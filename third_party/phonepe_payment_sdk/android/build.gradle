@@ -1,0 +1,52 @@
+// VENDORED COPY of phonepe_payment_sdk 3.0.2 (see pubspec.yaml dependency_overrides).
+// Modernized for AGP 9 / Gradle 9.1 / Kotlin 2.3.20:
+//   - Removed the legacy `buildscript` block that pinned AGP 7.3.1 + Kotlin 1.8.20
+//     (incompatible with Gradle 9.1 → the plugin's Kotlin never compiled, so
+//     GeneratedPluginRegistrant couldn't find PhonePePaymentSdk). The plugin now
+//     uses the app-managed AGP/Kotlin, like every other plugin in this build.
+//   - Removed the `allprojects { repositories }` block — the app's root
+//     android/build.gradle.kts already provides google/mavenCentral + the PhonePe
+//     IntentSDK maven repo to all subprojects.
+//   - compileSdk 31 -> 36: transitive androidx deps (fragment 1.7.1, lifecycle
+//     2.7.0, ...) require compileSdk >= 34 under AGP 9.
+//   - Java/JVM 1.8 -> 17 to match the app.
+//   - proguard-android.txt -> proguard-android-optimize.txt (AGP 9 removed the
+//     former because it bundled -dontoptimize).
+group 'com.phonepe.phonepe_payment_sdk'
+version '3.0.2'
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+android {
+    namespace 'com.phonepe.phonepe_payment_sdk'
+    compileSdk 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdk 21
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    dependencies {
+        implementation 'phonepe.intentsdk.android.release:IntentSDK:5.2.0'
+    }
+}

@@ -1,0 +1,66 @@
+# ─── Secrets & environment (NEVER commit — CLAUDE.md §9) ───
+env/
+*.keystore
+*.jks
+key.properties
+**/google-services.json
+**/GoogleService-Info.plist
+.env
+.env.*
+
+# ─── Flutter / Dart ───
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_*.png
+linked_*.ds
+unlinked.ds
+unlinked_spec.ds
+**/doc/api/
+.fvm/
+
+# Generated code: *.g.dart and *.freezed.dart ARE committed by convention — keep them.
+
+# ─── Android ───
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+*.aab
+*.apk
+*.apks
+
+# ─── IDE / editor ───
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.history/
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Cloudflare Workers (NEVER commit secrets) ───
+.dev.vars
+*.dev.vars
+.wrangler/
+node_modules/
+
+# ─── Misc ───
+*.log
+pubspec.lock.bak
+
+# Release-version-guard hook state (local build history; see .claude/hooks/)
+.claude/last-release-build.json
+.claude/last-release-build.pending.json

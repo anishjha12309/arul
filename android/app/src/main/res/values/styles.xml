@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LaunchTheme: visible while the Flutter engine warms up. On Android 12+ the OS
+         SplashScreen API ALWAYS runs and cannot be opted out of, so these
+         windowSplashScreen* attrs are what the user actually sees. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_bg</item>
+        <!-- Pre-Android-12 fallback only. -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+
+        <!-- Arul's launch surface is dark brand ink in BOTH themes -> light icons. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Drop the 80% scrim Android paints behind 3-button nav; the feed draws its
+             own gradient there. -->
+        <item name="android:enforceNavigationBarContrast">false</item>
+
+        <!-- DELIBERATELY ABSENT (deprecated AND ignored at targetSdk 35+):
+             statusBarColor · navigationBarColor · navigationBarDividerColor ·
+             windowOptOutEdgeToEdgeEnforcement. They are dead config that would only
+             mislead the next reader. Paint system-bar backgrounds in Flutter. -->
+    </style>
+
+    <!-- Applied once Flutter takes over (io.flutter.embedding.android.NormalTheme). -->
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Must stay in sync with ArulColors.ink (lib/app/theme/tokens.dart) and the
+         flutter_native_splash color in pubspec.yaml. -->
+    <color name="splash_bg">#131011</color>
+    <color name="ic_launcher_background">#131011</color>
+</resources>

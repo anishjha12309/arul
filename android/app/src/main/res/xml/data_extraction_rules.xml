@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Security: block data exfiltration paths on Android 12+ (API 31+). Cloud backup
+  and adb backup are already disabled by android:allowBackup="false"; this file
+  additionally excludes ALL app data from device-to-device transfer ("Copy apps
+  & data" during setup), which allowBackup does NOT cover. Nothing (including the
+  encrypted auth tokens in flutter_secure_storage) leaves the device.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" />
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" />
+        <exclude domain="database" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

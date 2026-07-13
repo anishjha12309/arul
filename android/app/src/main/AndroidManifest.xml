@@ -1,0 +1,116 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Static wallpaper apply via WallpaperManager. Normal permission, auto-granted.
+         Live wallpapers go through the system chooser and need no permission. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+
+    <!-- Live wallpaper support is OPTIONAL: the app still installs and runs on a
+         device without it, and the apply flow degrades to static-only. -->
+    <uses-feature
+        android:name="android.software.live_wallpaper"
+        android:required="false"/>
+
+    <application
+        android:label="@string/app_name"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:enableOnBackInvokedCallback="true">
+        <!-- enableOnBackInvokedCallback = predictive back. The manifest default is
+             FALSE on Android 13-15, so WITHOUT this the gesture is dead across most
+             of the install base. Flutter 3.38+ then supplies the page transition. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|colorMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- uiMode|colorMode are LOAD-BEARING: applying a wallpaper makes the OS
+                 recolor (Material You) and recreate the activity. Handling both here
+                 keeps the app alive through apply; dropping either = cold restart on
+                 every apply (flutter/flutter#133722). -->
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Don't delete: used by the Flutter tool to generate GeneratedPluginRegistrant. -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2"/>
+
+        <!-- Impeller ON. Do NOT flip this to chase the green-edge-strip artifact on
+             live wallpapers: it was tested against Skia on the reference app and the
+             strip is IDENTICAL, because Flutter backs TextureRegistry.SurfaceProducer
+             with an ImageReader on BOTH renderers, and the ImageReader consumer is
+             where the decoder's crop rect gets dropped (flutter#174026, #159955).
+             The only fix is content-side: video width % 128 == 0 AND height % 32 == 0
+             (docs/media-conventions.md). Confirm via logcat: "Using the Impeller
+             rendering backend". -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="true"/>
+
+        <!-- The applied live wallpaper IS this service: it reads the downloaded MP4
+             from app-internal storage and loops it on the home screen via Media3
+             (wallpaper/VideoRenderer). exported + BIND_WALLPAPER lets the system bind
+             to it securely; the meta-data points at the @xml/video_wallpaper
+             descriptor Android requires of every live wallpaper. -->
+        <service
+            android:name=".wallpaper.ArulVideoWallpaperService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/video_wallpaper"/>
+        </service>
+
+        <!-- Hands a local image file to the system wallpaper chooser as a content://
+             URI (the ACTION_ATTACH_DATA fallback in the static apply path). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/wallpaper_file_paths"/>
+        </provider>
+    </application>
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <!-- share_plus needs this to enumerate apps that can receive a share. -->
+        <intent>
+            <action android:name="android.intent.action.SEND"/>
+            <data android:mimeType="*/*"/>
+        </intent>
+        <!-- url_launcher: mailto: for the support email. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="mailto"/>
+        </intent>
+    </queries>
+</manifest>

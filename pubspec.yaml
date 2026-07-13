@@ -1,0 +1,76 @@
+# Arul. Android-only — no iOS/web/desktop targets exist and none should be added.
+# Before bumping ANY package, fetch its pub.dev docs (CLAUDE.md §3).
+#
+# DELIBERATELY ABSENT (bloat/perf, decided 2026-07-14 — do not "helpfully" re-add):
+#   google_fonts       — fetches fonts over HTTP at first launch (wrong font on frame
+#                        one, broken offline, a gstatic privacy disclosure). The system
+#                        stack already covers Latin + all 5 Indic scripts at zero bytes.
+#   font_awesome_flutter — ships whole icon fonts; built-in `Icons` tree-shakes to only
+#                        the glyphs referenced. Never build IconData() at runtime.
+#   shimmer            — uses ShaderMask => saveLayer() (an offscreen pass PER FRAME).
+#                        lib/app/widgets/skeleton.dart animates a gradient instead.
+name: arul
+description: "Arul — South Indian wallpapers"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  flutter_riverpod: ^3.3.2      # state; the only cross-layer glue
+  go_router: ^17.3.0            # nav
+  cached_network_image: ^3.4.1  # static wallpapers (decoded at display size)
+  shared_preferences: ^2.5.5    # theme mode, locale
+  http: ^1.2.0                  # CDN catalog fetches
+  url_launcher: ^6.3.2          # support mail, privacy policy
+  package_info_plus: ^10.2.0    # version row in Settings
+
+  # ── Live wallpapers + apply (ported with the native Media3 pipeline).
+  path_provider: ^2.1.5         # app-internal dirs for the applied live video
+  flutter_cache_manager: ^3.4.1 # disk cache for prefetched MP4s (shared w/ CNI)
+  share_plus: ^13.2.0           # share a wallpaper file
+
+  # ── Added in port-map Phase 2/4, WITH the ported logic layers. Kept commented so
+  # the UI builds and runs standalone today (Firebase would otherwise need a
+  # google-services.json that provisioning hasn't produced yet).
+  #   freezed_annotation / json_annotation   — models
+  #   riverpod_annotation                    — codegen'd providers
+  #   firebase_core / _crashlytics / _performance / _analytics
+  #   posthog_flutter / facebook_app_events  — analytics (behind AnalyticsService)
+  #   google_sign_in / play_install_referrer — auth + referral attribution
+  #   phonepe_payment_sdk (+ third_party/ override) — premium
+  #   flutter_secure_storage / path_provider / share_plus / flutter_cache_manager
+  #   image_picker / file_picker             — upload-your-content
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.8
+  # build_runner / freezed / riverpod_generator / json_serializable: Phase 2/4.
+
+flutter:
+  generate: true          # gen_l10n
+  uses-material-design: true
+  assets:
+    - assets/images/
+    # The splash / sign-in background clip. Bundled, not streamed: the first
+    # screen must never wait on the network, and it is the same lotus clip the
+    # entire brand palette was extracted from — 1.6 MB, 640x1152 (w%128==0,
+    # h%32==0, per the decoder constraint in docs/media-conventions.md).
+    - assets/video/
+
+flutter_native_splash:
+  color: "#131011"        # == ArulColors.ink == values/colors.xml splash_bg. If these three ever
+                          # disagree, the OS splash flashes a different black than
+                          # the app paints, and the handoff visibly pops.
+  color_dark: "#131011"
+  android_12:
+    color: "#131011"
+    icon_background_color: "#131011"

@@ -1,0 +1,47 @@
+# Arul Worker — deploy config. TODO_ values come from docs/provisioning.md;
+# the deploy-worker skill refuses to deploy while any TODO_ remains.
+name = "arul-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-25"
+compatibility_flags = ["nodejs_compat"]
+account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as the reference app
+
+# ─── KV namespace ────────────────────────────────────────────────────────────
+# Refresh-token jti denylist · PhonePe webhook idempotency ("txn:<orderId>") ·
+# PhonePe OAuth cache ("phonepe:oauth") · catalog_version:<scope> gate.
+# Create: cd workers && npx wrangler kv namespace create KV  (+ --preview)
+[[kv_namespaces]]
+binding = "KV"
+id = "TODO_KV_ID"
+preview_id = "TODO_KV_PREVIEW_ID"
+
+# ─── Hyperdrive (Neon Postgres) ──────────────────────────────────────────────
+# Create: npx wrangler hyperdrive create arul-hyperdrive --connection-string="postgres://…"
+# Query caching stays OFF (caused ~60s staleness in the reference app).
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "TODO_HYPERDRIVE_ID"
+
+# ─── R2 bucket (build-catalog writes via binding; public read ON at bucket level) ──
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "south-indian-wallpapers"
+preview_bucket_name = "south-indian-wallpapers"
+
+# ─── Scheduled triggers ──────────────────────────────────────────────────────
+# Hourly: build-catalog → sweep-canonical ∥ sweep-submissions ∥ autopay notify/execute
+[triggers]
+crons = ["0 * * * *"]
+
+# Custom domain arul-api.hsrutility.com: attach in the dashboard after first
+# deploy (Worker → Settings → Domains & Routes). CDN domain arul-cdn.hsrutility.com
+# is attached to the R2 bucket, not the Worker.
+
+# ─── Secrets (`npx wrangler secret put <NAME>` — full descriptions: README.md) ──
+# JWT_SECRET  GOOGLE_WEB_CLIENT_ID
+# R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
+# PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
+# PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
+# CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
+# ADMIN_USERNAME  ADMIN_PASSWORD_HASH  ADMIN_SESSION_SECRET
+# CF_ZONE_ID  CF_PURGE_TOKEN   # optional: purge version pointer on publish

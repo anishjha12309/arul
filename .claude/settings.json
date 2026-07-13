@@ -1,0 +1,88 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze*)",
+      "Bash(flutter test*)",
+      "Bash(flutter gen-l10n*)",
+      "Bash(flutter doctor*)",
+      "Bash(dart format*)",
+      "Bash(dart analyze*)",
+      "Bash(dart run build_runner*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(npx tsc*)",
+      "Bash(npx vitest*)",
+      "Bash(adb devices*)",
+      "Bash(adb logcat*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/format-dart.js",
+            "timeout": 30,
+            "statusMessage": "dart format"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/version-commit.js post",
+            "timeout": 30,
+            "statusMessage": "version-bump commit"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-version-guard.js post",
+            "timeout": 30,
+            "statusMessage": "release-version guard (record)"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-version-guard.js reconcile",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-secrets.js",
+            "timeout": 15,
+            "statusMessage": "secret-staging guard"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-version-guard.js pre",
+            "timeout": 30,
+            "statusMessage": "release-version guard"
+          }
+        ]
+      }
+    ]
+  }
+}

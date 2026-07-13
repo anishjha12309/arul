@@ -1,0 +1,29 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # A premium feel dies by a thousand jank frames. These are the cheap wins the
+    # analyzer can enforce, so they are ERRORS, not suggestions.
+    prefer_const_constructors: error
+    prefer_const_literals_to_create_immutables: error
+    prefer_const_declarations: error
+    # Deprecated APIs we must not drift back onto (MaterialStateProperty,
+    # onPopInvoked, cacheExtent, Theme classes renamed to *ThemeData).
+    deprecated_member_use: error
+    deprecated_member_use_from_same_package: error
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "lib/app/l10n/app_localizations*.dart"
+
+linter:
+  rules:
+    - avoid_print
+    - prefer_final_locals
+    - use_super_parameters
+    - sized_box_for_whitespace          # SizedBox const-ability over Container
+    - use_colored_box                   # ColoredBox over Container(color:)
+    - use_decorated_box
+    - avoid_unnecessary_containers
+    - prefer_single_quotes
+    - unawaited_futures
