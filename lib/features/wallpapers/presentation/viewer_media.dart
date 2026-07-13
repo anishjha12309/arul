@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 import 'video_preload_controller.dart';
+import 'wallpaper_tile.dart';
 
 /// The media layer of one viewer page.
 ///
@@ -40,13 +41,20 @@ class ViewerMedia extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Poster. Same URL, same cache key, same decoded bytes as the grid.
+          // 1. Poster. Same URL AND the same decode width as the grid tile, which
+          // makes this a cache HIT rather than a second decode: memCacheWidth is
+          // part of the cache key, so decoding the same thumbnail at a different
+          // width would store a second copy of every wallpaper the user opens.
+          // The tile the user tapped is already decoded — this just repaints it.
+          // It is briefly upscaled to full-bleed, which is fine: it is a poster
+          // that lives for ~180ms until the real media fades in over it.
           CachedNetworkImage(
             imageUrl: wallpaper.thumbUrl(AppConfig.cdnBaseUrl),
             fit: BoxFit.cover,
+            memCacheWidth: WallpaperTile.decodeWidthFor(context),
             fadeInDuration: Duration.zero,
             // No placeholder and no errorWidget: if the poster is missing, the
-            // layer above it covers this anyway. An error glyph here would flash
+            // layer above covers this anyway. An error glyph here would flash
             // under a perfectly good full image.
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),

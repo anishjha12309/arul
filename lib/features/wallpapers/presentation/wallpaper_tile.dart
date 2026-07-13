@@ -31,14 +31,20 @@ class WallpaperTile extends ConsumerWidget {
 
   static const radius = Radii.tileShape;
 
+  /// Decode at the tile's real size, not the source's.
+  ///
+  /// cacheWidth is in RAW pixels, so it must be scaled by devicePixelRatio or the
+  /// tile ships blurry. The VIEWER's poster deliberately calls this too: the
+  /// decode width is part of the image cache key, so decoding the same thumbnail
+  /// at a different width there would store a second copy of every wallpaper the
+  /// user opens, instead of reusing the one already on screen.
+  static int decodeWidthFor(BuildContext context) =>
+      (200 * MediaQuery.devicePixelRatioOf(context)).round();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-
-    // Decode at the tile's real size, not the source's. cacheWidth is in RAW
-    // pixels, so it must be scaled by devicePixelRatio or the tile ships blurry.
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final decodeWidth = (200 * dpr).round();
+    final decodeWidth = decodeWidthFor(context);
 
     return Semantics(
       button: true,

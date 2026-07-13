@@ -8,6 +8,7 @@ import '../../../app/widgets/skeleton.dart';
 import '../../../app/widgets/state_views.dart';
 import '../../../data/models/wallpaper.dart';
 import '../providers/catalog_providers.dart';
+import 'apply_restore.dart';
 import 'category_tabs.dart';
 import 'viewer_screen.dart';
 import 'wallpaper_tile.dart';
@@ -23,13 +24,25 @@ import 'wallpaper_tile.dart';
 /// It is also the cheaper idle state on the hardware we target: a grid tile is a
 /// still image, so the video decoder stays completely idle until the user
 /// deliberately opens something.
-class BrowseScreen extends ConsumerWidget {
+class BrowseScreen extends ConsumerStatefulWidget {
   const BrowseScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BrowseScreen> createState() => _BrowseScreenState();
+}
+
+class _BrowseScreenState extends ConsumerState<BrowseScreen> with ApplyRestore {
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final feed = ref.watch(feedProvider);
+
+    // If a wallpaper apply took the app away and it came back cold (Android 12+
+    // recreates the Activity on a wallpaper change), put the user back on the
+    // wallpaper they were setting instead of at the top of the grid.
+    if (ref.watch(catalogProvider) case AsyncData(:final value)) {
+      maybeRestoreAfterApply(value);
+    }
 
     return Scaffold(
       appBar: AppBar(
