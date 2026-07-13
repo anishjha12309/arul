@@ -31,6 +31,17 @@ class SettingsScreen extends ConsumerWidget {
           const ThemeModePicker(),
 
           SettingsSection(title: l10n.settingsContent),
+          // Sign-in is HERE and nowhere else. Browsing and previewing are free, so
+          // demanding an account before the app will show a single wallpaper is a
+          // good way to be uninstalled. Identity is asked for when something
+          // actually needs it — entitlement, uploads, a collection that survives a
+          // new phone — and this is the door to it.
+          ListTile(
+            leading: const Icon(Icons.account_circle_outlined),
+            title: Text(l10n.signInGoogle),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.push('/sign-in'),
+          ),
           ListTile(
             leading: const Icon(Icons.upload_outlined),
             title: Text(l10n.uploadTitle),
@@ -79,7 +90,16 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, Uri uri) async {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    // launchUrl THROWS (PlatformException), it does not merely return false, when
+    // no app can handle the intent — which is the normal state of a device with no
+    // mail client for our `mailto:` support link. Uncaught, that killed the toast
+    // and the user got nothing at all when tapping "Need help".
+    bool ok;
+    try {
+      ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      ok = false;
+    }
     if (!ok && context.mounted) {
       showArulToast(
         context,

@@ -54,7 +54,7 @@ void showArulToast(
                   child: Text(
                     message,
                     style: const TextStyle(
-                      color: Color(0xFFF3E9EC),
+                      color: ArulColors.ivoryText,
                       fontSize: 14,
                       height: 1.35,
                     ),

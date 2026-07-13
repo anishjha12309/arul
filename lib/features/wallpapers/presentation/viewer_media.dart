@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../app/theme/tokens.dart';
 import '../../../data/models/wallpaper.dart';
 import 'video_preload_controller.dart';
 import 'wallpaper_tile.dart';
@@ -37,7 +38,7 @@ class ViewerMedia extends StatelessWidget {
     return ColoredBox(
       // Behind the poster, for the frames before it decodes and in the letterbox
       // of any wallpaper that is not exactly the screen's aspect ratio.
-      color: const Color(0xFF131011),
+      color: ArulColors.ink,
       child: Stack(
         fit: StackFit.expand,
         children: [

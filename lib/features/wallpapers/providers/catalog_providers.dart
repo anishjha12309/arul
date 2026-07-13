@@ -10,14 +10,20 @@ import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 import '../data/video_thumbnail_service.dart';
 
-/// How long to wait for the catalog before giving up on the network.
+/// How long to wait for the server to RESPOND before declaring the network dead.
 ///
-/// Measured, not guessed: with the device fully offline, an un-timed `http.get`
-/// took **~50 seconds** to surface a DNS failure — fifty seconds of skeleton
-/// tiles before the user was told anything. Eight seconds is longer than any
-/// successful fetch observed on a slow connection and short enough that a dead
-/// network is reported while the user is still looking at the screen.
-const _catalogTimeout = Duration(seconds: 8);
+/// Measured, not guessed: fully offline, an un-timed `http.get` took **~50
+/// seconds** to surface a DNS failure — fifty seconds of skeleton tiles before the
+/// user was told anything.
+///
+/// Critically this bounds the RESPONSE, not the download. Bounding the whole
+/// transfer looks equivalent and is not: the catalog for 428 items is a few
+/// hundred KB, which on the 2G/EDGE connections a chunk of this audience actually
+/// has takes well over eight seconds to pull. That user would time out, retry from
+/// byte zero, and time out again — the app would simply never load for them, while
+/// working fine on every developer's wifi. Headers arriving proves the network is
+/// alive; after that we let the bytes take as long as they take.
+const _catalogResponseTimeout = Duration(seconds: 8);
 
 /// Where the last good catalog is kept.
 const _catalogCacheFile = 'catalog.json';
@@ -39,18 +45,31 @@ final catalogProvider = FutureProvider<List<Wallpaper>>((ref) async {
   final file = await _cacheFile();
 
   try {
-    final res = await http
-        .get(Uri.parse('${AppConfig.cdnBaseUrl}/catalog/catalog.json'))
-        .timeout(_catalogTimeout);
-    if (res.statusCode != 200) {
-      throw Exception('catalog ${res.statusCode}');
-    }
-    final wallpapers = _parse(utf8.decode(res.bodyBytes));
+    final client = http.Client();
+    try {
+      // The timeout is on the RESPONSE, not the body — see the constant's docs.
+      final streamed = await client
+          .send(
+            http.Request(
+              'GET',
+              Uri.parse('${AppConfig.cdnBaseUrl}/catalog/catalog.json'),
+            ),
+          )
+          .timeout(_catalogResponseTimeout);
 
-    // Write AFTER parsing, so a malformed response can never poison the cache
-    // and brick every future cold start.
-    unawaited(file.writeAsBytes(res.bodyBytes).catchError((_) => file));
-    return wallpapers;
+      if (streamed.statusCode != 200) {
+        throw Exception('catalog ${streamed.statusCode}');
+      }
+      final bytes = await streamed.stream.toBytes();
+      final wallpapers = _parse(utf8.decode(bytes));
+
+      // Write AFTER parsing, so a malformed response can never poison the cache
+      // and brick every future cold start.
+      unawaited(file.writeAsBytes(bytes).catchError((_) => file));
+      return wallpapers;
+    } finally {
+      client.close();
+    }
   } catch (e) {
     if (await file.exists()) {
       try {

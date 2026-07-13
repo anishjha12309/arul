@@ -101,7 +101,19 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
 
     final tmpDir = await getTemporaryDirectory();
     final file = File('${tmpDir.path}/$filename');
-    final sink = file.openWrite();
+
+    // Download to a `.part` file and rename only on success.
+    //
+    // Streaming straight into the final path meant a network drop mid-download
+    // left a TRUNCATED file under the real name — and the apply flow's cache check
+    // ("exists and non-empty") accepted it forever after. A static apply would then
+    // fail to decode every single time; a live apply would hand a broken MP4 to the
+    // wallpaper service, whose error recovery re-prepares without bound — an
+    // infinite prepare/error loop running on the user's home screen, unfixable
+    // except by clearing app data. The rename is atomic, so the final name only
+    // ever exists as a complete file.
+    final part = File('${file.path}.part');
+    final sink = part.openWrite();
 
     try {
       await response.stream.listen((List<int> chunk) {
@@ -111,12 +123,27 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
           onProgress(received / total);
         }
       }, cancelOnError: true).asFuture<void>();
-    } finally {
       await sink.flush();
       await sink.close();
-    }
 
-    return file;
+      // A connection cut mid-body still delivers a 200 and a short stream, so
+      // trust the promised length, not the status code.
+      if (total != null && total > 0 && received < total) {
+        throw const WallpaperApplyException('Download incomplete');
+      }
+
+      await part.rename(file.path);
+      return file;
+    } catch (_) {
+      try {
+        await sink.close();
+      } catch (_) {
+        // Already closed by the success path, or the sink is dead. Either way the
+        // .part file below is what matters.
+      }
+      if (await part.exists()) await part.delete();
+      rethrow;
+    }
   }
 
   @override

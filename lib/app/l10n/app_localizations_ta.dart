@@ -161,7 +161,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get offlineBody =>
-      'நீங்கள் இணையற்றவர். இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
+      'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
 
   @override
   String get shareMessage =>

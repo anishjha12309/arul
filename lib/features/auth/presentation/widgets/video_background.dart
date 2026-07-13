@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/tokens.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
 /// Full-screen looping video background.
-/// Uses [islam_wallpaper_splash.mp4] from assets/images/.
+/// Uses [splash.mp4] from assets/images/.
 ///
 /// Shows a solid dark colour until the first frame is rendered so there's
 /// no blank-white flash on first paint.
@@ -34,7 +35,7 @@ class VideoBackground extends StatefulWidget {
 class _VideoBackgroundState extends State<VideoBackground> {
   /// The video's own darkest region. If this and the video disagree, the reveal
   /// pops — which is exactly what a splash must never do.
-  static const _fallbackColor = Color(0xFF131011);
+  static const _fallbackColor = ArulColors.ink;
 
   _SharedAuthVideoPlayer? _shared;
   FeedVideoPlayer? _player;

@@ -309,10 +309,42 @@ class VideoPreloadController extends ChangeNotifier
     );
   }
 
-  /// Call when the wallpaper list changes (initial load, pagination, refresh).
-  void setWallpapers(List<Wallpaper> wallpapers) {
+  /// Call when the viewer opens, or the list changes (pagination, refresh).
+  ///
+  /// [initialIndex] must be the page the viewer is actually opening on. Without
+  /// it the reconcile below runs against the PREVIOUS `_currentIndex` — 0 on a
+  /// first open, or wherever the last viewer left off — so the pool opens and
+  /// prefetches the wrong clips (up to three multi-megabyte downloads) before the
+  /// settle debounce re-targets the real page ~160ms later. The reference never
+  /// hit this: its pager WAS the home screen and always entered at page 0. A
+  /// viewer you tap into at an arbitrary index is the new case.
+  void setWallpapers(List<Wallpaper> wallpapers, {int? initialIndex}) {
     _wallpapers = wallpapers;
+    if (initialIndex != null &&
+        initialIndex >= 0 &&
+        initialIndex < wallpapers.length) {
+      _currentIndex = initialIndex;
+    }
     _reconcile();
+  }
+
+  /// Detach from the surface that was showing video. Called by the viewer, and
+  /// ONLY on the way out.
+  ///
+  /// The controller is app-scoped, so its list and index outlive the viewer —
+  /// deliberately, because that is what survives the Android 12+ Activity recreate
+  /// a wallpaper apply triggers. But it also means a stale, non-empty list sits
+  /// here after the viewer pops, and the `resumed` lifecycle handler reconciles
+  /// unconditionally. Background the app while on the GRID and come back, and the
+  /// pool would create ExoPlayers and start playing a clip with no viewer on
+  /// screen: decoders, battery and heat spent on something nobody can see.
+  ///
+  /// Clearing the list is what makes `resumed` a no-op unless a viewer is actually
+  /// mounted — `_reconcile` already early-returns on an empty list.
+  void detach() {
+    _wallpapers = const [];
+    _currentIndex = 0;
+    unawaited(releaseDecoders());
   }
 
   /// Splash-gate hook: warm ONLY the first item's decoder and begin decoding so
@@ -358,12 +390,25 @@ class VideoPreloadController extends ChangeNotifier
     // after we've released them all (e.g. release fired during a fling).
     _settleTimer?.cancel();
     _settling = false;
+    // Invalidate any player creation still in flight. Without this, a
+    // `_pool.create()` that was awaiting when release ran lands AFTERWARDS, is
+    // added to the pool we just emptied, and gets opened and played — holding a
+    // hardware decoder that the apply flow has already promised the OS is free, or
+    // running invisibly after the viewer closed. The post-create guard only
+    // checked `_appPaused`, which catches backgrounding but NOT a release while
+    // the app is foreground — and foreground release is now the common case
+    // (viewer dispose, and the awaited release inside apply).
+    _releaseEpoch++;
     final players = _pool_.toList();
     _pool_.clear();
     final disposals = [for (final p in players) p.dispose()];
     notifyListeners(); // cards re-read slotForIndex → shimmer
     await Future.wait(disposals);
   }
+
+  /// Bumped by every [releaseDecoders]. A player creation snapshots this before
+  /// it awaits and discards itself if the value moved while it was in flight.
+  int _releaseEpoch = 0;
 
   /// Rebuilds the player window after an apply that kept the app FOREGROUND
   /// (in-place live swap, static apply, or a failed apply). [releaseDecoders]
@@ -568,15 +613,23 @@ class VideoPreloadController extends ChangeNotifier
         return null;
       }
       _creating++;
+      // Snapshot the release epoch BEFORE awaiting, so we can tell whether a
+      // release happened while this create was in flight.
+      final epoch = _releaseEpoch;
       FeedVideoPlayer? handle;
       try {
         handle = await _pool.create();
       } finally {
         _creating--;
       }
-      // The pool may have been released while create() awaited (background /
-      // apply), or the app paused — drop the freshly-created player.
-      if (handle == null || _disposed || _appPaused) {
+      // The pool may have been released while create() awaited, or the app paused
+      // — drop the freshly-created player instead of adding it to a pool that was
+      // just emptied. The epoch check is what covers a release that happened while
+      // the app stayed FOREGROUND (viewer dispose, the awaited release inside
+      // apply); `_appPaused` alone only catches backgrounding, so without it a
+      // late-landing player would hold a hardware decoder the apply flow had
+      // already promised the OS was free.
+      if (handle == null || _disposed || _appPaused || _releaseEpoch != epoch) {
         unawaited(handle?.dispose());
         return null;
       }

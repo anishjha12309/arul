@@ -58,15 +58,10 @@ class WallpaperTile extends ConsumerWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Hero(
-                  // The viewer opens on this exact image, so the tile expanding
-                  // into the full-bleed poster is a repaint, not a refetch.
-                  tag: 'wallpaper_${wallpaper.id}',
-                  child: _TileImage(
-                    wallpaper: wallpaper,
-                    decodeWidth: decodeWidth,
-                  ),
-                ),
+                // No Hero: the viewer has no matching destination, so the flight
+                // never ran. The continuity comes from the poster instead — the
+                // viewer opens on the exact image this tile already decoded.
+                _TileImage(wallpaper: wallpaper, decodeWidth: decodeWidth),
                 if (wallpaper.kind == WallpaperKind.live)
                   const Positioned(
                     left: Gap.sm,

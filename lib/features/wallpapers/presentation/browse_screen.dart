@@ -62,28 +62,35 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen> with ApplyRestore {
         ],
         bottom: const CategoryTabs(),
       ),
-      body: switch (feed) {
-        // Skeleton tiles in the real grid geometry, so nothing reflows when the
-        // data lands — the page does not jump under the user's thumb.
-        AsyncLoading() => const _Grid.loading(),
+      // Pull to refresh. Without it, a user who cold-launched offline is served
+      // the cached catalog and then has NO way to get a fresh one for the life of
+      // the process — no refresh gesture existed anywhere, and the error-state
+      // retry button is unreachable once the cache successfully served.
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(catalogProvider.future),
+        child: switch (feed) {
+          // Skeleton tiles in the real grid geometry, so nothing reflows when the
+          // data lands — the page does not jump under the user's thumb.
+          AsyncLoading() => const _Grid.loading(),
 
-        AsyncData(:final value) when value.isEmpty => StateView.empty(
-          title: l10n.feedEmptyTitle,
-          message: l10n.feedEmptyBody,
-        ),
+          AsyncData(:final value) when value.isEmpty => StateView.empty(
+            title: l10n.feedEmptyTitle,
+            message: l10n.feedEmptyBody,
+          ),
 
-        AsyncData(:final value) => _Grid(items: value),
+          AsyncData(:final value) => _Grid(items: value),
 
-        // A failed catalog fetch is the only true full-screen error: without it
-        // there is nothing to show. A single broken IMAGE is not this — that
-        // degrades to one muted tile (see WallpaperTile).
-        AsyncError() => StateView.error(
-          title: l10n.feedErrorTitle,
-          message: l10n.feedErrorBody,
-          actionLabel: l10n.retry,
-          onAction: () => ref.invalidate(catalogProvider),
-        ),
-      },
+          // A failed catalog fetch with no cached copy is the only true
+          // full-screen error: there is genuinely nothing to show. A single broken
+          // IMAGE is not this — that degrades to one muted tile (WallpaperTile).
+          AsyncError() => StateView.error(
+            title: l10n.feedErrorTitle,
+            message: l10n.feedErrorBody,
+            actionLabel: l10n.retry,
+            onAction: () => ref.invalidate(catalogProvider),
+          ),
+        },
+      ),
     );
   }
 }

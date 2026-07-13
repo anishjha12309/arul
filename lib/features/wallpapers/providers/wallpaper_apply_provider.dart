@@ -8,6 +8,7 @@ import '../../../core/error/network_error.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/wallpaper.dart';
 import '../data/wallpaper_apply_service.dart';
+import 'wallpaper_prefetch_provider.dart';
 
 // ─── Pending-apply flags ──────────────────────────────────────────────────────
 //
@@ -57,12 +58,26 @@ final class WallpaperApplySuccess extends WallpaperApplyState {
 final class WallpaperApplyError extends WallpaperApplyState {
   const WallpaperApplyError({required this.message, this.isNetwork = false});
 
+  /// DIAGNOSTIC ONLY -- never show this to a user. It can be a raw
+  /// `FileSystemException: ...`, and it is English regardless of locale. The UI
+  /// maps [isNetwork] to a localized line; this is here for logs and, later,
+  /// crash reporting.
   final String message;
 
-  /// Offline, not broken. The UI shows a retry affordance and a friendly line
-  /// rather than an exception string.
+  /// Offline, not broken. The UI says so, and offers retry.
   final bool isNetwork;
 }
+
+// ─── Shared cache filename ────────────────────────────────────────────────────
+
+/// The ONE temp-file name apply and share both use for a given wallpaper.
+///
+/// They must agree. Share used to prefix the file `arul-…` for a friendly name in
+/// the recipient's chat — which meant applying and then sharing the same wallpaper
+/// downloaded the identical bytes TWICE. The recipient-facing name is a share-sheet
+/// concern and is set there via `fileNameOverrides`; the file on disk is a cache
+/// key and belongs to whoever fetched it first.
+String applyCacheFilename(Wallpaper w) => w.key.split('/').last;
 
 // ─── Service provider ─────────────────────────────────────────────────────────
 
@@ -96,25 +111,44 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     final prefs = ref.read(sharedPreferencesProvider);
     final isLive = wallpaper.kind == WallpaperKind.live;
 
+    // Claim the flow BEFORE the first await. The re-entrancy check above runs
+    // ahead of `getTemporaryDirectory()` and `exists()` — two awaits — so a
+    // double-tap inside those few milliseconds previously started two downloads
+    // racing to write the same file.
+    state = const WallpaperApplyLoading(stage: WallpaperApplyStage.preparing);
+
     try {
-      final filename = wallpaper.key.split('/').last;
+      final filename = applyCacheFilename(wallpaper);
       final tmpDir = await getTemporaryDirectory();
       final cachedFile = File('${tmpDir.path}/$filename');
-      final isCached =
-          await cachedFile.exists() && await cachedFile.length() > 0;
 
-      File file;
-      if (isCached) {
-        // Already on disk — e.g. the user dismissed the OEM chooser last time,
-        // or the prefetcher already pulled this clip. Skip the network entirely.
-        state = const WallpaperApplyLoading(
-          stage: WallpaperApplyStage.applying,
-        );
+      File? file;
+
+      if (await cachedFile.exists() && await cachedFile.length() > 0) {
+        // Already fetched by a previous apply or share of this wallpaper — e.g.
+        // the user dismissed the OEM chooser last time.
         file = cachedFile;
       } else {
-        state = const WallpaperApplyLoading(
-          stage: WallpaperApplyStage.preparing,
-        );
+        // The live clip the user is looking at is almost always ALREADY on disk:
+        // the feed prefetcher pulled it so the player could open a local file
+        // instead of streaming. Apply and prefetch now resolve the SAME public CDN
+        // URL, so those bytes are reusable — copying them locally beats spending
+        // another 2-15 MB of the user's mobile data re-downloading a file we have.
+        // (This was impossible in the reference: apply fetched a signed URL, so the
+        // two caches could never share a key. The port inherited the miss.)
+        final prefetched = await ref
+            .read(wallpaperPrefetchServiceProvider)
+            .cachedPathOrNull(await service.resolveUrl(wallpaper));
+        if (prefetched != null) {
+          try {
+            file = await File(prefetched).copy(cachedFile.path);
+          } catch (_) {
+            // Evicted between the lookup and the copy. Fall through and download.
+          }
+        }
+      }
+
+      if (file == null) {
         final url = await service.resolveUrl(wallpaper);
 
         state = const WallpaperApplyLoading(
@@ -187,7 +221,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       // the UI must not print "ClientException: Failed host lookup".
       final network = isNetworkError(e);
       state = WallpaperApplyError(
-        message: network ? 'offline' : e.toString(),
+        message: e.toString(),
         isNetwork: network,
       );
     }

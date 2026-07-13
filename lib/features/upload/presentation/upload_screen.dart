@@ -30,10 +30,36 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final theme = Theme.of(context);
     final categories = ref.watch(categoriesProvider);
 
+    // The category list comes from the catalog, so this screen inherits the
+    // catalog's states. It used to watch only `categoriesProvider`, which returns
+    // an empty list for BOTH loading and error — so a user who opened Upload while
+    // the catalog was still in flight got an *empty* view titled "Couldn't load
+    // wallpapers", with no spinner and no retry. Switch on the real state instead.
+    final catalog = ref.watch(catalogProvider);
+    if (catalog case AsyncLoading()) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.uploadTitle)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (catalog case AsyncError()) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.uploadTitle)),
+        body: StateView.error(
+          title: l10n.feedErrorTitle,
+          message: l10n.feedErrorBody,
+          actionLabel: l10n.retry,
+          onAction: () => ref.invalidate(catalogProvider),
+        ),
+      );
+    }
     if (categories.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.uploadTitle)),
-        body: StateView.empty(title: l10n.feedErrorTitle),
+        body: StateView.empty(
+          title: l10n.feedEmptyTitle,
+          message: l10n.feedEmptyBody,
+        ),
       );
     }
 

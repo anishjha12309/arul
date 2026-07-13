@@ -52,11 +52,20 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
   /// whose entire value is the image, was the wrong default to have no escape from.
   bool _chrome = true;
 
-  VideoPreloadController get _video => ref.read(videoPreloadControllerProvider);
+  /// Captured in initState, NOT read lazily via `ref.read`.
+  ///
+  /// This is load-bearing: `ref` is not usable from `dispose()` in Riverpod 3, so
+  /// a `ref.read(...)` there silently fails to reach the controller — which is
+  /// exactly how `detach()` never ran, leaving the pool's wallpaper list populated
+  /// after the viewer closed and letting a later background/resume on the grid spin
+  /// up hardware decoders behind a screen with no video on it. Verified on-device:
+  /// resume-on-grid reconciled with n=428 before this. Hold the reference.
+  late final VideoPreloadController _video;
 
   @override
   void initState() {
     super.initState();
+    _video = ref.read(videoPreloadControllerProvider);
     _index = widget.initialIndex;
     _pager = PageController(initialPage: _index);
 
@@ -69,8 +78,11 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
       if (!mounted) return;
       _video
         ..reclaimDecoders()
-        ..setWallpapers(widget.items);
-      _video.onPageChanged(_index);
+        // The index goes in WITH the list. setWallpapers reconciles immediately,
+        // and reconciling against a stale index opens and prefetches the wrong
+        // clips before the settle debounce corrects it.
+        ..setWallpapers(widget.items, initialIndex: _index)
+        ..onPageChanged(_index);
     });
   }
 
@@ -79,9 +91,10 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
     _pager.dispose();
     // Do NOT dispose the controller — it is app-scoped, and disposing it here
     // would race the Android 12+ Activity recreate that a wallpaper apply can
-    // trigger. Just give the decoders back: leaving the viewer means nothing on
-    // screen needs one.
-    _video.releaseDecoders();
+    // trigger. detach() gives the decoders back AND clears the list, so a later
+    // background/resume while the user is on the grid cannot silently spin the
+    // pool back up behind a screen that shows no video.
+    _video.detach();
     super.dispose();
   }
 
@@ -123,18 +136,32 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
     switch (state) {
       case WallpaperApplySuccess():
         showArulToast(context, l10n.applied);
-      case WallpaperApplyError(:final isNetwork, :final message):
-        showArulToast(context, isNetwork ? l10n.offlineBody : message);
-      // Idle: the OS live-wallpaper chooser is open over us and owns the outcome.
-      // We cannot observe whether the user confirmed, so we say nothing rather
-      // than claim a success that may not have happened.
+        // The apply is done with the codecs — take them back so the viewer the
+        // user is looking at resumes playing instead of sitting frozen.
+        _video.reclaimDecoders();
+      case WallpaperApplyError(:final isNetwork):
+        showArulToast(
+          context,
+          isNetwork ? l10n.offlineBody : l10n.errorGeneric,
+        );
+        _video.reclaimDecoders();
+
+      // Idle means the OS live-wallpaper chooser is open OVER us and owns the
+      // outcome. Two things follow, and both matter:
+      //
+      //  - We say nothing. We cannot observe whether the user actually tapped
+      //    "Set wallpaper", so a success toast would be a lie half the time.
+      //  - We do NOT reclaim the decoders. This continuation runs before the
+      //    Activity's inactive/paused events land, so reclaiming here would
+      //    immediately re-create the players we just awaited releaseDecoders() to
+      //    free — racing the chooser's preview engine for the same hardware codecs
+      //    on a SoC that has a handful. The chooser would lose and fall back to
+      //    software decode: exactly the stutter this whole pipeline exists to
+      //    avoid. The lifecycle resume path reclaims them when we come back.
       case _:
         break;
     }
     ref.read(wallpaperApplyProvider.notifier).reset();
-    // The decoders were handed to the wallpaper engine; take them back so the
-    // viewer the user returns to is playing, not frozen.
-    if (mounted) _video.reclaimDecoders();
   }
 
   Future<void> _onShare(Wallpaper w) async {
@@ -148,7 +175,7 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
     if (state is WallpaperShareError) {
       showArulToast(
         context,
-        state.isNetwork ? l10n.offlineBody : state.message,
+        state.isNetwork ? l10n.offlineBody : l10n.errorGeneric,
       );
       ref.read(wallpaperShareProvider.notifier).reset();
     }
@@ -171,7 +198,7 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-        backgroundColor: const Color(0xFF131011),
+        backgroundColor: ArulColors.ink,
         body: Stack(
           children: [
             PageView.builder(
@@ -203,12 +230,32 @@ class _ViewerScreenState extends ConsumerState<ViewerScreen> {
             // Progress lives at the top edge, not in a modal over the wallpaper:
             // the user is choosing a wallpaper, and covering it to tell them it is
             // being downloaded defeats the point.
-            if (apply is WallpaperApplyLoading)
+            //
+            // SHARE gets a bar too. It was tracking download progress diligently
+            // and rendering it nowhere — during a 15 MB clip the only feedback was
+            // the buttons dimming, which reads as "the app is broken", not "wait".
+            if (apply is WallpaperApplyLoading ||
+                share is WallpaperSharePreparing)
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: _ApplyProgress(state: apply),
+                child: _TransferProgress(
+                  // Downloading is the only stage with measurable progress; the
+                  // rest are indefinite, and a bar parked at 0% reads as stuck.
+                  progress: switch ((apply, share)) {
+                    (
+                      WallpaperApplyLoading(
+                        stage: WallpaperApplyStage.downloading,
+                        :final progress,
+                      ),
+                      _,
+                    ) =>
+                      progress,
+                    (_, WallpaperSharePreparing(:final progress)) => progress,
+                    _ => null,
+                  },
+                ),
               ),
           ],
         ),
@@ -261,11 +308,13 @@ class _Page extends ConsumerWidget {
   }
 }
 
-/// A hairline determinate/indeterminate bar under the status bar.
-class _ApplyProgress extends StatelessWidget {
-  const _ApplyProgress({required this.state});
+/// A hairline bar under the status bar, for any in-flight transfer (apply or
+/// share). Null [progress] renders it indeterminate — which is what the
+/// non-download stages need, since a bar parked at 0% reads as "stuck".
+class _TransferProgress extends StatelessWidget {
+  const _TransferProgress({required this.progress});
 
-  final WallpaperApplyLoading state;
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
@@ -276,11 +325,7 @@ class _ApplyProgress extends StatelessWidget {
         child: SizedBox(
           height: Gap.xs,
           child: LinearProgressIndicator(
-            // Null while preparing/applying — those stages have no measurable
-            // progress, and a bar sitting at 0% reads as "stuck", not as "working".
-            value: state.stage == WallpaperApplyStage.downloading
-                ? state.progress
-                : null,
+            value: progress,
             minHeight: Gap.xs,
             backgroundColor: Colors.transparent,
           ),

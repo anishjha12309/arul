@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/error/network_error.dart';
 import '../../../data/models/wallpaper.dart';
 import 'wallpaper_apply_provider.dart';
+import 'wallpaper_prefetch_provider.dart';
 
 sealed class WallpaperShareState {
   const WallpaperShareState();
@@ -25,6 +26,9 @@ final class WallpaperSharePreparing extends WallpaperShareState {
 
 final class WallpaperShareError extends WallpaperShareState {
   const WallpaperShareError({required this.message, this.isNetwork = false});
+
+  /// DIAGNOSTIC ONLY -- never shown to a user (English, and can be a raw
+  /// exception). The UI localizes from [isNetwork].
   final String message;
   final bool isNetwork;
 }
@@ -47,14 +51,34 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     try {
       state = const WallpaperSharePreparing();
 
-      final filename = 'arul-${wallpaper.key.split('/').last}';
+      // The SAME filename apply uses. Prefixing it `arul-` here meant apply-then-
+      // share (or share-then-apply) of one wallpaper downloaded the identical bytes
+      // twice, on a user's mobile data. The friendly name the recipient sees is a
+      // share-sheet concern, handled by `fileNameOverrides` below — not by renaming
+      // the cache entry.
+      final filename = applyCacheFilename(wallpaper);
       final tmpDir = await getTemporaryDirectory();
       final cached = File('${tmpDir.path}/$filename');
 
-      File file;
+      File? file;
       if (await cached.exists() && await cached.length() > 0) {
         file = cached;
       } else {
+        // Reuse the feed prefetcher's copy when it has one — for a live wallpaper
+        // being viewed, it almost always does.
+        final prefetched = await ref
+            .read(wallpaperPrefetchServiceProvider)
+            .cachedPathOrNull(await service.resolveUrl(wallpaper));
+        if (prefetched != null) {
+          try {
+            file = await File(prefetched).copy(cached.path);
+          } catch (_) {
+            // Evicted between lookup and copy — fall through to the download.
+          }
+        }
+      }
+
+      if (file == null) {
         final url = await service.resolveUrl(wallpaper);
         file = await service.downloadFile(url, filename, (p) {
           state = WallpaperSharePreparing(progress: p);
@@ -62,13 +86,19 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       }
 
       await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path)], text: message),
+        ShareParams(
+          files: [XFile(file.path)],
+          // What the RECIPIENT sees. The cache file is named for its content, so
+          // this is where the brand goes — without forking the cache.
+          fileNameOverrides: ['arul-${wallpaper.id}${_ext(wallpaper)}'],
+          text: message,
+        ),
       );
       state = const WallpaperShareIdle();
     } catch (e) {
       final network = isNetworkError(e);
       state = WallpaperShareError(
-        message: network ? 'offline' : e.toString(),
+        message: e.toString(),
         isNetwork: network,
       );
     }
@@ -81,3 +111,10 @@ final wallpaperShareProvider =
     NotifierProvider<WallpaperShareNotifier, WallpaperShareState>(
       WallpaperShareNotifier.new,
     );
+
+/// The shared file's extension, so the recipient's gallery/player recognises it.
+String _ext(Wallpaper w) {
+  final name = w.key.split('/').last;
+  final dot = name.lastIndexOf('.');
+  return dot == -1 ? '' : name.substring(dot);
+}

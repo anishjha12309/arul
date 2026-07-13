@@ -46,7 +46,7 @@ workers/  Worker API + CMS + crons (TS)   db/schema/  apply 01→03, then seed.s
 6 languages (ARB, `gen_l10n`): `en, ta, te, kn, ml, hi`. Only UI chrome localized; server content as-authored.
 
 ## 7. Theming
-Light / Dark / System, persisted. Fixed brand seed — Kanjivaram maroon + temple gold ([docs/ui-direction.md](docs/ui-direction.md)). ALL colors via `lib/app/theme/design_tokens.dart` — no literal `Color(0x…)` in screens (the reference leaked 153 literals across 19 files; do not repeat that). **Never seed from device wallpaper / dynamic color.**
+Light / Dark / System, persisted. Fixed brand seed — **extracted from the splash video** (`assets/video/splash.mp4`): lotus rose primary, teal secondary, temple gold accent, plum-black ink. ALL colors via `lib/app/theme/tokens.dart` — no literal `Color(0x…)` in screens (the reference leaked 153 literals across 19 files; do not repeat that). Schemes are hand-specified, NOT `ColorScheme.fromSeed` (it invents its own secondary/tertiary and loses the video’s actual teal + gold). **Never seed from device wallpaper / dynamic color.**
 
 ## 8. Known Gotchas (MUST hold — full checklist in docs/edge-cases.md)
 1. Live video files: **1024×1824 only** (w%128==0, h%32==0, fits 1088×1920 hw-decoder cap) — anything else hits the green-edge / software-decode bug class on budget SoCs.
