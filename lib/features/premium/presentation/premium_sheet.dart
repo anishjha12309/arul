@@ -112,8 +112,9 @@ class _PremiumSheetBody extends StatelessWidget {
                     color: ArulTokens.gold,
                     borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
                   ),
+                  // Must match TRIAL_DAYS in workers/src/routes/payments.ts.
                   child: Text(
-                    '7 DAYS FREE',
+                    '1 DAY FREE',
                     style: ArulTokens.caption.copyWith(
                       fontWeight: FontWeight.w700,
                       color: ArulTokens.darkSurface,

@@ -21,8 +21,13 @@ import '../domain/entitlement.dart';
 /// additionally ORs in `reward_premium_until`. Without a backend (or signed
 /// out) nobody is premium — the gate fails closed, which is the correct
 /// default; the Worker's `/media/signed-url` stays the authoritative gate.
-final entitlementProvider = FutureProvider<bool>((ref) async {
-  if (!AppConfig.hasBackend) return false;
+/// The FULL entitlement — the derived `isPremium` flag AND the subscription row
+/// it came from. The Manage screen needs the row itself (status, renewal date,
+/// trial end) to say anything true about the plan, so the fetch is modelled here
+/// and [entitlementProvider] narrows it to the bool the gate wants. One provider
+/// does the network read; both consumers share the single result.
+final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
+  if (!AppConfig.hasBackend) return const Entitlement.none();
 
   // Read the auth service's SYNCHRONOUS currentState, not the stream's
   // `.future`: authStateChanges is a broadcast controller that does not replay
@@ -35,12 +40,19 @@ final entitlementProvider = FutureProvider<bool>((ref) async {
   // We still watch the stream so entitlement re-resolves when auth changes.
   ref.watch(authStateStreamProvider);
   final authState = ref.read(authServiceProvider).currentState;
-  if (!authState.isAuthenticated) return false;
+  if (!authState.isAuthenticated) return const Entitlement.none();
 
   final sub = await ref
       .watch(subscriptionRepositoryProvider)
       .getSubscription(authState.userId!);
-  return Entitlement.fromSubscription(sub).isPremium;
+  return Entitlement.fromSubscription(sub);
+});
+
+/// The gate's view of [entitlementDetailProvider]: just "may this user act?".
+/// Invalidating [entitlementDetailProvider] cascades here automatically.
+final entitlementProvider = FutureProvider<bool>((ref) async {
+  final entitlement = await ref.watch(entitlementDetailProvider.future);
+  return entitlement.isPremium;
 });
 
 /// THE client gate. Call before every gated action; it is UX only — the real

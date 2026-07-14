@@ -7,9 +7,11 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../premium/providers/entitlement_provider.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
@@ -78,6 +80,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : _fallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
+    // Premium row subtitle reflects the REAL plan. While it resolves (or if the
+    // fetch fails) fall back to the upsell wording — the Manage screen re-reads
+    // it anyway, so a wrong-for-a-moment subtitle costs nothing, whereas
+    // claiming membership the user doesn't have would.
+    final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
+    final premiumSub = switch (entitlement?.subscription?.status) {
+      _ when entitlement?.isPremium != true => 'Unlock apply & share',
+      SubscriptionStatus.trialing => "You're on the free trial",
+      SubscriptionStatus.cancelled => 'Auto-renew off · access continues',
+      _ => "You're a member",
+    };
+
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -120,6 +134,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
                     rows: [
+                      // First row: the plan is the most consequential thing in
+                      // Settings, and it was previously not reachable at all.
+                      _RowData(
+                        icon: Icons.workspace_premium,
+                        title: 'Arul Premium',
+                        sub: premiumSub,
+                        onTap: () => context.push('/premium/manage'),
+                      ),
                       _RowData(
                         icon: Icons.card_giftcard,
                         title: 'Refer & Earn',
@@ -141,7 +163,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.help_outline,
                         title: 'Need help?',
-                        sub: 'Support & subscription',
+                        // No longer "& subscription" — that lives in its own row
+                        // now, and pointing at a mailto for it would be a lie.
+                        sub: 'Contact support',
                         onTap: _support,
                       ),
                       _RowData(
@@ -247,10 +271,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _delete() async {
+    // Deleting cancels the UPI mandate server-side and forfeits whatever is left
+    // of the paid period — and, because the trial tombstone survives deletion,
+    // signing up again does NOT hand back a second free trial. A user who bought
+    // premium is entitled to know all of that BEFORE the irreversible tap, so the
+    // warning is only shown when it is actually true of them.
+    final entitlement = ref.read(entitlementDetailProvider).asData?.value;
+    final hasPremium = entitlement?.isPremium ?? false;
+
     final ok = await showArulConfirmDialog(
       context,
       title: 'Delete account?',
-      message: 'This removes your account, favourites and rewards for good.',
+      message: hasPremium
+          ? 'This removes your account, favourites and rewards for good.\n\n'
+                'Your Arul Premium subscription will be cancelled and any time '
+                'left on it is lost — no refund. Signing up again will not '
+                'restore it, and you will not get another free trial.'
+          : 'This removes your account, favourites and rewards for good.',
       confirmLabel: 'Delete account',
     );
     if (ok != true) return;

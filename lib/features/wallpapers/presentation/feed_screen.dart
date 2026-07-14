@@ -321,6 +321,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
     final feed = ref.watch(feedProvider);
 
+    // Keep the entitlement warm for the whole time the feed is up. It is
+    // autoDispose, and the gate only ever `read`s it from inside a tap handler —
+    // so with no listener it was disposed and RE-FETCHED on every Apply/Share
+    // tap, making each gated tap wait on a live /me/subscription round trip
+    // (12s timeout) before any UI moved. Watching it here resolves it once, at
+    // feed load, so `_isPremium()` hands back a cached value instantly.
+    ref.watch(entitlementProvider);
+
     // Offline gate (product decision: "the instant the internet is out, no
     // wallpapers"). Fires only on a KNOWN offline result — a loading snapshot
     // (`.value == null`) or a failed probe keeps the normal online path, so a
@@ -580,6 +588,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
               child: PremiumNudge(
                 key: ValueKey(_nudgeSeq),
                 action: _nudge!,
+                onTap: () {
+                  final action = _nudge!;
+                  setState(() => _nudge = null);
+                  context.push('/premium?source=${action.source}');
+                },
                 onDismissed: () => setState(() => _nudge = null),
               ),
             ),

@@ -232,8 +232,11 @@ class PremiumScreen extends ConsumerWidget {
                               ArulTokens.pillRadius,
                             ),
                           ),
+                          // 1 day, not 7: the server grants exactly TRIAL_DAYS=1
+                          // (payments.ts) and debits ₹199 at trial end. Promising
+                          // more than the mandate honours is how you get chargebacks.
                           child: const Text(
-                            '7 DAYS FREE',
+                            '1 DAY FREE',
                             style: TextStyle(
                               fontSize: 11.5,
                               fontWeight: FontWeight.w700,
@@ -264,8 +267,13 @@ class PremiumScreen extends ConsumerWidget {
                           },
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
+                  // The ₹2 is named here on purpose. Setting up a UPI mandate
+                  // costs a ₹2 PENNY_DROP that PhonePe reverses immediately — but
+                  // the user still SEES ₹2 leave their account, and an unexplained
+                  // debit on a screen that said "free" reads as a scam.
                   Text(
-                    'Free for 7 days, then ₹199/month. Browsing stays free '
+                    'Free for 1 day, then ₹199/month. UPI Autopay verifies your '
+                    'account with ₹2, refunded instantly. Browsing stays free '
                     'forever.',
                     textAlign: TextAlign.center,
                     style: TextStyle(

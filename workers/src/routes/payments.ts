@@ -82,6 +82,21 @@ const KV_TXN_TTL = 30 * 24 * 60 * 60; // 30 days — covers PhonePe's retry wind
 /** Monthly price in paise (₹199) — must match maxAmount in phonepe.ts. */
 const MONTHLY_PRICE_PAISE = 19900;
 
+/**
+ * Free-trial length. The ₹2 PENNY_DROP only authorizes the mandate (PhonePe
+ * auto-reverses it); the trial itself is ours, granted here and nowhere else.
+ *
+ * Both the webhook and the /payments/status reconcile grant the trial, and they
+ * MUST agree — a drift between them would give some users a different trial than
+ * others depending on which path confirmed their mandate first. Hence one
+ * constant, not two literals.
+ *
+ * Also the debit clock: next_debit_at = now + this, so the paywall copy must say
+ * the same number or we charge users earlier than we promised.
+ */
+const TRIAL_DAYS = 1;
+const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
+
 // ── POST /payments/initiate ──────────────────────────────────────────────────
 
 export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Response> {
@@ -265,7 +280,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // The CASE expressions read the row's OLD trial_end (Postgres SET
       // semantics), so the decision + write is a single atomic statement.
       // COALESCE keeps the original trial_end forever as the consumed-marker.
-      const trialEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const trialEnd = new Date(Date.now() + TRIAL_MS);
       const paidEnd = addOneMonth(new Date());
       const phonepeSubId = pp.subscriptionId ?? null;
 
@@ -473,7 +488,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           orderStatus.state === "COMPLETED" &&
           (row.status as string) === "pending"
         ) {
-          const trialEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const trialEnd = new Date(Date.now() + TRIAL_MS);
           const paidEnd = addOneMonth(new Date());
           const phonepeSubId = orderStatus.paymentFlow?.subscriptionId ?? null;
           const updated = await sql<{ user_id: string; status: string }[]>`

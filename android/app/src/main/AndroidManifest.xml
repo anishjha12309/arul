@@ -127,4 +127,17 @@
     <queries>
         <package android:name="com.whatsapp"/>
     </queries>
+
+    <!-- PhonePe SDK — enumerate UPI apps for intent-based payment. REQUIRED on
+         Android 11+: without this, package-visibility rules hide every UPI app
+         from the SDK, it cannot launch a payment app, and the mandate setup dies
+         with a generic failure. Ported from the reference app. -->
+    <queries>
+        <package android:name="com.phonepe.app"/>
+        <package android:name="com.google.android.apps.nbu.paisa.user"/>
+        <package android:name="net.one97.paytm"/>
+        <package android:name="in.amazon.mShop.android.shopping"/>
+        <package android:name="com.axis.mobile"/>
+        <package android:name="com.whatsapp"/>
+    </queries>
 </manifest>

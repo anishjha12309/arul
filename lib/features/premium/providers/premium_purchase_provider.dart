@@ -230,7 +230,7 @@ class PremiumPurchase extends _$PremiumPurchase {
                   : 'subscription_active',
               merchantOrderId,
             );
-            ref.invalidate(entitlementProvider);
+            ref.invalidate(entitlementDetailProvider);
             state = const PurchaseSuccess();
             return;
           }
@@ -285,7 +285,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     } catch (_) {
       // Non-fatal: fall back to whatever /me/subscription returns on invalidate.
     }
-    ref.invalidate(entitlementProvider);
+    ref.invalidate(entitlementDetailProvider);
   }
 
   /// Cancels the active subscription (revokes the PhonePe mandate).
@@ -300,7 +300,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     try {
       await _api.post('/payments/cancel');
       // Refresh entitlement so any UI bound to it re-reads the new state.
-      ref.invalidate(entitlementProvider);
+      ref.invalidate(entitlementDetailProvider);
       return null;
     } on ApiException catch (e) {
       return e.message.isNotEmpty

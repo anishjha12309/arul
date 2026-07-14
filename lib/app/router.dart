@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/premium/presentation/manage_subscription_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/referral/presentation/refer_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -30,6 +31,12 @@ final router = GoRouter(
       builder: (_, state) => PremiumScreen(
         source: state.uri.queryParameters['source'] ?? 'unknown',
       ),
+    ),
+    // Settings → Arul Premium. Distinct from /premium (the paywall): this is the
+    // account's plan home and the ONLY route that can cancel a subscription.
+    GoRoute(
+      path: '/premium/manage',
+      builder: (_, _) => const ManageSubscriptionScreen(),
     ),
   ],
 );
