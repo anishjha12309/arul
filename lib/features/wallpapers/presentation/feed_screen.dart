@@ -306,19 +306,21 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// legible over any artwork. Left/right stay tight so the artwork dominates.
   static const _cardInsetH = 16.0;
 
-  /// The whole chips→artwork band belongs to the CARD, and the reel starts
-  /// flush against the chips row. That makes the reel's clip line — the one
-  /// place an outgoing card can vanish — coincide EXACTLY with the bottom edge
-  /// of a real element, so mid-scroll a card reads as sliding underneath the
-  /// chips, the way feed content slides under an app bar. Any frame-owned gap
-  /// here would move the clip down into empty space, and a card shearing off at
-  /// an invisible mid-air line is precisely the cheap look this avoids. No
-  /// gradient, no fade — pure clip at a legible boundary.
-  static const _cardInsetTop = 28.0;
+  /// The reel starts immediately below a full-width hairline divider (see the
+  /// build method), and this inset is the card's resting distance from it.
+  /// The divider is what makes the scroll exit read as intentional: the reel's
+  /// clip line — the one place an outgoing card can vanish — sits EXACTLY
+  /// under a drawn boundary, so mid-scroll a card slides beneath a line you
+  /// can see, the way wallpaper apps divide their header from the browse area.
+  /// No gradient, no fade — a pure clip at a visible edge.
+  static const _cardInsetTop = 17.0;
+
+  /// The frame-owned breathing room between the chips row and the divider.
+  static const _chipsGap = 10.0;
 
   /// Two adjacent pages put their insets back to back, so the inter-card
   /// gutter is `_cardInsetTop + _cardInsetBottom`.
-  static const _cardInsetBottom = 8.0;
+  static const _cardInsetBottom = 19.0;
   static const _cardMargin = EdgeInsets.fromLTRB(
     _cardInsetH,
     _cardInsetTop,
@@ -338,7 +340,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// E = H - peek and fraction E / (H + peek) put the current page's top flush
   /// with y=0 and leave `peek` of the next one showing. Pure layout — the snap,
   /// drag and fling geometry are still a stock PageView.
-  static const _peek = 98.0;
+  static const _peek = 87.0;
 
   @override
   Widget build(BuildContext context) {
@@ -419,9 +421,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
               // Chips get the FULL width — nothing overlaps them, and a
               // frame-colored fade on the trailing edge shows the row scrolls
               // on past the last visible chip.
-              // No padding below the chips: the reel begins at their bottom
-              // edge, and the CARD's top inset is the entire band (see
-              // [_cardInsetTop] for why the clip line must sit exactly here).
               Stack(
                 children: [
                   feed is AsyncLoading
@@ -448,6 +447,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
                     ),
                   ),
                 ],
+              ),
+
+              // The header's floor: a full-width hairline the reel begins
+              // directly beneath, so an outgoing card is clipped exactly at a
+              // line the eye can see (see [_cardInsetTop]). Same hairline
+              // tokens as the frame's other quiet borders.
+              Padding(
+                padding: const EdgeInsets.only(top: _chipsGap),
+                child: Container(
+                  height: 1,
+                  color: isDark
+                      ? ArulTokens.cardBorderDark14
+                      : ArulTokens.cardBorderLight,
+                ),
               ),
 
               Expanded(
