@@ -306,26 +306,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// legible over any artwork. Left/right stay tight so the artwork dominates.
   static const _cardInsetH = 16.0;
 
-  /// The band between the chips row and the parked card is split between the
-  /// FRAME (see [_chipsGap]) and the CARD (this top inset), and the split is
-  /// what makes the scroll exit look deliberate instead of cruel:
-  ///
-  /// The card's share only exists while the page is parked — mid-scroll the
-  /// outgoing card slides up through it. A frame-colored gradient exactly this
-  /// tall sits over the reel's top edge, so the card DISSOLVES through its own
-  /// inset zone instead of being sheared at an invisible line with its corners
-  /// cut. At rest the card's top sits exactly at the gradient's zero-alpha end,
-  /// so the parked artwork is never tinted.
-  static const _cardInsetTop = 18.0;
-
-  /// The frame-owned floor of the chips→artwork band: even at the worst
-  /// mid-scroll moment, an outgoing card never gets closer to the chips than
-  /// this — and by then it is already fading out through [_cardInsetTop].
-  static const _chipsGap = 10.0;
+  /// The whole chips→artwork band belongs to the CARD, and the reel starts
+  /// flush against the chips row. That makes the reel's clip line — the one
+  /// place an outgoing card can vanish — coincide EXACTLY with the bottom edge
+  /// of a real element, so mid-scroll a card reads as sliding underneath the
+  /// chips, the way feed content slides under an app bar. Any frame-owned gap
+  /// here would move the clip down into empty space, and a card shearing off at
+  /// an invisible mid-air line is precisely the cheap look this avoids. No
+  /// gradient, no fade — pure clip at a legible boundary.
+  static const _cardInsetTop = 28.0;
 
   /// Two adjacent pages put their insets back to back, so the inter-card
   /// gutter is `_cardInsetTop + _cardInsetBottom`.
-  static const _cardInsetBottom = 18.0;
+  static const _cardInsetBottom = 8.0;
   static const _cardMargin = EdgeInsets.fromLTRB(
     _cardInsetH,
     _cardInsetTop,
@@ -345,7 +338,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// E = H - peek and fraction E / (H + peek) put the current page's top flush
   /// with y=0 and leave `peek` of the next one showing. Pure layout — the snap,
   /// drag and fling geometry are still a stock PageView.
-  static const _peek = 88.0;
+  static const _peek = 98.0;
 
   @override
   Widget build(BuildContext context) {
@@ -426,38 +419,35 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
               // Chips get the FULL width — nothing overlaps them, and a
               // frame-colored fade on the trailing edge shows the row scrolls
               // on past the last visible chip.
-              Padding(
-                // The frame's share of the chips→artwork band; the card's top
-                // inset supplies the rest (see [_cardInsetTop] for how the two
-                // halves behave differently in motion).
-                padding: const EdgeInsets.only(bottom: _chipsGap),
-                child: Stack(
-                  children: [
-                    feed is AsyncLoading
-                        ? const FeedChipsSkeleton()
-                        : const FeedChips(),
-                    Positioned(
-                      top: 0,
-                      bottom: 0,
-                      right: 0,
-                      width: 24,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.centerRight,
-                              end: Alignment.centerLeft,
-                              colors: [
-                                frameColor,
-                                frameColor.withValues(alpha: 0),
-                              ],
-                            ),
+              // No padding below the chips: the reel begins at their bottom
+              // edge, and the CARD's top inset is the entire band (see
+              // [_cardInsetTop] for why the clip line must sit exactly here).
+              Stack(
+                children: [
+                  feed is AsyncLoading
+                      ? const FeedChipsSkeleton()
+                      : const FeedChips(),
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    width: 24,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerRight,
+                            end: Alignment.centerLeft,
+                            colors: [
+                              frameColor,
+                              frameColor.withValues(alpha: 0),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
 
               Expanded(
@@ -526,7 +516,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     const nudgeBottom = cardBottom + _CardChrome.stackHeight + 16;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -614,30 +603,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // The dissolve zone for outgoing cards (see [_cardInsetTop]): a
-            // frame-colored gradient exactly as tall as the card's top inset,
-            // so a card scrolling out fades into the frame through the space it
-            // vacated instead of hard-clipping at the reel's edge — while a
-            // PARKED card, whose top rests at this gradient's transparent end,
-            // is never touched by it.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: _cardInsetTop,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [frameColor, frameColor.withValues(alpha: 0)],
                     ),
                   ),
                 ),
