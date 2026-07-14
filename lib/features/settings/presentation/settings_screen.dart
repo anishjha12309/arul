@@ -31,9 +31,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Design placeholders (README), shown only while signed out / pre-backend.
-  static const _placeholderName = 'Priya Raman';
-  static const _placeholderEmail = 'priya.raman@gmail.com';
+  // Neutral stand-ins while the profile is still loading (settings is only
+  // reachable signed in, so this is momentary) — never a fake person.
+  static const _fallbackName = 'Your account';
+  static const _fallbackEmail = 'Signed in with Google';
 
   /// English name ↔ locale code for the language sheet (visual labels are the
   /// sheet's own; persistence goes through [LocaleNotifier]).
@@ -60,14 +61,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final headerColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final themeMode = ref.watch(themeModeProvider);
 
-    // Real identity once signed in; the handoff placeholders otherwise.
+    // Real identity once signed in; neutral stand-ins otherwise.
     final auth = ref.watch(authStateStreamProvider).asData?.value;
-    final name = (auth?.displayName?.trim().isNotEmpty ?? false)
-        ? auth!.displayName!.trim()
-        : _placeholderName;
+    final authName = auth?.displayName?.trim();
+    final hasRealName = authName != null && authName.isNotEmpty;
+    final name = hasRealName ? authName : _fallbackName;
     final email = (auth?.email?.trim().isNotEmpty ?? false)
         ? auth!.email!.trim()
-        : _placeholderEmail;
+        : _fallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
     return Scaffold(
@@ -104,8 +105,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _ProfileCard(
                     name: name,
                     email: email,
-                    initial: name.isEmpty ? 'A' : name[0].toUpperCase(),
-                    onEdit: () => _editName(name),
+                    // Brand 'A' while the stand-in shows — 'Y' (from "Your
+                    // account") would read as someone else's initial.
+                    initial: hasRealName ? authName[0].toUpperCase() : 'A',
+                    onEdit: () => _editName(hasRealName ? authName : ''),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(

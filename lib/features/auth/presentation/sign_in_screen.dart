@@ -25,8 +25,9 @@ import 'widgets/video_background.dart';
 /// the FULL Google `authenticate()` on its first frame (google_sign_in v7:
 /// instance → initialize() → authenticate()). It must never be swapped to
 /// lightweight/silent auth; that was tried and rejected on retention grounds.
-/// The pill below is the fallback for a dismissed sheet, and (in this design
-/// pass) a mock identity — no real auth wiring yet.
+/// The pill below is the fallback for a dismissed sheet — a generic
+/// "Continue with Google" retry affordance (never a named identity: the
+/// account choice belongs to Google's own sheet).
 ///
 /// The background player is SHARED with the splash — the same live decoder
 /// handed across the route — so arriving here never re-inits a MediaCodec.
@@ -38,8 +39,6 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
-  static const _mockName = 'Priya';
-  static const _mockEmail = 'priya.raman@gmail.com';
   static const _caption = 'Sign in to begin your free trial';
 
   bool _signingIn = false;
@@ -145,8 +144,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                   const SizedBox(height: 14),
                   _SignInPill(
-                    name: _mockName,
-                    email: _mockEmail,
+                    title: 'Continue with Google',
+                    subtitle: 'Choose an account to get started',
                     onTap: _signingIn ? () {} : _onPillTap,
                   ),
                   const SizedBox(height: 14),
@@ -165,13 +164,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 /// (solid gold on press).
 class _SignInPill extends StatefulWidget {
   const _SignInPill({
-    required this.name,
-    required this.email,
+    required this.title,
+    required this.subtitle,
     required this.onTap,
   });
 
-  final String name;
-  final String email;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
@@ -222,7 +221,7 @@ class _SignInPillState extends State<_SignInPill> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Continue as ${widget.name}',
+                    widget.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -232,7 +231,7 @@ class _SignInPillState extends State<_SignInPill> {
                     ),
                   ),
                   Text(
-                    widget.email,
+                    widget.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
