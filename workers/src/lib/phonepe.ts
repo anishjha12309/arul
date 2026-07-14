@@ -79,14 +79,35 @@ import type { Env } from "../env.js";
 
 // ── Hosts ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Is this the production gateway?
+ *
+ * TRIMMED, and anything that is not a recognised value THROWS. Both matter:
+ * a secret set through a shell pipe easily picks up a trailing newline, and the
+ * old bare `=== "PRODUCTION"` then quietly fell through to the SANDBOX branch —
+ * so production credentials got posted to the preprod host and came back
+ * `401 {"code":"401"}`, which reads exactly like "bad credentials" and sends you
+ * hunting the wrong bug. Silently defaulting to sandbox is never the safe
+ * default for a payment gateway; a typo must fail loudly, not downgrade.
+ */
+function isProduction(env: Env): boolean {
+  const raw = (env.PHONEPE_ENV ?? "").trim().toUpperCase();
+  if (raw !== "PRODUCTION" && raw !== "SANDBOX") {
+    throw new Error(
+      `PHONEPE_ENV must be exactly "PRODUCTION" or "SANDBOX" (got ${JSON.stringify(env.PHONEPE_ENV)}).`,
+    );
+  }
+  return raw === "PRODUCTION";
+}
+
 function getPgBase(env: Env): string {
-  return env.PHONEPE_ENV === "PRODUCTION"
+  return isProduction(env)
     ? "https://api.phonepe.com/apis/pg"
     : "https://api-preprod.phonepe.com/apis/pg-sandbox";
 }
 
 function getOAuthUrl(env: Env): string {
-  return env.PHONEPE_ENV === "PRODUCTION"
+  return isProduction(env)
     ? "https://api.phonepe.com/apis/identity-manager/v1/oauth/token"
     : "https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token";
 }
@@ -120,11 +141,14 @@ export async function getAccessToken(env: Env): Promise<string> {
     }
   }
 
-  // 2. Fetch new token
+  // 2. Fetch new token. Trimmed for the same reason as PHONEPE_ENV: a secret
+  // uploaded through a shell pipe can carry a trailing newline, and URLSearchParams
+  // would faithfully encode it into the credential (%0A), yielding a 401 that
+  // looks like a wrong password rather than a stray byte.
   const body = new URLSearchParams({
-    client_id: env.PHONEPE_CLIENT_ID,
-    client_secret: env.PHONEPE_CLIENT_SECRET,
-    client_version: env.PHONEPE_CLIENT_VERSION,
+    client_id: env.PHONEPE_CLIENT_ID.trim(),
+    client_secret: env.PHONEPE_CLIENT_SECRET.trim(),
+    client_version: env.PHONEPE_CLIENT_VERSION.trim(),
     grant_type: "client_credentials",
   });
 
@@ -288,16 +312,22 @@ export async function setupSubscription(
     expireAt?: number;
   };
 
-  // Primary source is the top-level SDK order token. Defensive fallback: if a
-  // response ever carries only a redirectUrl (web flow), scrape ?token= from it
-  // so we degrade instead of hard-failing.
-  let token: string | null = data.token ?? null;
-  if (!token && data.redirectUrl) {
-    try {
-      token = new URL(data.redirectUrl).searchParams.get("token");
-    } catch {
-      token = null;
-    }
+  // Primary source is the top-level SDK order token.
+  //
+  // The old code fell back to scraping ?token= out of `redirectUrl` when the
+  // top-level token was absent. That "graceful degradation" is a trap: the
+  // scraped value is a WEB CHECKOUT token, and per the note above, handing one
+  // to the Flutter SDK is precisely what produces 401 / PR004 "Unauthorized" on
+  // device. The fallback turned a loud, diagnosable server failure into a 200
+  // carrying a token guaranteed to fail — the worst of both. If sdk/order did
+  // not return a token, that IS the bug; say so here rather than shipping a
+  // poisoned one to the SDK.
+  const token: string | null = data.token ?? null;
+  if (!token) {
+    throw new Error(
+      `PhonePe sdk/order returned no SDK token (keys: ${Object.keys(data).join(",")}, ` +
+        `state: ${data.state}). A web-checkout token cannot authorize the mobile SDK.`,
+    );
   }
 
   return {

@@ -156,6 +156,20 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       return errorResponse(502, "phonepe_error", "PhonePe gateway error");
     }
 
+    // Diagnostic for the PR004/Unauthorized class of on-device failure. The SDK
+    // authenticates with merchantId + token, and the Worker validates NEITHER —
+    // a wrong merchant id or a web-checkout token both still return 200 here and
+    // only blow up inside the SDK. Log their shape (never their value) so the
+    // next failed tap says which one is wrong.
+    console.log(
+      `[payments/initiate] env=${env.PHONEPE_ENV} ` +
+        `merchantIdLen=${env.PHONEPE_MERCHANT_ID?.length ?? 0} ` +
+        `merchantIdPrefix=${(env.PHONEPE_MERCHANT_ID ?? "").slice(0, 4)} ` +
+        `tokenLen=${ppResult.token?.length ?? 0} ` +
+        `orderId=${ppResult.orderId} state=${ppResult.state} ` +
+        `trialEligible=${trialEligible}`,
+    );
+
     // Persist pending subscription intent
     // ON CONFLICT on user_id: a user can only have one active subscription row.
     // We overwrite pending state but never overwrite an active/trialing one.
@@ -192,7 +206,10 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       redirectUrl: ppResult.redirectUrl,
       token: ppResult.token,
       expireAt: ppResult.expireAt,
-      merchantId: env.PHONEPE_MERCHANT_ID,
+      // Trimmed: the SDK authenticates with this verbatim, and a trailing
+      // newline here surfaces on-device as PR004 "Unauthorized" with a healthy
+      // 200 from us — the hardest possible bug to trace.
+      merchantId: env.PHONEPE_MERCHANT_ID.trim(),
       environment: env.PHONEPE_ENV,
       // Additive — old app versions ignore these. trialEligible=false means the
       // user is being charged ₹199 upfront (amountPaise) at mandate setup.

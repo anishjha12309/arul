@@ -53,8 +53,21 @@ App reads version.json → appends `?v=<version>`; pages stay edge-cacheable (ma
    status `/subscriptions/v2/{id}/status?details=true`.
 5. Webhook: `Authorization: SHA256(username:password)`; deduped by orderId in KV (30d TTL).
    Order-id prefix here is `DKS_` (distinguishes Arul if the merchant is shared).
+6. **NEVER fall back to a web token.** If `sdk/order` returns no top-level `token`, THROW. Scraping
+   `?token=` out of `redirectUrl` yields a web-checkout token, and the SDK answers PR004
+   "Unauthorized" on device while the Worker happily returns 200 — undebuggable from the server.
+7. **`PHONEPE_ENV` is an exact string compare.** A trailing newline (e.g. `"PRODUCTION" | wrangler
+   secret put`) silently routed prod creds to the SANDBOX host, whose reply is
+   `401 {"code":"401"}` — indistinguishable from bad credentials. `isProduction()` now trims and
+   THROWS on anything but `PRODUCTION`/`SANDBOX`; creds + merchant id are trimmed too. Set secrets
+   with `wrangler secret bulk <json>`, never a shell pipe.
+8. **Flipping `PHONEPE_ENV` does NOT invalidate the cached OAuth token** (KV `phonepe:oauth`). Delete
+   that key after any env/credential change or the old token is served against the new host.
+9. Symptom map: PR004/Unauthorized on device = bad `merchantId` or a web token (the Worker validates
+   NEITHER — it only echoes them, so it still returns 200). `OAuth 401` in the tail = wrong host or a
+   whitespace-polluted credential.
 
-## Secrets (`npx wrangler secret put`) — fresh values, NEVER reuse another app's
+## Secrets (`npx wrangler secret bulk <file.json>`) — fresh values, NEVER reuse another app's
 ```
 JWT_SECRET  GOOGLE_WEB_CLIENT_ID
 R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL

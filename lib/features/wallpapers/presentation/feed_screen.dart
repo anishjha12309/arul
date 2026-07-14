@@ -46,7 +46,28 @@ class FeedScreen extends ConsumerStatefulWidget {
 }
 
 class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
-  late final PageController _pager;
+  /// Built lazily from the measured reel height (see [_peek]) rather than in
+  /// initState: `viewportFraction` is final on PageController, and the fraction
+  /// that yields a constant-size peek can only be computed once we know how tall
+  /// the reel actually is (screen − header − chips − insets).
+  PageController? _pager;
+  double? _pagerHeight;
+
+  PageController _pagerFor(double height) {
+    if (_pager != null && _pagerHeight == height) return _pager!;
+    final previous = _pager;
+    _pagerHeight = height;
+    _pager = PageController(
+      initialPage: _index,
+      viewportFraction: ((height - _peek) / (height + _peek)).clamp(0.5, 1.0),
+    );
+    // The outgoing controller is still attached to the PageView being replaced
+    // this frame; disposing it inline would throw. Let the frame land first.
+    if (previous != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    }
+    return _pager!;
+  }
 
   /// Captured in initState, NOT read lazily via `ref.read`: `ref` is unusable
   /// from `dispose()` in Riverpod 3, so a `ref.read` there silently fails to
@@ -63,11 +84,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// Set by [restoreFeedTo] after an apply-driven cold restart: the page to jump
   /// to once the restored category's list lands. Consumed by [_syncFeed].
   int? _pendingRestoreIndex;
-
-  /// Chrome (chips + action rail + meta) fades out while swiping, back on
-  /// settle. Opacity only — never a relayout, never a blur.
-  bool _chromeVisible = true;
-  Duration _chromeDuration = ArulTokens.chromeSettleIn;
 
   /// The gate nudge shows at most ONCE per session; every gated tap after that
   /// opens the premium sheet.
@@ -91,12 +107,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   void initState() {
     super.initState();
     _video = ref.read(videoPreloadControllerProvider);
-    _pager = PageController();
   }
 
   @override
   void dispose() {
-    _pager.dispose();
+    _pager?.dispose();
     // Do NOT dispose the controller — it is app-scoped, and disposing here would
     // race the Android 12+ Activity recreate a wallpaper apply can trigger.
     // detach() returns the decoders AND clears the list so a later
@@ -124,7 +139,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_pager.hasClients) _pager.jumpToPage(target);
+      final pager = _pager;
+      if (pager != null && pager.hasClients) pager.jumpToPage(target);
       // reclaim: the pool may hold no decoders (released by a prior apply); the
       // index goes in WITH the list so the pool opens the right clip first.
       _video
@@ -146,17 +162,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     if (!wasLive) {
       showArulToast(context, AppLocalizations.of(context).applied);
     }
-  }
-
-  // ─── Chrome recede ───────────────────────────────────────────────────────────
-
-  bool _onScroll(ScrollNotification n) {
-    if (n is ScrollStartNotification) {
-      _setChrome(false);
-    } else if (n is ScrollEndNotification) {
-      _setChrome(true);
-    }
-    return false;
   }
 
   /// Pull-to-refresh: an authoritative network reload. `refresh()` re-reads
@@ -192,16 +197,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
       // self-healing retry regardless.
       onError: (_, _) {},
     );
-  }
-
-  void _setChrome(bool visible) {
-    if (_chromeVisible == visible) return;
-    setState(() {
-      _chromeVisible = visible;
-      _chromeDuration = visible
-          ? ArulTokens.chromeSettleIn
-          : ArulTokens.chromeRecedeOut;
-    });
   }
 
   // ─── Premium gate ────────────────────────────────────────────────────────────
@@ -308,9 +303,49 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
   /// The inset around the wallpaper card. The surrounding themed frame (ink in
   /// dark, ivory in light) is what keeps the chips row and settings entry
-  /// legible over any artwork.
-  static const _cardMargin = EdgeInsets.fromLTRB(12, 8, 12, 12);
-  static const _cardRadius = 22.0;
+  /// legible over any artwork. Left/right stay tight so the artwork dominates.
+  static const _cardInsetH = 16.0;
+
+  /// The band between the chips row and the parked card is split between the
+  /// FRAME (see [_chipsGap]) and the CARD (this top inset), and the split is
+  /// what makes the scroll exit look deliberate instead of cruel:
+  ///
+  /// The card's share only exists while the page is parked — mid-scroll the
+  /// outgoing card slides up through it. A frame-colored gradient exactly this
+  /// tall sits over the reel's top edge, so the card DISSOLVES through its own
+  /// inset zone instead of being sheared at an invisible line with its corners
+  /// cut. At rest the card's top sits exactly at the gradient's zero-alpha end,
+  /// so the parked artwork is never tinted.
+  static const _cardInsetTop = 18.0;
+
+  /// The frame-owned floor of the chips→artwork band: even at the worst
+  /// mid-scroll moment, an outgoing card never gets closer to the chips than
+  /// this — and by then it is already fading out through [_cardInsetTop].
+  static const _chipsGap = 10.0;
+
+  /// Two adjacent pages put their insets back to back, so the inter-card
+  /// gutter is `_cardInsetTop + _cardInsetBottom`.
+  static const _cardInsetBottom = 18.0;
+  static const _cardMargin = EdgeInsets.fromLTRB(
+    _cardInsetH,
+    _cardInsetTop,
+    _cardInsetH,
+    _cardInsetBottom,
+  );
+  static const _cardRadius = ArulTokens.cardRadius;
+
+  /// How much of the NEXT page shows below the current one ("the second
+  /// wallpaper on the bottom horizon"). The next card starts [_cardInsetTop]
+  /// into its page, so the visible sliver is `_peek - _cardInsetTop`.
+  ///
+  /// A plain `viewportFraction` would split the slack evenly and peek a page
+  /// ABOVE as well, which would collide with the chips row. Instead the pager is
+  /// laid out taller than its viewport and pulled up by exactly the top slack,
+  /// so all of it lands at the bottom: with a visible height H, page extent
+  /// E = H - peek and fraction E / (H + peek) put the current page's top flush
+  /// with y=0 and leave `peek` of the next one showing. Pure layout — the snap,
+  /// drag and fling geometry are still a stock PageView.
+  static const _peek = 88.0;
 
   @override
   Widget build(BuildContext context) {
@@ -392,7 +427,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
               // frame-colored fade on the trailing edge shows the row scrolls
               // on past the last visible chip.
               Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                // The frame's share of the chips→artwork band; the card's top
+                // inset supplies the rest (see [_cardInsetTop] for how the two
+                // halves behave differently in motion).
+                padding: const EdgeInsets.only(bottom: _chipsGap),
                 child: Stack(
                   children: [
                     feed is AsyncLoading
@@ -479,147 +517,179 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     final busy =
         apply is WallpaperApplyLoading || share is WallpaperSharePreparing;
 
-    final current = items[_index.clamp(0, items.length - 1)];
-
-    // Everything below is positioned against the wallpaper CARD, not the
-    // screen: the card's margins are constant, so card-relative offsets are
-    // margin + inner offset.
     const m = _cardMargin;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Media pager — one inset rounded card per page. The padding lives
-        // INSIDE the page so the snap/drag geometry is unchanged. Wrapped in a
-        // RefreshIndicator: on the first page a downward pull has no previous
-        // page to reveal, so it overscrolls and refreshes the whole catalog;
-        // on later pages the pull just navigates, so refresh only fires "from
-        // the top", as intended.
-        RefreshIndicator(
-          onRefresh: _refreshCatalog,
-          color: ArulTokens.gold,
-          backgroundColor: Theme.of(context).brightness == Brightness.dark
-              ? ArulTokens.darkSurface
-              : ArulTokens.ivory,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _onScroll,
-            child: PageView.builder(
-              controller: _pager,
-              scrollDirection: Axis.vertical,
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: items.length,
-              onPageChanged: (i) {
-                setState(() => _index = i);
-                _video.onPageChanged(i);
-                _precacheNextStatic(items, i);
-              },
-              itemBuilder: (context, i) => Padding(
-                padding: m,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_cardRadius),
-                  child: _ReelMedia(wallpaper: items[i], index: i),
+    // The card no longer reaches the bottom of the reel — the peek does. Only
+    // the nudge is still screen-anchored, so it is the only thing that needs to
+    // know where the card's bottom edge falls.
+    const cardBottom = _peek + _cardInsetBottom;
+    const nudgeBottom = cardBottom + _CardChrome.stackHeight + 16;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // End-of-collection mark. It lives BEHIND the pager, inside the
+            // slot the next card's peek normally fills — so on every page but
+            // the last it is covered by an actual wallpaper, and on the last it
+            // owns what would otherwise be a dead void. Opacity is gated on the
+            // index (onPageChanged fires at the halfway point of the swipe, so
+            // it breathes in as the last card settles).
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: cardBottom,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _index == items.length - 1 ? 1 : 0,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOut,
+                  child: Center(child: _EndOfFeedMark(isDark: isDark)),
                 ),
               ),
             ),
-          ),
-        ),
 
-        // Chrome layer: scrim + action rail + meta, faded as one. Chips and
-        // settings live on the frame above and never recede.
-        IgnorePointer(
-          ignoring: !_chromeVisible,
-          child: AnimatedOpacity(
-            opacity: _chromeVisible ? 1 : 0,
-            duration: _chromeDuration,
-            curve: ArulTokens.settleCurve,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Bottom scrim, clipped to the card's lower corners so it
-                // never paints on the frame.
-                Positioned(
-                  bottom: m.bottom,
-                  left: m.left,
-                  right: m.right,
-                  height: 190,
-                  child: const ClipRRect(
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(_cardRadius),
-                      bottomRight: Radius.circular(_cardRadius),
-                    ),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: ArulTokens.feedBottomScrim,
+            // Media pager — one inset rounded card per page, laid out taller
+            // than the viewport and pulled up by `_peek` so ALL of the pager's
+            // slack lands below the current card as the next one's horizon (see
+            // [_peek]). The padding lives INSIDE the page, so page extent — and
+            // therefore the snap/drag/fling geometry — is a stock PageView's.
+            //
+            // Wrapped in a RefreshIndicator: on the first page a downward pull
+            // has no previous page to reveal, so it overscrolls and refreshes
+            // the whole catalog; on later pages the pull just navigates, so
+            // refresh only fires "from the top", as intended.
+            Positioned(
+              top: -_peek,
+              left: 0,
+              right: 0,
+              height: h + _peek,
+              child: RefreshIndicator(
+                onRefresh: _refreshCatalog,
+                // The indicator is measured from the pager's top, which is now
+                // _peek above the visible area — push it back down so it lands
+                // where the user pulled.
+                edgeOffset: _peek,
+                color: ArulTokens.gold,
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? ArulTokens.darkSurface
+                    : ArulTokens.ivory,
+                child: PageView.builder(
+                  controller: _pagerFor(h),
+                  scrollDirection: Axis.vertical,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: items.length,
+                  onPageChanged: (i) {
+                    setState(() => _index = i);
+                    _video.onPageChanged(i);
+                    _precacheNextStatic(items, i);
+                  },
+                  // Each page is a self-contained card: media, scrim, name and
+                  // the two buttons, all clipped to the same rounded rect. The
+                  // controls therefore TRAVEL WITH their wallpaper — they slide
+                  // in as it arrives and slide out with it, instead of hanging
+                  // in a fixed layer the artwork passes behind.
+                  itemBuilder: (context, i) => Padding(
+                    padding: m,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(_cardRadius),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _ReelMedia(wallpaper: items[i], index: i),
+                          _CardChrome(
+                            wallpaper: items[i],
+                            busy: busy,
+                            onApply: () =>
+                                _onAction(PremiumGateAction.apply, items[i]),
+                            onShare: () =>
+                                _onAction(PremiumGateAction.share, items[i]),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-
-                Positioned(
-                  right: m.right + 10,
-                  bottom: m.bottom + 92,
-                  child: _ActionRail(
-                    busy: busy,
-                    onApply: () => _onAction(PremiumGateAction.apply, current),
-                    onShare: () => _onAction(PremiumGateAction.share, current),
-                  ),
-                ),
-
-                Positioned(
-                  left: m.left + 16,
-                  right: m.right + 64,
-                  bottom: m.bottom + 20,
-                  child: _FeedMeta(wallpaper: current),
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Gate nudge — floats above the meta, keyed so each tap replays the rise.
-        if (_nudge != null)
-          Positioned(
-            left: 0,
-            right: 0,
-            // Just above the meta block, per README "floating nudge pill
-            // above meta".
-            bottom: m.bottom + 104,
-            child: Center(
-              child: PremiumNudge(
-                key: ValueKey(_nudgeSeq),
-                action: _nudge!,
-                onTap: () {
-                  final action = _nudge!;
-                  setState(() => _nudge = null);
-                  context.push('/premium?source=${action.source}');
-                },
-                onDismissed: () => setState(() => _nudge = null),
               ),
             ),
-          ),
 
-        // In-flight transfer bar for an apply/share download.
-        if (apply is WallpaperApplyLoading || share is WallpaperSharePreparing)
-          Positioned(
-            top: 0,
-            left: m.left,
-            right: m.right,
-            child: _TransferProgress(
-              progress: switch ((apply, share)) {
-                (
-                  WallpaperApplyLoading(
-                    stage: WallpaperApplyStage.downloading,
-                    :final progress,
+            // The dissolve zone for outgoing cards (see [_cardInsetTop]): a
+            // frame-colored gradient exactly as tall as the card's top inset,
+            // so a card scrolling out fades into the frame through the space it
+            // vacated instead of hard-clipping at the reel's edge — while a
+            // PARKED card, whose top rests at this gradient's transparent end,
+            // is never touched by it.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: _cardInsetTop,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [frameColor, frameColor.withValues(alpha: 0)],
+                    ),
                   ),
-                  _,
-                ) =>
-                  progress,
-                (_, WallpaperSharePreparing(:final progress)) => progress,
-                _ => null,
-              },
+                ),
+              ),
             ),
-          ),
-      ],
+
+            // Gate nudge — floats above the meta, keyed so each tap replays the
+            // rise.
+            if (_nudge != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: nudgeBottom,
+                child: Center(
+                  child: PremiumNudge(
+                    key: ValueKey(_nudgeSeq),
+                    action: _nudge!,
+                    onTap: () {
+                      final action = _nudge!;
+                      setState(() => _nudge = null);
+                      context.push('/premium?source=${action.source}');
+                    },
+                    onDismissed: () => setState(() => _nudge = null),
+                  ),
+                ),
+              ),
+
+            // In-flight transfer bar for an apply/share download.
+            if (apply is WallpaperApplyLoading ||
+                share is WallpaperSharePreparing)
+              Positioned(
+                top: 0,
+                left: m.left,
+                right: m.right,
+                child: _TransferProgress(
+                  progress: switch ((apply, share)) {
+                    (
+                      WallpaperApplyLoading(
+                        stage: WallpaperApplyStage.downloading,
+                        :final progress,
+                      ),
+                      _,
+                    ) =>
+                      progress,
+                    (_, WallpaperSharePreparing(:final progress)) => progress,
+                    _ => null,
+                  },
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -753,6 +823,46 @@ class _SettingsButton extends StatelessWidget {
   }
 }
 
+/// Marks the end of a category's reel: the brand gopuram between two hairlines
+/// that fade outward, centred in the slot where the next card would otherwise
+/// peek. Deliberately quiet — a closing flourish, not a message — so the feed
+/// ends the way a book does, and no localized copy is needed.
+class _EndOfFeedMark extends StatelessWidget {
+  const _EndOfFeedMark({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    // Same accent split as the header's mark: gold on the dark frame, maroon on
+    // ivory — muted further because this sits at the feed's quietest edge.
+    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+
+    Widget hairline(bool leading) => Container(
+      width: 30,
+      height: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: leading ? Alignment.centerLeft : Alignment.centerRight,
+          end: leading ? Alignment.centerRight : Alignment.centerLeft,
+          colors: [accent.withValues(alpha: 0), accent.withValues(alpha: 0.4)],
+        ),
+      ),
+    );
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        hairline(true),
+        const SizedBox(width: 12),
+        GopuramMark(size: 16, color: accent.withValues(alpha: 0.65)),
+        const SizedBox(width: 12),
+        hairline(false),
+      ],
+    );
+  }
+}
+
 /// The media of one reel page. Watches the video pool so the page rebinds when
 /// the pool reassigns a player to this index. Poster + texture come from the
 /// reused [ViewerMedia].
@@ -775,14 +885,108 @@ class _ReelMedia extends ConsumerWidget {
   }
 }
 
-/// Right-edge action rail (README > Reel feed): Apply (`wallpaper` 30px) + Share
-/// (`share` 28px) ONLY. Icon + 10.5px label, ivory, text-shadow. No like button.
-class _ActionRail extends StatelessWidget {
-  const _ActionRail({
+/// Everything that belongs to ONE wallpaper, painted inside that wallpaper's
+/// own card: the bottom scrim, the deity's name, and the Apply/Share buttons.
+///
+/// This lives in the page, not in a fixed layer above the pager. A screen-
+/// anchored overlay reads like a windshield — the artwork slides past behind
+/// controls that never move, and the name of the deity you are looking at has
+/// to be swapped in at the right moment by hand (which is what made it lag
+/// behind the swipe). Parented to the card, the controls simply ARE part of the
+/// wallpaper: they arrive with it, leave with it, and can never describe the
+/// wrong one. It also means no fade, no recede, no scroll-notification
+/// bookkeeping — the PageView moves them for free.
+class _CardChrome extends StatelessWidget {
+  const _CardChrome({
+    required this.wallpaper,
     required this.busy,
     required this.onApply,
     required this.onShare,
   });
+
+  /// Scrim height, and the band the name + buttons live in.
+  static const double stackHeight = 190;
+
+  /// Gap from the card's bottom edge to the buttons.
+  static const double _barInset = 22;
+
+  /// Gap from the buttons up to the name block.
+  static const double _metaGap = 18;
+
+  final Wallpaper wallpaper;
+  final bool busy;
+  final VoidCallback onApply;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // IgnorePointer is LOAD-BEARING, not decoration: RenderDecoratedBox
+        // overrides hitTestSelf and a BoxDecoration hit-tests true anywhere
+        // inside its box. Painted above the media, the scrim would otherwise
+        // swallow every touch in the bottom 190 — a swipe started down there
+        // would never reach the PageView and the reel would not advance.
+        const Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: stackHeight,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(gradient: ArulTokens.feedBottomScrim),
+            ),
+          ),
+        ),
+
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: _barInset,
+          child: _ActionBar(busy: busy, onApply: onApply, onShare: onShare),
+        ),
+
+        // Also pointer-transparent: RenderParagraph hit-tests true, so the
+        // name block would be a second dead zone over the pager.
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: _barInset + _ActionBar.height + _metaGap,
+          child: IgnorePointer(child: _FeedMeta(wallpaper: wallpaper)),
+        ),
+      ],
+    );
+  }
+}
+
+/// The feed's action bar: a wide Apply pill with a circular Share beside it,
+/// centred on the card's lower edge.
+///
+/// This replaces the old right-edge icon rail. The rail put the app's ONE
+/// primary verb (Apply) in the same visual weight as Share, in the zone the
+/// thumb uses to swipe — so the primary action both read as optional and shared
+/// its hit area with the gesture that drives the feed. A centred pill states the
+/// verb in words, sits where the thumb rests, and clears the swipe column.
+///
+/// Colour is deliberately NOT the design system's [ArulTokens.ctaGreen]: that
+/// token is for CTAs on THEMED surfaces (sheets, premium, sign-in), where the
+/// background is ours. Here the button sits directly on someone's artwork, and
+/// the app's established over-media language is ivory + shadow (rail glyphs,
+/// meta text, LIVE badge). So Apply is that language in pill form — solid ivory,
+/// maroon label — and Share is its secondary weight: the same ivory, held as
+/// glass. Hierarchy comes from fill and width, never from a hue that has to win
+/// a fight with 428 devotional wallpapers.
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({
+    required this.busy,
+    required this.onApply,
+    required this.onShare,
+  });
+
+  /// Both buttons' height, and the row's. Exported because the feed stacks the
+  /// meta directly above the bar and must know how tall it is.
+  static const double height = 48;
 
   final bool busy;
   final VoidCallback onApply;
@@ -790,37 +994,25 @@ class _ActionRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _RailButton(
-          icon: Icons.wallpaper_rounded,
-          iconSize: 30,
-          label: 'Apply',
-          onTap: busy ? null : onApply,
+        Flexible(
+          child: _ApplyPill(label: l10n.apply, onTap: busy ? null : onApply),
         ),
-        const SizedBox(height: 22),
-        _RailButton(
-          icon: Icons.share_rounded,
-          iconSize: 28,
-          label: 'Share',
-          onTap: busy ? null : onShare,
-        ),
+        const SizedBox(width: 12),
+        _ShareCircle(label: l10n.share, onTap: busy ? null : onShare),
       ],
     );
   }
 }
 
-class _RailButton extends StatelessWidget {
-  const _RailButton({
-    required this.icon,
-    required this.iconSize,
-    required this.label,
-    required this.onTap,
-  });
+/// Primary: solid ivory, maroon label. Given a floor width so it reads as the
+/// dominant action even where the localized verb is a single short word.
+class _ApplyPill extends StatelessWidget {
+  const _ApplyPill({required this.label, required this.onTap});
 
-  final IconData icon;
-  final double iconSize;
   final String label;
 
   /// Null while an apply/share is in flight — a second tap would start a second
@@ -834,36 +1026,96 @@ class _RailButton extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
-      child: GestureDetector(
-        onTap: disabled
-            ? null
-            : () {
-                HapticFeedback.lightImpact();
-                onTap!();
-              },
-        behavior: HitTestBehavior.opaque,
-        child: Opacity(
-          opacity: disabled ? 0.5 : 1,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: iconSize,
+      child: Opacity(
+        opacity: disabled ? 0.55 : 1,
+        child: Material(
+          color: ArulTokens.ivory,
+          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+          elevation: 0,
+          child: InkWell(
+            onTap: disabled
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onTap!();
+                  },
+            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+            splashColor: ArulTokens.maroonTintFill08,
+            highlightColor: ArulTokens.maroonTintFill07,
+            // No `alignment:` here — a Container with an alignment expands to
+            // its max constraint, which is what stretched the pill across the
+            // whole card. Without it the box hugs the label and the minWidth
+            // does the rest, so the pill keeps a constant, reference-like width
+            // whatever the locale's verb is.
+            child: Container(
+              height: _ActionBar.height,
+              constraints: const BoxConstraints(minWidth: 168, maxWidth: 240),
+              padding: const EdgeInsets.symmetric(horizontal: 26),
+              // Text only, like the reference: an icon would crowd the longer
+              // verbs (ta/ml/te set "Apply" as a whole word) and this pill is
+              // already the only thing that can be tapped down here.
+              child: Center(
+                widthFactor: 1,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: ArulTokens.button.copyWith(
+                    fontSize: 16,
+                    color: ArulTokens.maroon,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Secondary: the same ivory held as glass — a translucent fill with a hairline
+/// border, so it stays readable on white temples and night skies alike without
+/// competing with the pill.
+class _ShareCircle extends StatelessWidget {
+  const _ShareCircle({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return Semantics(
+      button: true,
+      enabled: !disabled,
+      label: label,
+      child: Opacity(
+        opacity: disabled ? 0.55 : 1,
+        child: Material(
+          color: const Color.fromRGBO(250, 245, 236, 0.18),
+          shape: const CircleBorder(
+            side: BorderSide(color: Color.fromRGBO(250, 245, 236, 0.45)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: disabled
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onTap!();
+                  },
+            child: const SizedBox(
+              width: _ActionBar.height,
+              height: _ActionBar.height,
+              child: Icon(
+                Icons.share_rounded,
+                size: 21,
                 color: ArulTokens.ivory,
                 shadows: ArulTokens.railIconShadow,
               ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w600,
-                  color: ArulTokens.ivory,
-                  shadows: ArulTokens.railIconShadow,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

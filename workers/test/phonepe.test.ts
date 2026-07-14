@@ -204,6 +204,7 @@ describe("setupSubscription", () => {
     mockFetchWithOAuthThenSetup({
       orderId: "PP_ORDER_123",
       state: "PENDING",
+      token: "SDK_TOK",
       redirectUrl: "upi://pay?...",
     });
 
@@ -283,7 +284,7 @@ describe("setupSubscription", () => {
 
   it("sends O-Bearer Authorization header", async () => {
     const env = makeEnv();
-    mockFetchWithOAuthThenSetup({ orderId: "X", state: "PENDING", redirectUrl: "u" });
+    mockFetchWithOAuthThenSetup({ orderId: "X", state: "PENDING", token: "T", redirectUrl: "u" });
 
     await setupSubscription(env, {
       userId: "u1",
@@ -321,26 +322,33 @@ describe("setupSubscription", () => {
     expect(result.expireAt).toBe(1776145172971);
   });
 
-  it("falls back to scraping ?token= from redirectUrl if no top-level token", async () => {
+  // A web-checkout token is NOT a valid SDK order token: handing one to the
+  // Flutter SDK is exactly what makes it return 401 / PR004 "Unauthorized" on
+  // device. The old code scraped ?token= out of redirectUrl as a "graceful"
+  // fallback, which turned a diagnosable server error into a 200 carrying a
+  // poisoned token. Never again — no SDK token is a hard failure.
+  it("throws rather than scraping a web ?token= out of redirectUrl (PR004 guard)", async () => {
     const env = makeEnv();
     mockFetchWithOAuthThenSetup({
       orderId: "X",
       state: "PENDING",
-      redirectUrl: "https://mercury-t2.phonepe.com/transact/pgv3?token=FALLBACK_TOK",
+      redirectUrl: "https://mercury-t2.phonepe.com/transact/pgv3?token=WEB_TOK",
     });
-    const result = await setupSubscription(env, {
-      userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
-    });
-    expect(result.token).toBe("FALLBACK_TOK");
+    await expect(
+      setupSubscription(env, {
+        userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
+      }),
+    ).rejects.toThrow(/no SDK token/i);
   });
 
-  it("returns null token when neither a token field nor a scrapeable redirectUrl is present", async () => {
+  it("throws when the response carries no token at all", async () => {
     const env = makeEnv();
     mockFetchWithOAuthThenSetup({ orderId: "X", state: "PENDING", redirectUrl: "upi://pay?pa=abc" });
-    const result = await setupSubscription(env, {
-      userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
-    });
-    expect(result.token).toBeNull();
+    await expect(
+      setupSubscription(env, {
+        userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
+      }),
+    ).rejects.toThrow(/no SDK token/i);
   });
 
   it("throws on non-OK response", async () => {
