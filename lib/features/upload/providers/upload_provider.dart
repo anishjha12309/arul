@@ -103,9 +103,12 @@ class UploadNotifier extends Notifier<UploadState> {
   }) async {
     final apiClient = ref.read(apiClientProvider);
 
-    // Derive userId from current auth state.
-    final authState = ref.read(authStateStreamProvider).asData?.value;
-    final userId = authState?.userId;
+    // Derive userId from the auth service's synchronous state — the stream
+    // provider is broadcast and does NOT replay, so its .asData is null when
+    // nothing was subscribed at emission time (e.g. a cold start straight to
+    // upload), which would bounce a signed-in user with "Not signed in".
+    final authState = ref.read(authServiceProvider).currentState;
+    final userId = authState.userId;
     if (userId == null) {
       state = const UploadError(message: 'Not signed in');
       return;

@@ -61,13 +61,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final headerColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final themeMode = ref.watch(themeModeProvider);
 
-    // Real identity once signed in; neutral stand-ins otherwise.
-    final auth = ref.watch(authStateStreamProvider).asData?.value;
-    final authName = auth?.displayName?.trim();
+    // Real identity once signed in; neutral stand-ins otherwise. Watch the
+    // stream for rebuilds, but READ the service's synchronous state for the
+    // value — the broadcast stream does not replay, so emissions from the
+    // startup seed land before this screen subscribes and .asData?.value
+    // would stay null for the whole session (fallback shown to a signed-in
+    // user — the entitlement provider hit the same class of bug).
+    ref.watch(authStateStreamProvider);
+    final auth = ref.read(authServiceProvider).currentState;
+    final authName = auth.displayName?.trim();
     final hasRealName = authName != null && authName.isNotEmpty;
     final name = hasRealName ? authName : _fallbackName;
-    final email = (auth?.email?.trim().isNotEmpty ?? false)
-        ? auth!.email!.trim()
+    final authEmail = auth.email?.trim();
+    final email = (authEmail != null && authEmail.isNotEmpty)
+        ? authEmail
         : _fallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
