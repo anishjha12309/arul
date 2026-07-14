@@ -1,92 +1,145 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/l10n/app_localizations.dart';
-import '../../../app/theme/tokens.dart';
+import '../../../app/widgets/arul_sheet.dart';
+import '../../../app/widgets/cta_button.dart';
+import '../../../theme/arul_tokens.dart';
 import '../data/wallpaper_apply_service.dart';
 
-/// Where to put it. Three rows, and **tapping a row commits** — there is no
-/// separate confirm button, matching the system share sheet's convention. Apply
-/// is therefore two taps, which beats the platform's own wallpaper flow.
+/// Where to put a STATIC wallpaper (README > Apply sheet).
 ///
-/// STATIC ONLY. A live wallpaper never reaches this sheet: Android's own
-/// live-wallpaper chooser asks the same home/lock/both question and is the one
-/// that actually decides, so showing this first asked the user twice and honoured
-/// the answer neither time. Live apply goes straight to the chooser.
-class ApplySheet extends StatelessWidget {
+/// Three equal cards — Home screen / Lock screen / Both (default Both) — and a
+/// single green CTA. Selecting a card only moves the selection; the CTA commits
+/// the chosen target. Live wallpapers never reach here: Android's own
+/// live-wallpaper chooser asks the same question and is the one that decides.
+///
+/// Keeps the `ApplySheet.show(context) → Future<ApplyTarget?>` contract: the
+/// future resolves to the picked target, or null if the sheet is dismissed.
+class ApplySheet {
   const ApplySheet._();
 
   static Future<ApplyTarget?> show(BuildContext context) {
-    return showModalBottomSheet<ApplyTarget>(
-      context: context,
-      showDragHandle: true,
-      // No BackdropFilter blur behind the sheet: it costs 6-9ms of raster per
-      // frame on the budget SoCs this app targets, and a video may still be
-      // decoding underneath. The scrim is an ordinary paint.
-      builder: (_) => const ApplySheet._(),
+    return showArulSheet<ApplyTarget>(
+      context,
+      // Overlays the always-dark feed — spec'd #1A0B0F in both app themes.
+      forceDark: true,
+      builder: (_) => const _ApplySheetBody(),
     );
   }
+}
+
+class _ApplySheetBody extends StatefulWidget {
+  const _ApplySheetBody();
+
+  @override
+  State<_ApplySheetBody> createState() => _ApplySheetBodyState();
+}
+
+class _ApplySheetBodyState extends State<_ApplySheetBody> {
+  ApplyTarget _target = ApplyTarget.both; // README: default Both
+
+  static const _cards = <(ApplyTarget, IconData, String)>[
+    (ApplyTarget.home, Icons.home_rounded, 'Home screen'),
+    (ApplyTarget.lock, Icons.lock_rounded, 'Lock screen'),
+    (ApplyTarget.both, Icons.smartphone_rounded, 'Both'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
+    return Padding(
+      // README: pad 18 20 24; the grabber + its padding come from ArulSheet.
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Set wallpaper on',
+            style: ArulTokens.sheetTitle.copyWith(color: ArulTokens.ivory),
+          ),
+          const SizedBox(height: 16),
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: Gap.md),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.md),
-              child: Text(
-                l10n.applyTargetTitle,
-                style: theme.textTheme.titleMedium,
-              ),
-            ),
-            _TargetRow(
-              icon: Icons.home_outlined,
-              label: l10n.applyTargetHome,
-              onTap: () => Navigator.of(context).pop(ApplyTarget.home),
-            ),
-            _TargetRow(
-              icon: Icons.lock_outline_rounded,
-              label: l10n.applyTargetLock,
-              onTap: () => Navigator.of(context).pop(ApplyTarget.lock),
-            ),
-            _TargetRow(
-              icon: Icons.smartphone_rounded,
-              label: l10n.applyTargetBoth,
-              onTap: () => Navigator.of(context).pop(ApplyTarget.both),
-            ),
-          ],
-        ),
+          Row(
+            children: [
+              for (var i = 0; i < _cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 10),
+                Expanded(
+                  child: _TargetCard(
+                    icon: _cards[i].$2,
+                    label: _cards[i].$3,
+                    selected: _target == _cards[i].$1,
+                    onTap: () => setState(() => _target = _cards[i].$1),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          CtaButton(
+            label: 'Apply wallpaper',
+            icon: Icons.wallpaper_rounded,
+            height: ArulTokens.ctaHeight50,
+            fontSize: 15.5,
+            onPressed: () => Navigator.of(context).pop(_target),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _TargetRow extends StatelessWidget {
-  const _TargetRow({
+/// One target card (README > Apply sheet): r16, 26px icon + 13px label.
+/// Selected: gold 1.5px border, gold-tint fill, gold icon. Unselected: ivory-5%
+/// fill, ivory-14% border, ivory icon.
+class _TargetCard extends StatelessWidget {
+  const _TargetCard({
     required this.icon,
     required this.label,
+    required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
-      // No trailing chevron: the row IS the button, and a chevron would imply it
-      // opens something further.
+    return GestureDetector(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
+        decoration: BoxDecoration(
+          color: selected ? ArulTokens.goldTintFill14 : ArulTokens.cardBgDark05,
+          borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
+          border: Border.all(
+            color: selected ? ArulTokens.gold : ArulTokens.cardBorderDark14,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 26,
+              color: selected ? ArulTokens.gold : ArulTokens.ivory,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: ArulTokens.ivory,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

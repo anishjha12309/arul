@@ -1,0 +1,153 @@
+import 'package:flutter/material.dart';
+
+import '../../theme/arul_tokens.dart';
+import '../theme/theme.dart';
+
+/// Presents [builder]'s content in an Arul-styled modal bottom sheet.
+///
+/// README (Apply / Theme / Language / Premium / Edit-name sheets): rounded top
+/// r24; dark surface `#1A0B0F` (optionally a `#241014 → #1A0B0F` gradient top for
+/// the premium sheet) or white on light; a 1px gold-35% top hairline on dark; a
+/// 44×4 r2 grabber; entrance translateY(24)+fade 300ms ease; barrier scrim
+/// `rgba(20,9,12,.58)`.
+///
+/// Pass [gradient] true for the gradient-top variant (premium sheet). The sheet
+/// is scroll-controlled and sizes to its content; wrap tall content in a scroll
+/// view yourself.
+Future<T?> showArulSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool gradient = false,
+  bool isDismissible = true,
+  bool forceDark = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    isDismissible: isDismissible,
+    // ArulSheet paints its own 44×4 grabber — the theme's Material drag
+    // handle would render a second one above the sheet.
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
+    barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
+    builder: (context) {
+      final sheet = ArulSheet(gradient: gradient, child: builder(context));
+      if (!forceDark) return sheet;
+      // Sheets that overlay the always-dark feed (apply / premium) are spec'd
+      // dark-only (#1A0B0F) regardless of the app theme.
+      return Theme(data: ArulTheme.dark(), child: sheet);
+    },
+  );
+}
+
+/// The visual scaffold of an Arul bottom sheet: surface + top hairline + grabber
+/// + the translateY(24)+fade entrance. Used by [showArulSheet]; also usable
+/// directly (e.g. inside a custom route).
+class ArulSheet extends StatefulWidget {
+  const ArulSheet({super.key, required this.child, this.gradient = false});
+
+  final Widget child;
+
+  /// Gradient-top variant (`#241014 → #1A0B0F`) for the premium sheet.
+  final bool gradient;
+
+  @override
+  State<ArulSheet> createState() => _ArulSheetState();
+}
+
+class _ArulSheetState extends State<ArulSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: ArulTokens.sheetEnter, // 300ms
+  )..forward();
+
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _c,
+    curve: ArulTokens.sheetCurve, // ease
+  );
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const radius = Radius.circular(ArulTokens.sheetTopRadius);
+
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark ? ArulTokens.darkSheetSurface : ArulTokens.cardBgLight,
+        gradient: widget.gradient && isDark
+            ? ArulTokens.sheetGradientDark
+            : null,
+        borderRadius: const BorderRadius.vertical(top: radius),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _Grabber(),
+          Flexible(child: widget.child),
+        ],
+      ),
+    );
+
+    return SafeArea(
+      top: false,
+      child: AnimatedBuilder(
+        animation: _t,
+        builder: (context, child) => Opacity(
+          opacity: _t.value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - _t.value) * 24),
+            child: child,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: radius),
+          child: Stack(
+            children: [
+              surface,
+              // 1px gold-35% top hairline (dark only). Clipped to the rounded
+              // top by the enclosing ClipRRect.
+              if (isDark)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(height: 1, color: ArulTokens.goldBorder35),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The drag grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)`
+/// light (README > Spacing / radii / misc).
+class _Grabber extends StatelessWidget {
+  const _Grabber();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Container(
+        width: ArulTokens.grabberWidth,
+        height: ArulTokens.grabberHeight,
+        decoration: BoxDecoration(
+          color: isDark
+              ? ArulTokens.grabberColorDark
+              : ArulTokens.grabberColorLight,
+          borderRadius: BorderRadius.circular(ArulTokens.grabberRadius),
+        ),
+      ),
+    );
+  }
+}

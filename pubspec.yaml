@@ -62,15 +62,24 @@ flutter:
     - assets/images/
     # The splash / sign-in background clip. Bundled, not streamed: the first
     # screen must never wait on the network, and it is the same lotus clip the
-    # entire brand palette was extracted from — 1.6 MB, 640x1152 (w%128==0,
+    # entire brand palette was extracted from — 4.3 MB, 1024x1824 (w%128==0,
     # h%32==0, per the decoder constraint in docs/media-conventions.md).
+    # Full-quality source swapped in 2026-07-14; the old 640x1152/1.1Mbps
+    # encode read visibly soft full-bleed on 1080-wide screens.
     - assets/video/
+  fonts:
+    # Display serif — ONLY the Latin "Arul" wordmark, screen titles, and the
+    # display numerals/headings the design README names. All other UI text
+    # stays on the system stack (covers all 5 Indic scripts at zero bytes).
+    - family: Marcellus
+      fonts:
+        - asset: assets/fonts/Marcellus-Regular.ttf
 
 flutter_native_splash:
-  color: "#131011"        # == ArulColors.ink == values/colors.xml splash_bg. If these three ever
+  color: "#14090C"        # == ArulColors.ink == values/colors.xml splash_bg. If these three ever
                           # disagree, the OS splash flashes a different black than
                           # the app paints, and the handoff visibly pops.
-  color_dark: "#131011"
+  color_dark: "#14090C"
   android_12:
-    color: "#131011"
-    icon_background_color: "#131011"
+    color: "#14090C"
+    icon_background_color: "#14090C"

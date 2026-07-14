@@ -20,9 +20,7 @@ class PillTag extends StatelessWidget {
         color: gold ? ArulColors.gold : Colors.black.withValues(alpha: 0.42),
         borderRadius: const BorderRadius.all(Radius.circular(Radii.chip)),
         border: Border.all(
-          color: gold
-              ? ArulColors.gold
-              : Colors.white.withValues(alpha: 0.24),
+          color: gold ? ArulColors.gold : Colors.white.withValues(alpha: 0.24),
         ),
       ),
       child: Text(

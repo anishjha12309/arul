@@ -50,12 +50,15 @@ class _SkeletonState extends State<Skeleton>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // Over media the redesign's loading fill is a dark-surface sweep
+    // (#14090C → #2A1218), never a coloured flash; on a surface the placeholder
+    // follows the theme and lifts toward the brand hue.
     final base = widget.onMedia
-        ? ArulColors.inkRaised
+        ? ArulColors.ink
         : scheme.surfaceContainerHighest;
-    // The sweep is a lift toward the brand hue, not toward white: a white sweep
-    // on ivory is invisible, and on ink it flashes.
-    final hi = Color.lerp(base, scheme.primary, 0.22)!;
+    final hi = widget.onMedia
+        ? ArulColors.inkVariant
+        : Color.lerp(base, scheme.primary, 0.22)!;
     return RepaintBoundary(
       child: AnimatedBuilder(
         animation: _c,

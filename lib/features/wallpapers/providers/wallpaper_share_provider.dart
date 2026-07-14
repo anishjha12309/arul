@@ -97,10 +97,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       state = const WallpaperShareIdle();
     } catch (e) {
       final network = isNetworkError(e);
-      state = WallpaperShareError(
-        message: e.toString(),
-        isNetwork: network,
-      );
+      state = WallpaperShareError(message: e.toString(), isNetwork: network);
     }
   }
 

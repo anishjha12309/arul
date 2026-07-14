@@ -2,18 +2,15 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// The two ColorSchemes, every role spelled out.
+/// The two ColorSchemes, every role spelled out — maroon primary, gold
+/// secondary/tertiary, ivory light surface, `#14090C` dark surface.
 ///
 /// `ColorScheme.fromSeed` is deliberately NOT used. Its tonal-palette algorithm
-/// derives secondary and tertiary by rotating hue off the seed, so a rose seed
-/// lands on a blue-grey secondary and a brown-olive tertiary. But the teal and
-/// the gold are not decorations we get to invent — they are the water and the
-/// brass in the splash footage, and a scheme that "generates" them generates the
-/// wrong ones. Seeding also re-tones every role we pinned, which is how the
-/// maroon-era build ended up with a pale-pink selected segment.
-///
-/// So: hand-specified, and each pair below carries its measured WCAG ratio.
-/// A new pair added here must be measured before it ships.
+/// derives secondary and tertiary by rotating hue off the seed, so a maroon seed
+/// would generate the wrong gold (or none at all). Gold is a fixed brand accent,
+/// not a derivation, so every role is hand-specified. These roles drive
+/// ThemeData-derived chrome (scaffold, dialogs, sheets, text); screens read exact
+/// values from [ArulTokens] in lib/theme/arul_tokens.dart.
 abstract final class ArulSchemes {
   static const ColorScheme lightScheme = ColorScheme(
     brightness: Brightness.light,
@@ -103,14 +100,15 @@ abstract final class ArulSchemes {
     outline: ArulColors.inkOutline, //         3.64:1 on surface
     outlineVariant: ArulColors.inkOutlineVariant,
 
-    // onSurface holds ≥9.9:1 and onSurfaceVariant ≥6.3:1 against every step.
+    // Dark surface ladder, matched to the redesign: sheets/cards/dialogs read
+    // surfaceContainerLow, which is the dark sheet surface #1A0B0F.
     surfaceDim: ArulColors.ink,
-    surfaceBright: Color(0xFF3A3234),
-    surfaceContainerLowest: Color(0xFF0D0B0C),
-    surfaceContainerLow: Color(0xFF1A1618),
+    surfaceBright: Color(0xFF2A1218),
+    surfaceContainerLowest: Color(0xFF0D0609),
+    surfaceContainerLow: ArulColors.inkRaised, // #1A0B0F
     surfaceContainer: ArulColors.inkRaised,
-    surfaceContainerHigh: ArulColors.inkHigh,
-    surfaceContainerHighest: ArulColors.inkVariant,
+    surfaceContainerHigh: ArulColors.inkHigh, // #241014
+    surfaceContainerHighest: ArulColors.inkVariant, // #2A1218
 
     inverseSurface: ArulColors.ivoryText,
     onInverseSurface: ArulColors.inverseLight, // 10.83:1

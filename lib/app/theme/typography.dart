@@ -31,49 +31,53 @@ import 'tokens.dart';
 abstract final class ArulType {
   static const _tight = -0.4;
 
+  /// The bundled display serif. ONLY the display/headline tiers and [wordmark]
+  /// use it — Latin-only, so it must never wrap a localized string.
+  static const _serif = 'Marcellus';
+
   static TextTheme scale(Color ink, Color muted) => TextTheme(
-    // Wordmark / hero numerals only.
+    // Display / hero headings — Marcellus (redesign screen titles & hero copy).
     displayLarge: TextStyle(
+      fontFamily: _serif,
       fontSize: 48,
       height: 1.08,
-      fontWeight: FontWeight.w700,
       letterSpacing: -1.2,
       color: ink,
     ),
     displayMedium: TextStyle(
+      fontFamily: _serif,
       fontSize: 40,
       height: 1.1,
-      fontWeight: FontWeight.w700,
       letterSpacing: -1.0,
       color: ink,
     ),
     displaySmall: TextStyle(
+      fontFamily: _serif,
       fontSize: 32,
       height: 1.15,
-      fontWeight: FontWeight.w700,
       letterSpacing: -0.8,
       color: ink,
     ),
     headlineLarge: TextStyle(
+      fontFamily: _serif,
       fontSize: 30,
       height: 1.2,
-      fontWeight: FontWeight.w700,
       letterSpacing: _tight,
       color: ink,
     ),
     headlineMedium: TextStyle(
+      fontFamily: _serif,
       fontSize: 26,
       height: 1.2,
-      fontWeight: FontWeight.w700,
       letterSpacing: _tight,
       color: ink,
     ),
-    // Viewer title, sign-in headline.
+    // Viewer title, sign-in headline. Marcellus, 22px (redesign screen title).
     headlineSmall: TextStyle(
-      fontSize: 21,
+      fontFamily: _serif,
+      fontSize: 22,
       height: 1.25,
-      fontWeight: FontWeight.w700,
-      letterSpacing: _tight,
+      letterSpacing: 0.3,
       color: ink,
     ),
     // App-bar title, sheet title.
@@ -145,23 +149,17 @@ abstract final class ArulType {
 
   /// The wordmark — "Arul", and ONLY "Arul".
   ///
-  /// A serif at display size is the one thing the system stack can give us that
-  /// reads as a designed mark rather than as UI text. `'serif'` is a family ALIAS
-  /// resolved by Android's font config (it lands on Noto Serif) — it is not a
-  /// bundled asset, costs zero bytes, and if a device cannot resolve it the
-  /// fallback below puts us straight back on the default stack.
+  /// A serif at display size reads as a designed mark rather than as UI text.
+  /// This uses the bundled [Marcellus] face (assets/fonts/Marcellus-Regular.ttf).
   ///
-  /// It must NEVER be applied to a localized string. Noto Serif has no Tamil,
-  /// Telugu, Kannada or Malayalam coverage, so a translated string set in it would
-  /// fall back per-glyph and render in a different face than the one asked for.
-  /// That is why this is a separate factory and not a TextTheme slot: reaching for
-  /// it has to be a deliberate act.
+  /// It must NEVER be applied to a localized string. Marcellus is Latin-only, so
+  /// a translated string set in it would fall back per-glyph and render in a
+  /// different face than the one asked for. That is why this is a separate factory
+  /// and not a TextTheme slot: reaching for it has to be a deliberate act.
   static TextStyle wordmark(Color color) => TextStyle(
-    fontFamily: 'serif',
-    fontFamilyFallback: const ['Roboto'],
+    fontFamily: _serif,
     fontSize: 40,
     height: 1.1,
-    fontWeight: FontWeight.w700,
     letterSpacing: -0.5,
     color: color,
   );

@@ -27,56 +27,40 @@ import 'tokens.dart';
 /// edge where the tail meets the image; the low-alpha stop near the end flattens
 /// it out for free.
 abstract final class ArulScrims {
-  /// Behind top chrome. Roughly 96–120dp tall in use.
-  ///
-  /// Guarantee: white clears 4.5:1 over a pure-white frame down to t=0.38.
-  /// The status bar — the only chrome up here with no fill of its own — sits at
-  /// t≤0.25, where it measures 6.88:1. The back button lives lower but carries
-  /// [ArulColors.mediaFill], so it does not depend on the ramp.
+  /// Behind top chrome (the feed chip row). README: feed top scrim, h130,
+  /// `.62 → 0`, tinted the dark surface `#14090C` (== rgba(20,9,12,x)). The
+  /// low-alpha mid-stop is the anti-banding tail.
   static const top = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [
-      Color(0xCF000000), // 81%
-      Color(0x94000000), // 58%
-      Color(0x2B000000), // 17% — the anti-banding tail
-      Color(0x00000000),
+      Color(0x9E14090C), // 62%
+      Color(0x2E14090C), // 18% — the anti-banding tail
+      Color(0x0014090C),
     ],
-    stops: [0.0, 0.35, 0.68, 1.0],
+    stops: [0.0, 0.6, 1.0],
   );
 
-  /// Behind bottom chrome (eyebrow + title + the action rail). ~200dp in use, and
-  /// taller and stronger than [top] because this is where the text lives.
-  ///
-  /// Guarantees over a pure-white frame, measured:
-  ///   white body text                ≥4.5:1 up to t=0.57
-  ///   ArulType.onMedia() muted tier   ≥4.5:1 up to t=0.52
-  ///   gold (UI/large, 3:1)            ≥3.0:1 up to t=0.45
-  /// The metadata block occupies roughly the bottom 90dp of 200dp — t≤0.45 — so
-  /// it sits inside all three bands with headroom (white 8.1:1, muted 6.4:1).
-  /// The action rail reaches higher than that, which is exactly why its buttons
-  /// carry their own fill.
+  /// Behind bottom chrome (meta + action rail). README: feed bottom scrim, h190,
+  /// `.72 → 0`. Stronger than [top] because this is where the text lives; chrome
+  /// that reaches above the guaranteed band carries its own [ArulColors.mediaFill].
   static const bottom = LinearGradient(
     begin: Alignment.bottomCenter,
     end: Alignment.topCenter,
     colors: [
-      Color(0xE6000000), // 90%
-      Color(0xBF000000), // 75%
-      Color(0x73000000), // 45%
-      Color(0x24000000), // 14% — the anti-banding tail
-      Color(0x00000000),
+      Color(0xB814090C), // 72%
+      Color(0x3D14090C), // 24% — the anti-banding tail
+      Color(0x0014090C),
     ],
-    stops: [0.0, 0.40, 0.64, 0.84, 1.0],
+    stops: [0.0, 0.55, 1.0],
   );
 
-  /// Silk: the premium surface. Lotus rose into ink, off-axis so it reads as woven
-  /// cloth rather than a flat vertical ramp.
+  /// Silk: the premium ground for the KolamBackground painter. Maroon into the
+  /// dark surface, off-axis so it reads as woven cloth rather than a flat ramp.
   ///
-  /// The rose head is held to the top ~42% on purpose. The premium CTA is a FILLED
-  /// button ([ArulColors.tealCta]) and it lands near the bottom of this diagonal
-  /// (t≈0.72–0.85), where it clears 3:1 against the ramp (3.08–3.38:1). Against
-  /// the rose head it would be 1.83:1. Do not move a filled control into the top
-  /// half of silk — white TEXT is fine anywhere on it (9.4:1 at the worst stop).
+  /// This is the OPAQUE brand ground used by the painter. The translucent silk
+  /// card gradients from the README (profile/hero/plan cards) live in
+  /// [ArulTokens.silkDark] / [ArulTokens.silkLight].
   static const silk = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -89,7 +73,7 @@ abstract final class ArulScrims {
   static const zari = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [ArulColors.goldSoft, ArulColors.gold, Color(0x00C29B4E)],
+    colors: [ArulColors.goldSoft, ArulColors.gold, Color(0x00D4A017)],
     stops: [0.0, 0.35, 1.0],
   );
 }

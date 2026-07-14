@@ -18,10 +18,7 @@ void showArulToast(
   final messenger = ScaffoldMessenger.of(context);
   final (accent, icon) = switch (kind) {
     ToastKind.info => (ArulColors.gold, Icons.info_outline_rounded),
-    ToastKind.success => (
-      ArulColors.cta,
-      Icons.check_circle_outline_rounded,
-    ),
+    ToastKind.success => (ArulColors.cta, Icons.check_circle_outline_rounded),
     ToastKind.error => (ArulColors.danger, Icons.error_outline_rounded),
   };
 

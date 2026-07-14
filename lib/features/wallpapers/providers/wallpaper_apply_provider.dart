@@ -220,10 +220,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       // Offline is the common case here (the download), and it is not a bug —
       // the UI must not print "ClientException: Failed host lookup".
       final network = isNetworkError(e);
-      state = WallpaperApplyError(
-        message: e.toString(),
-        isNetwork: network,
-      );
+      state = WallpaperApplyError(message: e.toString(), isNetwork: network);
     }
   }
 

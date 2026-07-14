@@ -14,10 +14,7 @@ class KolamPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    canvas.drawRect(
-      rect,
-      Paint()..shader = ArulScrims.silk.createShader(rect),
-    );
+    canvas.drawRect(rect, Paint()..shader = ArulScrims.silk.createShader(rect));
 
     final glow = Offset(size.width * 0.5, size.height * 0.72); // the lamp
     canvas.drawCircle(

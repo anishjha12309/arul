@@ -3,9 +3,10 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
+import '../features/referral/presentation/refer_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/upload/presentation/upload_screen.dart';
-import '../features/wallpapers/presentation/browse_screen.dart';
+import '../features/wallpapers/presentation/feed_screen.dart';
 
 /// Routes.
 ///
@@ -18,8 +19,9 @@ final router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
     GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
-    GoRoute(path: '/browse', builder: (_, _) => const BrowseScreen()),
+    GoRoute(path: '/browse', builder: (_, _) => const FeedScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+    GoRoute(path: '/refer', builder: (_, _) => const ReferScreen()),
     GoRoute(path: '/upload', builder: (_, _) => const UploadScreen()),
     GoRoute(
       path: '/premium',
