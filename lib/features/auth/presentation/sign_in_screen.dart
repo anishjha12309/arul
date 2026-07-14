@@ -5,8 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
+import '../domain/auth_service.dart';
+import '../providers/auth_providers.dart';
 import 'widgets/video_background.dart';
 
 /// Sign-in.
@@ -38,12 +42,52 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   static const _mockEmail = 'priya.raman@gmail.com';
   static const _caption = 'Sign in to begin your free trial';
 
+  bool _signingIn = false;
+
   @override
   void initState() {
     super.initState();
-    // TODO(auth-phase): AuthService.authenticate() auto-launches here on the
-    // first frame (google_sign_in v7: instance -> initialize() ->
-    // authenticate()). The pill is the fallback UI for a dismissed sheet.
+    // PHASE CONTRACT: auto-launch the FULL Google `authenticate()` on the first
+    // frame (google_sign_in v7: instance → initialize() [done in main()] →
+    // authenticate()). NEVER lightweight/silent auth — retention decision.
+    // The pill below is the fallback for a dismissed sheet.
+    // Pre-backend (or with the TODO client-id placeholder) there is nothing to
+    // authenticate against — the pill passes through to the feed.
+    if (AppConfig.hasBackend && AppConfig.googleAuthConfigured) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _signIn());
+    }
+  }
+
+  Future<void> _signIn() async {
+    if (_signingIn) return;
+    setState(() => _signingIn = true);
+    try {
+      final result = await ref
+          .read(authControllerProvider.notifier)
+          .signIn(AuthProvider.google);
+      if (!mounted) return;
+      switch (result) {
+        case AuthSuccess():
+          context.go('/browse');
+        case AuthCancelled():
+          break; // sheet dismissed — the pill remains as the retry affordance
+        case AuthFailure(:final message):
+          // Localized-enough surface + retry (the pill), never a stuck spinner.
+          showArulToast(context, message, kind: ToastKind.error);
+      }
+    } finally {
+      if (mounted) setState(() => _signingIn = false);
+    }
+  }
+
+  void _onPillTap() {
+    if (!AppConfig.hasBackend || !AppConfig.googleAuthConfigured) {
+      // Pre-Phase-0 stub: browse/preview are free and there is no Worker to
+      // exchange a token with — pass through.
+      context.go('/browse');
+      return;
+    }
+    _signIn();
   }
 
   @override
@@ -103,7 +147,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   _SignInPill(
                     name: _mockName,
                     email: _mockEmail,
-                    onTap: () => context.go('/browse'),
+                    onTap: _signingIn ? () {} : _onPillTap,
                   ),
                   const SizedBox(height: 14),
                   const _TermsPrivacyLine(),

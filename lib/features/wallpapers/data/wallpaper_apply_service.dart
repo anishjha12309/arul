@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 
@@ -32,13 +33,16 @@ class WallpaperApplyException implements Exception {
 // ─── Interface ───────────────────────────────────────────────────────────────
 
 abstract class WallpaperApplyService {
-  /// The URL to download [w]'s media from.
-  ///
-  /// Today: the public CDN object, because every action is ungated. When the
-  /// premium gate lands this becomes a Worker `POST /media/signed-url` call that
-  /// live-reads entitlement and returns a short-lived signed URL — the ONLY
-  /// method that changes. Nothing above this interface has to move.
+  /// The PUBLIC CDN URL for [w]'s media. Used as the prefetch-cache lookup key
+  /// (the feed prefetcher caches by this URL) — NOT necessarily the URL the
+  /// gated download uses; see [downloadUrl].
   Future<String> resolveUrl(Wallpaper w);
+
+  /// The URL the gated apply/share download actually fetches. With a backend
+  /// this is the Worker's `POST /media/signed-url` — the REAL premium gate: a
+  /// live entitlement read returning a short-lived signed URL. Without one
+  /// (pre-Phase-0) it degrades to the public CDN object.
+  Future<String> downloadUrl(Wallpaper w);
 
   /// Downloads [url] to a temp file named [filename]. [onProgress] gets 0.0→1.0.
   Future<File> downloadFile(
@@ -66,11 +70,18 @@ abstract class WallpaperApplyService {
 // ─── CDN-backed implementation ───────────────────────────────────────────────
 
 class CdnWallpaperApplyService implements WallpaperApplyService {
-  CdnWallpaperApplyService({http.Client? httpClient, MethodChannel? channel})
-    : _http = httpClient ?? http.Client(),
-      _channel = channel ?? const MethodChannel(_channelName);
+  CdnWallpaperApplyService({
+    ApiClient? apiClient,
+    http.Client? httpClient,
+    MethodChannel? channel,
+  }) : _api = apiClient,
+       _http = httpClient ?? http.Client(),
+       _channel = channel ?? const MethodChannel(_channelName);
 
   static const _channelName = 'com.hsrapps.arul/wallpaper';
+
+  /// Present only when the Worker exists — drives the signed-url gate.
+  final ApiClient? _api;
 
   final http.Client _http;
 
@@ -80,6 +91,31 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
 
   @override
   Future<String> resolveUrl(Wallpaper w) async => w.url(AppConfig.cdnBaseUrl);
+
+  @override
+  Future<String> downloadUrl(Wallpaper w) async {
+    final api = _api;
+    if (api == null || !AppConfig.hasBackend) {
+      // Pre-backend stub: keys are public by design (soft gate).
+      return w.url(AppConfig.cdnBaseUrl);
+    }
+    try {
+      final data = await api.post(
+        '/media/signed-url',
+        body: {'id': w.id, 'kind': 'wallpaper'},
+      );
+      final url = data['url'] as String?;
+      if (url == null || url.isEmpty) {
+        throw const WallpaperApplyException('Invalid signed URL response');
+      }
+      return url;
+    } on ApiException catch (e) {
+      if (e.isPremiumRequired) {
+        throw const WallpaperApplyException('Premium subscription required');
+      }
+      throw WallpaperApplyException('Failed to get signed URL (${e.status})');
+    }
+  }
 
   @override
   Future<File> downloadFile(

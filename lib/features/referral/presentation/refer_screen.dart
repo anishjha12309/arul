@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus;
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/cta_button.dart';
+import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
+import '../data/install_referrer_service.dart';
+import '../providers/referral_providers.dart';
 
-/// Refer & Earn. Design-only pass (design_handoff_arul spec, "Refer & Earn"):
-/// one warm silk hero card with the WhatsApp CTA, a rewards summary card, a
-/// numbered "how it works" card, and a quiet empty state below.
+/// Refer & Earn (design_handoff_arul spec, "Refer & Earn"): one warm silk hero
+/// card with the WhatsApp CTA, a rewards summary card, a numbered "how it
+/// works" card, and a quiet empty state below.
 ///
-/// No referral/share logic yet — the WhatsApp button is a visual CTA only
-/// (see TODO below) and "Rewards earned" is hardcoded to "0 days" until the
-/// backend ships.
+/// Wired (phase 4): the CTA shares the referral-attributed Play link
+/// (WhatsApp-first, share-sheet fallback) and "Rewards earned" reads
+/// `/me/referrals` via [referralSummaryProvider]; both degrade to the plain
+/// link / zero state pre-backend.
 ///
 /// `featured_seasonal_and_gifts` (the spec's icon) has no Material equivalent
 /// in Flutter's icon set — substituted with [Icons.card_giftcard_rounded].
-class ReferScreen extends StatelessWidget {
+class ReferScreen extends ConsumerWidget {
   const ReferScreen({super.key});
 
   static const _steps = [
@@ -23,8 +32,47 @@ class ReferScreen extends StatelessWidget {
     (n: '3', text: '30 days of free premium lands in your account'),
   ];
 
+  /// WhatsApp-first share of the referral-attributed Play link; system share
+  /// sheet when WhatsApp is absent or the launch fails (docs/edge-cases.md).
+  Future<void> _share(BuildContext context, WidgetRef ref) async {
+    // Referral-attributed when the user's code is known; the plain listing
+    // otherwise (pre-backend, or the summary hasn't loaded) — sharing must
+    // never block on the network.
+    final code = AppConfig.hasBackend
+        ? ref.read(referralSummaryProvider).asData?.value.referralCode
+        : null;
+    final link = (code != null && code.isNotEmpty)
+        ? InstallReferrerService.buildShareLink(code)
+        : 'https://play.google.com/store/apps/details?id=$kPlayPackageId';
+    final message = AppLocalizations.of(context).referShareMessage(link);
+
+    ref.read(analyticsServiceProvider).track('referral_shared');
+
+    final whatsapp = Uri.parse(
+      'whatsapp://send?text=${Uri.encodeComponent(message)}',
+    );
+    try {
+      if (await canLaunchUrl(whatsapp)) {
+        final ok = await launchUrl(
+          whatsapp,
+          mode: LaunchMode.externalApplication,
+        );
+        if (ok) return;
+      }
+    } catch (_) {
+      // WhatsApp missing / launch failed → share sheet below.
+    }
+    await SharePlus.instance.share(ShareParams(text: message));
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Rewards summary; pre-backend (or while loading) the zero state stands.
+    final rewardDays = AppConfig.hasBackend
+        ? (ref.watch(referralSummaryProvider).asData?.value.totalRewardDays ??
+              0)
+        : 0;
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
@@ -136,9 +184,7 @@ class ReferScreen extends StatelessWidget {
                           label: 'Share via WhatsApp',
                           icon: Icons.share_rounded,
                           height: ArulTokens.ctaHeight50,
-                          // TODO(phase-referral): build the referral link and
-                          // hand it to the WhatsApp share intent.
-                          onPressed: () {},
+                          onPressed: () => _share(context, ref),
                         ),
                       ],
                     ),
@@ -170,7 +216,7 @@ class ReferScreen extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              '0 days',
+                              '$rewardDays days',
                               style: ArulTokens.priceNumeral.copyWith(
                                 fontSize: 22,
                                 color: rewardValueColor,

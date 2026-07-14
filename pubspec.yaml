@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+4
 
 environment:
   sdk: ^3.12.0
@@ -28,6 +28,7 @@ dependencies:
   cached_network_image: ^3.4.1  # static wallpapers (decoded at display size)
   shared_preferences: ^2.5.5    # theme mode, locale
   http: ^1.2.0                  # CDN catalog fetches
+  connectivity_plus: ^7.2.0     # offline gate — transport-level online/offline
   url_launcher: ^6.3.2          # support mail, privacy policy
   package_info_plus: ^10.2.0    # version row in Settings
 
@@ -36,24 +37,47 @@ dependencies:
   flutter_cache_manager: ^3.4.1 # disk cache for prefetched MP4s (shared w/ CNI)
   share_plus: ^13.2.0           # share a wallpaper file
 
-  # ── Added in port-map Phase 2/4, WITH the ported logic layers. Kept commented so
-  # the UI builds and runs standalone today (Firebase would otherwise need a
-  # google-services.json that provisioning hasn't produced yet).
-  #   freezed_annotation / json_annotation   — models
-  #   riverpod_annotation                    — codegen'd providers
-  #   firebase_core / _crashlytics / _performance / _analytics
-  #   posthog_flutter / facebook_app_events  — analytics (behind AnalyticsService)
-  #   google_sign_in / play_install_referrer — auth + referral attribution
-  #   phonepe_payment_sdk (+ third_party/ override) — premium
-  #   flutter_secure_storage / path_provider / share_plus / flutter_cache_manager
-  #   image_picker / file_picker             — upload-your-content
+  # ── Phase 4 logic port (versions pinned to the reference app's pubspec).
+  riverpod_annotation: ^4.0.3   # codegen'd providers (auth/analytics/premium/…)
+  freezed_annotation: ^3.1.0    # models
+  json_annotation: ^4.12.0
+  flutter_secure_storage: ^10.3.1 # JWT pair + cached profile (ApiClient)
+  google_sign_in: ^7.2.0        # v7 flow: instance → initialize → authenticate
+  play_install_referrer: ^0.5.0 # referral attribution (Play Install Referrer)
+  posthog_flutter: ^5.28.0      # product analytics — manual events only,
+                                # autocapture/replay OFF (behind AnalyticsService)
+  facebook_app_events: ^0.30.1  # Meta ★ conversion events only; OFF until
+                                # META_APP_ID + META_CLIENT_TOKEN are real
+  phonepe_payment_sdk: ^3.0.2   # premium — vendored override below (AGP fix)
+  file_picker: ^12.0.0-beta.7   # upload-your-content (FileType.media pick)
+
+  # ── Firebase (core/crashlytics/performance/analytics) DELIBERATELY ABSENT:
+  # android/app/google-services.json does not exist yet (Google project
+  # deferred). CrashReporter / PerformanceMonitor / AnalyticsService compile
+  # against no-op implementations; to re-enable, add the four firebase_* deps
+  # (versions in the reference pubspec), the google-services + crashlytics
+  # gradle plugins, copy lib/core/crash/firebase_crash_reporter.dart +
+  # lib/core/perf/firebase_performance_monitor.dart +
+  # lib/core/analytics/google_analytics_service.dart from the reference, and
+  # flip the guards in crash_provider / performance_provider /
+  # analytics_provider / main.dart (marked "FIREBASE-REENABLE").
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_native_splash: ^2.4.8
-  # build_runner / freezed / riverpod_generator / json_serializable: Phase 2/4.
+  build_runner: ^2.15.0
+  riverpod_generator: ^4.0.4
+  freezed: ^3.2.5
+  json_serializable: ^6.14.0
+
+# phonepe_payment_sdk 3.0.2 ships a Gradle file that calls
+# getDefaultProguardFile('proguard-android.txt'), removed in AGP 9 — vendored in
+# third_party/ with the one-line fix (see the reference app's pubspec note).
+dependency_overrides:
+  phonepe_payment_sdk:
+    path: third_party/phonepe_payment_sdk
 
 flutter:
   generate: true          # gen_l10n

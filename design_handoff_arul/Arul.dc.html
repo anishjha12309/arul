@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL@20..48,300..600,0..1&display=swap">
+<style>
+  body { margin:0; background:#0e0a0b; color:#FAF5EC; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
+  a { color:#D4A017; } a:hover { color:#e8b93a; }
+  @keyframes arulShimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  @keyframes arulPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+  @keyframes arulRise { from{transform:translateY(24px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .msr { font-family:'Material Symbols Rounded'; font-weight:300; font-style:normal; line-height:1; display:inline-block; font-variation-settings:'FILL' 0,'opsz' 24; -webkit-font-smoothing:antialiased; }
+</style>
+</helmet>
+<section style="padding:48px 56px; display:flex; flex-direction:column; gap:28px;">
+  <div id="3a" style="display:flex; flex-direction:column; gap:20px;">
+    <div style="display:flex; align-items:baseline; gap:16px;">
+      <span style="background:#7A1E33; color:#FAF5EC; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; letter-spacing:.08em;">3a</span>
+      <h1 style="margin:0; font-family:'Marcellus',serif; font-size:30px; font-weight:400; color:#FAF5EC;">Premium · Edit name · Light variants</h1>
+    </div>
+    <div style="display:flex; gap:44px; align-items:flex-start; flex-wrap:wrap;">
+      <!-- PREMIUM DARK -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 6px;">
+              <span class="msr" style="font-size:24px; color:#FAF5EC;">close</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 20px 24px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; padding:18px 0 4px;">
+                <div style="width:40px;">{{ gopuramGold }}</div>
+                <div style="font-family:'Marcellus',serif; font-size:30px; color:#FAF5EC;">Arul Premium</div>
+                <div style="font-size:14px; color:#c8ac8d; line-height:1.5; max-width:280px;">The full collection, alive on your screen</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:14px; background:rgba(250,245,236,.04); border:1px solid rgba(250,245,236,.09); border-radius:20px; padding:20px 18px;">
+                <sc-for list="{{ premiumPerks }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex; align-items:center; gap:14px;">
+                    <span class="msr" style="font-size:22px; color:#D4A017;">{{ p.icon }}</span>
+                    <div style="font-size:14.5px; color:#FAF5EC;">{{ p.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, rgba(122,30,51,.4), rgba(212,160,23,.08)); border:1.5px solid #D4A017; border-radius:18px; padding:16px 18px;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <div style="font-family:'Marcellus',serif; font-size:20px; color:#FAF5EC;">₹199 <span style="font-size:13px; font-family:system-ui; color:#b9a58f;">/ month</span></div>
+                  <div style="font-size:12.5px; color:#b9a58f;">UPI Autopay · cancel anytime</div>
+                </div>
+                <div style="font-size:11.5px; font-weight:700; color:#14090C; background:#D4A017; border-radius:999px; padding:6px 13px; letter-spacing:.04em;">7 DAYS FREE</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:54px; border-radius:999px; background:#1FA75A; color:#fff; font-size:16px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Start free trial</div>
+              <div style="font-size:12px; color:#6e5c4c; text-align:center; line-height:1.6;">Free for 7 days, then ₹199/month. Browsing stays free forever.</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Premium, dark — one perk card, one gold-edged plan card, one CTA. Trial-first copy; browsing-stays-free reassurance keeps the gate inviting.</div>
+      </div>
+      <!-- PREMIUM LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#FAF5EC; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 6px;">
+              <span class="msr" style="font-size:24px; color:#2b1116;">close</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 20px 24px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; padding:18px 0 4px;">
+                <div style="width:40px;">{{ gopuramMaroon }}</div>
+                <div style="font-family:'Marcellus',serif; font-size:30px; color:#2b1116;">Arul Premium</div>
+                <div style="font-size:14px; color:#8a6f5c; line-height:1.5; max-width:280px;">The full collection, alive on your screen</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:14px; background:#fff; border:1px solid rgba(122,30,51,.12); border-radius:20px; padding:20px 18px;">
+                <sc-for list="{{ premiumPerks }}" as="p" hint-placeholder-count="4">
+                  <div style="display:flex; align-items:center; gap:14px;">
+                    <span class="msr" style="font-size:22px; color:#7A1E33;">{{ p.icon }}</span>
+                    <div style="font-size:14.5px; color:#2b1116;">{{ p.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, rgba(122,30,51,.08), rgba(212,160,23,.10)); border:1.5px solid #D4A017; border-radius:18px; padding:16px 18px;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                  <div style="font-family:'Marcellus',serif; font-size:20px; color:#2b1116;">₹199 <span style="font-size:13px; font-family:system-ui; color:#8a6f5c;">/ month</span></div>
+                  <div style="font-size:12.5px; color:#8a6f5c;">UPI Autopay · cancel anytime</div>
+                </div>
+                <div style="font-size:11.5px; font-weight:700; color:#14090C; background:#D4A017; border-radius:999px; padding:6px 13px; letter-spacing:.04em;">7 DAYS FREE</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:54px; border-radius:999px; background:#1FA75A; color:#fff; font-size:16px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Start free trial</div>
+              <div style="font-size:12px; color:#b09a86; text-align:center; line-height:1.6;">Free for 7 days, then ₹199/month. Browsing stays free forever.</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Premium, light — same skeleton on ivory; maroon gopuram and iconography.</div>
+      </div>
+      <!-- EDIT NAME DARK -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <div style="position:absolute; inset:0; opacity:.35; display:flex; flex-direction:column; padding:14px 16px; gap:16px;">
+              <div style="display:flex; align-items:center; gap:12px;"><span class="msr" style="font-size:24px; color:#FAF5EC;">arrow_back</span><span style="font-family:'Marcellus',serif; font-size:22px; color:#FAF5EC;">Settings</span></div>
+              <div style="height:84px; border-radius:20px; background:rgba(250,245,236,.06);"></div>
+              <div style="height:320px; border-radius:20px; background:rgba(250,245,236,.04);"></div>
+            </div>
+            <div style="position:absolute; inset:0; background:rgba(20,9,12,.5);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0; background:#1a0b0f; border-top:1px solid rgba(212,160,23,.35); border-radius:24px 24px 0 0; padding:18px 20px 26px; display:flex; flex-direction:column; gap:16px;">
+              <div style="width:44px; height:4px; border-radius:2px; background:rgba(250,245,236,.25); align-self:center;"></div>
+              <div style="display:flex; flex-direction:column; gap:4px; text-align:center;">
+                <div style="font-size:17px; font-weight:600; color:#FAF5EC;">Your name</div>
+                <div style="font-size:13px; color:#b9a58f;">Shown on wallpapers you upload</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; align-items:center; gap:12px; height:54px; border-radius:14px; background:rgba(250,245,236,.05); border:1.5px solid #D4A017; padding:0 16px;">
+                  <span class="msr" style="font-size:20px; color:#D4A017;">person</span>
+                  <span style="font-size:15px; color:#FAF5EC;">Priya Raman<span style="display:inline-block; width:2px; height:18px; background:#D4A017; margin-left:2px; vertical-align:middle; animation:arulPulse 1s ease infinite;"></span></span>
+                </div>
+                <div style="font-size:11.5px; color:#6e5c4c; text-align:right;">11 / 40</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:50px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15.5px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Save</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Edit name, dark — bottom sheet over dimmed settings; gold focus ring, live counter, one Save.</div>
+      </div>
+      <!-- EDIT NAME LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#FAF5EC; overflow:hidden;">
+            <div style="position:absolute; inset:0; opacity:.45; display:flex; flex-direction:column; padding:14px 16px; gap:16px;">
+              <div style="display:flex; align-items:center; gap:12px;"><span class="msr" style="font-size:24px; color:#2b1116;">arrow_back</span><span style="font-family:'Marcellus',serif; font-size:22px; color:#2b1116;">Settings</span></div>
+              <div style="height:84px; border-radius:20px; background:rgba(122,30,51,.06);"></div>
+              <div style="height:320px; border-radius:20px; background:#fff; border:1px solid rgba(122,30,51,.1);"></div>
+            </div>
+            <div style="position:absolute; inset:0; background:rgba(43,17,22,.35);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0; background:#FAF5EC; border-top:1px solid rgba(122,30,51,.2); border-radius:24px 24px 0 0; padding:18px 20px 26px; display:flex; flex-direction:column; gap:16px;">
+              <div style="width:44px; height:4px; border-radius:2px; background:rgba(43,17,22,.2); align-self:center;"></div>
+              <div style="display:flex; flex-direction:column; gap:4px; text-align:center;">
+                <div style="font-size:17px; font-weight:600; color:#2b1116;">Your name</div>
+                <div style="font-size:13px; color:#8a6f5c;">Shown on wallpapers you upload</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; align-items:center; gap:12px; height:54px; border-radius:14px; background:#fff; border:1.5px solid #7A1E33; padding:0 16px;">
+                  <span class="msr" style="font-size:20px; color:#7A1E33;">person</span>
+                  <span style="font-size:15px; color:#2b1116;">Priya Raman</span>
+                </div>
+                <div style="font-size:11.5px; color:#b09a86; text-align:right;">11 / 40</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:50px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15.5px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Save</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Edit name, light — maroon focus ring on white field.</div>
+      </div>
+      <!-- REFER LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#FAF5EC; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#2b1116;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#2b1116;">Refer &amp; Earn</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="background:linear-gradient(160deg, rgba(122,30,51,.10), rgba(212,160,23,.08)); border:1px solid rgba(212,160,23,.4); border-radius:22px; padding:26px 20px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;">
+                <div style="width:56px; height:56px; border-radius:50%; background:rgba(212,160,23,.16); display:flex; align-items:center; justify-content:center;"><span class="msr" style="font-size:28px; color:#7A1E33;">featured_seasonal_and_gifts</span></div>
+                <div style="font-family:'Marcellus',serif; font-size:21px; color:#2b1116;">Gift a friend, earn a month</div>
+                <div style="font-size:13.5px; color:#8a6f5c; line-height:1.5;">30 days of free premium for every friend who subscribes with your link</div>
+                <div style="margin-top:6px; width:100%; display:flex; align-items:center; justify-content:center; gap:10px; height:50px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">
+                  <span class="msr" style="font-size:20px;">share</span><span>Share via WhatsApp</span>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; background:#fff; border:1px solid rgba(122,30,51,.12); border-radius:18px; padding:16px;">
+                <span class="msr" style="font-size:26px; color:#7A1E33;">emoji_events</span>
+                <div style="display:flex; flex-direction:column; gap:1px;">
+                  <div style="font-size:12.5px; color:#8a6f5c;">Rewards earned</div>
+                  <div style="font-family:'Marcellus',serif; font-size:22px; color:#7A1E33;">0 days</div>
+                </div>
+              </div>
+              <div style="background:#fff; border:1px solid rgba(122,30,51,.12); border-radius:18px; padding:18px 16px; display:flex; flex-direction:column; gap:14px;">
+                <div style="font-size:14.5px; font-weight:600; color:#2b1116;">How it works</div>
+                <sc-for list="{{ referSteps }}" as="s" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="width:24px; height:24px; border-radius:50%; background:rgba(122,30,51,.08); color:#7A1E33; font-size:12.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none;">{{ s.n }}</div>
+                    <div style="font-size:13.5px; color:#6b5240; line-height:1.5; padding-top:3px;">{{ s.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 16px; text-align:center;">
+                <span class="msr" style="font-size:26px; color:rgba(43,17,22,.25);">group</span>
+                <div style="font-size:13.5px; color:#8a6f5c;">No referrals yet — your first friend is one share away</div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Refer &amp; Earn, light.</div>
+      </div>
+      <!-- UPLOAD LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#FAF5EC; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#2b1116;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#2b1116;">Upload wallpaper</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="border:1.5px dashed rgba(122,30,51,.45); border-radius:20px; padding:34px 20px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; cursor:pointer; background:#fff;">
+                <span class="msr" style="font-size:32px; color:#7A1E33;">add_photo_alternate</span>
+                <div style="font-size:15px; font-weight:500; color:#2b1116;">Choose an image or video</div>
+                <div style="font-size:12.5px; color:#8a6f5c;">Portrait, 1080×2400 or larger</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="font-size:12.5px; color:#8a6f5c;">Title <span style="color:#b09a86;">(optional)</span></div>
+                <div style="height:50px; border-radius:14px; background:#fff; border:1px solid rgba(122,30,51,.18); display:flex; align-items:center; padding:0 16px; font-size:14.5px; color:#b09a86;">e.g. Meenakshi at dusk</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:12.5px; color:#8a6f5c;">Category</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                  <sc-for list="{{ uploadCatsLight }}" as="c" hint-placeholder-count="6">
+                    <div style="padding:8px 16px; border-radius:999px; font-size:13.5px; font-weight:{{ c.weight }}; color:{{ c.color }}; background:{{ c.bg }}; border:1px solid {{ c.border }}; cursor:pointer;">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex; align-items:flex-start; gap:12px; padding:4px 2px;">
+                <span class="msr" style="font-size:22px; color:#7A1E33;">check_box</span>
+                <div style="font-size:13px; color:#6b5240; line-height:1.5;">I own the rights to this content or have permission to share it</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:52px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15.5px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Submit for review</div>
+              <div style="font-size:12px; color:#b09a86; text-align:center; line-height:1.5;">Approved wallpapers appear in the feed with your name</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Upload, light.</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:48px 56px; display:flex; flex-direction:column; gap:28px;">
+  <div id="2a" style="display:flex; flex-direction:column; gap:20px;">
+    <div style="display:flex; align-items:baseline; gap:16px;">
+      <span style="background:#7A1E33; color:#FAF5EC; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; letter-spacing:.08em;">2a</span>
+      <h1 style="margin:0; font-family:'Marcellus',serif; font-size:30px; font-weight:400; color:#FAF5EC;">Settings · Refer &amp; Earn · Language · Upload · Feed states</h1>
+      <span style="font-size:14px; color:#b9a58f;">First settings phone is interactive — tap Theme, Language, Logout or Delete account</span>
+    </div>
+    <div style="display:flex; gap:44px; align-items:flex-start; flex-wrap:wrap;">
+      <!-- SETTINGS DARK (interactive) -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#FAF5EC;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#FAF5EC;">Settings</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; align-items:center; gap:14px; background:linear-gradient(135deg, rgba(122,30,51,.35), rgba(212,160,23,.10)); border:1px solid rgba(212,160,23,.3); border-radius:20px; padding:16px;">
+                <div style="width:52px; height:52px; border-radius:50%; background:#7A1E33; color:#D4A017; display:flex; align-items:center; justify-content:center; font-family:'Marcellus',serif; font-size:22px;">P</div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                  <div style="font-size:16px; font-weight:600; color:#FAF5EC;">Priya Raman</div>
+                  <div style="font-size:13px; color:#b9a58f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">priya.raman@gmail.com</div>
+                </div>
+                <span class="msr" style="font-size:20px; color:#D4A017; cursor:pointer;">edit</span>
+              </div>
+              <div style="background:rgba(250,245,236,.04); border:1px solid rgba(250,245,236,.09); border-radius:20px; overflow:hidden;">
+                <sc-for list="{{ dRows }}" as="r" hint-placeholder-count="5">
+                  <div onClick="{{ r.tap }}" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:{{ r.divider }}; cursor:pointer;" style-hover="background:rgba(250,245,236,.04);">
+                    <div style="width:40px; height:40px; border-radius:12px; background:rgba(212,160,23,.10); display:flex; align-items:center; justify-content:center;"><span class="msr" style="font-size:21px; color:#D4A017;">{{ r.icon }}</span></div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
+                      <div style="font-size:15px; font-weight:500; color:#FAF5EC;">{{ r.title }}</div>
+                      <div style="font-size:12.5px; color:#b9a58f;">{{ r.sub }}</div>
+                    </div>
+                    <span class="msr" style="font-size:20px; color:rgba(250,245,236,.4);">chevron_right</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ openLogout }}" style="display:flex; align-items:center; justify-content:center; gap:8px; height:50px; border-radius:999px; background:rgba(122,30,51,.35); border:1px solid rgba(122,30,51,.6); color:#f0c9ba; font-size:15px; font-weight:600; cursor:pointer;" style-hover="background:rgba(122,30,51,.5);">
+                <span class="msr" style="font-size:20px;">logout</span><span>Logout</span>
+              </div>
+              <div onClick="{{ openDelete }}" style="font-size:13.5px; color:#b9a58f; text-align:center; cursor:pointer; text-decoration:underline; text-underline-offset:3px;">Delete account</div>
+              <div style="font-size:12px; color:#6e5c4c; text-align:center;">Privacy Policy · Terms · Copyright</div>
+            </div>
+            <!-- theme sheet -->
+            <sc-if value="{{ showTheme }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSettings }}" style="position:absolute; inset:0; background:rgba(20,9,12,.55);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; background:#1a0b0f; border-top:1px solid rgba(212,160,23,.35); border-radius:24px 24px 0 0; padding:18px 20px 26px; display:flex; flex-direction:column; gap:6px; animation:arulRise .3s ease both;">
+                <div style="width:44px; height:4px; border-radius:2px; background:rgba(250,245,236,.25); align-self:center; margin-bottom:8px;"></div>
+                <div style="font-size:17px; font-weight:600; color:#FAF5EC; margin-bottom:6px;">Theme</div>
+                <sc-for list="{{ themeOpts }}" as="o" hint-placeholder-count="3">
+                  <div onClick="{{ o.pick }}" style="display:flex; align-items:center; gap:14px; padding:12px 12px; border-radius:14px; background:{{ o.bg }}; cursor:pointer;">
+                    <span class="msr" style="font-size:22px; color:{{ o.iconColor }};">{{ o.icon }}</span>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                      <div style="font-size:15px; font-weight:500; color:{{ o.titleColor }};">{{ o.title }}</div>
+                      <div style="font-size:12.5px; color:#b9a58f;">{{ o.sub }}</div>
+                    </div>
+                    <span class="msr" style="font-size:20px; color:{{ o.checkColor }};">check_circle</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <!-- language sheet -->
+            <sc-if value="{{ showLang }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSettings }}" style="position:absolute; inset:0; background:rgba(20,9,12,.55);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; background:#1a0b0f; border-top:1px solid rgba(212,160,23,.35); border-radius:24px 24px 0 0; padding:18px 20px 26px; display:flex; flex-direction:column; gap:14px; animation:arulRise .3s ease both;">
+                <div style="width:44px; height:4px; border-radius:2px; background:rgba(250,245,236,.25); align-self:center;"></div>
+                <div style="font-size:17px; font-weight:600; color:#FAF5EC;">Language</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <sc-for list="{{ langs }}" as="l" hint-placeholder-count="6">
+                    <div onClick="{{ l.pick }}" style="display:flex; flex-direction:column; align-items:center; gap:3px; padding:16px 8px; border-radius:16px; background:{{ l.bg }}; border:1.5px solid {{ l.border }}; cursor:pointer;">
+                      <div style="font-size:17px; font-weight:600; color:{{ l.nativeColor }};">{{ l.native }}</div>
+                      <div style="font-size:12px; color:#b9a58f;">{{ l.name }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+            <!-- confirm dialogs -->
+            <sc-if value="{{ showConfirm }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSettings }}" style="position:absolute; inset:0; background:rgba(20,9,12,.6);"></div>
+              <div style="position:absolute; left:24px; right:24px; top:50%; transform:translateY(-50%); background:#1a0b0f; border:1px solid rgba(212,160,23,.35); border-radius:22px; padding:24px 22px; display:flex; flex-direction:column; gap:8px; animation:arulRise .25s ease both;">
+                <div style="font-size:18px; font-weight:600; color:#FAF5EC; text-align:center;">{{ confirmTitle }}</div>
+                <div style="font-size:13.5px; color:#b9a58f; text-align:center; line-height:1.5;">{{ confirmMsg }}</div>
+                <div style="display:flex; gap:10px; margin-top:12px;">
+                  <div onClick="{{ closeSettings }}" style="flex:1; display:flex; align-items:center; justify-content:center; height:46px; border-radius:999px; border:1px solid rgba(250,245,236,.25); color:#FAF5EC; font-size:14.5px; font-weight:500; cursor:pointer;">Cancel</div>
+                  <div onClick="{{ closeSettings }}" style="flex:1; display:flex; align-items:center; justify-content:center; height:46px; border-radius:999px; background:#7A1E33; color:#FAF5EC; font-size:14.5px; font-weight:600; cursor:pointer;" style-hover="background:#8d2740;">{{ confirmCta }}</div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Settings, dark — interactive. Silk-tinted profile card, one quiet card of rows. Logout is muted maroon, delete demoted to a text link; both confirm in a centered dialog.</div>
+      </div>
+      <!-- SETTINGS LIGHT -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#FAF5EC; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#2b1116;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#2b1116;">Settings</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; align-items:center; gap:14px; background:linear-gradient(135deg, rgba(122,30,51,.10), rgba(212,160,23,.10)); border:1px solid rgba(122,30,51,.18); border-radius:20px; padding:16px;">
+                <div style="width:52px; height:52px; border-radius:50%; background:#7A1E33; color:#D4A017; display:flex; align-items:center; justify-content:center; font-family:'Marcellus',serif; font-size:22px;">P</div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                  <div style="font-size:16px; font-weight:600; color:#2b1116;">Priya Raman</div>
+                  <div style="font-size:13px; color:#8a6f5c; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">priya.raman@gmail.com</div>
+                </div>
+                <span class="msr" style="font-size:20px; color:#7A1E33;">edit</span>
+              </div>
+              <div style="background:#fff; border:1px solid rgba(122,30,51,.12); border-radius:20px; overflow:hidden;">
+                <sc-for list="{{ lRows }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-bottom:{{ r.divider }};">
+                    <div style="width:40px; height:40px; border-radius:12px; background:rgba(122,30,51,.07); display:flex; align-items:center; justify-content:center;"><span class="msr" style="font-size:21px; color:#7A1E33;">{{ r.icon }}</span></div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;">
+                      <div style="font-size:15px; font-weight:500; color:#2b1116;">{{ r.title }}</div>
+                      <div style="font-size:12.5px; color:#8a6f5c;">{{ r.sub }}</div>
+                    </div>
+                    <span class="msr" style="font-size:20px; color:rgba(43,17,22,.35);">chevron_right</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; gap:8px; height:50px; border-radius:999px; background:rgba(122,30,51,.08); border:1px solid rgba(122,30,51,.35); color:#7A1E33; font-size:15px; font-weight:600;">
+                <span class="msr" style="font-size:20px;">logout</span><span>Logout</span>
+              </div>
+              <div style="font-size:13.5px; color:#8a6f5c; text-align:center; text-decoration:underline; text-underline-offset:3px;">Delete account</div>
+              <div style="font-size:12px; color:#b09a86; text-align:center;">Privacy Policy · Terms · Copyright</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Settings, light — ivory surfaces, white cards, maroon iconography. Same structure, same restraint.</div>
+      </div>
+      <!-- REFER & EARN DARK -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#FAF5EC;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#FAF5EC;">Refer &amp; Earn</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="background:linear-gradient(160deg, rgba(122,30,51,.45), rgba(20,9,12,.2)); border:1px solid rgba(212,160,23,.35); border-radius:22px; padding:26px 20px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;">
+                <div style="width:56px; height:56px; border-radius:50%; background:rgba(212,160,23,.14); display:flex; align-items:center; justify-content:center;"><span class="msr" style="font-size:28px; color:#D4A017;">featured_seasonal_and_gifts</span></div>
+                <div style="font-family:'Marcellus',serif; font-size:21px; color:#FAF5EC;">Gift a friend, earn a month</div>
+                <div style="font-size:13.5px; color:#c8ac8d; line-height:1.5;">30 days of free premium for every friend who subscribes with your link</div>
+                <div style="margin-top:6px; width:100%; display:flex; align-items:center; justify-content:center; gap:10px; height:50px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">
+                  <span class="msr" style="font-size:20px;">share</span><span>Share via WhatsApp</span>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:14px; background:rgba(250,245,236,.04); border:1px solid rgba(250,245,236,.09); border-radius:18px; padding:16px;">
+                <span class="msr" style="font-size:26px; color:#D4A017;">emoji_events</span>
+                <div style="display:flex; flex-direction:column; gap:1px;">
+                  <div style="font-size:12.5px; color:#b9a58f;">Rewards earned</div>
+                  <div style="font-family:'Marcellus',serif; font-size:22px; color:#D4A017;">0 days</div>
+                </div>
+              </div>
+              <div style="background:rgba(250,245,236,.04); border:1px solid rgba(250,245,236,.09); border-radius:18px; padding:18px 16px; display:flex; flex-direction:column; gap:14px;">
+                <div style="font-size:14.5px; font-weight:600; color:#FAF5EC;">How it works</div>
+                <sc-for list="{{ referSteps }}" as="s" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="width:24px; height:24px; border-radius:50%; background:rgba(212,160,23,.14); color:#D4A017; font-size:12.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none;">{{ s.n }}</div>
+                    <div style="font-size:13.5px; color:#c8ac8d; line-height:1.5; padding-top:3px;">{{ s.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 16px; text-align:center;">
+                <span class="msr" style="font-size:26px; color:rgba(250,245,236,.3);">group</span>
+                <div style="font-size:13.5px; color:#8f7c68;">No referrals yet — your first friend is one share away</div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Refer &amp; Earn — one warm silk hero, gold numerals for the steps (no traffic-light icon salad), quiet empty state.</div>
+      </div>
+      <!-- UPLOAD DARK -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; gap:12px; padding:14px 16px 10px;">
+              <span class="msr" style="font-size:24px; color:#FAF5EC;">arrow_back</span>
+              <span style="font-family:'Marcellus',serif; font-size:22px; color:#FAF5EC;">Upload wallpaper</span>
+            </div>
+            <div style="flex:1; overflow:auto; padding:8px 16px 24px; display:flex; flex-direction:column; gap:16px;">
+              <div style="border:1.5px dashed rgba(212,160,23,.5); border-radius:20px; padding:34px 20px; display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; cursor:pointer;" style-hover="background:rgba(212,160,23,.05);">
+                <span class="msr" style="font-size:32px; color:#D4A017;">add_photo_alternate</span>
+                <div style="font-size:15px; font-weight:500; color:#FAF5EC;">Choose an image or video</div>
+                <div style="font-size:12.5px; color:#8f7c68;">Portrait, 1080×2400 or larger</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="font-size:12.5px; color:#b9a58f;">Title <span style="color:#6e5c4c;">(optional)</span></div>
+                <div style="height:50px; border-radius:14px; background:rgba(250,245,236,.05); border:1px solid rgba(250,245,236,.14); display:flex; align-items:center; padding:0 16px; font-size:14.5px; color:#6e5c4c;">e.g. Meenakshi at dusk</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:12.5px; color:#b9a58f;">Category</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                  <sc-for list="{{ uploadCats }}" as="c" hint-placeholder-count="6">
+                    <div style="padding:8px 16px; border-radius:999px; font-size:13.5px; font-weight:{{ c.weight }}; color:{{ c.color }}; background:{{ c.bg }}; border:1px solid {{ c.border }}; cursor:pointer;">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex; align-items:flex-start; gap:12px; padding:4px 2px;">
+                <span class="msr" style="font-size:22px; color:#D4A017;">check_box</span>
+                <div style="font-size:13px; color:#c8ac8d; line-height:1.5;">I own the rights to this content or have permission to share it</div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:center; height:52px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15.5px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Submit for review</div>
+              <div style="font-size:12px; color:#6e5c4c; text-align:center; line-height:1.5;">Approved wallpapers appear in the feed with your name</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Upload — wallpaper-only (image/video, no type tabs). Dashed gold pick zone, category chips, rights checkbox, single green submit.</div>
+      </div>
+      <!-- FEED EMPTY -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <div style="position:absolute; top:14px; left:0; right:0; display:flex; gap:8px; overflow:hidden; padding:0 16px;">
+              <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="4">
+                <div style="flex:none; padding:7px 15px; border-radius:999px; font-size:13.5px; font-weight:{{ chip.weight }}; color:{{ chip.color }}; background:{{ chip.bg }}; border:1px solid {{ chip.border }};">{{ chip.label }}</div>
+              </sc-for>
+            </div>
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:0 48px;">
+              <div style="width:40px; opacity:.55;">{{ gopuramGold }}</div>
+              <div style="font-family:'Marcellus',serif; font-size:20px; color:#FAF5EC;">Nothing here yet</div>
+              <div style="font-size:13.5px; color:#8f7c68; line-height:1.5;">New Amman wallpapers arrive often. Meanwhile, explore everything.</div>
+              <div style="margin-top:8px; padding:12px 26px; border-radius:999px; border:1px solid rgba(212,160,23,.5); color:#D4A017; font-size:14px; font-weight:600; cursor:pointer;" style-hover="background:rgba(212,160,23,.08);">Browse all</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Feed empty (category) — gentle copy, outlined gold action back to All.</div>
+      </div>
+      <!-- FEED ERROR -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; padding:0 48px;">
+              <span class="msr" style="font-size:34px; color:rgba(250,245,236,.35);">cloud_off</span>
+              <div style="font-family:'Marcellus',serif; font-size:20px; color:#FAF5EC;">Couldn't load wallpapers</div>
+              <div style="font-size:13.5px; color:#8f7c68; line-height:1.5;">Check your connection and try again.</div>
+              <div style="margin-top:8px; display:flex; align-items:center; gap:8px; padding:12px 26px; border-radius:999px; background:#1FA75A; color:#fff; font-size:14px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">
+                <span class="msr" style="font-size:18px;">refresh</span><span>Retry</span>
+              </div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Feed error — plain words, one green retry.</div>
+      </div>
+    </div>
+  </div>
+</section>
+<section style="padding:48px 56px; display:flex; flex-direction:column; gap:28px;">
+  <div id="1a" style="display:flex; flex-direction:column; gap:20px;">
+    <div style="display:flex; align-items:baseline; gap:16px;">
+      <span style="background:#7A1E33; color:#FAF5EC; font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; letter-spacing:.08em;">1a</span>
+      <h1 style="margin:0; font-family:'Marcellus',serif; font-size:30px; font-weight:400; color:#FAF5EC;">Arul — Splash · Sign-in · Reel feed</h1>
+      <span style="font-size:14px; color:#b9a58f;">Kanjivaram silk + temple gold · scrims only, no blur · tap Apply / Share in the feed phone to see sheets &amp; gate nudge</span>
+    </div>
+    <div style="display:flex; gap:44px; align-items:flex-start; flex-wrap:wrap;">
+      <!-- SPLASH -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <video src="uploads/splash_video-1784002767795.mp4" autoPlay="{{ true }}" muted="{{ true }}" loop="{{ true }}" playsInline="{{ true }}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>
+            <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(20,9,12,.25) 0%, rgba(20,9,12,0) 35%, rgba(20,9,12,0) 55%, rgba(20,9,12,.82) 100%);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:64px; display:flex; flex-direction:column; align-items:center; gap:10px; animation:arulRise .8s ease both;">
+              <div style="width:44px;">{{ gopuramGold }}</div>
+              <div style="font-family:'Marcellus',serif; font-size:44px; letter-spacing:.04em; color:#FAF5EC;">Arul</div>
+              <div style="font-size:11px; letter-spacing:.42em; color:#D4A017; padding-left:.42em;">SOUTH INDIAN WALLPAPERS</div>
+              <div style="margin-top:14px; width:120px; height:2px; border-radius:1px; background:linear-gradient(90deg, rgba(212,160,23,0) 0%, #D4A017 40%, #D4A017 60%, rgba(212,160,23,0) 100%); background-size:200% 100%; animation:arulShimmer 1.6s linear infinite;"></div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Splash — video untouched, only a bottom scrim carrying the mark. Gold hairline doubles as the loading indicator (sliding gradient, no masked shimmer).</div>
+      </div>
+      <!-- SIGN-IN -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <video src="uploads/splash_video-1784002767795.mp4" autoPlay="{{ true }}" muted="{{ true }}" loop="{{ true }}" playsInline="{{ true }}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>
+            <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(20,9,12,.28) 0%, rgba(20,9,12,0) 38%, rgba(20,9,12,0) 62%, rgba(20,9,12,.72) 100%);"></div>
+            <div style="position:absolute; top:96px; left:0; right:0; display:flex; flex-direction:column; align-items:center; gap:8px;">
+              <div style="width:34px;">{{ gopuramGold }}</div>
+              <div style="font-family:'Marcellus',serif; font-size:30px; color:#FAF5EC;">Arul</div>
+            </div>
+            <!-- Google one-tap — slim, blends into the scrim -->
+            <div style="position:absolute; left:20px; right:20px; bottom:28px; display:flex; flex-direction:column; gap:14px; animation:arulRise .6s ease both;">
+              <div style="font-size:13.5px; color:rgba(250,245,236,.8); text-align:center; text-shadow:0 1px 6px rgba(0,0,0,.6);">Sign in to begin your free trial</div>
+              <div style="display:flex; align-items:center; gap:12px; height:56px; border-radius:999px; background:rgba(20,9,12,.55); border:1px solid rgba(212,160,23,.5); padding:0 8px 0 8px; cursor:pointer;" style-hover="border-color:#D4A017;">
+                <div style="width:42px; height:42px; border-radius:50%; background:#FAF5EC; display:flex; align-items:center; justify-content:center;">
+                  <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.1 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.8 6.1C12.3 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6.1C1 16.5 0 20.1 0 24s1 7.5 2.6 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.1 0 11.2-2 15-5.5l-7.5-5.8c-2.1 1.4-4.7 2.2-7.5 2.2-6.3 0-11.7-3.7-13.6-9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:1px; flex:1; min-width:0;">
+                  <div style="font-size:15px; font-weight:600; color:#FAF5EC;">Continue as Priya</div>
+                  <div style="font-size:12px; color:rgba(250,245,236,.6); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">priya.raman@gmail.com</div>
+                </div>
+                <span class="msr" style="font-size:22px; color:#D4A017; padding-right:10px;">arrow_forward</span>
+              </div>
+              <div style="font-size:11px; color:rgba(250,245,236,.5); text-align:center; text-shadow:0 1px 6px rgba(0,0,0,.6);"><a href="#1a" style="color:rgba(212,160,23,.85); text-decoration:none;">Terms</a> · <a href="#1a" style="color:rgba(212,160,23,.85); text-decoration:none;">Privacy</a></div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Sign-in — the video stays the hero; one-tap is a single slim gold-trimmed pill on the bottom scrim, nothing more.</div>
+      </div>
+      <!-- FEED (interactive) -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden;">
+            <img src="uploads/sample_wallpapers-1784002886703.jpg" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">
+            <div style="position:absolute; left:0; right:0; top:0; height:130px; background:linear-gradient(180deg, rgba(20,9,12,.62) 0%, rgba(20,9,12,0) 100%);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0; height:190px; background:linear-gradient(0deg, rgba(20,9,12,.72) 0%, rgba(20,9,12,0) 100%);"></div>
+            <!-- category chips -->
+            <div style="position:absolute; top:14px; left:0; right:0; display:flex; gap:8px; overflow:hidden; padding:0 16px; align-items:center;">
+              <sc-for list="{{ chips }}" as="chip" hint-placeholder-count="4">
+                <div style="flex:none; padding:7px 15px; border-radius:999px; font-size:13.5px; font-weight:{{ chip.weight }}; color:{{ chip.color }}; background:{{ chip.bg }}; border:1px solid {{ chip.border }};">{{ chip.label }}</div>
+              </sc-for>
+            </div>
+            <!-- right-edge action stack -->
+            <div style="position:absolute; right:10px; bottom:118px; display:flex; flex-direction:column; align-items:center; gap:22px;">
+              <div onClick="{{ openApply }}" style="display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;">
+                <span class="msr" style="font-size:30px; color:#FAF5EC; text-shadow:0 1px 8px rgba(0,0,0,.6);">wallpaper</span>
+                <span style="font-size:10.5px; color:rgba(250,245,236,.85); text-shadow:0 1px 6px rgba(0,0,0,.7);">Apply</span>
+              </div>
+              <div onClick="{{ tapShare }}" style="display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer;">
+                <span class="msr" style="font-size:28px; color:#FAF5EC; text-shadow:0 1px 8px rgba(0,0,0,.6);">share</span>
+                <span style="font-size:10.5px; color:rgba(250,245,236,.85); text-shadow:0 1px 6px rgba(0,0,0,.7);">Share</span>
+              </div>
+            </div>
+            <!-- bottom meta -->
+            <div style="position:absolute; left:16px; right:76px; bottom:26px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:.14em; color:#14090C; background:#D4A017; border-radius:4px; padding:2px 7px;">LIVE</span>
+                <span style="font-size:12.5px; color:rgba(250,245,236,.75);">Amman</span>
+              </div>
+              <div style="font-size:17px; font-weight:600; color:#FAF5EC; text-shadow:0 1px 8px rgba(0,0,0,.5);">Nagavalli Amman</div>
+            </div>
+            <!-- premium nudge -->
+            <sc-if value="{{ showNudge }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; left:50%; bottom:210px; transform:translateX(-50%); background:rgba(20,9,12,.92); border:1px solid rgba(212,160,23,.45); border-radius:999px; padding:9px 18px; display:flex; align-items:center; gap:8px; white-space:nowrap; animation:arulRise .3s ease both;">
+                <span class="msr" style="font-size:17px; color:#D4A017;">workspace_premium</span>
+                <span style="font-size:13px; color:#FAF5EC;">Sharing is a premium treat — <b style="color:#D4A017;">try it free</b></span>
+              </div>
+            </sc-if>
+            <!-- apply sheet -->
+            <sc-if value="{{ showApply }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSheets }}" style="position:absolute; inset:0; background:rgba(20,9,12,.55);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; background:#1a0b0f; border-top:1px solid rgba(212,160,23,.35); border-radius:24px 24px 0 0; padding:18px 20px 24px; display:flex; flex-direction:column; gap:16px; animation:arulRise .3s ease both;">
+                <div style="width:44px; height:4px; border-radius:2px; background:rgba(250,245,236,.25); align-self:center;"></div>
+                <div style="font-size:17px; font-weight:600; color:#FAF5EC;">Set wallpaper on</div>
+                <div style="display:flex; gap:10px;">
+                  <sc-for list="{{ applyTargets }}" as="t" hint-placeholder-count="3">
+                    <div onClick="{{ t.pick }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px 13px; border-radius:16px; background:{{ t.bg }}; border:1.5px solid {{ t.border }}; cursor:pointer;">
+                      <span class="msr" style="font-size:26px; color:{{ t.iconColor }};">{{ t.icon }}</span>
+                      <span style="font-size:13px; font-weight:500; color:#FAF5EC; text-align:center;">{{ t.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div onClick="{{ openPremium }}" style="display:flex; align-items:center; justify-content:center; gap:8px; height:50px; border-radius:999px; background:#1FA75A; color:#fff; font-size:15.5px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">
+                  <span class="msr" style="font-size:20px;">wallpaper</span><span>Apply wallpaper</span>
+                </div>
+              </div>
+            </sc-if>
+            <!-- premium sheet -->
+            <sc-if value="{{ showPremium }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSheets }}" style="position:absolute; inset:0; background:rgba(20,9,12,.62);"></div>
+              <div style="position:absolute; left:0; right:0; bottom:0; background:linear-gradient(180deg,#241014,#1a0b0f); border-top:1px solid rgba(212,160,23,.4); border-radius:24px 24px 0 0; padding:20px 22px 26px; display:flex; flex-direction:column; gap:14px; animation:arulRise .3s ease both;">
+                <div style="width:44px; height:4px; border-radius:2px; background:rgba(250,245,236,.25); align-self:center;"></div>
+                <div style="display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;">
+                  <div style="width:30px;">{{ gopuramGold }}</div>
+                  <div style="font-family:'Marcellus',serif; font-size:22px; color:#FAF5EC;">Arul Premium</div>
+                  <div style="font-size:13.5px; color:#c8ac8d; line-height:1.5;">Every wallpaper, live and still. Apply and share freely across all six categories.</div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; border:1px solid rgba(212,160,23,.4); border-radius:16px; padding:14px 16px;">
+                  <div style="display:flex; flex-direction:column; gap:2px;">
+                    <div style="font-size:15px; font-weight:600; color:#FAF5EC;">₹199 / month</div>
+                    <div style="font-size:12.5px; color:#b9a58f;">UPI Autopay · cancel anytime</div>
+                  </div>
+                  <div style="font-size:12px; font-weight:700; color:#14090C; background:#D4A017; border-radius:999px; padding:5px 12px;">7 DAYS FREE</div>
+                </div>
+                <div onClick="{{ closeSheets }}" style="display:flex; align-items:center; justify-content:center; height:52px; border-radius:999px; background:#1FA75A; color:#fff; font-size:16px; font-weight:600; cursor:pointer;" style-hover="background:#1c9450;">Start free trial</div>
+                <div onClick="{{ closeSheets }}" style="font-size:13.5px; color:#b9a58f; text-align:center; cursor:pointer;">Keep browsing free</div>
+              </div>
+            </sc-if>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Reel feed — fully chromeless: chips float on a top scrim, icon-only actions hug the right edge (fade while swiping in the real app). Tap <b>Apply</b> → target sheet; tap <b>Share</b> twice → nudge, then premium sheet.</div>
+      </div>
+      <!-- FEED LOADING STATE -->
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" dark="{{ true }}" hint-size="428px,908px">
+          <div style="position:relative; width:100%; height:100%; background:#14090C; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+            <div style="position:absolute; inset:0; background:linear-gradient(110deg, #14090C 30%, #2a1218 50%, #14090C 70%); background-size:200% 100%; animation:arulShimmer 1.8s linear infinite;"></div>
+            <div style="position:absolute; top:14px; left:16px; right:16px; display:flex; gap:8px;">
+              <div style="width:64px; height:32px; border-radius:999px; background:rgba(250,245,236,.08);"></div>
+              <div style="width:84px; height:32px; border-radius:999px; background:rgba(250,245,236,.08);"></div>
+              <div style="width:92px; height:32px; border-radius:999px; background:rgba(250,245,236,.08);"></div>
+            </div>
+            <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:12px; animation:arulPulse 2s ease infinite;">
+              <div style="width:38px;">{{ gopuramGold }}</div>
+              <div style="font-size:13px; color:#b9a58f;">Bringing your wallpapers…</div>
+            </div>
+          </div>
+        </x-import>
+        <div style="font-size:13px; color:#8f7c68; max-width:428px;">Feed loading — sliding-gradient skeleton (no masked shimmer), gopuram mark pulses on opacity only.</div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:2100,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  state = { sheet: null, nudged: false, target: 'both', s2: null, theme: 'dark', lang: 'English' };
+  renderVals() {
+    const gold = '#D4A017';
+    const gopuram = (color) => React.createElement('svg', { viewBox: '0 0 44 40', width: '100%', style: { display: 'block' } },
+      React.createElement('path', { d: 'M20 0h4v3h-4z M14 5h16l-2 5H16z M10 12h24l-2.5 6H12.5z M6 20h32l-3 7H9z M2 29h40l-2 8H4z', fill: color }),
+      React.createElement('circle', { cx: 22, cy: -2, r: 0 })
+    );
+    const chipDefs = ['All', 'Amman', 'Ayyappan', 'Murugan', 'Perumal', 'Sivan', 'Temples'];
+    const chips = chipDefs.map((label, i) => i === 1
+      ? { label, weight: 600, color: '#14090C', bg: gold, border: gold }
+      : { label, weight: 500, color: 'rgba(250,245,236,.92)', bg: 'rgba(20,9,12,.42)', border: 'rgba(250,245,236,.22)' });
+    const targets = [
+      { key: 'home', icon: 'home', label: 'Home screen' },
+      { key: 'lock', icon: 'lock', label: 'Lock screen' },
+      { key: 'both', icon: 'smartphone', label: 'Both' },
+    ].map(t => {
+      const on = this.state.target === t.key;
+      return { ...t, bg: on ? 'rgba(212,160,23,.14)' : 'rgba(250,245,236,.05)',
+        border: on ? gold : 'rgba(250,245,236,.14)', iconColor: on ? gold : 'rgba(250,245,236,.75)',
+        pick: () => this.setState({ target: t.key }) };
+    });
+    const rowDefs = [
+      { icon: 'featured_seasonal_and_gifts', title: 'Refer & Earn', sub: 'Earn 30 days free premium', tap: () => {} },
+      { icon: 'translate', title: 'Language', sub: this.state.lang, tap: () => this.setState({ s2: 'lang' }) },
+      { icon: 'dark_mode', title: 'Theme', sub: this.state.theme === 'system' ? 'System default' : this.state.theme === 'light' ? 'Light' : 'Dark', tap: () => this.setState({ s2: 'theme' }) },
+      { icon: 'help', title: 'Need help?', sub: 'Support & subscription', tap: () => {} },
+      { icon: 'upload', title: 'Upload your wallpaper', sub: 'Share your own image or video', tap: () => {} },
+    ];
+    const mkRows = (borderColor) => rowDefs.map((r, i) => ({ ...r, divider: i < rowDefs.length - 1 ? `1px solid ${borderColor}` : 'none' }));
+    const themeOpts = [
+      { key: 'system', icon: 'settings_suggest', title: 'System default', sub: 'Follow device setting' },
+      { key: 'light', icon: 'light_mode', title: 'Light', sub: 'Ivory & silk' },
+      { key: 'dark', icon: 'dark_mode', title: 'Dark', sub: 'Lamp-lit maroon' },
+    ].map(o => {
+      const on = this.state.theme === o.key;
+      return { ...o, bg: on ? 'rgba(212,160,23,.10)' : 'transparent', iconColor: on ? gold : 'rgba(250,245,236,.7)',
+        titleColor: on ? gold : '#FAF5EC', checkColor: on ? gold : 'transparent',
+        pick: () => this.setState({ theme: o.key }) };
+    });
+    const langs = [
+      ['English', 'English'], ['தமிழ்', 'Tamil'], ['తెలుగు', 'Telugu'],
+      ['ಕನ್ನಡ', 'Kannada'], ['മലയാളം', 'Malayalam'], ['हिन्दी', 'Hindi'],
+    ].map(([native, name]) => {
+      const on = this.state.lang === name;
+      return { native, name, bg: on ? 'rgba(212,160,23,.12)' : 'rgba(250,245,236,.04)',
+        border: on ? gold : 'rgba(250,245,236,.12)', nativeColor: on ? gold : '#FAF5EC',
+        pick: () => this.setState({ lang: name }) };
+    });
+    const uploadCats = ['Amman', 'Ayyappan', 'Murugan', 'Perumal', 'Sivan', 'Temples'].map((label, i) => i === 0
+      ? { label, weight: 600, color: '#14090C', bg: gold, border: gold }
+      : { label, weight: 500, color: 'rgba(250,245,236,.85)', bg: 'rgba(250,245,236,.05)', border: 'rgba(250,245,236,.16)' });
+    const isDel = this.state.s2 === 'delete';
+    return {
+      gopuramGold: gopuram(gold),
+      gopuramMaroon: gopuram('#7A1E33'),
+      premiumPerks: [
+        { icon: 'wallpaper', text: 'All 428 wallpapers, still and live' },
+        { icon: 'movie', text: 'Live wallpapers play on your home screen' },
+        { icon: 'ios_share', text: 'Apply and share without limits' },
+        { icon: 'auto_awesome', text: 'New arrivals every week' },
+      ],
+      uploadCatsLight: ['Amman', 'Ayyappan', 'Murugan', 'Perumal', 'Sivan', 'Temples'].map((label, i) => i === 0
+        ? { label, weight: 600, color: '#FAF5EC', bg: '#7A1E33', border: '#7A1E33' }
+        : { label, weight: 500, color: '#2b1116', bg: '#fff', border: 'rgba(122,30,51,.2)' }),
+      dRows: mkRows('rgba(250,245,236,.08)'),
+      lRows: mkRows('rgba(122,30,51,.10)'),
+      themeOpts, langs, uploadCats,
+      referSteps: [
+        { n: '1', text: 'Share your link with friends and family' },
+        { n: '2', text: 'They install Arul and subscribe to premium' },
+        { n: '3', text: '30 days of free premium lands in your account' },
+      ],
+      showTheme: this.state.s2 === 'theme',
+      showLang: this.state.s2 === 'lang',
+      showConfirm: this.state.s2 === 'logout' || isDel,
+      confirmTitle: isDel ? 'Delete account?' : 'Logout?',
+      confirmMsg: isDel ? 'This removes your account, favourites and rewards for good.' : 'You can sign back in anytime with Google.',
+      confirmCta: isDel ? 'Delete account' : 'Logout',
+      openLogout: () => this.setState({ s2: 'logout' }),
+      openDelete: () => this.setState({ s2: 'delete' }),
+      closeSettings: () => this.setState({ s2: null }),
+      chips, applyTargets: targets,
+      showApply: this.state.sheet === 'apply',
+      showPremium: this.state.sheet === 'premium',
+      showNudge: this.state.sheet === 'nudge',
+      openApply: () => this.setState({ sheet: 'apply' }),
+      openPremium: () => this.setState({ sheet: 'premium' }),
+      closeSheets: () => this.setState({ sheet: null }),
+      tapShare: () => {
+        if (this.state.nudged) this.setState({ sheet: 'premium' });
+        else { this.setState({ sheet: 'nudge', nudged: true });
+          clearTimeout(this._nt);
+          this._nt = setTimeout(() => { if (this.state.sheet === 'nudge') this.setState({ sheet: null }); }, 2600); }
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

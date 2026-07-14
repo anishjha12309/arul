@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../app/widgets/sliding_skeleton.dart';
@@ -16,12 +17,13 @@ const _kAllLabel = 'All';
 
 // ─────────────────────────────── Chips row ──────────────────────────────────
 
-/// The horizontal category-chip row that floats on the feed's top scrim
-/// (README > Reel feed: `top:14px, pad 0 16px, gap 8, h-scroll`).
+/// The horizontal category-chip row on the feed's solid top bar
+/// (`pad 0 16px, gap 8, h-scroll`).
 ///
-/// A bare scrollable [Row]; the caller positions it (top = safe-area + 14) and,
-/// in the reel, wraps it in the chrome-recede opacity. Rendered over media, so
-/// the chips use [ArulChipVariant.feed] (fixed dark palette, gold when active).
+/// Sits on the themed frame, not over media, so the chips use
+/// [ArulChipVariant.surface] and follow light/dark. The trailing padding is
+/// wider than the leading one so the last chip can scroll fully clear of the
+/// frame-colored continuation fade the feed paints over this row's right edge.
 class FeedChips extends ConsumerWidget {
   const FeedChips({super.key});
 
@@ -43,8 +45,11 @@ class FeedChips extends ConsumerWidget {
       height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: ArulTokens.screenPadding,
+        padding: const EdgeInsets.only(
+          left: ArulTokens.screenPadding,
+          // Wider than the leading pad so the final chip can scroll clear of
+          // the frame-colored "scrolls on" fade the feed paints over this edge.
+          right: 28,
         ),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -54,6 +59,7 @@ class FeedChips extends ConsumerWidget {
             child: ArulChip(
               label: c.label,
               selected: c.slug == selected,
+              variant: ArulChipVariant.surface,
               onTap: () =>
                   ref.read(selectedCategoryProvider.notifier).select(c.slug),
             ),
@@ -66,62 +72,82 @@ class FeedChips extends ConsumerWidget {
 
 // ─────────────────────────────── Loading ────────────────────────────────────
 
-/// Full-bleed feed loading (README > Feed states > Loading): a sliding-gradient
-/// fill, three ivory-8% chip skeletons, and a centred gopuram + line that pulses
-/// on opacity only. No masked shimmer, no spinner.
-class FeedLoading extends StatelessWidget {
-  const FeedLoading({super.key});
+/// Chip-row skeleton for the feed's top bar while the catalog loads: three
+/// ivory-8% pills (README > Feed states > Loading). The chips themselves render
+/// once categories land.
+class FeedChipsSkeleton extends StatelessWidget {
+  const FeedChipsSkeleton({super.key});
 
   static const _skeletonWidths = [64.0, 84.0, 92.0];
 
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.viewPaddingOf(context).top;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const SlidingSkeleton(),
-
-        Positioned(
-          top: topInset + 14,
-          left: ArulTokens.screenPadding,
-          right: ArulTokens.screenPadding,
-          child: Row(
-            children: [
-              for (final w in _skeletonWidths) ...[
-                Container(
-                  width: w,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: ArulTokens.ivory.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
-        ),
-
-        Center(
-          child: _OpacityPulse(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const GopuramMark(size: 38, color: ArulTokens.gold),
-                const SizedBox(height: 12),
-                Text(
-                  'Bringing your wallpapers…',
-                  style: ArulTokens.body.copyWith(
-                    color: ArulTokens.darkTextSecondary,
-                  ),
-                ),
-              ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fill = isDark
+        ? ArulTokens.ivory.withValues(alpha: 0.08)
+        : ArulTokens.maroonTintFill08;
+    return SizedBox(
+      height: 34,
+      child: Row(
+        children: [
+          const SizedBox(width: ArulTokens.screenPadding),
+          for (final w in _skeletonWidths) ...[
+            Container(
+              width: w,
+              height: 32,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Feed loading fill (README > Feed states > Loading): the sliding-gradient
+/// card with a centred gopuram + line that pulses on opacity only. No masked
+/// shimmer, no spinner. Renders in the same inset rounded card as the reel so
+/// the loading → content swap doesn't jump.
+class FeedLoading extends StatelessWidget {
+  const FeedLoading({super.key, required this.margin, required this.radius});
+
+  final EdgeInsets margin;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: margin,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const SlidingSkeleton(),
+            Center(
+              child: _OpacityPulse(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const GopuramMark(size: 38, color: ArulTokens.gold),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Bringing your wallpapers…',
+                      style: ArulTokens.body.copyWith(
+                        color: ArulTokens.darkTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -177,63 +203,58 @@ class FeedEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.viewPaddingOf(context).top;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 48),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Opacity(
-                opacity: 0.55,
-                child: const GopuramMark(size: 40, color: ArulTokens.gold),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Nothing here yet',
-                textAlign: TextAlign.center,
-                style: ArulTokens.screenTitle.copyWith(
-                  fontSize: 20,
-                  color: ArulTokens.ivory,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'New $categoryLabel wallpapers arrive often. '
-                'Meanwhile, explore everything.',
-                textAlign: TextAlign.center,
-                style: ArulTokens.body.copyWith(color: ArulTokens.darkMuted),
-              ),
-              const SizedBox(height: 20),
-              _OutlinedGoldPill(label: 'Browse all', onTap: onBrowseAll),
-            ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Chips stay visible via the feed's persistent top bar; this is only the
+    // body, rendered on the themed frame.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 48),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Opacity(
+            opacity: 0.55,
+            child: GopuramMark(
+              size: 40,
+              color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+            ),
           ),
-        ),
-
-        Positioned(
-          top: topInset + 14,
-          left: 0,
-          right: 0,
-          child: const FeedChips(),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Text(
+            'Nothing here yet',
+            textAlign: TextAlign.center,
+            style: ArulTokens.screenTitle.copyWith(
+              fontSize: 20,
+              color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'New $categoryLabel wallpapers arrive often. '
+            'Meanwhile, explore everything.',
+            textAlign: TextAlign.center,
+            style: ArulTokens.body.copyWith(
+              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
+            ),
+          ),
+          const SizedBox(height: 20),
+          _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+        ],
+      ),
     );
   }
 }
 
-/// Outlined gold pill (README > Feed states > Empty: `border gold-50%, gold
-/// text, pad 12 26, r999`).
-class _OutlinedGoldPill extends StatelessWidget {
-  const _OutlinedGoldPill({required this.label, required this.onTap});
+/// Outlined accent pill (README > Feed states > Empty: `border gold-50%, gold
+/// text, pad 12 26, r999`) — gold on the dark frame, maroon on the light one.
+class _OutlinedAccentPill extends StatelessWidget {
+  const _OutlinedAccentPill({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -241,13 +262,17 @@ class _OutlinedGoldPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          border: Border.all(color: ArulTokens.goldBorder50),
+          border: Border.all(
+            color: isDark
+                ? ArulTokens.goldBorder50
+                : ArulTokens.maroon.withValues(alpha: 0.5),
+          ),
         ),
         child: Text(
           label,
           style: ArulTokens.button.copyWith(
             fontSize: 14,
-            color: ArulTokens.gold,
+            color: isDark ? ArulTokens.gold : ArulTokens.maroon,
           ),
         ),
       ),
@@ -257,16 +282,30 @@ class _OutlinedGoldPill extends StatelessWidget {
 
 // ──────────────────────────────── Error ─────────────────────────────────────
 
-/// Full-screen feed error — only when the catalog fetch fails AND there is no
-/// cached copy (README > Feed states > Error). `cloud_off`, plain words, one
-/// green Retry.
+/// Full-screen feed error (README > Feed states > Error). `cloud_off`, plain
+/// words, one green Retry.
+///
+/// Two modes, same layout/tokens:
+///   - default ([offline] false): the catalog fetch failed AND there is no
+///     cached copy — "Couldn't load wallpapers" / "Check your connection…".
+///   - [offline] true: the device is offline, so the feed is gated shut
+///     regardless of cache — "No internet" / "Turn on the internet to see
+///     wallpapers." (the product's "boom, no wallpapers" state).
 class FeedError extends StatelessWidget {
-  const FeedError({super.key, required this.onRetry});
+  const FeedError({super.key, required this.onRetry, this.offline = false});
 
   final VoidCallback onRetry;
 
+  /// Selects the offline copy over the generic load-failure copy. Nothing else
+  /// changes — same icon, same green Retry, same layout.
+  final bool offline;
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final title = offline ? l10n.offlineTitle : l10n.feedErrorTitle;
+    final body = offline ? l10n.offlineFeedBody : l10n.feedErrorBody;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Column(
@@ -275,26 +314,29 @@ class FeedError extends StatelessWidget {
           Icon(
             Icons.cloud_off_rounded,
             size: 34,
-            color: ArulTokens.ivory.withValues(alpha: 0.35),
+            color: (isDark ? ArulTokens.ivory : ArulTokens.lightText)
+                .withValues(alpha: 0.35),
           ),
           const SizedBox(height: 12),
           Text(
-            "Couldn't load wallpapers",
+            title,
             textAlign: TextAlign.center,
             style: ArulTokens.screenTitle.copyWith(
               fontSize: 20,
-              color: ArulTokens.ivory,
+              color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            'Check your connection and try again.',
+            body,
             textAlign: TextAlign.center,
-            style: ArulTokens.body.copyWith(color: ArulTokens.darkMuted),
+            style: ArulTokens.body.copyWith(
+              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
+            ),
           ),
           const SizedBox(height: 20),
           CtaButton(
-            label: 'Retry',
+            label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
             height: 46,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/providers/locale_provider.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
@@ -18,6 +19,7 @@ class ArulApp extends ConsumerWidget {
       theme: ArulTheme.light(),
       darkTheme: ArulTheme.dark(),
       themeMode: ref.watch(themeModeProvider),
+      locale: ref.watch(localeProvider),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
     );

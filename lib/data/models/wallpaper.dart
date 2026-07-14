@@ -1,74 +1,71 @@
-/// `static` is a Dart keyword, so the static-image case cannot be named for it.
-enum WallpaperKind { image, live }
+import 'package:freezed_annotation/freezed_annotation.dart';
 
-/// One feed item.
+part 'wallpaper.freezed.dart';
+part 'wallpaper.g.dart';
+
+/// DB column `type`: 'static' or 'live'. `static` is a Dart keyword, so the
+/// static-image case is named `image` and mapped via @JsonValue. A RENDERING
+/// hint only — never a browse/filter axis (CLAUDE.md §5b).
+enum WallpaperKind {
+  @JsonValue('static')
+  image,
+  @JsonValue('live')
+  live,
+}
+
+/// One feed item, parsed from the Worker-built catalog JSON
+/// (`catalog/wallpapers/all_{page}.json`, snake_case fields — Arul's
+/// build-catalog additionally emits `category`).
 ///
-/// Plain immutable class, no codegen: the UI layer must build without a
-/// build_runner round. Port-map Phase 4 replaces this with the freezed model
-/// that parses the Worker catalog — the FIELDS are already the catalog's, so the
-/// widgets above it will not change.
-class Wallpaper {
-  const Wallpaper({
-    required this.id,
-    required this.title,
-    required this.category,
-    required this.categoryLabel,
-    required this.kind,
-    required this.key,
-    this.width,
-    this.height,
-  });
+/// The field surface (id/title/category/categoryLabel/kind/key/width/height +
+/// url/thumbUrl) is what the finished widgets consume — keep it stable.
+@freezed
+abstract class Wallpaper with _$Wallpaper {
+  const Wallpaper._();
 
-  final String id;
-  final String title;
+  @JsonSerializable(fieldRename: FieldRename.snake)
+  const factory Wallpaper({
+    required String id,
+    required String title,
 
-  /// Browse axis. NEVER filter the feed by [kind] — see CLAUDE.md §5b.
-  final String category;
-  final String categoryLabel;
+    /// Browse axis (amman·ayyappan·murugan·perumal·sivan·temples — free text;
+    /// a 7th is a server-side insert). An unknown/missing category must never
+    /// crash the feed — it falls into All (docs/edge-cases.md).
+    @Default('other') String category,
 
-  final WallpaperKind kind;
+    @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)
+    required WallpaperKind kind,
 
-  /// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4`. Public by design
-  /// (browse/preview are free); applying it is the premium gate.
-  final String key;
-  final int? width;
-  final int? height;
+    /// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4`. Public by design
+    /// (browse/preview are free); applying it is the premium gate.
+    @JsonKey(name: 'full_key') required String key,
+    int? width,
+    int? height,
+  }) = _Wallpaper;
+
+  factory Wallpaper.fromJson(Map<String, dynamic> json) =>
+      _$WallpaperFromJson(json);
+
+  /// Chip/meta label, derived from the slug (capitalised). The catalog does not
+  /// carry a display label; categories are single ASCII words by convention.
+  String get categoryLabel => category.isEmpty
+      ? category
+      : category[0].toUpperCase() + category.substring(1);
 
   String url(String cdnBase) => '$cdnBase/$key';
 
   /// The 720px still used by the grid, and as the viewer's instant poster.
   ///
-  /// Derived, not stored: the thumbnails are generated from the media itself and
-  /// live under their OWN `thumbs/` prefix — deliberately not under `wallpapers/`,
-  /// which the Worker's hourly orphan sweep owns and would delete from.
-  ///
-  /// A grid cannot show live items any other way: a decoder per tile is not
-  /// affordable on the budget SoCs this app targets. If a thumb is missing the
-  /// tile falls back (native first-frame for live, full image for static), so a
-  /// newly published wallpaper is never a hole.
-  String thumbUrl(String cdnBase) => '$cdnBase/thumbs/$category/$id.jpg';
-
-  /// Parses the bucket's content-prep manifest (`catalog/catalog.json`). The
-  /// Worker-built catalog uses the same field meanings under snake_case names,
-  /// so Phase 4 swaps this constructor, not its callers.
-  factory Wallpaper.fromManifest(Map<String, dynamic> json) {
-    final delivered = json['delivered'] as Map<String, dynamic>?;
-    final category = (json['category'] as String?) ?? 'other';
-    return Wallpaper(
-      id: json['id'] as String,
-      title:
-          (json['subjectName'] as String?) ??
-          (json['categoryName'] as String?) ??
-          category,
-      category: category,
-      categoryLabel: (json['categoryName'] as String?) ?? category,
-      kind: json['mediaType'] == 'video'
-          ? WallpaperKind.live
-          : WallpaperKind.image,
-      key: json['mediaKey'] as String,
-      width: (delivered?['width'] as num?)?.toInt(),
-      height: (delivered?['height'] as num?)?.toInt(),
-    );
+  /// Derived, not stored: thumbnails live under their OWN `thumbs/` prefix
+  /// (deliberately not under `wallpapers/`, which the hourly orphan sweep owns)
+  /// at `thumbs/<category>/<file-stem>.jpg`, where the stem is the basename of
+  /// [key] without its extension. The catalog `id` is a DB UUID and has NO
+  /// relation to the thumb name — always derive from the key, never from id.
+  String thumbUrl(String cdnBase) {
+    final name = key.split('/').last;
+    final dot = name.lastIndexOf('.');
+    final stem = dot == -1 ? name : name.substring(0, dot);
+    return '$cdnBase/thumbs/$category/$stem.jpg';
   }
 }
 

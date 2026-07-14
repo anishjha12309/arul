@@ -164,6 +164,17 @@ class AppLocalizationsKn extends AppLocalizations {
       'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
 
   @override
+  String get offlineTitle => 'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ';
+
+  @override
+  String get offlineFeedBody => 'ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ನೋಡಲು ಇಂಟರ್ನೆಟ್ ಆನ್ ಮಾಡಿ.';
+
+  @override
   String get shareMessage =>
       'ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಅರುಳ್ ಪಡೆಯಿರಿ: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ನನಗೆ Arul ತುಂಬಾ ಇಷ್ಟ. ನನ್ನ ಲಿಂಕ್‌ನಿಂದ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ, ನನಗೆ ಉಚಿತ ಪ್ರೀಮಿಯಂ ಸಿಗುತ್ತದೆ: $link';
+  }
 }

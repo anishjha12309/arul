@@ -20,6 +20,7 @@ Future<T?> showArulSheet<T>(
   bool gradient = false,
   bool isDismissible = true,
   bool forceDark = false,
+  bool topHairline = true,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -31,7 +32,11 @@ Future<T?> showArulSheet<T>(
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
     builder: (context) {
-      final sheet = ArulSheet(gradient: gradient, child: builder(context));
+      final sheet = ArulSheet(
+        gradient: gradient,
+        topHairline: topHairline,
+        child: builder(context),
+      );
       if (!forceDark) return sheet;
       // Sheets that overlay the always-dark feed (apply / premium) are spec'd
       // dark-only (#1A0B0F) regardless of the app theme.
@@ -44,12 +49,21 @@ Future<T?> showArulSheet<T>(
 /// + the translateY(24)+fade entrance. Used by [showArulSheet]; also usable
 /// directly (e.g. inside a custom route).
 class ArulSheet extends StatefulWidget {
-  const ArulSheet({super.key, required this.child, this.gradient = false});
+  const ArulSheet({
+    super.key,
+    required this.child,
+    this.gradient = false,
+    this.topHairline = true,
+  });
 
   final Widget child;
 
   /// Gradient-top variant (`#241014 → #1A0B0F`) for the premium sheet.
   final bool gradient;
+
+  /// The 1px gold-35% top hairline (dark only). Off for sheets where it reads
+  /// as a stray line rather than an edge — e.g. the theme picker.
+  final bool topHairline;
 
   @override
   State<ArulSheet> createState() => _ArulSheetState();
@@ -113,7 +127,7 @@ class _ArulSheetState extends State<ArulSheet>
               surface,
               // 1px gold-35% top hairline (dark only). Clipped to the rounded
               // top by the enclosing ClipRRect.
-              if (isDark)
+              if (isDark && widget.topHairline)
                 Positioned(
                   top: 0,
                   left: 0,

@@ -11,6 +11,9 @@ analyzer:
     # onPopInvoked, cacheExtent, Theme classes renamed to *ThemeData).
     deprecated_member_use: error
     deprecated_member_use_from_same_package: error
+    # Freezed's @JsonSerializable-on-factory pattern (ported models) trips this
+    # by design — same suppression as the reference app.
+    invalid_annotation_target: ignore
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"

@@ -1,21 +1,20 @@
-<!-- Arul brand mark — lotus + deepam flame.
-     Retint: change the four gradient stops below. Geometry is two paths only:
-       #lotus (the bloom + receptacle) and #flame (the rising deepam flame).
+<!-- Arul brand mark — the gopuram (temple tower), the SAME geometry the app draws
+     in-product via lib/app/widgets/gopuram_mark.dart (design-handoff viewBox
+     0 0 44 40). Launcher icon and in-app mark must never disagree.
+     Retint: change the two gradient stops below.
      Canvas 108x108 = Android adaptive-icon foreground. Centre (54,54).
-     All ink sits inside r=32.7 of centre, i.e. within the 66dp safe circle.
-     The bloom is nonzero-filled: every subpath winds the same way, so they union.
-     Reversing any subpath's direction will punch holes in the fill. -->
+     The source mark is scaled 1.1x and centred, so its half-diagonal is 32.7 —
+     exactly the 66dp adaptive-icon safe circle. Do not scale up past 1.1 or an
+     OEM mask can clip the base tier. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-label="Arul">
   <defs>
-    <linearGradient id="lotusGold" x1="0" y1="0.18" x2="0" y2="1">
-      <stop offset="0" stop-color="#F5C95C"/>
-      <stop offset="1" stop-color="#E0A82E"/>
-    </linearGradient>
-    <linearGradient id="flameGold" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="gopuramGold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#F5C95C"/>
       <stop offset="1" stop-color="#E0A82E"/>
     </linearGradient>
   </defs>
-  <path id="lotus" fill="url(#lotusGold)" d="M54,73.74C66.18,70.28 58.96,68.21 54,62.22C49.04,68.21 41.82,70.28 54,73.74Z M52.26,74.16C60.76,64.01 52.91,64.51 44.41,58.76C44.07,69.02 39.05,75.07 52.26,74.16Z M55.74,74.16C68.95,75.07 63.93,69.02 63.59,58.76C55.09,64.51 47.24,64.01 55.74,74.16Z M50.85,75.38C52.65,61.76 45.4,65.5 33.55,63.26C39.7,73.63 38.68,81.72 50.85,75.38Z M57.15,75.38C69.32,81.72 68.3,73.63 74.45,63.26C62.6,65.5 55.35,61.76 57.15,75.38Z M50.19,77.11C44.94,65.5 40.21,71.42 28.27,74.42C39.13,80.22 42.29,87.11 50.19,77.11Z M57.81,77.11C65.71,87.11 68.87,80.22 79.73,74.42C67.79,71.42 63.06,65.5 57.81,77.11Z M54,71.58C47.18,71.58 43,74.88 43,77.58C43,82.38 47.18,83.58 54,83.58C60.82,83.58 65,82.38 65,77.58C65,74.88 60.82,71.58 54,71.58Z"/>
-  <path id="flame" fill="url(#flameGold)" d="M54,22.86C55.06,27.35 62.39,33.92 62.83,40.14C62.83,51.89 58.86,57.42 54,57.42C49.14,57.42 45.17,51.89 45.17,40.14C45.61,33.92 52.94,27.35 54,22.86Z"/>
+  <g transform="translate(29.8,32) scale(1.1)">
+    <path id="gopuram" fill="url(#gopuramGold)" fill-rule="nonzero"
+          d="M20 0h4v3h-4z M14 5h16l-2 5H16z M10 12h24l-2.5 6H12.5z M6 20h32l-3 7H9z M2 29h40l-2 8H4z"/>
+  </g>
 </svg>

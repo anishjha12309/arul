@@ -12,15 +12,15 @@ account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as the refer
 # Create: cd workers && npx wrangler kv namespace create KV  (+ --preview)
 [[kv_namespaces]]
 binding = "KV"
-id = "TODO_KV_ID"
-preview_id = "TODO_KV_PREVIEW_ID"
+id = "8bf33c34e2ec41cd8ca98611dc5a70fb"
+preview_id = "7314407718774cfe8388a3f365cd7c37"
 
 # ─── Hyperdrive (Neon Postgres) ──────────────────────────────────────────────
 # Create: npx wrangler hyperdrive create arul-hyperdrive --connection-string="postgres://…"
 # Query caching stays OFF (caused ~60s staleness in the reference app).
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "TODO_HYPERDRIVE_ID"
+id = "19dda46cef1c42fc9d3176704feb74dc"
 
 # ─── R2 bucket (build-catalog writes via binding; public read ON at bucket level) ──
 [[r2_buckets]]

@@ -164,6 +164,18 @@ class AppLocalizationsTe extends AppLocalizations {
       'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.';
 
   @override
+  String get offlineTitle => 'ఇంటర్నెట్ లేదు';
+
+  @override
+  String get offlineFeedBody =>
+      'వాల్‌పేపర్‌లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.';
+
+  @override
   String get shareMessage =>
       'అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — అరుళ్ పొందండి: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — నాకు Arul చాలా ఇష్టం. నా లింక్‌తో ఇన్‌స్టాల్ చేయండి, నాకు ఉచిత ప్రీమియం వస్తుంది: $link';
+  }
 }

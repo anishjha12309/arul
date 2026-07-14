@@ -4,8 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/widgets/arul_toast.dart';
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
@@ -15,8 +19,10 @@ import 'theme_sheet.dart';
 /// Settings — profile card, one rows-card, muted logout, demoted delete link,
 /// faint legal line. Copy and mock identity are hardcoded verbatim per the
 /// handoff (name, email and the row labels are deliberate constants). The theme
-/// row is the only functional control here; language + name are local mock
-/// state; logout/delete confirm but their real actions are TODO.
+/// row labels are deliberate constants. Wired (phase 4): profile identity comes
+/// from the auth state (placeholders pre-backend), edit-name persists via
+/// `POST /me/profile`, language drives the app locale, and logout / delete
+/// account run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -25,12 +31,27 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Mock identity (README): "Priya Raman" / "priya.raman@gmail.com" / "P".
-  String _name = 'Priya Raman';
-  static const _email = 'priya.raman@gmail.com';
+  // Design placeholders (README), shown only while signed out / pre-backend.
+  static const _placeholderName = 'Priya Raman';
+  static const _placeholderEmail = 'priya.raman@gmail.com';
 
-  // Visual-only language selection; persists into the row sub-label.
-  String _language = 'English';
+  /// English name ↔ locale code for the language sheet (visual labels are the
+  /// sheet's own; persistence goes through [LocaleNotifier]).
+  static const _languageCodes = {
+    'English': 'en',
+    'Tamil': 'ta',
+    'Telugu': 'te',
+    'Kannada': 'kn',
+    'Malayalam': 'ml',
+    'Hindi': 'hi',
+  };
+
+  String _languageName(String code) => _languageCodes.entries
+      .firstWhere(
+        (e) => e.value == code,
+        orElse: () => _languageCodes.entries.first,
+      )
+      .key;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +59,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final headerColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final themeMode = ref.watch(themeModeProvider);
+
+    // Real identity once signed in; the handoff placeholders otherwise.
+    final auth = ref.watch(authStateStreamProvider).asData?.value;
+    final name = (auth?.displayName?.trim().isNotEmpty ?? false)
+        ? auth!.displayName!.trim()
+        : _placeholderName;
+    final email = (auth?.email?.trim().isNotEmpty ?? false)
+        ? auth!.email!.trim()
+        : _placeholderEmail;
+    final language = _languageName(ref.watch(localeProvider).languageCode);
 
     return Scaffold(
       backgroundColor: bg,
@@ -71,10 +102,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
                   _ProfileCard(
-                    name: _name,
-                    email: _email,
-                    initial: 'P',
-                    onEdit: _editName,
+                    name: name,
+                    email: email,
+                    initial: name.isEmpty ? 'A' : name[0].toUpperCase(),
+                    onEdit: () => _editName(name),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
@@ -88,8 +119,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.translate,
                         title: 'Language',
-                        sub: _language,
-                        onTap: _pickLanguage,
+                        sub: language,
+                        onTap: () => _pickLanguage(language),
                       ),
                       _RowData(
                         icon: Icons.dark_mode,
@@ -117,17 +148,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: _delete,
-                    child: Text(
-                      'Delete account',
-                      textAlign: TextAlign.center,
-                      style: ArulTokens.body.copyWith(
-                        color: isDark
-                            ? ArulTokens.darkTextSecondary
-                            : ArulTokens.lightSecondary,
-                        decoration: TextDecoration.underline,
-                        decorationColor: isDark
-                            ? ArulTokens.darkTextSecondary
-                            : ArulTokens.lightSecondary,
+                    // Hand-drawn underline. TextDecoration.underline sits hard
+                    // on the baseline; this hairline gets 3px of air. The
+                    // text's line-height is collapsed to 1.0 first, otherwise
+                    // body's 1.5 leading pads the box and drops the rule far
+                    // below the glyphs.
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Delete account',
+                            textAlign: TextAlign.center,
+                            style: ArulTokens.body.copyWith(
+                              height: 1,
+                              color: isDark
+                                  ? ArulTokens.darkTextSecondary
+                                  : ArulTokens.lightSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Container(
+                            height: 1,
+                            width: 98,
+                            color: isDark
+                                ? ArulTokens.darkTextSecondary
+                                : ArulTokens.lightSecondary,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -150,14 +198,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Future<void> _editName() async {
-    final next = await showEditNameSheet(context, _name);
-    if (next != null && next != _name) setState(() => _name = next);
+  Future<void> _editName(String current) async {
+    final next = await showEditNameSheet(context, current);
+    if (next == null || next.trim().isEmpty || next.trim() == current) return;
+    if (!AppConfig.hasBackend) return; // pre-Phase-0: nothing to persist to
+    try {
+      // Persists via the Worker (`POST /me/profile`) and reflects reactively
+      // through authStateStreamProvider — no local copy to keep in sync.
+      await ref.read(authControllerProvider.notifier).updateDisplayName(next);
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException && e.message.isNotEmpty
+          ? e.message
+          : 'Something went wrong. Please try again.';
+      showArulToast(context, message, kind: ToastKind.error);
+    }
   }
 
-  Future<void> _pickLanguage() async {
-    final next = await showLanguageSheet(context, _language);
-    if (next != null && next != _language) setState(() => _language = next);
+  Future<void> _pickLanguage(String current) async {
+    final next = await showLanguageSheet(context, current);
+    final code = _languageCodes[next];
+    if (code == null) return;
+    await ref.read(localeProvider.notifier).setLocale(Locale(code));
   }
 
   Future<void> _logout() async {
@@ -167,9 +229,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       message: 'You can sign back in anytime with Google.',
       confirmLabel: 'Logout',
     );
-    if (ok == true) {
-      // TODO(auth): sign the user out and route to /sign-in.
-    }
+    if (ok != true) return;
+    // Best-effort server logout (refresh-token denylist) + local token clear;
+    // never throws for the offline case.
+    await ref.read(authControllerProvider.notifier).signOut();
+    if (mounted) context.go('/sign-in');
   }
 
   Future<void> _delete() async {
@@ -179,8 +243,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       message: 'This removes your account, favourites and rewards for good.',
       confirmLabel: 'Delete account',
     );
-    if (ok == true) {
-      // TODO(auth): call account-deletion, then route to /sign-in.
+    if (ok != true) return;
+    try {
+      // Server-side: mandate revoke → tombstone → cascade → refresh denylist.
+      // Throws on failure — the account is intact and the session stays.
+      await ref.read(authControllerProvider.notifier).deleteAccount();
+      if (mounted) context.go('/sign-in');
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is ApiException && e.message.isNotEmpty
+          ? e.message
+          : 'Something went wrong. Please try again.';
+      showArulToast(context, message, kind: ToastKind.error);
     }
   }
 
@@ -188,9 +262,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // launchUrl THROWS (not merely returns false) when no mail client can handle
     // the intent — the normal state of a device with no mail app. Uncaught, that
     // swallows any feedback on tapping "Need help?".
+    // Recipient read LIVE from the remote app config (brand delta: the
+    // documented fallback is support@hsrutility.com via AppConfig).
+    final config = await ref
+        .read(appConfigProvider.future)
+        .catchError((_) => null);
     final uri = Uri(
       scheme: 'mailto',
-      path: AppConfig.supportEmail,
+      path: config?.supportEmail ?? AppConfig.supportEmail,
       queryParameters: {'subject': 'Arul - Support Request'},
     );
     bool ok;

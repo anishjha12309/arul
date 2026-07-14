@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/error/network_error.dart';
+import '../../../core/error/app_exception.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../../../data/models/wallpaper.dart';
 import '../data/wallpaper_apply_service.dart';
 import 'wallpaper_prefetch_provider.dart';
@@ -82,7 +83,7 @@ String applyCacheFilename(Wallpaper w) => w.key.split('/').last;
 // ─── Service provider ─────────────────────────────────────────────────────────
 
 final wallpaperApplyServiceProvider = Provider<WallpaperApplyService>(
-  (ref) => CdnWallpaperApplyService(),
+  (ref) => CdnWallpaperApplyService(apiClient: ref.watch(apiClientProvider)),
 );
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
@@ -149,7 +150,9 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       }
 
       if (file == null) {
-        final url = await service.resolveUrl(wallpaper);
+        // The GATED download URL: Worker signed-url (live entitlement check)
+        // when the backend exists, public CDN before then.
+        final url = await service.downloadUrl(wallpaper);
 
         state = const WallpaperApplyLoading(
           stage: WallpaperApplyStage.downloading,

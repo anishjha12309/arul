@@ -163,6 +163,17 @@ class AppLocalizationsHi extends AppLocalizations {
       'आप ऑफ़लाइन हैं। अपना कनेक्शन जाँचें और फिर कोशिश करें।';
 
   @override
+  String get offlineTitle => 'इंटरनेट नहीं है';
+
+  @override
+  String get offlineFeedBody => 'वॉलपेपर देखने के लिए इंटरनेट चालू करें।';
+
+  @override
   String get shareMessage =>
       'सुंदर दक्षिण भारतीय वॉलपेपर — अरुल पाएँ: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'सुंदर दक्षिण भारतीय वॉलपेपर — मुझे Arul बहुत पसंद है। मेरी लिंक से इंस्टॉल करें और मुझे मुफ़्त प्रीमियम मिलेगा: $link';
+  }
 }

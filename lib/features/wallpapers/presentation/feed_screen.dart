@@ -1,9 +1,19 @@
+import 'dart:math' as math;
+
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../app/widgets/arul_toast.dart';
+import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/presentation/premium_sheet.dart';
@@ -65,11 +75,17 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   PremiumGateAction? _nudge;
   int _nudgeSeq = 0;
 
-  /// Snapshot gate for the tap handler. CLAUDE.md §5's real gate must `await
-  /// entitlementProvider.future` (a loading snapshot must never bounce a
-  /// premium user) — done properly when the purchase flow lands (phase-4);
-  /// today the provider is hardcoded false, so the read never races.
-  bool get _premium => ref.read(entitlementProvider).value ?? false;
+  /// The gate AWAITS `entitlementProvider.future` (CLAUDE.md §5): a loading
+  /// snapshot must never bounce a premium user to the paywall on a cold start.
+  /// A failed fetch gates closed — the Worker's signed-url check remains the
+  /// authoritative gate either way.
+  Future<bool> _isPremium() async {
+    try {
+      return await ref.read(entitlementProvider.future);
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
@@ -143,6 +159,41 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     return false;
   }
 
+  /// Pull-to-refresh: an authoritative network reload. `refresh()` re-reads
+  /// the version pointer and BYPASSES the serve-cached-first fast path (a bare
+  /// invalidate would re-emit the disk snapshot instantly and the indicator
+  /// would settle without fresh data). It never throws: on failure with data
+  /// on screen the current feed is kept; the AsyncError branch renders retry
+  /// only when there is nothing to show. Fresh data cascades to feedProvider.
+  Future<void> _refreshCatalog() =>
+      ref.read(catalogProvider.notifier).refresh();
+
+  /// Ported from the reference feed: warm the NEXT item's full image when it
+  /// is static, so a static→static swipe paints from cache instead of
+  /// shimmering through the whole download. Live items are prefetched as bytes
+  /// ahead of time by the prefetch service's data window, not here. Same URL
+  /// AND the same decode width as [ViewerMedia]'s full-resolution layer, so
+  /// this precache and the page's render share ONE image-cache entry.
+  void _precacheNextStatic(List<Wallpaper> items, int index) {
+    final next = index + 1;
+    if (next >= items.length || items[next].kind != WallpaperKind.image) {
+      return;
+    }
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final fullWidth = (MediaQuery.sizeOf(context).width * dpr).round();
+    precacheImage(
+      ResizeImage.resizeIfNeeded(
+        fullWidth,
+        null,
+        CachedNetworkImageProvider(items[next].url(AppConfig.cdnBaseUrl)),
+      ),
+      context,
+      // Never throws into the framework; the real render path keeps its own
+      // self-healing retry regardless.
+      onError: (_, _) {},
+    );
+  }
+
   void _setChrome(bool visible) {
     if (_chromeVisible == visible) return;
     setState(() {
@@ -155,18 +206,26 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
   // ─── Premium gate ────────────────────────────────────────────────────────────
 
-  void _onAction(PremiumGateAction action, Wallpaper w) {
-    if (_premium) {
+  Future<void> _onAction(PremiumGateAction action, Wallpaper w) async {
+    final prem = await _isPremium();
+    if (prem) {
       switch (action) {
         case PremiumGateAction.apply:
-          _doApply(w);
+          unawaited(_doApply(w));
         case PremiumGateAction.share:
-          _doShare(w);
+          unawaited(_doShare(w));
       }
       return;
     }
-    // Free user: nudge once, then the sheet.
-    // TODO(phase-4): track '${action.source}_blocked_premium'.
+    if (!mounted) return;
+    // Free user: nudge once, then the sheet. Either way the blocked verb is
+    // tracked (docs/edge-cases.md).
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          '${action.source}_blocked_premium',
+          properties: {'wallpaper_id': w.id, 'category': w.category},
+        );
     if (!_nudgeShown) {
       setState(() {
         _nudgeShown = true;
@@ -174,7 +233,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
         _nudgeSeq++;
       });
     } else {
-      PremiumSheet.show(context, source: action.source);
+      unawaited(PremiumSheet.show(context, source: action.source));
     }
   }
 
@@ -247,6 +306,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
   // ─── Build ───────────────────────────────────────────────────────────────────
 
+  /// The inset around the wallpaper card. The surrounding themed frame (ink in
+  /// dark, ivory in light) is what keeps the chips row and settings entry
+  /// legible over any artwork.
+  static const _cardMargin = EdgeInsets.fromLTRB(12, 8, 12, 12);
+  static const _cardRadius = 22.0;
+
   @override
   Widget build(BuildContext context) {
     // Restore after an apply-driven cold restart, once the full catalog is in.
@@ -256,33 +321,136 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
     final feed = ref.watch(feedProvider);
 
+    // Offline gate (product decision: "the instant the internet is out, no
+    // wallpapers"). Fires only on a KNOWN offline result — a loading snapshot
+    // (`.value == null`) or a failed probe keeps the normal online path, so a
+    // slow first connectivity check never flashes the offline screen over a
+    // live network. When offline the whole reel — browse AND the Apply/Share
+    // rail — is unreachable, which also means the premium gate can't hang on an
+    // offline signed-url/subscription call.
+    final offline = ref.watch(isOnlineProvider).value == false;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Over full-bleed media the status/nav icons must be light in both themes.
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
+      // The frame follows the app theme, so the status/nav icons do too.
+      value: SystemUiOverlayStyle(
+        statusBarColor: const Color(0x00000000),
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: const Color(0x00000000),
+        systemNavigationBarIconBrightness: isDark
+            ? Brightness.light
+            : Brightness.dark,
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-        backgroundColor: ArulTokens.darkSurface,
-        body: switch (feed) {
-          AsyncLoading() => const FeedLoading(),
+        backgroundColor: frameColor,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Brand header — the wordmark anchors the app and gives settings
+              // its own home, so nothing sits on top of the chips.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  ArulTokens.screenPadding,
+                  6,
+                  ArulTokens.screenPadding,
+                  8,
+                ),
+                child: Row(
+                  children: [
+                    GopuramMark(
+                      size: 20,
+                      color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Arul',
+                      style: ArulTokens.screenTitle.copyWith(
+                        fontSize: 20,
+                        color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
+                      ),
+                    ),
+                    const Spacer(),
+                    _GiftButton(onTap: () => context.push('/refer')),
+                    const SizedBox(width: 8),
+                    _SettingsButton(onTap: () => context.push('/settings')),
+                  ],
+                ),
+              ),
 
-          AsyncData(:final value) when value.isEmpty => FeedEmpty(
-            categoryLabel: _selectedLabel(),
-            onBrowseAll: () => ref
-                .read(selectedCategoryProvider.notifier)
-                .select(WallpaperCategory.allSlug),
+              // Chips get the FULL width — nothing overlaps them, and a
+              // frame-colored fade on the trailing edge shows the row scrolls
+              // on past the last visible chip.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Stack(
+                  children: [
+                    feed is AsyncLoading
+                        ? const FeedChipsSkeleton()
+                        : const FeedChips(),
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      right: 0,
+                      width: 24,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerRight,
+                              end: Alignment.centerLeft,
+                              colors: [
+                                frameColor,
+                                frameColor.withValues(alpha: 0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                // Offline wins over every catalog state (loading / cached data
+                // / error): a clear "no internet" screen, never stale
+                // wallpapers, never a hang. Retry re-checks connectivity AND
+                // reloads the catalog, so it restores the moment the network is
+                // back.
+                child: offline
+                    ? FeedError(
+                        offline: true,
+                        onRetry: () {
+                          ref.invalidate(isOnlineProvider);
+                          ref.invalidate(catalogProvider);
+                        },
+                      )
+                    : switch (feed) {
+                        AsyncLoading() => const FeedLoading(
+                          margin: _cardMargin,
+                          radius: _cardRadius,
+                        ),
+
+                        AsyncData(:final value) when value.isEmpty => FeedEmpty(
+                          categoryLabel: _selectedLabel(),
+                          onBrowseAll: () => ref
+                              .read(selectedCategoryProvider.notifier)
+                              .select(WallpaperCategory.allSlug),
+                        ),
+
+                        AsyncData(:final value) => _buildReel(value),
+
+                        AsyncError() => FeedError(
+                          onRetry: () => ref.invalidate(catalogProvider),
+                        ),
+                      },
+              ),
+            ],
           ),
-
-          AsyncData(:final value) => _buildReel(value),
-
-          AsyncError() => FeedError(
-            onRetry: () => ref.invalidate(catalogProvider),
-          ),
-        },
+        ),
       ),
     );
   }
@@ -303,29 +471,53 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     final busy =
         apply is WallpaperApplyLoading || share is WallpaperSharePreparing;
 
-    final topInset = MediaQuery.viewPaddingOf(context).top;
     final current = items[_index.clamp(0, items.length - 1)];
+
+    // Everything below is positioned against the wallpaper CARD, not the
+    // screen: the card's margins are constant, so card-relative offsets are
+    // margin + inner offset.
+    const m = _cardMargin;
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Media pager — only the wallpaper per page; chrome is one layer above.
-        NotificationListener<ScrollNotification>(
-          onNotification: _onScroll,
-          child: PageView.builder(
-            controller: _pager,
-            scrollDirection: Axis.vertical,
-            itemCount: items.length,
-            onPageChanged: (i) {
-              setState(() => _index = i);
-              _video.onPageChanged(i);
-            },
-            itemBuilder: (context, i) =>
-                _ReelMedia(wallpaper: items[i], index: i),
+        // Media pager — one inset rounded card per page. The padding lives
+        // INSIDE the page so the snap/drag geometry is unchanged. Wrapped in a
+        // RefreshIndicator: on the first page a downward pull has no previous
+        // page to reveal, so it overscrolls and refreshes the whole catalog;
+        // on later pages the pull just navigates, so refresh only fires "from
+        // the top", as intended.
+        RefreshIndicator(
+          onRefresh: _refreshCatalog,
+          color: ArulTokens.gold,
+          backgroundColor: Theme.of(context).brightness == Brightness.dark
+              ? ArulTokens.darkSurface
+              : ArulTokens.ivory,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: PageView.builder(
+              controller: _pager,
+              scrollDirection: Axis.vertical,
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: items.length,
+              onPageChanged: (i) {
+                setState(() => _index = i);
+                _video.onPageChanged(i);
+                _precacheNextStatic(items, i);
+              },
+              itemBuilder: (context, i) => Padding(
+                padding: m,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(_cardRadius),
+                  child: _ReelMedia(wallpaper: items[i], index: i),
+                ),
+              ),
+            ),
           ),
         ),
 
-        // Chrome layer: scrims + chips + action rail + meta, faded as one.
+        // Chrome layer: scrim + action rail + meta, faded as one. Chips and
+        // settings live on the frame above and never recede.
         IgnorePointer(
           ignoring: !_chromeVisible,
           child: AnimatedOpacity(
@@ -335,39 +527,29 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 130,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: ArulTokens.feedTopScrim,
-                    ),
-                  ),
-                ),
-                const Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
+                // Bottom scrim, clipped to the card's lower corners so it
+                // never paints on the frame.
+                Positioned(
+                  bottom: m.bottom,
+                  left: m.left,
+                  right: m.right,
                   height: 190,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: ArulTokens.feedBottomScrim,
+                  child: const ClipRRect(
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(_cardRadius),
+                      bottomRight: Radius.circular(_cardRadius),
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: ArulTokens.feedBottomScrim,
+                      ),
                     ),
                   ),
                 ),
 
                 Positioned(
-                  top: topInset + 14,
-                  left: 0,
-                  right: 0,
-                  child: const FeedChips(),
-                ),
-
-                Positioned(
-                  right: 10,
-                  bottom: 118,
+                  right: m.right + 10,
+                  bottom: m.bottom + 92,
                   child: _ActionRail(
                     busy: busy,
                     onApply: () => _onAction(PremiumGateAction.apply, current),
@@ -376,9 +558,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
                 ),
 
                 Positioned(
-                  left: 16,
-                  right: 76,
-                  bottom: 26,
+                  left: m.left + 16,
+                  right: m.right + 64,
+                  bottom: m.bottom + 20,
                   child: _FeedMeta(wallpaper: current),
                 ),
               ],
@@ -391,9 +573,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
           Positioned(
             left: 0,
             right: 0,
-            // Just above the meta block (meta bottom:26 + ~2 text lines + gap),
-            // per README "floating nudge pill above meta".
-            bottom: 110,
+            // Just above the meta block, per README "floating nudge pill
+            // above meta".
+            bottom: m.bottom + 104,
             child: Center(
               child: PremiumNudge(
                 key: ValueKey(_nudgeSeq),
@@ -407,8 +589,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
         if (apply is WallpaperApplyLoading || share is WallpaperSharePreparing)
           Positioned(
             top: 0,
-            left: 0,
-            right: 0,
+            left: m.left,
+            right: m.right,
             child: _TransferProgress(
               progress: switch ((apply, share)) {
                 (
@@ -425,6 +607,135 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The Refer & Earn entry on the feed's top bar — a bare gold gift that catches
+/// the eye through motion, not glow: it rests for [_restBeat], then gives one
+/// short shake (a few damped rotations, like a wrapped box being rattled) and
+/// settles.
+///
+/// Transform/opacity only, per the design rules — no ShaderMask sweep (that is
+/// an offscreen pass every frame, on the surface that also decodes video).
+class _GiftButton extends StatefulWidget {
+  const _GiftButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_GiftButton> createState() => _GiftButtonState();
+}
+
+class _GiftButtonState extends State<_GiftButton>
+    with SingleTickerProviderStateMixin {
+  /// One shake every ~2.8s: long enough to read as an invitation, not a nag.
+  static const _restBeat = Duration(milliseconds: 2800);
+  static const _shake = Duration(milliseconds: 700);
+
+  /// Peak tilt, radians (~16°), and the number of half-swings in one shake.
+  static const _amplitude = 0.28;
+  static const _swings = 4.0;
+
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: _restBeat,
+  )..repeat();
+
+  /// The shake occupies the tail of each cycle; the rest of it is the pause.
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _c,
+    curve: Interval(
+      1 - _shake.inMilliseconds / _restBeat.inMilliseconds,
+      1,
+      curve: Curves.linear,
+    ),
+  );
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+
+    return Semantics(
+      button: true,
+      label: 'Refer and earn',
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          widget.onTap();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: AnimatedBuilder(
+            animation: _t,
+            builder: (context, child) {
+              // A sine wobble that decays across the shake window, so it ends
+              // dead-level instead of snapping back mid-swing.
+              final decay = 1 - _t.value;
+              final angle =
+                  math.sin(_t.value * _swings * 2 * math.pi) *
+                  _amplitude *
+                  decay;
+              return Transform.rotate(angle: angle, child: child);
+            },
+            child: Icon(Icons.card_giftcard_rounded, size: 22, color: accent),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The settings entry on the feed's top bar. Styled like an inactive surface
+/// chip in the current theme so it reads as quiet chrome next to the category
+/// pills rather than an accent.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Semantics(
+      button: true,
+      label: 'Settings',
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDark
+                  ? ArulTokens.cardBorderDark14
+                  : ArulTokens.cardBorderLight,
+            ),
+          ),
+          child: Icon(
+            Icons.settings_rounded,
+            size: 19,
+            color: isDark
+                ? ArulTokens.ivory.withValues(alpha: 0.92)
+                : ArulTokens.maroon,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -527,15 +838,16 @@ class _RailButton extends StatelessWidget {
                 icon,
                 size: iconSize,
                 color: ArulTokens.ivory,
-                shadows: ArulTokens.overMediaShadow,
+                shadows: ArulTokens.railIconShadow,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 10.5,
-                  color: ArulTokens.ivory.withValues(alpha: 0.85),
-                  shadows: ArulTokens.overMediaShadow,
+                  fontWeight: FontWeight.w600,
+                  color: ArulTokens.ivory,
+                  shadows: ArulTokens.railIconShadow,
                 ),
               ),
             ],

@@ -164,6 +164,17 @@ class AppLocalizationsTa extends AppLocalizations {
       'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
 
   @override
+  String get offlineTitle => 'இணையம் இல்லை';
+
+  @override
+  String get offlineFeedBody => 'வால்பேப்பர்களைப் பார்க்க இணையத்தை இயக்கவும்.';
+
+  @override
   String get shareMessage =>
       'அழகான தென்னிந்திய வால்பேப்பர்கள் — அருள் பெறவும்: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'அழகான தென்னிந்திய வால்பேப்பர்கள் — எனக்கு Arul மிகவும் பிடிக்கும். என் இணைப்பைப் பயன்படுத்தி நிறுவவும், எனக்கு இலவச பிரீமியம் கிடைக்கும்: $link';
+  }
 }

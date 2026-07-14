@@ -10,7 +10,12 @@ import '../providers/theme_mode_provider.dart';
 /// gold check_circle." This one is FUNCTIONAL: selecting a row drives
 /// [themeModeProvider] (real theme switching), then closes the sheet.
 Future<void> showThemeSheet(BuildContext context) {
-  return showArulSheet<void>(context, builder: (_) => const _ThemeSheet());
+  return showArulSheet<void>(
+    context,
+    // The gold edge reads as a stray line over this small sheet — off here.
+    topHairline: false,
+    builder: (_) => const _ThemeSheet(),
+  );
 }
 
 /// Human label for a [ThemeMode], used both here and for the settings row sub.

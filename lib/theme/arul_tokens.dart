@@ -249,6 +249,18 @@ abstract final class ArulTokens {
     Shadow(offset: Offset(0, 1), blurRadius: 8, color: Color(0x99000000)),
   ];
 
+  /// Shadow for the feed action-rail icons (Apply / Share). The single
+  /// [overMediaShadow] lets an ivory glyph wash out over pale wallpapers
+  /// (white temples, bright sky). This stacks a tight, near-opaque contact
+  /// halo — which hugs the glyph edge and reads as separation on light media —
+  /// under a broader soft spread that keeps it grounded over dark media. Result:
+  /// the icon carries its own contrast on ANY background without a chip or
+  /// border breaking the chromeless rail.
+  static const List<Shadow> railIconShadow = [
+    Shadow(blurRadius: 3, color: Color(0xE6000000)),
+    Shadow(offset: Offset(0, 1), blurRadius: 10, color: Color(0xB3000000)),
+  ];
+
   // ────────────────────────────── Typography ──────────────────────────────
   // README > Typography. UI = system stack (fontFamily null). Serif =
   // 'Marcellus' (bundled) for the Latin wordmark, screen titles, price/reward

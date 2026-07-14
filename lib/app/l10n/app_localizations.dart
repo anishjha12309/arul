@@ -400,11 +400,29 @@ abstract class AppLocalizations {
   /// **'You\'re offline. Check your connection and try again.'**
   String get offlineBody;
 
+  /// No description provided for @offlineTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet'**
+  String get offlineTitle;
+
+  /// No description provided for @offlineFeedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on the internet to see wallpapers.'**
+  String get offlineFeedBody;
+
   /// No description provided for @shareMessage.
   ///
   /// In en, this message translates to:
   /// **'Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul'**
   String get shareMessage;
+
+  /// Text shared to WhatsApp / the system share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: {link}'**
+  String referShareMessage(String link);
 }
 
 class _AppLocalizationsDelegate

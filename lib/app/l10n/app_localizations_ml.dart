@@ -165,6 +165,17 @@ class AppLocalizationsMl extends AppLocalizations {
       'നിങ്ങൾ ഓഫ്‌ലൈനിലാണ്. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.';
 
   @override
+  String get offlineTitle => 'ഇന്റർനെറ്റ് ഇല്ല';
+
+  @override
+  String get offlineFeedBody => 'വാൾപേപ്പറുകൾ കാണാൻ ഇന്റർനെറ്റ് ഓണാക്കുക.';
+
+  @override
   String get shareMessage =>
       'മനോഹരമായ ദക്ഷിണേന്ത്യൻ വാൾപേപ്പറുകൾ — അരുൾ നേടുക: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'മനോഹരമായ ദക്ഷിണേന്ത്യൻ വാൾപേപ്പറുകൾ — എനിക്ക് Arul വളരെ ഇഷ്ടമാണ്. എന്റെ ലിങ്ക് ഉപയോഗിച്ച് ഇൻസ്റ്റാൾ ചെയ്യൂ, എനിക്ക് സൗജന്യ പ്രീമിയം ലഭിക്കും: $link';
+  }
 }

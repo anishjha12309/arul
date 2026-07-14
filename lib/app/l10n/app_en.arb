@@ -49,5 +49,16 @@
   "applyTargetBoth": "Home and lock screen",
   "applied": "Wallpaper applied",
   "offlineBody": "You're offline. Check your connection and try again.",
-  "shareMessage": "Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul"
+  "offlineTitle": "No internet",
+  "offlineFeedBody": "Turn on the internet to see wallpapers.",
+  "shareMessage": "Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul",
+  "referShareMessage": "Beautiful South Indian wallpapers, still and live — I'm loving Arul. Install it with my link and I'll earn free premium: {link}",
+  "@referShareMessage": {
+    "description": "Text shared to WhatsApp / the system share sheet",
+    "placeholders": {
+      "link": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -1,10 +1,16 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
+import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
+import '../providers/upload_provider.dart';
 
 /// Upload-your-content. WALLPAPERS ONLY — Arul has no ringtones, so there is
 /// no kind picker; the Worker validates `kind == 'wallpaper'` regardless.
@@ -16,14 +22,14 @@ import '../../../theme/arul_tokens.dart';
 /// (category + rights) only, per the design-handoff instructions. Category
 /// labels are hardcoded consts for this pass — the live screen re-wires them
 /// from `categoriesProvider` (see git history) once the picker lands.
-class UploadScreen extends StatefulWidget {
+class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
 
   @override
-  State<UploadScreen> createState() => _UploadScreenState();
+  ConsumerState<UploadScreen> createState() => _UploadScreenState();
 }
 
-class _UploadScreenState extends State<UploadScreen> {
+class _UploadScreenState extends ConsumerState<UploadScreen> {
   static const _categories = [
     'Amman',
     'Ayyappan',
@@ -36,6 +42,12 @@ class _UploadScreenState extends State<UploadScreen> {
   String? _category;
   bool _rightsAccepted = false;
 
+  // Picked file (validated against UploadConstraints before it lands here).
+  String? _filePath;
+  String? _fileName;
+  String? _mimeType;
+  int _fileSize = 0;
+
   final _titleController = TextEditingController();
 
   @override
@@ -44,7 +56,79 @@ class _UploadScreenState extends State<UploadScreen> {
     super.dispose();
   }
 
-  bool get _canSubmit => _category != null && _rightsAccepted;
+  bool get _canSubmit =>
+      _filePath != null && _category != null && _rightsAccepted;
+
+  /// Picks an image or MP4 and validates its MIME type + size against
+  /// [UploadConstraints] — rejects with a toast if it doesn't fit.
+  Future<void> _pickFile() async {
+    final result = await FilePicker.pickFiles(type: FileType.media);
+    final file = result?.files.singleOrNull;
+    if (file?.path == null || !mounted) return;
+
+    final name = file!.name;
+    final mime = UploadConstraints.mimeFromName(name);
+    final wallpaperType = mime.startsWith('video/') ? 'live' : 'static';
+
+    if (!UploadConstraints.allowedTypes(wallpaperType).contains(mime)) {
+      showArulToast(
+        context,
+        'Please choose a ${UploadConstraints.typeLabel(wallpaperType)}.',
+        kind: ToastKind.error,
+      );
+      return;
+    }
+
+    final size = File(file.path!).lengthSync();
+    if (size > UploadConstraints.maxBytes(wallpaperType)) {
+      showArulToast(
+        context,
+        'File is too large (max ${UploadConstraints.maxLabel(wallpaperType)}).',
+        kind: ToastKind.error,
+      );
+      return;
+    }
+
+    setState(() {
+      _filePath = file.path;
+      _fileName = name;
+      _mimeType = mime;
+      _fileSize = size;
+    });
+  }
+
+  Future<void> _submit() async {
+    if (!AppConfig.hasBackend) {
+      // Pre-Phase-0 stub: there is no Worker to presign/confirm against.
+      showArulToast(context, 'Upload is coming soon.');
+      return;
+    }
+    await ref
+        .read(uploadProvider.notifier)
+        .submit(
+          kind: 'wallpaper',
+          filePath: _filePath!,
+          fileName: _fileName!,
+          mimeType: _mimeType!,
+          fileSize: _fileSize,
+          title: _titleController.text,
+          // The Worker + moderation flow key on the lowercase slug
+          // (`wallpapers/<category>/…` on approval).
+          category: _category!.toLowerCase(),
+        );
+    if (!mounted) return;
+    switch (ref.read(uploadProvider)) {
+      case UploadSuccess():
+        showArulToast(context, 'Submitted for review — thank you!');
+        ref.read(uploadProvider.notifier).reset();
+        if (context.canPop()) context.pop();
+      case UploadError(:final message):
+        showArulToast(context, message, kind: ToastKind.error);
+        ref.read(uploadProvider.notifier).reset();
+      case _:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,9 +189,7 @@ class _UploadScreenState extends State<UploadScreen> {
                 children: [
                   // Pick zone.
                   GestureDetector(
-                    // TODO(phase-4): image_picker -> /media/upload-url -> PUT -> confirm.
-                    onTap: () =>
-                        showArulToast(context, 'Upload is coming soon.'),
+                    onTap: _pickFile,
                     child: CustomPaint(
                       painter: _DashedRectPainter(
                         color: dashColor,
@@ -134,7 +216,9 @@ class _UploadScreenState extends State<UploadScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Choose an image or video',
+                              _fileName ?? 'Choose an image or video',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
                               style: ArulTokens.rowTitle.copyWith(
                                 color: textPrimary,
@@ -268,15 +352,20 @@ class _UploadScreenState extends State<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // NOTE: spec says submit is disabled until file + category +
-                  // rights; this design-only pass has no real file picker, so
-                  // it's gated on category + rights alone (deviation, tracked
-                  // above via the TODO on the pick zone).
+                  // Submit — disabled until file + category + rights (spec),
+                  // and while an upload is in flight (re-entrancy).
                   CtaButton(
-                    label: 'Submit for review',
+                    label: switch (ref.watch(uploadProvider)) {
+                      UploadLoading(stage: UploadStage.uploading) =>
+                        'Uploading…',
+                      UploadLoading(stage: UploadStage.saving) => 'Saving…',
+                      _ => 'Submit for review',
+                    },
                     fontSize: 15.5,
-                    onPressed: _canSubmit
-                        ? () => showArulToast(context, 'Upload is coming soon.')
+                    onPressed:
+                        _canSubmit &&
+                            ref.watch(uploadProvider) is! UploadLoading
+                        ? _submit
                         : null,
                   ),
                   const SizedBox(height: 16),

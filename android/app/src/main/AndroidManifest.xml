@@ -43,6 +43,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- arul:// return scheme: PhonePe brings the app back to the
+                 foreground with this after the payment flow (the appSchema
+                 passed to startTransaction). Rename of the reference's pakiza://. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="arul"/>
+            </intent-filter>
         </activity>
 
         <!-- Don't delete: used by the Flutter tool to generate GeneratedPluginRegistrant. -->
@@ -112,5 +121,10 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="mailto"/>
         </intent>
+    </queries>
+
+    <!-- Detect whether WhatsApp is installed for the targeted referral share. -->
+    <queries>
+        <package android:name="com.whatsapp"/>
     </queries>
 </manifest>

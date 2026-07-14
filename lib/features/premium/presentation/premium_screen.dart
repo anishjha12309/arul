@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
+import '../providers/premium_purchase_provider.dart';
 
 /// Paywall. Reached only from a blocked gated action; `source` says which — the
 /// one number that tells you which verb actually sells the product.
@@ -28,6 +30,25 @@ class PremiumScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // PhonePe purchase flow (ported): initiate → SDK → status poll → refresh
+    // entitlement. Success/failure feedback is reactive so the flow survives
+    // rebuilds while the SDK UI is up.
+    ref.listen<PurchaseState>(premiumPurchaseProvider, (prev, next) {
+      switch (next) {
+        case PurchaseSuccess():
+          showArulToast(context, 'Welcome to Arul Premium!');
+          if (context.canPop()) context.pop();
+        case PurchaseError(:final message):
+          showArulToast(context, message, kind: ToastKind.error);
+          ref.read(premiumPurchaseProvider.notifier).reset();
+        case _:
+          break;
+      }
+    });
+    final purchase = ref.watch(premiumPurchaseProvider);
+    final purchaseBusy =
+        purchase is PurchaseLoading || purchase is PurchaseProcessing;
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
@@ -226,12 +247,21 @@ class PremiumScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   CtaButton(
-                    label: 'Start free trial',
+                    label: purchaseBusy ? 'Processing…' : 'Start free trial',
                     height: ArulTokens.ctaHeight54,
                     fontSize: 16,
-                    // TODO(phase-4): PhonePe Autopay mandate via the Worker.
-                    onPressed: () =>
-                        showArulToast(context, 'Premium is coming soon.'),
+                    onPressed: purchaseBusy
+                        ? null
+                        : () {
+                            if (!AppConfig.hasBackend) {
+                              // Pre-Phase-0 stub: no Worker to initiate against.
+                              showArulToast(context, 'Premium is coming soon.');
+                              return;
+                            }
+                            ref
+                                .read(premiumPurchaseProvider.notifier)
+                                .startTrial();
+                          },
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   Text(

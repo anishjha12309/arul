@@ -163,6 +163,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'You\'re offline. Check your connection and try again.';
 
   @override
+  String get offlineTitle => 'No internet';
+
+  @override
+  String get offlineFeedBody => 'Turn on the internet to see wallpapers.';
+
+  @override
   String get shareMessage =>
       'Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul';
+
+  @override
+  String referShareMessage(String link) {
+    return 'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: $link';
+  }
 }
