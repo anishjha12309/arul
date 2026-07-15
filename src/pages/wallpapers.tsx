@@ -227,6 +227,14 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                       <td>
                         {r.type === "static" ? (
                           <img class="thumb" src={`${cdn}/${r.full_key}`} alt="" loading="lazy" />
+                        ) : app.thumbKeyFor?.(r.full_key) ? (
+                          <img
+                            class="thumb"
+                            src={`${cdn}/${app.thumbKeyFor?.(r.full_key)}`}
+                            alt=""
+                            loading="lazy"
+                            onerror={`this.onerror=null;this.outerHTML='<span class="filemark">▶</span>'`}
+                          />
                         ) : (
                           <span class="filemark">▶</span>
                         )}

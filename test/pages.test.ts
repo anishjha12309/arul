@@ -71,6 +71,26 @@ describe("page renders", () => {
     expect(pakHtml).not.toContain(">Category <"); // no category column header
   });
 
+  it("arul live rows preview the mapped thumbs/ image; pakiza live rows keep the ▶ placeholder", async () => {
+    const arulRows = [
+      { id: "1", title: "Ayyappan live", type: "live", category: "ayyappan", full_key: "wallpapers/ayyappan/abc.mp4", is_published: true },
+    ];
+    const pakizaRows = [
+      { id: "2", title: "Pakiza live", type: "live", full_key: "wallpapers/full/x.mp4", is_published: true },
+    ];
+    const { env } = makeEnv({ arulRows, pakizaRows });
+
+    const arulHtml = await (await get(makeWallpapersApp(ARUL), env)).text();
+    // live row maps full_key → thumbs/<cat>/<stem>.jpg and renders it as an <img>
+    expect(arulHtml).toContain("thumbs/ayyappan/abc.jpg");
+    expect(arulHtml).toContain("onerror="); // graceful fallback to ▶ when a thumb is absent
+
+    const pakHtml = await (await get(makeWallpapersApp(PAKIZA), env)).text();
+    // Pakiza has no thumbnail convention: live rows are untouched (still ▶, no thumbs/ lookup)
+    expect(pakHtml).not.toContain("thumbs/");
+    expect(pakHtml).toContain("▶");
+  });
+
   it("arul new-wallpaper form carries the category field and the arul presign URL", async () => {
     const { env } = makeEnv();
     const res = await get(makeWallpapersApp(ARUL), env, "/new");

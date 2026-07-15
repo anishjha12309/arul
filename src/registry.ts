@@ -43,6 +43,13 @@ export interface AppDef {
    * when the combination is not allowed for this app.
    */
   keyPrefixFor: (kind: string, contentType: string, category: string | null) => string | null;
+  /**
+   * Maps a live wallpaper's full_key to its thumbnail R2 key for admin preview,
+   * or null when the key doesn't fit the scheme. Undefined for apps with no
+   * thumbnail convention (Pakiza), so their live rows keep the ▶ placeholder.
+   * Arul: wallpapers/<cat>/<stem>.<ext> → thumbs/<cat>/<stem>.jpg.
+   */
+  thumbKeyFor?: (fullKey: string) => string | null;
 }
 
 export const PAKIZA: AppDef = {
@@ -96,6 +103,7 @@ export const ARUL: AppDef = {
     }
     return null;
   },
+  thumbKeyFor: arulThumbKey,
 };
 
 export const APPS: readonly AppDef[] = [PAKIZA, ARUL];
