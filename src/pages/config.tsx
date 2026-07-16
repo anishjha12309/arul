@@ -81,7 +81,7 @@ export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
 
     return c.html(
       <Layout title={`App config · ${app.label}`} active={navKey}>
-        <PageHead title={`${app.label} app config`} sub={`content_version v${version}`}>
+        <PageHead title={`${app.label} app config`} sub={`content_version v${version}`} subMono>
           <form method="post" action={`${base}/rebuild`}>
             <button type="submit" class="btn sec">
               Rebuild catalog now
@@ -114,17 +114,23 @@ export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
           </div>
 
           <label class="field">
-            <span class="lab">prices (JSON object)</span>
+            <span class="json-lab">
+              prices <span class="json-lab-hint">(JSON object)</span>
+            </span>
             <textarea class="mono" name="prices" rows={5}>{pretty(cfg?.prices)}</textarea>
           </label>
 
           <label class="field">
-            <span class="lab">policy_urls (JSON object)</span>
+            <span class="json-lab">
+              policy_urls <span class="json-lab-hint">(JSON object)</span>
+            </span>
             <textarea class="mono" name="policy_urls" rows={4}>{pretty(cfg?.policy_urls)}</textarea>
           </label>
 
           <label class="field">
-            <span class="lab">feature_flags (JSON object)</span>
+            <span class="json-lab">
+              feature_flags <span class="json-lab-hint">(JSON object)</span>
+            </span>
             <textarea class="mono" name="feature_flags" rows={5}>{pretty(cfg?.feature_flags)}</textarea>
           </label>
 

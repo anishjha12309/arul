@@ -50,7 +50,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
 
         <label class="field">
           <span class="lab">Title</span>
-          <input name="title" type="text" required value={r?.title ?? ""} />
+          <input name="title" type="text" required autofocus value={r?.title ?? ""} />
         </label>
 
         <label class="field">
@@ -70,11 +70,14 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
           </label>
         )}
 
-        <div class="row" style="margin-top:18px">
+        <div class="row" style="margin-top:18px;justify-content:flex-end">
+          <span class="muted" data-upload-status style="color:var(--accent-text);margin-right:auto"></span>
+          <button type="button" class="btn sec" data-dialog-close>
+            Cancel
+          </button>
           <button type="submit" class="btn">
             {isEdit ? "Save changes" : "Create ringtone"}
           </button>
-          <span class="muted" data-upload-status style="color:var(--muted)"></span>
         </div>
       </form>
     );
@@ -141,7 +144,12 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         ) : (
           <div data-listview data-page="1">
             <div class="toolbar">
-              <input class="search" type="text" data-search placeholder="Search ringtones…" />
+              <div class="searchwrap">
+                <input class="search" type="text" data-search placeholder="Search title, ID or file key…" />
+                <button type="button" class="search-clear" aria-label="Clear search" data-search-clear>
+                  ×
+                </button>
+              </div>
               <select data-filter="2" aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
@@ -172,7 +180,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                 <tbody>
                   {rows.map((r) => (
                     <tr>
-                      <td>
+                      <td style="padding:4px 14px">
                         <span class="filemark">♪</span>
                       </td>
                       <td class="coltitle">

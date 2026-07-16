@@ -59,13 +59,20 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
 
         <label class="field">
           <span class="lab">Title</span>
-          <input name="title" type="text" required value={r?.title ?? ""} />
+          <input name="title" type="text" required autofocus value={r?.title ?? ""} />
         </label>
 
         {app.hasCategories ? (
           <label class="field">
             <span class="lab">Category</span>
-            <input name="category" type="text" required list="wp-cats" value={r?.category ?? ""} />
+            <input
+              name="category"
+              type="text"
+              required
+              list="wp-cats"
+              placeholder="e.g. murugan"
+              value={r?.category ?? ""}
+            />
             <datalist id="wp-cats">
               {app.knownCategories.map((cat) => (
                 <option value={cat} />
@@ -86,11 +93,10 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
             {...(isEdit ? {} : { "data-required": "1", multiple: true })}
             accept="image/jpeg,image/png,image/webp,video/mp4"
           />
+          {isEdit && r ? <span class="hint keyline">Current: {r.full_key}</span> : null}
           <span class="hint">
             JPG/PNG/WebP = static · MP4 = live. Run ffmpeg locally first (no server transcode).
-            {isEdit && r
-              ? ` Current: ${r.full_key}`
-              : " Select several files to create a batch — the title gets numbered per file."}
+            {isEdit ? "" : " Select several files to create a batch — the title gets numbered per file."}
           </span>
         </label>
         <input type="hidden" name="key_main" value="" />
@@ -105,11 +111,14 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
           </label>
         )}
 
-        <div class="row" style="margin-top:18px">
+        <div class="row" style="margin-top:18px;justify-content:flex-end">
+          <span class="muted" data-upload-status style="color:var(--accent-text);margin-right:auto"></span>
+          <button type="button" class="btn sec" data-dialog-close>
+            Cancel
+          </button>
           <button type="submit" class="btn">
             {isEdit ? "Save changes" : "Create wallpaper"}
           </button>
-          <span class="muted" data-upload-status style="color:var(--muted)"></span>
         </div>
       </form>
     );
@@ -187,12 +196,17 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         ) : (
           <div data-listview data-page="1">
             <div class="toolbar">
-              <input
-                class="search"
-                type="text"
-                data-search
-                placeholder="Search title, category, ID or R2 key…"
-              />
+              <div class="searchwrap">
+                <input
+                  class="search"
+                  type="text"
+                  data-search
+                  placeholder="Search title, category, ID or R2 key…"
+                />
+                <button type="button" class="search-clear" aria-label="Clear search" data-search-clear>
+                  ×
+                </button>
+              </div>
               <select data-filter="3" aria-label="Filter by type">
                 <option value="">All types</option>
                 <option value="static">Static</option>
@@ -277,7 +291,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                           aria-label="Select"
                         />
                       </td>
-                      <td>
+                      <td style="padding:4px 14px">
                         {r.type === "static" ? (
                           <img class="thumb" src={`${cdn}/${r.full_key}`} alt="" loading="lazy" />
                         ) : app.thumbKeyFor?.(r.full_key) ? (
@@ -295,8 +309,12 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                       <td class="coltitle">
                         <strong>{r.title}</strong>
                       </td>
-                      <td>{r.type}</td>
-                      {app.hasCategories ? <td>{r.category ?? "—"}</td> : null}
+                      <td style="color:var(--muted)">{r.type}</td>
+                      {app.hasCategories ? (
+                        <td class="colcat" title={r.category ?? ""}>
+                          {r.category ?? "—"}
+                        </td>
+                      ) : null}
                       <td>
                         <div class="row">
                           {r.is_published ? (
@@ -368,14 +386,14 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                   "hx-swap": "innerHTML",
                 };
                 return (
-                  <div class="pick gcard" data-grid-id={r.id}>
+                  <div class={`pick gcard${r.is_published ? "" : " draft"}`} data-grid-id={r.id}>
                     {thumbSrc ? (
                       <img
                         class="gimg"
                         src={thumbSrc}
                         alt=""
                         loading="lazy"
-                        onerror={`this.onerror=null;this.style.opacity='.2'`}
+                        onerror={`this.onerror=null;this.outerHTML='<span class="gfmark">\\u25b6</span>'`}
                         {...hx}
                       />
                     ) : (

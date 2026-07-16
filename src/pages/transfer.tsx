@@ -110,22 +110,24 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
         <Flash ok={c.req.query("ok")} err={c.req.query("err")} />
         {dbError ? <div class="note danger">Could not load wallpapers.</div> : null}
 
-        <form class="card" method="get" action={base} style="max-width:480px;margin-bottom:22px">
-          <label class="field">
-            <span class="lab">Source category</span>
-            <select name="source">
-              <option value="">Choose a category…</option>
-              {categories.map((cat) => (
-                <option value={cat} selected={cat === source}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" class="btn sec">
-            Load wallpapers
-          </button>
-        </form>
+        <div class="card" style="max-width:480px;margin-bottom:18px">
+          <div class="microlabel-mono">01 · SOURCE</div>
+          <form method="get" action={base}>
+            <label class="field" style="margin-bottom:12px">
+              <select name="source" aria-label="Source category" onchange="this.form.requestSubmit()">
+                <option value="">Choose a category…</option>
+                {categories.map((cat) => (
+                  <option value={cat} selected={cat === source}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" class="btn sec sm">
+              Load wallpapers
+            </button>
+          </form>
+        </div>
 
         {source && rows.length === 0 && !dbError ? (
           <div class="empty">
@@ -143,48 +145,59 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
           >
             <input type="hidden" name="source" value={source} />
             <div class="card" style="margin-bottom:18px">
-              <div class="row" style="justify-content:space-between">
-                <label class="check" style="margin:0">
-                  <input type="checkbox" data-select-all />
-                  <span>Select all ({rows.length})</span>
-                </label>
+              <div class="row" style="justify-content:space-between;margin-bottom:12px">
+                <div class="microlabel-mono" style="margin:0">
+                  02 · PICK
+                </div>
+                <span class="grow" />
                 <span class="muted" style="color:var(--muted)" data-selected-count>
                   0 selected
                 </span>
+                <label class="btn sec sm" style="margin:0;cursor:pointer">
+                  <input type="checkbox" data-select-all style="position:absolute;opacity:0;width:0;height:0" />
+                  Select all ({rows.length})
+                </label>
               </div>
 
               <div class="pickgrid">
                 {rows.map((r) => {
                   const thumb = r.type === "static" ? `${cdn}/${r.full_key}` : `${cdn}/${arulThumbKey(r.full_key) ?? r.full_key}`;
                   return (
-                    <label class="pick">
-                      <img src={thumb} alt="" loading="lazy" />
+                    <label class="pick pick-hide-cb">
+                      <img
+                        src={thumb}
+                        alt=""
+                        loading="lazy"
+                        onerror={`this.onerror=null;this.outerHTML='<span class="pick-fallback">\\u25b6</span>'`}
+                      />
                       {r.type === "live" ? <span class="pick-live">LIVE</span> : null}
                       <span class="pick-title">{r.title}</span>
+                      <span class="pick-check">✓</span>
                       <input type="checkbox" name="ids" value={r.id} />
                     </label>
                   );
                 })}
               </div>
+            </div>
 
-              <label class="field" style="max-width:360px">
-                <span class="lab">Target category</span>
-                <input name="target" type="text" required list="transfer-cats" placeholder="e.g. murugan" />
-                <datalist id="transfer-cats">
-                  {targetSuggestions.map((cat) => (
-                    <option value={cat} />
-                  ))}
-                </datalist>
-                <span class="hint">
-                  Free text — a brand-new category is allowed (it appears as a new feed chip).
-                </span>
-              </label>
-
-              <div class="row" style="margin-top:8px">
+            <div class="card">
+              <div class="microlabel-mono">03 · TARGET</div>
+              <div class="row" style="align-items:flex-start">
+                <label class="field" style="max-width:280px;margin-bottom:0">
+                  <input name="target" type="text" required list="transfer-cats" placeholder="Target category…" />
+                  <datalist id="transfer-cats">
+                    {targetSuggestions.map((cat) => (
+                      <option value={cat} />
+                    ))}
+                  </datalist>
+                </label>
                 <button type="submit" class="btn" data-transfer-go disabled>
                   Move selected wallpapers
                 </button>
               </div>
+              <span class="hint" style="display:block;margin-top:8px">
+                Free text — a brand-new category is allowed (it appears as a new feed chip).
+              </span>
             </div>
           </form>
         ) : null}
