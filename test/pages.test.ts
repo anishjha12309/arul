@@ -71,6 +71,45 @@ describe("page renders", () => {
     expect(pakHtml).not.toContain(">Category <"); // no category column header
   });
 
+  it("arul wallpapers list has a category filter select wired onto the Category column; pakiza's has none", async () => {
+    const arulRows = [
+      { id: "1", title: "Murugan dawn", type: "static", category: "murugan", full_key: "wallpapers/murugan/a.jpg", is_published: true },
+      { id: "2", title: "Amman gold", type: "live", category: "amman", full_key: "wallpapers/amman/b.mp4", is_published: true },
+      { id: "3", title: "Amman flowers", type: "static", category: "amman", full_key: "wallpapers/amman/c.jpg", is_published: false },
+    ];
+    const pakizaRows = [
+      { id: "9", title: "Calligraphy", type: "static", full_key: "wallpapers/posters/b.jpg", is_published: true },
+    ];
+    const { env } = makeEnv({ arulRows, pakizaRows });
+
+    const arulHtml = await (await get(makeWallpapersApp(ARUL), env)).text();
+    // The filter select targets table column 4 — the same <td class="colcat">
+    // index — via the same generic [data-filter] mechanism LIST_JS already
+    // drives for type (col 3) and status, so no new client-side JS is needed.
+    expect(arulHtml).toContain('data-filter="4" aria-label="Filter by category"');
+    // Isolate the filter <select> itself (the page ALSO renders a <datalist>
+    // of every known category on the create-form modal — a different element
+    // that must not be confused with the list-filter options under test).
+    const selMatch = /<select data-filter="4"[^>]*>[\s\S]*?<\/select>/.exec(arulHtml);
+    expect(selMatch).not.toBeNull();
+    const selHtml = selMatch![0];
+    expect(selHtml).toContain(">All categories<");
+    // One <option> per DISTINCT category actually present in the rows, capitalized.
+    expect(selHtml).toContain('<option value="amman">Amman</option>');
+    expect(selHtml).toContain('<option value="murugan">Murugan</option>');
+    // A category absent from these rows must not appear as a filter option
+    // (the create-form's datalist legitimately lists it — this select must not).
+    expect(selHtml).not.toContain("sivan");
+    // Static + live rows stay interleaved in ONE table — never split by type.
+    expect((arulHtml.match(/<table/g) ?? []).length).toBe(1);
+    expect(arulHtml).toContain("Murugan dawn"); // static
+    expect(arulHtml).toContain("Amman gold"); // live, same table
+
+    const pakHtml = await (await get(makeWallpapersApp(PAKIZA), env)).text();
+    expect(pakHtml).not.toContain("Filter by category");
+    expect(pakHtml).not.toContain("All categories");
+  });
+
   it("live rows preview the mapped thumbs/ image for BOTH apps", async () => {
     const arulRows = [
       { id: "1", title: "Ayyappan live", type: "live", category: "ayyappan", full_key: "wallpapers/ayyappan/abc.mp4", is_published: true },

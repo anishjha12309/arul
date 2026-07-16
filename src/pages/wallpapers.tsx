@@ -36,6 +36,20 @@ interface WpRow {
   created?: string;
 }
 
+/**
+ * Safe-for-flash truncation — validation messages may echo back an
+ * attacker/operator-controlled value (an R2 key, a mime string); cap it so a
+ * huge string never blows up the ?err= toast.
+ */
+function truncateForMessage(s: string, max = 60): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+/** Title-case a free-text category slug for the filter dropdown label. */
+function capitalize(s: string): string {
+  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
   const wallpapersApp = new Hono<{ Bindings: Env }>();
   const base = appPath(app, "/wallpapers");
@@ -170,6 +184,13 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     }
 
     const cdn = app.cdnBase.replace(/\/$/, "");
+    // Category filter options — only the categories actually present in this
+    // app's rows (Arul only; Pakiza has no category axis at all).
+    const categories = app.hasCategories
+      ? Array.from(
+          new Set(rows.map((r) => r.category).filter((c): c is string => Boolean(c))),
+        ).sort()
+      : [];
     return c.html(
       <Layout title={`Wallpapers · ${app.label}`} active={navKey}>
         <PageHead
@@ -212,6 +233,17 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                 <option value="static">Static</option>
                 <option value="live">Live</option>
               </select>
+              {app.hasCategories ? (
+                // Column 4 is the Category cell (see <td class="colcat"> below) —
+                // same generic [data-filter] path LIST_JS already drives for type
+                // (col 3) and status; no parallel filtering logic needed.
+                <select data-filter="4" aria-label="Filter by category">
+                  <option value="">All categories</option>
+                  {categories.map((cat) => (
+                    <option value={cat}>{capitalize(cat)}</option>
+                  ))}
+                </select>
+              ) : null}
               <select data-filter={app.hasCategories ? "5" : "4"} aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
@@ -486,22 +518,38 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     // whole set as items_json: N rows + ONE version bump + ONE rebuild.
     const itemsJson = formStr(form, "items_json");
     if (itemsJson) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(itemsJson);
+      } catch {
+        return c.redirect(`${base}/new?err=` + encodeURIComponent("Upload data was not valid JSON"));
+      }
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return c.redirect(`${base}/new?err=` + encodeURIComponent("No files to upload"));
+      }
       let items: { key: string; mime: string; id: string }[];
       try {
-        const parsed = JSON.parse(itemsJson) as unknown;
-        if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("empty");
         items = parsed.map((raw) => {
           const o = raw as Record<string, unknown>;
           const key = typeof o.key === "string" ? o.key : "";
           const m = typeof o.mime === "string" ? o.mime : "";
           const iid =
             typeof o.id === "string" && /^[0-9a-f-]{36}$/i.test(o.id) ? o.id : crypto.randomUUID();
-          if (!key || key.includes("..") || key.length > 300) throw new Error("bad key");
-          if (m !== "video/mp4" && !m.startsWith("image/")) throw new Error("bad mime");
+          if (!key) throw new Error("Upload rejected: a file is missing its upload key");
+          if (key.includes("..")) {
+            throw new Error(
+              `Upload rejected: key "${truncateForMessage(key)}" contains an illegal path segment`,
+            );
+          }
+          if (key.length > 300) throw new Error("Upload rejected: key exceeds 300 characters");
+          if (m !== "video/mp4" && !m.startsWith("image/")) {
+            throw new Error(`Upload rejected: unsupported file type ${truncateForMessage(m || "(empty)")}`);
+          }
           return { key, mime: m, id: iid };
         });
-      } catch {
-        return c.redirect(`${base}/new?err=` + encodeURIComponent("Batch upload data was invalid"));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Upload data was invalid";
+        return c.redirect(`${base}/new?err=` + encodeURIComponent(msg));
       }
 
       const publishedB = parseBool(form.is_published);
@@ -599,26 +647,40 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
   // thumbs) only after a confirmed rebuild, mirroring the single-row flow.
   // MUST be registered before POST /:id — Hono matches in registration order,
   // so the param route would otherwise capture "bulk" as an id.
+  // Validation order (each rejects BEFORE any DB write — a lookup SELECT is a
+  // read, not a write, so it never bumps content_version or triggers rebuild):
+  //   1. unknown/missing bulk_action
+  //   2. no well-formed ids in the "ids" field
+  //   3. none of the well-formed ids match an existing row
   wallpapersApp.post("/bulk", async (c) => {
     const form = (await c.req.parseBody()) as Record<string, unknown>;
     const action = formStr(form, "bulk_action");
+    if (!["publish", "unpublish", "delete"].includes(action)) {
+      return c.redirect(`${base}?err=` + encodeURIComponent("Unknown bulk action"));
+    }
     const ids = formStr(form, "ids")
       .split(",")
       .map((s) => s.trim())
       .filter((s) => /^[0-9a-f-]{36}$/i.test(s));
-    if (ids.length === 0 || !["publish", "unpublish", "delete"].includes(action)) {
-      return c.redirect(`${base}?err=` + encodeURIComponent("Nothing selected"));
+    if (ids.length === 0) {
+      return c.redirect(`${base}?err=` + encodeURIComponent("Select at least one wallpaper"));
     }
 
     const sql = getDb(c.env, app);
     let keys: string[] = [];
+    let matchedCount = 0;
     try {
-      if (action === "delete") {
-        const rows = (await sql`
-          SELECT full_key FROM wallpapers WHERE id = ANY(${ids})
-        `) as unknown as { full_key: string }[];
-        keys = rows.map((r) => r.full_key);
+      const found = (await sql`
+        SELECT id, full_key FROM wallpapers WHERE id = ANY(${ids})
+      `) as unknown as { id: string; full_key: string }[];
+      if (found.length === 0) {
+        c.executionCtx.waitUntil(sql.end());
+        return c.redirect(
+          `${base}?err=` + encodeURIComponent("None of the selected wallpapers were found"),
+        );
       }
+      matchedCount = found.length;
+      if (action === "delete") keys = found.map((r) => r.full_key);
       await sql.begin(async (tx) => {
         if (action === "delete") {
           await tx`DELETE FROM wallpapers WHERE id = ANY(${ids})`;
@@ -650,7 +712,8 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     return c.redirect(
       `${base}?` +
         (ok
-          ? "ok=" + encodeURIComponent(`${ids.length} wallpaper${ids.length === 1 ? "" : "s"} ${verb}`)
+          ? "ok=" +
+            encodeURIComponent(`${matchedCount} wallpaper${matchedCount === 1 ? "" : "s"} ${verb}`)
           : "err=" + encodeURIComponent(REBUILD_FAILED_MSG)),
     );
   });
