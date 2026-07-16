@@ -91,62 +91,73 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
   ) => {
     const { row, signedUrl, ext } = props;
     const isPending = row.status === "pending";
+    const approveFormId = `sub-approve-${row.id}`;
+    const rejectFormId = `sub-reject-${row.id}`;
     return (
       <div>
         {props.err ? <div class="note danger">{props.err}</div> : null}
-        <div class="card preview-media" style="margin-bottom:18px">
-          {signedUrl ? (
-            <Preview kind={row.kind} ext={ext} url={signedUrl} />
-          ) : (
-            <div class="note warn">Could not generate a preview URL for this file.</div>
-          )}
-          <div class="muted" style="font-size:13px;margin-top:10px;color:var(--muted)">
-            {row.kind} · {row.status} · {row.file_key}
+        <div style="display:flex;gap:20px;flex-wrap:wrap">
+          <div
+            class="preview-media"
+            style="width:180px;flex:0 0 auto;aspect-ratio:9/16;border-radius:10px;overflow:hidden;
+              background:var(--input);border:1px solid var(--hairline);position:relative"
+          >
+            {signedUrl ? (
+              <Preview kind={row.kind} ext={ext} url={signedUrl} />
+            ) : (
+              <div class="note warn" style="margin:8px">
+                No preview URL.
+              </div>
+            )}
+            {ext === "mp4" ? <span class="pick-live">LIVE</span> : null}
+          </div>
+          <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:14px">
+            <div class="muted" style="font-size:13px;color:var(--muted)">
+              {row.kind} · {row.status} · {row.file_key}
+            </div>
+
+            {row.status === "rejected" && row.rejection_reason ? (
+              <div class="note danger">Rejected: {row.rejection_reason}</div>
+            ) : null}
+
+            {!isPending ? (
+              <div class="note muted">
+                This submission is <strong>{row.status}</strong> — no further action.
+              </div>
+            ) : (
+              <>
+                <form id={approveFormId} method="post" action={`${base}/${row.id}/approve`}>
+                  <label class="field">
+                    <span class="lab">Title override</span>
+                    <input name="title" type="text" value={row.title ?? ""} required />
+                  </label>
+                  {app.hasCategories ? (
+                    <label class="field" style="margin-bottom:0">
+                      <span class="lab">Category override</span>
+                      <input name="category" type="text" value={row.category ?? ""} required />
+                    </label>
+                  ) : null}
+                </form>
+                <form id={rejectFormId} method="post" action={`${base}/${row.id}/reject`}>
+                  <label class="field" style="margin-bottom:0">
+                    <span class="lab" style="color:var(--muted)">
+                      Rejection reason (optional)
+                    </span>
+                    <input name="reason" type="text" placeholder="e.g. low resolution" />
+                  </label>
+                </form>
+                <div class="row" style="justify-content:flex-end;margin-top:auto">
+                  <button type="submit" form={rejectFormId} class="btn danger">
+                    Reject
+                  </button>
+                  <button type="submit" form={approveFormId} class="btn">
+                    Approve
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
-
-        {row.status === "rejected" && row.rejection_reason ? (
-          <div class="note danger">Rejected: {row.rejection_reason}</div>
-        ) : null}
-
-        {!isPending ? (
-          <div class="note muted">
-            This submission is <strong>{row.status}</strong> — no further action.
-          </div>
-        ) : (
-          <div class="grid" style="grid-template-columns:1fr 1fr;align-items:start">
-            <form class="card" method="post" action={`${base}/${row.id}/approve`}>
-              <div class="card-title">Approve &amp; publish</div>
-              <label class="field" style="margin-top:12px">
-                <span class="lab">Title</span>
-                <input name="title" type="text" value={row.title ?? ""} required />
-              </label>
-              {app.hasCategories ? (
-                <label class="field">
-                  <span class="lab">Category</span>
-                  <input name="category" type="text" value={row.category ?? ""} required />
-                  <span class="hint">
-                    Browse axis + canonical key prefix (wallpapers/&lt;category&gt;/…).
-                  </span>
-                </label>
-              ) : null}
-              <button type="submit" class="btn" style="margin-top:8px">
-                Approve &amp; publish
-              </button>
-            </form>
-
-            <form class="card" method="post" action={`${base}/${row.id}/reject`}>
-              <div class="card-title">Reject</div>
-              <label class="field" style="margin-top:12px">
-                <span class="lab">Reason (optional, stored on the submission)</span>
-                <textarea name="reason" rows={3}></textarea>
-              </label>
-              <button type="submit" class="btn danger" style="margin-top:8px">
-                Reject
-              </button>
-            </form>
-          </div>
-        )}
       </div>
     );
   };
@@ -189,14 +200,16 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
         {dbError ? <div class="note danger">Could not load submissions.</div> : null}
 
         {rows.length === 0 ? (
-          <div class="empty">
-            <span class="emoji">📥</span>
-            No {active} submissions.
-          </div>
+          <div style="padding:32px 0;color:var(--muted)">No {active} submissions.</div>
         ) : (
           <div data-listview data-page="1">
             <div class="toolbar">
-              <input class="search" type="text" data-search placeholder="Search submissions…" />
+              <div class="searchwrap">
+                <input class="search" type="text" data-search placeholder="Search submissions…" />
+                <button type="button" class="search-clear" aria-label="Clear search" data-search-clear>
+                  ×
+                </button>
+              </div>
               <span class="grow" />
               <select data-page-size aria-label="Rows per page">
                 <option value="20" selected>

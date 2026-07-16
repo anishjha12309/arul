@@ -65,3 +65,7 @@ pubspec.lock.bak
 .claude/last-release-build.json
 .claude/last-release-build.pending.json
 docs/cms-redesign-shots/
+cms/.preview/
+cms/.preview/
+.playwright-mcp/
+cms-shots/

@@ -100,66 +100,82 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
     <Layout title="Dashboard" active="dashboard">
       <PageHead title="Dashboard" sub="Pakiza + Arul content overview" />
 
-      {all.map((s) => (
-        <section style="margin-bottom:34px">
-          <div class="head" style="margin-bottom:16px">
-            <div class="htext">
-              <h1 style="font-size:21px">{s.app.label}</h1>
-              <div class="sub">catalog v{s.version}</div>
-            </div>
-            <div class="actions">
-              <a class="btn sec" href={appPath(s.app, "/wallpapers")}>
-                Wallpapers
-              </a>
-              {s.app.hasRingtones ? (
-                <a class="btn sec" href={appPath(s.app, "/ringtones")}>
-                  Ringtones
+      {all.map((s) => {
+        const pendingN = Number(s.pending) || 0;
+        return (
+          <section style="margin-bottom:34px">
+            <div class="row" style="margin-bottom:16px;gap:12px">
+              <span style="font-size:17px;font-weight:700">{s.app.label}</span>
+              <span class="chip">v{s.version}</span>
+              <span class="grow" />
+              <div class="actions">
+                <a class="btn sec" href={appPath(s.app, "/wallpapers")}>
+                  Wallpapers
                 </a>
-              ) : null}
-              {s.app.hasCategories ? (
-                <a class="btn sec" href={appPath(s.app, "/transfer")}>
-                  Category transfer
+                {s.app.hasRingtones ? (
+                  <a class="btn sec" href={appPath(s.app, "/ringtones")}>
+                    Ringtones
+                  </a>
+                ) : null}
+                {s.app.hasCategories ? (
+                  <a class="btn sec" href={appPath(s.app, "/transfer")}>
+                    Category transfer
+                  </a>
+                ) : null}
+                <a class="btn gold-outline" href={appPath(s.app, "/submissions")}>
+                  Review submissions{pendingN > 0 ? ` (${s.pending})` : ""}
+                  {pendingN > 0 ? <span class="navdot" /> : null}
                 </a>
-              ) : null}
-              <a class="btn" href={appPath(s.app, "/submissions")}>
-                Review submissions{s.pending !== "0" ? ` (${s.pending})` : ""}
-              </a>
+              </div>
             </div>
-          </div>
-          {s.dbError ? (
-            <div class="note danger">
-              Could not reach the {s.app.label} database. Check Hyperdrive / Neon.
-            </div>
-          ) : (
-            <div class="grid">
-              <StatCard n={s.wpPub} label="Published wallpapers" hint={`${s.wpTotal} total`} />
-              {s.rtTotal !== null ? (
-                <StatCard n={s.rtPub ?? "0"} label="Published ringtones" hint={`${s.rtTotal} total`} />
-              ) : null}
-              <StatCard n={s.pending} label="Pending submissions" hint="awaiting review" />
-              <StatCard n={`v${s.version}`} label="Catalog version" hint="content_version" />
-              {s.cats && s.cats.length > 0 ? (
-                <div class="card">
-                  <div class="card-title">Published by category</div>
-                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:7px">
-                    {s.cats.map((cat) => (
-                      <div class="row" style="justify-content:space-between;gap:12px">
-                        <span style="color:var(--muted);text-transform:capitalize">
-                          {cat.category}
-                        </span>
-                        <strong>
-                          {cat.pub}
-                          <span style="color:var(--faint);font-weight:500"> / {cat.total}</span>
-                        </strong>
-                      </div>
-                    ))}
+            {s.dbError ? (
+              <div class="note danger">
+                Could not reach the {s.app.label} database. Check Hyperdrive / Neon.
+              </div>
+            ) : (
+              <div class="grid">
+                <StatCard n={s.wpPub} label="Published wallpapers" hint={`${s.wpTotal} total`} />
+                {s.rtTotal !== null ? (
+                  <StatCard n={s.rtPub ?? "0"} label="Published ringtones" hint={`${s.rtTotal} total`} />
+                ) : null}
+                <StatCard n={s.pending} label="Pending submissions" hint="awaiting review" />
+                <StatCard n={`v${s.version}`} label="Catalog version" hint="content_version" />
+                {s.cats && s.cats.length > 0 ? (
+                  <div class="card" style="grid-column:span 2;min-width:260px">
+                    <div
+                      style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+                        color:var(--label);margin-bottom:10px"
+                    >
+                      Published by category
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:7px">
+                      {s.cats.map((cat) => {
+                        const total = Number(cat.total) || 0;
+                        const pub = Number(cat.pub) || 0;
+                        const pct = total > 0 ? Math.round((pub / total) * 100) : 0;
+                        return (
+                          <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 8px;border-radius:4px;overflow:hidden">
+                            <div
+                              style={`position:absolute;inset:0;width:${pct}%;background:var(--accent-soft);border-right:2px solid rgba(217,164,65,.55)`}
+                            />
+                            <span style="position:relative;text-transform:capitalize;color:var(--body)">
+                              {cat.category}
+                            </span>
+                            <span style="position:relative;font-variant-numeric:tabular-nums">
+                              <strong>{cat.pub}</strong>
+                              <span style="color:var(--faint);font-weight:500"> / {cat.total}</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </section>
-      ))}
+                ) : null}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </Layout>,
   );
 }
