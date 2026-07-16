@@ -329,6 +329,29 @@ html:has(dialog[open]){overflow:hidden}
 .pick input{position:absolute;top:8px;right:8px;width:20px;height:20px;accent-color:var(--accent)}
 .pick:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 
+/* ── List page: bulk selection, id column, view toggle, grid cards ── */
+.rowsel{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+td .idcode{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--muted)}
+.keysearch{display:none}
+.coldate{color:var(--muted);font-size:13px;white-space:nowrap}
+.bulkbar{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 16px;
+  border-radius:14px;background:var(--accent-soft);border:1px solid rgba(10,132,255,.3)}
+.bulkbar [data-bulk-count]{font-weight:600;color:var(--accent-text);margin-right:auto}
+.viewtoggle{display:flex;gap:4px;padding:4px;border-radius:var(--radius-pill);
+  background:var(--glass);border:1px solid var(--hairline)}
+.viewtoggle button{border:0;cursor:pointer;font:inherit;font-weight:600;font-size:13px;
+  padding:6px 13px;border-radius:var(--radius-pill);background:transparent;color:var(--muted);
+  transition:background .15s,color .15s}
+.viewtoggle button:hover{color:var(--ink)}
+.viewtoggle button.on{background:linear-gradient(180deg,var(--accent-h),var(--accent));
+  color:var(--accent-ink);box-shadow:0 2px 8px rgba(10,132,255,.3)}
+.gcard .gimg{cursor:pointer}
+.gcard .gfmark{position:absolute;inset:0;display:grid;place-items:center;cursor:pointer;
+  font-size:34px;color:var(--accent-text);background:var(--accent-soft)}
+.gcard{aspect-ratio:9/16}
+.gcard .gdraft{position:absolute;top:8px;right:36px;background:rgba(0,0,0,.55);color:var(--muted);
+  border-radius:var(--radius-pill);font-size:11px;font-weight:700;padding:2px 8px}
+
 /* ── Login ── */
 .login{min-height:100vh;display:grid;place-items:center;padding:20px}
 .login .box{width:380px;max-width:100%;border-radius:26px;padding:40px 36px;color:var(--ink);
@@ -483,6 +506,19 @@ const LIST_JS = `
     pager.appendChild(cur);
     nav('Next',page+1,page>=pages);
   }
+  // Mirror the table's post-filter/sort/paginate state onto the optional grid
+  // view: cards (matched by data-grid-id ↔ tr data-id) follow row order and
+  // visibility, so search/filters/pagination work identically in both views.
+  function syncGrid(v){
+    var g=v.querySelector('[data-grid]'); if(!g)return;
+    var map={};
+    Array.prototype.slice.call(g.querySelectorAll('[data-grid-id]')).forEach(function(c){map[c.getAttribute('data-grid-id')]=c;});
+    rows(v).forEach(function(r){
+      var c=map[r.getAttribute('data-id')]; if(!c)return;
+      g.appendChild(c);
+      c.style.display=(r.classList.contains('filtered-out')||r.classList.contains('paged-out'))?'none':'';
+    });
+  }
   function apply(v){
     var si=v.querySelector('[data-search]'); var q=si?(si.value||'').trim().toLowerCase():'';
     var filters=Array.prototype.slice.call(v.querySelectorAll('[data-filter]'));
@@ -495,6 +531,7 @@ const LIST_JS = `
       r.classList.toggle('filtered-out',!ok); if(ok)visible.push(r);
     });
     paginate(v,visible);
+    syncGrid(v);
     var empty=v.querySelector('[data-empty-filtered]');
     if(empty) empty.style.display=(all.length>0&&visible.length===0)?'block':'none';
   }
@@ -547,6 +584,15 @@ const NAV_JS = `
  * then fills hidden fields key_X / mime_X / id_X and submits the form. File
  * inputs carry no `name`, so the bytes are never posted to the Worker.
  *
+ * Unified-CMS additions on top of the reference behavior:
+ *   - dimension pre-check against the media conventions (warn + confirm, never
+ *     silently blocks) for images and videos;
+ *   - video uploads capture a first-frame JPEG on a canvas and PUT it to the
+ *     presign response's thumbUploadUrl (best-effort — no thumb, no failure);
+ *   - a multi-select file input plus a hidden items_json field switches the
+ *     form into batch mode: every file is uploaded, then the create POST
+ *     carries the whole batch as JSON (one txn / one rebuild server-side).
+ *
  * Delegated off `document` submit, so it also handles forms rendered inside a
  * <dialog> / swapped in by HTMX. The presign body also carries the form's
  * `category` value when present (Arul keys are category-partitioned).
@@ -555,21 +601,83 @@ const UPLOAD_JS = `
 (function(){
   function infer(name){var e=(name.split('.').pop()||'').toLowerCase();return ({jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp',mp4:'video/mp4',mp3:'audio/mpeg',m4a:'audio/mp4',aac:'audio/aac'})[e]||'';}
   function set(form,n,v){var el=form.querySelector('[name="'+n+'"]');if(el)el.value=v;}
+  // Probe a video file: dimensions + a first-frame JPEG (scaled to 540w) for the
+  // admin thumbnail. Resolves null on any failure — the thumb is best-effort.
+  function probeVideo(f){return new Promise(function(resolve){
+    var url=URL.createObjectURL(f);var v=document.createElement('video');var done=false;
+    function fin(r){if(done)return;done=true;URL.revokeObjectURL(url);resolve(r);}
+    v.muted=true;v.preload='auto';
+    v.addEventListener('error',function(){fin(null);});
+    v.addEventListener('loadeddata',function(){
+      var w=v.videoWidth,h=v.videoHeight;
+      if(!w||!h)return fin(null);
+      try{
+        var tw=540,th=Math.round(tw*h/w);
+        var cv=document.createElement('canvas');cv.width=tw;cv.height=th;
+        cv.getContext('2d').drawImage(v,0,0,tw,th);
+        cv.toBlob(function(b){fin({w:w,h:h,thumb:b});},'image/jpeg',0.82);
+      }catch(e){fin({w:w,h:h,thumb:null});}
+    });
+    v.src=url;
+    setTimeout(function(){fin(null);},8000);
+  });}
+  function probeImage(f){return new Promise(function(resolve){
+    var url=URL.createObjectURL(f);var im=new Image();
+    im.onload=function(){var r={w:im.naturalWidth,h:im.naturalHeight,thumb:null};URL.revokeObjectURL(url);resolve(r);};
+    im.onerror=function(){URL.revokeObjectURL(url);resolve(null);};
+    im.src=url;
+  });}
+  // Media-convention dimension check (docs/media-conventions.md). Warn-and-
+  // confirm rather than block: the operator may knowingly upload an exception.
+  function dimWarning(ct,d){
+    if(!d)return null;
+    if(ct==='video/mp4'&&(d.w!==1024||d.h!==1824))
+      return 'Video is '+d.w+'\\u00d7'+d.h+' \\u2014 the live-wallpaper convention is 1024\\u00d71824 (width%128==0, height%32==0, fits the 1088\\u00d71920 hw-decoder cap). Off-spec dims risk the green-edge bug on budget phones.';
+    if(ct.indexOf('image/')===0&&(d.w!==1080||d.h!==1920))
+      return 'Image is '+d.w+'\\u00d7'+d.h+' \\u2014 the static-wallpaper convention is 1080\\u00d71920.';
+    return null;
+  }
+  async function uploadOne(form,input,f,status){
+    var ct=f.type||infer(f.name);
+    var probe=null;
+    if(ct==='video/mp4')probe=await probeVideo(f);
+    else if(ct.indexOf('image/')===0)probe=await probeImage(f);
+    var warn=dimWarning(ct,probe);
+    if(warn&&!confirm(f.name+'\\n\\n'+warn+'\\n\\nUpload anyway?'))throw new Error('Upload cancelled: '+f.name);
+    if(status) status.textContent='Uploading '+f.name+'\\u2026 ('+Math.round(f.size/1024)+' KB)';
+    var catEl=form.querySelector('[name="category"]');var cat=catEl?catEl.value:'';
+    var pres=await fetch(form.dataset.presign,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind:form.dataset.kind,slot:input.dataset.slot,contentType:ct,size:f.size,category:cat})});
+    var pj=await pres.json().catch(function(){return{};});
+    if(!pres.ok) throw new Error((pj.error&&pj.error.message)||('upload-url failed ('+pres.status+')'));
+    var put=await fetch(pj.uploadUrl,{method:'PUT',headers:{'content-type':ct},body:f});
+    if(!put.ok) throw new Error('R2 upload failed ('+put.status+')');
+    // Best-effort thumb PUT: a failure only means the admin list shows \\u25b6.
+    if(pj.thumbUploadUrl&&probe&&probe.thumb){
+      try{await fetch(pj.thumbUploadUrl,{method:'PUT',headers:{'content-type':'image/jpeg'},body:probe.thumb});}catch(e){}
+    }
+    return {key:pj.key,mime:ct,id:pj.id};
+  }
   async function run(form){
     var status=form.querySelector('[data-upload-status]');
     var inputs=form.querySelectorAll('input[type=file][data-slot]');
     for(var i=0;i<inputs.length;i++){
-      var input=inputs[i];var f=input.files&&input.files[0];
-      if(!f){ if(input.hasAttribute('data-required')) throw new Error('Select a file for "'+input.dataset.slot+'"'); else continue; }
-      var ct=f.type||infer(f.name);
-      if(status) status.textContent='Uploading '+input.dataset.slot+'\\u2026 ('+Math.round(f.size/1024)+' KB)';
-      var catEl=form.querySelector('[name="category"]');var cat=catEl?catEl.value:'';
-      var pres=await fetch(form.dataset.presign,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kind:form.dataset.kind,slot:input.dataset.slot,contentType:ct,size:f.size,category:cat})});
-      var pj=await pres.json().catch(function(){return{};});
-      if(!pres.ok) throw new Error((pj.error&&pj.error.message)||('upload-url failed ('+pres.status+')'));
-      var put=await fetch(pj.uploadUrl,{method:'PUT',headers:{'content-type':ct},body:f});
-      if(!put.ok) throw new Error('R2 upload failed ('+put.status+')');
-      set(form,'key_'+input.dataset.slot,pj.key);set(form,'mime_'+input.dataset.slot,ct);set(form,'id_'+input.dataset.slot,pj.id);
+      var input=inputs[i];var files=input.files?Array.prototype.slice.call(input.files):[];
+      if(!files.length){ if(input.hasAttribute('data-required')) throw new Error('Select a file for "'+input.dataset.slot+'"'); else continue; }
+      var multi=form.querySelector('[name="items_json"]');
+      if(files.length>1){
+        if(!multi) throw new Error('This form accepts a single file');
+        var items=[];
+        for(var j=0;j<files.length;j++){
+          if(status)status.textContent='File '+(j+1)+' of '+files.length+'\\u2026';
+          items.push(await uploadOne(form,input,files[j],status));
+        }
+        multi.value=JSON.stringify(items);
+        set(form,'key_'+input.dataset.slot,'');set(form,'mime_'+input.dataset.slot,'');set(form,'id_'+input.dataset.slot,'');
+      }else{
+        var r=await uploadOne(form,input,files[0],status);
+        set(form,'key_'+input.dataset.slot,r.key);set(form,'mime_'+input.dataset.slot,r.mime);set(form,'id_'+input.dataset.slot,r.id);
+        if(multi)multi.value='';
+      }
     }
   }
   document.addEventListener('submit',function(e){
@@ -604,6 +712,84 @@ const SELECT_ALL_JS = `
     counts(scope);
   });
   function init(){ document.querySelectorAll('[data-pickscope]').forEach(counts); }
+  if(document.readyState!=='loading')init(); else document.addEventListener('DOMContentLoaded',init);
+})();
+`;
+
+/**
+ * BULK_JS: list-page bulk selection + table/grid view toggle.
+ *   - checkboxes marked data-bulk-id select a row; the same id may appear in
+ *     BOTH the table and the grid, so twins are kept in sync;
+ *   - the header data-bulk-all checkbox selects every currently VISIBLE
+ *     (filtered-in) row;
+ *   - the data-bulk-bar form appears once anything is selected; its buttons
+ *     stamp bulk_action + comma-joined ids and submit (delete via confirm);
+ *   - data-view="table|grid" buttons swap .tablewrap ↔ [data-grid], persisted
+ *     in localStorage so the preferred view sticks across pages.
+ */
+const BULK_JS = `
+(function(){
+  var VKEY='cms-list-view';
+  function scope(el){return el.closest&&el.closest('[data-listview]');}
+  function update(v){
+    var seen={},ids=[];
+    v.querySelectorAll('[data-bulk-id]').forEach(function(b){
+      var id=b.getAttribute('data-bulk-id');
+      if(b.checked&&!seen[id]){seen[id]=1;ids.push(id);}
+    });
+    var bar=v.querySelector('[data-bulk-bar]'); if(!bar)return;
+    bar.style.display=ids.length?'flex':'none';
+    var lab=bar.querySelector('[data-bulk-count]'); if(lab)lab.textContent=ids.length+' selected';
+    var inp=bar.querySelector('[name="ids"]'); if(inp)inp.value=ids.join(',');
+  }
+  document.addEventListener('change',function(e){
+    var t=e.target;
+    if(t.matches&&t.matches('[data-bulk-id]')){
+      var v=scope(t); if(!v)return;
+      v.querySelectorAll('[data-bulk-id="'+t.getAttribute('data-bulk-id')+'"]').forEach(function(x){x.checked=t.checked;});
+      if(!t.checked){var all=v.querySelector('[data-bulk-all]');if(all)all.checked=false;}
+      update(v); return;
+    }
+    if(t.matches&&t.matches('[data-bulk-all]')){
+      var v2=scope(t); if(!v2)return;
+      v2.querySelectorAll('tbody tr').forEach(function(r){
+        if(r.classList.contains('filtered-out'))return;
+        var cb=r.querySelector('[data-bulk-id]'); if(!cb)return;
+        v2.querySelectorAll('[data-bulk-id="'+cb.getAttribute('data-bulk-id')+'"]').forEach(function(x){x.checked=t.checked;});
+      });
+      update(v2);
+    }
+  });
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest&&e.target.closest('[data-bulk-act]');
+    if(btn){
+      var form=btn.closest('form'); if(!form)return;
+      var act=btn.getAttribute('data-bulk-act');
+      var n=(form.querySelector('[name="ids"]').value||'').split(',').filter(Boolean).length;
+      if(!n)return;
+      if(act==='delete'&&!confirm('Delete '+n+' wallpaper'+(n===1?'':'s')+'? This removes them from the app.'))return;
+      form.querySelector('[name="bulk_action"]').value=act;
+      form.submit();
+      return;
+    }
+    var vb=e.target.closest&&e.target.closest('[data-view]');
+    if(vb){ var v=scope(vb); if(v){ setView(v,vb.getAttribute('data-view')); try{localStorage.setItem(VKEY,vb.getAttribute('data-view'));}catch(err){} } }
+  });
+  function setView(v,mode){
+    var g=v.querySelector('[data-grid]'); var tw=v.querySelector('.tablewrap'); if(!g||!tw)return;
+    var grid=mode==='grid';
+    tw.style.display=grid?'none':''; g.style.display=grid?'':'none';
+    v.querySelectorAll('[data-view]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-view')===mode);});
+  }
+  function init(){
+    document.querySelectorAll('[data-listview]').forEach(function(v){
+      if(v.querySelector('[data-grid]')){
+        var m='table'; try{m=localStorage.getItem(VKEY)||'table';}catch(err){}
+        setView(v,m);
+      }
+      update(v);
+    });
+  }
   if(document.readyState!=='loading')init(); else document.addEventListener('DOMContentLoaded',init);
 })();
 `;
@@ -670,6 +856,7 @@ export const Layout: FC<PropsWithChildren<{ title: string; active?: string }>> =
         <script dangerouslySetInnerHTML={{ __html: NAV_JS }} />
         <script dangerouslySetInnerHTML={{ __html: LIST_JS }} />
         <script dangerouslySetInnerHTML={{ __html: SELECT_ALL_JS }} />
+        <script dangerouslySetInnerHTML={{ __html: BULK_JS }} />
       </body>
     </html>
   );

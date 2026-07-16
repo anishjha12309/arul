@@ -132,4 +132,159 @@ describe("publish flow", () => {
     );
     expect(arulR2.calls.delete).not.toContain("wallpapers/amman/keep.jpg");
   });
+
+  it("pakiza STATIC wallpapers never touch the thumb pipeline (posters have no derived thumb)", async () => {
+    stubFetch(200);
+    const { env, pakizaR2 } = makeEnv({
+      pakizaRows: [{ full_key: "wallpapers/posters/poster.jpg" }],
+    });
+
+    const app = makeWallpapersApp(PAKIZA);
+    await app.fetch(
+      new Request("https://hsr-cms.example.com/wp-1/delete", { method: "POST" }),
+      env,
+      execCtx,
+    );
+    // The poster itself goes; no thumbs/ key is derived or deleted for statics.
+    expect(pakizaR2.calls.delete).toContain("wallpapers/posters/poster.jpg");
+    expect(pakizaR2.calls.delete.some((k: string) => k.startsWith("thumbs/"))).toBe(false);
+  });
+
+  it("delete of a live wallpaper also removes its derived thumb after rebuild", async () => {
+    stubFetch(200);
+    const { env, arulR2 } = makeEnv({ arulRows: [{ full_key: "wallpapers/amman/clip.mp4" }] });
+
+    const app = makeWallpapersApp(ARUL);
+    await app.fetch(
+      new Request("https://hsr-cms.example.com/wp-1/delete", { method: "POST" }),
+      env,
+      execCtx,
+    );
+    expect(arulR2.calls.delete).toContain("wallpapers/amman/clip.mp4");
+    expect(arulR2.calls.delete).toContain("thumbs/amman/clip.jpg");
+  });
+});
+
+describe("bulk actions", () => {
+  const ID_A = "1c237f37-e962-470b-99a8-9be57c080f88";
+  const ID_B = "303dc99d-4018-49bb-8506-b160673c22f5";
+
+  it("bulk unpublish updates the set + bumps content_version in ONE txn, ONE rebuild", async () => {
+    const fetchFn = stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "unpublish", ids: `${ID_A},${ID_B}` }),
+      }),
+      env,
+      execCtx,
+    );
+
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain("2 wallpapers unpublished");
+    expect(arulSql.beginCalls).toBe(1);
+    const text = capturedSqlText(arulSql);
+    expect(text).toContain("UPDATE wallpapers SET is_published =");
+    expect(text).toContain("content_version = content_version + 1");
+    expect(fetchFn).toHaveBeenCalledTimes(1); // one rebuild for the whole batch
+  });
+
+  it("bulk delete drops rows, then removes media + derived thumbs after a confirmed rebuild", async () => {
+    stubFetch(200);
+    const { env, arulR2 } = makeEnv({
+      arulRows: [{ full_key: "wallpapers/sivan/a.jpg" }, { full_key: "wallpapers/sivan/b.mp4" }],
+    });
+
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "delete", ids: `${ID_A},${ID_B}` }),
+      }),
+      env,
+      execCtx,
+    );
+
+    expect(res.status).toBe(302);
+    expect(arulR2.calls.delete).toContain("wallpapers/sivan/a.jpg");
+    expect(arulR2.calls.delete).toContain("wallpapers/sivan/b.mp4");
+    // live item's derived thumb goes too; the static's mapped thumb key delete is a no-op
+    expect(arulR2.calls.delete).toContain("thumbs/sivan/b.jpg");
+  });
+
+  it("rejects malformed ids and unknown actions", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "delete", ids: "1; DROP TABLE wallpapers" }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toContain("err=");
+    expect(arulSql.beginCalls).toBe(0);
+  });
+});
+
+describe("batch create (items_json)", () => {
+  it("inserts N rows with numbered titles in ONE txn + ONE rebuild", async () => {
+    const fetchFn = stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+
+    const items = [
+      { key: "wallpapers/murugan/u1.jpg", mime: "image/jpeg", id: "1c237f37-e962-470b-99a8-9be57c080f88" },
+      { key: "wallpapers/murugan/u2.mp4", mime: "video/mp4", id: "303dc99d-4018-49bb-8506-b160673c22f5" },
+    ];
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "Murugan",
+          category: "murugan",
+          items_json: JSON.stringify(items),
+          is_published: "on",
+        }),
+      }),
+      env,
+      execCtx,
+    );
+
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain("2 wallpapers created");
+    expect(arulSql.beginCalls).toBe(1);
+    const text = capturedSqlText(arulSql);
+    expect(text).toContain("INSERT INTO wallpapers");
+    expect(text).toContain("content_version = content_version + 1");
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalid batch payloads never reach the DB", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "X",
+          category: "murugan",
+          items_json: JSON.stringify([{ key: "../../etc", mime: "image/jpeg", id: "nope" }]),
+        }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toContain("err=");
+    expect(arulSql.beginCalls).toBe(0);
+  });
 });

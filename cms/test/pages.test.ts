@@ -71,7 +71,7 @@ describe("page renders", () => {
     expect(pakHtml).not.toContain(">Category <"); // no category column header
   });
 
-  it("arul live rows preview the mapped thumbs/ image; pakiza live rows keep the ▶ placeholder", async () => {
+  it("live rows preview the mapped thumbs/ image for BOTH apps", async () => {
     const arulRows = [
       { id: "1", title: "Ayyappan live", type: "live", category: "ayyappan", full_key: "wallpapers/ayyappan/abc.mp4", is_published: true },
     ];
@@ -86,9 +86,43 @@ describe("page renders", () => {
     expect(arulHtml).toContain("onerror="); // graceful fallback to ▶ when a thumb is absent
 
     const pakHtml = await (await get(makeWallpapersApp(PAKIZA), env)).text();
-    // Pakiza has no thumbnail convention: live rows are untouched (still ▶, no thumbs/ lookup)
-    expect(pakHtml).not.toContain("thumbs/");
-    expect(pakHtml).toContain("▶");
+    // Pakiza live videos map wallpapers/full/<stem>.mp4 → thumbs/full/<stem>.jpg
+    expect(pakHtml).toContain("thumbs/full/x.jpg");
+    expect(pakHtml).toContain("onerror=");
+  });
+
+  it("pakiza static rows render their own image directly — no thumbs/ lookup", async () => {
+    const pakizaRows = [
+      { id: "3", title: "Poster", type: "static", full_key: "wallpapers/posters/p.jpg", is_published: true },
+    ];
+    const { env } = makeEnv({ pakizaRows });
+    const html = await (await get(makeWallpapersApp(PAKIZA), env)).text();
+    expect(html).toContain("wallpapers/posters/p.jpg"); // the poster IS the thumb
+    expect(html).not.toContain("thumbs/"); // statics never derive a thumb key
+  });
+
+  it("wallpapers list carries id + created columns, bulk bar, and a grid view", async () => {
+    const arulRows = [
+      {
+        id: "1c237f37-e962-470b-99a8-9be57c080f88",
+        title: "Murugan dawn",
+        type: "static",
+        category: "murugan",
+        full_key: "wallpapers/murugan/a.jpg",
+        is_published: true,
+        created: "2026-07-16",
+      },
+    ];
+    const { env } = makeEnv({ arulRows });
+    const html = await (await get(makeWallpapersApp(ARUL), env)).text();
+    expect(html).toContain("1c237f37</span>"); // short id column
+    expect(html).toContain("wallpapers/murugan/a.jpg"); // full key searchable (hidden span)
+    expect(html).toContain("2026-07-16"); // created column
+    expect(html).toContain("data-bulk-bar"); // bulk action bar
+    expect(html).toContain('data-bulk-id="1c237f37-e962-470b-99a8-9be57c080f88"');
+    expect(html).toContain("data-grid"); // grid view container
+    expect(html).toContain('data-grid-id="1c237f37-e962-470b-99a8-9be57c080f88"');
+    expect(html).toContain('action="/admin/arul/wallpapers/bulk"');
   });
 
   it("arul new-wallpaper form carries the category field and the arul presign URL", async () => {

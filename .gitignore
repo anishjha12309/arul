@@ -64,3 +64,4 @@ pubspec.lock.bak
 # Release-version-guard hook state (local build history; see .claude/hooks/)
 .claude/last-release-build.json
 .claude/last-release-build.pending.json
+docs/cms-redesign-shots/
