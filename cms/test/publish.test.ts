@@ -171,7 +171,12 @@ describe("bulk actions", () => {
 
   it("bulk unpublish updates the set + bumps content_version in ONE txn, ONE rebuild", async () => {
     const fetchFn = stubFetch(200);
-    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const { env, arulSql } = makeEnv({
+      arulRows: [
+        { id: ID_A, full_key: "wallpapers/sivan/a.jpg" },
+        { id: ID_B, full_key: "wallpapers/sivan/b.jpg" },
+      ],
+    });
 
     const app = makeWallpapersApp(ARUL);
     const res = await app.fetch(
@@ -215,7 +220,7 @@ describe("bulk actions", () => {
     expect(arulR2.calls.delete).toContain("thumbs/sivan/b.jpg");
   });
 
-  it("rejects malformed ids and unknown actions", async () => {
+  it("rejects malformed ids with a specific message and never touches the DB", async () => {
     stubFetch(200);
     const { env, arulSql } = makeEnv({ arulRows: [] });
     const app = makeWallpapersApp(ARUL);
@@ -229,7 +234,69 @@ describe("bulk actions", () => {
       execCtx,
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("err=");
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain(
+      "Select at least one wallpaper",
+    );
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("rejects an unknown bulk action with a specific message and never touches the DB", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "nuke", ids: ID_A }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain("Unknown bulk action");
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("rejects with no ids at all using a specific message and never touches the DB", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "publish", ids: "" }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain(
+      "Select at least one wallpaper",
+    );
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("rejects when none of the well-formed ids match a real row, without writing", async () => {
+    stubFetch(200);
+    // The mock SQL handle returns [] for every query, including the lookup SELECT.
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/bulk", {
+        method: "POST",
+        body: new URLSearchParams({ bulk_action: "publish", ids: `${ID_A},${ID_B}` }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain(
+      "None of the selected wallpapers were found",
+    );
+    // The lookup SELECT ran (a read), but no transaction/write happened.
     expect(arulSql.beginCalls).toBe(0);
   });
 });
@@ -267,7 +334,7 @@ describe("batch create (items_json)", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
-  it("invalid batch payloads never reach the DB", async () => {
+  it("a path-traversal key is rejected with a specific message, never reaching the DB", async () => {
     stubFetch(200);
     const { env, arulSql } = makeEnv({ arulRows: [] });
     const app = makeWallpapersApp(ARUL);
@@ -284,7 +351,103 @@ describe("batch create (items_json)", () => {
       execCtx,
     );
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("err=");
+    const loc = decodeURIComponent(res.headers.get("location") ?? "");
+    expect(loc).toContain("err=");
+    expect(loc).toContain("illegal path segment");
+    expect(loc).toContain("../../etc"); // names the offending key (short enough — not truncated)
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("malformed (unparseable) items_json is rejected with its own message", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "X",
+          category: "murugan",
+          items_json: "{not valid json",
+        }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain(
+      "Upload data was not valid JSON",
+    );
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("an empty items array is rejected with its own message", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "X",
+          category: "murugan",
+          items_json: JSON.stringify([]),
+        }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain("No files to upload");
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("a key over 300 characters is rejected with its own message", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+    const longKey = `wallpapers/murugan/${"a".repeat(300)}.jpg`;
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "X",
+          category: "murugan",
+          items_json: JSON.stringify([{ key: longKey, mime: "image/jpeg", id: "nope" }]),
+        }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    expect(decodeURIComponent(res.headers.get("location") ?? "")).toContain(
+      "key exceeds 300 characters",
+    );
+    expect(arulSql.beginCalls).toBe(0);
+  });
+
+  it("an unsupported mime type is rejected with its own message naming the mime", async () => {
+    stubFetch(200);
+    const { env, arulSql } = makeEnv({ arulRows: [] });
+    const app = makeWallpapersApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/", {
+        method: "POST",
+        body: new URLSearchParams({
+          title: "X",
+          category: "murugan",
+          items_json: JSON.stringify([
+            { key: "wallpapers/murugan/u1.pdf", mime: "application/pdf", id: "nope" },
+          ]),
+        }),
+      }),
+      env,
+      execCtx,
+    );
+    expect(res.status).toBe(302);
+    const loc = decodeURIComponent(res.headers.get("location") ?? "");
+    expect(loc).toContain("unsupported file type");
+    expect(loc).toContain("application/pdf");
     expect(arulSql.beginCalls).toBe(0);
   });
 });
