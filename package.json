@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260625.1",
+    "@types/node": "^26.1.1",
     "happy-dom": "17.6.3",
     "typescript": "5.9.3",
     "vitest": "3.2.6",
