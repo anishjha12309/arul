@@ -10,11 +10,18 @@
  *   pakiza  wallpaper static → wallpapers/posters/{id}.{jpg|png|webp}
  *           wallpaper live   → wallpapers/full/{id}.mp4
  *           ringtone         → ringtones/audio/{id}.{mp3|m4a|aac}
+ *           thumbnail (live) → thumbs/full/<file-stem>.jpg
  *           (no category column anywhere — tags only)
  *   arul    wallpaper        → wallpapers/<category>/{id}.{ext}  (category is
  *           the browse axis AND the key partition; free text, NOT NULL in DB)
  *           thumbnail        → thumbs/<category>/<file-stem>.jpg
  *           (no ringtones table at all)
+ *
+ * Thumbnails live under a TOP-LEVEL thumbs/ prefix in BOTH buckets on purpose:
+ * each app's orphan-sweep cron deletes unreferenced objects under wallpapers/
+ * (+ ringtones/ for Pakiza), so a thumbs key nested inside those prefixes would
+ * be swept as an orphan (thumb keys are never in the DB — they are derived from
+ * full_key via thumbKeyFor). CMS delete/replace flows clean thumbs up instead.
  */
 
 import type { Env } from "./env.js";
@@ -44,10 +51,11 @@ export interface AppDef {
    */
   keyPrefixFor: (kind: string, contentType: string, category: string | null) => string | null;
   /**
-   * Maps a live wallpaper's full_key to its thumbnail R2 key for admin preview,
-   * or null when the key doesn't fit the scheme. Undefined for apps with no
-   * thumbnail convention (Pakiza), so their live rows keep the ▶ placeholder.
-   * Arul: wallpapers/<cat>/<stem>.<ext> → thumbs/<cat>/<stem>.jpg.
+   * Maps a live wallpaper's full_key to its thumbnail R2 key (admin preview +
+   * upload-time thumb capture + delete/replace cleanup), or null when the key
+   * doesn't fit the scheme.
+   * Arul:   wallpapers/<cat>/<stem>.<ext> → thumbs/<cat>/<stem>.jpg
+   * Pakiza: wallpapers/full/<stem>.mp4    → thumbs/full/<stem>.jpg
    */
   thumbKeyFor?: (fullKey: string) => string | null;
 }
@@ -79,6 +87,7 @@ export const PAKIZA: AppDef = {
     }
     return null;
   },
+  thumbKeyFor: pakizaThumbKey,
 };
 
 export const ARUL: AppDef = {
@@ -118,4 +127,14 @@ export function arulThumbKey(fullKey: string): string | null {
   if (!m) return null;
   const stem = m[2]!.replace(/\.[^.]+$/, "");
   return `thumbs/${m[1]}/${stem}.jpg`;
+}
+
+/**
+ * "wallpapers/full/<stem>.mp4" → "thumbs/full/<stem>.jpg" (Pakiza). Only live
+ * videos map — a static wallpaper's poster IS the image, so anything outside
+ * wallpapers/full/*.mp4 has no separate thumbnail (null).
+ */
+export function pakizaThumbKey(fullKey: string): string | null {
+  const m = /^wallpapers\/full\/([^/]+)\.mp4$/.exec(fullKey);
+  return m ? `thumbs/full/${m[1]}.jpg` : null;
 }

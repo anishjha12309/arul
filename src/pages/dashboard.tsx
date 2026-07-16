@@ -11,6 +11,12 @@ import { APPS } from "../registry.js";
 import { getDb } from "../lib/db.js";
 import { Layout, PageHead, StatCard, appPath } from "../ui.js";
 
+interface CatCount {
+  category: string;
+  pub: string;
+  total: string;
+}
+
 interface AppStats {
   app: AppDef;
   wpTotal: string;
@@ -19,6 +25,7 @@ interface AppStats {
   rtPub: string | null;
   pending: string;
   version: string;
+  cats: CatCount[] | null; // null when the app has no category axis
   dbError: boolean;
 }
 
@@ -31,6 +38,7 @@ async function loadStats(c: Context<{ Bindings: Env }>, app: AppDef): Promise<Ap
     rtPub: app.hasRingtones ? "0" : null,
     pending: "0",
     version: "0",
+    cats: app.hasCategories ? [] : null,
     dbError: false,
   };
   const sql = getDb(c.env, app);
@@ -61,6 +69,21 @@ async function loadStats(c: Context<{ Bindings: Env }>, app: AppDef): Promise<Ap
     }
     stats.pending = String(r.pending ?? "0");
     stats.version = r.version == null ? "0" : String(r.version);
+    if (app.hasCategories) {
+      const cats = (await sql`
+        SELECT category,
+               count(*) FILTER (WHERE is_published) AS pub,
+               count(*)                             AS total
+        FROM wallpapers
+        GROUP BY category
+        ORDER BY category
+      `) as unknown as { category: string; pub: unknown; total: unknown }[];
+      stats.cats = cats.map((row) => ({
+        category: row.category,
+        pub: String(row.pub ?? "0"),
+        total: String(row.total ?? "0"),
+      }));
+    }
   } catch (err) {
     console.error(`[cms/dashboard] ${app.slug} DB error:`, err);
     stats.dbError = true;
@@ -115,6 +138,24 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
               ) : null}
               <StatCard n={s.pending} label="Pending submissions" hint="awaiting review" />
               <StatCard n={`v${s.version}`} label="Catalog version" hint="content_version" />
+              {s.cats && s.cats.length > 0 ? (
+                <div class="card">
+                  <div class="card-title">Published by category</div>
+                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:7px">
+                    {s.cats.map((cat) => (
+                      <div class="row" style="justify-content:space-between;gap:12px">
+                        <span style="color:var(--muted);text-transform:capitalize">
+                          {cat.category}
+                        </span>
+                        <strong>
+                          {cat.pub}
+                          <span style="color:var(--faint);font-weight:500"> / {cat.total}</span>
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </section>

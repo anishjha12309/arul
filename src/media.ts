@@ -67,8 +67,21 @@ export function makeUploadUrlHandler(app: AppDef) {
     const id = crypto.randomUUID();
     const key = `${prefix}/${id}.${ext}`;
 
+    // Live wallpaper videos also get a presigned PUT for their derived thumbnail
+    // key, so the browser can capture a first frame and store it in one pass
+    // (no server transcoding). The thumb is optional — capture failure in the
+    // browser just leaves the ▶ placeholder in admin lists.
+    const thumbKey =
+      kind === "wallpaper" && contentType === "video/mp4"
+        ? (app.thumbKeyFor?.(key) ?? null)
+        : null;
+
     try {
       const uploadUrl = await presignPut(c.env, app.bucketName, key, contentType, 600);
+      if (thumbKey) {
+        const thumbUploadUrl = await presignPut(c.env, app.bucketName, thumbKey, "image/jpeg", 600);
+        return c.json({ id, key, uploadUrl, thumbKey, thumbUploadUrl });
+      }
       return c.json({ id, key, uploadUrl });
     } catch (e) {
       console.error(`[cms/${app.slug}/media/upload-url] presign error:`, e);

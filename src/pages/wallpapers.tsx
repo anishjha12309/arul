@@ -32,6 +32,8 @@ interface WpRow {
   category?: string;
   full_key: string;
   is_published: boolean;
+  /** created_at as YYYY-MM-DD (list column; absent on edit-form loads). */
+  created?: string;
 }
 
 export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
@@ -77,21 +79,24 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         ) : null}
 
         <label class="field">
-          <span class="lab">{isEdit ? "Replace media (optional)" : "Media file"}</span>
+          <span class="lab">{isEdit ? "Replace media (optional)" : "Media file(s)"}</span>
           <input
             type="file"
             data-slot="main"
-            {...(isEdit ? {} : { "data-required": "1" })}
+            {...(isEdit ? {} : { "data-required": "1", multiple: true })}
             accept="image/jpeg,image/png,image/webp,video/mp4"
           />
           <span class="hint">
             JPG/PNG/WebP = static · MP4 = live. Run ffmpeg locally first (no server transcode).
-            {isEdit && r ? ` Current: ${r.full_key}` : ""}
+            {isEdit && r
+              ? ` Current: ${r.full_key}`
+              : " Select several files to create a batch — the title gets numbered per file."}
           </span>
         </label>
         <input type="hidden" name="key_main" value="" />
         <input type="hidden" name="mime_main" value="" />
         <input type="hidden" name="id_main" value="" />
+        {isEdit ? null : <input type="hidden" name="items_json" value="" />}
 
         {isEdit ? null : (
           <label class="check">
@@ -135,13 +140,15 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     try {
       if (app.hasCategories) {
         rows = (await sql`
-          SELECT id, title, type, category, full_key, is_published
+          SELECT id, title, type, category, full_key, is_published,
+                 to_char(created_at, 'YYYY-MM-DD') AS created
           FROM wallpapers
           ORDER BY sort_order ASC, created_at DESC
         `) as unknown as WpRow[];
       } else {
         rows = (await sql`
-          SELECT id, title, type, full_key, is_published
+          SELECT id, title, type, full_key, is_published,
+                 to_char(created_at, 'YYYY-MM-DD') AS created
           FROM wallpapers
           ORDER BY sort_order ASC, created_at DESC
         `) as unknown as WpRow[];
@@ -180,18 +187,29 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         ) : (
           <div data-listview data-page="1">
             <div class="toolbar">
-              <input class="search" type="text" data-search placeholder="Search wallpapers…" />
-              <select data-filter="2" aria-label="Filter by type">
+              <input
+                class="search"
+                type="text"
+                data-search
+                placeholder="Search title, category, ID or R2 key…"
+              />
+              <select data-filter="3" aria-label="Filter by type">
                 <option value="">All types</option>
                 <option value="static">Static</option>
                 <option value="live">Live</option>
               </select>
-              <select data-filter={app.hasCategories ? "4" : "3"} aria-label="Filter by status">
+              <select data-filter={app.hasCategories ? "5" : "4"} aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
               </select>
               <span class="grow" />
+              <div class="viewtoggle" role="group" aria-label="View">
+                <button type="button" data-view="table" class="on">
+                  Table
+                </button>
+                <button type="button" data-view="grid">Grid</button>
+              </div>
               <select data-page-size aria-label="Rows per page">
                 <option value="10">10 / page</option>
                 <option value="20" selected>
@@ -201,10 +219,33 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                 <option value="0">All</option>
               </select>
             </div>
+            {/* Bulk bar — hidden until a row is selected; buttons stamp bulk_action. */}
+            <form method="post" action={`${base}/bulk`} class="bulkbar" data-bulk-bar>
+              <span data-bulk-count>0 selected</span>
+              <input type="hidden" name="ids" value="" />
+              <input type="hidden" name="bulk_action" value="" />
+              <button type="button" class="btn sec sm" data-bulk-act="publish">
+                Publish
+              </button>
+              <button type="button" class="btn sec sm" data-bulk-act="unpublish">
+                Unpublish
+              </button>
+              <button type="button" class="btn danger sm" data-bulk-act="delete">
+                Delete
+              </button>
+            </form>
             <div class="tablewrap">
               <table>
                 <thead>
                   <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        class="rowsel"
+                        data-bulk-all
+                        aria-label="Select all visible"
+                      />
+                    </th>
                     <th></th>
                     <th class="sortable" data-type="text">
                       Title <span class="arrow" />
@@ -218,12 +259,24 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                       </th>
                     ) : null}
                     <th>Status</th>
+                    <th>ID</th>
+                    <th class="sortable" data-type="text">
+                      Added <span class="arrow" />
+                    </th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr>
+                    <tr data-id={r.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          class="rowsel"
+                          data-bulk-id={r.id}
+                          aria-label="Select"
+                        />
+                      </td>
                       <td>
                         {r.type === "static" ? (
                           <img class="thumb" src={`${cdn}/${r.full_key}`} alt="" loading="lazy" />
@@ -253,6 +306,17 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                           )}
                         </div>
                       </td>
+                      <td>
+                        {/* Short id for the eye; hidden full id + R2 key feed the
+                            client-side search, so pasting either finds the row. */}
+                        <span class="idcode" title={r.id}>
+                          {r.id.slice(0, 8)}
+                        </span>
+                        <span class="keysearch">
+                          {r.id} {r.full_key}
+                        </span>
+                      </td>
+                      <td class="coldate">{r.created ?? "—"}</td>
                       <td>
                         <div class="rowact">
                           <button
@@ -285,6 +349,49 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* Grid view — same rows as visual cards. LIST_JS mirrors filter/sort/
+                page state onto it (data-grid-id ↔ tr data-id); BULK_JS keeps the
+                card checkbox in sync with the table one. Click a card to edit. */}
+            <div class="pickgrid" data-grid style="display:none">
+              {rows.map((r) => {
+                const thumbSrc =
+                  r.type === "static"
+                    ? `${cdn}/${r.full_key}`
+                    : app.thumbKeyFor?.(r.full_key)
+                      ? `${cdn}/${app.thumbKeyFor?.(r.full_key)}`
+                      : null;
+                const hx = {
+                  "data-dialog-target": "wp-edit",
+                  "hx-get": `${base}/${r.id}/edit`,
+                  "hx-target": "#wp-edit-body",
+                  "hx-swap": "innerHTML",
+                };
+                return (
+                  <div class="pick gcard" data-grid-id={r.id}>
+                    {thumbSrc ? (
+                      <img
+                        class="gimg"
+                        src={thumbSrc}
+                        alt=""
+                        loading="lazy"
+                        onerror={`this.onerror=null;this.style.opacity='.2'`}
+                        {...hx}
+                      />
+                    ) : (
+                      <span class="gfmark" {...hx}>
+                        ▶
+                      </span>
+                    )}
+                    {r.type === "live" ? <span class="pick-live">LIVE</span> : null}
+                    {r.is_published ? null : <span class="gdraft">draft</span>}
+                    <span class="pick-title">
+                      {r.title} · {r.id.slice(0, 8)}
+                    </span>
+                    <input type="checkbox" data-bulk-id={r.id} aria-label="Select" />
+                  </div>
+                );
+              })}
             </div>
             <div class="note muted" data-empty-filtered style="display:none">
               No wallpapers match your search.
@@ -357,6 +464,73 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         return c.redirect(`${base}/new?err=` + encodeURIComponent("Category is required"));
       }
     }
+    // ── Batch create ── the uploader put N files directly to R2 and posted the
+    // whole set as items_json: N rows + ONE version bump + ONE rebuild.
+    const itemsJson = formStr(form, "items_json");
+    if (itemsJson) {
+      let items: { key: string; mime: string; id: string }[];
+      try {
+        const parsed = JSON.parse(itemsJson) as unknown;
+        if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("empty");
+        items = parsed.map((raw) => {
+          const o = raw as Record<string, unknown>;
+          const key = typeof o.key === "string" ? o.key : "";
+          const m = typeof o.mime === "string" ? o.mime : "";
+          const iid =
+            typeof o.id === "string" && /^[0-9a-f-]{36}$/i.test(o.id) ? o.id : crypto.randomUUID();
+          if (!key || key.includes("..") || key.length > 300) throw new Error("bad key");
+          if (m !== "video/mp4" && !m.startsWith("image/")) throw new Error("bad mime");
+          return { key, mime: m, id: iid };
+        });
+      } catch {
+        return c.redirect(`${base}/new?err=` + encodeURIComponent("Batch upload data was invalid"));
+      }
+
+      const publishedB = parseBool(form.is_published);
+      const sqlB = getDb(c.env, app);
+      try {
+        await sqlB.begin(async (tx) => {
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i]!;
+            const rowTitle = items.length > 1 ? `${title} ${i + 1}` : title;
+            const rowType = it.mime === "video/mp4" ? "live" : "static";
+            if (app.hasCategories) {
+              await tx`
+                INSERT INTO wallpapers (id, title, type, category, full_key, mime, is_published)
+                VALUES (${it.id}, ${rowTitle}, ${rowType}, ${category}, ${it.key}, ${it.mime}, ${publishedB})
+              `;
+            } else {
+              await tx`
+                INSERT INTO wallpapers (id, title, type, full_key, mime, is_published)
+                VALUES (${it.id}, ${rowTitle}, ${rowType}, ${it.key}, ${it.mime}, ${publishedB})
+              `;
+            }
+          }
+          await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
+        });
+      } catch (err) {
+        console.error(`[cms/${app.slug}/wallpapers] batch create error:`, err);
+        // Nothing was inserted — clean up every uploaded object (+ video thumbs).
+        const r2 = app.r2(c.env);
+        for (const it of items) {
+          c.executionCtx.waitUntil(r2.delete(it.key).catch(() => {}));
+          const tk = it.mime === "video/mp4" ? app.thumbKeyFor?.(it.key) : null;
+          if (tk) c.executionCtx.waitUntil(r2.delete(tk).catch(() => {}));
+        }
+        c.executionCtx.waitUntil(sqlB.end());
+        return c.redirect(`${base}/new?err=` + encodeURIComponent("Could not save wallpapers"));
+      }
+      c.executionCtx.waitUntil(sqlB.end());
+
+      const okB = await triggerRebuild(c.env, app);
+      return c.redirect(
+        `${base}?` +
+          (okB
+            ? "ok=" + encodeURIComponent(`${items.length} wallpapers created`)
+            : "err=" + encodeURIComponent(REBUILD_FAILED_MSG)),
+      );
+    }
+
     if (!fullKey || !mime) {
       return c.redirect(`${base}/new?err=` + encodeURIComponent("Media upload did not complete"));
     }
@@ -385,6 +559,8 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
       console.error(`[cms/${app.slug}/wallpapers] create error:`, err);
       // Insert failed — remove the orphan object we just uploaded (benign cleanup).
       c.executionCtx.waitUntil(app.r2(c.env).delete(fullKey).catch(() => {}));
+      const failedThumb = mime === "video/mp4" ? app.thumbKeyFor?.(fullKey) : null;
+      if (failedThumb) c.executionCtx.waitUntil(app.r2(c.env).delete(failedThumb).catch(() => {}));
       c.executionCtx.waitUntil(sql.end());
       return c.redirect(`${base}/new?err=` + encodeURIComponent("Could not save wallpaper"));
     }
@@ -395,6 +571,68 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
       `${base}?` +
         (ok
           ? "ok=" + encodeURIComponent("Wallpaper created")
+          : "err=" + encodeURIComponent(REBUILD_FAILED_MSG)),
+    );
+  });
+
+  // ── Bulk actions ────────────────────────────────────────────────────────────
+  // POST /bulk — publish | unpublish | delete a set of ids in ONE transaction
+  // with ONE version bump + ONE rebuild. Delete removes R2 media (+ derived
+  // thumbs) only after a confirmed rebuild, mirroring the single-row flow.
+  // MUST be registered before POST /:id — Hono matches in registration order,
+  // so the param route would otherwise capture "bulk" as an id.
+  wallpapersApp.post("/bulk", async (c) => {
+    const form = (await c.req.parseBody()) as Record<string, unknown>;
+    const action = formStr(form, "bulk_action");
+    const ids = formStr(form, "ids")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => /^[0-9a-f-]{36}$/i.test(s));
+    if (ids.length === 0 || !["publish", "unpublish", "delete"].includes(action)) {
+      return c.redirect(`${base}?err=` + encodeURIComponent("Nothing selected"));
+    }
+
+    const sql = getDb(c.env, app);
+    let keys: string[] = [];
+    try {
+      if (action === "delete") {
+        const rows = (await sql`
+          SELECT full_key FROM wallpapers WHERE id = ANY(${ids})
+        `) as unknown as { full_key: string }[];
+        keys = rows.map((r) => r.full_key);
+      }
+      await sql.begin(async (tx) => {
+        if (action === "delete") {
+          await tx`DELETE FROM wallpapers WHERE id = ANY(${ids})`;
+        } else {
+          await tx`
+            UPDATE wallpapers SET is_published = ${action === "publish"} WHERE id = ANY(${ids})
+          `;
+        }
+        await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
+      });
+    } catch (err) {
+      console.error(`[cms/${app.slug}/wallpapers] bulk ${action} error:`, err);
+      c.executionCtx.waitUntil(sql.end());
+      return c.redirect(`${base}?err=` + encodeURIComponent("Bulk action failed"));
+    }
+    c.executionCtx.waitUntil(sql.end());
+
+    const ok = await triggerRebuild(c.env, app);
+    if (ok && action === "delete") {
+      const r2 = app.r2(c.env);
+      for (const key of keys) {
+        c.executionCtx.waitUntil(r2.delete(key).catch(() => {}));
+        const tk = app.thumbKeyFor?.(key);
+        if (tk) c.executionCtx.waitUntil(r2.delete(tk).catch(() => {}));
+      }
+    }
+    const verb =
+      action === "delete" ? "deleted" : action === "publish" ? "published" : "unpublished";
+    return c.redirect(
+      `${base}?` +
+        (ok
+          ? "ok=" + encodeURIComponent(`${ids.length} wallpaper${ids.length === 1 ? "" : "s"} ${verb}`)
           : "err=" + encodeURIComponent(REBUILD_FAILED_MSG)),
     );
   });
@@ -459,7 +697,11 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
       });
     } catch (err) {
       console.error(`[cms/${app.slug}/wallpapers] update error:`, err);
-      if (hasNewMedia) c.executionCtx.waitUntil(app.r2(c.env).delete(newKey).catch(() => {}));
+      if (hasNewMedia) {
+        c.executionCtx.waitUntil(app.r2(c.env).delete(newKey).catch(() => {}));
+        const nt = newMime === "video/mp4" ? app.thumbKeyFor?.(newKey) : null;
+        if (nt) c.executionCtx.waitUntil(app.r2(c.env).delete(nt).catch(() => {}));
+      }
       c.executionCtx.waitUntil(sql.end());
       return c.redirect(`${base}/${id}/edit?err=` + encodeURIComponent("Could not save changes"));
     }
@@ -470,6 +712,10 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     // references it; on rebuild failure keep the old bytes (benign) so nothing breaks.
     if (ok && hasNewMedia && oldKey && oldKey !== newKey) {
       c.executionCtx.waitUntil(app.r2(c.env).delete(oldKey).catch(() => {}));
+      // Thumb keys are derived, never stored — clean the replaced video's thumb
+      // too (delete is a no-op when the old media had none).
+      const ot = app.thumbKeyFor?.(oldKey);
+      if (ot) c.executionCtx.waitUntil(app.r2(c.env).delete(ot).catch(() => {}));
     }
     return c.redirect(
       `${base}?` +
@@ -531,7 +777,13 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     // Rebuild so the catalog no longer references the object, THEN drop the bytes.
     // On rebuild failure keep the bytes — the still-stale catalog may reference them.
     const ok = await triggerRebuild(c.env, app);
-    if (ok && key) c.executionCtx.waitUntil(app.r2(c.env).delete(key).catch(() => {}));
+    if (ok && key) {
+      c.executionCtx.waitUntil(app.r2(c.env).delete(key).catch(() => {}));
+      // Derived thumb (live videos) — sweep never covers thumbs/, so the CMS
+      // is the only cleaner. No-op when none exists.
+      const tk = app.thumbKeyFor?.(key);
+      if (tk) c.executionCtx.waitUntil(app.r2(c.env).delete(tk).catch(() => {}));
+    }
     return c.redirect(
       `${base}?` +
         (ok
