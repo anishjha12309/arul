@@ -115,9 +115,11 @@ class ShareWatermarkService {
     return _logo = frame.image;
   }
 
-  /// Draws logo + code onto [canvas] for a [width]x[height] frame. The ONE
-  /// overlay code path: the image pipeline composites it over the decoded
-  /// source; the video pipeline exports it alone as a transparent PNG.
+  /// Draws the brand mark (logo + "Arul" wordmark) and the unique code onto
+  /// [canvas] for a [width]x[height] frame. The ONE overlay code path: the
+  /// image pipeline composites it over the decoded source; the video pipeline
+  /// exports it alone as a transparent PNG. Legibility comes from edge contrast
+  /// (dark stroke + soft shadow under a white fill), not from raw opacity.
   Future<void> _drawOverlay(
     ui.Canvas canvas,
     WatermarkSpec spec,
@@ -130,44 +132,122 @@ class ShareWatermarkService {
     final logoW = width * _logoWidthFrac;
     final logoH = logoW * logo.height / logo.width;
 
+    // Top-left of an [itemW]x[itemH] box tucked into corner [c] at the inset.
     Offset corner(int c, double itemW, double itemH) => Offset(
       c == 0 || c == 3 ? inset : width - inset - itemW,
       c == 0 || c == 1 ? inset : height - inset - itemH,
     );
 
-    final logoPos = corner(spec.logoCorner, logoW, logoH);
+    // ── Brand mark: logo + wordmark treated as one group in the logo corner ──
+    // Cap-height of "Arul" roughly matches the logo height; laid out logo-first,
+    // wordmark-right, so it reads the same in every corner. The group's bounding
+    // box is what lands at the inset, so right corners right-align cleanly (the
+    // whole width + gap is accounted for) and nothing overflows the frame.
+    final brandFontSize = logoH * 0.6;
+    final (wordStroke, wordFill) = _labelPainters('Arul', brandFontSize);
+    final gap = logoW * 0.15;
+    final groupW = logoW + gap + wordFill.width;
+    final groupH = max(logoH, wordFill.height);
+    final group = corner(spec.logoCorner, groupW, groupH);
+
+    _drawLogo(
+      canvas,
+      logo,
+      Rect.fromLTWH(
+        group.dx,
+        group.dy + (groupH - logoH) / 2, // vertically centered in the group
+        logoW,
+        logoH,
+      ),
+      logoW,
+    );
+    final wordOffset = Offset(
+      group.dx + logoW + gap,
+      group.dy + (groupH - wordFill.height) / 2, // centered against the logo
+    );
+    wordStroke.paint(canvas, wordOffset);
+    wordFill.paint(canvas, wordOffset);
+
+    // ── Unique code, diagonally opposite, same legibility treatment ──
+    final (codeStroke, codeFill) = _labelPainters(
+      spec.code,
+      height * _codeFontFrac,
+    );
+    final codePos = corner(spec.codeCorner, codeFill.width, codeFill.height);
+    codeStroke.paint(canvas, codePos);
+    codeFill.paint(canvas, codePos);
+  }
+
+  /// A dark stroke pass under a white fill with a soft drop shadow. Two
+  /// painters because `foreground` (the stroke) and `color` (the fill) can't
+  /// both live on one [TextStyle]. Shared by the wordmark and the code so a
+  /// single tweak serves both, and both read on any background.
+  ///
+  /// The bundled display serif ('Marcellus'); the engine falls back to the
+  /// default typeface when the family is unavailable (plain `flutter test`).
+  (TextPainter, TextPainter) _labelPainters(String value, double fontSize) {
+    TextPainter build(TextStyle style) => TextPainter(
+      text: TextSpan(text: value, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final stroke = build(
+      TextStyle(
+        fontFamily: 'Marcellus',
+        fontSize: fontSize,
+        foreground: Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = fontSize * 0.09
+          ..color = const Color.fromRGBO(0, 0, 0, 0.5),
+      ),
+    );
+    final fill = build(
+      TextStyle(
+        fontFamily: 'Marcellus',
+        fontSize: fontSize,
+        color: const Color.fromRGBO(255, 255, 255, _opacity),
+        shadows: [
+          Shadow(
+            color: const Color.fromRGBO(0, 0, 0, 0.55),
+            blurRadius: fontSize * 0.28,
+            offset: Offset(0, fontSize * 0.05),
+          ),
+        ],
+      ),
+    );
+    return (stroke, fill);
+  }
+
+  /// Draws [logo] into [dst] with a soft dark drop shadow beneath — a blurred
+  /// black silhouette (srcIn tint) offset down-right — so the mark separates
+  /// from bright backgrounds, then the logo itself at [_opacity] on top.
+  void _drawLogo(ui.Canvas canvas, ui.Image logo, Rect dst, double logoW) {
+    final src = Rect.fromLTWH(
+      0,
+      0,
+      logo.width.toDouble(),
+      logo.height.toDouble(),
+    );
     canvas.drawImageRect(
       logo,
-      Rect.fromLTWH(0, 0, logo.width.toDouble(), logo.height.toDouble()),
-      Rect.fromLTWH(logoPos.dx, logoPos.dy, logoW, logoH),
+      src,
+      dst.shift(Offset(logoW * 0.015, logoW * 0.02)),
+      Paint()
+        ..filterQuality = FilterQuality.high
+        ..colorFilter = const ui.ColorFilter.mode(
+          Color.fromRGBO(0, 0, 0, 0.5),
+          ui.BlendMode.srcIn,
+        )
+        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, logoW * 0.02),
+    );
+    canvas.drawImageRect(
+      logo,
+      src,
+      dst,
       Paint()
         ..filterQuality = FilterQuality.high
         ..color = const Color.fromRGBO(255, 255, 255, _opacity),
     );
-
-    final fontSize = height * _codeFontFrac;
-    final text = TextPainter(
-      text: TextSpan(
-        text: spec.code,
-        style: TextStyle(
-          // Bundled display serif; the engine falls back to the default
-          // typeface when the family is unavailable (plain `flutter test`).
-          fontFamily: 'Marcellus',
-          fontSize: fontSize,
-          color: const Color.fromRGBO(255, 255, 255, _opacity),
-          shadows: [
-            Shadow(
-              color: const Color.fromRGBO(0, 0, 0, 0.6),
-              blurRadius: fontSize * 0.2,
-              offset: Offset(0, fontSize * 0.06),
-            ),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    final codePos = corner(spec.codeCorner, text.width, text.height);
-    text.paint(canvas, codePos);
   }
 
   // ─── Image path ────────────────────────────────────────────────────────────
