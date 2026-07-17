@@ -36,6 +36,9 @@ dependencies:
   path_provider: ^2.1.5         # app-internal dirs for the applied live video
   flutter_cache_manager: ^3.4.1 # disk cache for prefetched MP4s (shared w/ CNI)
   share_plus: ^13.2.0           # share a wallpaper file
+  just_audio: ^0.10.6           # ringtone preview — ONE shared AudioPlayer
+                                # (ringtone_preview_provider), streamed from CDN
+  image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
 
   # ── Phase 4 logic port (versions pinned to the reference app's pubspec).
   riverpod_annotation: ^4.0.3   # codegen'd providers (auth/analytics/premium/…)

@@ -77,8 +77,14 @@ dependencies {
     //   • feedvideo/FeedVideoPlugin  — the in-feed live-preview texture pool
     //   • wallpaper/VideoRenderer    — the applied live wallpaper's own service
     // Keep the media3 modules in version lockstep.
-    implementation("androidx.media3:media3-exoplayer:1.9.2")
-    implementation("androidx.media3:media3-common:1.9.2")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-common:1.10.1")
+
+    // Share-time watermarking (share/ShareWatermarkChannel): Transformer re-encodes
+    // the live clip with a full-frame PNG BitmapOverlay burned in. Same version
+    // lockstep rule as above — ALL media3 artifacts must match.
+    implementation("androidx.media3:media3-transformer:1.10.1")
+    implementation("androidx.media3:media3-effect:1.10.1")
 
     // Coroutines — off-main-thread file persistence in the apply channel.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
