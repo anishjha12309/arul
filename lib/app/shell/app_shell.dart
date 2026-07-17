@@ -75,8 +75,11 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      // The dock FLOATS: the branch content runs full-bleed behind it and
+      // scrolls under the capsule (the island treatment).
+      extendBody: true,
       body: widget.navigationShell,
-      bottomNavigationBar: _ArulNavBar(
+      bottomNavigationBar: _ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,
         items: [
@@ -94,12 +97,16 @@ class _NavItem {
   final String label;
 }
 
-/// Hand-rolled bottom bar (NOT the stock NavigationBar): the app's dark frame
-/// with a hairline top border; the active item sits in an animated gold pill —
-/// the same selection language as the chips and premium badging. Transform/
-/// opacity/paint only, no blur, no elevation (docs/ui-direction.md).
-class _ArulNavBar extends StatelessWidget {
-  const _ArulNavBar({
+/// The floating island dock — a detached capsule hovering above the bottom
+/// edge; branch content scrolls full-bleed behind it (Scaffold.extendBody).
+///
+/// Statement treatment, paint-only (no blur / shaders — ui-direction.md):
+///   * dark capsule with a gold hairline rim and a warm drop shadow;
+///   * a SOLID gold pill glides between the two halves ([AnimatedAlign]) with
+///     a soft diya-glow (gold [BoxShadow]);
+///   * the label reveals only on the active side; inactive is a quiet glyph.
+class _ArulNavDock extends StatelessWidget {
+  const _ArulNavDock({
     required this.currentIndex,
     required this.onTap,
     required this.items,
@@ -109,34 +116,83 @@ class _ArulNavBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final List<_NavItem> items;
 
+  static const double _height = 64;
+  static const double _pillInset = 6;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-    final hairline = isDark
-        ? ArulTokens.cardBorderDark14
-        : ArulTokens.cardBorderLight;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(top: BorderSide(color: hairline)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              for (var i = 0; i < items.length; i++)
-                Expanded(
-                  child: _NavBarItem(
-                    item: items[i],
-                    selected: i == currentIndex,
-                    onTap: () => onTap(i),
+    final capsule = isDark
+        ? ArulTokens.darkSheetSurface
+        : ArulTokens.cardBgLight;
+    final rim = isDark ? ArulTokens.goldBorder35 : ArulTokens.maroonBorder18;
+    final pill = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final glow = isDark
+        ? ArulTokens.gold.withValues(alpha: 0.30)
+        : ArulTokens.maroon.withValues(alpha: 0.22);
+
+    // -1 → left half, 1 → right half (two tabs).
+    final align = Alignment(currentIndex == 0 ? -1.0 : 1.0, 0);
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+        child: Container(
+          height: _height,
+          decoration: BoxDecoration(
+            color: capsule,
+            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+            border: Border.all(color: rim),
+            boxShadow: [
+              // Grounding shadow so the island reads as floating over the reel.
+              BoxShadow(
+                color: ArulTokens.darkSurface.withValues(alpha: 0.55),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(_pillInset),
+            child: Stack(
+              children: [
+                // The gliding gold pill + its diya glow.
+                AnimatedAlign(
+                  alignment: align,
+                  duration: ArulTokens.chromeSettleIn,
+                  curve: ArulTokens.settleCurve,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.5,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: pill,
+                        borderRadius: BorderRadius.circular(
+                          ArulTokens.pillRadius,
+                        ),
+                        boxShadow: [BoxShadow(color: glow, blurRadius: 16)],
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
                 ),
-            ],
+                Row(
+                  children: [
+                    for (var i = 0; i < items.length; i++)
+                      Expanded(
+                        child: _DockItem(
+                          item: items[i],
+                          selected: i == currentIndex,
+                          onTap: () => onTap(i),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -144,8 +200,8 @@ class _ArulNavBar extends StatelessWidget {
   }
 }
 
-class _NavBarItem extends StatelessWidget {
-  const _NavBarItem({
+class _DockItem extends StatelessWidget {
+  const _DockItem({
     required this.item,
     required this.selected,
     required this.onTap,
@@ -159,18 +215,13 @@ class _NavBarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Gold selection on the dark frame, maroon on ivory — the app's standard
-    // accent split.
-    final activeFg = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    // Content over the gold pill is surface-dark (ink on gold — the selected
+    // chip's grammar); inactive is a lone muted glyph.
+    final activeFg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final inactiveFg = isDark
         ? ArulTokens.darkMuted
         : ArulTokens.lightSecondary;
-    final pillFill = isDark
-        ? ArulTokens.goldTintFill14
-        : ArulTokens.maroonTintFill08;
-    final pillBorder = isDark
-        ? ArulTokens.goldBorder35
-        : ArulTokens.maroonBorder18;
+    final fg = selected ? activeFg : inactiveFg;
 
     return Semantics(
       button: true,
@@ -180,49 +231,27 @@ class _NavBarItem extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Center(
-          child: AnimatedContainer(
-            duration: ArulTokens.chromeSettleIn,
-            curve: ArulTokens.settleCurve,
-            padding: EdgeInsets.symmetric(
-              horizontal: selected ? 16 : 10,
-              vertical: 8,
-            ),
-            decoration: BoxDecoration(
-              color: selected ? pillFill : pillFill.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-              border: Border.all(
-                color: selected ? pillBorder : pillBorder.withValues(alpha: 0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(item.icon, size: 20, color: fg),
+              // Label reveals only while this side is active; the glide and
+              // the reveal share one clock so the pill never outruns its text.
+              AnimatedSize(
+                duration: ArulTokens.chromeSettleIn,
+                curve: ArulTokens.settleCurve,
+                child: selected
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 7),
+                        child: Text(
+                          item.label,
+                          maxLines: 1,
+                          style: ArulTokens.chipActive.copyWith(color: fg),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  item.icon,
-                  size: 20,
-                  color: selected ? activeFg : inactiveFg,
-                ),
-                // The label rides only in the active pill — the inactive item
-                // is a quiet glyph, so the bar stays low and unlabeled space
-                // never fights the reel below it.
-                AnimatedSize(
-                  duration: ArulTokens.chromeSettleIn,
-                  curve: ArulTokens.settleCurve,
-                  child: selected
-                      ? Padding(
-                          padding: const EdgeInsets.only(left: 7),
-                          child: Text(
-                            item.label,
-                            maxLines: 1,
-                            style: ArulTokens.chipActive.copyWith(
-                              color: activeFg,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
