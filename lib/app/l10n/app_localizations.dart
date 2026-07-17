@@ -423,6 +423,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: {link}'**
   String referShareMessage(String link);
+
+  /// No description provided for @tabWallpapers.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpapers'**
+  String get tabWallpapers;
+
+  /// No description provided for @tabRingtones.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtones'**
+  String get tabRingtones;
+
+  /// No description provided for @ringtoneSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set'**
+  String get ringtoneSet;
+
+  /// No description provided for @ringtonePreviewSemantic.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get ringtonePreviewSemantic;
+
+  /// No description provided for @ringtonePreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview not available yet'**
+  String get ringtonePreviewUnavailable;
+
+  /// No description provided for @ringtonesEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtones are coming soon'**
+  String get ringtonesEmptyTitle;
+
+  /// No description provided for @ringtonesEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Devotional ringtones are on their way. Check back soon.'**
+  String get ringtonesEmptyBody;
+
+  /// No description provided for @ringtonesErrorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load ringtones'**
+  String get ringtonesErrorTitle;
+
+  /// No description provided for @ringtoneSetSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtone set. If it doesn\'t appear, restart your phone.'**
+  String get ringtoneSetSuccess;
+
+  /// No description provided for @ringtoneSetFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t set the ringtone. Please try again.'**
+  String get ringtoneSetFailed;
+
+  /// No description provided for @ringtonePermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Permission needed'**
+  String get ringtonePermissionTitle;
+
+  /// No description provided for @ringtonePermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'To set a ringtone, allow Arul to change system settings.'**
+  String get ringtonePermissionBody;
+
+  /// No description provided for @ringtonePermissionCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get ringtonePermissionCta;
+
+  /// No description provided for @ringtonePermissionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get ringtonePermissionCancel;
+
+  /// No description provided for @ringtoneSetPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing…'**
+  String get ringtoneSetPreparing;
+
+  /// No description provided for @ringtoneSetDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get ringtoneSetDownloading;
+
+  /// No description provided for @ringtoneSetApplying.
+  ///
+  /// In en, this message translates to:
+  /// **'Setting ringtone…'**
+  String get ringtoneSetApplying;
 }
 
 class _AppLocalizationsDelegate

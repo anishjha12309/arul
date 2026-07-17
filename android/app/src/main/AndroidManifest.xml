@@ -3,6 +3,8 @@
     <!-- Static wallpaper apply via WallpaperManager. Normal permission, auto-granted.
          Live wallpapers go through the system chooser and need no permission. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
+    <!-- Required to set device ringtone/notification/alarm via RingtoneManager -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
     <!-- Live wallpaper support is OPTIONAL: the app still installs and runs on a

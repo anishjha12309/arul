@@ -34,6 +34,37 @@ export function toPgTextArray(items: string[]): string {
 }
 
 /**
+ * Parse a Postgres text[] literal (the connection uses fetch_types:false, so
+ * postgres.js hands arrays back as raw strings like `{tag,"two words"}`).
+ * Tolerates an already-parsed string array (some drivers/tests pass one).
+ */
+export function fromPgTextArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v !== "string") return [];
+  const s = v.trim();
+  if (!s.startsWith("{") || !s.endsWith("}")) return [];
+  const inner = s.slice(1, -1);
+  if (!inner) return [];
+  const out: string[] = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    if (inQ) {
+      if (ch === "\\") cur += inner[++i] ?? "";
+      else if (ch === '"') inQ = false;
+      else cur += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.filter((x) => x.length > 0 && x !== "NULL");
+}
+
+/**
  * Normalize a free-text category into the R2 key segment. Lowercased; spaces
  * collapse to "-"; only [a-z0-9_-] survive. Returns null when nothing usable
  * remains (for Arul a category is REQUIRED — it is the key partition and the

@@ -25,7 +25,24 @@ Reference is READ-ONLY. One phase = one commit, human approves first. File:line 
 AndroidManifest blocks (**`configChanges` incl `uiMode|colorMode`**, FileProvider `${applicationId}`,
 network-security-config, allowBackup=false + data-extraction rules) · gradle signing + `dartDefines()`/`manifestPlaceholders` helpers.
 
-## Ringtones strip (REQUIRED — Arul has NO ringtones; DB has no ringtones table)
+## Ringtones strip — **REVERSED 2026-07-17** (historical record kept below)
+The strip below was applied during the original port, then reversed on 2026-07-17: Arul now HAS
+ringtones. What was added back (Worker side; contract in the reversal task):
+- `ringtones` table: id, title, category (not null), tags text[], audio_key, cover_key (nullable),
+  mime, duration_ms, bytes, is_published, sort_order, created_at (db/ migration — separate task).
+- `cron/build-catalog.ts`: allScopes = `["wallpapers", "ringtones"]`; ringtones branch orders
+  `sort_order ASC, created_at DESC NULLS LAST`, drops rows missing audio_key, strips duration_ms +
+  bytes (keeps audio_key, cover_key, mime), writes `catalog/ringtones/all_{page}.json`; a zero-row
+  scope writes a valid empty all_1.json.
+- `cron/sweep-canonical.ts`: CANONICAL_PREFIXES = `["wallpapers/", "ringtones/"]`; referenced keys =
+  wallpapers.full_key ∪ ringtones.audio_key ∪ ringtones.cover_key (all rows).
+- `routes/media.ts`: KIND_TABLE gains `ringtone → ringtones.audio_key`; confirm-upload stays
+  wallpaper-only (product decision — no user ringtone submissions).
+- R2 keys: audio `ringtones/<category>/<uuid>.mp3`, covers `ringtones/covers/<category>/<uuid>.jpg`
+  (recipes in docs/media-conventions.md). Legacy per-app `src/admin/` untouched — ringtone authoring
+  lives in the separate hsr-cms worker. Flutter side ported separately.
+
+### Original strip (historical — no longer in force)
 Worker — do these WITH the copy, or build-catalog crashes on the missing table:
 `cron/build-catalog.ts:70` allScopes = `["wallpapers"]` + delete the ringtones SQL branch (:281-288) ·
 `cron/sweep-canonical.ts:26` CANONICAL_PREFIXES = `["wallpapers/"]` · `routes/media.ts:29-32` KIND_TABLE

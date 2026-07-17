@@ -3,9 +3,11 @@
  *
  * Logic:
  *   - Queries Neon for published rows (via Hyperdrive)
- *   - Validates: wallpapers need full_key; live wallpapers need video/mp4 mime
+ *   - Validates: wallpapers need full_key; live wallpapers need video/mp4 mime;
+ *     ringtones need audio_key
  *   - Strips private keys per scope:
  *       wallpapers → keep full_key (public preview) + category (the browse axis)
+ *       ringtones  → keep audio_key + cover_key (public preview) + category
  *   - Paginates 20/page (PAGE_SIZE=20) with the exact catalog JSON shape
  *   - Writes per-scope all_N.json to R2 (App filters by category client-side)
  *
@@ -65,7 +67,7 @@ export async function buildCatalog(
   scope: string | null,
   force = false,
 ): Promise<BuildResults> {
-  const allScopes = ["wallpapers"];
+  const allScopes = ["wallpapers", "ringtones"];
   const scopes = scope ? [scope] : allScopes;
 
   const sql = getDb(env);
@@ -271,6 +273,16 @@ async function buildScope(
       WHERE is_published = true
       ORDER BY sort_order ASC, created_at DESC
     `;
+  } else if (scope === "ringtones") {
+    // Same ordering contract as wallpapers: sort_order ASC, created_at DESC —
+    // newest first within an equal sort_order. NULLS LAST so a row with a null
+    // created_at (shouldn't happen, but the column is only defaulted) sinks to
+    // the end instead of leading the feed.
+    rows = await sql`
+      SELECT * FROM ringtones
+      WHERE is_published = true
+      ORDER BY sort_order ASC, created_at DESC NULLS LAST
+    `;
   } else {
     throw new Error(`[build-catalog] unknown scope: ${scope}`);
   }
@@ -293,7 +305,14 @@ async function buildScope(
       }
       return true;
     }
-    // Wallpapers is the only scope in Arul.
+    if (scope === "ringtones") {
+      if (!row["audio_key"]) {
+        console.warn(`[build-catalog] skipping ringtone id=${row["id"]}: missing audio_key`);
+        skipped++;
+        return false;
+      }
+      return true;
+    }
     console.warn(`[build-catalog] skipping unknown-scope row id=${row["id"]}`);
     skipped++;
     return false;
@@ -308,6 +327,9 @@ async function buildScope(
   //               (created_at STAYS — the app's "New" tab windows the feed to the
   //               last 7 days client-side; postgres.js emits it as an ISO-8601
   //               "…Z" string that Dart's DateTime.parse consumes directly.)
+  //   ringtones:  drop duration_ms, bytes  (audio_key + cover_key stay — public
+  //               preview/stream + cover rendering; mime stays — used to infer
+  //               the file extension on set-as-ringtone; created_at STAYS.)
   //   `category` (the browse axis — feed chips filter on it) is always emitted.
   const publicRows = validRows.map((row) => {
     const r = { ...row } as Record<string, unknown>;
@@ -316,9 +338,16 @@ async function buildScope(
     // The Flutter models cast `tags` to List<dynamic>, so emit a real JSON array.
     if ("tags" in r) r["tags"] = pgTextArrayToList(r["tags"]);
 
-    // wallpapers — the only scope in Arul. `category` (the browse axis) is
-    // emitted as-is; it must never be dropped here.
-    for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes"]) {
+    if (scope === "wallpapers") {
+      // `category` (the browse axis) is emitted as-is; it must never be dropped here.
+      for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes"]) {
+        delete r[k];
+      }
+      return r;
+    }
+    // ringtones — the only other scope. Keeps id, title, category, tags,
+    // audio_key, cover_key, mime, is_published, sort_order, created_at.
+    for (const k of ["full_key", "duration_ms", "bytes"]) {
       delete r[k];
     }
     return r;
@@ -331,6 +360,9 @@ async function buildScope(
   // page (e.g. a legacy tag_1.json) orphaned in R2, still serving the deleted item forever.
   const writtenKeys = new Set<string>();
 
+  // Math.max(1, …) guarantees a zero-row scope still writes an explicit empty
+  // all_1.json ({ total: 0, total_pages: 1, has_more: false, items: [] }) —
+  // the app's first-page fetch must get valid JSON, never an ambiguous 404.
   const totalPages = Math.max(1, Math.ceil(publicRows.length / PAGE_SIZE));
   for (let page = 1; page <= totalPages; page++) {
     const pageItems = publicRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

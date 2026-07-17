@@ -176,4 +176,59 @@ class AppLocalizationsEn extends AppLocalizations {
   String referShareMessage(String link) {
     return 'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: $link';
   }
+
+  @override
+  String get tabWallpapers => 'Wallpapers';
+
+  @override
+  String get tabRingtones => 'Ringtones';
+
+  @override
+  String get ringtoneSet => 'Set';
+
+  @override
+  String get ringtonePreviewSemantic => 'Preview';
+
+  @override
+  String get ringtonePreviewUnavailable => 'Preview not available yet';
+
+  @override
+  String get ringtonesEmptyTitle => 'Ringtones are coming soon';
+
+  @override
+  String get ringtonesEmptyBody =>
+      'Devotional ringtones are on their way. Check back soon.';
+
+  @override
+  String get ringtonesErrorTitle => 'Couldn\'t load ringtones';
+
+  @override
+  String get ringtoneSetSuccess =>
+      'Ringtone set. If it doesn\'t appear, restart your phone.';
+
+  @override
+  String get ringtoneSetFailed =>
+      'Couldn\'t set the ringtone. Please try again.';
+
+  @override
+  String get ringtonePermissionTitle => 'Permission needed';
+
+  @override
+  String get ringtonePermissionBody =>
+      'To set a ringtone, allow Arul to change system settings.';
+
+  @override
+  String get ringtonePermissionCta => 'Open settings';
+
+  @override
+  String get ringtonePermissionCancel => 'Not now';
+
+  @override
+  String get ringtoneSetPreparing => 'Preparing…';
+
+  @override
+  String get ringtoneSetDownloading => 'Downloading…';
+
+  @override
+  String get ringtoneSetApplying => 'Setting ringtone…';
 }

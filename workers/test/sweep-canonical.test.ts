@@ -3,7 +3,7 @@
  *
  * sweepCanonical() itself needs a live DB + R2 binding, so we test the pure
  * `selectCanonicalKeysToDelete` core: given the objects seen, the keys still
- * referenced by wallpapers rows, and `now`, decide which to delete.
+ * referenced by wallpapers/ringtones rows, and `now`, decide which to delete.
  */
 
 import { describe, it, expect } from "vitest";
@@ -39,9 +39,31 @@ describe("selectCanonicalKeysToDelete", () => {
     expect(out).toEqual([wp, wp2]);
   });
 
-  it("never touches ringtones/ objects (Arul has no ringtones — not a canonical prefix)", () => {
+  it("keeps ringtone audio AND cover keys while a row references them", () => {
+    const audio = "ringtones/murugan/abc.mp3";
+    const cover = "ringtones/covers/murugan/abc.jpg";
     const out = selectCanonicalKeysToDelete(
-      [obj("ringtones/audio/legacy.mp3", OLD)],
+      [obj(audio, OLD), obj(cover, OLD)],
+      new Set([audio, cover]),
+      NOW,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("deletes unreferenced ringtones/ objects (audio and covers) past the grace window", () => {
+    const orphanAudio = "ringtones/sivan/gone.mp3";
+    const orphanCover = "ringtones/covers/sivan/gone.jpg";
+    const out = selectCanonicalKeysToDelete(
+      [obj(orphanAudio, OLD), obj(orphanCover, OLD)],
+      new Set(["ringtones/sivan/kept.mp3"]),
+      NOW,
+    );
+    expect(out).toEqual([orphanAudio, orphanCover]);
+  });
+
+  it("never deletes fresh ringtones/ objects inside the grace window", () => {
+    const out = selectCanonicalKeysToDelete(
+      [obj("ringtones/amman/fresh.mp3", FRESH), obj("ringtones/covers/amman/fresh.jpg", FRESH)],
       new Set(),
       NOW,
     );

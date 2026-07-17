@@ -60,5 +60,22 @@
         "type": "String"
       }
     }
-  }
+  },
+  "tabWallpapers": "Wallpapers",
+  "tabRingtones": "Ringtones",
+  "ringtoneSet": "Set",
+  "ringtonePreviewSemantic": "Preview",
+  "ringtonePreviewUnavailable": "Preview not available yet",
+  "ringtonesEmptyTitle": "Ringtones are coming soon",
+  "ringtonesEmptyBody": "Devotional ringtones are on their way. Check back soon.",
+  "ringtonesErrorTitle": "Couldn't load ringtones",
+  "ringtoneSetSuccess": "Ringtone set. If it doesn't appear, restart your phone.",
+  "ringtoneSetFailed": "Couldn't set the ringtone. Please try again.",
+  "ringtonePermissionTitle": "Permission needed",
+  "ringtonePermissionBody": "To set a ringtone, allow Arul to change system settings.",
+  "ringtonePermissionCta": "Open settings",
+  "ringtonePermissionCancel": "Not now",
+  "ringtoneSetPreparing": "Preparing…",
+  "ringtoneSetDownloading": "Downloading…",
+  "ringtoneSetApplying": "Setting ringtone…"
 }

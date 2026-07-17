@@ -15,7 +15,9 @@
  *   arul    wallpaper        → wallpapers/<category>/{id}.{ext}  (category is
  *           the browse axis AND the key partition; free text, NOT NULL in DB)
  *           thumbnail        → thumbs/<category>/<file-stem>.jpg
- *           (no ringtones table at all)
+ *           ringtone audio   → ringtones/<category>/{id}.{mp3|m4a|aac}
+ *           ringtone cover   → ringtones/covers/<category>/{id}.jpg (512×512;
+ *           stored in ringtones.cover_key, never derived)
  *
  * Thumbnails live under a TOP-LEVEL thumbs/ prefix in BOTH buckets on purpose:
  * each app's orphan-sweep cron deletes unreferenced objects under wallpapers/
@@ -41,7 +43,8 @@ export interface AppDef {
   scopes: readonly string[];
   /** Arul: wallpapers carry a NOT NULL category (browse axis + key partition). */
   hasCategories: boolean;
-  /** Pakiza: has the ringtones table + /ringtones authoring pages. */
+  /** Has the ringtones table + /ringtones authoring pages (both apps; the
+   *  page factories differ — Pakiza keeps its legacy bare page). */
   hasRingtones: boolean;
   /** Seeded categories offered as datalist suggestions (free text allowed). */
   knownCategories: readonly string[];
@@ -100,15 +103,27 @@ export const ARUL: AppDef = {
   apiBase: "https://arul-api.twilight-smoke-d495.workers.dev",
   catalogSecret: (env) => env.ARUL_CATALOG_BUILD_SECRET,
   service: (env) => env.ARUL_API,
-  scopes: ["wallpapers", "submissions", "config"],
+  scopes: ["wallpapers", "ringtones", "submissions", "config"],
   hasCategories: true,
-  hasRingtones: false,
+  hasRingtones: true,
   knownCategories: ["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"],
   keyPrefixFor: (kind, contentType, category) => {
-    if (kind !== "wallpaper") return null; // no ringtones anywhere for Arul
     if (!category) return null; // category is REQUIRED — it is the key partition
-    if (contentType.startsWith("image/") || contentType === "video/mp4") {
-      return `wallpapers/${category}`;
+    if (kind === "wallpaper") {
+      if (contentType.startsWith("image/") || contentType === "video/mp4") {
+        return `wallpapers/${category}`;
+      }
+      return null;
+    }
+    if (kind === "ringtone") {
+      // Single audio file (mp3 canonical; m4a/aac accepted per media-constraints).
+      if (!contentType.startsWith("audio/")) return null;
+      return `ringtones/${category}`;
+    }
+    if (kind === "ringtone_cover") {
+      // 512×512 JPG cover art; the key is STORED in ringtones.cover_key.
+      if (contentType !== "image/jpeg") return null;
+      return `ringtones/covers/${category}`;
     }
     return null;
   },

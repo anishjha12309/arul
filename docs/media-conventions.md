@@ -2,8 +2,9 @@
 
 No server-side transcoding. Transcode locally, upload via CMS (`arul-api.hsrutility.com/admin`)
 or, for bulk import, direct R2 + one DB transaction (content-ops skill). Full QC battery incl.
-faststart/audio-stream checks: reference `c:\Anish\Pakiza\wallpaper-media-spec.md`. Wallpapers only —
-no ringtone/audio pipeline in Arul.
+faststart/audio-stream checks: reference `c:\Anish\Pakiza\wallpaper-media-spec.md`.
+Content kinds: wallpapers (static + live) AND ringtones (audio + optional cover — added 2026-07-17,
+see the Ringtones section below).
 
 ## R2 keys & formats (bucket `south-indian-wallpapers`)
 
@@ -24,6 +25,8 @@ that category's prefix). Sweep prefix stays `wallpapers/`, so it covers every ca
 |------|------------------------------|-------|--------|-----|
 | Wallpaper (static) | wallpapers/&lt;category&gt;/{uuid}.jpg | JPG/PNG/WEBP | 1080×1920 JPG | 10 MB |
 | Wallpaper (live) | wallpapers/&lt;category&gt;/{uuid}.mp4 | MP4/MOV | **1024×1824** H.264 MP4 faststart, no audio | 50 MB |
+| Ringtone (audio) | ringtones/&lt;category&gt;/{uuid}.mp3 | MP3/M4A/AAC | MP3 (libmp3lame), recommend ≤40s | 15 MB |
+| Ringtone (cover) | ringtones/covers/&lt;category&gt;/{uuid}.jpg | JPG/PNG/WEBP | 512×512 JPG q~80 | ≤300 KB |
 
 **THE video rule: width % 128 == 0, height % 32 == 0, AND fits the 1088×1920 hw-decoder cap**
 (min side ≤ 1088, max side ≤ 1920). Verified on-device (SD695 + Dimensity 900): budget hw decoders
@@ -47,6 +50,25 @@ ffmpeg -i input.jpg -vf "scale=1080:1920:force_original_aspect_ratio=increase,cr
 ffmpeg -i input.mov -vf "scale=1024:1824:force_original_aspect_ratio=increase,crop=1024:1824" \
   -c:v libx264 -preset slow -crf 23 -maxrate 4M -bufsize 8M -pix_fmt yuv420p -an -movflags +faststart output/{uuid}.mp4
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height output/{uuid}.mp4   # MUST print 1024 / 1824
+```
+
+## Ringtones (added 2026-07-17 — strip reversed, see docs/port-map.md)
+
+Audio: output is always MP3 (input MP3/M4A/AAC), ≤15 MB hard cap, recommend ≤40s.
+Cover: optional 512×512 JPG, quality ~80, ≤300 KB.
+Both live under the `ringtones/` R2 prefix (covered by the canonical sweep — a DB row's
+`audio_key` AND `cover_key` both shield their objects):
+- audio → `ringtones/<category>/<uuid>.mp3`
+- cover → `ringtones/covers/<category>/<uuid>.jpg`
+
+**Ringtone audio:**
+```bash
+ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3
+```
+
+**Ringtone cover (512×512 JPG q~80):**
+```bash
+ffmpeg -i cover.png -vf scale=512:512 -q:v 3 out/<uuid>.jpg
 ```
 
 ## Checks before upload / import

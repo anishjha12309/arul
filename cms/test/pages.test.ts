@@ -17,6 +17,7 @@ vi.mock("../src/lib/db.js", () => ({
 
 import { makeWallpapersApp } from "../src/pages/wallpapers.js";
 import { makeRingtonesApp } from "../src/pages/ringtones.js";
+import { makeArulRingtonesApp } from "../src/pages/ringtones-arul.js";
 import { makeSubmissionsApp } from "../src/pages/submissions.js";
 import { makeConfigApp } from "../src/pages/config.js";
 import { makeTransferApp } from "../src/pages/transfer.js";
@@ -31,10 +32,10 @@ const get = (app: Hono<{ Bindings: Env }>, env: Env, path = "/") =>
   app.fetch(new Request(`https://hsr-cms.example.com${path}`), env, execCtx);
 
 describe("page renders", () => {
-  it("dashboard shows both apps' stats", async () => {
+  it("dashboard shows both apps' stats, incl. Arul's ringtone count", async () => {
     const { env } = makeEnv({
       pakizaRows: [{ wp_total: 5, wp_pub: 4, rt_total: 9, rt_pub: 8, pending: 2, version: 11 }],
-      arulRows: [{ wp_total: 428, wp_pub: 428, pending: 1, version: 6 }],
+      arulRows: [{ wp_total: 428, wp_pub: 428, rt_total: 37, rt_pub: 36, pending: 1, version: 6 }],
     });
     const app = new Hono<{ Bindings: Env }>().get("/", handleDashboard);
     const res = await get(app, env);
@@ -42,8 +43,10 @@ describe("page renders", () => {
     const html = await res.text();
     expect(html).toContain("Pakiza");
     expect(html).toContain("Arul");
-    expect(html).toContain("Published ringtones"); // pakiza-only stat
+    // BOTH apps carry the ringtone stat now (Arul launched 2026-07-17)
+    expect((html.match(/Published ringtones/g) ?? []).length).toBe(2);
     expect(html).toContain("428");
+    expect(html).toContain("37 total"); // Arul ringtone total hint
     expect(html).toContain("v11");
     expect(html).toContain("v6");
   });
@@ -191,6 +194,98 @@ describe("page renders", () => {
     const html = await res.text();
     expect(html).toContain("Azaan");
     expect(html).toContain("ringtone");
+  });
+
+  it("pakiza ringtones page is UNCHANGED by the Arul launch — none of the Arul-only structure", async () => {
+    const { env } = makeEnv({
+      pakizaRows: [{ id: "r1", title: "Azaan", audio_key: "ringtones/audio/r1.mp3", mime: "audio/mpeg", is_published: true }],
+    });
+    const html = await (await get(makeRingtonesApp(PAKIZA), env)).text();
+    // Pakiza's legacy page: no category input, no cover fields, no grid cards,
+    // no bulk pill ELEMENT, and never the Arul-only data-rt-* uploader. (The
+    // shared Layout scripts mention data-grid/data-bulk-bar as selectors on
+    // every page, so assert on rendered elements, not raw substrings.)
+    expect(html).not.toContain('<input name="category"');
+    expect(html).not.toContain('class="pickgrid'); // no grid view markup
+    expect(html).not.toContain('class="bulkbar"'); // no bulk pill element
+    expect(html).not.toContain("data-rt-form");
+    expect(html).not.toContain("data-rt-batch-form");
+    expect(html).not.toContain("key_cover");
+    expect(html).not.toContain("ringtone_cover");
+    expect(html).toContain('data-kind="ringtone"'); // legacy shared uploader path
+  });
+
+  it("arul ringtones list renders covers, audio previews, category filter and keysearch", async () => {
+    const arulRows = [
+      {
+        id: "1c237f37-e962-470b-99a8-9be57c080f88",
+        title: "Om Namah",
+        category: "sivan",
+        audio_key: "ringtones/sivan/a.mp3",
+        cover_key: "ringtones/covers/sivan/a.jpg",
+        mime: "audio/mpeg",
+        duration_ms: 94000,
+        is_published: true,
+        created: "2026-07-17",
+      },
+      {
+        id: "303dc99d-4018-49bb-8506-b160673c22f5",
+        title: "Bell Draftless",
+        category: "temples",
+        audio_key: "ringtones/temples/b.mp3",
+        cover_key: null,
+        mime: "audio/mpeg",
+        duration_ms: null,
+        is_published: true,
+        created: "2026-07-17",
+      },
+    ];
+    const { env } = makeEnv({ arulRows });
+    const res = await get(makeArulRingtonesApp(ARUL), env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Om Namah");
+    expect(html).toContain("ringtones/covers/sivan/a.jpg"); // cover thumb
+    expect(html).toContain("<audio"); // inline grid preview element
+    expect(html).toContain('preload="none"'); // never pre-fetches audio bytes
+    expect(html).toContain("ringtones/sivan/a.mp3"); // audio src + keysearch
+    expect(html).toContain('data-filter="3" aria-label="Filter by category"');
+    // Filter options = knownCategories UNION novel categories in rows.
+    const selMatch = /<select data-filter="3"[^>]*>[\s\S]*?<\/select>/.exec(html);
+    expect(selMatch![0]).toContain('<option value="amman">'); // known, no rows
+    expect(selMatch![0]).toContain('<option value="sivan">'); // present in rows
+    expect(html).toContain("1:34"); // duration formatted
+    expect(html).toContain("1c237f37</span>"); // short id
+    expect(html).toContain("data-bulk-bar"); // floating bulk pill
+    expect(html).toContain('data-rt-bulk="category"'); // bulk category move
+    expect(html).toContain('data-grid-id="1c237f37-e962-470b-99a8-9be57c080f88"');
+    // Published row WITHOUT a cover: ♪ placeholder + warn badge, never an <img>
+    // pointing at a null key.
+    expect(html).toContain("no cover");
+    expect(html).not.toContain('src="' + "https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev/null");
+  });
+
+  it("arul ringtones empty state shows the operable guidance card + batch CTA", async () => {
+    const { env } = makeEnv({ arulRows: [] });
+    const html = await (await get(makeArulRingtonesApp(ARUL), env)).text();
+    expect(html).toContain("No ringtones yet");
+    expect(html).toContain("batch-upload");
+    expect(html).toContain("512×512");
+    expect(html).toContain('data-dialog-target="rt-batch"');
+    expect(html).toContain('data-dialog-target="rt-new"');
+  });
+
+  it("arul new-ringtone form requires BOTH audio and cover and posts to the arul presign", async () => {
+    const { env } = makeEnv();
+    const res = await get(makeArulRingtonesApp(ARUL), env, "/new");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-presign="/admin/arul/media/upload-url"');
+    expect(html).toContain('data-slot="audio" data-required="1"');
+    expect(html).toContain('data-slot="cover" data-required="1"');
+    expect(html).toContain("audio/mpeg,audio/mp4,audio/aac,.mp3,.m4a,.aac");
+    expect(html).toContain('name="category"');
+    expect(html).toContain('name="duration_ms"');
   });
 
   it("submissions list renders with status tabs (arul)", async () => {

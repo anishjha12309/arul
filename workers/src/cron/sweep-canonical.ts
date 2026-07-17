@@ -1,7 +1,8 @@
 /**
  * Canonical-media sweep cron — reclaim orphaned catalog objects from R2.
  *
- * Canonical media lives at wallpapers/<category>/…
+ * Canonical media lives at wallpapers/<category>/…, ringtones/<category>/…
+ * and ringtones/covers/<category>/…
  * Two flows can strand an object there with no DB row referencing it:
  *   - a CMS upload (presigned PUT lands the bytes BEFORE the row insert) whose
  *     form was abandoned, so the row never got created, or
@@ -10,8 +11,8 @@
  * Neither is ever retried inline, so without this sweep those objects (a live
  * wallpaper can be tens of MB) accumulate forever.
  *
- * Rule: an object under wallpapers/ is kept ONLY while some row
- * (published or not) references it as full_key. Everything else is
+ * Rule: an object under wallpapers/ or ringtones/ is kept ONLY while some row
+ * (published or not) references it as full_key / audio_key / cover_key. Everything else is
  * deleted — but only after a grace window, so a CMS upload whose row hasn't been
  * saved yet is never swept mid-edit. catalog/ and user/ prefixes are never touched.
  */
@@ -23,7 +24,7 @@ import { getDb } from "../lib/db.js";
 export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /** The only prefixes this sweep manages. */
-export const CANONICAL_PREFIXES = ["wallpapers/"] as const;
+export const CANONICAL_PREFIXES = ["wallpapers/", "ringtones/"] as const;
 
 export interface CanonicalCandidate {
   key: string;
@@ -76,10 +77,21 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
     const wpRows = (await sql`SELECT full_key FROM wallpapers`) as unknown as {
       full_key: string;
     }[];
-    const referenced = new Set<string>(wpRows.map((r) => r.full_key));
+    // Ringtones reference TWO objects per row: the audio file and the (nullable)
+    // cover image. Both must survive the sweep while the row exists — a swept
+    // cover would leave every published ringtone with a broken artwork tile.
+    const rtRows = (await sql`SELECT audio_key, cover_key FROM ringtones`) as unknown as {
+      audio_key: string;
+      cover_key: string | null;
+    }[];
+    const referenced = new Set<string>([
+      ...wpRows.map((r) => r.full_key),
+      ...rtRows.map((r) => r.audio_key),
+      ...rtRows.map((r) => r.cover_key).filter((k): k is string => !!k),
+    ]);
 
     // Failsafe: an empty reference set would mark EVERY object for deletion.
-    // An empty table is far more likely a DB/config fault than a real state
+    // All tables empty is far more likely a DB/config fault than a real state
     // (the catalog has shipped content) — refuse to sweep rather than risk
     // wiping the whole media store.
     if (referenced.size === 0) {

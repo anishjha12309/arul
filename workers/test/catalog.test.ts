@@ -66,6 +66,11 @@ function stripPrivateKeys(scope: string, row: ContentRow): ContentRow {
     // (the browse axis the feed chips filter on).
     return r;
   }
+  // ringtones — keep id, title, category, tags, audio_key, cover_key, mime,
+  // is_published, sort_order, created_at; strip duration_ms + bytes.
+  for (const k of ["full_key", "duration_ms", "bytes"]) {
+    delete r[k];
+  }
   return r;
 }
 
@@ -79,6 +84,10 @@ function filterValidRows(
     if (scope === "wallpapers") {
       if (!row["full_key"]) { skipped++; return false; }
       if (row["type"] === "live" && row["mime"] !== "video/mp4") { skipped++; return false; }
+      return true;
+    }
+    if (scope === "ringtones") {
+      if (!row["audio_key"]) { skipped++; return false; }
       return true;
     }
     skipped++;
@@ -123,6 +132,52 @@ describe("Catalog key stripping", () => {
     expect(result["title"]).toBe("Murugan at Palani");
     expect(result["category"]).toBe("murugan");
   });
+
+  it("ringtones: keeps audio_key + cover_key + mime + category, strips duration_ms + bytes", () => {
+    const row: ContentRow = {
+      id: "r1",
+      title: "Murugan Bell",
+      category: "murugan",
+      tags: ["bell"],
+      audio_key: "ringtones/murugan/abc.mp3",
+      cover_key: "ringtones/covers/murugan/abc.jpg",
+      mime: "audio/mpeg",
+      duration_ms: 30000,
+      bytes: 480000,
+      is_published: true,
+      sort_order: 0,
+      created_at: "2026-07-17T00:00:00Z",
+    };
+    const result = stripPrivateKeys("ringtones", row);
+    expect(result["audio_key"]).toBe("ringtones/murugan/abc.mp3");
+    expect(result["cover_key"]).toBe("ringtones/covers/murugan/abc.jpg");
+    expect(result["mime"]).toBe("audio/mpeg");
+    expect(result["category"]).toBe("murugan");
+    expect(result["duration_ms"]).toBeUndefined();
+    expect(result["bytes"]).toBeUndefined();
+    expect(Object.keys(result).sort()).toEqual([
+      "audio_key",
+      "category",
+      "cover_key",
+      "created_at",
+      "id",
+      "is_published",
+      "mime",
+      "sort_order",
+      "tags",
+      "title",
+    ]);
+  });
+
+  it("ringtones: a null cover_key passes through (cover is optional)", () => {
+    const result = stripPrivateKeys("ringtones", {
+      id: "r2",
+      audio_key: "ringtones/temples/x.mp3",
+      cover_key: null,
+    });
+    expect(result["cover_key"]).toBeNull();
+    expect(result["audio_key"]).toBe("ringtones/temples/x.mp3");
+  });
 });
 
 describe("Catalog validation / filtering", () => {
@@ -148,6 +203,18 @@ describe("Catalog validation / filtering", () => {
     expect(skipped).toBe(1);
   });
 
+  it("excludes ringtones missing audio_key and counts them as skipped", () => {
+    const rows: ContentRow[] = [
+      { id: "r1", audio_key: "ringtones/amman/a.mp3" },
+      { id: "r2", audio_key: null }, // missing
+      { id: "r3", audio_key: "ringtones/sivan/c.mp3", cover_key: null },
+    ];
+    const { valid, skipped } = filterValidRows("ringtones", rows);
+    expect(valid.length).toBe(2);
+    expect(skipped).toBe(1);
+    expect(valid.map((r) => r["id"])).toEqual(["r1", "r3"]);
+  });
+
 });
 
 describe("Catalog pagination", () => {
@@ -157,6 +224,21 @@ describe("Catalog pagination", () => {
     expect(pages[0].total).toBe(0);
     expect(pages[0].has_more).toBe(false);
     expect(pages[0].items.length).toBe(0);
+  });
+
+  it("zero-content scope (e.g. ringtones before any content) emits a valid empty page 1", () => {
+    // The app's first-page fetch (catalog/ringtones/all_1.json) must get valid
+    // JSON, never an ambiguous 404 — mirrors Math.max(1, …) in buildScope.
+    const pages = paginateItems([]);
+    expect(pages.length).toBe(1);
+    expect(pages[0]).toEqual({
+      page: 1,
+      per_page: 20,
+      total: 0,
+      total_pages: 1,
+      has_more: false,
+      items: [],
+    });
   });
 
   it("paginates 25 items into 2 pages of 20", () => {

@@ -52,5 +52,22 @@
   "offlineTitle": "ఇంటర్నెట్ లేదు",
   "offlineFeedBody": "వాల్‌పేపర్‌లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.",
   "shareMessage": "అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — అరుళ్ పొందండి: https://hsrapps.com/arul",
-  "referShareMessage": "అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — నాకు Arul చాలా ఇష్టం. నా లింక్‌తో ఇన్‌స్టాల్ చేయండి, నాకు ఉచిత ప్రీమియం వస్తుంది: {link}"
+  "referShareMessage": "అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — నాకు Arul చాలా ఇష్టం. నా లింక్‌తో ఇన్‌స్టాల్ చేయండి, నాకు ఉచిత ప్రీమియం వస్తుంది: {link}",
+  "tabWallpapers": "వాల్‌పేపర్లు",
+  "tabRingtones": "రింగ్‌టోన్లు",
+  "ringtoneSet": "సెట్ చేయి",
+  "ringtonePreviewSemantic": "ప్రివ్యూ",
+  "ringtonePreviewUnavailable": "ప్రివ్యూ ఇంకా అందుబాటులో లేదు",
+  "ringtonesEmptyTitle": "రింగ్‌టోన్లు త్వరలో వస్తున్నాయి",
+  "ringtonesEmptyBody": "భక్తి రింగ్‌టోన్లు దారిలో ఉన్నాయి. కాసేపటి తర్వాత మళ్లీ చూడండి.",
+  "ringtonesErrorTitle": "రింగ్‌టోన్లను లోడ్ చేయలేకపోయాం",
+  "ringtoneSetSuccess": "రింగ్‌టోన్ సెట్ అయింది. కనిపించకపోతే, ఫోన్‌ను రీస్టార్ట్ చేయండి.",
+  "ringtoneSetFailed": "రింగ్‌టోన్ సెట్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
+  "ringtonePermissionTitle": "అనుమతి అవసరం",
+  "ringtonePermissionBody": "రింగ్‌టోన్ సెట్ చేయడానికి, సిస్టమ్ సెట్టింగ్‌లను మార్చేందుకు Arulకు అనుమతి ఇవ్వండి.",
+  "ringtonePermissionCta": "సెట్టింగ్‌లు తెరవండి",
+  "ringtonePermissionCancel": "ఇప్పుడు కాదు",
+  "ringtoneSetPreparing": "సిద్ధమవుతోంది…",
+  "ringtoneSetDownloading": "డౌన్‌లోడ్ అవుతోంది…",
+  "ringtoneSetApplying": "రింగ్‌టోన్ సెట్ అవుతోంది…"
 }

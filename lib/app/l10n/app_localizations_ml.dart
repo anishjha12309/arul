@@ -178,4 +178,59 @@ class AppLocalizationsMl extends AppLocalizations {
   String referShareMessage(String link) {
     return 'മനോഹരമായ ദക്ഷിണേന്ത്യൻ വാൾപേപ്പറുകൾ — എനിക്ക് Arul വളരെ ഇഷ്ടമാണ്. എന്റെ ലിങ്ക് ഉപയോഗിച്ച് ഇൻസ്റ്റാൾ ചെയ്യൂ, എനിക്ക് സൗജന്യ പ്രീമിയം ലഭിക്കും: $link';
   }
+
+  @override
+  String get tabWallpapers => 'വാൾപേപ്പറുകൾ';
+
+  @override
+  String get tabRingtones => 'റിംഗ്ടോണുകൾ';
+
+  @override
+  String get ringtoneSet => 'സെറ്റ് ചെയ്യുക';
+
+  @override
+  String get ringtonePreviewSemantic => 'പ്രിവ്യൂ';
+
+  @override
+  String get ringtonePreviewUnavailable => 'പ്രിവ്യൂ ഇപ്പോൾ ലഭ്യമല്ല';
+
+  @override
+  String get ringtonesEmptyTitle => 'റിംഗ്ടോണുകൾ ഉടൻ വരുന്നു';
+
+  @override
+  String get ringtonesEmptyBody =>
+      'ഭക്തി റിംഗ്ടോണുകൾ വഴിയിലുണ്ട്. അൽപസമയത്തിനു ശേഷം വീണ്ടും നോക്കുക.';
+
+  @override
+  String get ringtonesErrorTitle => 'റിംഗ്ടോണുകൾ ലോഡ് ചെയ്യാനായില്ല';
+
+  @override
+  String get ringtoneSetSuccess =>
+      'റിംഗ്ടോൺ സെറ്റ് ചെയ്തു. കാണുന്നില്ലെങ്കിൽ ഫോൺ റീസ്റ്റാർട്ട് ചെയ്യുക.';
+
+  @override
+  String get ringtoneSetFailed =>
+      'റിംഗ്ടോൺ സെറ്റ് ചെയ്യാനായില്ല. വീണ്ടും ശ്രമിക്കുക.';
+
+  @override
+  String get ringtonePermissionTitle => 'അനുമതി ആവശ്യമാണ്';
+
+  @override
+  String get ringtonePermissionBody =>
+      'റിംഗ്ടോൺ സെറ്റ് ചെയ്യാൻ, സിസ്റ്റം ക്രമീകരണങ്ങൾ മാറ്റാൻ Arul-ന് അനുമതി നൽകുക.';
+
+  @override
+  String get ringtonePermissionCta => 'ക്രമീകരണങ്ങൾ തുറക്കുക';
+
+  @override
+  String get ringtonePermissionCancel => 'ഇപ്പോൾ വേണ്ട';
+
+  @override
+  String get ringtoneSetPreparing => 'തയ്യാറാകുന്നു…';
+
+  @override
+  String get ringtoneSetDownloading => 'ഡൗൺലോഡ് ചെയ്യുന്നു…';
+
+  @override
+  String get ringtoneSetApplying => 'റിംഗ്ടോൺ സെറ്റ് ചെയ്യുന്നു…';
 }

@@ -52,5 +52,22 @@
   "offlineTitle": "ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ",
   "offlineFeedBody": "ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ನೋಡಲು ಇಂಟರ್ನೆಟ್ ಆನ್ ಮಾಡಿ.",
   "shareMessage": "ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಅರುಳ್ ಪಡೆಯಿರಿ: https://hsrapps.com/arul",
-  "referShareMessage": "ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ನನಗೆ Arul ತುಂಬಾ ಇಷ್ಟ. ನನ್ನ ಲಿಂಕ್‌ನಿಂದ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ, ನನಗೆ ಉಚಿತ ಪ್ರೀಮಿಯಂ ಸಿಗುತ್ತದೆ: {link}"
+  "referShareMessage": "ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ನನಗೆ Arul ತುಂಬಾ ಇಷ್ಟ. ನನ್ನ ಲಿಂಕ್‌ನಿಂದ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ, ನನಗೆ ಉಚಿತ ಪ್ರೀಮಿಯಂ ಸಿಗುತ್ತದೆ: {link}",
+  "tabWallpapers": "ವಾಲ್‌ಪೇಪರ್‌ಗಳು",
+  "tabRingtones": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು",
+  "ringtoneSet": "ಹೊಂದಿಸಿ",
+  "ringtonePreviewSemantic": "ಮುನ್ನೋಟ",
+  "ringtonePreviewUnavailable": "ಮುನ್ನೋಟ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ",
+  "ringtonesEmptyTitle": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತಿವೆ",
+  "ringtonesEmptyBody": "ಭಕ್ತಿ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ದಾರಿಯಲ್ಲಿವೆ. ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ನೋಡಿ.",
+  "ringtonesErrorTitle": "ರಿಂಗ್‌ಟೋನ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ",
+  "ringtoneSetSuccess": "ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗಿದೆ. ಕಾಣದಿದ್ದರೆ, ಫೋನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ.",
+  "ringtoneSetFailed": "ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  "ringtonePermissionTitle": "ಅನುಮತಿ ಬೇಕು",
+  "ringtonePermissionBody": "ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲು, ಸಿಸ್ಟಂ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬದಲಾಯಿಸಲು Arul-ಗೆ ಅನುಮತಿ ನೀಡಿ.",
+  "ringtonePermissionCta": "ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ತೆರೆಯಿರಿ",
+  "ringtonePermissionCancel": "ಈಗ ಬೇಡ",
+  "ringtoneSetPreparing": "ಸಿದ್ಧವಾಗುತ್ತಿದೆ…",
+  "ringtoneSetDownloading": "ಡೌನ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ…",
+  "ringtoneSetApplying": "ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗುತ್ತಿದೆ…"
 }

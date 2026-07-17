@@ -6,11 +6,11 @@
  *   POST /media/confirm-upload — record a completed upload as a content_submission
  *
  * Key decisions (from architecture.md §3.2):
- *   - Wallpaper full_key is PUBLIC in the catalog (free
+ *   - Wallpaper full_key + ringtone audio_key are PUBLIC in the catalog (free
  *     preview/stream via CDN). /media/signed-url is only called at apply/set/save
  *     time (write to device).
  *   - ALL content requires premium to apply/set/save (product decision
- *     2026-07-01 — every wallpaper is premium). entitlement.isPremium()
+ *     2026-07-01 — every wallpaper + ringtone is premium). entitlement.isPremium()
  *     is checked live from Neon on every request here — never from the token. This
  *     is a SOFT gate: the public CDN keys mean a determined user could still fetch
  *     raw URLs; acceptable for v1. (The per-row is_premium flag was removed 2026-07-01.)
@@ -28,6 +28,7 @@ import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 // Wallpaper full_key is intentionally included (it's the apply gate key).
 const KIND_TABLE: Record<string, { table: string; keyCol: string }> = {
   wallpaper: { table: "wallpapers", keyCol: "full_key" },
+  ringtone: { table: "ringtones", keyCol: "audio_key" },
 };
 
 // ── POST /media/signed-url ───────────────────────────────────────────────────
@@ -53,7 +54,7 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     return errorResponse(
       400,
       "invalid_kind",
-      "kind must be one of: wallpaper",
+      "kind must be one of: wallpaper, ringtone",
     );
   }
 

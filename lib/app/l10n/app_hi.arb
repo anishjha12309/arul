@@ -52,5 +52,22 @@
   "offlineTitle": "इंटरनेट नहीं है",
   "offlineFeedBody": "वॉलपेपर देखने के लिए इंटरनेट चालू करें।",
   "shareMessage": "सुंदर दक्षिण भारतीय वॉलपेपर — अरुल पाएँ: https://hsrapps.com/arul",
-  "referShareMessage": "सुंदर दक्षिण भारतीय वॉलपेपर — मुझे Arul बहुत पसंद है। मेरी लिंक से इंस्टॉल करें और मुझे मुफ़्त प्रीमियम मिलेगा: {link}"
+  "referShareMessage": "सुंदर दक्षिण भारतीय वॉलपेपर — मुझे Arul बहुत पसंद है। मेरी लिंक से इंस्टॉल करें और मुझे मुफ़्त प्रीमियम मिलेगा: {link}",
+  "tabWallpapers": "वॉलपेपर",
+  "tabRingtones": "रिंगटोन",
+  "ringtoneSet": "सेट करें",
+  "ringtonePreviewSemantic": "प्रीव्यू",
+  "ringtonePreviewUnavailable": "प्रीव्यू अभी उपलब्ध नहीं है",
+  "ringtonesEmptyTitle": "रिंगटोन जल्द आ रहे हैं",
+  "ringtonesEmptyBody": "भक्ति रिंगटोन रास्ते में हैं। कुछ समय बाद फिर देखें।",
+  "ringtonesErrorTitle": "रिंगटोन लोड नहीं हो सके",
+  "ringtoneSetSuccess": "रिंगटोन सेट हो गया। दिखाई न दे तो फ़ोन रीस्टार्ट करें।",
+  "ringtoneSetFailed": "रिंगटोन सेट नहीं हो सका। फिर से कोशिश करें।",
+  "ringtonePermissionTitle": "अनुमति चाहिए",
+  "ringtonePermissionBody": "रिंगटोन सेट करने के लिए, Arul को सिस्टम सेटिंग्स बदलने की अनुमति दें।",
+  "ringtonePermissionCta": "सेटिंग्स खोलें",
+  "ringtonePermissionCancel": "अभी नहीं",
+  "ringtoneSetPreparing": "तैयार हो रहा है…",
+  "ringtoneSetDownloading": "डाउनलोड हो रहा है…",
+  "ringtoneSetApplying": "रिंगटोन सेट हो रहा है…"
 }

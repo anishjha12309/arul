@@ -92,6 +92,30 @@ describe("POST /media/signed-url", () => {
     expect(body.url).toContain("X-Amz-Signature=");
     expect(body.url).toContain("wallpapers");
   });
+
+  it("resolves kind=ringtone via audio_key and returns a signed URL for a premium user", async () => {
+    // Same shared-mock caveat as the wallpaper success path: the mock returns
+    // the row for both the ringtones lookup (audio_key AS private_key) and the
+    // entitlement query, so isPremium() — checked live, never from the JWT —
+    // reads true.
+    const { env } = envWithSql([{ private_key: "ringtones/murugan/abc.mp3" }]);
+    const res = await handleSignedUrl(
+      makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { url: string; expiresIn: number };
+    expect(body.expiresIn).toBe(300);
+    expect(body.url).toContain("X-Amz-Signature=");
+    expect(body.url).toContain("ringtones");
+  });
+
+  it("404 when the ringtone row is not found", async () => {
+    const { env } = envWithSql([]);
+    const res = await handleSignedUrl(
+      makeCtx({ env, token: await token(), jsonBody: { id: "nope", kind: "ringtone" } }),
+    );
+    expect(res.status).toBe(404);
+  });
 });
 
 // ── POST /media/upload-url ────────────────────────────────────────────────────
@@ -201,6 +225,19 @@ describe("POST /media/confirm-upload", () => {
     );
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_key");
+  });
+
+  it("invalid_kind for kind=ringtone (user submissions stay wallpaper-only in Arul)", async () => {
+    const { env } = envWithSql([]);
+    const res = await handleConfirmUpload(
+      makeCtx({
+        env,
+        token: await token(),
+        jsonBody: { kind: "ringtone", fileKey: `user/${USER_ID}/submissions/x.mp3` },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("invalid_kind");
   });
 
   it("invalid_kind when kind is not wallpaper", async () => {

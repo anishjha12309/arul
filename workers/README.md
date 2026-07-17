@@ -3,14 +3,16 @@
 Cloudflare Worker = whole backend: API + CMS + crons. Base `https://arul-api.hsrutility.com`.
 Neon via Hyperdrive · R2 `south-indian-wallpapers` (presign via aws4fetch) · KV (jti denylist,
 webhook dedupe, OAuth cache) · PhonePe v2 Autopay. `src/` arrives in port-map Phase 2 — copied
-verbatim from `c:\Anish\Pakiza\workers\src` + the **ringtones strip** and brand deltas in docs/port-map.md.
+verbatim from `c:\Anish\Pakiza\workers\src` + brand deltas in docs/port-map.md. (The original
+**ringtones strip** was REVERSED 2026-07-17 — ringtones are back: scope `ringtones`, kind `ringtone`,
+R2 `ringtones/` prefix. See port-map.md.)
 
 ## Routes
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | POST | /auth/login | — | Google idToken → access(15m) + refresh(60d rotating) JWTs; captures referral code |
 | POST | /auth/refresh · /auth/logout | —/Bearer | Rotate (old jti denylisted) · denylist refresh jti |
-| POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET (apply/share gate) |
+| POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET (apply/share gate); kind ∈ {wallpaper, ringtone} |
 | POST | /media/upload-url | Bearer | Presigned PUT, `user/<sub>/submissions/…` only |
 | POST | /media/confirm-upload | Bearer | Record submission — kind = `wallpaper` only, HEAD-verified, ≤10 pending/user, upsert on unique file_key |
 | POST | /payments/{initiate,status,cancel} | Bearer | Autopay mandate lifecycle (see PhonePe below) |
@@ -28,16 +30,19 @@ Server-rendered Hono JSX+HTMX, single operator (PBKDF2 hash + signed HttpOnly co
 upload browser → R2 direct via presigned PUT. Every mutation bumps `content_version` in the row's
 transaction, rebuilds the scope, purges the version pointer. Pages: dashboard · wallpapers ·
 submissions (approve→copy to canonical key→promote; NEVER approve a dimension-violating video as-is)
-· config. (No ringtones page — module stripped in the port.)
+· config. (No ringtones page here — the legacy per-app admin is superseded by the separate hsr-cms
+worker; ringtone authoring lives there.)
 
 ## Catalog outputs (build-catalog)
-`catalog/wallpapers/all_{page}.json` (20/page; no per-tag pages; orphaned pages deleted each rebuild) ·
+`catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (20/page; no per-tag pages;
+orphaned pages deleted each rebuild; a zero-row scope still writes a valid empty all_1.json) ·
 `catalog/app_config.json` (public subset) · `catalog/version.json` (`no-store` pointer).
 App reads version.json → appends `?v=<version>`; pages stay edge-cacheable (max-age=60).
 
 ## Cron — ONE hourly trigger (`0 * * * *`)
 1. build-catalog (no-op if version unchanged) → **sweep-canonical** only after a fully successful
-   rebuild (deletes `wallpapers/…` objects no DB row references — why this bucket must never be shared).
+   rebuild (deletes `wallpapers/…` + `ringtones/…` objects no DB row references — full_key,
+   audio_key AND cover_key all count as references — why this bucket must never be shared).
 2. sweep-submissions (reclaim orphaned `user/…/submissions/`; expire 30d-old pending rows).
 3. autopay notify (24h before debit) + execute (notify → redeem at next_debit_at).
 

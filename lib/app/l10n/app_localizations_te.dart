@@ -178,4 +178,59 @@ class AppLocalizationsTe extends AppLocalizations {
   String referShareMessage(String link) {
     return 'అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — నాకు Arul చాలా ఇష్టం. నా లింక్‌తో ఇన్‌స్టాల్ చేయండి, నాకు ఉచిత ప్రీమియం వస్తుంది: $link';
   }
+
+  @override
+  String get tabWallpapers => 'వాల్‌పేపర్లు';
+
+  @override
+  String get tabRingtones => 'రింగ్‌టోన్లు';
+
+  @override
+  String get ringtoneSet => 'సెట్ చేయి';
+
+  @override
+  String get ringtonePreviewSemantic => 'ప్రివ్యూ';
+
+  @override
+  String get ringtonePreviewUnavailable => 'ప్రివ్యూ ఇంకా అందుబాటులో లేదు';
+
+  @override
+  String get ringtonesEmptyTitle => 'రింగ్‌టోన్లు త్వరలో వస్తున్నాయి';
+
+  @override
+  String get ringtonesEmptyBody =>
+      'భక్తి రింగ్‌టోన్లు దారిలో ఉన్నాయి. కాసేపటి తర్వాత మళ్లీ చూడండి.';
+
+  @override
+  String get ringtonesErrorTitle => 'రింగ్‌టోన్లను లోడ్ చేయలేకపోయాం';
+
+  @override
+  String get ringtoneSetSuccess =>
+      'రింగ్‌టోన్ సెట్ అయింది. కనిపించకపోతే, ఫోన్‌ను రీస్టార్ట్ చేయండి.';
+
+  @override
+  String get ringtoneSetFailed =>
+      'రింగ్‌టోన్ సెట్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get ringtonePermissionTitle => 'అనుమతి అవసరం';
+
+  @override
+  String get ringtonePermissionBody =>
+      'రింగ్‌టోన్ సెట్ చేయడానికి, సిస్టమ్ సెట్టింగ్‌లను మార్చేందుకు Arulకు అనుమతి ఇవ్వండి.';
+
+  @override
+  String get ringtonePermissionCta => 'సెట్టింగ్‌లు తెరవండి';
+
+  @override
+  String get ringtonePermissionCancel => 'ఇప్పుడు కాదు';
+
+  @override
+  String get ringtoneSetPreparing => 'సిద్ధమవుతోంది…';
+
+  @override
+  String get ringtoneSetDownloading => 'డౌన్‌లోడ్ అవుతోంది…';
+
+  @override
+  String get ringtoneSetApplying => 'రింగ్‌టోన్ సెట్ అవుతోంది…';
 }
