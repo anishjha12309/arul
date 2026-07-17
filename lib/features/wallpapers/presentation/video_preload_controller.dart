@@ -87,6 +87,14 @@ class _PooledPlayer {
   /// [_reconcile]).
   int servingIndex = -1;
 
+  /// Network URL of the media this player was assigned to open, recorded at
+  /// assignment time. An index alone is NOT identity: a category switch swaps
+  /// the whole list under the pager, so "serving index 0" can silently mean a
+  /// different wallpaper than the one this player has open — reconcile compares
+  /// this URL against the current item to detect that and re-open. Null until
+  /// first assignment.
+  String? openedUrl;
+
   /// Per-item first-frame flag, owned by the native handle (the card holds a
   /// reference via the slot). Reset to false before each new
   /// [FeedVideoPlayer.open] and flips true again when the native side reports
@@ -488,15 +496,20 @@ class VideoPreloadController extends ChangeNotifier
     ];
 
     // 1. Free any player whose current index left the window / is no longer
-    //    live. Freeing = mark idle + pause; the player and its surface are KEPT
-    //    for reassignment (no dispose → no surface churn).
+    //    live — or whose OPEN MEDIA no longer matches the item at its index (a
+    //    category switch replaces the list under the pager, so index 0 in the
+    //    new list can be a different clip than the one this player is showing;
+    //    without the URL check the old category's video kept playing over the
+    //    new category's card). Freeing = mark idle + pause; the player and its
+    //    surface are KEPT for reassignment (no dispose → no surface churn).
     for (final p in _pool_) {
       final idx = p.servingIndex;
       final stillWanted =
           idx >= 0 &&
           idx < _wallpapers.length &&
           _wallpapers[idx].kind == WallpaperKind.live &&
-          wanted.contains(idx);
+          wanted.contains(idx) &&
+          p.openedUrl == _prefetch.urlFor(_wallpapers[idx]);
       if (!stillWanted && idx != -1) {
         p.servingIndex = -1;
         unawaited(p.handle.pause());
@@ -647,6 +660,12 @@ class VideoPreloadController extends ChangeNotifier
     }
 
     pooled.servingIndex = index;
+    // Record the media identity NOW (synchronously with the assignment), so the
+    // next reconcile can tell whether the list changed under this index. The
+    // list may have shrunk while create() awaited; _setupAndOpen re-guards.
+    pooled.openedUrl = index < _wallpapers.length
+        ? _prefetch.urlFor(_wallpapers[index])
+        : null;
     // New media on this player: reset the first-frame flag; the native
     // onRenderedFirstFrame event flips it true again once the new media paints.
     // (open() itself resets the handle's firstFrame notifier too.)
