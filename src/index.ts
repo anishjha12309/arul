@@ -9,8 +9,12 @@
  *   GET  /admin (and /admin/)             — app picker + combined dashboard
  *   POST /admin/{app}/media/upload-url    — presigned PUT to the app's bucket
  *   /admin/pakiza/{wallpapers,ringtones,submissions,config}
- *   /admin/arul/{wallpapers,submissions,config}
+ *   /admin/arul/{wallpapers,ringtones,submissions,config}
  *   /admin/arul/transfer                  — category transfer tool (Arul only)
+ *
+ *   Ringtones use DIFFERENT page factories per app: Pakiza keeps its legacy
+ *   bare page (pages/ringtones.tsx, byte-identical); Arul mounts the
+ *   full-featured pages/ringtones-arul.tsx (covers, batch stem-pairing, bulk).
  *
  *   POST /payments/webhook                — PhonePe S2S dispatcher (NO session
  *     auth; route api.hsrutility.com/payments/webhook*). PhonePe sends both
@@ -35,6 +39,7 @@ import { handleLoginPage, handleLoginPost, handleLogout } from "./pages/login.js
 import { handleDashboard } from "./pages/dashboard.js";
 import { makeWallpapersApp } from "./pages/wallpapers.js";
 import { makeRingtonesApp } from "./pages/ringtones.js";
+import { makeArulRingtonesApp } from "./pages/ringtones-arul.js";
 import { makeSubmissionsApp } from "./pages/submissions.js";
 import { makeConfigApp } from "./pages/config.js";
 import { makeTransferApp } from "./pages/transfer.js";
@@ -69,8 +74,9 @@ admin.route("/pakiza/ringtones", makeRingtonesApp(PAKIZA));
 admin.route("/pakiza/submissions", makeSubmissionsApp(PAKIZA));
 admin.route("/pakiza/config", makeConfigApp(PAKIZA));
 
-// ── Arul (wallpapers + submissions + config + category transfer) ──────────────
+// ── Arul (wallpapers + ringtones + submissions + config + category transfer) ──
 admin.route("/arul/wallpapers", makeWallpapersApp(ARUL));
+admin.route("/arul/ringtones", makeArulRingtonesApp(ARUL));
 admin.route("/arul/submissions", makeSubmissionsApp(ARUL));
 admin.route("/arul/config", makeConfigApp(ARUL));
 admin.route("/arul/transfer", makeTransferApp(ARUL));

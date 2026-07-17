@@ -20,6 +20,7 @@ vi.mock("../src/lib/db.js", () => ({
 }));
 
 import { makeWallpapersApp } from "../src/pages/wallpapers.js";
+import { makeArulRingtonesApp } from "../src/pages/ringtones-arul.js";
 import { PAKIZA, ARUL } from "../src/registry.js";
 
 beforeEach(() => {
@@ -86,6 +87,48 @@ describe("routing isolation", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]!.url).toBe("https://api.hsrutility.com/internal/build-catalog");
     expect(calls[0]!.auth).toBe("Bearer test-pakiza-catalog-secret");
+  });
+
+  it("an /arul/ringtones mutation touches only Arul's DB, bucket and API", async () => {
+    const fetchFn = stubFetch();
+    const rows = [{ audio_key: "ringtones/amman/x.mp3", cover_key: "ringtones/covers/amman/x.jpg" }];
+    const { env, pakizaSql, arulSql, pakizaR2 } = makeEnv({ arulRows: rows, pakizaRows: rows });
+
+    const app = makeArulRingtonesApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/rt-1/publish", { method: "POST" }),
+      env,
+      execCtx,
+    );
+
+    expect(res.status).toBe(302);
+    expect(arulSql.beginCalls).toBe(1);
+    expect(arulSql.capturedArgs.length).toBeGreaterThan(0);
+    expect(pakizaSql.beginCalls).toBe(0);
+    expect(pakizaSql.capturedArgs.length).toBe(0);
+    expect(pakizaR2.calls.get.length + pakizaR2.calls.put.length + pakizaR2.calls.delete.length + pakizaR2.calls.head.length).toBe(0);
+    const calls = fetchCalls(fetchFn);
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.url).toBe("https://arul-api.twilight-smoke-d495.workers.dev/internal/build-catalog");
+    expect(calls[0]!.auth).toBe("Bearer test-arul-catalog-secret");
+  });
+
+  it("an /arul/ringtones delete removes bytes only from Arul's bucket", async () => {
+    stubFetch();
+    const rows = [{ audio_key: "ringtones/amman/gone.mp3", cover_key: "ringtones/covers/amman/gone.jpg" }];
+    const { env, arulR2, pakizaR2 } = makeEnv({ arulRows: rows, pakizaRows: rows });
+
+    const app = makeArulRingtonesApp(ARUL);
+    const res = await app.fetch(
+      new Request("https://hsr-cms.example.com/rt-1/delete", { method: "POST" }),
+      env,
+      execCtx,
+    );
+
+    expect(res.status).toBe(302);
+    expect(arulR2.calls.delete).toContain("ringtones/amman/gone.mp3");
+    expect(arulR2.calls.delete).toContain("ringtones/covers/amman/gone.jpg");
+    expect(pakizaR2.calls.delete.length).toBe(0);
   });
 
   it("a delete on Arul removes bytes only from Arul's bucket", async () => {
