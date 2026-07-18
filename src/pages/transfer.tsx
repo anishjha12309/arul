@@ -60,6 +60,91 @@ async function bindingCopy(r2: R2Bucket, srcKey: string, dstKey: string): Promis
   return true;
 }
 
+/**
+ * TRANSFER_JS — page-local script for the category-transfer Move form. Two jobs:
+ *
+ *  A) Novel-target confirm (F4). The foundation only wires `data-warn-new-category`
+ *     inside UPLOAD_JS's `categoryGuards`, which runs ONLY for `form[data-upload-form]`
+ *     — this form isn't one, so we implement the confirm here. (Slug preview is
+ *     handled globally by UPLOAD_JS's document-level `data-slug-preview` listener,
+ *     so we do NOT re-implement that part.)
+ *
+ *  B) Live confirm text (I3): keep the form's `data-confirm` in step with the
+ *     selection count, warning on big batches.
+ *
+ * ── Chaining the two confirms with MODAL_JS (F4 ordering) ──
+ * The Move form carries `data-confirm` (the batch confirm). MODAL_JS intercepts
+ * `data-confirm` on submit in the CAPTURE phase, and once confirmed stamps
+ * `data-confirmed="1"` and re-submits. We add a SECOND capture-phase submit
+ * handler for the new-category confirm, gated on our own `data-catok` flag. The
+ * two are order-independent — each only ACTS in one state and DEFERS otherwise:
+ *
+ *   submit #1  confirmed unset            → we DEFER (return, no preventDefault);
+ *                                           MODAL_JS runs the batch confirm,
+ *                                           sets data-confirmed=1, resubmits.
+ *   submit #2  confirmed=1, catok unset   → MODAL_JS is inert; WE run the
+ *                                           new-category confirm (if the target
+ *                                           is novel), set data-catok=1, resubmit.
+ *                                           No novel category ⇒ we let it through.
+ *   submit #3  confirmed=1, catok=1       → both inert; the POST goes out, and
+ *                                           bubble-phase BUSY_JS marks the button.
+ *
+ * This script lives in <main>, so it registers BEFORE MODAL_JS (whose scripts sit
+ * at end-of-body) — but the flag gating makes the sequence identical whichever
+ * handler is registered first (MODAL_JS's stopImmediatePropagation only ever
+ * short-circuits a handler that would have no-op'd anyway). When WE act we also
+ * stopImmediatePropagation so BUSY_JS can't disable the button mid-confirm.
+ */
+const TRANSFER_JS = `
+(function(){
+  function slug(s){return (s||'').trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9_-]/g,'');}
+
+  // New-category confirm message, or null when the target already exists.
+  function newCategoryMsg(form){
+    var catIn=form.querySelector('input[data-warn-new-category]');
+    if(!catIn||!catIn.getAttribute('list'))return null;
+    var s=slug(catIn.value); if(!s)return null;
+    var listEl=document.getElementById(catIn.getAttribute('list'));
+    var known=[]; if(listEl)Array.prototype.forEach.call(listEl.querySelectorAll('option'),function(o){known.push(slug(o.value));});
+    if(known.indexOf(s)>=0)return null;
+    return 'Create the NEW category "'+s+'"? It will appear as a new chip in the app.';
+  }
+
+  document.addEventListener('submit',function(e){
+    var f=e.target;
+    if(!f||!f.matches||!f.matches('[data-transfer-form]'))return;
+    if(f.getAttribute('data-confirmed')!=='1')return;  // let MODAL_JS's batch confirm go first
+    if(f.getAttribute('data-catok')==='1')return;       // our check already passed → submit through
+    var msg=newCategoryMsg(f);
+    if(!msg)return;                                      // target exists → nothing to confirm
+    e.preventDefault(); e.stopImmediatePropagation();
+    window.cmsConfirm(msg).then(function(ok){
+      if(!ok){ f.removeAttribute('data-confirmed'); f.removeAttribute('data-catok'); return; }
+      f.setAttribute('data-catok','1');
+      if(f.requestSubmit)f.requestSubmit(); else f.submit();
+    });
+  },true);
+
+  // Keep data-confirm in step with the selection (count + big-batch warning).
+  function updateConfirm(form){
+    var srcEl=form.querySelector('input[name="source"]'); var source=srcEl?srcEl.value:'';
+    var n=0; form.querySelectorAll('input[name="ids"]').forEach(function(b){ if(b.checked)n++; });
+    var msg='Move '+n+' selected wallpaper'+(n===1?'':'s')+' out of "'+source+'"? '
+      +'Media and thumbnails are copied to the new category, then the originals are removed.';
+    if(n>40)msg+=' Large moves copy each file and can take a while \\u2014 keep this tab open until the result page appears.';
+    form.setAttribute('data-confirm',msg);
+  }
+  document.addEventListener('change',function(e){
+    var scope=e.target.closest&&e.target.closest('[data-pickscope]');
+    if(!scope)return;
+    // Defer so SELECT_ALL_JS finishes toggling the row checkboxes before we count.
+    setTimeout(function(){ updateConfirm(scope); },0);
+  });
+  function init(){ document.querySelectorAll('[data-transfer-form]').forEach(updateConfirm); }
+  if(document.readyState!=='loading')init(); else document.addEventListener('DOMContentLoaded',init);
+})();
+`;
+
 export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
   if (!app.hasCategories) {
     throw new Error(`category transfer mounted for an app without categories: ${app.slug}`);
@@ -123,9 +208,11 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
                 ))}
               </select>
             </label>
-            <button type="submit" class="btn sec sm">
-              Load wallpapers
-            </button>
+            <noscript>
+              <button type="submit" class="btn sec sm">
+                Load
+              </button>
+            </noscript>
           </form>
         </div>
 
@@ -140,6 +227,7 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
           <form
             method="post"
             action={base}
+            data-transfer-form
             data-pickscope
             data-confirm={`Move the selected wallpapers out of "${source}"? Media and thumbnails are copied to the new category, then the originals are removed.`}
           >
@@ -153,8 +241,8 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
                 <span class="muted" style="color:var(--muted)" data-selected-count>
                   0 selected
                 </span>
-                <label class="btn sec sm" style="margin:0;cursor:pointer">
-                  <input type="checkbox" data-select-all style="position:absolute;opacity:0;width:0;height:0" />
+                <label class="btn sec sm" style="margin:0;cursor:pointer;gap:8px">
+                  <input type="checkbox" class="rowsel" data-select-all style="margin:0" />
                   Select all ({rows.length})
                 </label>
               </div>
@@ -168,10 +256,16 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
                         src={thumb}
                         alt=""
                         loading="lazy"
+                        {...(r.type === "live"
+                          ? { "data-hovervideo": `${cdn}/${r.full_key}` }
+                          : { "data-hoverzoom": `${cdn}/${r.full_key}` })}
                         onerror={`this.onerror=null;this.outerHTML='<span class="pick-fallback">\\u25b6</span>'`}
                       />
                       {r.type === "live" ? <span class="pick-live">LIVE</span> : null}
-                      <span class="pick-title">{r.title}</span>
+                      <span class="pick-title">
+                        {r.title}
+                        <small>{r.id.slice(0, 8)}</small>
+                      </span>
                       <span class="pick-check">✓</span>
                       <input type="checkbox" name="ids" value={r.id} />
                     </label>
@@ -184,12 +278,21 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
               <div class="microlabel-mono">03 · TARGET</div>
               <div class="row" style="align-items:flex-start">
                 <label class="field" style="max-width:280px;margin-bottom:0">
-                  <input name="target" type="text" required list="transfer-cats" placeholder="Target category…" />
+                  <input
+                    name="target"
+                    type="text"
+                    required
+                    list="transfer-cats"
+                    placeholder="Target category…"
+                    data-warn-new-category
+                    data-slug-preview
+                  />
                   <datalist id="transfer-cats">
                     {targetSuggestions.map((cat) => (
                       <option value={cat} />
                     ))}
                   </datalist>
+                  <span class="hint keyline" data-slug-preview-out data-slug-template="wallpapers/{slug}/…" />
                 </label>
                 <button type="submit" class="btn" data-transfer-go disabled>
                   Move selected wallpapers
@@ -200,6 +303,9 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
               </span>
             </div>
           </form>
+        ) : null}
+        {source && rows.length > 0 ? (
+          <script dangerouslySetInnerHTML={{ __html: TRANSFER_JS }} />
         ) : null}
       </Layout>,
     );
@@ -394,11 +500,15 @@ export function makeTransferApp(app: AppDef): Hono<{ Bindings: Env }> {
                   <td class="coltitle">
                     <strong>{r.title}</strong>
                   </td>
-                  <td class="muted" style="color:var(--muted)">
-                    {r.fromKey}
+                  <td>
+                    <span class="idcode" data-copy={r.fromKey} title="Click to copy">
+                      {r.fromKey}
+                    </span>
                   </td>
-                  <td class="muted" style="color:var(--muted)">
-                    {r.toKey}
+                  <td>
+                    <span class="idcode" data-copy={r.toKey} title="Click to copy">
+                      {r.toKey}
+                    </span>
                   </td>
                   <td>
                     {r.status === "moved" ? (

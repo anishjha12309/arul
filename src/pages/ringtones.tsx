@@ -131,7 +131,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         <Flash ok={c.req.query("ok")} err={c.req.query("err")} />
         {dbError ? <div class="note danger">Could not load ringtones.</div> : null}
 
-        {rows.length === 0 ? (
+        {rows.length === 0 && !dbError ? (
           <div class="empty">
             <span class="emoji">🎵</span>
             No ringtones yet. Create the first one.
@@ -141,7 +141,8 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
               </button>
             </div>
           </div>
-        ) : (
+        ) : null}
+        {rows.length > 0 ? (
           <div data-listview data-page="1">
             <div class="toolbar">
               <div class="searchwrap">
@@ -150,7 +151,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                   ×
                 </button>
               </div>
-              <select data-filter="2" aria-label="Filter by status">
+              <select data-filter="2" data-filter-key="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
@@ -179,7 +180,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr>
+                    <tr data-id={r.id} data-rowedit>
                       <td style="padding:4px 14px">
                         <span class="filemark">♪</span>
                       </td>
@@ -208,6 +209,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                             Edit
                           </button>
                           <form method="post" action={`${base}/${r.id}/publish`}>
+                            <input type="hidden" name="set" value={r.is_published ? "0" : "1"} />
                             <button type="submit" class="btn sec sm">
                               {r.is_published ? "Unpublish" : "Publish"}
                             </button>
@@ -215,7 +217,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                           <form
                             method="post"
                             action={`${base}/${r.id}/delete`}
-                            data-confirm="Delete this ringtone? This removes it from the app."
+                            data-confirm={`Delete "${r.title}"? This removes it from the app.`}
                           >
                             <button type="submit" class="btn danger sm">
                               Delete
@@ -233,7 +235,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
             </div>
             <div class="pager" />
           </div>
-        )}
+        ) : null}
 
         <Modal id="rt-new" title="New ringtone" wide>
           <RingtoneForm mode="new" />
@@ -378,10 +380,18 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
   // ── Publish toggle ──────────────────────────────────────────────────────────
   ringtonesApp.post("/:id/publish", async (c) => {
     const id = c.req.param("id");
+    // Idempotent set (list toggle sends set=0/1); fall back to NOT-toggle when
+    // absent (direct POST / older clients).
+    const form = (await c.req.parseBody()) as Record<string, unknown>;
+    const set = formStr(form, "set");
     const sql = getDb(c.env, app);
     try {
       await sql.begin(async (tx) => {
-        await tx`UPDATE ringtones SET is_published = NOT is_published WHERE id = ${id}`;
+        if (set === "0" || set === "1") {
+          await tx`UPDATE ringtones SET is_published = ${set === "1"} WHERE id = ${id}`;
+        } else {
+          await tx`UPDATE ringtones SET is_published = NOT is_published WHERE id = ${id}`;
+        }
         await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
       });
     } catch (err) {

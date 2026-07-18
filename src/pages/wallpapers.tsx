@@ -60,6 +60,17 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     const r = props.row;
     const isEdit = props.mode === "edit";
     const action = isEdit ? `${base}/${r!.id}` : base;
+    // cdn isn't otherwise in scope inside the form — compute it for the
+    // edit-mode "current media" preview.
+    const cdn = app.cdnBase.replace(/\/$/, "");
+    const previewSrc =
+      isEdit && r
+        ? r.type === "static"
+          ? `${cdn}/${r.full_key}`
+          : app.thumbKeyFor?.(r.full_key)
+            ? `${cdn}/${app.thumbKeyFor?.(r.full_key)}`
+            : null
+        : null;
     return (
       <form
         class="form"
@@ -68,6 +79,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         data-upload-form
         data-kind="wallpaper"
         data-presign={appPath(app, "/media/upload-url")}
+        {...(isEdit ? {} : { "data-dup-source": "wp-existing" })}
       >
         <div class="note danger" data-upload-error style="display:none"></div>
 
@@ -86,12 +98,19 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
               list="wp-cats"
               placeholder="e.g. murugan"
               value={r?.category ?? ""}
+              data-warn-new-category
+              data-slug-preview
             />
             <datalist id="wp-cats">
               {app.knownCategories.map((cat) => (
                 <option value={cat} />
               ))}
             </datalist>
+            <span
+              class="hint keyline"
+              data-slug-preview-out
+              data-slug-template="wallpapers/{slug}/…"
+            ></span>
             <span class="hint">
               Browse axis + R2 key prefix (wallpapers/&lt;category&gt;/…). Free text — a new
               category simply appears as a new feed chip.
@@ -101,6 +120,28 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
 
         <label class="field">
           <span class="lab">{isEdit ? "Replace media (optional)" : "Media file(s)"}</span>
+          {isEdit && r ? (
+            previewSrc ? (
+              <img
+                src={previewSrc}
+                alt=""
+                style="width:96px;aspect-ratio:9/16;object-fit:cover;border-radius:var(--radius-btn);border:1px solid var(--hairline);background:var(--input);display:block;margin:0 0 10px;cursor:pointer"
+                data-lightbox={`${cdn}/${r.full_key}`}
+                data-lightbox-type={r.type === "static" ? "img" : "video"}
+                data-lightbox-title={r.title}
+              />
+            ) : (
+              <span
+                class="filemark"
+                style="width:96px;height:auto;aspect-ratio:9/16;margin:0 0 10px;cursor:pointer;font-size:28px"
+                data-lightbox={`${cdn}/${r.full_key}`}
+                data-lightbox-type="video"
+                data-lightbox-title={r.title}
+              >
+                ▶
+              </span>
+            )
+          ) : null}
           <input
             type="file"
             data-slot="main"
@@ -113,12 +154,31 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
             {isEdit ? "" : " Select several files to create a batch — the title gets numbered per file."}
           </span>
         </label>
+        <div class="filelist" data-file-list></div>
+        <div class="progress" data-upload-progress>
+          <i></i>
+        </div>
         <input type="hidden" name="key_main" value="" />
         <input type="hidden" name="mime_main" value="" />
         <input type="hidden" name="id_main" value="" />
         {isEdit ? null : <input type="hidden" name="items_json" value="" />}
 
         {isEdit ? null : (
+          <label class="check">
+            <input name="titles_from_filenames" type="checkbox" checked />
+            <span>Derive titles from the file names (otherwise "Title 1…N")</span>
+          </label>
+        )}
+
+        {isEdit ? (
+          <>
+            <input type="hidden" name="publish_present" value="1" />
+            <label class="check">
+              <input name="is_published" type="checkbox" checked={!!r?.is_published} />
+              <span>Published (visible in the app feed)</span>
+            </label>
+          </>
+        ) : (
           <label class="check">
             <input name="is_published" type="checkbox" checked />
             <span>Published (visible in the app feed)</span>
@@ -191,6 +251,11 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
           new Set(rows.map((r) => r.category).filter((c): c is string => Boolean(c))),
         ).sort()
       : [];
+    // Dedupe data for the uploader's dup-title guard ("category|lowercased
+    // title"); </ escaped so a hostile title can never close the script tag.
+    const existingJson = JSON.stringify(
+      rows.map((r) => `${r.category ?? ""}|${r.title.toLowerCase()}`),
+    ).replace(/</g, "\\u003c");
     return c.html(
       <Layout title={`Wallpapers · ${app.label}`} active={navKey}>
         <PageHead
@@ -204,7 +269,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         <Flash ok={c.req.query("ok")} err={c.req.query("err")} />
         {dbError ? <div class="note danger">Could not load wallpapers.</div> : null}
 
-        {rows.length === 0 ? (
+        {rows.length === 0 && !dbError ? (
           <div class="empty">
             <span class="emoji">🖼️</span>
             No wallpapers yet. Create the first one.
@@ -214,7 +279,8 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
               </button>
             </div>
           </div>
-        ) : (
+        ) : null}
+        {rows.length > 0 ? (
           <div data-listview data-page="1">
             <div class="toolbar">
               <div class="searchwrap">
@@ -228,7 +294,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                   ×
                 </button>
               </div>
-              <select data-filter="3" aria-label="Filter by type">
+              <select data-filter="3" data-filter-key="type" aria-label="Filter by type">
                 <option value="">All types</option>
                 <option value="static">Static</option>
                 <option value="live">Live</option>
@@ -237,19 +303,31 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                 // Column 4 is the Category cell (see <td class="colcat"> below) —
                 // same generic [data-filter] path LIST_JS already drives for type
                 // (col 3) and status; no parallel filtering logic needed.
-                <select data-filter="4" aria-label="Filter by category">
+                <select
+                  data-filter="4"
+                  data-filter-key="category"
+                  data-filter-exact="1"
+                  aria-label="Filter by category"
+                >
                   <option value="">All categories</option>
                   {categories.map((cat) => (
                     <option value={cat}>{capitalize(cat)}</option>
                   ))}
                 </select>
               ) : null}
-              <select data-filter={app.hasCategories ? "5" : "4"} aria-label="Filter by status">
+              <select
+                data-filter={app.hasCategories ? "5" : "4"}
+                data-filter-key="status"
+                aria-label="Filter by status"
+              >
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
               </select>
               <span class="grow" />
+              <button type="button" class="btn sec sm" data-bulk-select-page>
+                Select page
+              </button>
               <div class="viewtoggle" role="group" aria-label="View">
                 <button type="button" data-view="table" class="on">
                   Table
@@ -266,8 +344,15 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
               </select>
             </div>
             {/* Bulk bar — hidden until a row is selected; buttons stamp bulk_action. */}
-            <form method="post" action={`${base}/bulk`} class="bulkbar" data-bulk-bar>
+            <form
+              method="post"
+              action={`${base}/bulk`}
+              class="bulkbar"
+              data-bulk-bar
+              data-bulk-noun="wallpapers"
+            >
               <span data-bulk-count>0 selected</span>
+              <button type="button" class="btn sec sm" data-bulk-matching hidden></button>
               <input type="hidden" name="ids" value="" />
               <input type="hidden" name="bulk_action" value="" />
               <button type="button" class="btn sec sm" data-bulk-act="publish">
@@ -314,7 +399,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr data-id={r.id}>
+                    <tr data-id={r.id} data-rowedit>
                       <td>
                         <input
                           type="checkbox"
@@ -325,7 +410,20 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                       </td>
                       <td style="padding:4px 14px">
                         {r.type === "static" ? (
-                          <img class="thumb" src={`${cdn}/${r.full_key}`} alt="" loading="lazy" />
+                          <img
+                            class="thumb"
+                            src={`${cdn}/${r.full_key}`}
+                            alt=""
+                            loading="lazy"
+                            onerror={`this.onerror=null;this.outerHTML='<span class="filemark">▦</span>'`}
+                            data-hoverzoom={`${cdn}/${r.full_key}`}
+                            data-lightbox={`${cdn}/${r.full_key}`}
+                            data-lightbox-type="img"
+                            data-lightbox-title={r.title}
+                            data-lightbox-edit-dialog="wp-edit"
+                            data-lightbox-edit-get={`${base}/${r.id}/edit`}
+                            data-lightbox-edit-target="wp-edit-body"
+                          />
                         ) : app.thumbKeyFor?.(r.full_key) ? (
                           <img
                             class="thumb"
@@ -333,9 +431,26 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                             alt=""
                             loading="lazy"
                             onerror={`this.onerror=null;this.outerHTML='<span class="filemark">▶</span>'`}
+                            data-hovervideo={`${cdn}/${r.full_key}`}
+                            data-lightbox={`${cdn}/${r.full_key}`}
+                            data-lightbox-type="video"
+                            data-lightbox-title={r.title}
+                            data-lightbox-edit-dialog="wp-edit"
+                            data-lightbox-edit-get={`${base}/${r.id}/edit`}
+                            data-lightbox-edit-target="wp-edit-body"
                           />
                         ) : (
-                          <span class="filemark">▶</span>
+                          <span
+                            class="filemark"
+                            data-lightbox={`${cdn}/${r.full_key}`}
+                            data-lightbox-type="video"
+                            data-lightbox-title={r.title}
+                            data-lightbox-edit-dialog="wp-edit"
+                            data-lightbox-edit-get={`${base}/${r.id}/edit`}
+                            data-lightbox-edit-target="wp-edit-body"
+                          >
+                            ▶
+                          </span>
                         )}
                       </td>
                       <td class="coltitle">
@@ -359,7 +474,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                       <td>
                         {/* Short id for the eye; hidden full id + R2 key feed the
                             client-side search, so pasting either finds the row. */}
-                        <span class="idcode" title={r.id}>
+                        <span class="idcode" title="Click to copy ID" data-copy={r.id}>
                           {r.id.slice(0, 8)}
                         </span>
                         <span class="keysearch">
@@ -380,6 +495,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                             Edit
                           </button>
                           <form method="post" action={`${base}/${r.id}/publish`}>
+                            <input type="hidden" name="set" value={r.is_published ? "0" : "1"} />
                             <button type="submit" class="btn sec sm">
                               {r.is_published ? "Unpublish" : "Publish"}
                             </button>
@@ -387,7 +503,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                           <form
                             method="post"
                             action={`${base}/${r.id}/delete`}
-                            data-confirm="Delete this wallpaper? This removes it from the app."
+                            data-confirm={`Delete "${r.title}"? This removes it from the app.`}
                           >
                             <button type="submit" class="btn danger sm">
                               Delete
@@ -411,12 +527,16 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                     : app.thumbKeyFor?.(r.full_key)
                       ? `${cdn}/${app.thumbKeyFor?.(r.full_key)}`
                       : null;
-                const hx = {
-                  "data-dialog-target": "wp-edit",
-                  "hx-get": `${base}/${r.id}/edit`,
-                  "hx-target": "#wp-edit-body",
-                  "hx-swap": "innerHTML",
+                // Card media click opens the shared lightbox (Edit lives inside it).
+                const lb = {
+                  "data-lightbox": `${cdn}/${r.full_key}`,
+                  "data-lightbox-type": r.type === "static" ? "img" : "video",
+                  "data-lightbox-title": r.title,
+                  "data-lightbox-edit-dialog": "wp-edit",
+                  "data-lightbox-edit-get": `${base}/${r.id}/edit`,
+                  "data-lightbox-edit-target": "wp-edit-body",
                 };
+                const gfmark = r.type === "static" ? "\\u25a6" : "\\u25b6";
                 return (
                   <div class={`pick gcard${r.is_published ? "" : " draft"}`} data-grid-id={r.id}>
                     {thumbSrc ? (
@@ -425,18 +545,23 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
                         src={thumbSrc}
                         alt=""
                         loading="lazy"
-                        onerror={`this.onerror=null;this.outerHTML='<span class="gfmark">\\u25b6</span>'`}
-                        {...hx}
+                        onerror={`this.onerror=null;this.outerHTML='<span class="gfmark">${gfmark}</span>'`}
+                        {...(r.type === "live" ? { "data-hovervideo": `${cdn}/${r.full_key}` } : {})}
+                        {...lb}
                       />
                     ) : (
-                      <span class="gfmark" {...hx}>
+                      <span class="gfmark" {...lb}>
                         ▶
                       </span>
                     )}
                     {r.type === "live" ? <span class="pick-live">LIVE</span> : null}
                     {r.is_published ? null : <span class="gdraft">draft</span>}
                     <span class="pick-title">
-                      {r.title} · {r.id.slice(0, 8)}
+                      {r.title}
+                      <small>
+                        {app.hasCategories ? `${r.category} · ` : ""}
+                        {r.id.slice(0, 8)}
+                      </small>
                     </span>
                     <input type="checkbox" data-bulk-id={r.id} aria-label="Select" />
                   </div>
@@ -448,8 +573,14 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
             </div>
             <div class="pager" />
           </div>
-        )}
+        ) : null}
 
+        {/* Dedupe source for the uploader's dup-title guard (see WallpaperForm). */}
+        <script
+          type="application/json"
+          id="wp-existing"
+          dangerouslySetInnerHTML={{ __html: existingJson }}
+        />
         {/* Centered modals (create = inline form, edit = HTMX-loaded) */}
         <Modal id="wp-new" title="New wallpaper" wide>
           <WallpaperForm mode="new" />
@@ -527,7 +658,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
       if (!Array.isArray(parsed) || parsed.length === 0) {
         return c.redirect(`${base}/new?err=` + encodeURIComponent("No files to upload"));
       }
-      let items: { key: string; mime: string; id: string }[];
+      let items: { key: string; mime: string; id: string; title?: string }[];
       try {
         items = parsed.map((raw) => {
           const o = raw as Record<string, unknown>;
@@ -535,6 +666,10 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
           const m = typeof o.mime === "string" ? o.mime : "";
           const iid =
             typeof o.id === "string" && /^[0-9a-f-]{36}$/i.test(o.id) ? o.id : crypto.randomUUID();
+          // Optional per-file title (uploader "derive titles from file names"):
+          // trim + cap at 200; empty falls back to the numbering below.
+          const rawTitle = typeof o.title === "string" ? o.title.trim() : "";
+          const itemTitle = rawTitle ? rawTitle.slice(0, 200) : "";
           if (!key) throw new Error("Upload rejected: a file is missing its upload key");
           if (key.includes("..")) {
             throw new Error(
@@ -545,7 +680,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
           if (m !== "video/mp4" && !m.startsWith("image/")) {
             throw new Error(`Upload rejected: unsupported file type ${truncateForMessage(m || "(empty)")}`);
           }
-          return { key, mime: m, id: iid };
+          return { key, mime: m, id: iid, ...(itemTitle ? { title: itemTitle } : {}) };
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Upload data was invalid";
@@ -558,7 +693,7 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
         await sqlB.begin(async (tx) => {
           for (let i = 0; i < items.length; i++) {
             const it = items[i]!;
-            const rowTitle = items.length > 1 ? `${title} ${i + 1}` : title;
+            const rowTitle = it.title ?? (items.length > 1 ? `${title} ${i + 1}` : title);
             const rowType = it.mime === "video/mp4" ? "live" : "static";
             if (app.hasCategories) {
               await tx`
@@ -719,8 +854,9 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
   });
 
   // ── Update ──────────────────────────────────────────────────────────────────
-  // Only title / category / (optionally) the media file are editable. Publish
-  // state and the unused tags/sort fields stay out of the UPDATE (preserved).
+  // Editable: title / category / (optionally) the media file, plus publish state
+  // when the edit form sends publish_present. The unused tags/sort fields stay
+  // out of the UPDATE (preserved).
   wallpapersApp.post("/:id", async (c) => {
     const id = c.req.param("id");
     const form = (await c.req.parseBody()) as Record<string, unknown>;
@@ -741,6 +877,11 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
     const newMime = formStr(form, "mime_main");
     const hasNewMedia = newKey !== "" && newMime !== "";
     const newType = newMime === "video/mp4" ? "live" : "static";
+
+    // Optional publish-state update — the edit form's Published checkbox is sent
+    // only when publish_present is set; applied as its own txn UPDATE below.
+    const publishPresent = formStr(form, "publish_present") !== "";
+    const publishState = parseBool(form.is_published);
 
     const sql = getDb(c.env, app);
     let oldKey: string | null = null;
@@ -773,6 +914,9 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
           } else {
             await tx`UPDATE wallpapers SET title = ${title} WHERE id = ${id}`;
           }
+        }
+        if (publishPresent) {
+          await tx`UPDATE wallpapers SET is_published = ${publishState} WHERE id = ${id}`;
         }
         await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
       });
@@ -809,10 +953,18 @@ export function makeWallpapersApp(app: AppDef): Hono<{ Bindings: Env }> {
   // ── Publish toggle ──────────────────────────────────────────────────────────
   wallpapersApp.post("/:id/publish", async (c) => {
     const id = c.req.param("id");
+    // Idempotent set (list toggle sends set=0/1); fall back to NOT-toggle when
+    // absent (direct POST / older clients).
+    const form = (await c.req.parseBody()) as Record<string, unknown>;
+    const set = formStr(form, "set");
     const sql = getDb(c.env, app);
     try {
       await sql.begin(async (tx) => {
-        await tx`UPDATE wallpapers SET is_published = NOT is_published WHERE id = ${id}`;
+        if (set === "0" || set === "1") {
+          await tx`UPDATE wallpapers SET is_published = ${set === "1"} WHERE id = ${id}`;
+        } else {
+          await tx`UPDATE wallpapers SET is_published = NOT is_published WHERE id = ${id}`;
+        }
         await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
       });
     } catch (err) {

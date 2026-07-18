@@ -31,9 +31,11 @@
 
 import { Hono } from "hono";
 import { ADMIN_BASE, type Env } from "./env.js";
-import { PAKIZA, ARUL } from "./registry.js";
+import { PAKIZA, ARUL, APPS } from "./registry.js";
 import { requireAdmin } from "./auth.js";
+import { getDb } from "./lib/db.js";
 import { makeUploadUrlHandler } from "./media.js";
+import { HTMX_MIN_JS_B64 } from "./vendor/htmx.js";
 import { handlePaymentsWebhook } from "./payments-dispatch.js";
 import { handleLoginPage, handleLoginPost, handleLogout } from "./pages/login.js";
 import { handleDashboard } from "./pages/dashboard.js";
@@ -47,13 +49,30 @@ import { makeTransferApp } from "./pages/transfer.js";
 // ── Admin sub-app: EVERY CMS page lives under /admin ──────────────────────────
 const admin = new Hono<{ Bindings: Env }>().basePath(ADMIN_BASE);
 
-// Guard: protect /admin/* except the login/logout endpoints. c.req.path is the
-// FULL request path here (basePath does not strip it), hence the prefix.
+// Guard: protect /admin/* except the login/logout endpoints and the public,
+// immutable static assets. c.req.path is the FULL request path here (basePath
+// does not strip it), hence the prefix.
 admin.use("/*", async (c, next) => {
   const p = c.req.path;
-  if (p === `${ADMIN_BASE}/login` || p === `${ADMIN_BASE}/logout`) return next();
+  if (
+    p === `${ADMIN_BASE}/login` ||
+    p === `${ADMIN_BASE}/logout` ||
+    p.startsWith(`${ADMIN_BASE}/assets/`)
+  ) {
+    return next();
+  }
   return requireAdmin(c, next);
 });
+
+// ── Static assets (public, immutable, cache-forever) ──────────────────────────
+// Self-hosted htmx so the CMS never depends on unpkg (CSP / offline / privacy).
+const HTMX_MIN_JS_BYTES = Uint8Array.from(atob(HTMX_MIN_JS_B64), (ch) => ch.charCodeAt(0));
+admin.get("/assets/htmx.min.js", (c) =>
+  c.body(HTMX_MIN_JS_BYTES, 200, {
+    "content-type": "text/javascript; charset=utf-8",
+    "cache-control": "public, max-age=31536000, immutable",
+  }),
+);
 
 // ── Login / logout ────────────────────────────────────────────────────────────
 admin.get("/login", handleLoginPage);
@@ -63,6 +82,31 @@ admin.post("/logout", handleLogout);
 // ── Combined dashboard (GET /admin — the root app's strict:false also routes
 //    GET /admin/ here) ─────────────────────────────────────────────────────────
 admin.get("/", handleDashboard);
+
+// ── Pending-submissions counts (sidebar nav dots; behind auth) ────────────────
+// One number per app, from ITS OWN DB via the registry; a failure in one app's
+// DB yields null for that app and never blanks the other's count.
+admin.get("/api/pending", async (c) => {
+  const out: Record<string, number | null> = {};
+  await Promise.all(
+    APPS.map(async (app) => {
+      const sql = getDb(c.env, app);
+      try {
+        const rows = (await sql`
+          SELECT count(*) AS n FROM content_submissions WHERE status='pending'
+        `) as unknown as { n: number | string | null }[];
+        const n = rows[0]?.n;
+        out[app.slug] = n == null ? 0 : Number(n);
+      } catch (err) {
+        console.error(`[cms/api/pending] ${app.slug} DB error:`, err);
+        out[app.slug] = null;
+      } finally {
+        c.executionCtx.waitUntil(sql.end());
+      }
+    }),
+  );
+  return c.json(out);
+});
 
 // ── Per-app media presign (used by the authoring forms' uploader) ─────────────
 admin.post("/pakiza/media/upload-url", makeUploadUrlHandler(PAKIZA));

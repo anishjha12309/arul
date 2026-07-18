@@ -47,7 +47,9 @@ function extOf(key: string): string {
 }
 
 // ── Media preview (shared) ──────────────────────────────────────────────────
-const Preview: FC<{ kind: string; ext: string; url: string }> = (props) => {
+// Media is click-to-enlarge via the shared lightbox (data-lightbox*, see
+// PREVIEW_JS). Audio needs no lightbox — it plays inline with controls.
+const Preview: FC<{ kind: string; ext: string; url: string; title: string }> = (props) => {
   if (props.kind === "ringtone" || props.ext === "mp3" || props.ext === "m4a" || props.ext === "aac") {
     return <audio controls src={props.url} />;
   }
@@ -72,13 +74,132 @@ const Preview: FC<{ kind: string; ext: string; url: string }> = (props) => {
       "Re-encode to 1024×1824 before approving.';}}";
     return (
       <>
-        <video controls src={props.url} onloadedmetadata={dimCheck} />
+        <video
+          controls
+          src={props.url}
+          onloadedmetadata={dimCheck}
+          data-lightbox={props.url}
+          data-lightbox-type="video"
+          data-lightbox-title={props.title}
+        />
         <div class="note danger dim-warn" style="display:none;margin-top:10px"></div>
       </>
     );
   }
-  return <img src={props.url} alt="" />;
+  return (
+    <img
+      src={props.url}
+      alt=""
+      data-lightbox={props.url}
+      data-lightbox-type="img"
+      data-lightbox-title={props.title}
+    />
+  );
 };
+
+// ── List thumbnail cell (44px) ───────────────────────────────────────────────
+// mp4 → ▶ mark (no <img>: it would 404 as a poster); audio → ♪ mark; otherwise
+// a lazy <img> that falls back to a ▦ mark on load error. Every mark/thumb is
+// click-to-enlarge via the shared lightbox when a signed URL exists.
+const ThumbCell: FC<{ url: string; ext: string; title: string }> = (props) => {
+  const isVideo = props.ext === "mp4";
+  const isAudio = props.ext === "mp3" || props.ext === "m4a" || props.ext === "aac";
+  const lb = props.url
+    ? {
+        "data-lightbox": props.url,
+        "data-lightbox-type": isVideo ? "video" : isAudio ? "audio" : "img",
+        "data-lightbox-title": props.title,
+      }
+    : {};
+  if (isVideo) {
+    return (
+      <span class="filemark" {...lb}>
+        ▶
+      </span>
+    );
+  }
+  if (isAudio) {
+    return (
+      <span class="filemark" {...lb}>
+        ♪
+      </span>
+    );
+  }
+  return (
+    <img
+      class="thumb"
+      src={props.url}
+      alt=""
+      loading="lazy"
+      onerror={`this.onerror=null;this.outerHTML='<span class="filemark">▦</span>'`}
+      {...lb}
+    />
+  );
+};
+
+/**
+ * SUB_JS (page-local): submissions-page keyboard moderation + the approve
+ * form's novel-category confirm. The foundation's data-warn-new-category guard
+ * is scoped to form[data-upload-form] (see ui.tsx UPLOAD_JS categoryGuards),
+ * and the approve form is a plain POST form, so the "create a new category?"
+ * confirm is re-implemented here. The slug-preview under the category input is
+ * wired GLOBALLY by UPLOAD_JS, so it needs no page-local code. All listeners are
+ * delegated off document because the approve/reject forms are swapped into the
+ * modal by HTMX. Same slug rules + confirm text as the foundation.
+ */
+const SUB_JS = `
+(function(){
+  function slug(s){return (s||'').trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9_-]/g,'');}
+  function dlgOpen(id){ var d=document.getElementById(id); return !!(d&&d.open); }
+  function typing(t){ return !!(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable)); }
+
+  // ── Approve form: confirm a genuinely NEW category before publishing. ──
+  document.addEventListener('submit',function(e){
+    var f=e.target;
+    if(!f||!f.id||f.id.indexOf('sub-approve-')!==0)return;
+    if(f.getAttribute('data-cat-confirmed')==='1')return;
+    var catIn=f.querySelector('input[data-warn-new-category]');
+    if(!catIn||!catIn.getAttribute('list'))return;
+    var s=slug(catIn.value); if(!s)return;
+    var listEl=document.getElementById(catIn.getAttribute('list'));
+    var known=[]; if(listEl)Array.prototype.forEach.call(listEl.querySelectorAll('option'),function(o){known.push(slug(o.value));});
+    if(known.indexOf(s)>=0)return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    window.cmsConfirm('Create the NEW category "'+s+'"? It will appear as a new chip in the app.').then(function(ok){
+      if(!ok)return;
+      f.setAttribute('data-cat-confirmed','1');
+      if(f.requestSubmit)f.requestSubmit(); else f.submit();
+    });
+  },true);
+
+  // ── Keyboard moderation. ──
+  document.addEventListener('keydown',function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    var k=e.key;
+    // A layered confirm / lightbox owns the keyboard while open.
+    if(dlgOpen('confirm-dlg')||dlgOpen('media-lightbox'))return;
+    if(dlgOpen('sub-review')){
+      if(typing(e.target))return;
+      var dlg=document.getElementById('sub-review');
+      if(k==='a'||k==='A'){ var af=dlg.querySelector('form[id^="sub-approve-"]'); if(af){ e.preventDefault(); if(af.requestSubmit)af.requestSubmit(); else af.submit(); } }
+      else if(k==='r'||k==='R'){ var rf=dlg.querySelector('form[id^="sub-reject-"]'); if(rf){ e.preventDefault(); if(rf.requestSubmit)rf.requestSubmit(); else rf.submit(); } }
+      return;
+    }
+    if(typing(e.target))return;
+    if(k!=='j'&&k!=='J'&&k!=='k'&&k!=='K')return;
+    var v=document.querySelector('[data-listview]'); if(!v)return;
+    var btns=Array.prototype.slice.call(v.querySelectorAll('tbody tr'))
+      .filter(function(r){return !r.classList.contains('filtered-out')&&!r.classList.contains('paged-out');})
+      .map(function(r){return r.querySelector('.rowact button');})
+      .filter(Boolean);
+    if(!btns.length)return;
+    e.preventDefault();
+    var idx=btns.indexOf(document.activeElement);
+    var next=(k==='j'||k==='J')?(idx<0?0:Math.min(idx+1,btns.length-1)):(idx<0?btns.length-1:Math.max(idx-1,0));
+    btns[next].focus();
+  });
+})();
+`;
 
 export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
   const submissionsApp = new Hono<{ Bindings: Env }>();
@@ -93,23 +214,34 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
     const isPending = row.status === "pending";
     const approveFormId = `sub-approve-${row.id}`;
     const rejectFormId = `sub-reject-${row.id}`;
+    // Audio has no lightbox; a missing signed URL has nothing to enlarge.
+    const canEnlarge =
+      !!signedUrl && !(row.kind === "ringtone" || ext === "mp3" || ext === "m4a" || ext === "aac");
+    const previewTitle = row.title ?? "(untitled)";
     return (
       <div>
         {props.err ? <div class="note danger">{props.err}</div> : null}
         <div style="display:flex;gap:20px;flex-wrap:wrap">
-          <div
-            class="preview-media"
-            style="width:180px;flex:0 0 auto;aspect-ratio:9/16;border-radius:10px;overflow:hidden;
-              background:var(--input);border:1px solid var(--hairline);position:relative"
-          >
-            {signedUrl ? (
-              <Preview kind={row.kind} ext={ext} url={signedUrl} />
-            ) : (
-              <div class="note warn" style="margin:8px">
-                No preview URL.
-              </div>
-            )}
-            {ext === "mp4" ? <span class="pick-live">LIVE</span> : null}
+          <div style="flex:0 0 auto;display:flex;flex-direction:column;gap:6px">
+            <div
+              class="preview-media"
+              style="width:180px;aspect-ratio:9/16;border-radius:10px;overflow:hidden;
+                background:var(--input);border:1px solid var(--hairline);position:relative"
+            >
+              {signedUrl ? (
+                <Preview kind={row.kind} ext={ext} url={signedUrl} title={previewTitle} />
+              ) : (
+                <div class="note warn" style="margin:8px">
+                  No preview URL.
+                </div>
+              )}
+              {ext === "mp4" ? <span class="pick-live">LIVE</span> : null}
+            </div>
+            {canEnlarge ? (
+              <span class="hint" style="color:var(--muted);font-size:12.5px;text-align:center">
+                Click to enlarge
+              </span>
+            ) : null}
           </div>
           <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:14px">
             <div class="muted" style="font-size:13px;color:var(--muted)">
@@ -132,10 +264,30 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
                     <input name="title" type="text" value={row.title ?? ""} required />
                   </label>
                   {app.hasCategories ? (
-                    <label class="field" style="margin-bottom:0">
-                      <span class="lab">Category override</span>
-                      <input name="category" type="text" value={row.category ?? ""} required />
-                    </label>
+                    <>
+                      <label class="field" style="margin-bottom:0">
+                        <span class="lab">Category override</span>
+                        <input
+                          name="category"
+                          type="text"
+                          value={row.category ?? ""}
+                          required
+                          list="sub-cats"
+                          data-warn-new-category
+                          data-slug-preview
+                        />
+                        <span
+                          class="hint keyline"
+                          data-slug-preview-out
+                          data-slug-template="wallpapers/{slug}/…"
+                        />
+                      </label>
+                      <datalist id="sub-cats">
+                        {app.knownCategories.map((cat) => (
+                          <option value={cat} />
+                        ))}
+                      </datalist>
+                    </>
                   ) : null}
                 </form>
                 <form id={rejectFormId} method="post" action={`${base}/${row.id}/reject`}>
@@ -143,7 +295,12 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
                     <span class="lab" style="color:var(--muted)">
                       Rejection reason (optional)
                     </span>
-                    <input name="reason" type="text" placeholder="e.g. low resolution" />
+                    <input
+                      name="reason"
+                      type="text"
+                      placeholder="e.g. low resolution"
+                      maxlength={200}
+                    />
                   </label>
                 </form>
                 <div class="row" style="justify-content:flex-end;margin-top:auto">
@@ -169,6 +326,7 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
 
     const sql = getDb(c.env, app);
     let rows: SubRow[] = [];
+    const counts: Record<string, number> = {};
     let dbError = false;
     try {
       rows = (await sql`
@@ -180,9 +338,35 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
     } catch (err) {
       console.error(`[cms/${app.slug}/submissions] list error:`, err);
       dbError = true;
+    }
+    // Per-status counts for the tab labels — sourced defensively (a missing
+    // status just reads as 0 below).
+    try {
+      const countRows = (await sql`
+        SELECT status, count(*) AS n FROM content_submissions GROUP BY status
+      `) as unknown as { status: string; n: number | string }[];
+      for (const cr of countRows) {
+        if (cr && typeof cr.status === "string") counts[cr.status] = Number(cr.n) || 0;
+      }
+    } catch (err) {
+      console.error(`[cms/${app.slug}/submissions] counts error:`, err);
     } finally {
       c.executionCtx.waitUntil(sql.end());
     }
+
+    // Presign a preview URL per row for the thumbnail column (best-effort — a
+    // failed presign just renders the fallback mark). Longer TTL so previews
+    // survive slow moderation sessions.
+    const signed = await Promise.all(
+      rows.map(async (r) => {
+        try {
+          return await presignGet(c.env, app.bucketName, r.file_key, 1800);
+        } catch (err) {
+          console.error(`[cms/${app.slug}/submissions] list presign error:`, err);
+          return "";
+        }
+      }),
+    );
 
     return c.html(
       <Layout title={`Submissions · ${app.label}`} active={navKey}>
@@ -192,9 +376,12 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
         <div class="tabs">
           {STATUSES.map((s) => (
             <a class={s === active ? "on" : ""} href={`${base}?status=${s}`}>
-              {s}
+              {s} ({counts[s] ?? 0})
             </a>
           ))}
+        </div>
+        <div class="hint" style="margin:-10px 0 14px;color:var(--faint)">
+          J/K navigate · Enter review · A approve · R reject (in review)
         </div>
 
         {dbError ? <div class="note danger">Could not load submissions.</div> : null}
@@ -223,6 +410,7 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
               <table>
                 <thead>
                   <tr>
+                    <th></th>
                     <th class="sortable" data-type="text">
                       Kind <span class="arrow" />
                     </th>
@@ -237,8 +425,15 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.map((r, i) => (
                     <tr>
+                      <td style="padding:4px 14px">
+                        <ThumbCell
+                          url={signed[i] ?? ""}
+                          ext={extOf(r.file_key)}
+                          title={r.title ?? "(untitled)"}
+                        />
+                      </td>
                       <td>{r.kind}</td>
                       <td class="coltitle">
                         <strong>{r.title ?? "(untitled)"}</strong>
@@ -280,6 +475,7 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
             <div class="modal-loading">Loading…</div>
           </div>
         </Modal>
+        <script dangerouslySetInnerHTML={{ __html: SUB_JS }} />
       </Layout>,
     );
   });
@@ -310,7 +506,7 @@ export function makeSubmissionsApp(app: AppDef): Hono<{ Bindings: Env }> {
     const ext = extOf(row.file_key);
     let signedUrl = "";
     try {
-      signedUrl = await presignGet(c.env, app.bucketName, row.file_key, 300);
+      signedUrl = await presignGet(c.env, app.bucketName, row.file_key, 1800);
     } catch (err) {
       console.error(`[cms/${app.slug}/submissions] presign error:`, err);
     }
