@@ -99,7 +99,16 @@ const RT_CSS = `
  * confirm copy ("wallpapers") never fires here; BULK_JS still drives checkbox
  * sync, the pill's count/ids and the table↔grid toggle.
  *
- * The stem-pairing rules mirror src/lib/ringtone-batch.ts (the tested form).
+ * Foundation contracts consumed here (ui.tsx): window.cmsConfirm replaces every
+ * native confirm(); the XHR PUTs stash the in-flight request under form._xhr +
+ * form.dataset.aborted and mark form[data-busy-upload] while running, so the
+ * shared dialog-close guard's window.cmsAbortUpload(form) aborts cleanly; the
+ * slug-preview listener is global so we only supply the attributes, but the
+ * novel-category confirm is scoped to data-upload-form upstream, so it is
+ * re-implemented locally (novelCategoryGuard) with the same slug rules.
+ *
+ * The stem-pairing rules mirror src/lib/ringtone-batch.ts (the tested form) and
+ * live in computePairs — one source of truth for the live pair list and submit.
  */
 const RT_JS = `
 (function(){
@@ -111,7 +120,7 @@ const RT_JS = `
   function pretty(s){
     return s.replace(/[-_]+/g,' ').split(' ').filter(function(w){return w.length;})
       .map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');}
-  function slugify(s){return (s||'').trim().toLowerCase().split(' ').join('-').replace(/[^a-z0-9_-]/g,'');}
+  function slugify(s){return (s||'').trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9_-]/g,'');}
   function existing(){try{var el=document.getElementById('rt-existing');
     return el?JSON.parse(el.textContent||'[]'):[];}catch(e){return [];}}
   function isDup(cat,title){return existing().indexOf(cat+'|'+(title||'').trim().toLowerCase())>=0;}
@@ -139,16 +148,60 @@ const RT_JS = `
       URL.revokeObjectURL(u);res(w);};
     im.onerror=function(){URL.revokeObjectURL(u);res(f.name+': could not be read as an image');};
     im.src=u;});}
-  async function presignPut(form,kind,f,ct){
+  // ── Upload progress + abort ── mirror ui.tsx UPLOAD_JS conventions EXACTLY:
+  //    the in-flight XHR is stashed at form._xhr and the cancel flag at
+  //    form.dataset.aborted, so the shared dialog-close guard's
+  //    window.cmsAbortUpload(form) (called on form[data-busy-upload]) aborts us.
+  function aborted(form){return form.dataset.aborted==='1';}
+  function progressEls(form){var p=form.querySelector('[data-upload-progress]');return p?{box:p,bar:p.querySelector('i')}:null;}
+  function hideProgress(form){var pe=progressEls(form);if(pe){pe.box.classList.remove('on');if(pe.bar)pe.bar.style.width='0%';}}
+  function makeCtx(form,total){
+    var done=0,pe=progressEls(form);
+    if(pe){pe.box.classList.add('on');if(pe.bar)pe.bar.style.width='0%';}
+    function render(cur){if(pe&&pe.bar){var pct=total>0?Math.min(100,Math.round((done+(cur||0))/total*100)):0;pe.bar.style.width=pct+'%';}}
+    return {setLoaded:function(l){render(l);},addDone:function(s){done+=s;render(0);},finish:function(){if(pe&&pe.bar)pe.bar.style.width='100%';}};
+  }
+  function putXHR(form,url,ct,body,onprog){
+    return new Promise(function(resolve,reject){
+      var xhr=new XMLHttpRequest();form._xhr=xhr;
+      xhr.open('PUT',url);xhr.setRequestHeader('content-type',ct);
+      if(xhr.upload&&onprog)xhr.upload.onprogress=function(ev){if(ev.lengthComputable)onprog(ev.loaded);};
+      xhr.onload=function(){form._xhr=null;if(xhr.status>=200&&xhr.status<300)resolve();else reject(new Error('R2 upload failed ('+xhr.status+')'));};
+      xhr.onerror=function(){form._xhr=null;reject(new Error('R2 upload failed (network)'));};
+      xhr.onabort=function(){form._xhr=null;reject(new Error('__aborted__'));};
+      xhr.send(body);
+    });
+  }
+  async function presignPut(form,kind,f,ct,ctx){
+    if(aborted(form))throw new Error('__aborted__');
     var catEl=form.querySelector('[name="category"]');var cat=catEl?catEl.value:'';
     var pres=await fetch(form.getAttribute('data-presign'),{method:'POST',
       headers:{'content-type':'application/json'},
       body:JSON.stringify({kind:kind,slot:kind,contentType:ct,size:f.size,category:cat})});
     var pj=await pres.json().catch(function(){return {};});
     if(!pres.ok)throw new Error(f.name+': '+((pj.error&&pj.error.message)||('upload-url failed ('+pres.status+')')));
-    var put=await fetch(pj.uploadUrl,{method:'PUT',headers:{'content-type':ct},body:f});
-    if(!put.ok)throw new Error(f.name+': R2 upload failed ('+put.status+')');
+    if(aborted(form))throw new Error('__aborted__');
+    try{
+      await putXHR(form,pj.uploadUrl,ct,f,function(loaded){if(ctx)ctx.setLoaded(loaded);});
+    }catch(err){
+      if(err&&err.message==='__aborted__')throw err;
+      throw new Error(f.name+': '+err.message);
+    }
+    if(ctx)ctx.addDone(f.size);
     return pj;
+  }
+  // Novel-category confirm — UPLOAD_JS only runs this for data-upload-form, so
+  // re-implement it here with the SAME slug rules + datalist lookup.
+  async function novelCategoryGuard(form){
+    var catIn=form.querySelector('input[data-warn-new-category]');
+    if(!catIn||!catIn.getAttribute('list'))return true;
+    var listEl=document.getElementById(catIn.getAttribute('list'));
+    var s=slugify(catIn.value);
+    if(!s)return true;
+    var known=[];
+    if(listEl)Array.prototype.forEach.call(listEl.querySelectorAll('option'),function(o){known.push(slugify(o.value));});
+    if(known.indexOf(s)>=0)return true;
+    return await window.cmsConfirm('Create the NEW category "'+s+'"? It will appear as a new chip in the app.');
   }
   function busy(form,on,label){var btn=form.querySelector('[type=submit]');
     if(btn){btn.disabled=on;btn.classList.toggle('busy',on);if(label)btn.textContent=label;}}
@@ -156,6 +209,8 @@ const RT_JS = `
   // ── Single create / edit ──
   async function runSingle(form){
     clearNotes(form);
+    form.dataset.aborted='';
+    form.setAttribute('data-busy-upload','1');
     var status=form.querySelector('[data-upload-status]');
     var isNew=form.getAttribute('data-mode')==='new';
     var aIn=form.querySelector('input[type=file][data-slot="audio"]');
@@ -172,10 +227,23 @@ const RT_JS = `
     }
     if(cf&&(cf.type||infer(cf.name))!=='image/jpeg')
       throw new Error(cf.name+': covers must be JPEG (512\\u00d7512)');
+    // Category + dedupe confirms run BEFORE any upload (novel category first).
+    if(!(await novelCategoryGuard(form)))return false;
     var titleEl=form.querySelector('[name="title"]');var catEl=form.querySelector('[name="category"]');
-    if(isNew&&titleEl&&catEl&&isDup(slugify(catEl.value),titleEl.value)){
-      if(!confirm('A ringtone titled "'+titleEl.value+'" already exists in this category. Create it anyway?'))return false;
+    if(titleEl&&catEl){
+      var newTitle=titleEl.value;var newCatSlug=slugify(catEl.value);
+      if(isNew){
+        if(isDup(newCatSlug,newTitle)&&!(await window.cmsConfirm('A ringtone titled "'+newTitle+'" already exists in this category. Create it anyway?')))return false;
+      }else{
+        // Edit dup check (G5): only warn when title/category actually changed —
+        // the row itself lives in #rt-existing, so an unchanged edit always "collides".
+        var origTitle=form.getAttribute('data-orig-title')||'';
+        var origCat=form.getAttribute('data-orig-category')||'';
+        var changed=(newTitle.trim().toLowerCase()!==origTitle.trim().toLowerCase())||(newCatSlug!==slugify(origCat));
+        if(changed&&isDup(newCatSlug,newTitle)&&!(await window.cmsConfirm('A ringtone titled "'+newTitle+'" already exists in this category. Save anyway?')))return false;
+      }
     }
+    if(aborted(form))throw new Error('__aborted__');
     busy(form,true,'Uploading\\u2026');
     var warns=[];
     if(af){
@@ -187,35 +255,29 @@ const RT_JS = `
     }
     if(cf){var cw=await probeCoverWarn(cf);if(cw)warns.push(cw);}
     showWarn(form,warns);
+    if(aborted(form))throw new Error('__aborted__');
+    var ctx=makeCtx(form,(af?af.size:0)+(cf?cf.size:0));
     if(af){
       if(status)status.textContent='Uploading audio\\u2026 ('+Math.round(af.size/1024)+' KB)';
-      var ar=await presignPut(form,'ringtone',af,act);
+      var ar=await presignPut(form,'ringtone',af,act,ctx);
       setV(form,'key_audio',ar.key);setV(form,'mime_audio',act);setV(form,'id_audio',ar.id||'');
     }
     if(cf){
       if(status)status.textContent='Uploading cover\\u2026';
-      var cr=await presignPut(form,'ringtone_cover',cf,'image/jpeg');
+      var cr=await presignPut(form,'ringtone_cover',cf,'image/jpeg',ctx);
       setV(form,'key_cover',cr.key);setV(form,'mime_cover','image/jpeg');
     }
+    ctx.finish();
     if(status)status.textContent='Saving\\u2026';
     return true;
   }
 
   // ── Batch: N audio + N covers paired by filename stem ──
-  async function runBatch(form){
-    clearNotes(form);
-    var status=form.querySelector('[data-upload-status]');
-    var aIn=form.querySelector('input[type=file][data-slot="batch-audio"]');
-    var cIn=form.querySelector('input[type=file][data-slot="batch-cover"]');
-    var audios=(aIn&&aIn.files)?Array.prototype.slice.call(aIn.files):[];
-    var covers=(cIn&&cIn.files)?Array.prototype.slice.call(cIn.files):[];
-    if(!audios.length)throw new Error('Select at least one audio file (MP3/M4A/AAC)');
-    if(!covers.length)throw new Error('Select the matching cover images \\u2014 one 512\\u00d7512 JPG per audio file, same filename stem');
-    var catEl=form.querySelector('[name="category"]');
-    var cat=slugify(catEl?catEl.value:'');
+  // Pure pairing (mirrors src/lib/ringtone-batch.ts pairByStem) — the ONE source
+  // of truth for both the live pair list and the submit-time upload loop.
+  function computePairs(audios,covers,cat){
     var errs=[];var pairs=[];
-    // pairing — mirrors src/lib/ringtone-batch.ts pairByStem
-    var coverByStem={};var badCover={};
+    var coverByStem={};var badCover={};var usedCover={};
     covers.forEach(function(f){
       if((f.type||infer(f.name))!=='image/jpeg'){errs.push(f.name+': covers must be JPEG (.jpg) \\u2014 512\\u00d7512');return;}
       var s=stem(f.name).toLowerCase();
@@ -234,28 +296,89 @@ const RT_JS = `
       if(!cv){errs.push(f.name+': no matching cover image (expected '+stem(f.name)+'.jpg)');return;}
       var title=pretty(stem(f.name));
       if(isDup(cat,title)){errs.push(f.name+': "'+title+'" already exists in this category \\u2014 skipped');return;}
-      cv._used=1;
+      usedCover[s]=1;
       pairs.push({a:f,c:cv,ct:ct,title:title});});
     covers.forEach(function(f){
       var s=stem(f.name).toLowerCase();
-      if(!f._used&&!seenAudio[s]&&coverByStem[s]===f)errs.push(f.name+': no matching audio file');});
+      if(!usedCover[s]&&!seenAudio[s]&&coverByStem[s]===f)errs.push(f.name+': no matching audio file');});
+    return {pairs:pairs,errs:errs};
+  }
+  function fmtSize(b){return b>=1048576?((b/1048576).toFixed(1)+' MB'):(Math.round(b/1024)+' KB');}
+  // Find the skip reason for a file from the errs list (strip the leading filename).
+  function reasonFor(errs,name){
+    for(var i=0;i<errs.length;i++){
+      var e=errs[i];
+      if(e.indexOf(name)===0){var rest=e.slice(name.length).replace(/^:\\s*/,'').replace(/^\\s+/,'');return rest||e;}
+    }
+    return 'skipped';
+  }
+  function addPairRow(box,name,size,ok,text){
+    var row=document.createElement('div');row.className='fl-row';
+    var nm=document.createElement('span');nm.className='fl-name';nm.textContent=name;
+    var sz=document.createElement('span');sz.className='fl-size';sz.textContent=size;
+    var st=document.createElement('span');st.className='fl-stat '+(ok?'ok':'warn');st.textContent=text;
+    row.appendChild(nm);row.appendChild(sz);row.appendChild(st);box.appendChild(row);
+  }
+  // Render one row per audio (✓ paired / ⚠ reason) + rows for unmatched covers.
+  function renderPairs(form){
+    var box=form.querySelector('[data-pair-list]');if(!box)return;
+    var aIn=form.querySelector('input[type=file][data-slot="batch-audio"]');
+    var cIn=form.querySelector('input[type=file][data-slot="batch-cover"]');
+    var audios=(aIn&&aIn.files)?Array.prototype.slice.call(aIn.files):[];
+    var covers=(cIn&&cIn.files)?Array.prototype.slice.call(cIn.files):[];
+    box.innerHTML='';
+    if(!audios.length&&!covers.length)return;
+    var catEl=form.querySelector('[name="category"]');
+    var res=computePairs(audios,covers,slugify(catEl?catEl.value:''));
+    audios.forEach(function(f){
+      var paired=false;
+      for(var i=0;i<res.pairs.length;i++){if(res.pairs[i].a===f){paired=true;break;}}
+      addPairRow(box,stem(f.name),fmtSize(f.size),paired,paired?'\\u2713 paired':('\\u26a0 '+reasonFor(res.errs,f.name)));
+    });
+    covers.forEach(function(f){
+      var used=false;
+      for(var i=0;i<res.pairs.length;i++){if(res.pairs[i].c===f){used=true;break;}}
+      if(!used)addPairRow(box,stem(f.name)+'.jpg',fmtSize(f.size),false,'\\u26a0 '+reasonFor(res.errs,f.name));
+    });
+  }
+  async function runBatch(form){
+    clearNotes(form);
+    form.dataset.aborted='';
+    form.setAttribute('data-busy-upload','1');
+    var status=form.querySelector('[data-upload-status]');
+    var aIn=form.querySelector('input[type=file][data-slot="batch-audio"]');
+    var cIn=form.querySelector('input[type=file][data-slot="batch-cover"]');
+    var audios=(aIn&&aIn.files)?Array.prototype.slice.call(aIn.files):[];
+    var covers=(cIn&&cIn.files)?Array.prototype.slice.call(cIn.files):[];
+    if(!audios.length)throw new Error('Select at least one audio file (MP3/M4A/AAC)');
+    if(!covers.length)throw new Error('Select the matching cover images \\u2014 one 512\\u00d7512 JPG per audio file, same filename stem');
+    var catEl=form.querySelector('[name="category"]');
+    var cat=slugify(catEl?catEl.value:'');
+    var res=computePairs(audios,covers,cat);
+    var errs=res.errs;var pairs=res.pairs;
     if(errs.length)showErr(form,errs.join('\\n'));
     if(!pairs.length)throw new Error('No valid audio + cover pairs \\u2014 fix the files listed above');
-    if(errs.length&&!confirm(errs.length+' file(s) will be skipped:\\n\\n'+errs.join('\\n')+'\\n\\nContinue with '+pairs.length+' ringtone(s)?'))return false;
+    if(!(await novelCategoryGuard(form)))return false;
+    if(errs.length&&!(await window.cmsConfirm(errs.length+' file(s) will be skipped:\\n\\n'+errs.join('\\n')+'\\n\\nContinue with '+pairs.length+' ringtone(s)?')))return false;
+    if(aborted(form))throw new Error('__aborted__');
     busy(form,true,'Uploading\\u2026');
     var items=[];var warns=[];
+    var total=0;for(var t=0;t<pairs.length;t++){total+=pairs[t].a.size+pairs[t].c.size;}
+    var ctx=makeCtx(form,total);
     for(var i=0;i<pairs.length;i++){
+      if(aborted(form))throw new Error('__aborted__');
       var p=pairs[i];
       if(status)status.textContent='Pair '+(i+1)+' of '+pairs.length+' \\u2014 '+p.a.name+'\\u2026';
       var d=await probeAudio(p.a);
       if(d!=null&&d>60000)warns.push(p.a.name+' is '+Math.round(d/1000)+'s (>60s)');
       var cw=await probeCoverWarn(p.c);if(cw)warns.push(cw);
       showWarn(form,warns);
-      var ar=await presignPut(form,'ringtone',p.a,p.ct);
-      var cr=await presignPut(form,'ringtone_cover',p.c,'image/jpeg');
+      var ar=await presignPut(form,'ringtone',p.a,p.ct,ctx);
+      var cr=await presignPut(form,'ringtone_cover',p.c,'image/jpeg',ctx);
       items.push({id:ar.id,audio_key:ar.key,mime:p.ct,cover_key:cr.key,title:p.title,
         duration_ms:d,bytes:p.a.size});
     }
+    ctx.finish();
     setV(form,'items_json',JSON.stringify(items));
     if(status)status.textContent='Saving '+items.length+' ringtones\\u2026';
     return true;
@@ -269,19 +392,44 @@ const RT_JS = `
       e.preventDefault();
       var btn=form.querySelector('[type=submit]');var orig=btn?btn.textContent:'';
       run(form).then(function(go){
-        if(go===false){busy(form,false,orig);return;}
+        form.removeAttribute('data-busy-upload');
+        if(go===false){busy(form,false,orig);hideProgress(form);return;}
         form.setAttribute('data-uploaded','1');
         busy(form,true,'Saving\\u2026');
         form.submit();
       }).catch(function(err){
+        form.removeAttribute('data-busy-upload');hideProgress(form);
+        var st=form.querySelector('[data-upload-status]');
+        // Abort (via the shared dialog-close guard): restore quietly, never submit.
+        if(err&&err.message==='__aborted__'){
+          form.dataset.aborted='';
+          busy(form,false,orig);
+          if(st)st.textContent='Upload cancelled';
+          return;
+        }
         busy(form,false,orig);
-        var st=form.querySelector('[data-upload-status]');if(st)st.textContent='';
+        if(st)st.textContent='';
         showErr(form,err.message);
       });
     });
   }
   wire('form[data-rt-form]',runSingle);
   wire('form[data-rt-batch-form]',runBatch);
+
+  // Live batch pairing status — re-render on file change (and category change,
+  // since dup detection depends on the target category).
+  document.addEventListener('change',function(e){
+    var t=e.target;if(!t.matches)return;
+    if(t.matches('input[type=file][data-slot="batch-audio"],input[type=file][data-slot="batch-cover"]')){
+      var f=t.closest('form[data-rt-batch-form]');if(f)renderPairs(f);
+    }
+  });
+  document.addEventListener('input',function(e){
+    var t=e.target;
+    if(t.matches&&t.matches('form[data-rt-batch-form] [name="category"]')){
+      var f=t.closest('form[data-rt-batch-form]');if(f)renderPairs(f);
+    }
+  });
 
   // ── Bulk pill actions (publish/unpublish/category/delete) ──
   document.addEventListener('click',function(e){
@@ -291,13 +439,18 @@ const RT_JS = `
     var act=btn.getAttribute('data-rt-bulk');
     var n=((form.querySelector('[name="ids"]')||{}).value||'').split(',').filter(Boolean).length;
     if(!n)return;
-    if(act==='delete'&&!confirm('Delete '+n+' ringtone'+(n===1?'':'s')+'? This removes them from the app.'))return;
+    function submit(){form.querySelector('[name="bulk_action"]').value=act;form.submit();}
+    if(act==='delete'){
+      window.cmsConfirm('Delete '+n+' ringtone'+(n===1?'':'s')+'? This removes them from the app.').then(function(ok){if(ok)submit();});
+      return;
+    }
     if(act==='category'){
       var sel=form.querySelector('[name="bulk_category"]');
-      if(!sel||!sel.value){alert('Choose a target category first');return;}
+      if(!sel||!sel.value){if(window.cmsToast)window.cmsToast('Choose a target category first',{danger:true});else alert('Choose a target category first');return;}
+      window.cmsConfirm('Move '+n+' ringtone'+(n===1?'':'s')+' to "'+sel.value+'"?').then(function(ok){if(ok)submit();});
+      return;
     }
-    form.querySelector('[name="bulk_action"]').value=act;
-    form.submit();
+    submit();
   });
 })();
 `;
@@ -312,6 +465,10 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
   const AUDIO_ACCEPT = "audio/mpeg,audio/mp4,audio/aac,.mp3,.m4a,.aac";
   const COVER_ACCEPT = "image/jpeg,.jpg,.jpeg";
 
+  // Category input: `data-slug-preview` drives the shared UPLOAD_JS slug-preview
+  // (that listener is delegated off document, so it fires for our forms too);
+  // `data-warn-new-category` is only honoured by UPLOAD_JS's own submit path, so
+  // RT_JS re-implements the "create new category?" confirm locally (novelCategoryGuard).
   const CategoryField: FC<{ value?: string }> = (props) => (
     <label class="field">
       <span class="lab">Category</span>
@@ -322,12 +479,15 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         list="rt-cats"
         placeholder="e.g. murugan"
         value={props.value ?? ""}
+        data-warn-new-category
+        data-slug-preview
       />
       <datalist id="rt-cats">
         {app.knownCategories.map((cat) => (
           <option value={cat} />
         ))}
       </datalist>
+      <span class="hint keyline" data-slug-preview-out data-slug-template="ringtones/{slug}/…"></span>
       <span class="hint">
         Browse axis + R2 key prefix (ringtones/&lt;category&gt;/…). Free text — a new category
         simply appears as a new chip.
@@ -341,6 +501,9 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
     const isEdit = props.mode === "edit";
     const action = isEdit ? `${base}/${r!.id}` : base;
     const tags = isEdit ? fromPgTextArray(r?.tags).join(", ") : "";
+    // `cdn` is not passed into the form components — compute it locally for the
+    // edit-mode current-media previews (same normalisation as the list route).
+    const cdn = app.cdnBase.replace(/\/$/, "");
     return (
       <form
         class="form"
@@ -349,6 +512,7 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         data-rt-form
         data-mode={props.mode}
         data-presign={appPath(app, "/media/upload-url")}
+        {...(isEdit && r ? { "data-orig-title": r.title, "data-orig-category": r.category } : {})}
       >
         <div class="note danger" data-upload-error style="display:none;white-space:pre-line"></div>
         <div class="note warn" data-upload-warn style="display:none"></div>
@@ -359,6 +523,19 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         </label>
 
         <CategoryField {...(r?.category ? { value: r.category } : {})} />
+
+        {isEdit && r ? (
+          <div class="field" style="margin-bottom:12px">
+            <span class="lab">Current audio</span>
+            <audio
+              controls
+              preload="none"
+              controlslist="nodownload noplaybackrate"
+              src={`${cdn}/${r.audio_key}`}
+              style="width:100%;height:34px"
+            ></audio>
+          </div>
+        ) : null}
 
         <label class="field">
           <span class="lab">{isEdit ? "Replace audio (optional)" : "Audio file"}</span>
@@ -377,6 +554,21 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         <input type="hidden" name="duration_ms" value="" />
         <input type="hidden" name="bytes_audio" value="" />
 
+        {isEdit && r && r.cover_key ? (
+          <div class="field" style="margin-bottom:12px">
+            <span class="lab">Current cover</span>
+            <img
+              src={`${cdn}/${r.cover_key}`}
+              alt=""
+              loading="lazy"
+              style="width:96px;height:96px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--hairline);display:block;cursor:pointer"
+              data-lightbox={`${cdn}/${r.cover_key}`}
+              data-lightbox-type="img"
+              data-lightbox-title={r.title}
+            />
+          </div>
+        ) : null}
+
         <label class="field">
           <span class="lab">{isEdit ? "Replace cover (optional)" : "Cover image"}</span>
           <input
@@ -393,21 +585,35 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         <input type="hidden" name="key_cover" value="" />
         <input type="hidden" name="mime_cover" value="" />
 
+        {/* Overall upload progress (audio + cover bytes) — RT_JS toggles .on. */}
+        <div class="progress" data-upload-progress>
+          <i></i>
+        </div>
+
         {isEdit ? (
-          <div class="formgrid">
-            <label class="field">
-              <span class="lab">Tags</span>
-              <input name="tags" type="text" placeholder="comma, separated" value={tags} />
+          <>
+            <div class="formgrid">
+              <label class="field">
+                <span class="lab">Tags</span>
+                <input name="tags" type="text" placeholder="comma, separated" value={tags} />
+              </label>
+              <label class="field">
+                <span class="lab">Sort order</span>
+                <input
+                  name="sort_order"
+                  type="number"
+                  value={String(r?.sort_order ?? 0)}
+                />
+              </label>
+            </div>
+            {/* Publish is now editable here (F7); publish_present tells the POST to
+                apply is_published inside the same transaction. */}
+            <input type="hidden" name="publish_present" value="1" />
+            <label class="check">
+              <input name="is_published" type="checkbox" checked={!!r?.is_published} />
+              <span>Published (visible in the app)</span>
             </label>
-            <label class="field">
-              <span class="lab">Sort order</span>
-              <input
-                name="sort_order"
-                type="number"
-                value={String(r?.sort_order ?? 0)}
-              />
-            </label>
-          </div>
+          </>
         ) : (
           <label class="check">
             <input name="is_published" type="checkbox" checked />
@@ -456,6 +662,13 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
           Unmatched files are skipped with a per-file error.
         </span>
       </label>
+      {/* Live pairing status — RT_JS renders one row per audio (✓ paired / ⚠ reason)
+          plus any unmatched covers, from the same computePairs used at submit. */}
+      <div class="filelist" data-pair-list></div>
+      {/* Overall upload progress across every queued PUT — RT_JS toggles .on. */}
+      <div class="progress" data-upload-progress>
+        <i></i>
+      </div>
       <input type="hidden" name="items_json" value="" />
 
       <label class="check">
@@ -570,19 +783,25 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                   ×
                 </button>
               </div>
-              {/* Column 3 = Category cell, column 5 = Status cell (LIST_JS generic filters). */}
-              <select data-filter="3" aria-label="Filter by category">
+              {/* Column 3 = Category cell, column 5 = Status cell (LIST_JS generic filters).
+                  data-filter-key persists the choice; category is an exact match so
+                  "amman" never matches "ammani", status stays a substring match so a
+                  "published · no cover" cell still filters under "published". */}
+              <select data-filter="3" data-filter-key="category" data-filter-exact="1" aria-label="Filter by category">
                 <option value="">All categories</option>
                 {categories.map((cat) => (
                   <option value={cat}>{capitalize(cat)}</option>
                 ))}
               </select>
-              <select data-filter="5" aria-label="Filter by status">
+              <select data-filter="5" data-filter-key="status" aria-label="Filter by status">
                 <option value="">All statuses</option>
                 <option value="published">Published</option>
                 <option value="draft">Draft</option>
               </select>
               <span class="grow" />
+              <button type="button" class="btn sec sm" data-bulk-select-page>
+                Select page
+              </button>
               <div class="viewtoggle" role="group" aria-label="View">
                 <button type="button" data-view="table" class="on">
                   Table
@@ -600,8 +819,9 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
             </div>
             {/* Floating bulk pill — buttons use data-rt-bulk (page JS) so the copy
                 says "ringtones"; BULK_JS still fills ids + shows/hides the bar. */}
-            <form method="post" action={`${base}/bulk`} class="bulkbar" data-bulk-bar>
+            <form method="post" action={`${base}/bulk`} class="bulkbar" data-bulk-bar data-bulk-noun="ringtones">
               <span data-bulk-count>0 selected</span>
+              <button type="button" class="btn sec sm" data-bulk-matching hidden></button>
               <input type="hidden" name="ids" value="" />
               <input type="hidden" name="bulk_action" value="" />
               <button type="button" class="btn sec sm" data-rt-bulk="publish">
@@ -659,7 +879,7 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                   {rows.map((r) => {
                     const secs = durSecs(r.duration_ms);
                     return (
-                      <tr data-id={r.id}>
+                      <tr data-id={r.id} data-rowedit>
                         <td>
                           <input
                             type="checkbox"
@@ -668,18 +888,39 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                             aria-label="Select"
                           />
                         </td>
+                        {/* Cover thumb + inline audio preview in ONE cell so no column
+                            is added (filter column indexes must not shift). The thumb
+                            hover-zooms + opens the lightbox (with Edit trip through);
+                            the ▶ button toggles the shared single-player. */}
                         <td style="padding:4px 14px">
-                          {r.cover_key ? (
-                            <img
-                              class="thumb"
-                              src={`${cdn}/${r.cover_key}`}
-                              alt=""
-                              loading="lazy"
-                              onerror={`this.onerror=null;this.outerHTML='<span class="filemark">\\u266a</span>'`}
-                            />
-                          ) : (
-                            <span class="filemark">♪</span>
-                          )}
+                          <div style="display:flex;align-items:center;gap:6px">
+                            {r.cover_key ? (
+                              <img
+                                class="thumb"
+                                src={`${cdn}/${r.cover_key}`}
+                                alt=""
+                                loading="lazy"
+                                data-hoverzoom={`${cdn}/${r.cover_key}`}
+                                data-lightbox={`${cdn}/${r.cover_key}`}
+                                data-lightbox-type="img"
+                                data-lightbox-title={r.title}
+                                data-lightbox-edit-dialog="rt-edit"
+                                data-lightbox-edit-get={`${base}/${r.id}/edit`}
+                                data-lightbox-edit-target="rt-edit-body"
+                                onerror={`this.onerror=null;this.outerHTML='<span class="filemark">\\u266a</span>'`}
+                              />
+                            ) : (
+                              <span class="filemark">♪</span>
+                            )}
+                            <button
+                              type="button"
+                              class="btn sec sm"
+                              data-play-audio={`${cdn}/${r.audio_key}`}
+                              aria-label="Play"
+                            >
+                              ▶
+                            </button>
+                          </div>
                         </td>
                         <td class="coltitle">
                           <strong>{r.title}</strong>
@@ -705,7 +946,7 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                           </div>
                         </td>
                         <td>
-                          <span class="idcode" title={r.id}>
+                          <span class="idcode" title="Click to copy ID" data-copy={r.id}>
                             {r.id.slice(0, 8)}
                           </span>
                           <span class="keysearch">
@@ -726,6 +967,8 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                               Edit
                             </button>
                             <form method="post" action={`${base}/${r.id}/publish`}>
+                              {/* Explicit target state → double-submits are idempotent. */}
+                              <input type="hidden" name="set" value={r.is_published ? "0" : "1"} />
                               <button type="submit" class="btn sec sm">
                                 {r.is_published ? "Unpublish" : "Publish"}
                               </button>
@@ -733,7 +976,7 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                             <form
                               method="post"
                               action={`${base}/${r.id}/delete`}
-                              data-confirm="Delete this ringtone? This removes it from the app."
+                              data-confirm={`Delete "${r.title}"? This removes it from the app.`}
                             >
                               <button type="submit" class="btn danger sm">
                                 Delete
@@ -778,7 +1021,12 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                       {r.is_published ? null : <span class="rtdraft">draft</span>}
                       <input type="checkbox" class="rowsel" data-bulk-id={r.id} aria-label="Select" />
                     </div>
-                    <audio controls preload="none" src={`${cdn}/${r.audio_key}`}></audio>
+                    <audio
+                      controls
+                      preload="none"
+                      controlslist="nodownload noplaybackrate"
+                      src={`${cdn}/${r.audio_key}`}
+                    ></audio>
                     <div class="rtmeta">
                       <span class="rtname">{r.title}</span>
                       <span class="rtsub">
@@ -1096,8 +1344,9 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
   });
 
   // ── Update — title/category/tags/sort_order; audio and cover replaceable
-  //    independently. Publish state is owned by the list-page toggle (left out
-  //    of the UPDATE so it is preserved). ─────────────────────────────────────
+  //    independently. Publish state is set from the edit form's checkbox, but
+  //    ONLY when publish_present is posted (F7) — so a form that never rendered
+  //    the checkbox still leaves is_published untouched. ──────────────────────
   ringtonesApp.post("/:id", async (c) => {
     const id = c.req.param("id");
     const form = (await c.req.parseBody()) as Record<string, unknown>;
@@ -1125,6 +1374,9 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
     const durationMs = Number.isFinite(durRaw) ? durRaw : null;
     const bytesRaw = parseInt(formStr(form, "bytes_audio"), 10);
     const bytes = Number.isFinite(bytesRaw) ? bytesRaw : null;
+    // Publish is only applied when the edit form declared the control (F7).
+    const publishPresent = formStr(form, "publish_present") !== "";
+    const publishState = parseBool(form.is_published);
 
     const sql = getDb(c.env, app);
     let oldAudio: string | null = null;
@@ -1153,6 +1405,9 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
         }
         if (replaceCover) {
           await tx`UPDATE ringtones SET cover_key = ${newCover} WHERE id = ${id}`;
+        }
+        if (publishPresent) {
+          await tx`UPDATE ringtones SET is_published = ${publishState} WHERE id = ${id}`;
         }
         await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
       });
@@ -1188,10 +1443,18 @@ export function makeArulRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
   // ── Publish toggle ──────────────────────────────────────────────────────────
   ringtonesApp.post("/:id/publish", async (c) => {
     const id = c.req.param("id");
+    // Explicit target state (`set`=0/1 from the row form) makes a double-submit
+    // idempotent; absent it falls back to the NOT toggle.
+    const form = (await c.req.parseBody()) as Record<string, unknown>;
+    const set = formStr(form, "set");
     const sql = getDb(c.env, app);
     try {
       await sql.begin(async (tx) => {
-        await tx`UPDATE ringtones SET is_published = NOT is_published WHERE id = ${id}`;
+        if (set === "0" || set === "1") {
+          await tx`UPDATE ringtones SET is_published = ${set === "1"} WHERE id = ${id}`;
+        } else {
+          await tx`UPDATE ringtones SET is_published = NOT is_published WHERE id = ${id}`;
+        }
         await tx`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
       });
     } catch (err) {

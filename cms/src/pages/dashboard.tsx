@@ -99,6 +99,12 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
   return c.html(
     <Layout title="Dashboard" active="dashboard">
       <PageHead title="Dashboard" sub="Pakiza + Arul content overview" />
+      <style
+        dangerouslySetInnerHTML={{
+          __html:
+            "a.statlink:hover .card{border-color:var(--hairline-strong)}a.catrow:hover{background:var(--glass-2)}",
+        }}
+      />
 
       {all.map((s) => {
         const pendingN = Number(s.pending) || 0;
@@ -134,12 +140,36 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
               </div>
             ) : (
               <div class="grid">
-                <StatCard n={s.wpPub} label="Published wallpapers" hint={`${s.wpTotal} total`} />
+                <a
+                  class="statlink"
+                  href={appPath(s.app, "/wallpapers")}
+                  style="display:block;color:inherit;text-decoration:none"
+                >
+                  <StatCard n={s.wpPub} label="Published wallpapers" hint={`${s.wpTotal} total`} />
+                </a>
                 {s.rtTotal !== null ? (
-                  <StatCard n={s.rtPub ?? "0"} label="Published ringtones" hint={`${s.rtTotal} total`} />
+                  <a
+                    class="statlink"
+                    href={appPath(s.app, "/ringtones")}
+                    style="display:block;color:inherit;text-decoration:none"
+                  >
+                    <StatCard n={s.rtPub ?? "0"} label="Published ringtones" hint={`${s.rtTotal} total`} />
+                  </a>
                 ) : null}
-                <StatCard n={s.pending} label="Pending submissions" hint="awaiting review" />
-                <StatCard n={`v${s.version}`} label="Catalog version" hint="content_version" />
+                <a
+                  class="statlink"
+                  href={appPath(s.app, "/submissions")}
+                  style="display:block;color:inherit;text-decoration:none"
+                >
+                  <StatCard n={s.pending} label="Pending submissions" hint="awaiting review" />
+                </a>
+                <a
+                  class="statlink"
+                  href={appPath(s.app, "/config")}
+                  style="display:block;color:inherit;text-decoration:none"
+                >
+                  <StatCard n={`v${s.version}`} label="Catalog version" hint="content_version" />
+                </a>
                 {s.cats && s.cats.length > 0 ? (
                   <div class="card" style="grid-column:span 2;min-width:260px">
                     <div
@@ -154,7 +184,11 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
                         const pub = Number(cat.pub) || 0;
                         const pct = total > 0 ? Math.round((pub / total) * 100) : 0;
                         return (
-                          <div style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 8px;border-radius:4px;overflow:hidden">
+                          <a
+                            class="catrow"
+                            href={`${appPath(s.app, "/wallpapers")}?category=${encodeURIComponent(cat.category)}`}
+                            style="position:relative;display:flex;justify-content:space-between;align-items:center;padding:3px 8px;border-radius:4px;overflow:hidden;color:inherit;text-decoration:none"
+                          >
                             <div
                               style={`position:absolute;inset:0;width:${pct}%;background:var(--accent-soft);border-right:2px solid rgba(217,164,65,.55)`}
                             />
@@ -165,7 +199,7 @@ export async function handleDashboard(c: Context<{ Bindings: Env }>): Promise<Re
                               <strong>{cat.pub}</strong>
                               <span style="color:var(--faint);font-weight:500"> / {cat.total}</span>
                             </span>
-                          </div>
+                          </a>
                         );
                       })}
                     </div>

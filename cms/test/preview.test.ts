@@ -21,6 +21,7 @@ vi.mock("../src/lib/db.js", () => ({
 
 import { makeWallpapersApp } from "../src/pages/wallpapers.js";
 import { makeRingtonesApp } from "../src/pages/ringtones.js";
+import { makeArulRingtonesApp } from "../src/pages/ringtones-arul.js";
 import { makeSubmissionsApp } from "../src/pages/submissions.js";
 import { makeConfigApp } from "../src/pages/config.js";
 import { makeTransferApp } from "../src/pages/transfer.js";
@@ -232,6 +233,30 @@ describe("preview harness", () => {
     const { env } = makeEnv({ pakizaRows });
     const res = await get(makeRingtonesApp(PAKIZA), env);
     save("pakiza-ringtones", await res.text());
+    expect(res.status).toBe(200);
+  });
+
+  RUN("renders arul ringtones", async () => {
+    const cats = ["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"];
+    const arulRows = Array.from({ length: 9 }, (_, i) => {
+      const cat = cats[i % cats.length]!;
+      const id = `30000000-0000-4000-8000-${String(400000000000 + i).padStart(12, "0")}`;
+      return {
+        id,
+        title: `Devotional ringtone ${i + 1}`,
+        category: cat,
+        audio_key: `ringtones/${cat}/${id}.mp3`,
+        // Two rows without a cover to exercise the ♪ fallback + warn badge.
+        cover_key: i % 4 === 3 ? null : `ringtones/covers/${cat}/${id}.jpg`,
+        mime: "audio/mpeg",
+        duration_ms: 20000 + i * 9000,
+        is_published: i % 3 !== 0,
+        created: `2026-0${(i % 6) + 1}-${String((i % 27) + 1).padStart(2, "0")}`,
+      };
+    });
+    const { env } = makeEnv({ arulRows });
+    const res = await get(makeArulRingtonesApp(ARUL), env);
+    save("arul-ringtones", await res.text());
     expect(res.status).toBe(200);
   });
 

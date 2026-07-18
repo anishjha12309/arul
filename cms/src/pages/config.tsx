@@ -55,6 +55,59 @@ function parseJsonObject(label: string, raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+/**
+ * CFG_JS — client-side JSON validation for the config editor.
+ *
+ * The server rejects bad JSON with a redirect that DROPS the operator's edits
+ * (F1). This validates each textarea.mono on input (debounced) + blur, and
+ * blocks submit until prices / policy_urls / feature_flags all parse to a plain
+ * object. Empty is valid (treated as {} server-side). The form carries
+ * data-own-busy so the shared BUSY_JS (which can't see this listener's
+ * preventDefault) leaves the submit button alone — on a valid submit we set the
+ * busy state ourselves.
+ */
+const CFG_JS = `
+(function(){
+  var form=document.getElementById('config-form'); if(!form)return;
+  var areas=Array.prototype.slice.call(form.querySelectorAll('textarea.mono'));
+  function errEl(ta,make){
+    var el=ta.parentNode.querySelector('[data-json-err]');
+    if(!el&&make){
+      el=document.createElement('span'); el.className='hint'; el.setAttribute('data-json-err','');
+      el.style.color='var(--danger)'; ta.parentNode.appendChild(el);
+    }
+    return el;
+  }
+  function mark(ta,msg){ ta.style.borderColor='var(--danger)'; var el=errEl(ta,true); el.textContent=msg; el.style.display='block'; }
+  function clear(ta){ ta.style.borderColor=''; var el=errEl(ta,false); if(el){ el.textContent=''; el.style.display='none'; } }
+  function validate(ta){
+    var raw=(ta.value||'').trim();
+    if(raw===''){ clear(ta); return true; }
+    var parsed;
+    try{ parsed=JSON.parse(raw); }catch(e){ mark(ta,'Invalid JSON: '+e.message); return false; }
+    if(typeof parsed!=='object'||parsed===null||Array.isArray(parsed)){ mark(ta,'Must be a JSON object'); return false; }
+    clear(ta); return true;
+  }
+  areas.forEach(function(ta){
+    var t;
+    ta.addEventListener('input',function(){ clearTimeout(t); t=setTimeout(function(){ validate(ta); },300); });
+    ta.addEventListener('blur',function(){ clearTimeout(t); validate(ta); });
+  });
+  form.addEventListener('submit',function(e){
+    var bad=null;
+    areas.forEach(function(ta){ if(!validate(ta)&&!bad)bad=ta; });
+    if(bad){
+      e.preventDefault();
+      bad.focus();
+      if(window.cmsToast)window.cmsToast('Fix the invalid JSON before saving',{danger:true});
+      return;
+    }
+    var btn=form.querySelector('[type=submit]');
+    if(btn){ if(btn.dataset.origText==null)btn.dataset.origText=btn.textContent; btn.disabled=true; btn.classList.add('busy'); btn.textContent='Working\\u2026'; }
+  });
+})();
+`;
+
 export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
   const configApp = new Hono<{ Bindings: Env }>();
   const base = appPath(app, "/config");
@@ -79,19 +132,59 @@ export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
 
     const version = cfg?.content_version == null ? "0" : String(cfg.content_version);
 
+    // ── Live catalog pointer (C6): what version is actually published to the
+    //    CDN right now vs the DB's content_version above. build-catalog writes
+    //    catalog/version.json no-store as { content_version, built_at }.
+    //    Best-effort with a short timeout — never blocks the page render. ──
+    let live: { version: string; builtAt: string | null } | null = null;
+    try {
+      const res = await fetch(`${app.cdnBase.replace(/\/$/, "")}/catalog/version.json`, {
+        cf: { cacheTtl: 0 },
+        signal: AbortSignal.timeout(2500),
+      });
+      if (res.ok) {
+        const j = (await res.json()) as { content_version?: unknown; built_at?: unknown };
+        if (j && j.content_version != null) {
+          live = {
+            version: String(j.content_version),
+            builtAt: typeof j.built_at === "string" ? j.built_at : null,
+          };
+        }
+      }
+    } catch {
+      live = null;
+    }
+
     return c.html(
       <Layout title={`App config · ${app.label}`} active={navKey}>
         <PageHead title={`${app.label} app config`} sub={`content_version v${version}`} subMono>
-          <form method="post" action={`${base}/rebuild`}>
-            <button type="submit" class="btn sec">
-              Rebuild catalog now
-            </button>
-          </form>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <form method="post" action={`${base}/rebuild`} style="margin:0">
+              <button type="submit" class="btn sec">
+                Rebuild catalog now
+              </button>
+            </form>
+            <span style="color:var(--muted);font-size:12px;text-align:right">
+              Rebuild republishes the catalog JSON to the CDN.
+            </span>
+          </div>
         </PageHead>
+        <div class="row" style="margin:-8px 0 20px">
+          {live ? (
+            <span class="chip">
+              Live catalog: v{live.version}
+              {live.builtAt ? ` · built ${live.builtAt}` : ""}
+            </span>
+          ) : (
+            <span class="chip" style="color:var(--faint)">
+              Live catalog: unreachable
+            </span>
+          )}
+        </div>
         <Flash ok={c.req.query("ok")} err={c.req.query("err")} />
         {dbError ? <div class="note danger">Could not load app_config.</div> : null}
 
-        <form class="card" method="post" action={base} style="max-width:760px">
+        <form id="config-form" class="card" method="post" action={base} style="max-width:760px" data-own-busy>
           <div class="formgrid">
             <label class="field">
               <span class="lab">Support email</span>
@@ -117,21 +210,21 @@ export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
             <span class="json-lab">
               prices <span class="json-lab-hint">(JSON object)</span>
             </span>
-            <textarea class="mono" name="prices" rows={5}>{pretty(cfg?.prices)}</textarea>
+            <textarea class="mono" name="prices" rows={5} spellcheck={false}>{pretty(cfg?.prices)}</textarea>
           </label>
 
           <label class="field">
             <span class="json-lab">
               policy_urls <span class="json-lab-hint">(JSON object)</span>
             </span>
-            <textarea class="mono" name="policy_urls" rows={4}>{pretty(cfg?.policy_urls)}</textarea>
+            <textarea class="mono" name="policy_urls" rows={4} spellcheck={false}>{pretty(cfg?.policy_urls)}</textarea>
           </label>
 
           <label class="field">
             <span class="json-lab">
               feature_flags <span class="json-lab-hint">(JSON object)</span>
             </span>
-            <textarea class="mono" name="feature_flags" rows={5}>{pretty(cfg?.feature_flags)}</textarea>
+            <textarea class="mono" name="feature_flags" rows={5} spellcheck={false}>{pretty(cfg?.feature_flags)}</textarea>
           </label>
 
           <div class="row" style="margin-top:8px">
@@ -140,6 +233,7 @@ export function makeConfigApp(app: AppDef): Hono<{ Bindings: Env }> {
             </button>
           </div>
         </form>
+        <script dangerouslySetInnerHTML={{ __html: CFG_JS }} />
       </Layout>,
     );
   });

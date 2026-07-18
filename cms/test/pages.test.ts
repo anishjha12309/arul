@@ -89,7 +89,7 @@ describe("page renders", () => {
     // The filter select targets table column 4 — the same <td class="colcat">
     // index — via the same generic [data-filter] mechanism LIST_JS already
     // drives for type (col 3) and status, so no new client-side JS is needed.
-    expect(arulHtml).toContain('data-filter="4" aria-label="Filter by category"');
+    expect(arulHtml).toMatch(/<select data-filter="4"[^>]*aria-label="Filter by category"/);
     // Isolate the filter <select> itself (the page ALSO renders a <datalist>
     // of every known category on the create-form modal — a different element
     // that must not be confused with the list-filter options under test).
@@ -208,8 +208,10 @@ describe("page renders", () => {
     expect(html).not.toContain('<input name="category"');
     expect(html).not.toContain('class="pickgrid'); // no grid view markup
     expect(html).not.toContain('class="bulkbar"'); // no bulk pill element
-    expect(html).not.toContain("data-rt-form");
-    expect(html).not.toContain("data-rt-batch-form");
+    // Assert on the rendered form ELEMENT, not the raw substring: shared Layout
+    // scripts (e.g. BUSY_JS) legitimately reference the [data-rt-form] selector.
+    expect(html).not.toContain('data-rt-form="true"');
+    expect(html).not.toContain('data-rt-batch-form="true"');
     expect(html).not.toContain("key_cover");
     expect(html).not.toContain("ringtone_cover");
     expect(html).toContain('data-kind="ringtone"'); // legacy shared uploader path
@@ -249,7 +251,7 @@ describe("page renders", () => {
     expect(html).toContain("<audio"); // inline grid preview element
     expect(html).toContain('preload="none"'); // never pre-fetches audio bytes
     expect(html).toContain("ringtones/sivan/a.mp3"); // audio src + keysearch
-    expect(html).toContain('data-filter="3" aria-label="Filter by category"');
+    expect(html).toMatch(/<select data-filter="3"[^>]*aria-label="Filter by category"/);
     // Filter options = knownCategories UNION novel categories in rows.
     const selMatch = /<select data-filter="3"[^>]*>[\s\S]*?<\/select>/.exec(html);
     expect(selMatch![0]).toContain('<option value="amman">'); // known, no rows
