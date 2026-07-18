@@ -147,6 +147,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     title: 'Continue with Google',
                     subtitle: 'Choose an account to get started',
                     onTap: _signingIn ? () {} : _onPillTap,
+                    busy: _signingIn,
                   ),
                   const SizedBox(height: 14),
                   const _TermsPrivacyLine(),
@@ -167,11 +168,16 @@ class _SignInPill extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.busy = false,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+
+  /// While a sign-in is in flight: the trailing arrow becomes a spinner so the
+  /// Worker-verify round-trip after the Google picker isn't dead-silent.
+  final bool busy;
 
   @override
   State<_SignInPill> createState() => _SignInPillState();
@@ -242,14 +248,26 @@ class _SignInPillState extends State<_SignInPill> {
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.only(right: 10),
-              child: Icon(
-                Icons.arrow_forward,
-                size: 22,
-                color: ArulTokens.gold,
+            if (widget.busy)
+              const Padding(
+                padding: EdgeInsets.only(right: 12),
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.2,
+                    color: ArulTokens.gold,
+                  ),
+                ),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.only(right: 10),
+                child: Icon(
+                  Icons.arrow_forward,
+                  size: 22,
+                  color: ArulTokens.gold,
+                ),
               ),
-            ),
           ],
         ),
       ),

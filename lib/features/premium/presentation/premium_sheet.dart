@@ -25,9 +25,9 @@ class PremiumSheet {
   static Future<void> show(BuildContext context, {required String source}) {
     return showArulSheet<void>(
       context,
+      // Gradient top is a dark-only flourish; ArulSheet falls back to the flat
+      // light surface when the app theme is light.
       gradient: true,
-      // Overlays the always-dark feed — spec'd #241014→#1A0B0F in both themes.
-      forceDark: true,
       builder: (_) => _PremiumSheetBody(source: source),
     );
   }
@@ -42,6 +42,13 @@ class _PremiumSheetBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
+    final pitchColor = isDark ? ArulTokens.darkBodyWarm : ArulTokens.lightBody;
+    final subColor = isDark
+        ? ArulTokens.darkTextSecondary
+        : ArulTokens.lightSecondary;
+
     return Padding(
       // The grabber (and its 10px vertical padding) is supplied by ArulSheet;
       // here only the sheet body inset (README: pad 20 22 26).
@@ -58,14 +65,14 @@ class _PremiumSheetBody extends StatelessWidget {
                 'Arul Premium',
                 style: ArulTokens.screenTitle.copyWith(
                   fontSize: 22,
-                  color: ArulTokens.ivory,
+                  color: titleColor,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 PremiumSheet._pitch,
                 textAlign: TextAlign.center,
-                style: ArulTokens.body.copyWith(color: ArulTokens.darkBodyWarm),
+                style: ArulTokens.body.copyWith(color: pitchColor),
               ),
             ],
           ),
@@ -89,15 +96,13 @@ class _PremiumSheetBody extends StatelessWidget {
                         style: ArulTokens.rowTitle.copyWith(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: ArulTokens.ivory,
+                          color: titleColor,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'UPI Autopay · cancel anytime',
-                        style: ArulTokens.rowSub.copyWith(
-                          color: ArulTokens.darkTextSecondary,
-                        ),
+                        style: ArulTokens.rowSub.copyWith(color: subColor),
                       ),
                     ],
                   ),
@@ -143,9 +148,7 @@ class _PremiumSheetBody extends StatelessWidget {
             child: Text(
               'Keep browsing free',
               textAlign: TextAlign.center,
-              style: ArulTokens.body.copyWith(
-                color: ArulTokens.darkTextSecondary,
-              ),
+              style: ArulTokens.body.copyWith(color: subColor),
             ),
           ),
         ],

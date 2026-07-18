@@ -559,9 +559,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
     // The card no longer reaches the bottom of the reel — the peek does. Only
     // the nudge is still screen-anchored, so it is the only thing that needs to
-    // know where the card's bottom edge falls.
+    // know where the card's bottom edge falls. It sits just above the Apply
+    // bar (a 16px gap over the bar's top), right over the verb it gates —
+    // NOT floating in the middle of the artwork.
     const cardBottom = _peek + _cardInsetBottom;
-    const nudgeBottom = cardBottom + _CardChrome.stackHeight + 16;
+    const nudgeBottom = cardBottom + _CardChrome.actionBarTop + 16;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -923,8 +925,10 @@ class _CardChrome extends StatelessWidget {
   /// Gap from the card's bottom edge to the buttons.
   static const double _barInset = 22;
 
-  /// Gap from the buttons up to the name block.
-  static const double _metaGap = 18;
+  /// Distance from the card's bottom edge up to the TOP of the action bar. The
+  /// feed anchors the gate nudge just above this so it rises right over Apply,
+  /// not stranded in the middle of the artwork.
+  static const double actionBarTop = _barInset + _ActionBar.height;
 
   final Wallpaper wallpaper;
   final bool busy;
@@ -960,12 +964,12 @@ class _CardChrome extends StatelessWidget {
           child: _ActionBar(busy: busy, onApply: onApply, onShare: onShare),
         ),
 
-        // Also pointer-transparent: RenderParagraph hit-tests true, so the
-        // name block would be a second dead zone over the pager.
+        // Pointer-transparent: a DecoratedBox hit-tests true anywhere in its
+        // box, so the LIVE pill would otherwise be a dead zone over the pager.
+        // Anchored top-right, just clear of the status bar.
         Positioned(
-          left: 16,
+          top: MediaQuery.viewPaddingOf(context).top + 12,
           right: 16,
-          bottom: _barInset + _ActionBar.height + _metaGap,
           child: IgnorePointer(child: _FeedMeta(wallpaper: wallpaper)),
         ),
       ],
@@ -1136,8 +1140,9 @@ class _ShareCircle extends StatelessWidget {
   }
 }
 
-/// Bottom-left meta (README > Reel feed): LIVE badge (live only) + category
-/// 12.5px ivory-75%; title 17px/600 ivory.
+/// Top-right meta: only the gold LIVE badge (live items). The category label and
+/// the deity name were intentionally removed so the wallpaper stands on its own;
+/// static cards render nothing here.
 class _FeedMeta extends StatelessWidget {
   const _FeedMeta({required this.wallpaper});
 
@@ -1145,58 +1150,15 @@ class _FeedMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The title only earns its pixels when it says more than the category (many
-    // items fall back title == categoryLabel).
-    final titleAddsSomething =
-        wallpaper.title.trim().toLowerCase() !=
-        wallpaper.categoryLabel.trim().toLowerCase();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (wallpaper.kind == WallpaperKind.live) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: ArulTokens.gold,
-                  borderRadius: BorderRadius.circular(
-                    ArulTokens.liveBadgeRadius,
-                  ),
-                ),
-                child: const Text('LIVE', style: ArulTokens.liveBadge),
-              ),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Text(
-                wallpaper.categoryLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ArulTokens.rowSub.copyWith(
-                  color: ArulTokens.ivory.withValues(alpha: 0.75),
-                  shadows: ArulTokens.overMediaShadow,
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (titleAddsSomething) ...[
-          const SizedBox(height: 6),
-          Text(
-            wallpaper.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: ArulTokens.sheetTitle.copyWith(
-              color: ArulTokens.ivory,
-              shadows: ArulTokens.overMediaShadow,
-            ),
-          ),
-        ],
-      ],
+    if (wallpaper.kind != WallpaperKind.live) return const SizedBox.shrink();
+    // Sizes to its own label; the enclosing Positioned pins it top-right.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: ArulTokens.gold,
+        borderRadius: BorderRadius.circular(ArulTokens.liveBadgeRadius),
+      ),
+      child: const Text('LIVE', style: ArulTokens.liveBadge),
     );
   }
 }

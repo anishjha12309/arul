@@ -20,8 +20,6 @@ class ApplySheet {
   static Future<ApplyTarget?> show(BuildContext context) {
     return showArulSheet<ApplyTarget>(
       context,
-      // Overlays the always-dark feed — spec'd #1A0B0F in both app themes.
-      forceDark: true,
       builder: (_) => const _ApplySheetBody(),
     );
   }
@@ -45,6 +43,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       // README: pad 18 20 24; the grabber + its padding come from ArulSheet.
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
@@ -54,7 +53,9 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
         children: [
           Text(
             'Set wallpaper on',
-            style: ArulTokens.sheetTitle.copyWith(color: ArulTokens.ivory),
+            style: ArulTokens.sheetTitle.copyWith(
+              color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -89,8 +90,8 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
 }
 
 /// One target card (README > Apply sheet): r16, 26px icon + 13px label.
-/// Selected: gold 1.5px border, gold-tint fill, gold icon. Unselected: ivory-5%
-/// fill, ivory-14% border, ivory icon.
+/// Selected: gold 1.5px border, gold-tint fill, gold icon (both themes).
+/// Unselected follows the app theme — ivory-tint on dark, maroon-tint on light.
 class _TargetCard extends StatelessWidget {
   const _TargetCard({
     required this.icon,
@@ -106,16 +107,28 @@ class _TargetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedFill = isDark
+        ? ArulTokens.cardBgDark05
+        : ArulTokens.maroonTintFill07;
+    final unselectedBorder = isDark
+        ? ArulTokens.cardBorderDark14
+        : ArulTokens.cardBorderLight;
+    final unselectedIcon = isDark
+        ? ArulTokens.ivory
+        : ArulTokens.lightSecondary;
+    final labelColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
         decoration: BoxDecoration(
-          color: selected ? ArulTokens.goldTintFill14 : ArulTokens.cardBgDark05,
+          color: selected ? ArulTokens.goldTintFill14 : unselectedFill,
           borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
           border: Border.all(
-            color: selected ? ArulTokens.gold : ArulTokens.cardBorderDark14,
+            color: selected ? ArulTokens.gold : unselectedBorder,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -125,16 +138,16 @@ class _TargetCard extends StatelessWidget {
             Icon(
               icon,
               size: 26,
-              color: selected ? ArulTokens.gold : ArulTokens.ivory,
+              color: selected ? ArulTokens.gold : unselectedIcon,
             ),
             const SizedBox(height: 8),
             Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: ArulTokens.ivory,
+                color: labelColor,
               ),
             ),
           ],

@@ -355,12 +355,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   // Submit — disabled until file + category + rights (spec),
                   // and while an upload is in flight (re-entrancy).
                   CtaButton(
-                    label: switch (ref.watch(uploadProvider)) {
-                      UploadLoading(stage: UploadStage.uploading) =>
-                        'Uploading…',
-                      UploadLoading(stage: UploadStage.saving) => 'Saving…',
-                      _ => 'Submit for review',
-                    },
+                    label: 'Submit for review',
+                    busy: ref.watch(uploadProvider) is UploadLoading,
                     fontSize: 15.5,
                     onPressed:
                         _canSubmit &&

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
-import '../theme/theme.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
 ///
@@ -19,29 +18,30 @@ Future<T?> showArulSheet<T>(
   required WidgetBuilder builder,
   bool gradient = false,
   bool isDismissible = true,
-  bool forceDark = false,
   bool topHairline = true,
 }) {
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
     isDismissible: isDismissible,
+    // Present ABOVE the shell so the barrier scrim + sheet cover the floating
+    // nav dock (Scaffold.bottomNavigationBar, extendBody). Without this the
+    // sheet opens on the branch navigator inside the body and the dock paints
+    // on top of the sheet's bottom edge — a visible collision, worst on the
+    // light theme where dock and sheet are both near-white.
+    useRootNavigator: true,
     // ArulSheet paints its own 44×4 grabber — the theme's Material drag
     // handle would render a second one above the sheet.
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
-    builder: (context) {
-      final sheet = ArulSheet(
-        gradient: gradient,
-        topHairline: topHairline,
-        child: builder(context),
-      );
-      if (!forceDark) return sheet;
-      // Sheets that overlay the always-dark feed (apply / premium) are spec'd
-      // dark-only (#1A0B0F) regardless of the app theme.
-      return Theme(data: ArulTheme.dark(), child: sheet);
-    },
+    // Every Arul sheet follows the app theme (dark surface on dark, white on
+    // light) — ArulSheet reads Theme.of(context).brightness itself.
+    builder: (context) => ArulSheet(
+      gradient: gradient,
+      topHairline: topHairline,
+      child: builder(context),
+    ),
   );
 }
 

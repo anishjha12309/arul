@@ -250,7 +250,8 @@ class PremiumScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   CtaButton(
-                    label: purchaseBusy ? 'Processing…' : 'Start free trial',
+                    label: 'Start free trial',
+                    busy: purchaseBusy,
                     height: ArulTokens.ctaHeight54,
                     fontSize: 16,
                     onPressed: purchaseBusy
