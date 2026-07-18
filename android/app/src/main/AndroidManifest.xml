@@ -61,6 +61,18 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
+        <!-- PostHog is initialised in Dart (main.dart: Posthog().setup() with the
+             POSTHOG_KEY dart-define), never from the manifest. Disable the
+             plugin's native manifest auto-init so it doesn't try — and fail — to
+             configure PostHog from a com.posthog.posthog.API_KEY meta-data we
+             deliberately don't ship: that path logged
+             `E/PostHog: Either …API_KEY must be provided!` on every launch.
+             With AUTO_INIT=false the plugin skips it (a benign info log instead)
+             and the Dart setup() stays the single source of truth. -->
+        <meta-data
+            android:name="com.posthog.posthog.AUTO_INIT"
+            android:value="false" />
+
         <!-- Meta (Facebook) App Events. App id + client token are injected at
              build time from dart-defines (META_APP_ID / META_CLIENT_TOKEN) via
              gradle manifestPlaceholders — no config lives in the repo. When the
