@@ -1536,6 +1536,13 @@ const AUDIO_JS = `
   var shared=null,curUrl=null,curBtn=null;
   function resetBtn(){ if(curBtn){curBtn.textContent='\\u25b6';curBtn.setAttribute('aria-pressed','false');curBtn=null;} }
   function pauseDom(except){ document.querySelectorAll('audio,video').forEach(function(m){ if(m!==except&&!m.paused){try{m.pause();}catch(e){}} }); }
+  // Playback failure must never be silent: a \\u23f8 button with no sound reads
+  // as "the button is broken". Reset the toggle and toast the real cause.
+  function fail(){
+    if(curUrl==null)return; // already handled (error + rejected play both fire)
+    curUrl=null; resetBtn();
+    if(window.cmsToast)window.cmsToast('Could not play this audio \\u2014 the file is missing or unsupported.',{danger:true});
+  }
   document.addEventListener('play',function(e){
     var t=e.target;
     pauseDom(t);
@@ -1545,15 +1552,19 @@ const AUDIO_JS = `
   document.addEventListener('click',function(e){
     var btn=e.target.closest&&e.target.closest('[data-play-audio]'); if(!btn)return;
     var url=btn.getAttribute('data-play-audio');
-    if(!shared){ shared=new Audio(); shared.addEventListener('ended',function(){resetBtn();curUrl=null;}); }
+    if(!shared){
+      shared=new Audio();
+      shared.addEventListener('ended',function(){resetBtn();curUrl=null;});
+      shared.addEventListener('error',fail);
+    }
     if(curUrl!==url){
       pauseDom(); resetBtn();
       shared.src=url; curUrl=url;
       curBtn=btn; btn.textContent='\\u23f8'; btn.setAttribute('aria-pressed','true');
-      shared.play().catch(function(){});
+      shared.play().catch(fail);
       return;
     }
-    if(shared.paused){ pauseDom(); shared.play().catch(function(){}); curBtn=btn; btn.textContent='\\u23f8'; btn.setAttribute('aria-pressed','true'); }
+    if(shared.paused){ pauseDom(); shared.play().catch(fail); curBtn=btn; btn.textContent='\\u23f8'; btn.setAttribute('aria-pressed','true'); }
     else { shared.pause(); btn.textContent='\\u25b6'; btn.setAttribute('aria-pressed','false'); }
   });
 })();
