@@ -118,6 +118,7 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
       c.executionCtx.waitUntil(sql.end());
     }
 
+    const cdn = app.cdnBase.replace(/\/$/, "");
     return c.html(
       <Layout title={`Ringtones · ${app.label}`} active={navKey}>
         <PageHead
@@ -182,7 +183,19 @@ export function makeRingtonesApp(app: AppDef): Hono<{ Bindings: Env }> {
                   {rows.map((r) => (
                     <tr data-id={r.id} data-rowedit>
                       <td style="padding:4px 14px">
-                        <span class="filemark">♪</span>
+                        {/* ♪ mark + shared-AUDIO_JS play toggle (the one Arul-era
+                            addition here — preview parity, no other structure). */}
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <span class="filemark">♪</span>
+                          <button
+                            type="button"
+                            class="btn sec sm"
+                            data-play-audio={`${cdn}/${r.audio_key}`}
+                            aria-label="Play"
+                          >
+                            ▶
+                          </button>
+                        </div>
                       </td>
                       <td class="coltitle">
                         <strong>{r.title}</strong>
