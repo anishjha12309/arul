@@ -77,8 +77,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
 
   int _index = 0;
 
-  /// The filtered list currently handed to the pager + video pool. Identity is
-  /// stable until the category or catalog changes; a change triggers a resync.
+  /// The filtered list currently handed to the pager + video pool. Compared by
+  /// CONTENT (ordered item ids), not identity: feedProvider re-emits a NEW list
+  /// identity on every catalogProvider change (a background revalidate or
+  /// pull-refresh), and an identity-only check reset the browse position on each
+  /// of those. A resync only jumps/re-points when the items actually change.
   List<Wallpaper>? _servedList;
 
   /// Set by [restoreFeedTo] after an apply-driven cold restart: the page to jump
@@ -125,7 +128,27 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// Re-point the pager + video pool at [items] whenever the filtered list
   /// changes (category switch, first data, or an apply-restore jump).
   void _syncFeed(List<Wallpaper> items) {
-    if (identical(items, _servedList)) return;
+    final previous = _servedList;
+
+    // Defect E: a background revalidate (cache-first startup path) or a
+    // pull-refresh that returns EQUIVALENT content re-emits a new list identity
+    // with the same items. Detecting change by identity reset _index to 0,
+    // jumped the pager, and re-pointed the video pool mid-browse. When the items
+    // are unchanged, keep the user exactly where they are — just hand the pool
+    // the fresh objects so a same-id item whose URL changed still re-opens
+    // (reconcile is a no-op when nothing changed, so there is no flicker). Never
+    // when an apply-restore jump is pending: that must still land on its index.
+    if (previous != null &&
+        _pendingRestoreIndex == null &&
+        _sameContent(previous, items)) {
+      _servedList = items;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _video.setWallpapers(items, initialIndex: _index);
+      });
+      return;
+    }
+
     _servedList = items;
 
     final target =
@@ -148,6 +171,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
         ..setWallpapers(items, initialIndex: target)
         ..onPageChanged(target);
     });
+  }
+
+  /// Whether two filtered feeds hold the same items in the same order (by id).
+  /// A category switch, or a catalog rebuild that added/removed/reordered items,
+  /// changes this; a revalidate that re-fetched the identical catalog does not.
+  static bool _sameContent(List<Wallpaper> a, List<Wallpaper> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
   }
 
   @override

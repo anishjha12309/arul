@@ -128,6 +128,16 @@ class FeedVideoPlugin(
                     if (id != null) players[id]?.stop()
                     result.success(null)
                 }
+                "paintedOpenId" -> {
+                    // The openId of the most recent frame this player has actually
+                    // painted (0 = nothing painted yet), so Dart's reveal-timeout
+                    // net can tell a lost onRenderedFirstFrame EVENT apart from a
+                    // clip that simply hasn't decoded yet — and never force-reveal
+                    // a reused player onto its previous clip's frozen frame. -1 for
+                    // a stale/unknown id.
+                    val id = call.argument<Int>("playerId")
+                    result.success(if (id != null) players[id]?.paintedOpenId() ?: -1 else -1)
+                }
                 "dispose" -> {
                     val id = call.argument<Int>("playerId")
                     if (id != null) disposePlayer(id)
@@ -245,6 +255,16 @@ class FeedVideoPlugin(
         /** Bumped per [open]; echoed on `firstFrame` so Dart drops stale frames. */
         private var openId = 0
 
+        /**
+         * The [openId] of the most recent frame actually rendered to the surface
+         * (set in [Player.Listener.onRenderedFirstFrame]). Queried by Dart via
+         * `paintedOpenId` so its reveal-timeout net reveals ONLY when the native
+         * first-frame event was lost, never onto a reused player that hasn't yet
+         * painted the current clip (which still shows the previous one).
+         */
+        private var lastPaintedOpenId = 0
+        fun paintedOpenId(): Int = lastPaintedOpenId
+
         private val player: ExoPlayer
 
         init {
@@ -292,7 +312,22 @@ class FeedVideoPlugin(
                 player.prepare()
             } catch (e: Exception) {
                 Log.e(TAG, "open failed for player $playerId", e)
-                emit(playerId, "error", mapOf("message" to (e.message ?: "open failed")))
+                // Tag with THIS open's id + a distinct codeName so Dart can (a)
+                // drop it if a newer open has since swapped in, and (b) recognise
+                // it as a non-decoder open failure and schedule a re-open instead
+                // of giving up silently (which left the card stranded on its
+                // poster). Without openId Dart treated it as current, and without
+                // a codeName it fell through as ERROR_CODE_UNSPECIFIED — neither a
+                // decoder class (no retry) nor recoverable. See Defect D.
+                emit(
+                    playerId,
+                    "error",
+                    mapOf(
+                        "openId" to id,
+                        "codeName" to "ERROR_CODE_OPEN_FAILED",
+                        "message" to (e.message ?: "open failed"),
+                    ),
+                )
             }
             return id.toLong()
         }
@@ -365,8 +400,10 @@ class FeedVideoPlugin(
 
         private fun playerListener(): Player.Listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
-                // Tag with the current openId so Dart drops a first-frame that
-                // belongs to a since-swapped media.
+                // Record what we've painted (for the paintedOpenId query) and tag
+                // the event with the current openId so Dart drops a first-frame
+                // that belongs to a since-swapped media.
+                lastPaintedOpenId = openId
                 emit(playerId, "firstFrame", mapOf("openId" to openId))
             }
 

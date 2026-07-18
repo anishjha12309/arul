@@ -87,12 +87,14 @@ class _PooledPlayer {
   /// [_reconcile]).
   int servingIndex = -1;
 
-  /// Network URL of the media this player was assigned to open, recorded at
-  /// assignment time. An index alone is NOT identity: a category switch swaps
-  /// the whole list under the pager, so "serving index 0" can silently mean a
-  /// different wallpaper than the one this player has open — reconcile compares
-  /// this URL against the current item to detect that and re-open. Null until
-  /// first assignment.
+  /// Network URL of the media this player actually opened, stamped once
+  /// [FeedVideoPlayer.open] is invoked (NOT at assignment time — a setup that
+  /// abandons before opening must leave this null so the next reconcile
+  /// re-opens; see Defect C). An index alone is NOT identity: a category switch
+  /// swaps the whole list under the pager, so "serving index 0" can silently
+  /// mean a different wallpaper than the one this player has open — reconcile
+  /// compares this URL against the current item to detect that and re-open.
+  /// Null until the current assignment's media has been opened.
   String? openedUrl;
 
   /// Per-item first-frame flag, owned by the native handle (the card holds a
@@ -660,12 +662,19 @@ class VideoPreloadController extends ChangeNotifier
     }
 
     pooled.servingIndex = index;
-    // Record the media identity NOW (synchronously with the assignment), so the
-    // next reconcile can tell whether the list changed under this index. The
-    // list may have shrunk while create() awaited; _setupAndOpen re-guards.
-    pooled.openedUrl = index < _wallpapers.length
-        ? _prefetch.urlFor(_wallpapers[index])
-        : null;
+    // Defect A: hide the previous clip's frozen frame NOW, synchronously, before
+    // the notify below and long before _setupAndOpen's awaited open() would reset
+    // it. A reused player's native texture still holds the prior clip's last
+    // painted frame and its first-frame flag is still true from that clip;
+    // without this the new card renders the OLD wallpaper at full opacity until
+    // the disk-cache lookup resolves.
+    pooled.handle.resetForReassign();
+    // Defect C: do NOT stamp openedUrl here. It is recorded only once open() is
+    // actually invoked (in _setupAndOpen), so a setup that abandons before
+    // opening — openToken bumped, servingIndex moved, app paused, list shrank —
+    // leaves this null and the next reconcile re-opens instead of treating a
+    // never-opened player as correctly served (the poster-until-Apply wedge).
+    pooled.openedUrl = null;
     // New media on this player: reset the first-frame flag; the native
     // onRenderedFirstFrame event flips it true again once the new media paints.
     // (open() itself resets the handle's firstFrame notifier too.)
@@ -692,19 +701,36 @@ class VideoPreloadController extends ChangeNotifier
     return pooled;
   }
 
-  /// (Re)arms the shimmer-timeout reveal for [pooled]'s current open. Guarded
+  /// (Re)arms the reveal-timeout safety net for [pooled]'s current open. Guarded
   /// by [token] + serving index so a since-reassigned player never reveals; the
   /// handle itself additionally refuses to force-reveal an ERRORED open (black
   /// texture — the error path retries instead).
+  ///
+  /// Defect B: the timer only reveals when the native side confirms it has
+  /// actually PAINTED this open's first frame (i.e. the onRenderedFirstFrame
+  /// event was lost). If the clip simply hasn't decoded yet — not-yet-prefetched
+  /// fresh category, fast fling ahead of the data window, slow network — a
+  /// blind force-reveal on a REUSED player flashed the previous clip's frozen
+  /// frame, repeating the same wallpaper over card after card. Keeping the
+  /// poster is the correct fallback; genuine open failures/abandons heal via the
+  /// error retry (Defect D) and the post-open openedUrl stamping (Defect C).
   void _armReveal(_PooledPlayer pooled, int index, int token) {
     pooled._revealTimer?.cancel();
-    pooled._revealTimer = Timer(_revealTimeout, () {
+    pooled._revealTimer = Timer(_revealTimeout, () async {
       if (_disposed ||
           pooled.openToken != token ||
           pooled.servingIndex != index) {
         return;
       }
-      pooled.handle.forceFirstFrame();
+      final painted = await pooled.handle.hasPaintedCurrentOpen();
+      // Re-check after the async query: the player may have been reassigned or
+      // released while we asked native.
+      if (_disposed ||
+          pooled.openToken != token ||
+          pooled.servingIndex != index) {
+        return;
+      }
+      if (painted) pooled.handle.forceFirstFrame();
     });
   }
 
@@ -734,6 +760,14 @@ class VideoPreloadController extends ChangeNotifier
         _appPaused) {
       return;
     }
+
+    // Defect C: the guard above proved this assignment is still current, so we
+    // are now committed to opening this exact media — record its identity NOW.
+    // (Stamping this at assignment time wedged the card: an abandon before
+    // opening left openedUrl matching the item, and _reconcile then treated a
+    // never-opened player as correctly served, showing only the poster until an
+    // Apply (releaseDecoders) rebuilt the pool.)
+    pooled.openedUrl = url;
 
     // open() with playWhenReady=false so the first frame is decoded & painted
     // even for a paused neighbour; the current index passes true. Re-opening on
@@ -774,7 +808,7 @@ class VideoPreloadController extends ChangeNotifier
   void _onPlayerError(_PooledPlayer pooled, String codeName) {
     if (_disposed || _appPaused) return;
     final index = pooled.servingIndex;
-    if (index < 0 || !_isDecoderError(codeName)) return;
+    if (index < 0) return;
     final token = pooled.openToken;
 
     if (pooled.retriesThisOpen >= _maxRetriesPerOpen) {
@@ -785,6 +819,22 @@ class VideoPreloadController extends ChangeNotifier
       return;
     }
     pooled.retriesThisOpen++;
+
+    if (!_isDecoderError(codeName)) {
+      // Defect D: an open/source failure (ERROR_CODE_OPEN_FAILED from a native
+      // setMediaItem/prepare throw, or a transient source error) — the open may
+      // simply not have taken. Shrinking the decoder window wouldn't help, so
+      // don't demote; null the opened identity and re-open once instead of
+      // wedging the card on its poster. Nulling openedUrl also lets an
+      // interleaving reconcile re-open, whichever fires first.
+      pooled.openedUrl = null;
+      debugPrint(
+        'FeedVideo: $codeName on index $index — re-open '
+        '${pooled.retriesThisOpen}/$_maxRetriesPerOpen',
+      );
+      _scheduleReopen(pooled, index, token);
+      return;
+    }
 
     // A repeat failure on the same open = real codec starvation, not a blip.
     if (pooled.retriesThisOpen >= 2) {
@@ -800,6 +850,14 @@ class VideoPreloadController extends ChangeNotifier
       '(budget $_decoderBudget)',
     );
 
+    _scheduleReopen(pooled, index, token);
+  }
+
+  /// Schedules a single delayed re-open of [pooled]'s current media after
+  /// [_errorRetryDelay], guarded so a since-reassigned / released / out-of-window
+  /// player is left alone. Shared by the decoder-error retry, the software-
+  /// fallback re-open, and the open-failure retry (Defect D).
+  void _scheduleReopen(_PooledPlayer pooled, int index, int token) {
     Timer(_errorRetryDelay, () {
       if (_disposed ||
           _appPaused ||
@@ -899,25 +957,9 @@ class VideoPreloadController extends ChangeNotifier
     final demoted = _demoteBudget('software decoder $name at index $index');
     if (!demoted || index != _currentIndex) return;
 
-    final token = pooled.openToken;
-    Timer(_errorRetryDelay, () {
-      if (_disposed ||
-          _appPaused ||
-          pooled.openToken != token ||
-          pooled.servingIndex != index ||
-          !_inWindow(index)) {
-        return; // reassigned / released meanwhile
-      }
-      _armReveal(pooled, index, token);
-      unawaited(
-        _setupAndOpen(
-          pooled,
-          index,
-          token,
-          playWhenReady: index == _currentIndex && !_settling,
-        ),
-      );
-    });
+    // Re-open the visible card so it re-initializes onto the hw decoder the
+    // demote just freed, rather than waiting for the next swipe.
+    _scheduleReopen(pooled, index, pooled.openToken);
   }
 
   void _pauseAll() {

@@ -172,6 +172,17 @@ class _FeedVideoChannelHub {
     }
   }
 
+  /// Like [invokeMethod] but for a call that returns an int (e.g. a player's
+  /// last-painted openId). Returns null when the platform side is unavailable or
+  /// the id is stale, so callers can treat "unknown" distinctly from a value.
+  Future<int?> invokeIntMethod(String method, Map<String, dynamic> args) async {
+    try {
+      return await _method.invokeMethod<int>(method, args);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _onEvent(dynamic raw) {
     if (raw is! Map) return;
     final playerId = (raw['playerId'] as num?)?.toInt();
@@ -266,6 +277,38 @@ class FeedVideoPlayer {
       'playWhenReady': playWhenReady,
       'looping': looping,
     });
+  }
+
+  /// Synchronously hide the currently-shown frame the instant this player is
+  /// reassigned to a new index, BEFORE the async [open] runs. A reused player's
+  /// native texture still holds the PREVIOUS clip's last painted frame and its
+  /// [firstFrame] flag is still true from that clip; [open] only resets the flag
+  /// after an awaited disk-cache lookup, so without this the new card would
+  /// render the old wallpaper at full opacity in that window. Resets only the
+  /// first-frame flag (and the errored flag); it deliberately leaves [videoSize]
+  /// alone (it persists across reused opens — a same-dimension clip may not
+  /// re-emit onVideoSizeChanged) and does NOT bump [_currentOpenId] (that must
+  /// stay in lockstep with the native open, so a late first-frame from the
+  /// previous media is still dropped by the staleness guard, not mis-accepted).
+  void resetForReassign() {
+    if (_disposed) return;
+    firstFrame.value = false;
+    _openErrored = false;
+  }
+
+  /// Whether the native side has actually painted a frame for the CURRENT open
+  /// (its `lastPaintedOpenId` has reached our [_currentOpenId]). The controller's
+  /// reveal-timeout safety net uses this so it only reveals when the
+  /// onRenderedFirstFrame EVENT was lost — not when the clip simply hasn't
+  /// decoded yet. Force-revealing the latter on a reused player would flash the
+  /// PREVIOUS clip's frozen frame (the "content repeats over cards" bug). Returns
+  /// false if the query fails (treat as not-painted → keep the poster).
+  Future<bool> hasPaintedCurrentOpen() async {
+    if (_disposed) return false;
+    final painted = await _hub.invokeIntMethod('paintedOpenId', {
+      'playerId': playerId,
+    });
+    return painted != null && painted >= _currentOpenId;
   }
 
   /// Safety-net reveal: flip [firstFrame] true without a native event. The Dart
