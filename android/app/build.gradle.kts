@@ -1,12 +1,27 @@
+import java.util.Base64
 import java.util.Properties
 
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    // Phase 2/4 (with the port, once android/app/google-services.json exists):
-    //   id("com.google.gms.google-services")
-    //   id("com.google.firebase.crashlytics")
+    // Firebase plugins are declared (apply false) in settings.gradle.kts but
+    // applied CONDITIONALLY below — the plugins {} DSL block can't be conditional,
+    // so we apply(plugin = …) only when android/app/google-services.json exists.
+}
+
+// Firebase — applied ONLY when android/app/google-services.json is present. This
+// keeps the build green until the Firebase project is provisioned: without the
+// file the google-services plugin fails ("File google-services.json is missing"),
+// so dev/CI builds must not apply it. Dropping the file in enables Firebase
+// natively (pair it with FIREBASE_ENABLED=true in env/*.json for the Dart side).
+// Order matters: google-services MUST come before crashlytics/perf. crashlytics
+// auto-uploads the R8 mapping (isMinifyEnabled = true below) for deobfuscated
+// release stack traces.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+    apply(plugin = "com.google.firebase.firebase-perf")
 }
 
 // Release signing. key.properties is git-ignored; when absent the build silently
@@ -37,6 +52,15 @@ android {
         // Launcher + themed icons are vectors; render at build time for old APIs
         // instead of shipping extra PNG densities.
         vectorDrawables.useSupportLibrary = true
+
+        // Meta SDK app id + client token → AndroidManifest meta-data. Empty when
+        // unset/placeholder (see realDefine), which leaves the SDK inert; the
+        // Dart side is gated in parallel by AppConfig.metaEnabled. A build with
+        // no META defines therefore still works (placeholders resolve to "").
+        val defines = dartDefines()
+        manifestPlaceholders["facebookAppId"] = realDefine(defines, "META_APP_ID")
+        manifestPlaceholders["facebookClientToken"] =
+            realDefine(defines, "META_CLIENT_TOKEN")
     }
 
     signingConfigs {
@@ -64,6 +88,33 @@ android {
             )
         }
     }
+}
+
+// ── Meta (Facebook) SDK config from dart-defines ──────────────────────────────
+// Flutter forwards `--dart-define[-from-file]` values to Gradle as the
+// `dart-defines` project property: a comma-separated list of base64-encoded
+// `KEY=VALUE` pairs. Decode it so META_APP_ID / META_CLIENT_TOKEN can be baked
+// into the AndroidManifest meta-data via manifestPlaceholders (see the
+// com.facebook.sdk.* entries in AndroidManifest.xml). Keeping the values here —
+// not committed in strings.xml — means no Meta config lives in the repo and the
+// same source of truth (env/*.json) drives both the Dart and native sides.
+fun dartDefines(): Map<String, String> {
+    val raw = (project.findProperty("dart-defines") as String?) ?: return emptyMap()
+    return raw.split(",")
+        .mapNotNull { entry ->
+            if (entry.isBlank()) return@mapNotNull null
+            val decoded = String(Base64.getDecoder().decode(entry.trim()))
+            val idx = decoded.indexOf('=')
+            if (idx < 0) null else decoded.substring(0, idx) to decoded.substring(idx + 1)
+        }
+        .toMap()
+}
+
+// Treat env-file placeholders (`YOUR_…`, `placeholder-…`) as "unset" so a
+// half-configured build produces an inert SDK rather than a bogus app id.
+fun realDefine(defines: Map<String, String>, key: String): String {
+    val v = defines[key] ?: return ""
+    return if (v.startsWith("YOUR_") || v.startsWith("placeholder")) "" else v
 }
 
 kotlin {

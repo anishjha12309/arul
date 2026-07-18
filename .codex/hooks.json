@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\guard-secrets.js'",
+            "timeout": 15,
+            "statusMessage": "secret-staging guard"
+          },
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\release-version-guard.js' pre",
+            "timeout": 30,
+            "statusMessage": "release-version guard"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\format-dart.js'",
+            "timeout": 30,
+            "statusMessage": "dart format"
+          },
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\version-commit.js' post",
+            "timeout": 30,
+            "statusMessage": "version-bump commit"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\release-version-guard.js' post",
+            "timeout": 30,
+            "statusMessage": "release-version guard (record)"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'c:\\Anish\\Arul\\.codex\\hooks\\release-version-guard.js' reconcile",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -8,26 +8,18 @@ part of 'performance_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// App-wide [PerformanceMonitor].
-///
-/// FIREBASE-REENABLE: currently ALWAYS the no-op because Firebase is not
-/// provisioned (no google-services.json). Once it is, copy the reference's
-/// `firebase_performance_monitor.dart` next to this file and restore:
-///
-///   if (!AppConfig.firebaseEnabled) return const NoOpPerformanceMonitor();
-///   return const FirebasePerformanceMonitor();
+/// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
+/// every real app build (debug, profile, release), and the no-op under
+/// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
+/// `crashReporterProvider`, so tests never touch an uninitialised SDK.
 
 @ProviderFor(performanceMonitor)
 final performanceMonitorProvider = PerformanceMonitorProvider._();
 
-/// App-wide [PerformanceMonitor].
-///
-/// FIREBASE-REENABLE: currently ALWAYS the no-op because Firebase is not
-/// provisioned (no google-services.json). Once it is, copy the reference's
-/// `firebase_performance_monitor.dart` next to this file and restore:
-///
-///   if (!AppConfig.firebaseEnabled) return const NoOpPerformanceMonitor();
-///   return const FirebasePerformanceMonitor();
+/// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
+/// every real app build (debug, profile, release), and the no-op under
+/// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
+/// `crashReporterProvider`, so tests never touch an uninitialised SDK.
 
 final class PerformanceMonitorProvider
     extends
@@ -37,14 +29,10 @@ final class PerformanceMonitorProvider
           PerformanceMonitor
         >
     with $Provider<PerformanceMonitor> {
-  /// App-wide [PerformanceMonitor].
-  ///
-  /// FIREBASE-REENABLE: currently ALWAYS the no-op because Firebase is not
-  /// provisioned (no google-services.json). Once it is, copy the reference's
-  /// `firebase_performance_monitor.dart` next to this file and restore:
-  ///
-  ///   if (!AppConfig.firebaseEnabled) return const NoOpPerformanceMonitor();
-  ///   return const FirebasePerformanceMonitor();
+  /// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
+  /// every real app build (debug, profile, release), and the no-op under
+  /// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
+  /// `crashReporterProvider`, so tests never touch an uninitialised SDK.
   PerformanceMonitorProvider._()
     : super(
         from: null,
@@ -80,4 +68,4 @@ final class PerformanceMonitorProvider
 }
 
 String _$performanceMonitorHash() =>
-    r'c08a36b6cc63df703fd7db55710360125384def3';
+    r'791ccb6ad8f121a5e01f9ae822d53386f91408a2';

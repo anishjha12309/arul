@@ -12,14 +12,12 @@ part of 'analytics_provider.dart';
 /// are configured, so call sites never change:
 ///
 ///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
+///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
+///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
+///     (every real build with google-services.json + FIREBASE_ENABLED=true;
+///     skipped under `flutter test`).
 ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
 ///     (real App ID + client token).
-///
-/// FIREBASE-REENABLE: the reference also adds `GoogleAnalyticsService()` (GA4 —
-/// all events + ★→login/purchase for Google Ads) when
-/// `AppConfig.firebaseEnabled`. Copy `google_analytics_service.dart` from the
-/// reference and add `if (AppConfig.firebaseEnabled) GoogleAnalyticsService(),`
-/// once google-services.json exists.
 ///
 /// If more than one is present they're wrapped in a [CompositeAnalyticsService];
 /// a single one is returned directly; none → [NoOpAnalyticsService], so
@@ -32,14 +30,12 @@ final analyticsServiceProvider = AnalyticsServiceProvider._();
 /// are configured, so call sites never change:
 ///
 ///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
+///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
+///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
+///     (every real build with google-services.json + FIREBASE_ENABLED=true;
+///     skipped under `flutter test`).
 ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
 ///     (real App ID + client token).
-///
-/// FIREBASE-REENABLE: the reference also adds `GoogleAnalyticsService()` (GA4 —
-/// all events + ★→login/purchase for Google Ads) when
-/// `AppConfig.firebaseEnabled`. Copy `google_analytics_service.dart` from the
-/// reference and add `if (AppConfig.firebaseEnabled) GoogleAnalyticsService(),`
-/// once google-services.json exists.
 ///
 /// If more than one is present they're wrapped in a [CompositeAnalyticsService];
 /// a single one is returned directly; none → [NoOpAnalyticsService], so
@@ -57,14 +53,12 @@ final class AnalyticsServiceProvider
   /// are configured, so call sites never change:
   ///
   ///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
+  ///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
+  ///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
+  ///     (every real build with google-services.json + FIREBASE_ENABLED=true;
+  ///     skipped under `flutter test`).
   ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
   ///     (real App ID + client token).
-  ///
-  /// FIREBASE-REENABLE: the reference also adds `GoogleAnalyticsService()` (GA4 —
-  /// all events + ★→login/purchase for Google Ads) when
-  /// `AppConfig.firebaseEnabled`. Copy `google_analytics_service.dart` from the
-  /// reference and add `if (AppConfig.firebaseEnabled) GoogleAnalyticsService(),`
-  /// once google-services.json exists.
   ///
   /// If more than one is present they're wrapped in a [CompositeAnalyticsService];
   /// a single one is returned directly; none → [NoOpAnalyticsService], so
@@ -102,4 +96,4 @@ final class AnalyticsServiceProvider
   }
 }
 
-String _$analyticsServiceHash() => r'3260600583491e1190ddb620969bdf50f04b9d91';
+String _$analyticsServiceHash() => r'27de1a6c3a6e5b69f18f31e9a7acc81fe39e4328';

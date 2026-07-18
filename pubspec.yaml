@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+11
+version: 1.0.0+12
 
 environment:
   sdk: ^3.12.0
@@ -54,16 +54,31 @@ dependencies:
   phonepe_payment_sdk: ^3.0.2   # premium — vendored override below (AGP fix)
   file_picker: ^12.0.0-beta.7   # upload-your-content (FileType.media pick)
 
-  # ── Firebase (core/crashlytics/performance/analytics) DELIBERATELY ABSENT:
-  # android/app/google-services.json does not exist yet (Google project
-  # deferred). CrashReporter / PerformanceMonitor / AnalyticsService compile
-  # against no-op implementations; to re-enable, add the four firebase_* deps
-  # (versions in the reference pubspec), the google-services + crashlytics
-  # gradle plugins, copy lib/core/crash/firebase_crash_reporter.dart +
-  # lib/core/perf/firebase_performance_monitor.dart +
-  # lib/core/analytics/google_analytics_service.dart from the reference, and
-  # flip the guards in crash_provider / performance_provider /
-  # analytics_provider / main.dart (marked "FIREBASE-REENABLE").
+  # ── Firebase — Crashlytics + Performance + Analytics (GA4). SEPARATE from
+  # PostHog (our primary product analytics). All run in EVERY real build (debug,
+  # profile, release) and are skipped ONLY under `flutter test` — gated by
+  # AppConfig.firebaseEnabled in main.dart + the crash/perf providers +
+  # GoogleAnalyticsService selection, where Firebase has no platform channel.
+  # Wrapped behind CrashReporter / PerformanceMonitor / AnalyticsService — never
+  # call the Firebase SDKs from widgets. Analytics (firebase_analytics) is
+  # GA4-for-apps: it feeds the Firebase/GA4 console AND is the required conversion
+  # source for Google Ads (link the Firebase project ↔ Google Ads account in the
+  # console — no code). It receives ALL events (parity with PostHog); the ★ events
+  # additionally map to GA4 standard events (login/purchase) so they're Google
+  # Ads-eligible.
+  #
+  # CONDITIONALLY GATED (Arul delta from the reference, which is always-on because
+  # its google-services.json always exists): android/app/google-services.json does
+  # NOT exist yet. Until it does, the code above stays inert — the gradle plugins
+  # apply only when the file is present (app/build.gradle.kts) and firebaseEnabled
+  # is false (main.dart + providers select the no-op impls). To ENABLE: drop
+  # android/app/google-services.json in AND flip FIREBASE_ENABLED=true in env/*.json
+  # in the SAME change. No code edits needed — the deps + services + guards are all
+  # already wired here.
+  firebase_core: ^4.11.0
+  firebase_crashlytics: ^5.2.4
+  firebase_performance: ^0.11.4+3
+  firebase_analytics: ^12.4.3
 
 dev_dependencies:
   flutter_test:

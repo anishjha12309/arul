@@ -1,5 +1,10 @@
 import 'dart:async';
 
+import 'package:facebook_app_events/facebook_app_events.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,12 +20,55 @@ import 'features/referral/data/install_referrer_service.dart';
 
 /// App entry point.
 ///
-/// FIREBASE-REENABLE: the reference wraps everything below in a
-/// `runZonedGuarded` that initialises Firebase (Crashlytics + Performance +
-/// GA4) and routes Flutter/platform errors to Crashlytics, guarded by
-/// `AppConfig.firebaseEnabled`. Restore that wrapper (see the reference
-/// `main.dart`) once android/app/google-services.json exists.
+/// Crash + performance telemetry (Firebase Crashlytics + Performance Monitoring)
+/// and GA4 analytics run in **every real app build — debug, profile and
+/// release** — so the dashboards receive data during development too. Two builds
+/// skip Firebase: `flutter test` (the SDK has no platform channel and would
+/// throw) and any build without android/app/google-services.json — both are
+/// captured by `AppConfig.firebaseEnabled` (FIREBASE_ENABLED define + not a
+/// test), the same guard used in `crashReporterProvider` /
+/// `performanceMonitorProvider` / `analyticsServiceProvider`, so the SDK is
+/// never touched uninitialised.
 Future<void> main() async {
+  if (!AppConfig.firebaseEnabled) {
+    await _startApp();
+    return;
+  }
+
+  // Run the whole app inside a guarded zone so uncaught async errors are
+  // reported, and route Flutter framework + platform errors to Crashlytics as
+  // fatal.
+  await runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      await Firebase.initializeApp();
+      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+      await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+      // GA4 analytics — the product-analytics mirror of PostHog AND the
+      // conversion source for Google Ads (link the Firebase project ↔ Google
+      // Ads account in the console; no code). Events are sent via
+      // GoogleAnalyticsService behind the AnalyticsService seam. Enabling here
+      // (not per-event) also turns on auto-collected first_open/screen_view.
+      await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+
+      await _startApp();
+    },
+    (error, stack) =>
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true),
+  );
+}
+
+/// Configures the app (system UI, image cache, PostHog, Meta, Google Sign-In,
+/// referral capture) and runs it inside a Riverpod scope. Shared by the
+/// Firebase and non-Firebase entry paths above.
+Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
 
@@ -60,6 +108,19 @@ Future<void> main() async {
       ..surveys = false
       ..debug = kDebugMode;
     await Posthog().setup(config);
+  }
+
+  // Meta (Facebook) App Events. The native SDK auto-initialises + auto-logs
+  // install/launch via the AndroidManifest meta-data (app id + client token
+  // baked in from dart-defines); the ★ conversion events are sent explicitly
+  // through MetaAnalyticsService. We only nudge it here when a real app id +
+  // client token are configured — `activateApp()` re-affirms the app-launch
+  // event and is a no-op/no-cost otherwise. Skipped for key-less dev builds and
+  // `flutter test` (no platform channel), mirroring the PostHog guard above and
+  // `analyticsServiceProvider`. Belongs to startup regardless of Firebase, so it
+  // lives here in the shared path.
+  if (AppConfig.metaEnabled) {
+    unawaited(FacebookAppEvents().activateApp());
   }
 
   // Resolved before runApp: the wallpaper-apply flow persists its restore flags

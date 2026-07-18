@@ -82,11 +82,17 @@ abstract final class AppConfig {
     'FLUTTER_TEST',
   );
 
-  /// FIREBASE-REENABLE: Firebase (Crashlytics + Performance + GA4) is stubbed
-  /// out — android/app/google-services.json does not exist yet. When the Google
-  /// project is provisioned, restore the reference behaviour:
-  /// `static bool get firebaseEnabled => !isFlutterTest;`
-  static bool get firebaseEnabled => false;
+  /// Whether Firebase (Crashlytics + Performance + GA4) initialises and receives
+  /// events. Firebase runs in every real build (debug/profile/release) and is
+  /// skipped only under `flutter test` (no platform channel).
+  ///
+  /// Gated on the `FIREBASE_ENABLED` dart-define because Arul's
+  /// android/app/google-services.json does not exist yet (the reference is
+  /// always-on because its file always exists). Flip `FIREBASE_ENABLED=true` in
+  /// env/*.json in the SAME change that adds android/app/google-services.json —
+  /// enabling the flag without the file makes `Firebase.initializeApp()` fail.
+  static bool get firebaseEnabled =>
+      !isFlutterTest && const bool.fromEnvironment('FIREBASE_ENABLED');
 
   /// Logs key config in debug. Deliberately assert-free: an empty API_BASE_URL
   /// is a SUPPORTED state pre-Phase-0 ([hasBackend] = false stubs).

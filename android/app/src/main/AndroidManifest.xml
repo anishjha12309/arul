@@ -61,6 +61,35 @@
             android:name="flutterEmbedding"
             android:value="2"/>
 
+        <!-- Meta (Facebook) App Events. App id + client token are injected at
+             build time from dart-defines (META_APP_ID / META_CLIENT_TOKEN) via
+             gradle manifestPlaceholders — no config lives in the repo. When the
+             defines are absent (dev without keys, or the placeholder in prod.json
+             pre-provisioning), gradle substitutes empty placeholders, the values
+             below resolve to a bare "fb"/"" and the SDK stays effectively inert;
+             we ALSO gate the Dart side via AppConfig.metaEnabled so no events are
+             sent. The `fb`-prefix on ApplicationId is Meta's required string form.
+             Auto-init + auto-logging ON (Android-only v1, no iOS ATT): this
+             captures the install/launch events Meta Ads needs for attribution
+             automatically; the ★ conversion events are logged explicitly via
+             MetaAnalyticsService. Advertiser-ID collection ON for install
+             attribution — surface this in the privacy policy before launch. -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="fb${facebookAppId}" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="${facebookClientToken}" />
+        <meta-data
+            android:name="com.facebook.sdk.AutoInitEnabled"
+            android:value="true" />
+        <meta-data
+            android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
+            android:value="true" />
+        <meta-data
+            android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
+            android:value="true" />
+
         <!-- Impeller ON. Do NOT flip this to chase the green-edge-strip artifact on
              live wallpapers: it was tested against Skia on the reference app and the
              strip is IDENTICAL, because Flutter backs TextureRegistry.SurfaceProducer
