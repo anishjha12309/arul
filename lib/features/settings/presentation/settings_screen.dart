@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/widgets/arul_toast.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/providers/package_info_provider.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
@@ -306,19 +308,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _support() async {
-    // launchUrl THROWS (not merely returns false) when no mail client can handle
-    // the intent — the normal state of a device with no mail app. Uncaught, that
-    // swallows any feedback on tapping "Need help?".
+    // A blank email with an identical subject for every user is nearly useless
+    // to triage — pre-fill a diagnostics block (version, account, plan) and a
+    // prompt so the first reply already has what support needs. Every input
+    // degrades gracefully: the providers return null rather than throw, and a
+    // signed-in-only screen still guards the identity fields.
     // Recipient read LIVE from the remote app config (brand delta: the
     // documented fallback is support@hsrutility.com via AppConfig).
     final config = await ref
         .read(appConfigProvider.future)
         .catchError((_) => null);
+
+    // Real installed version (a failed read leaves it blank → "Unknown" below).
+    var version = '';
+    try {
+      final info = await ref.read(packageInfoProvider.future);
+      version = '${info.version} (${info.buildNumber})';
+    } catch (_) {
+      // Leave blank; the body prints "Unknown".
+    }
+
+    final auth = ref.read(authServiceProvider).currentState;
+    final userId = auth.userId;
+    final email = auth.email?.trim();
+
+    // Plan status is the single most common support-triage question for a
+    // premium-gated app ("I paid but nothing unlocked") — include it.
+    final entitlement = ref.read(entitlementDetailProvider).asData?.value;
+    final plan = entitlement?.isPremium != true
+        ? 'Free'
+        : switch (entitlement?.subscription?.status) {
+            SubscriptionStatus.trialing => 'Trial',
+            SubscriptionStatus.cancelled => 'Premium (auto-renew off)',
+            _ => 'Premium',
+          };
+
+    final supportEmail = config?.supportEmail ?? AppConfig.supportEmail;
+    final versionText = version.isEmpty ? 'Unknown' : version;
+
+    // Blank lines give the user room to type ABOVE the diagnostics block.
+    final body = StringBuffer()
+      ..writeln('Please describe your issue or feedback:')
+      ..writeln()
+      ..writeln()
+      ..writeln('— — — — — — — — — —')
+      ..writeln('The details below help us resolve your request faster:')
+      ..writeln('App: Arul $versionText')
+      ..writeln(
+        'Account: ${(email != null && email.isNotEmpty) ? email : 'Not signed in'}',
+      )
+      ..writeln('Plan: $plan')
+      ..write(
+        'User ID: ${(userId != null && userId.isNotEmpty) ? userId : 'Not signed in'}',
+      );
+
+    // launchUrl THROWS (not merely returns false) when no mail client can handle
+    // the intent — the normal state of a device with no mail app. Uncaught, that
+    // swallows any feedback on tapping "Need help?".
+    // mailto: query parts need %20-encoded spaces; Uri(queryParameters:) emits
+    // '+', which mail clients render literally — hence the manual _encodeQuery.
     final uri = Uri(
       scheme: 'mailto',
-      path: config?.supportEmail ?? AppConfig.supportEmail,
-      queryParameters: {'subject': 'Arul - Support Request'},
+      path: supportEmail,
+      query: _encodeQuery({
+        'subject': version.isEmpty
+            ? 'Arul Support Request'
+            : 'Arul Support Request — v$version',
+        'body': body.toString(),
+      }),
     );
+
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          'support_email_opened',
+          properties: {'has_user': userId != null},
+        );
+
     bool ok;
     try {
       ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -326,13 +392,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ok = false;
     }
     if (!ok && mounted) {
+      // Name the address so the user can still reach us by copying it manually.
       showArulToast(
         context,
-        'Something went wrong. Please try again.',
+        'No email app found. Write to us at $supportEmail',
         kind: ToastKind.error,
       );
     }
   }
+
+  /// `mailto:` query parts need %20 for spaces — [Uri]'s default query encoding
+  /// uses '+', which mail clients show literally in the subject/body. Encode
+  /// each key/value ourselves (mirrors the Pakiza reference).
+  static String _encodeQuery(Map<String, String> params) => params.entries
+      .map(
+        (e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+      )
+      .join('&');
 }
 
 /// Silk-gradient profile card — 52px maroon avatar with a gold Marcellus initial,
