@@ -13,7 +13,7 @@
 - **Media:** Cloudflare R2 (**zero egress**) + CDN — this is why it's affordable.
 - **Browse feed:** edge-cached catalog JSON from the `build-catalog` Worker (CMS-triggered or hourly cron; the same cron sweeps orphaned R2 objects). **Never hits DB.**
 - **DB (Neon Postgres via Hyperdrive):** per-user state only. Reached **only** from Workers — never the app.
-- **Authoring:** CMS at `arul-api.hsrutility.com/admin` — row write + `content_version` bump + rebuild + purge, atomically. Near-instant updates via `catalog/version.json` + `?v=`.
+- **Authoring:** unified CMS at `api.hsrutility.com/admin` — **separate worker `hsr-cms`, separate repo** (`c:\Anish\Unified CMS`, github.com/anishjha12309/hsr-cms); manages Arul AND Pakiza from one login, reaching each app's worker via service binding + `/internal/build-catalog`. Row write + `content_version` bump + rebuild + purge, atomically. Near-instant updates via `catalog/version.json` + `?v=`. **This repo's worker has no `/admin`** (legacy CMS removed 2026-07-20).
 - **No server-side transcoding.** ffmpeg locally per [docs/media-conventions.md](docs/media-conventions.md).
 
 ## 3. Stack (decided — do NOT re-litigate; versions pinned in pubspec.yaml / workers/package.json)
@@ -21,7 +21,7 @@
 | Concern | Choice |
 | --- | --- |
 | State / Nav | Riverpod 3 (riverpod_generator) · go_router |
-| Backend | Cloudflare Workers (Hono, TS) = API + CMS + crons · Neon via Hyperdrive · Workers KV · R2. Code in `workers/`. |
+| Backend | Cloudflare Workers (Hono, TS) = API + crons (CMS is its own repo/worker) · Neon via Hyperdrive · Workers KV · R2. Code in `workers/`. |
 | Auth | Google one-tap (`google_sign_in` v7: instance → initialize → authenticate) → Worker verifies idToken (`aud` = WEB client id) → identity-only JWT (15m access + 60d rotating refresh) |
 | Payments | PhonePe v2 Autopay (OAuth), server calls in Workers only. One trial per user (`trial_end` = consumed-marker); repeat = ₹199 TRANSACTION setup. Endpoint gotchas: [workers/README.md](workers/README.md) — re-verify there, never from memory. |
 | Analytics | `AnalyticsService` → Composite = PostHog (all events) + GA4/`firebase_analytics` (all + ★→`login`/`purchase`) + Meta (★ only, gated on dart-defines). **Never call SDKs from widgets.** |
@@ -32,7 +32,7 @@
 Feature-first; Riverpod providers are the only cross-layer glue. App reaches the backend only via `lib/core/api/api_client.dart`.
 ```
 lib/  main.dart · app/ · core/{config,api,error,analytics} · features/{auth,wallpapers,premium,referral,upload,settings} · data/{models,repositories}
-workers/  Worker API + CMS + crons (TS)   db/schema/  apply 01→04, then seed.sql   docs/  reference docs
+workers/  Worker API + crons (TS)         db/schema/  apply 01→04, then seed.sql   docs/  reference docs
 ```
 
 ## 5. Premium Entitlement — THE Cross-Cutting Rule

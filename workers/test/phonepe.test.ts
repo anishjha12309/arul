@@ -75,9 +75,6 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     TRIAL_TOMBSTONE_SECRET: "test-tombstone-secret-32-bytes!!!!",
     CATALOG_BUILD_SECRET: "test-catalog-secret",
     ALLOWED_ORIGINS: "https://arul.hsrutility.com",
-    ADMIN_USERNAME: "admin",
-    ADMIN_PASSWORD_HASH: "pbkdf2$210000$c2FsdHNhbHQ=$aGFzaGhhc2g=",
-    ADMIN_SESSION_SECRET: "test-admin-session-secret-min-32-bytes",
     ...overrides,
   };
 }

@@ -1,6 +1,6 @@
 # Media Conventions
 
-No server-side transcoding. Transcode locally, upload via CMS (`arul-api.hsrutility.com/admin`)
+No server-side transcoding. Transcode locally, upload via the unified CMS (`api.hsrutility.com/admin/arul`)
 or, for bulk import, direct R2 + one DB transaction (content-ops skill). Full QC battery incl.
 faststart/audio-stream checks: reference `c:\Anish\Pakiza\wallpaper-media-spec.md`.
 Content kinds: wallpapers (static + live) AND ringtones (audio + optional cover — added 2026-07-17,

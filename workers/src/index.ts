@@ -66,7 +66,6 @@ import {
   handleRunRedemptions,
   handleRefund,
 } from "./routes/internal.js";
-import { adminApp } from "./admin/app.js";
 import { buildCatalog } from "./cron/build-catalog.js";
 import { sweepSubmissions } from "./cron/sweep-submissions.js";
 import { sweepCanonical } from "./cron/sweep-canonical.js";
@@ -126,8 +125,8 @@ app.post("/internal/sweep-canonical", handleSweepCanonical);
 app.post("/internal/run-redemptions", handleRunRedemptions); // testing: force notify+execute
 app.post("/internal/refund", handleRefund);                  // operator/support: ₹199 refund
 
-// ── Admin CMS (server-rendered, session-gated; mounted sub-app) ───────────────
-app.route("/admin", adminApp);
+// Authoring lives in the unified CMS worker (hsr-cms), not here — see README.
+// It reaches this worker via the ARUL_API service binding + /internal/build-catalog.
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.onError((err, c) => {

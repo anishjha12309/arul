@@ -1,6 +1,8 @@
 # Arul Workers
 
-Cloudflare Worker = whole backend: API + CMS + crons. Base `https://arul-api.hsrutility.com`.
+Cloudflare Worker = API + crons. Base `https://arul-api.twilight-smoke-d495.workers.dev`
+(the `arul-api.hsrutility.com` custom domain is still an open provisioning item — see docs/provisioning.md).
+**Authoring is NOT here** — the unified CMS is the separate `hsr-cms` worker/repo (see below).
 Neon via Hyperdrive · R2 `south-indian-wallpapers` (presign via aws4fetch) · KV (jti denylist,
 webhook dedupe, OAuth cache) · PhonePe v2 Autopay. `src/` arrives in port-map Phase 2 — copied
 verbatim from `c:\Anish\Pakiza\workers\src` + brand deltas in docs/port-map.md. (The original
@@ -21,17 +23,21 @@ R2 `ringtones/` prefix. See port-map.md.)
 | GET/POST | /me · /me/{subscription,submissions,referrals} · /me/profile | Bearer | Scoped to verified sub |
 | DELETE | /me | Bearer | Revoke mandate → trial tombstone (HMAC, never-rotate secret) → cascade → denylist |
 | POST | /internal/{build-catalog,sweep-submissions,sweep-canonical,run-redemptions,refund} | CATALOG_BUILD_SECRET | Ops |
-| ALL | /admin/* | Session cookie `arul_admin` | CMS |
 
 Errors: `{ "error": { "code", "message" } }` with 4xx/5xx.
 
-## Admin CMS (/admin/*)
-Server-rendered Hono JSX+HTMX, single operator (PBKDF2 hash + signed HttpOnly cookie). Media bytes
-upload browser → R2 direct via presigned PUT. Every mutation bumps `content_version` in the row's
-transaction, rebuilds the scope, purges the version pointer. Pages: dashboard · wallpapers ·
-submissions (approve→copy to canonical key→promote; NEVER approve a dimension-violating video as-is)
-· config. (No ringtones page here — the legacy per-app admin is superseded by the separate hsr-cms
-worker; ringtone authoring lives there.)
+## Authoring — the unified CMS (NOT in this repo)
+The legacy per-app `/admin` was removed on 2026-07-20. All authoring for Arul AND Pakiza now lives in
+the standalone **`hsr-cms`** worker: `https://api.hsrutility.com/admin` (Arul pages under
+`/admin/arul/…`), repo `c:\Anish\Unified CMS` → github.com/anishjha12309/hsr-cms.
+
+It never touches this repo's code. It reaches this worker through the **`ARUL_API` service binding**
+and `POST /internal/build-catalog` (bearer `CATALOG_BUILD_SECRET`). A plain `fetch()` to a sibling
+`*.workers.dev` host is blocked by Cloudflare — the service binding is required.
+
+The `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` / `ADMIN_SESSION_SECRET` secrets are no longer read by
+this worker (they now live on `hsr-cms`); they remain set in Cloudflare but are inert and can be
+deleted with `npx wrangler secret delete <NAME>`.
 
 ## Catalog outputs (build-catalog)
 `catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (20/page; no per-tag pages;
@@ -79,11 +85,10 @@ R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
 PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
-ADMIN_USERNAME  ADMIN_PASSWORD_HASH(node scripts/hash-admin-password.mjs '<pw>')  ADMIN_SESSION_SECRET
 CF_ZONE_ID  CF_PURGE_TOKEN   # optional: purge version pointer on publish
 ```
-CMS one-time setup: set the three ADMIN_* secrets, then add an R2 CORS rule allowing origin
-`https://arul-api.hsrutility.com` for PUT with header `content-type`.
+No ADMIN_* secrets here any more — they belong to the `hsr-cms` worker. The R2 CORS rule for browser
+uploads must allow origin `https://api.hsrutility.com` (the CMS), not this worker.
 
 ## Dev / deploy
 ```bash

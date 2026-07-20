@@ -54,18 +54,6 @@ export interface Env {
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
-  // ── CMS admin (single-operator login for /admin) ─────────────────────────
-  /** CMS admin login username (not secret, but set via wrangler secret). */
-  ADMIN_USERNAME: string;
-  /**
-   * CMS admin password digest — NEVER the plaintext.
-   * Format: "pbkdf2$<iterations>$<saltB64>$<hashB64>".
-   * Generate with: node workers/scripts/hash-admin-password.mjs '<password>'
-   */
-  ADMIN_PASSWORD_HASH: string;
-  /** HS256 secret for signing the admin session cookie — separate from JWT_SECRET. */
-  ADMIN_SESSION_SECRET: string;
-
   // ── Optional: instant-update cache purge (publish → evict edge copy) ──────
   /** Cloudflare zone id; if set with CF_PURGE_TOKEN, publish purges the version pointer. */
   CF_ZONE_ID?: string;

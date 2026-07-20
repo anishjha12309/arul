@@ -4,7 +4,7 @@ Browse = CDN-only ($0 egress). Writes = Workers → Neon. Neon holds per-user st
 Base: `https://arul-api.hsrutility.com` · CDN: `https://arul-cdn.hsrutility.com` (R2 `south-indian-wallpapers`).
 Wallpapers-only: the reference's ringtone code paths are stripped (port-map strip list).
 
-**Routes:** auth.ts · media.ts (gated signed-url + submissions) · payments.ts (PhonePe v2 Autopay) · me.ts · internal.ts · admin/* (CMS)
+**Routes:** auth.ts · media.ts (gated signed-url + submissions) · payments.ts (PhonePe v2 Autopay) · me.ts · internal.ts
 **Cron (single hourly `0 * * * *`):** build-catalog → sweep-canonical (only after a fully successful rebuild) ∥ sweep-submissions ∥ autopay notify/execute
 **Libs:** db.ts (Hyperdrive) · r2.ts (presign/copy) · jwt.ts · google.ts (idToken) · entitlement.ts (isPremium live read) · phonepe.ts
 
@@ -38,8 +38,11 @@ All/New tabs, never a static/live filter). Orphaned page files deleted each rebu
 no-store; pages = max-age=60 + `?v=<version>` busting. Exposed key is public: wallpaper full_key.
 (`catalog/catalog.json` in the bucket is the one-time import manifest, not read by the app.)
 
-CMS: server-rendered Hono JSX+HTMX, single operator (PBKDF2). Mutation = bytes + row + version bump +
-rebuild + purge (atomic). Scopes: wallpapers, app_config, submissions.
+CMS: **separate worker + repo** (`hsr-cms`, `c:\Anish\Unified CMS`) serving Arul + Pakiza from one
+login at `api.hsrutility.com/admin`. Server-rendered Hono JSX+HTMX, single operator (PBKDF2). Mutation
+= bytes + row + version bump + rebuild + purge (atomic). Scopes: wallpapers, ringtones, app_config,
+submissions. It calls this worker via the `ARUL_API` service binding → `/internal/build-catalog`;
+this worker exposes no `/admin` of its own (legacy removed 2026-07-20).
 
 ## Schema (Neon) — detail in docs/data-model.md, DDL in db/schema/
 users · subscriptions · wallpapers · content_submissions · referrals · trial_tombstones ·

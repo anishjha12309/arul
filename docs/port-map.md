@@ -39,8 +39,8 @@ ringtones. What was added back (Worker side; contract in the reversal task):
 - `routes/media.ts`: KIND_TABLE gains `ringtone → ringtones.audio_key`; confirm-upload stays
   wallpaper-only (product decision — no user ringtone submissions).
 - R2 keys: audio `ringtones/<category>/<uuid>.mp3`, covers `ringtones/covers/<category>/<uuid>.jpg`
-  (recipes in docs/media-conventions.md). Legacy per-app `src/admin/` untouched — ringtone authoring
-  lives in the separate hsr-cms worker. Flutter side ported separately.
+  (recipes in docs/media-conventions.md). Legacy per-app `src/admin/` has since been REMOVED
+  (2026-07-20) — all authoring lives in the separate hsr-cms worker. Flutter side ported separately.
 
 ### Original strip (historical — no longer in force)
 Worker — do these WITH the copy, or build-catalog crashes on the missing table:
