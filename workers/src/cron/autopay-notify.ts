@@ -1,8 +1,9 @@
 /**
  * Autopay cron — PhonePe Standard Checkout v2 (OAuth / O-Bearer)
  *
- * Required by CLAUDE.md §8 gotcha #5:
- *   "MUST notify user 24h before each debit (pg_cron Edge Function)"
+ * Required by CLAUDE.md §8 gotcha #4:
+ *   "notify user 24h before each debit (hourly cron)"
+ * Implemented as a Cloudflare Worker cron trigger (not a DB-scheduled job).
  *
  * Per PhonePe docs:
  *   - The Notify API must be called BEFORE the debit date.
@@ -38,7 +39,20 @@ import {
   executeRedemption,
   getSubscriptionStatus,
   buildMerchantOrderId,
+  PhonePeApiError,
 } from "../lib/phonepe.js";
+
+/**
+ * Mandate states from which PhonePe will never debit again. Seeing one of these
+ * is authoritative — the mandate is gone at their end, so a row still pointing
+ * at it must stop being retried.
+ */
+const TERMINAL_MANDATE_STATES = new Set([
+  "REVOKED",
+  "CANCELLED",
+  "EXPIRED",
+  "FAILED",
+]);
 
 /** Maximum failed execute attempts before we expire the subscription. */
 const MAX_RETRIES = 5;
@@ -46,8 +60,59 @@ const MAX_RETRIES = 5;
 /** How far ahead to look for upcoming debits when deciding to notify. */
 const NOTIFY_WINDOW_HOURS = 24;
 
+/**
+ * Rows fetched per pass, per run.
+ *
+ * This cron is a SEQUENTIAL loop making PhonePe HTTP calls per row, inside a
+ * single scheduled invocation bounded by the Workers subrequest cap and cron
+ * duration. Unbounded, a backlog of a few hundred due subscribers would simply
+ * kill the invocation partway — safe (survivors retry next hour) but it never
+ * drains and nothing surfaces that it is stuck. Bounded + logged instead.
+ */
+const MAX_ROWS_PER_PASS = 200;
+
+/**
+ * Ceiling on outbound PhonePe calls per run, shared across both passes.
+ * Pass A costs 2 per row (status check + notify), Pass B costs 1 (redeem).
+ */
+const MAX_PHONEPE_CALLS_PER_RUN = 400;
+
+/**
+ * KV key caching the earliest next_debit_at across all live subscriptions.
+ * While that instant is still in the future minus the notify window, this cron
+ * provably has nothing to do and can skip the DB entirely.
+ */
+const NEXT_WORK_KEY = "autopay:next_work_at";
+
 export async function runAutopayNotify(env: Env): Promise<void> {
+  // ── Idle short-circuit ─────────────────────────────────────────────────────
+  // WHY: this cron runs hourly forever and used to query `subscriptions`
+  // unconditionally, so it woke the Neon compute every single hour whether or
+  // not any debit was due. Neon bills by compute-time and autosuspend is what
+  // keeps that near zero pre-launch. A cached "nothing is due before T" marker
+  // makes an idle hour cost one KV read instead of a cold start.
+  //
+  // Fail-open in every direction: no marker, unparseable marker, or KV error
+  // all fall through to the real query.
+  try {
+    const cached = await env.KV.get(NEXT_WORK_KEY);
+    if (cached !== null) {
+      const nextWorkMs = Number(cached);
+      if (Number.isFinite(nextWorkMs) && nextWorkMs > Date.now()) {
+        console.log(
+          `[autopay-notify] Nothing due before ${new Date(nextWorkMs).toISOString()} — skipping DB`,
+        );
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("[autopay-notify] idle-marker read failed, running anyway:", err);
+  }
+
   const sql = getDb(env);
+  let phonePeCalls = 0;
+  const budgetLeft = (needed: number) =>
+    phonePeCalls + needed <= MAX_PHONEPE_CALLS_PER_RUN;
 
   try {
     const now = new Date();
@@ -64,21 +129,58 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       WHERE status IN ('trialing', 'active')
         AND next_debit_at <= ${notifyThreshold.toISOString()}
         AND notified_at IS NULL
+      ORDER BY next_debit_at ASC
+      LIMIT ${MAX_ROWS_PER_PASS}
     `;
 
     console.log(`[autopay-notify] Pass A — ${toNotify.length} subscriptions due for notify`);
+    if (toNotify.length === MAX_ROWS_PER_PASS) {
+      console.warn(
+        `[autopay-notify] Pass A hit the ${MAX_ROWS_PER_PASS}-row cap — a backlog exists; ` +
+        `remaining rows continue next run (soonest next_debit_at first)`,
+      );
+    }
 
     for (const row of toNotify) {
       const merchantSubId = row.merchant_subscription_id as string;
       const userId = row.user_id as string;
 
+      if (!budgetLeft(2)) {
+        console.warn(
+          `[autopay-notify] Pass A stopping early — PhonePe call budget ` +
+          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+        );
+        break;
+      }
+
       try {
+        phonePeCalls += 2; // status check + notify
         // Must verify ACTIVE before notifying (PhonePe docs requirement)
         const subStatus = await getSubscriptionStatus(env, merchantSubId);
         if (subStatus.state !== "ACTIVE") {
-          console.warn(
-            `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state}, not ACTIVE — skipping notify`,
-          );
+          // A bare `continue` here is what created the stuck-row loop: the row
+          // keeps notified_at = NULL, so it is re-selected next hour, forever,
+          // for a mandate PhonePe has already retired. Terminal states are a
+          // final answer — reconcile the row instead of re-asking hourly.
+          if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
+            await parkMandate(sql, row.id as string, "cancelled");
+            console.warn(
+              `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
+              `marked cancelled, next_debit_at cleared (access kept to current_period_end)`,
+            );
+          } else if (subStatus.state === "PAUSED") {
+            await parkMandate(sql, row.id as string, "paused");
+            console.warn(
+              `[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`,
+            );
+          } else {
+            // ACTIVATION_IN_PROGRESS and friends are genuinely in-flight; these
+            // DO resolve on their own, so retrying next hour is correct.
+            console.warn(
+              `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state}, not ACTIVE — ` +
+              `skipping notify, will retry next run`,
+            );
+          }
           continue;
         }
 
@@ -108,8 +210,23 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         });
 
       } catch (err) {
-        console.error(`[autopay-notify] Notify failed for sub ${merchantSubId}:`, err);
-        // Leave notified_at = NULL → will retry on next cron run
+        // A 4xx is PhonePe's final answer (SUBSCRIPTION_NOT_FOUND is the one
+        // seen in the wild). Retrying it hourly forever costs two PhonePe calls
+        // and a Neon wake per row per hour and never converges, so park the row
+        // instead. Everything else — 5xx, 429, a dropped connection — really is
+        // transient, and for those leaving notified_at = NULL to retry next run
+        // is the correct behaviour.
+        if (err instanceof PhonePeApiError && err.isPermanent) {
+          await parkMandate(sql, row.id as string, "cancelled");
+          console.error(
+            `[autopay-notify] Sub ${merchantSubId} rejected permanently by PhonePe ` +
+            `(HTTP ${err.status}) — marked cancelled to stop the hourly retry loop. ` +
+            `Access is kept to current_period_end. Body: ${err.body}`,
+          );
+        } else {
+          console.error(`[autopay-notify] Notify failed for sub ${merchantSubId}:`, err);
+          // Transient — leave notified_at = NULL so the next cron run retries.
+        }
       }
     }
 
@@ -125,9 +242,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       WHERE notified_at IS NOT NULL
         AND next_debit_at <= ${now.toISOString()}
         AND status IN ('trialing', 'active')
+      ORDER BY next_debit_at ASC
+      LIMIT ${MAX_ROWS_PER_PASS}
     `;
 
     console.log(`[autopay-notify] Pass B — ${toExecute.length} subscriptions due for execute`);
+    if (toExecute.length === MAX_ROWS_PER_PASS) {
+      console.warn(
+        `[autopay-notify] Pass B hit the ${MAX_ROWS_PER_PASS}-row cap — backlog continues next run`,
+      );
+    }
 
     for (const row of toExecute) {
       const merchantSubId = row.merchant_subscription_id as string;
@@ -138,7 +262,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         continue;
       }
 
+      if (!budgetLeft(1)) {
+        console.warn(
+          `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
+          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+        );
+        break;
+      }
+
       try {
+        phonePeCalls += 1;
         const execResult = await executeRedemption(env, redemptionOrderId);
 
         console.log(
@@ -193,12 +326,100 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       }
     }
 
+    // ── Refresh the idle marker ───────────────────────────────────────────────
+    // Earliest moment this cron could next have work = the soonest next_debit_at
+    // among live subscriptions, minus the notify window. Anything already due
+    // (or a row mid-flight with notified_at set) yields a past/absent value, so
+    // we store nothing and the next run queries normally.
+    await refreshIdleMarker(env, sql);
+
   } finally {
     await sql.end();
   }
 }
 
+/**
+ * Cache "there is provably no autopay work before T" so idle hours skip the DB.
+ * Deliberately conservative: any in-flight row (notified_at set) or any row
+ * already due clears the marker so the next run does the real work.
+ */
+async function refreshIdleMarker(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+): Promise<void> {
+  try {
+    const rows = (await sql`
+      SELECT
+        min(next_debit_at) AS soonest,
+        count(*) FILTER (WHERE notified_at IS NOT NULL) AS in_flight
+      FROM subscriptions
+      WHERE status IN ('trialing', 'active')
+        AND next_debit_at IS NOT NULL
+    `) as unknown as { soonest: unknown; in_flight: unknown }[];
+
+    const inFlight = Number(rows[0]?.in_flight ?? 0);
+    const soonestRaw = rows[0]?.soonest ?? null;
+    if (inFlight > 0 || soonestRaw === null) {
+      await env.KV.delete(NEXT_WORK_KEY);
+      return;
+    }
+
+    const soonest = new Date(soonestRaw as string).getTime();
+    if (!Number.isFinite(soonest)) {
+      await env.KV.delete(NEXT_WORK_KEY);
+      return;
+    }
+    // Work starts one notify-window BEFORE the debit itself.
+    const nextWorkMs = soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000;
+    if (nextWorkMs <= Date.now()) {
+      await env.KV.delete(NEXT_WORK_KEY);
+      return;
+    }
+    // TTL is deliberately capped at the CRON PERIOD, never at nextWorkMs.
+    // A subscription that activates between runs writes its own next_debit_at
+    // via the webhook, and this marker knows nothing about it. Letting the
+    // marker live for days would risk skipping a real debit — a lost ₹199 and a
+    // broken subscription — to save a fraction of a cent of Neon compute.
+    // Capping at one hour means the worst case is EXACTLY today's behaviour.
+    await env.KV.put(NEXT_WORK_KEY, String(nextWorkMs), { expirationTtl: 3600 });
+    console.log(
+      `[autopay-notify] No work until ${new Date(nextWorkMs).toISOString()} — marker set`,
+    );
+  } catch (err) {
+    // A marker we failed to write just means the next run does the full query.
+    console.warn("[autopay-notify] idle-marker refresh failed:", err);
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Take a subscription out of the autopay rotation without touching entitlement.
+ *
+ * `next_debit_at = NULL` plus a status outside ('trialing','active') removes the
+ * row from BOTH passes' queries, which is what actually stops the hourly loop.
+ *
+ * current_period_end is deliberately left alone: 'cancelled' keeps premium to
+ * the end of the period the user already paid for. Parking a row is a billing
+ * decision, never a reason to strip access someone has bought — which is also
+ * why we never park as 'expired' here.
+ *
+ * Mirrored in Pakiza (workers/src/cron/autopay-notify.ts) — keep both in sync.
+ */
+async function parkMandate(
+  sql: ReturnType<typeof getDb>,
+  subscriptionId: string,
+  status: "cancelled" | "paused",
+): Promise<void> {
+  await sql`
+    UPDATE subscriptions
+    SET status        = ${status},
+        next_debit_at = NULL,
+        notified_at   = NULL,
+        updated_at    = now()
+    WHERE id = ${subscriptionId}
+  `;
+}
 
 function addOneMonth(date: Date): Date {
   const d = new Date(date);

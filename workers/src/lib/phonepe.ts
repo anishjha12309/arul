@@ -100,6 +100,44 @@ function isProduction(env: Env): boolean {
   return raw === "PRODUCTION";
 }
 
+/**
+ * A non-2xx response from PhonePe, carrying the HTTP status so callers can tell
+ * a TRANSIENT fault from a FINAL verdict.
+ *
+ * This distinction is load-bearing for the autopay cron. That cron runs hourly
+ * forever and, on any thrown error, deliberately leaves the row untouched so it
+ * retries next hour. That is right for a 5xx or a dropped connection — and
+ * exactly wrong for a 4xx like SUBSCRIPTION_NOT_FOUND, where PhonePe has told
+ * us the mandate does not exist and no number of retries will change that. Left
+ * unclassified, one such row burns two PhonePe calls and a Neon wake every hour
+ * indefinitely, and also holds the cron's idle marker permanently clear so no
+ * hour can ever skip the DB. Observed live on this app.
+ *
+ * The message format is unchanged from the plain Errors this replaces, so
+ * existing log greps and assertions still match.
+ *
+ * Mirrored in Pakiza (workers/src/lib/phonepe.ts) — keep both in sync.
+ */
+export class PhonePeApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+    this.name = "PhonePeApiError";
+  }
+
+  /**
+   * True when PhonePe has made a final decision about this request — retrying
+   * the identical call cannot succeed. 429 is excluded on purpose: it means
+   * "not now", not "never".
+   */
+  get isPermanent(): boolean {
+    return this.status >= 400 && this.status < 500 && this.status !== 429;
+  }
+}
+
 function getPgBase(env: Env): string {
   return isProduction(env)
     ? "https://api.phonepe.com/apis/pg"
@@ -301,7 +339,7 @@ export async function setupSubscription(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe setup error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe setup error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as {
@@ -480,7 +518,7 @@ export async function notifyRedemption(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe notify error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe notify error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as {
@@ -526,7 +564,7 @@ export async function executeRedemption(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe execute error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe execute error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as {
@@ -577,7 +615,7 @@ export async function getSubscriptionStatus(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe subscription status error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe subscription status error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as SubscriptionStatusResult;
@@ -628,7 +666,7 @@ export async function getOrderStatus(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe order status error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe order status error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as OrderStatusResult;
@@ -687,7 +725,7 @@ export async function initiateRefund(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`PhonePe refund error ${res.status}: ${text}`);
+    throw new PhonePeApiError(`PhonePe refund error ${res.status}: ${text}`, res.status, text);
   }
 
   const data = await res.json() as RefundResult;
