@@ -5,7 +5,8 @@
 /// already covers catalog/API/CDN latency. This abstraction is only for the few
 /// custom traces worth measuring by hand (v1: wallpaper apply). Widgets must
 /// never touch `FirebasePerformance` directly — depend on this behind
-/// `performanceMonitorProvider`, so tests/debug builds get the no-op.
+/// `performanceMonitorProvider`, which picks the no-op when Firebase is not
+/// initialised.
 abstract interface class PerformanceMonitor {
   /// Starts (and returns) a running custom trace. Always pair with [PerfTrace.stop].
   Future<PerfTrace> startTrace(String name);
@@ -25,8 +26,10 @@ abstract interface class PerfTrace {
   Future<void> stop();
 }
 
-/// No-op used in debug builds and `flutter test`, where Firebase is never
-/// initialised.
+/// No-op used ONLY under `flutter test`, or in a build without the
+/// `FIREBASE_ENABLED` define — the two cases where Firebase is never
+/// initialised. Every real build (debug, profile and release) gets the real
+/// Firebase monitor.
 class NoOpPerformanceMonitor implements PerformanceMonitor {
   const NoOpPerformanceMonitor();
 

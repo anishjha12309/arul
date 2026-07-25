@@ -1,6 +1,9 @@
 # Edge Cases & Must-Preserve Behavior
 
-The port is NOT done until every box holds on-device. `←` points into the reference (c:\Anish\Pakiza).
+Every box below held on-device as of the **1.0.0+20** release (2026-07-19). They are not a one-time port
+checklist — they are permanent **regression contracts**, to be re-verified on-device before every release.
+Boxes stay unticked on purpose: an unticked box means "not re-verified for the release you are cutting
+now", not "never done". `←` points into the reference (c:\Anish\Pakiza).
 These are regressions that actually happened once — each line is a bug someone already paid for.
 They bind regardless of how different Arul's UI looks.
 
@@ -38,6 +41,18 @@ They bind regardless of how different Arul's UI looks.
 - [ ] Feed filters by CATEGORY chips (All + 6); static and live interleave — no All/New tabs, no static/live filter anywhere in the UI
 - [ ] Every catalog item carries `category`; unknown/missing category never crashes the feed (falls into All)
 - [ ] Empty category → localized empty state, not a blank feed
+
+## Ringtones (shipped 2026-07-17 — the original strip was reversed)
+- [ ] Setting a tone needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to
+      `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt:76-149`
+      (`setRingtoneFromFile` re-checks and throws `SecurityException` at :149 — surface it localized)
+- [ ] ONE shared `just_audio` `AudioPlayer` for ALL preview playback — starting a track stops the previous
+      one, so two previews never overlap and only one decoder is held (the feed's video pool shares the
+      device) ← `lib/features/ringtones/providers/ringtone_preview_provider.dart`
+- [ ] `cover_key` is NULLABLE — a missing cover degrades to fallback art in app AND CMS, never a broken
+      cell ← `db/schema/04_ringtones.sql:6-8`
+- [ ] Preview is FREE (public `audio_key` straight from the CDN); only **Set** is premium-gated, through
+      `/media/signed-url` with kind `ringtone` ← `workers/src/routes/media.ts:31`
 
 ## Upload (wallpaper-only in Arul)
 - [ ] confirm-upload accepts kind `wallpaper` ONLY; idempotent via unique `file_key` upsert; keys forced under `user/<sub>/`

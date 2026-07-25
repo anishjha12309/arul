@@ -3,10 +3,11 @@
  *
  * Coverage:
  *   - getAccessToken: KV caching, refresh, error handling
- *   - setupSubscription: exact request payload (PENNY_DROP amount=200, maxAmount=19900,
- *     frequency=MONTHLY, authWorkflowType=PENNY_DROP, productType=UPI_MANDATE)
+ *   - setupSubscription: exact request payload for BOTH auth paths — PENNY_DROP
+ *     (amount=200) when trial-eligible, TRANSACTION (amount=19900) once the trial
+ *     is consumed; maxAmount=19900, frequency=MONTHLY, productType=UPI_MANDATE
  *   - notifyRedemption: exact payload (type=SUBSCRIPTION_REDEMPTION,
- *     redemptionRetryStrategy=STANDARD, autoDebit=true, amount=19900)
+ *     redemptionRetryStrategy=STANDARD, autoDebit=false, amount=19900)
  *   - executeRedemption: passes merchantOrderId, returns state+transactionId
  *   - initiateRefund: merchantRefundId, originalMerchantOrderId, amount
  *   - verifyCallbackAuth / verifyWebhookAuth: SHA256(username:password) hex comparison
@@ -74,6 +75,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     PHONEPE_ENV: "SANDBOX",
     TRIAL_TOMBSTONE_SECRET: "test-tombstone-secret-32-bytes!!!!",
     CATALOG_BUILD_SECRET: "test-catalog-secret",
+    OPS_SECRET: "test-ops-secret",
     ALLOWED_ORIGINS: "https://arul.hsrutility.com",
     ...overrides,
   };

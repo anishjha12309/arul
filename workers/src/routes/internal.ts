@@ -14,7 +14,10 @@
  *     bypassing the 24h window when { "force": true } is passed.
  *     Body: { "force"?: boolean, "merchantSubscriptionId"?: string }
  *     - If merchantSubscriptionId is specified, only that subscription is processed.
- *     - If force=true, next_debit_at check is skipped (useful in sandbox testing).
+ *     - If force=true, the next_debit_at check is skipped. DANGER: this worker
+ *       runs on PhonePe PRODUCTION credentials, so a forced redemption debits a
+ *       real ₹199 from a real customer's account. It is not a dry run — use it
+ *       deliberately, against a subscription you own.
  *     This route reuses the same logic as the cron but is callable on demand.
  */
 
@@ -102,9 +105,11 @@ export async function handleSweepSubmissions(c: Context<{ Bindings: Env }>): Pro
 
 // ── POST /internal/sweep-canonical ───────────────────────────────────────────
 //   Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>
-//   Reclaims canonical media objects (wallpapers/) that no DB row
-//   references — abandoned CMS uploads + lost delete/replace cleanups. Called by
-//   the hourly CRON (after the rebuild) and on-demand for testing.
+//   Reclaims canonical media objects under BOTH the wallpapers/ and ringtones/
+//   prefixes that no DB row references — full_key, audio_key AND cover_key all
+//   count as references. Catches abandoned CMS uploads + lost delete/replace
+//   cleanups. Called by the hourly CRON (after the rebuild) and on-demand for
+//   testing. This is why the bucket must never be shared with another app.
 
 export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -135,10 +140,11 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
 export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // Auth: same CATALOG_BUILD_SECRET
-  const authHeader = c.req.header("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (token !== env.CATALOG_BUILD_SECRET) {
+  // Auth: OPS_SECRET — NOT CATALOG_BUILD_SECRET. This route debits real money
+  // (force:true charges every due subscriber ₹199 immediately), and
+  // CATALOG_BUILD_SECRET is handed to the CMS worker just to trigger rebuilds.
+  // One string must never authorize both.
+  if (!authorizeOps(c, env)) {
     return Response.json(
       { error: { code: "unauthorized", message: "Invalid secret" } },
       { status: 401 },
@@ -287,9 +293,8 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
 export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  const authHeader = c.req.header("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (token !== env.CATALOG_BUILD_SECRET) {
+  // Auth: OPS_SECRET — moves money, see handleRunRedemptions.
+  if (!authorizeOps(c, env)) {
     return Response.json(
       { error: { code: "unauthorized", message: "Invalid secret" } },
       { status: 401 },
@@ -317,10 +322,64 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
     );
   }
 
+  // Never refund more than one month. A fat-fingered amountPaise used to be
+  // passed straight to PhonePe; the only ceiling was PhonePe's own
+  // "≤ original transaction amount" check.
+  if (amountPaise > MONTHLY_PRICE_PAISE) {
+    return Response.json(
+      {
+        error: {
+          code: "amount_too_large",
+          message: `amountPaise must be <= ${MONTHLY_PRICE_PAISE} (one month)`,
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // The order must actually be OURS. Without this the route would ask PhonePe to
+  // refund any merchant order id the caller could name — including one belonging
+  // to the OTHER app on the same PhonePe merchant account. Setup orders live in
+  // merchant_order_id, redemption orders in redemption_order_id.
+  const sql = getDb(env);
+  let ownerUserId: string;
+  try {
+    const rows = (await sql`
+      SELECT user_id FROM subscriptions
+      WHERE merchant_order_id = ${originalMerchantOrderId}
+         OR redemption_order_id = ${originalMerchantOrderId}
+      LIMIT 1
+    `) as unknown as { user_id: string }[];
+    if (rows.length === 0) {
+      return Response.json(
+        {
+          error: {
+            code: "unknown_order",
+            message: "No subscription in this app owns that merchantOrderId",
+          },
+        },
+        { status: 404 },
+      );
+    }
+    ownerUserId = rows[0].user_id;
+  } catch (err) {
+    console.error("[internal/refund] order lookup failed:", err);
+    return Response.json(
+      { error: { code: "server_error", message: "Could not verify the order" } },
+      { status: 500 },
+    );
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+
   try {
     // merchantRefundId must be unique; reuse the order-id builder with a REF tag.
     const merchantRefundId = buildMerchantOrderId(originalMerchantOrderId, "REF").slice(0, 63);
     const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, amountPaise);
+    console.log(
+      `[internal/refund] ${amountPaise} paise on ${originalMerchantOrderId} ` +
+      `(user ${ownerUserId}) -> ${result.state} refundId=${result.refundId}`,
+    );
     return c.json({ ok: true, merchantRefundId, ...result });
   } catch (err) {
     console.error("[internal/refund] error:", err);
@@ -331,7 +390,43 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 }
 
+/** Monthly price in paise (₹199) — the refund ceiling. Mirrors payments.ts. */
+const MONTHLY_PRICE_PAISE = 19900;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Authorize an operator route that MOVES MONEY.
+ *
+ * Requires OPS_SECRET and nothing else. Fails closed when OPS_SECRET is unset
+ * so a missing secret can never silently fall back to a weaker check — an
+ * unconfigured Worker refuses to debit rather than accepting any bearer.
+ */
+function authorizeOps(c: Context<{ Bindings: Env }>, env: Env): boolean {
+  const expected = env.OPS_SECRET ?? "";
+  if (!expected) {
+    console.error("[internal] OPS_SECRET is not set — refusing money-moving route");
+    return false;
+  }
+  const token = (c.req.header("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return false;
+  return timingSafeEqual(token, expected);
+}
+
+/** Length-independent constant-time string compare (no early exit on mismatch). */
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  // Fold length into the result instead of returning early, so a wrong-length
+  // guess is not distinguishable by timing from a wrong-value guess.
+  let diff = ab.length ^ bb.length;
+  const n = Math.max(ab.length, bb.length);
+  for (let i = 0; i < n; i++) {
+    diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
+  }
+  return diff === 0;
+}
 
 function addOneMonth(date: Date): Date {
   const d = new Date(date);

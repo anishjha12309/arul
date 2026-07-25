@@ -7,7 +7,7 @@ import '../../../app/widgets/gopuram_mark.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The premium bottom sheet shown on the SECOND gated tap in a session
-/// (README > Premium gate). A soft nudge toward the full premium SCREEN — not
+/// (Spec > Premium gate). A soft nudge toward the full premium SCREEN — not
 /// the screen itself (that is `/premium`, owned elsewhere).
 ///
 /// Gradient `#241014 → #1A0B0F`, gold-40% top hairline (both from [ArulSheet]'s
@@ -17,7 +17,7 @@ import '../../../theme/arul_tokens.dart';
 class PremiumSheet {
   const PremiumSheet._();
 
-  /// Copy is hardcoded verbatim for this design pass (README > Premium gate).
+  /// Copy is hardcoded verbatim for this design pass (Spec > Premium gate).
   static const _pitch =
       'Every wallpaper, live and still. Apply and share freely '
       'across all six categories.';
@@ -51,7 +51,7 @@ class _PremiumSheetBody extends StatelessWidget {
 
     return Padding(
       // The grabber (and its 10px vertical padding) is supplied by ArulSheet;
-      // here only the sheet body inset (README: pad 20 22 26).
+      // here only the sheet body inset (spec: pad 20 22 26).
       padding: const EdgeInsets.fromLTRB(22, 6, 22, 26),
       child: Column(
         mainAxisSize: MainAxisSize.min,

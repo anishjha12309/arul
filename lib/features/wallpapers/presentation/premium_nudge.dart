@@ -25,7 +25,7 @@ enum PremiumGateAction {
 }
 
 /// The floating premium nudge pill shown on the FIRST gated tap in a session
-/// (README > Premium gate): `bg rgba(20,9,12,.92)`, gold-45% border, r999, pad
+/// (Spec > Premium gate): `bg rgba(20,9,12,.92)`, gold-45% border, r999, pad
 /// 9 18, gold `workspace_premium` 17px + a 13px line whose tail is bold gold.
 ///
 /// Rises (translateY + fade) on mount like the sheets, holds for

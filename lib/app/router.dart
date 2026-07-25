@@ -56,8 +56,9 @@ final router = GoRouter(
     GoRoute(
       path: '/premium',
       // `source` is the blocked verb that sent the user here (apply / share /
-      // ringtone_set / feed / settings). Phase 4 forwards it to
-      // AnalyticsService.
+      // ringtone_set / feed / settings). Tracking happens at the GATE, not
+      // here: `ensurePremium` fires `${source}_blocked_premium` before it
+      // pushes this route. PremiumScreen only displays/attributes it.
       builder: (_, state) => PremiumScreen(
         source: state.uri.queryParameters['source'] ?? 'unknown',
       ),

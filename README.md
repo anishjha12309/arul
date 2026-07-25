@@ -1,50 +1,53 @@
-# Arul — South Indian Wallpapers
+# Arul — South Indian Wallpapers & Ringtones
 
-Android-only Flutter app: Shorts-style wallpaper feed (static + live video), upload-your-content
-(wallpaper-only), premium via PhonePe UPI Autopay. No ringtones. Backend: Cloudflare Workers + Neon + R2.
-UI/UX is Arul's own design; backend architecture and logic are ported from the reference.
+Android-only Flutter app: Shorts-style wallpaper feed (static + live video), category-browsed
+ringtones with cover art, upload-your-content (wallpaper-only), premium via PhonePe UPI Autopay.
+Backend: Cloudflare Workers + Neon + R2. UI/UX is Arul's own design; backend architecture and
+logic are ported from the reference (`c:\Anish\Pakiza`, READ-ONLY — never modify it).
 
 ## State of this repo
 
-**The app builds, installs and RUNS today** — verified on a Nothing Phone (1), Android 15.
-It renders the real 428-wallpaper catalog straight from R2, filters by category, and gates
-apply/share behind the paywall. What is NOT here yet is everything that needs a backend.
+**Shipped.** v1.0.0+20 is built, signed and uploaded to the Play Console — not public yet.
+The backend has been live since 2026-07-14 and the app runs against production: real catalog,
+Google sign-in, PhonePe (PRODUCTION credentials), Firebase analytics + Crashlytics.
 
 | Layer | State |
 |---|---|
-| UI / design system / navigation / l10n (6 locales) | **Done** — `flutter analyze` clean |
-| Android platform (edge-to-edge, predictive back, themed icon, splash, R8, signing) | **Done** |
-| Feed data | **Preview** — reads the bucket's `catalog/catalog.json` manifest over the public r2.dev URL |
-| Live video playback | Placeholder — needs the native Media3 pool (port Phase 4) |
-| Auth · premium · share · upload | Designed + gated, but stubbed — need the Worker (Phases 0–4) |
+| UI / design system / navigation / l10n (6 locales) | Done — `flutter analyze` clean |
+| Android platform (edge-to-edge, predictive back, themed icon, splash, R8, release signing) | Done |
+| Feed data | Live — per-scope `catalog/<scope>/all_N.json` from the `build-catalog` Worker |
+| Live video playback | Done — native Media3 texture pool (`FeedVideoPlugin`) |
+| Auth · premium · share · upload · ringtones | Done |
+| Content | 514 wallpapers · 0 ringtones (no ringtone content published yet) |
+
+Still open: **FLAG_SECURE** is not added yet (docs/edge-cases.md). Custom domains
+`arul-api` / `arul-cdn.hsrutility.com` are **not attached** — the live origins are the
+`*.workers.dev` API and the `*.r2.dev` CDN (see workers/README.md).
 
 ## Run it
 ```bash
 flutter pub get
-flutter run                                  # works with no config — uses the preview catalog
-flutter run --dart-define-from-file=env/dev.json   # once provisioning is done
+flutter run --dart-define-from-file=env/dev.json   # env/ is git-ignored — copy env.example.json
 ```
 
-## Build it out
-- Reference implementation (READ-ONLY, never modify): `c:\Anish\Pakiza`
-- Plan: [docs/port-map.md](docs/port-map.md) — next up is **Phase 0** (provisioning)
-- Cloud resources to create: [docs/provisioning.md](docs/provisioning.md)
+## Work on it
+- Session contract: [CLAUDE.md](CLAUDE.md) — read first, every session
+- What got built and the deltas vs the reference: [docs/port-map.md](docs/port-map.md)
 - Behaviour that must not regress: [docs/edge-cases.md](docs/edge-cases.md)
+- Backend: [docs/architecture.md](docs/architecture.md) · [workers/README.md](workers/README.md)
 - Design rules: [docs/ui-direction.md](docs/ui-direction.md)
-
-## Kickoff prompt for a fresh Claude Code session
-> Read CLAUDE.md, docs/port-map.md, docs/provisioning.md and docs/edge-cases.md. The reference
-> implementation is c:\Anish\Pakiza — read-only, never modify it. The UI is already built and
-> running; report which provisioning items are still open, then start Phase 0.
+- Content authoring = the unified CMS at `api.hsrutility.com/admin` — a **separate worker and
+  repo** (`c:\Anish\Unified CMS`). This repo's worker has no `/admin`.
 
 ## Map
 ```
 CLAUDE.md          session contract (read first)
 docs/              architecture · data model · media rules · port plan · edge cases · provisioning · UI
-lib/               app/{theme,widgets,l10n} · core/config · data/models · features/*
-android/           edge-to-edge + predictive back + adaptive/themed icon + R8
+lib/               app/{theme,widgets,l10n} · core/{config,api,error,analytics} · data/* · features/*
+android/           edge-to-edge + predictive back + adaptive/themed icon + R8 + release signing
 .claude/           hooks (format, secret guard, version guards) + 6 skills
-db/schema/         Neon schema (apply 01→03, then seed.sql)
-workers/           wrangler.toml + package.json (src/ arrives in Phase 2)
+db/schema/         Neon schema (apply 01→04, then seed.sql)
+workers/           Worker API + crons (src/, wrangler.toml)
+tools/             content-import — bulk wallpaper import pipeline
 env.example.json   → copy to env/dev.json + env/prod.json (git-ignored)
 ```

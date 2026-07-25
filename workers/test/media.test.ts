@@ -6,7 +6,9 @@
  * single-rows SQL mock returns the same non-empty rows for BOTH the content
  * lookup and the entitlement query, so isPremium() reads as true. A pure
  * 403-deny test isn't expressible with that mock; the deny path is covered by
- * the live deployed-worker checks. (There is no PREMIUM_TEST_USER_IDS bypass —
+ * the live deployed-worker checks in the unified CMS repo's smoke plan
+ * (c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md — it moved there when the
+ * legacy in-repo CMS was removed). (There is no PREMIUM_TEST_USER_IDS bypass —
  * it was removed; premium comes solely from a live Neon subscription row.)
  */
 

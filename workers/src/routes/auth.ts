@@ -19,12 +19,15 @@ import {
   signRefreshToken,
   verifyRefreshToken,
   denylistJti,
-  isJtiDenylisted,
+  claimRefreshJti,
+  storeRotationReplay,
+  readRotationReplay,
   verifyAccessToken,
 } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
 import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
+import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 
 // ── POST /auth/login ─────────────────────────────────────────────────────────
 
@@ -55,6 +58,22 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   } catch (err) {
     console.error("[auth/login] Google idToken verification failed:", err);
     return errorResponse(401, "invalid_token", "Google idToken is invalid or expired");
+  }
+
+  // Rate limit AFTER verification, keyed by the GOOGLE ACCOUNT — never by IP.
+  //
+  // India is heavily carrier-grade NAT'd: thousands of Jio/Airtel subscribers
+  // share one egress IP, so an IP key would put every user on that carrier into
+  // a single bucket and start 429ing real sign-ins as soon as the app got
+  // popular. The account is the correct unit of abuse here — one Google account
+  // signing in 20× a minute is not a person.
+  //
+  // Placing it after verifyGoogleIdToken also means a flood of garbage tokens
+  // never reaches the limiter at all (it 401s first), while the thing worth
+  // protecting — the Neon read/write below — is behind it.
+  if (!(await allowRequest(env.RL_AUTH, `login:${googleClaims.sub}`))) {
+    console.warn(`[auth/login] rate limited google_sub ${googleClaims.sub}`);
+    return tooManyRequests("Too many sign-in attempts — please wait a minute");
   }
 
   const sql = getDb(env);
@@ -195,6 +214,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
 
 export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
+
   let body: { refreshToken?: string };
   try {
     body = await c.req.json();
@@ -215,18 +235,50 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(401, "invalid_refresh", "Refresh token is invalid or expired");
   }
 
-  // 2. Check KV denylist
-  if (await isJtiDenylisted(env.KV, claims.jti)) {
-    return errorResponse(401, "invalid_refresh", "Refresh token has been revoked");
+  // Rate limit AFTER verification, keyed by the USER — never by IP (see the
+  // carrier-NAT note in handleLogin). With a 60-minute access token a normal
+  // user refreshes about once an hour; 20/min per user is pure abuse headroom.
+  if (!(await allowRequest(env.RL_AUTH, `refresh:${claims.sub}`))) {
+    console.warn(`[auth/refresh] rate limited user ${claims.sub}`);
+    return tooManyRequests();
   }
 
-  // 3. Denylist the old refresh token
+  // 2 + 3. Claim the token for rotation. This replaces the old
+  // check-then-act (isJtiDenylisted, then denylistJti), under which two
+  // concurrent refreshes with the SAME token both saw "not denylisted" and both
+  // minted a pair — forking one session into two. Only the caller that wins the
+  // claim may issue new tokens; the loser is told to retry.
   const expEpoch = claims.exp ?? Math.floor(Date.now() / 1000);
-  await denylistJti(env.KV, claims.jti, expEpoch);
+  const won = await claimRefreshJti(env.KV, claims.jti, expEpoch);
+  if (!won) {
+    // We did not win the rotation. Before treating this as a revoked token —
+    // which signs the user out — check whether it is simply a RETRY of a
+    // refresh that already succeeded (client timed out waiting, connection
+    // dropped mid-flight, app backgrounded at the wrong moment). In that
+    // window, replay the same pair so a flaky network is a no-op instead of a
+    // forced re-sign-in.
+    //
+    // Limitation, stated honestly: this covers the dominant real case (a
+    // SEQUENTIAL retry seconds later). Two genuinely simultaneous refreshes can
+    // still have the loser arrive before the winner has written the replay, and
+    // it will 401 — the client's own single-flight is what prevents that.
+    const replay = await readRotationReplay(env.KV, claims.jti);
+    if (replay) {
+      console.log(`[auth/refresh] replaying rotated pair for jti ${claims.jti}`);
+      return c.json(replay);
+    }
+    return errorResponse(401, "invalid_refresh", "Refresh token has been revoked");
+  }
 
   // 4. Issue new pair
   const newAccessToken = await signAccessToken(claims.sub, env.JWT_SECRET);
   const { token: newRefreshToken } = await signRefreshToken(claims.sub, env.JWT_SECRET);
+
+  // Record it BEFORE responding so a retry that races the response still finds it.
+  await storeRotationReplay(env.KV, claims.jti, {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  });
 
   return c.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
 }

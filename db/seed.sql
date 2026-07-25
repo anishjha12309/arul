@@ -1,5 +1,7 @@
--- Arul — Neon seed data. Run AFTER db/schema/01→03 on a fresh database.
--- Only app_config is seeded; content rows arrive via the Phase-3 import (content-ops skill).
+-- Arul — Neon seed data. Run AFTER db/schema/01→04 on a fresh database.
+-- Only app_config is seeded. Wallpaper rows arrive via the content-import pipeline
+-- (tools/content-import) or the CMS; the `ringtones` table starts empty and has no
+-- content published yet. See the content-ops skill.
 --
 -- prices = PAYWALL DISPLAY values (paise, INR) served via catalog/app_config.json.
 -- The Worker's actual debit amount is a constant in workers/src (₹199 = 19900) —

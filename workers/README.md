@@ -4,8 +4,8 @@ Cloudflare Worker = API + crons. Base `https://arul-api.twilight-smoke-d495.work
 (the `arul-api.hsrutility.com` custom domain is still an open provisioning item — see docs/provisioning.md).
 **Authoring is NOT here** — the unified CMS is the separate `hsr-cms` worker/repo (see below).
 Neon via Hyperdrive · R2 `south-indian-wallpapers` (presign via aws4fetch) · KV (jti denylist,
-webhook dedupe, OAuth cache) · PhonePe v2 Autopay. `src/` arrives in port-map Phase 2 — copied
-verbatim from `c:\Anish\Pakiza\workers\src` + brand deltas in docs/port-map.md. (The original
+webhook dedupe, OAuth cache) · PhonePe v2 Autopay (**PRODUCTION** credentials). `src/` was ported
+from `c:\Anish\Pakiza\workers\src` + the brand deltas in docs/port-map.md. (The original
 **ringtones strip** was REVERSED 2026-07-17 — ringtones are back: scope `ringtones`, kind `ringtone`,
 R2 `ringtones/` prefix. See port-map.md.)
 
@@ -36,8 +36,8 @@ and `POST /internal/build-catalog` (bearer `CATALOG_BUILD_SECRET`). A plain `fet
 `*.workers.dev` host is blocked by Cloudflare — the service binding is required.
 
 The `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` / `ADMIN_SESSION_SECRET` secrets are no longer read by
-this worker (they now live on `hsr-cms`); they remain set in Cloudflare but are inert and can be
-deleted with `npx wrangler secret delete <NAME>`.
+this worker (they now live on `hsr-cms`) and have already been deleted from it — `npx wrangler
+secret list` no longer returns them.
 
 ## Catalog outputs (build-catalog)
 `catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (20/page; no per-tag pages;
@@ -85,8 +85,10 @@ R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
 PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
-CF_ZONE_ID  CF_PURGE_TOKEN   # optional: purge version pointer on publish
 ```
+`CF_ZONE_ID` / `CF_PURGE_TOKEN` used to live here for purge-on-publish. That path moved to
+`hsr-cms` on 2026-07-20; they are no longer read, no longer declared in `env.ts`, and were never
+set on this worker.
 No ADMIN_* secrets here any more — they belong to the `hsr-cms` worker. The R2 CORS rule for browser
 uploads must allow origin `https://api.hsrutility.com` (the CMS), not this worker.
 

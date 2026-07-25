@@ -5,7 +5,7 @@ import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/wallpaper_apply_service.dart';
 
-/// Where to put a STATIC wallpaper (README > Apply sheet).
+/// Where to put a STATIC wallpaper (Spec > Apply sheet).
 ///
 /// Three equal cards — Home screen / Lock screen / Both (default Both) — and a
 /// single green CTA. Selecting a card only moves the selection; the CTA commits
@@ -33,7 +33,7 @@ class _ApplySheetBody extends StatefulWidget {
 }
 
 class _ApplySheetBodyState extends State<_ApplySheetBody> {
-  ApplyTarget _target = ApplyTarget.both; // README: default Both
+  ApplyTarget _target = ApplyTarget.both; // Spec: default Both
 
   static const _cards = <(ApplyTarget, IconData, String)>[
     (ApplyTarget.home, Icons.home_rounded, 'Home screen'),
@@ -45,7 +45,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      // README: pad 18 20 24; the grabber + its padding come from ArulSheet.
+      // Spec: pad 18 20 24; the grabber + its padding come from ArulSheet.
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -89,7 +89,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
   }
 }
 
-/// One target card (README > Apply sheet): r16, 26px icon + 13px label.
+/// One target card (Spec > Apply sheet): r16, 26px icon + 13px label.
 /// Selected: gold 1.5px border, gold-tint fill, gold icon (both themes).
 /// Unselected follows the app theme — ivory-tint on dark, maroon-tint on light.
 class _TargetCard extends StatelessWidget {

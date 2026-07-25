@@ -27,7 +27,7 @@ import 'tokens.dart';
 /// edge where the tail meets the image; the low-alpha stop near the end flattens
 /// it out for free.
 abstract final class ArulScrims {
-  /// Behind top chrome (the feed chip row). README: feed top scrim, h130,
+  /// Behind top chrome (the feed chip row). The spec: feed top scrim, h130,
   /// `.62 → 0`, tinted the dark surface `#14090C` (== rgba(20,9,12,x)). The
   /// low-alpha mid-stop is the anti-banding tail.
   static const top = LinearGradient(
@@ -41,7 +41,7 @@ abstract final class ArulScrims {
     stops: [0.0, 0.6, 1.0],
   );
 
-  /// Behind bottom chrome (meta + action rail). README: feed bottom scrim, h190,
+  /// Behind bottom chrome (meta + action rail). The spec: feed bottom scrim, h190,
   /// `.72 → 0`. Stronger than [top] because this is where the text lives; chrome
   /// that reaches above the guaranteed band carries its own [ArulColors.mediaFill].
   static const bottom = LinearGradient(
@@ -59,7 +59,7 @@ abstract final class ArulScrims {
   /// dark surface, off-axis so it reads as woven cloth rather than a flat ramp.
   ///
   /// This is the OPAQUE brand ground used by the painter. The translucent silk
-  /// card gradients from the README (profile/hero/plan cards) live in
+  /// card gradients from the spec (profile/hero/plan cards) live in
   /// [ArulTokens.silkDark] / [ArulTokens.silkLight].
   static const silk = LinearGradient(
     begin: Alignment.topLeft,

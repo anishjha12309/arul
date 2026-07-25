@@ -34,7 +34,24 @@ export interface RefreshClaims extends JWTPayload {
   jti: string;
 }
 
-const ACCESS_TTL_SECONDS = 15 * 60; // 15 minutes
+/**
+ * Access-token lifetime.
+ *
+ * 60 minutes, not 15. Every expiry costs a /auth/refresh round trip, and each
+ * refresh is a KV READ (denylist check) plus a KV WRITE whose entry then lives
+ * for the FULL 60-day refresh TTL. At 15 minutes that is ~4 permanent-ish KV
+ * entries per user per active hour — the denylist keyspace grows without bound
+ * and the write volume scales with DAU × session length rather than with
+ * anything security-relevant.
+ *
+ * The security cost of the longer window is small and bounded: the access token
+ * carries identity ONLY (`sub`) — never entitlement (CLAUDE.md §3) — so a stale
+ * token cannot preserve premium after a refund, expiry, or cancellation. Every
+ * gated action re-reads entitlement live from Neon. Revocation latency for a
+ * stolen ACCESS token rises from ≤15m to ≤60m; refresh-token revocation is
+ * unchanged (immediate, via the denylist).
+ */
+const ACCESS_TTL_SECONDS = 60 * 60; // 60 minutes
 const REFRESH_TTL_SECONDS = 60 * 24 * 60 * 60; // 60 days
 
 // ── Key derivation ───────────────────────────────────────────────────────────
@@ -136,4 +153,89 @@ export async function isJtiDenylisted(
 ): Promise<boolean> {
   const val = await kv.get(`${KV_JTI_PREFIX}${jti}`);
   return val !== null;
+}
+
+/**
+ * Claim a refresh token for rotation: denylist its jti and report whether THIS
+ * caller was the one that consumed it.
+ *
+ * Rotation was previously check-then-act (`isJtiDenylisted` then `denylistJti`),
+ * so two concurrent /auth/refresh calls carrying the same refresh token both
+ * observed "not denylisted" and both minted a fresh token pair — one refresh
+ * token silently forking into two live sessions.
+ *
+ * KV has no compare-and-set, so this cannot be a true mutex. What it does give
+ * is a single read-then-write per caller with the WINNER recorded by value: the
+ * first writer's holder id is what lands, and a caller that reads back a
+ * different holder knows it lost. Combined with the client's own single-flight
+ * refresh, that closes the realistic double-rotation window. A determined
+ * attacker racing inside KV's replication lag is not defended here — that needs
+ * a Durable Object, which is the documented upgrade path if refresh-token
+ * theft ever becomes a real threat model.
+ *
+ * @returns true when this caller won the rotation and may issue a new pair.
+ */
+/**
+ * Reuse-grace window: how long the pair minted from a given refresh token stays
+ * replayable to a caller presenting that same (now-rotated) token.
+ *
+ * WHY this exists: rotation is one-shot, so ANY retry of a refresh that already
+ * succeeded server-side — a client that timed out waiting for the response, a
+ * dropped mobile connection mid-flight, a background/foreground race — would
+ * otherwise get 401 and the app would sign a paying user out. Replaying the
+ * same pair for a short window turns that into a no-op instead of a logout.
+ *
+ * The window is short on purpose: a genuinely stolen refresh token is used
+ * minutes-to-days later, well outside this, and still gets 401. This is the
+ * standard refresh-token reuse-grace pattern.
+ */
+const ROTATION_REPLAY_TTL_SECONDS = 120;
+const KV_ROTATION_PREFIX = "rot:";
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/** Remember the pair minted from `oldJti` so a retry of that refresh replays it. */
+export async function storeRotationReplay(
+  kv: KVNamespace,
+  oldJti: string,
+  pair: TokenPair,
+): Promise<void> {
+  await kv.put(`${KV_ROTATION_PREFIX}${oldJti}`, JSON.stringify(pair), {
+    expirationTtl: ROTATION_REPLAY_TTL_SECONDS,
+  });
+}
+
+/** The pair previously minted from `oldJti`, if still inside the grace window. */
+export async function readRotationReplay(
+  kv: KVNamespace,
+  oldJti: string,
+): Promise<TokenPair | null> {
+  const raw = await kv.get(`${KV_ROTATION_PREFIX}${oldJti}`, "json");
+  if (!raw) return null;
+  const pair = raw as Partial<TokenPair>;
+  return typeof pair.accessToken === "string" && typeof pair.refreshToken === "string"
+    ? { accessToken: pair.accessToken, refreshToken: pair.refreshToken }
+    : null;
+}
+
+export async function claimRefreshJti(
+  kv: KVNamespace,
+  jti: string,
+  expEpoch: number,
+): Promise<boolean> {
+  const key = `${KV_JTI_PREFIX}${jti}`;
+  const existing = await kv.get(key);
+  if (existing !== null) return false; // already rotated or revoked
+
+  const holder = crypto.randomUUID();
+  const ttlSeconds = Math.max(60, expEpoch - Math.floor(Date.now() / 1000));
+  await kv.put(key, holder, { expirationTtl: ttlSeconds });
+
+  // Read back: if another caller's write landed after ours, they own the
+  // rotation and we must not also issue a pair.
+  const observed = await kv.get(key);
+  return observed === holder;
 }

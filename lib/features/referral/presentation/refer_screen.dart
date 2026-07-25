@@ -12,14 +12,15 @@ import '../../../theme/arul_tokens.dart';
 import '../data/install_referrer_service.dart';
 import '../providers/referral_providers.dart';
 
-/// Refer & Earn (design_handoff_arul spec, "Refer & Earn"): one warm silk hero
+/// Refer & Earn: one warm silk hero
 /// card with the WhatsApp CTA, a rewards summary card, a numbered "how it
 /// works" card, and a quiet empty state below.
 ///
 /// Wired (phase 4): the CTA shares the referral-attributed Play link
 /// (WhatsApp-first, share-sheet fallback) and "Rewards earned" reads
-/// `/me/referrals` via [referralSummaryProvider]; both degrade to the plain
-/// link / zero state pre-backend.
+/// `/me/referrals` via [referralSummaryProvider]. Both degrade to the plain
+/// link / zero state while the summary loads, and in define-less local runs
+/// (no backend) — never in a shipped build.
 ///
 /// `featured_seasonal_and_gifts` (the spec's icon) has no Material equivalent
 /// in Flutter's icon set — substituted with [Icons.card_giftcard_rounded].
@@ -36,8 +37,8 @@ class ReferScreen extends ConsumerWidget {
   /// sheet when WhatsApp is absent or the launch fails (docs/edge-cases.md).
   Future<void> _share(BuildContext context, WidgetRef ref) async {
     // Referral-attributed when the user's code is known; the plain listing
-    // otherwise (pre-backend, or the summary hasn't loaded) — sharing must
-    // never block on the network.
+    // otherwise (the summary hasn't loaded yet, or a define-less local run) —
+    // sharing must never block on the network.
     final code = AppConfig.hasBackend
         ? ref.read(referralSummaryProvider).asData?.value.referralCode
         : null;
@@ -67,7 +68,8 @@ class ReferScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Rewards summary; pre-backend (or while loading) the zero state stands.
+    // Rewards summary; the zero state stands while it loads, and in a
+    // define-less local run that has no backend to read it from.
     final rewardDays = AppConfig.hasBackend
         ? (ref.watch(referralSummaryProvider).asData?.value.totalRewardDays ??
               0)
@@ -106,7 +108,7 @@ class ReferScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header: back arrow + Marcellus title. README > Refer & Earn.
+            // Header: back arrow + Marcellus title. Spec > Refer & Earn.
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 ArulTokens.screenPadding - 4,

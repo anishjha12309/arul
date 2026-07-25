@@ -133,10 +133,11 @@ Future<void> _startApp() async {
   // critical path and a no-op without Play Services.
   unawaited(InstallReferrerService(prefs).captureOnce());
 
-  // google_sign_in v7: initialize the singleton once at startup. Skipped while
-  // GOOGLE_WEB_CLIENT_ID is the TODO placeholder (no Arul Google Cloud project
-  // yet) — sign-in then degrades to a graceful failure instead of a crash-loop
-  // against Google's servers with a bogus audience.
+  // google_sign_in v7: initialize the singleton once at startup. Both env files
+  // carry a real client id, so this runs in every real build; the guard only
+  // matters for define-less / test runs, where sign-in degrades to a graceful
+  // failure instead of a crash-loop against Google's servers with a bogus
+  // audience.
   if (AppConfig.googleAuthConfigured) {
     try {
       await GoogleSignIn.instance.initialize(

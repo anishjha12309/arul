@@ -1,8 +1,10 @@
 # Backend Architecture
 
 Browse = CDN-only ($0 egress). Writes = Workers → Neon. Neon holds per-user state only; the app never touches it.
-Base: `https://arul-api.hsrutility.com` · CDN: `https://arul-cdn.hsrutility.com` (R2 `south-indian-wallpapers`).
-Wallpapers-only: the reference's ringtone code paths are stripped (port-map strip list).
+Base: `https://arul-api.twilight-smoke-d495.workers.dev` · CDN: `https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev`
+(R2 `south-indian-wallpapers`). ⚠ **OPEN:** the custom domains `arul-api`/`arul-cdn.hsrutility.com` are NOT
+attached — these workers.dev/r2.dev origins are the deliberate interim state, to migrate to unified CDN domains.
+Wallpapers **and ringtones**: the original ringtone strip was REVERSED 2026-07-17 (port-map).
 
 **Routes:** auth.ts · media.ts (gated signed-url + submissions) · payments.ts (PhonePe v2 Autopay) · me.ts · internal.ts
 **Cron (single hourly `0 * * * *`):** build-catalog → sweep-canonical (only after a fully successful rebuild) ∥ sweep-submissions ∥ autopay notify/execute
@@ -32,10 +34,12 @@ Orphans reclaimed by sweep-submissions; pending rows expire after 30d.
 
 ## Catalog generation
 Source: `app_config.content_version` (Neon). Trigger: CMS mutation, `/internal/build-catalog`, or hourly
-cron (no-op if version unchanged). Output: `catalog/wallpapers/all_{page}.json` — ONE page set; every item
-carries `category`, and the app's **category** chips filter client-side (no per-category page files, no
-All/New tabs, never a static/live filter). Orphaned page files deleted each rebuild. Cache: version.json =
-no-store; pages = max-age=60 + `?v=<version>` busting. Exposed key is public: wallpaper full_key.
+cron (no-op if version unchanged). Output per scope (`wallpapers`, `ringtones`): `catalog/<scope>/all_{page}.json`
+— ONE page set each, no per-category files — plus the shared `catalog/version.json` + `catalog/app_config.json`.
+A zero-row scope still writes a valid empty `all_1.json` (ringtones today: no content published yet). Every item
+carries `category`, and the app's **category** chips filter client-side (no All/New tabs, never a static/live
+filter). Orphaned page files deleted each rebuild. Cache: version.json = no-store; pages = max-age=60 +
+`?v=<version>` busting. Exposed keys are public: wallpaper full_key, ringtone audio_key + cover_key.
 (`catalog/catalog.json` in the bucket is the one-time import manifest, not read by the app.)
 
 CMS: **separate worker + repo** (`hsr-cms`, `c:\Anish\Unified CMS`) serving Arul + Pakiza from one
@@ -45,7 +49,7 @@ submissions. It calls this worker via the `ARUL_API` service binding → `/inter
 this worker exposes no `/admin` of its own (legacy removed 2026-07-20).
 
 ## Schema (Neon) — detail in docs/data-model.md, DDL in db/schema/
-users · subscriptions · wallpapers · content_submissions · referrals · trial_tombstones ·
+users · subscriptions · wallpapers · ringtones · content_submissions · referrals · trial_tombstones ·
 app_config (singleton). No RLS — the Worker scopes every parameterized query to the verified sub.
 
 ## Security

@@ -21,8 +21,12 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
 3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
-4. Play upload = user task (Play App Signing ON). After first upload: register BOTH app-signing and
-   upload SHA-1/256 (Play Console → Setup → App signing) in the Google Cloud OAuth Android client +
-   Firebase — **Google Sign-In is broken for testers until then.** No rebuild needed.
-5. Pre-launch gate (docs/provisioning.md): privacy policy live, PhonePe prod webhook registered,
-   real analytics creds in env/prod.json, **FLAG_SECURE added** (docs/edge-cases.md).
+4. Play upload = user task (Play App Signing ON). **v1.0.0+20 is already uploaded** (not public yet).
+   SHA-1/256 registration — BOTH the app-signing and upload certs (Play Console → Setup → App
+   signing) in the Google Cloud OAuth Android client + Firebase — is required after the first
+   upload, or Google Sign-In is broken for testers. That state lives in Play Console, so confirm it
+   there; re-check only if the upload key rotates. No rebuild needed either way.
+5. Before the app goes PUBLIC (docs/provisioning.md): privacy policy live ✓
+   (`https://hsrapps.com/arul/privacy-policy/`), PhonePe PROD webhook registered ✓, real analytics
+   creds in env/prod.json ✓ — **FLAG_SECURE is the one still open** (docs/edge-cases.md).
+   v1.0.0+20 shipped without it.

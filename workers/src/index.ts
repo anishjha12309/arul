@@ -14,10 +14,14 @@
  *   POST /media/signed-url
  *   POST /media/upload-url
  *   POST /media/confirm-upload
- *   POST /payments/initiate     — start PhonePe PENNY_DROP Autopay mandate
+ *   POST /payments/initiate     — start Autopay mandate: PENNY_DROP ₹2 when
+ *                                 trial-eligible, else TRANSACTION ₹199
  *   POST /payments/webhook      — PhonePe S2S callback (idempotent)
  *   POST /payments/status       — live subscription state reconciliation
+ *   POST /payments/cancel       — revoke mandate (Manage Subscription)
+ *   GET  /payments/callback     — PhonePe post-mandate browser redirect
  *   GET  /me
+ *   POST /me/profile            — update display name
  *   DELETE /me                  — delete account (mandate revoke + trial tombstone)
  *   GET  /me/subscription
  *   GET  /me/submissions
@@ -26,6 +30,7 @@
  *   POST /internal/sweep-submissions — reclaim orphaned R2 submission objects
  *   POST /internal/sweep-canonical  — reclaim orphaned canonical media objects
  *   POST /internal/run-redemptions  — force notify+execute (testing)
+ *   POST /internal/refund           — operator/support ₹199 refund
  *
  * Scheduled handlers:
  *   "0 * * * *"  — hourly: catalog rebuild (no-op if nothing changed) +
@@ -104,7 +109,7 @@ app.post("/media/upload-url", handleUploadUrl);
 app.post("/media/confirm-upload", handleConfirmUpload);
 
 // ── Payment routes (PhonePe Autopay v2) ───────────────────────────────────────
-app.post("/payments/initiate", handleInitiate);   // JWT — start ₹2 PENNY_DROP mandate
+app.post("/payments/initiate", handleInitiate);    // JWT — mandate: ₹2 PENNY_DROP / ₹199 TRANSACTION
 app.post("/payments/webhook", handleWebhook);      // S2S callback (callback-auth verified)
 app.post("/payments/status", handleStatus);        // JWT — reconcile live subscription state
 app.post("/payments/cancel", handleCancel);        // JWT — revoke mandate (Manage Subscription)

@@ -114,10 +114,19 @@ class PremiumPurchase extends _$PremiumPurchase {
       final orderId = initResp['orderId'] as String? ?? '';
       final token = initResp['token'] as String? ?? '';
       final merchantId = initResp['merchantId'] as String? ?? '';
-      // "SANDBOX" or "PRODUCTION" — forwarded verbatim from the server.
-      final environment = (initResp['environment'] as String?) ?? 'SANDBOX';
+      // "SANDBOX" or "PRODUCTION" — forwarded verbatim from the server, which
+      // reads it from the PHONEPE_ENV secret and hard-validates it there
+      // (workers/src/lib/phonepe.ts isProduction() throws on anything else).
+      // Deliberately NO client-side default: a missing value must fail closed.
+      // Defaulting to SANDBOX would point a production build at the preprod
+      // host, whose 401 is indistinguishable from a bad merchantId — see the
+      // symptom map in workers/README.md (PhonePe gotcha 9).
+      final environment = initResp['environment'] as String? ?? '';
 
-      if (orderId.isEmpty || token.isEmpty || merchantId.isEmpty) {
+      if (orderId.isEmpty ||
+          token.isEmpty ||
+          merchantId.isEmpty ||
+          environment.isEmpty) {
         state = const PurchaseError(
           'Payment initiation failed. Please try again.',
         );
@@ -256,6 +265,17 @@ class PremiumPurchase extends _$PremiumPurchase {
         'Please restart the app — your subscription will activate shortly.',
       );
     } on ApiException catch (e) {
+      // The server refuses a second mandate while a live one exists, so this is
+      // NOT a failure — it means the user is already subscribed and our local
+      // entitlement snapshot was stale (a purchase whose confirmation poll timed
+      // out, a reinstall that raced /me, a "Try Again" tap after a success).
+      // Treat it as success and re-read entitlement so the UI flips to
+      // "Manage Subscription" instead of showing an error for a working account.
+      if (e.code == 'already_subscribed') {
+        ref.invalidate(entitlementProvider);
+        state = const PurchaseSuccess();
+        return;
+      }
       state = PurchaseError(
         e.message.isNotEmpty
             ? e.message

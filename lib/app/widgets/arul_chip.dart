@@ -4,22 +4,22 @@ import '../../theme/arul_tokens.dart';
 
 /// Which surface an [ArulChip] sits on.
 enum ArulChipVariant {
-  /// Over the feed's media (README > Reel feed chips). Fixed dark palette so it
+  /// Over the feed's media (Spec > Reel feed chips). Fixed dark palette so it
   /// stays legible on any wallpaper.
   feed,
 
-  /// On a themed surface — the Upload screen's category chips (README > Upload).
+  /// On a themed surface — the Upload screen's category chips (Spec > Upload).
   /// Follows light/dark.
   surface,
 }
 
 /// The category / selection chip used by the feed row and the Upload screen.
 ///
-/// Feed (README): pad 7×15, r999; inactive bg `rgba(20,9,12,.42)` border
+/// Feed (spec): pad 7×15, r999; inactive bg `rgba(20,9,12,.42)` border
 /// `rgba(250,245,236,.22)` ivory-92% 13.5/500; active SOLID gold, `#14090C`
 /// text /600.
 ///
-/// Surface (README > Upload): unselected light = white bg, maroon-12% border;
+/// Surface (Spec > Upload): unselected light = white bg, maroon-12% border;
 /// selected = solid gold on dark / solid maroon on light, with contrasting label.
 class ArulChip extends StatelessWidget {
   const ArulChip({

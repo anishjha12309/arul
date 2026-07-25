@@ -1,29 +1,27 @@
 import 'package:flutter/material.dart';
 
-/// ARUL — the single normative design-token source for the UI redesign.
+/// ARUL — the single normative design-token source for the UI.
 ///
-/// This file is the machine-readable copy of `design_handoff_arul/README.md`.
-/// Every value is annotated with the README line it encodes. Screen code reads
-/// tokens from here; it never spells a hex, radius, duration or letter-spacing
-/// literal of its own.
+/// Screen code reads tokens from here; it never spells a hex, radius, duration
+/// or letter-spacing literal of its own.
 ///
-/// Naming mirrors the README vocabulary (maroon / gold / ivory / darkSurface /
+/// Naming follows the design vocabulary (maroon / gold / ivory / darkSurface /
 /// ctaGreen / darkTextSecondary / feedTopScrim / silkDark …) so a screen author
-/// can consume a token by the same word the design spec uses.
+/// can consume a token by the same word the design uses.
 ///
-/// Where the README gives a RANGE (`.04–.05`, `16–20px`, `50–54px`) both
+/// Where the design gives a RANGE (`.04–.05`, `16–20px`, `50–54px`) both
 /// endpoints are exposed when they map to two genuinely different usage sites
 /// (e.g. [cardBgDark04] vs [cardBgDark05]); where the range is one decision the
 /// chosen value is noted in the token's doc comment.
 ///
-/// Letter-spacing: the README quotes tracking in `em`; Flutter's `letterSpacing`
+/// Letter-spacing: the design quotes tracking in `em`; Flutter's `letterSpacing`
 /// is logical pixels, so every value below is pre-multiplied (`em × fontSize`)
 /// and the arithmetic is shown in the comment.
 abstract final class ArulTokens {
   ArulTokens._();
 
   // ───────────────────────────── Brand colors ─────────────────────────────
-  // README > Colors.
+  // Spec > Colors.
 
   /// maroon (primary) — active states, light-theme icons, muted destructive
   /// buttons, confirm CTA. `#7A1E33`.
@@ -55,7 +53,7 @@ abstract final class ArulTokens {
   static const Color ctaGreenHover = Color(0xFF1C9450);
 
   // ───────────────────────── Dark theme text ladder ───────────────────────
-  // README > Colors > Dark theme.
+  // Spec > Colors > Dark theme.
 
   /// Dark theme primary text. `#FAF5EC` (== [ivory]).
   static const Color darkText = ivory;
@@ -73,7 +71,7 @@ abstract final class ArulTokens {
   static const Color darkFaint = Color(0xFF6E5C4C);
 
   // ───────────────────── Dark theme surfaces & borders ────────────────────
-  // README > Colors > Dark theme. `card bg rgba(250,245,236,.04–.05)` etc.
+  // Spec > Colors > Dark theme. `card bg rgba(250,245,236,.04–.05)` etc.
 
   /// Card fill, low end. `rgba(250,245,236,.04)`.
   static const Color cardBgDark04 = Color.fromRGBO(250, 245, 236, 0.04);
@@ -105,11 +103,11 @@ abstract final class ArulTokens {
   /// Premium-sheet / plan-card gold border. `rgba(212,160,23,.40)`.
   static const Color goldBorder40 = Color.fromRGBO(212, 160, 23, 0.40);
 
-  /// Premium-plan-card SOLID gold border (1.5px). README > Premium screen.
+  /// Premium-plan-card SOLID gold border (1.5px). Spec > Premium screen.
   static const Color goldBorderSolid = gold;
 
   // ───────────────────────── Light theme ladder ───────────────────────────
-  // README > Colors > Light theme.
+  // Spec > Colors > Light theme.
 
   /// Light theme primary text. `#2B1116`.
   static const Color lightText = Color(0xFF2B1116);
@@ -142,7 +140,7 @@ abstract final class ArulTokens {
   static const Color maroonBorder18 = Color.fromRGBO(122, 30, 51, 0.18);
 
   // ────────────────────────────── Scrims ──────────────────────────────────
-  // README > Colors > Scrims: all `rgba(20,9,12,x)`. `Color(0x0014090C)` is a
+  // Spec > Colors > Scrims: all `rgba(20,9,12,x)`. `Color(0x0014090C)` is a
   // transparent darkSurface, so only alpha moves and no grey fringe appears.
 
   static const Color _scrim0 = Color.fromRGBO(20, 9, 12, 0.0);
@@ -152,7 +150,7 @@ abstract final class ArulTokens {
   static const LinearGradient feedTopScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    // README is a plain two-stop `.62 → 0`; no mid-stop, or the mid-range
+    // The spec is a plain two-stop `.62 → 0`; no mid-stop, or the mid-range
     // reads visibly weaker than the reference.
     colors: [Color.fromRGBO(20, 9, 12, 0.62), _scrim0],
   );
@@ -161,11 +159,11 @@ abstract final class ArulTokens {
   static const LinearGradient feedBottomScrim = LinearGradient(
     begin: Alignment.bottomCenter,
     end: Alignment.topCenter,
-    // Plain two-stop `.72 → 0` per README (see note on [feedTopScrim]).
+    // Plain two-stop `.72 → 0` per spec (see note on [feedTopScrim]).
     colors: [Color.fromRGBO(20, 9, 12, 0.72), _scrim0],
   );
 
-  /// Splash bottom scrim. README > Splash: `180deg .25 → 0 @35% → 0 @55% → .82`.
+  /// Splash bottom scrim. Spec > Splash: `180deg .25 → 0 @35% → 0 @55% → .82`.
   static const LinearGradient splashBottomScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -178,7 +176,7 @@ abstract final class ArulTokens {
     stops: [0.0, 0.35, 0.55, 1.0],
   );
 
-  /// Sign-in scrim. README > Sign-in: 3-stop `.28 → 0 (38–62%) → .72`.
+  /// Sign-in scrim. Spec > Sign-in: 3-stop `.28 → 0 (38–62%) → .72`.
   static const LinearGradient signInScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -191,14 +189,14 @@ abstract final class ArulTokens {
     stops: [0.0, 0.38, 0.62, 1.0],
   );
 
-  /// Bottom-sheet barrier overlay. README range `.55–.62`; chosen `.58`.
+  /// Bottom-sheet barrier overlay. spec range `.55–.62`; chosen `.58`.
   static const Color sheetOverlay = Color.fromRGBO(20, 9, 12, 0.58);
 
   /// Dialog barrier overlay. `.60`.
   static const Color dialogOverlay = Color.fromRGBO(20, 9, 12, 0.60);
 
   // ─────────────────────────── Silk gradients ─────────────────────────────
-  // README > Colors > Silk gradients (profile / hero / plan cards).
+  // Spec > Colors > Silk gradients (profile / hero / plan cards).
 
   /// Silk, dark theme. `135deg rgba(122,30,51,.35) → rgba(212,160,23,.10)`,
   /// paired with [silkBorderDark] (gold 30%).
@@ -229,21 +227,21 @@ abstract final class ArulTokens {
   static const Color silkBorderLight = maroonBorder18;
 
   /// Dark sheet surface gradient: [darkSheetGradientTop] → [darkSheetSurface].
-  /// README > Premium gate: `#241014 → #1A0B0F`.
+  /// Spec > Premium gate: `#241014 → #1A0B0F`.
   static const LinearGradient sheetGradientDark = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [darkSheetGradientTop, darkSheetSurface],
   );
 
-  /// Feed loading placeholder fill. README > Feed states > Loading:
+  /// Feed loading placeholder fill. Spec > Feed states > Loading:
   /// `110deg #14090C 30% → #2A1218 50% → #14090C 70%`.
   static const Color skeletonBase = darkSurface; // #14090C
   static const Color skeletonHighlight = Color(0xFF2A1218);
 
   // ─────────────────────────── Text over media ────────────────────────────
 
-  /// Shadow for text/icons sitting directly on media. README > Spacing/misc:
+  /// Shadow for text/icons sitting directly on media. Spec > Spacing/misc:
   /// `0 1px 8px rgba(0,0,0,.6)`.
   static const List<Shadow> overMediaShadow = [
     Shadow(offset: Offset(0, 1), blurRadius: 8, color: Color(0x99000000)),
@@ -262,7 +260,7 @@ abstract final class ArulTokens {
   ];
 
   // ────────────────────────────── Typography ──────────────────────────────
-  // README > Typography. UI = system stack (fontFamily null). Serif =
+  // Spec > Typography. UI = system stack (fontFamily null). Serif =
   // 'Marcellus' (bundled) for the Latin wordmark, screen titles, price/reward
   // numerals and hero headings ONLY — never a localized string.
 
@@ -313,7 +311,7 @@ abstract final class ArulTokens {
   );
 
   /// Premium / refer price & reward numerals. Marcellus. Size varies per site
-  /// (20–30px per README) — pass `.copyWith(fontSize:)`; default 22.
+  /// (20–30px per spec) — pass `.copyWith(fontSize:)`; default 22.
   static const TextStyle priceNumeral = TextStyle(
     fontFamily: serif,
     fontSize: 22,
@@ -355,7 +353,7 @@ abstract final class ArulTokens {
     fontWeight: FontWeight.w600,
   );
 
-  /// Button label. README range 15–16px; chosen 15px w600. Bump per site with
+  /// Button label. spec range 15–16px; chosen 15px w600. Bump per site with
   /// `.copyWith(fontSize: 16)` where the design calls for 16.
   static const TextStyle button = TextStyle(
     fontSize: 15,
@@ -372,9 +370,9 @@ abstract final class ArulTokens {
   );
 
   // ─────────────────────────────── Radii ──────────────────────────────────
-  // README > Spacing / radii / misc.
+  // Spec > Spacing / radii / misc.
 
-  /// Card corner. README range 18–22; chosen 20.
+  /// Card corner. spec range 18–22; chosen 20.
   static const double cardRadius = 20;
 
   /// Rows-card corner. 20.
@@ -430,7 +428,7 @@ abstract final class ArulTokens {
   static const double minHitTarget = 44;
 
   // ──────────────────────────── Icon chip ─────────────────────────────────
-  // README: 40×40 r12, gold-tint (dark) / maroon-tint (light), 21px icon.
+  // Spec: 40×40 r12, gold-tint (dark) / maroon-tint (light), 21px icon.
 
   /// Icon-chip box size. 40×40.
   static const double iconChipSize = 40;
@@ -439,7 +437,7 @@ abstract final class ArulTokens {
   static const double iconChipIconSize = 21;
 
   // ───────────────────────────── Sheet grabber ────────────────────────────
-  // README: 44×4 r2, rgba(250,245,236,.25) dark / rgba(43,17,22,.2) light.
+  // Spec: 44×4 r2, rgba(250,245,236,.25) dark / rgba(43,17,22,.2) light.
 
   static const double grabberWidth = 44;
   static const double grabberHeight = 4;
@@ -448,7 +446,7 @@ abstract final class ArulTokens {
   static const Color grabberColorLight = Color.fromRGBO(43, 17, 22, 0.20);
 
   // ─────────────────────────────── Motion ─────────────────────────────────
-  // README > Motion. Transform/opacity only — never blur, never ShaderMask.
+  // Spec > Motion. Transform/opacity only — never blur, never ShaderMask.
 
   /// Chrome recede: fade OUT while swiping. 150ms.
   static const Duration chromeRecedeOut = Duration(milliseconds: 150);
@@ -471,17 +469,17 @@ abstract final class ArulTokens {
   /// Splash hairline loader loop. 1600ms linear.
   static const Duration hairlineLoop = Duration(milliseconds: 1600);
 
-  /// The ease-out curve for chrome settle. README: "ease-out".
+  /// The ease-out curve for chrome settle. spec: "ease-out".
   static const Curve settleCurve = Curves.easeOut;
 
-  /// The generic ease curve for sheets/dialogs. README: "ease".
+  /// The generic ease curve for sheets/dialogs. spec: "ease".
   static const Curve sheetCurve = Curves.ease;
 
   /// Linear loop for the two continuous sweeps (skeleton, hairline).
   static const Curve loopCurve = Curves.linear;
 
   // ──────────────────────── Splash hairline loader ────────────────────────
-  // README > Splash: 120×2px gold with sliding gradient, 1.6s linear loop.
+  // Spec > Splash: 120×2px gold with sliding gradient, 1.6s linear loop.
 
   static const double hairlineWidth = 120;
   static const double hairlineHeight = 2;

@@ -265,6 +265,24 @@ class ApiClient {
         );
 
     if (response.statusCode != 200) {
+      // ONLY a 401 means the refresh token is genuinely dead. Everything else —
+      // 429 (rate limited), 5xx, a Cloudflare gateway blip, a Neon hiccup — is
+      // TRANSIENT, and wiping the session for those would sign a paying user
+      // out because the server had a bad second. That is the worst possible
+      // false positive: they lose premium access and have to re-authenticate,
+      // for a fault that was never theirs.
+      //
+      // Transient failures surface as a normal error the caller can retry; the
+      // stored tokens stay put and the next request succeeds. `isSessionExpired`
+      // deliberately does NOT match this code, so the UI never says
+      // "session expired" for what is really "server busy".
+      if (response.statusCode != 401) {
+        throw ApiException(
+          code: 'refresh_unavailable',
+          message: 'Could not reach the server. Please try again.',
+          status: response.statusCode,
+        );
+      }
       await clearTokens();
       throw ApiException(
         code: 'invalid_refresh',

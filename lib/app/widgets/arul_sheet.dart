@@ -4,7 +4,7 @@ import '../../theme/arul_tokens.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
 ///
-/// README (Apply / Theme / Language / Premium / Edit-name sheets): rounded top
+/// Spec (Apply / Theme / Language / Premium / Edit-name sheets): rounded top
 /// r24; dark surface `#1A0B0F` (optionally a `#241014 → #1A0B0F` gradient top for
 /// the premium sheet) or white on light; a 1px gold-35% top hairline on dark; a
 /// 44×4 r2 grabber; entrance translateY(24)+fade 300ms ease; barrier scrim
@@ -143,7 +143,7 @@ class _ArulSheetState extends State<ArulSheet>
 }
 
 /// The drag grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)`
-/// light (README > Spacing / radii / misc).
+/// light (Spec > Spacing / radii / misc).
 class _Grabber extends StatelessWidget {
   const _Grabber();
 

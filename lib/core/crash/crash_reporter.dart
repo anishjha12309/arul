@@ -3,7 +3,8 @@
 /// Kept SEPARATE from [AnalyticsService] (product analytics): a crash reporter
 /// answers "did it break, and where", analytics answers "what did the user do".
 /// Widgets must never touch `FirebaseCrashlytics` directly — depend on this
-/// behind `crashReporterProvider`, so tests/debug builds get the no-op.
+/// behind `crashReporterProvider`, which picks the no-op when Firebase is not
+/// initialised.
 abstract interface class CrashReporter {
   /// Records a caught (non-fatal by default) error. Use at catch sites that
   /// currently swallow meaningful failures — NOT in hot loops.
@@ -25,8 +26,11 @@ abstract interface class CrashReporter {
   void setCustomKey(String key, Object value);
 }
 
-/// No-op used in debug builds and `flutter test`, where Firebase is never
-/// initialised. Every method is a safe no-op so call sites never branch.
+/// No-op used ONLY under `flutter test`, or in a build without the
+/// `FIREBASE_ENABLED` define — the two cases where Firebase is never
+/// initialised. Every real build (debug, profile and release) gets the real
+/// Crashlytics reporter. Every method is a safe no-op so call sites never
+/// branch.
 class NoOpCrashReporter implements CrashReporter {
   const NoOpCrashReporter();
 

@@ -1,5 +1,5 @@
--- Arul — Neon Postgres schema (1/3: identity + subscription). PG 16+.
--- Apply order: 01 → 02 → 03, then ../seed.sql (neon-migration skill).
+-- Arul — Neon Postgres schema (1/4: identity + subscription). PG 16+.
+-- Apply order: 01 → 02 → 03 → 04, then ../seed.sql (neon-migration skill).
 -- NO RLS by design: authorization is enforced entirely in the Cloudflare Worker —
 -- every query parameterized and scoped to the verified JWT `sub`. No client
 -- connects to Neon directly.

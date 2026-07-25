@@ -31,7 +31,7 @@ import 'video_preload_controller.dart';
 import 'viewer_media.dart';
 
 /// The home surface: a Shorts-style vertical reel of wallpapers, one full-bleed
-/// page each (README > Reel feed). The old grid + separate viewer are gone —
+/// page each (Spec > Reel feed). The old grid + separate viewer are gone —
 /// this pager IS the browse experience.
 ///
 /// Chromeless by design: category chips float on the top scrim, an icon-only

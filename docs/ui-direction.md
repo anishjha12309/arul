@@ -31,9 +31,11 @@ Load the frontend-design skill when building screens. Tokenize every color — n
 Light + dark themes both required, persisted.
 
 ## Type
-Base: Roboto (system). Display/wordmark: a serif with presence (e.g. Playfair Display via
-google_fonts) — but every locale string must render in Tamil/Telugu/Kannada/Malayalam scripts,
-so display fonts apply ONLY to the Latin wordmark; all UI text uses the base stack (Noto fallbacks).
+Base: Roboto (system). Display/wordmark: **Marcellus**, BUNDLED at `assets/fonts/Marcellus-Regular.ttf`
+and wired in `lib/app/theme/typography.dart:36` — never `google_fonts`, which is a banned dependency
+(pubspec.yaml:5-8; see §Perf). Every locale string must render in Tamil/Telugu/Kannada/Malayalam scripts,
+so the display serif applies ONLY to the display/headline tiers + Latin wordmark; all UI text uses the
+base stack (Noto fallbacks).
 
 ## Motifs
 Sign-in + splash backgrounds: **kolam dot-grid patterns** (subtle line-drawn loops), **gopuram
@@ -52,7 +54,8 @@ pattern: "Beautiful South Indian wallpapers — get Arul: <link>".
 - **No `shimmer` package / no `ShaderMask`** — a mask forces `saveLayer()`, an offscreen pass per
   frame. `lib/app/widgets/skeleton.dart` slides a gradient FILL instead: identical look, zero cost.
 - **No `google_fonts`, no `font_awesome_flutter`** — runtime font fetching and whole icon fonts. The
-  system stack already renders Latin + all 5 Indic scripts for free; built-in `Icons` tree-shake.
+  system stack already renders Latin + all 5 Indic scripts for free; built-in `Icons` tree-shake. The one
+  display serif (Marcellus) is BUNDLED in-APK, not fetched — that is the only allowed way to add a face.
 - Feed pages get no keep-alive and no extra RepaintBoundary (PageView.builder adds one already).
 - Images decode at display size (`memCacheWidth` × devicePixelRatio); the image cache is capped in
   `main.dart` — a 1080×1920 wallpaper is ~8.3 MB of RGBA regardless of file size.
@@ -61,6 +64,9 @@ pattern: "Beautiful South Indian wallpapers — get Arul: <link>".
   system above + Material's real motion tokens (`Easing`, `Durations`) + one spring on the CTA.
 
 ## Assets still owed
-Real launcher-icon artwork (a vector gopuram mark ships now: `android/.../ic_launcher_foreground.xml`
-+ a `<monochrome>` themed layer) · sign-in background video (1024×1824, same spec as live wallpapers)
-· premium art. Keep masters outside the repo.
+Real launcher-icon artwork · premium art. Keep masters outside the repo.
+The shipped launcher icon is a placeholder gopuram mark in **RASTER** form — no vector drawable:
+`ic_launcher{,_foreground,_monochrome}.png` in `mipmap-mdpi…xxxhdpi`, composed (adaptive + `<monochrome>`
+themed layer) by `mipmap-anydpi-v26/ic_launcher.xml`.
+**Shipped, no longer owed:** sign-in background video — `assets/video/splash.mp4` (1024×1824, same spec as
+live wallpapers), loaded at `lib/features/auth/presentation/widgets/video_background.dart:191`.

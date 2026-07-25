@@ -12,16 +12,21 @@ import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/upload_provider.dart';
 
-/// Upload-your-content. WALLPAPERS ONLY — Arul has no ringtones, so there is
+/// Upload-your-content. WALLPAPERS ONLY: user submissions are wallpaper-only by
+/// design — the ringtone catalog is curated, never user-submitted — so there is
 /// no kind picker; the Worker validates `kind == 'wallpaper'` regardless.
 ///
-/// DESIGN-ONLY pass (design_handoff_arul spec, "Upload screen"): dashed pick
-/// zone, optional title field, EXACTLY the 6 fixed categories (no "All"),
-/// rights checkbox, single green submit. No real file picking yet — the pick
-/// zone tap is a TODO and submit-enabled state is driven by local mock state
-/// (category + rights) only, per the design-handoff instructions. Category
-/// labels are hardcoded consts for this pass — the live screen re-wires them
-/// from `categoriesProvider` (see git history) once the picker lands.
+/// Layout: dashed pick zone, optional title field, EXACTLY the 6 fixed
+/// categories (no "All"),
+/// rights checkbox, single submit. The pick zone is live — [_pickFile] runs the
+/// real [FilePicker] and validates MIME type + size against [UploadConstraints]
+/// before accepting a file — and submit stays disabled until a validated file,
+/// a category and the rights checkbox are all present.
+///
+/// Upload categories are deliberately the fixed 6 consts below, decoupled from
+/// the browse catalog's `categoriesProvider`: submissions must land in a
+/// moderator-known slug, so this list is not driven by whatever the catalog
+/// currently happens to contain.
 class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
 
@@ -139,7 +144,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
     final dashColor = isDark
         ? ArulTokens.goldBorder50
-        : const Color.fromRGBO(122, 30, 51, 0.45); // maroon 45%, README
+        : const Color.fromRGBO(122, 30, 51, 0.45); // maroon 45%, per spec
     final pickZoneFill = isDark ? null : ArulTokens.cardBgLight;
     final labelColor = isDark
         ? ArulTokens.darkTextSecondary
@@ -380,7 +385,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 }
 
-/// 1.5px dashed rounded-rect border for the pick zone. README calls for a
+/// 1.5px dashed rounded-rect border for the pick zone. The spec calls for a
 /// dashed border with no dedicated package in scope, so it's a small
 /// CustomPainter: walk the rounded-rect perimeter as a [Path.computeMetrics]
 /// arc-length and stroke alternating on/off segments.

@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 
 import '../../theme/arul_tokens.dart';
 
-/// The green primary CTA — README: "ctaGreen `#1FA75A` — ALL primary CTAs".
+/// The green primary CTA — spec: "ctaGreen `#1FA75A` — ALL primary CTAs".
 ///
 /// Fully-rounded (r999), green fill, darkening to [ArulTokens.ctaGreenHover] on
 /// press, white 15–16px/600 label with an optional leading icon. Feedback is
-/// transform + opacity ONLY (README motion rule): a slight scale-down and the
+/// transform + opacity ONLY (spec motion rule): a slight scale-down and the
 /// colour swap, no shadow, no blur.
 class CtaButton extends StatefulWidget {
   const CtaButton({
@@ -24,13 +24,13 @@ class CtaButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
 
-  /// One of 50 / 52 / 54 per the design (README: "primary 50–54px"). Defaults to
+  /// One of 50 / 52 / 54 per the design (spec: "primary 50–54px"). Defaults to
   /// [ArulTokens.ctaHeight52].
   final double height;
 
   final IconData? icon;
 
-  /// README button label is 15–16px; default 15, pass 16 where the site calls it.
+  /// Spec button label is 15–16px; default 15, pass 16 where the site calls it.
   final double fontSize;
 
   final bool expand;

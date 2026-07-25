@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
 
-/// The redesign's sliding-gradient skeleton (README > Feed states > Loading:
+/// The redesign's sliding-gradient skeleton (Spec > Feed states > Loading:
 /// `110deg #14090C 30% → #2A1218 50% → #14090C 70%`, background-size 200%,
 /// 1.8s linear loop).
 ///

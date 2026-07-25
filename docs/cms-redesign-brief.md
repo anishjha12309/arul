@@ -25,7 +25,9 @@ for TWO Android apps from one login:
 - **Pakiza** — Islamic content: 111 wallpapers (static images + live videos) +
   51 ringtones. No categories.
 - **Arul** — South-Indian devotional content: 514 wallpapers in 6 categories
-  (amman, ayyappan, murugan, perumal, sivan, temples). No ringtones.
+  (amman, ayyappan, murugan, perumal, sivan, temples), plus ringtones — also
+  category-browsed, and unlike Pakiza's they carry cover art. (No ringtone
+  content is published yet, so design the list for its empty state too.)
 
 All wallpaper media is vertical 9:16 (phone wallpapers); every item has a real
 thumbnail, including videos. The operator works in short daily bursts: upload
@@ -35,7 +37,7 @@ ID/R2-key), and occasionally bulk publish/unpublish/delete.
 
 **Pages:** Login · Dashboard (both apps' stats) · per-app Wallpapers list
 (table view + thumbnail-grid view, create/edit modals, multi-select with bulk
-actions) · Ringtones (Pakiza only) · Submissions moderation queue (pending /
+actions) · per-app Ringtones (both apps) · Submissions moderation queue (pending /
 approved / rejected tabs, review modal with media preview + approve/reject) ·
 Category transfer (Arul only: pick source category → multi-select items →
 move to target category) · App config (JSON textareas + save/rebuild) ·
@@ -147,8 +149,8 @@ restrained fast motion.
 ### Sidebar + mobile drawer
 - Brand block: "HSR" 16px with a short gold underline, "UNIFIED CMS" 10px
   tracked micro-label. Groups: OVERVIEW (Dashboard) · PAKIZA (Wallpapers,
-  Ringtones, Submissions, App config) · ARUL (Wallpapers, Submissions,
-  Category transfer, App config). Active item: 2px gold left bar + warm-white
+  Ringtones, Submissions, App config) · ARUL (Wallpapers, Ringtones,
+  Submissions, Category transfer, App config). Active item: 2px gold left bar + warm-white
   text on `#1d191d` — not the current blue filled pill. Sign out pinned to the
   bottom. Mobile: hamburger → drawer with the same content, Sign out pinned to
   the drawer's bottom edge (current drawer has a dead-space gap — fix).
@@ -163,10 +165,13 @@ restrained fast motion.
   support-email + min-version text fields; gold "Save & rebuild" + ghost
   "Rebuild now".
 
-### Ringtones (Pakiza)
-- Same table language as wallpapers minus thumbnails/category: ♪ mark, title,
-  status dot, date, row actions. Same create/edit modal pattern with a single
-  audio file.
+### Ringtones (both apps)
+- Same table language as wallpapers: ♪ mark, title, status dot, date, row
+  actions. Same create/edit modal pattern with a single audio file.
+- **Pakiza:** no thumbnail, no category column.
+- **Arul:** a category column (same 6 as wallpapers) AND a cover thumbnail —
+  Arul ringtones carry cover art. `cover_key` is nullable, so a missing cover
+  must render the neutral placeholder tile, never a broken-image box.
 
 ## Anti-patterns (do NOT do these)
 
@@ -187,9 +192,11 @@ mode, user management (single operator), server-side pagination.
 
 ## Appendix — implementation handoff notes (carry into the Claude Code bundle)
 
-The production app is server-rendered **Hono JSX on Cloudflare Workers**: one
-CSS template string + a few vanilla-JS string constants in `cms/src/ui.tsx`,
-page JSX in `cms/src/pages/*.tsx`, HTMX for modal content loading. No client
+The production app is server-rendered **Hono JSX on Cloudflare Workers**, and
+lives in its OWN repo — `c:\Anish\Unified CMS` (github.com/anishjha12309/hsr-cms),
+NOT in the Arul repo. One CSS template string + a few vanilla-JS string
+constants in `src/ui.tsx`, page JSX in `src/pages/*.tsx`, per-app scopes wired
+in `src/registry.ts`, HTMX for modal content loading. No client
 framework, no build step, no external assets beyond HTMX — fonts must be
 system-stack. The implementation must preserve, byte-exact: all `data-*`
 behavioral attributes (`data-upload-form/-kind/-presign/-slot/-required/
@@ -202,6 +209,7 @@ behavioral attributes (`data-upload-form/-kind/-presign/-slot/-required/
 `is_published`, `ids`, `bulk_action`, `username`, `password`) and form
 actions; script-queried classes (`.tablewrap`, `.pager`, `.filtered-out`,
 `.paged-out`, `th.sortable[data-type][data-dir]`, `tbody tr[data-id]`); the
-native `<dialog>` modals; and the 52-test suite
-(`cd cms && npx tsc --noEmit && npx vitest run`). Deploy stays manual
-(`npx wrangler deploy`, owner-run).
+native `<dialog>` modals; and a green test suite
+(`npx tsc --noEmit && npx vitest run`, run from the hsr-cms repo root). Deploy
+stays manual (`npx wrangler deploy`, owner-run — hsr-cms serves live Pakiza
+too, so it always needs owner sign-off).

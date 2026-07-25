@@ -68,13 +68,14 @@ dependencies:
   # Ads-eligible.
   #
   # CONDITIONALLY GATED (Arul delta from the reference, which is always-on because
-  # its google-services.json always exists): android/app/google-services.json does
-  # NOT exist yet. Until it does, the code above stays inert — the gradle plugins
-  # apply only when the file is present (app/build.gradle.kts) and firebaseEnabled
-  # is false (main.dart + providers select the no-op impls). To ENABLE: drop
-  # android/app/google-services.json in AND flip FIREBASE_ENABLED=true in env/*.json
-  # in the SAME change. No code edits needed — the deps + services + guards are all
-  # already wired here.
+  # its google-services.json always exists). LIVE since 2026-07-18:
+  # android/app/google-services.json is in place and both env files set
+  # FIREBASE_ENABLED=true, so every real build gets the real SDKs. The gate stays
+  # so `flutter test` and define-less builds remain inert — the gradle plugins
+  # apply only when the file is present (app/build.gradle.kts), and firebaseEnabled
+  # false makes main.dart + the providers select the no-op impls. NOTE:
+  # google-services.json is git-ignored, so a fresh clone must supply its own
+  # before FIREBASE_ENABLED=true will work.
   firebase_core: ^4.11.0
   firebase_crashlytics: ^5.2.4
   firebase_performance: ^0.11.4+3

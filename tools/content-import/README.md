@@ -6,12 +6,15 @@ external process); this is that pipeline, built for the Drive drop of 2026-07-16
 
 It handles the things the CMS one-at-a-time upload does not: **dedup against existing
 content**, **vision classification** into the six categories, a **visual review/correction
-step**, and a **full media-convention QC gate**.
+step**, and a **full media-convention QC gate**. ("The CMS" = the unified CMS worker at
+`api.hsrutility.com/admin`, a separate repo checked out at `c:\Anish\Unified CMS`.)
 
 ## Prerequisites
 
 - **Node 20+**, **ffmpeg + ffprobe** on PATH.
-- **sharp** — borrowed from `cms/node_modules` via `createRequire` (no separate install).
+- **sharp** — borrowed from the unified CMS repo's `node_modules` (`c:/Anish/Unified CMS/`) via
+  `createRequire` (no separate install). **Requires that sibling repo to be checked out** — the
+  in-repo `cms/` this used to borrow from was deleted 2026-07-20.
 - **aws4fetch + postgres** — `npm i aws4fetch postgres` inside the staging ROOT (only needed for `import.mjs` / `fix.mjs`).
 - Secrets read at runtime from `workers/.dev.vars` (`R2_*`, `DATABASE_URL`, `CATALOG_BUILD_SECRET`) — never hardcoded.
 

@@ -22,6 +22,7 @@ import { verifyAccessToken } from "../lib/jwt.js";
 import { isPremium } from "../lib/entitlement.js";
 import { presignGet, presignPut } from "../lib/r2.js";
 import { getDb } from "../lib/db.js";
+import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 
 // Maps kind → { table, privateKeyCol }
@@ -38,6 +39,13 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
 
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  // Each grant costs a live Neon entitlement read. Limit is high enough for
+  // genuine bulk apply/share bursts, low enough to stop a scripted drain.
+  if (!(await allowRequest(env.RL_MEDIA, `signed:${sub}`))) {
+    console.warn(`[media/signed-url] rate limited user ${sub}`);
+    return tooManyRequests();
+  }
 
   let body: { id?: string; kind?: string };
   try {

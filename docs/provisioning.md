@@ -1,4 +1,8 @@
-# Provisioning — create BEFORE Phase 1 (nothing is shared with the reference app)
+# Provisioning — record of Arul's infrastructure (nothing is shared with the reference app)
+
+**STATUS 2026-07-20: every Phase-0/1 item below is complete unless its box is unchecked.** The one
+real open item is the custom domains (see ⚠ below). Originally a pre-Phase-1 checklist; kept as the
+inventory of what exists and where.
 
 Sharing Pakiza's bucket/KV/DB/JWT secret would let each app delete the other's media and
 accept the other's tokens. Everything below is Arul-only. `[user]` = only you can do it.
@@ -7,65 +11,84 @@ accept the other's tokens. Everything below is Arul-only. `[user]` = only you ca
 - [x] R2 bucket `south-indian-wallpapers` — exists (created 2026-07-09, APAC, 429 objects / 1.75 GB
       incl. the `catalog/catalog.json` import manifest); public dev-url ON:
       `https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev` (dev/testing ONLY — throttled)
-- [ ] [user] R2 custom domain `arul-cdn.hsrutility.com` on the bucket (dashboard → bucket →
-      Settings → Custom Domains). Do NOT ship the throttled `r2.dev` URL to prod.
-- [ ] KV namespace: `cd workers && npx wrangler kv namespace create KV` (+ `--preview`) → ids into wrangler.toml
-- [ ] Hyperdrive: `npx wrangler hyperdrive create arul-hyperdrive --connection-string="<NEON_URL>"`
+- [x] KV namespace: `cd workers && npx wrangler kv namespace create KV` (+ `--preview`) → ids into wrangler.toml
+- [x] Hyperdrive: `npx wrangler hyperdrive create arul-hyperdrive --connection-string="<NEON_URL>"`
       → id into wrangler.toml. **Query caching stays OFF.**
-- [ ] R2 S3 API token (Object Read & Write, this bucket only) → `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` secrets
-- [ ] [user] Worker custom domain `arul-api.hsrutility.com` (dashboard → worker → Settings → Domains)
-      after first deploy
-- [ ] R2 CORS rule allowing origin `https://arul-api.hsrutility.com`, method PUT, header
-      `content-type` (CMS browser uploads PUT the S3 endpoint cross-origin)
+- [x] R2 S3 API token (Object Read & Write, this bucket only) → `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`
+      secrets — presigning verified working in prod
+- [x] R2 CORS rule, method PUT, header `content-type` (CMS browser uploads PUT the S3 endpoint
+      cross-origin). Origin is `https://api.hsrutility.com` — the hsr-cms worker, NOT an arul-* host.
+
+### ⚠ OPEN — the only unfinished infrastructure item
+- [ ] [user] **Custom domains are NOT attached.** Live origins today are
+      `https://arul-api.twilight-smoke-d495.workers.dev` and
+      `https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev` (throttled dev URL). Deliberate interim
+      state — to be migrated to unified CDN domains:
+      · R2 custom domain on the bucket (dashboard → bucket → Settings → Custom Domains)
+      · Worker custom domain (dashboard → worker → Settings → Domains)
+      When attached, update `R2_CDN_BASE_URL`, the R2 CORS origin if it moves, and docs/architecture.md.
 
 ## Neon
-- [ ] [user] New Neon project `arul` (separate from Pakiza's) → pooled connection string
-- [ ] Apply `db/schema/01→03` then `db/seed.sql` (neon-migration skill — psql is not installed)
-- [ ] Connection string into `workers/.dev.vars` as `DATABASE_URL` (git-ignored) + the Hyperdrive config above
+- [x] [user] New Neon project `arul` (separate from Pakiza's) → pooled connection string
+- [x] Apply `db/schema/01→04` then `db/seed.sql` (neon-migration skill — psql is not installed).
+      `04_ringtones.sql` added 2026-07-17 with the ringtones reversal.
+- [x] Connection string into `workers/.dev.vars` as `DATABASE_URL` (git-ignored) + the Hyperdrive config above
 
 ## Google (new Cloud project — never reuse Pakiza's OAuth clients)
-- [ ] [user] Firebase project + Android app `com.hsrapps.arul` → download `android/app/google-services.json`
-- [ ] [user] OAuth clients: **Web** (→ `GOOGLE_WEB_CLIENT_ID`, also the Worker secret) + **Android**
-      (package `com.hsrapps.arul` + debug/upload SHA-1s). After first Play upload: register BOTH
-      Play app-signing and upload SHA-1/256 in the Android client + Firebase, or tester sign-in breaks.
+- [x] [user] Firebase project + Android app `com.hsrapps.arul` → `android/app/google-services.json` (in
+      place since 2026-07-18; both env files set `FIREBASE_ENABLED: "true"`)
+- [x] [user] OAuth clients: **Web** (→ `GOOGLE_WEB_CLIENT_ID`, also the Worker secret) + **Android**
+      (package `com.hsrapps.arul` + debug/upload SHA-1s) — real ids in `env/prod.json`. After first Play
+      upload: register BOTH Play app-signing and upload SHA-1/256 in the Android client + Firebase, or
+      tester sign-in breaks.
 - [ ] [user] Link Firebase ↔ Google Ads if running install campaigns
 
 ## Analytics
-- [ ] [user] PostHog: new project (US region) → `POSTHOG_KEY`. Autocapture stays OFF.
-- [ ] [user] Meta app (optional at launch): `META_APP_ID`/`META_CLIENT_TOKEN` — empty defines = SDK disabled
+- [x] [user] PostHog: new project (US region) → `POSTHOG_KEY` (real key in env). Autocapture stays OFF.
+- [x] [user] Meta app: `META_APP_ID`/`META_CLIENT_TOKEN` set (real app id + token) — empty defines = SDK disabled
 
 ## PhonePe
-- [ ] [user] Decide: same merchant as Pakiza (default — reuse `PHONEPE_*` credential values, order
+- [x] [user] Decide: same merchant as Pakiza (default — reuse `PHONEPE_*` credential values, order
       prefix `DKS_` keeps streams distinguishable) or a separate merchant onboarding
-- [ ] [user] Register webhook `https://arul-api.hsrutility.com/payments/webhook` + username/password
-      in the PhonePe dashboard (prod)
+- [x] [user] Webhook registered + username/password in the PhonePe dashboard. Running on **PRODUCTION**
+      credentials. The registered URL is `https://api.hsrutility.com/payments/webhook` (the hsr-cms
+      dispatcher, which forwards `DKS_`-prefixed orders to arul-api) — **not** an `arul-*` host.
 
 ## Play / signing
-- [ ] [user] New upload keystore: `keytool -genkeypair -v -keystore C:\Users\anish\arul-upload.jks
+- [x] [user] New upload keystore: `keytool -genkeypair -v -keystore C:\Users\anish\arul-upload.jks
       -alias arul -keyalg RSA -keysize 2048 -validity 10000` (CN=HSR Apps) + `android/key.properties`
-- [ ] [user] Play Console listing `com.hsrapps.arul`, Play App Signing ON
-- [ ] [user] Privacy policy page live (e.g. `https://hsrapps.com/arul/privacy-policy/`) disclosing
-      Google/Firebase + PostHog (+ Meta + advertiser-ID if used) — also goes in `db/seed.sql` policy_urls
+- [x] [user] Play Console listing `com.hsrapps.arul`, Play App Signing ON — **1.0.0+20** AAB uploaded
+      (not yet public)
+- [x] [user] Privacy policy page live: `https://hsrapps.com/arul/privacy-policy/` — disclosing
+      Google/Firebase + PostHog (+ Meta + advertiser-ID if used). Served to the app via `policy_urls`
+      (`db/seed.sql` → `app_config`); confirmed present in the live `catalog/app_config.json`.
 
 ## Worker secrets (`cd workers && npx wrangler secret put <NAME>` — fresh values, never Pakiza's)
 ```
 JWT_SECRET (32+ random bytes)      GOOGLE_WEB_CLIENT_ID
 R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET=south-indian-wallpapers
-R2_CDN_BASE_URL=https://arul-cdn.hsrutility.com
+R2_CDN_BASE_URL   # currently the r2.dev origin, NOT arul-cdn.hsrutility.com — see the ⚠ open item
 PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET (set once, NEVER rotate)  ALLOWED_ORIGINS
-ADMIN_USERNAME  ADMIN_PASSWORD_HASH  ADMIN_SESSION_SECRET
 CF_ZONE_ID  CF_PURGE_TOKEN   # optional: instant version-pointer purge on publish
 ```
+`ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` / `ADMIN_SESSION_SECRET` are **not** this worker's secrets — they
+belong to the hsr-cms worker. Deleted here with the legacy `/admin` removal (2026-07-20); verified gone
+from `wrangler secret list`.
 
 ## App env
-- [ ] Copy `env.example.json` → `env/dev.json` + `env/prod.json`, fill values (git-ignored)
+- [x] Copy `env.example.json` → `env/dev.json` + `env/prod.json`, fill values (git-ignored) — both exist
+      and are filled
 
 ## Existing bucket content — verified 2026-07-14 (wrangler + S3 listing + ffprobe samples)
 `wallpapers/<category>/<hex>.{jpg|mp4}` — 6 categories (amman/ayyappan/murugan/perumal/sivan/temples),
 211 static + 217 live, all size-cap-clean; sampled media conforms to every rule (videos 1024×1824
 h264 no-audio faststart). `catalog/catalog.json` = content-prep manifest → the Phase-3 import source
 (titles, categories, dims, ranks). The app never reads it; build-catalog writes its own
-`catalog/wallpapers/…` + `version.json` beside it. Register all 428 as DB rows before the hourly
-cron starts sweeping unreferenced `wallpapers/` keys (port-map Phase 3).
+`catalog/<scope>/…` + `version.json` + `app_config.json` beside it.
+
+*Historical:* the manifest import ran 2026-07-14, registering all 428 as DB rows before the hourly cron
+could sweep unreferenced `wallpapers/` keys (port-map Phase 3). The live catalog has since grown via the
+CMS — **~514 wallpapers, 0 ringtones (no ringtone content published yet), content_version 16** as of
+2026-07-20. The sweep rule still binds: any `wallpapers/`/`ringtones/` object without a DB row is deleted.

@@ -5,17 +5,18 @@ import 'package:flutter/foundation.dart';
 /// Build-time config. Values arrive via `--dart-define-from-file=env/dev.json`.
 /// No secrets ever live here — the app holds none (CLAUDE.md §9).
 abstract final class AppConfig {
-  /// PREVIEW DEFAULT (pre-Phase-0): the bucket's public r2.dev URL, so the feed
-  /// renders REAL content before the Worker exists. It is throttled and must never
-  /// ship — provisioning attaches `arul-cdn.hsrutility.com` and env/prod.json
-  /// then overrides this.
+  /// The bucket's public r2.dev origin — CURRENTLY the CDN for BOTH dev and
+  /// prod (env/*.json ship this exact URL, and v1.0.0+20 released on it). A
+  /// deliberate interim: r2.dev is throttled, and the move to a unified custom
+  /// CDN domain (`arul-cdn.hsrutility.com`) is still pending.
   static const cdnBaseUrl = String.fromEnvironment(
     'R2_CDN_BASE_URL',
     defaultValue: 'https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev',
   );
 
-  /// Base URL for the Cloudflare Worker API. EMPTY until Phase 0 provisions
-  /// `arul-api.hsrutility.com` — see [hasBackend].
+  /// Base URL for the Cloudflare Worker API. Set in BOTH env files to the
+  /// worker's workers.dev origin; the custom `arul-api.hsrutility.com` domain
+  /// is still pending. Empty only in define-less builds — see [hasBackend].
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   /// Web OAuth 2.0 client ID from the NEW Arul Google Cloud project.
@@ -48,13 +49,17 @@ abstract final class AppConfig {
     defaultValue: 'https://hsrapps.com/arul/privacy-policy/',
   );
 
-  /// True once the Worker is provisioned; until then every gated action is a
-  /// no-op stub and the app runs standalone off the public CDN.
+  /// Always true in real builds — the Worker has been live since 2026-07-14 and
+  /// both env files set API_BASE_URL. The false branch is a legacy safety net
+  /// for define-less local runs, where gated actions degrade to no-op stubs and
+  /// the app runs standalone off the public CDN.
   static bool get hasBackend => apiBaseUrl.isNotEmpty;
 
-  /// Whether Google sign-in is configured with a REAL web client id. Until the
-  /// Arul Google Cloud project exists, env files carry a `TODO…` placeholder —
-  /// auth then degrades gracefully (no auto-launch, sign-in shows an error).
+  /// Whether Google sign-in is configured with a REAL web client id. The Arul
+  /// Google Cloud project exists and both env files carry real ids — only
+  /// env.example.json still ships the `TODO…` sentinel. On that sentinel (or in
+  /// a define-less build) auth degrades gracefully: no auto-launch, and sign-in
+  /// shows an error instead of failing against a bogus audience.
   static bool get googleAuthConfigured => isRealValue(googleWebClientId);
 
   /// Whether Meta App Events should initialise + receive the ★ conversion
@@ -86,16 +91,18 @@ abstract final class AppConfig {
   /// events. Firebase runs in every real build (debug/profile/release) and is
   /// skipped only under `flutter test` (no platform channel).
   ///
-  /// Gated on the `FIREBASE_ENABLED` dart-define because Arul's
-  /// android/app/google-services.json does not exist yet (the reference is
-  /// always-on because its file always exists). Flip `FIREBASE_ENABLED=true` in
-  /// env/*.json in the SAME change that adds android/app/google-services.json —
-  /// enabling the flag without the file makes `Firebase.initializeApp()` fail.
+  /// Gated on the `FIREBASE_ENABLED` dart-define (an Arul delta — the reference
+  /// is always-on) so `flutter test` and define-less builds stay inert: enabling
+  /// the flag without android/app/google-services.json makes
+  /// `Firebase.initializeApp()` fail. Both env files already set it to `true`,
+  /// and the file is present locally — but it is git-ignored, so a fresh clone
+  /// must supply its own before the flag can be turned on.
   static bool get firebaseEnabled =>
       !isFlutterTest && const bool.fromEnvironment('FIREBASE_ENABLED');
 
-  /// Logs key config in debug. Deliberately assert-free: an empty API_BASE_URL
-  /// is a SUPPORTED state pre-Phase-0 ([hasBackend] = false stubs).
+  /// Logs key config in debug. Deliberately assert-free: every real build sets
+  /// API_BASE_URL, but an empty one stays a SUPPORTED state for define-less
+  /// local runs ([hasBackend] = false stubs).
   static void validate() {
     if (kDebugMode) {
       debugPrint('[AppConfig] apiBaseUrl=$apiBaseUrl (hasBackend=$hasBackend)');

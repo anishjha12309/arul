@@ -5,7 +5,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/theme_mode_provider.dart';
 
-/// The theme picker sheet — README: "Bottom sheet 'Theme'; 3 rows (r14, 12px
+/// The theme picker sheet — spec: "Bottom sheet 'Theme'; 3 rows (r14, 12px
 /// pad): System default / Light / Dark. Selected: gold-tint bg, gold icon+title,
 /// gold check_circle." This one is FUNCTIONAL: selecting a row drives
 /// [themeModeProvider] (real theme switching), then closes the sheet.

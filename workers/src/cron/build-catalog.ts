@@ -48,14 +48,17 @@ interface ScopeResult {
 }
 
 interface BuildResults {
-  [scope: string]: ScopeResult | { error: string } | { skipped: "no_change" };
+  [scope: string]:
+    | ScopeResult
+    | { error: string }
+    | { skipped: "no_change" }
+    | { skipped: "locked" };
 }
 
 // ── R2 binding name in wrangler.toml ─────────────────────────────────────────
-// We need the R2 binding (R2Bucket) for writes, not the S3 presign API.
-// The binding is declared in wrangler.toml as [[r2_buckets]] binding = "R2".
-// Add this to wrangler.toml and Env interface when the R2 binding is created.
-// For now we fall back to putPublicJson which accepts an R2Bucket.
+// Writes go through the R2 Workers binding (env.R2, declared in wrangler.toml as
+// [[r2_buckets]] binding = "R2" and typed in env.ts), not the S3 presign API —
+// no outbound HTTP, no signing overhead.
 
 /**
  * Build catalog pages for one or all scopes.
@@ -66,6 +69,68 @@ export async function buildCatalog(
   env: Env,
   scope: string | null,
   force = false,
+): Promise<BuildResults> {
+  // ── Mutual exclusion ───────────────────────────────────────────────────────
+  // Two builders must never run concurrently. The CMS fires a rebuild on EVERY
+  // content mutation while the hourly cron rebuilds independently, so overlap is
+  // routine during a bulk publish — and overlap is destructive here:
+  //   · deleteOrphanedPages deletes every catalog/<scope>/*.json this build did
+  //     not itself write, so a build that saw fewer items happily deletes a
+  //     concurrent build's higher pages, leaving total_pages advertised while
+  //     those pages 404;
+  //   · writeVersionPointer is last-writer-wins, so an OLDER build finishing
+  //     second rewinds version.json and every client pins a stale ?v=.
+  // Best-effort KV lock: KV is eventually consistent so this is not a hard
+  // mutex, but it collapses the common same-minute overlap, and the monotonic
+  // guard in writeVersionPointer covers what slips through.
+  const lockHolder = crypto.randomUUID();
+  const lockHeld = await acquireBuildLock(env, lockHolder);
+  if (!lockHeld) {
+    console.log("[build-catalog] Another build holds the lock — skipping this run");
+    return { _lock: { skipped: "locked" } };
+  }
+  try {
+    return await buildCatalogLocked(env, scope, force);
+  } finally {
+    await releaseBuildLock(env, lockHolder);
+  }
+}
+
+/** KV key + TTL for the build lock. TTL bounds a crashed build's stale lock. */
+const BUILD_LOCK_KEY = "catalog_build_lock";
+const BUILD_LOCK_TTL_SECONDS = 300; // 5 min — far longer than a real build
+
+async function acquireBuildLock(env: Env, holder: string): Promise<boolean> {
+  try {
+    const current = await env.KV.get(BUILD_LOCK_KEY);
+    if (current !== null) return false;
+    await env.KV.put(BUILD_LOCK_KEY, holder, {
+      expirationTtl: BUILD_LOCK_TTL_SECONDS,
+    });
+    return true;
+  } catch (err) {
+    // KV unavailable must not block content publishing — proceed unlocked
+    // rather than freezing the catalog behind a broken lock.
+    console.warn("[build-catalog] lock acquire failed, proceeding unlocked:", err);
+    return true;
+  }
+}
+
+async function releaseBuildLock(env: Env, holder: string): Promise<void> {
+  try {
+    // Only clear OUR lock — never delete one a later build acquired after ours
+    // expired, or we'd hand it two concurrent writers again.
+    const current = await env.KV.get(BUILD_LOCK_KEY);
+    if (current === holder) await env.KV.delete(BUILD_LOCK_KEY);
+  } catch (err) {
+    console.warn("[build-catalog] lock release failed (TTL will clear it):", err);
+  }
+}
+
+async function buildCatalogLocked(
+  env: Env,
+  scope: string | null,
+  force: boolean,
 ): Promise<BuildResults> {
   const allScopes = ["wallpapers", "ringtones"];
   const scopes = scope ? [scope] : allScopes;
@@ -143,7 +208,8 @@ export async function buildCatalog(
   // only AFTER every page body is durably in R2 — and only if no scope errored —
   // means advertising version N guarantees N's content already exists, so an app
   // that polls the pointer can never request a ?v=N page that isn't built yet.
-  // See docs/architecture.md §4.2 + admin/publish.ts (purge backstop).
+  // See docs/architecture.md §4.2. (The purge backstop moved to the hsr-cms
+  // worker on 2026-07-20 along with the rest of authoring.)
   const anyScopeError = Object.values(results).some(
     (r) => r && typeof r === "object" && "error" in r,
   );
@@ -170,12 +236,56 @@ export async function writeVersionPointer(
   r2Bucket: R2Bucket,
   contentVersion: string,
 ): Promise<void> {
+  // MONOTONIC: never advertise a version older than the one already published.
+  // content_version only ever increases (the CMS bumps it in the same
+  // transaction as the row write), so a lower value here means THIS build read
+  // an older DB snapshot than a build that already finished. Writing it anyway
+  // would rewind every client to a stale ?v= and hide freshly published content
+  // until the next bump. Skip instead — the newer pointer is already correct,
+  // and this build's pages were written under the same keys.
+  const current = await readVersionPointer(r2Bucket);
+  if (current !== null && !isNewerVersion(contentVersion, current)) {
+    console.log(
+      `[build-catalog] version.json already at ${current}; not rewinding to ${contentVersion}`,
+    );
+    return;
+  }
   await putPublicJson(
     r2Bucket,
     "catalog/version.json",
     { content_version: contentVersion, built_at: new Date().toISOString() },
     "no-store",
   );
+}
+
+/** Current published content_version, or null when absent/unreadable. */
+async function readVersionPointer(r2Bucket: R2Bucket): Promise<string | null> {
+  try {
+    const raw = await getJsonString(r2Bucket, "catalog/version.json");
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as { content_version?: unknown };
+    const v = parsed.content_version;
+    return typeof v === "string" || typeof v === "number" ? String(v) : null;
+  } catch {
+    // Unreadable/corrupt pointer must not block a rebuild — treat as absent so
+    // this build republishes it.
+    return null;
+  }
+}
+
+/**
+ * True when `candidate` is strictly newer than `current`.
+ *
+ * content_version is a Postgres bigint, so compare NUMERICALLY — string
+ * comparison would rank "9" above "10" and wedge the pointer at a single digit
+ * forever. Non-numeric input (should never happen) falls back to "treat as
+ * newer" so a malformed existing pointer can always be overwritten.
+ */
+export function isNewerVersion(candidate: string, current: string): boolean {
+  const a = Number(candidate);
+  const b = Number(current);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return true;
+  return a > b;
 }
 
 // ── Public app_config.json ────────────────────────────────────────────────────
@@ -423,6 +533,3 @@ export async function deleteOrphanedPages(
   } while (cursor);
   return deleted;
 }
-
-// Re-export getJsonString for version-check helper usage by tests
-export { getJsonString };

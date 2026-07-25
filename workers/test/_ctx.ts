@@ -79,6 +79,7 @@ export function makeEnv(overrides: Record<string, unknown> = {}): Env {
     PHONEPE_WEBHOOK_PASSWORD: "p",
     PHONEPE_ENV: "SANDBOX",
     CATALOG_BUILD_SECRET: "test-catalog-secret",
+    OPS_SECRET: "test-ops-secret",
     ALLOWED_ORIGINS: "https://arul.hsrutility.com",
     ...overrides,
   } as unknown as Env;

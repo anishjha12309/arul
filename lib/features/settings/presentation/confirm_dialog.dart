@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/arul_tokens.dart';
 
-/// A centered confirm dialog — README (Settings): "Centered card (24px side
+/// A centered confirm dialog — spec (Settings): "Centered card (24px side
 /// margins, r22, gold 35% border on #1A0B0F): title 18px/600, message 13.5px
 /// secondary, two 46px r999 buttons: Cancel (outlined ivory 25%) + confirm
 /// (solid #7A1E33, press #8D2740)."
@@ -56,7 +56,7 @@ class _ConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Light variant (README-unspecified) mirrors the dark one: white card with a
+    // Light variant (spec-unspecified) mirrors the dark one: white card with a
     // maroon-tinted border, maroon-styled text ladder. ASSUMPTION — noted in the
     // handoff report.
     final cardColor = isDark

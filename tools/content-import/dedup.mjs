@@ -3,7 +3,9 @@
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createRequire } from "module";
-const require = createRequire("c:/Anish/Arul/cms/");
+// sharp is borrowed from the hsr-cms checkout (the in-repo cms/ folder this
+// used to point at was removed on 2026-07-20).
+const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
 const ROOT = "c:/Anish/arul-import";

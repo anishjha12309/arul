@@ -21,12 +21,11 @@ import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
 /// Settings — profile card, one rows-card, muted logout, demoted delete link,
-/// faint legal line. Copy and mock identity are hardcoded verbatim per the
-/// handoff (name, email and the row labels are deliberate constants). The theme
-/// row labels are deliberate constants. Wired (phase 4): profile identity comes
-/// from the auth state (placeholders pre-backend), edit-name persists via
-/// `POST /me/profile`, language drives the app locale, and logout / delete
-/// account run the real auth actions before routing back to sign-in.
+/// faint legal line. Copy is hardcoded verbatim per the handoff: the row and
+/// theme labels are deliberate constants. Wired (phase 4): profile identity
+/// comes from the auth state (neutral stand-ins while it loads), edit-name
+/// persists via `POST /me/profile`, language drives the app locale, and logout /
+/// delete account run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -237,7 +236,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _editName(String current) async {
     final next = await showEditNameSheet(context, current);
     if (next == null || next.trim().isEmpty || next.trim() == current) return;
-    if (!AppConfig.hasBackend) return; // pre-Phase-0: nothing to persist to
+    // Defensive: unreachable in shipped builds — nothing to persist to in a
+    // define-less local run.
+    if (!AppConfig.hasBackend) return;
     try {
       // Persists via the Worker (`POST /me/profile`) and reflects reactively
       // through authStateStreamProvider — no local copy to keep in sync.
@@ -618,7 +619,7 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-/// Muted-maroon logout pill (README): dark bg maroon 35% / border maroon 60% /
+/// Muted-maroon logout pill (spec): dark bg maroon 35% / border maroon 60% /
 /// text #F0C9BA; light bg maroon 8% / border maroon 35% / text maroon.
 class _LogoutButton extends StatefulWidget {
   const _LogoutButton({required this.onTap});

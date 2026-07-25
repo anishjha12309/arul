@@ -12,8 +12,8 @@ import '../providers/premium_purchase_provider.dart';
 /// Paywall. Reached only from a blocked gated action; `source` says which — the
 /// one number that tells you which verb actually sells the product.
 ///
-/// Design-only pass (design_handoff_arul spec, "Premium screen (3a)"): close
-/// X top-left, centered gopuram + wordmark + subline, a perk card, a
+/// Design-only pass: close X top-left, centered gopuram + wordmark + subline,
+/// a perk card, a
 /// gold-bordered plan card and the green CTA. Copy is hardcoded verbatim for
 /// this pass — deliberately not yet routed through l10n.
 class PremiumScreen extends ConsumerWidget {
@@ -258,7 +258,10 @@ class PremiumScreen extends ConsumerWidget {
                         ? null
                         : () {
                             if (!AppConfig.hasBackend) {
-                              // Pre-Phase-0 stub: no Worker to initiate against.
+                              // Defensive: unreachable in shipped builds
+                              // (API_BASE_URL is always set). Kept for
+                              // define-less local runs, where there is no
+                              // Worker to initiate against.
                               showArulToast(context, 'Premium is coming soon.');
                               return;
                             }

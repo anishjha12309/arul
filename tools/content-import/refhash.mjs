@@ -3,7 +3,9 @@
 // Writes refhashes.json. Robust to the re-encode gap (dHash ignores exact bytes).
 import { writeFileSync } from "fs";
 import { createRequire } from "module";
-const require = createRequire("c:/Anish/Arul/cms/");
+// sharp is borrowed from the hsr-cms checkout (the in-repo cms/ folder this
+// used to point at was removed on 2026-07-20).
+const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
 const CDN = "https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev";

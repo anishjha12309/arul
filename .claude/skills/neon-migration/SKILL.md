@@ -6,7 +6,8 @@ description: Write and apply a schema migration to prod Neon Postgres for Arul. 
 # Neon Migration
 
 **Fresh install:** apply `db/schema/01_identity.sql` → `02_content.sql` → `03_referral_config.sql`
-→ `db/seed.sql`, in that order, via the runner below.
+→ `04_ringtones.sql` → `db/seed.sql`, in that order, via the runner below. **04 is not optional** —
+the build-catalog cron queries the ringtones scope and crash-loops against a missing table.
 
 **Changes after that:**
 1. Write `db/migrations/YYYY-MM-DD_short-name.sql`. Idempotent only (`IF NOT EXISTS` / `IF EXISTS`);

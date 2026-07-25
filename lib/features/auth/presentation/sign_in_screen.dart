@@ -50,8 +50,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     // frame (google_sign_in v7: instance → initialize() [done in main()] →
     // authenticate()). NEVER lightweight/silent auth — retention decision.
     // The pill below is the fallback for a dismissed sheet.
-    // Pre-backend (or with the TODO client-id placeholder) there is nothing to
-    // authenticate against — the pill passes through to the feed.
+    // The guard is defensive: both defines are always set in shipped builds.
+    // In a define-less local run there is nothing to authenticate against, so
+    // auto-launch is skipped and the pill passes through to the feed.
     if (AppConfig.hasBackend && AppConfig.googleAuthConfigured) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _signIn());
     }
@@ -81,8 +82,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   void _onPillTap() {
     if (!AppConfig.hasBackend || !AppConfig.googleAuthConfigured) {
-      // Pre-Phase-0 stub: browse/preview are free and there is no Worker to
-      // exchange a token with — pass through.
+      // Defensive: unreachable in shipped builds (both defines are always
+      // set). Kept for define-less local runs — browse/preview are free and
+      // there is no Worker to exchange a token with, so pass through.
       context.go('/browse');
       return;
     }
@@ -106,7 +108,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             // Same shared player as splash; we paint our own scrim below.
             const VideoBackground(overlayOpacity: 0),
 
-            // README > Sign-in: 3-stop .28 → 0 (38–62%) → .72.
+            // Spec > Sign-in: 3-stop .28 → 0 (38–62%) → .72.
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.signInScrim),
             ),

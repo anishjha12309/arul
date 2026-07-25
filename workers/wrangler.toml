@@ -1,5 +1,5 @@
-# Arul Worker — deploy config. TODO_ values come from docs/provisioning.md;
-# the deploy-worker skill refuses to deploy while any TODO_ remains.
+# Arul Worker — deploy config. Every provisioned id below is filled in; see
+# docs/provisioning.md for how each was created.
 name = "arul-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-25"
@@ -28,14 +28,53 @@ binding = "R2"
 bucket_name = "south-indian-wallpapers"
 preview_bucket_name = "south-indian-wallpapers"
 
+# ─── Rate limiters ────────────────────────────────────────────────────────────
+# Nothing here was rate limited before, so any authenticated caller could spam
+# the expensive routes: /payments/initiate creates a real PhonePe mandate order
+# per call, /auth/login costs a Google JWKS verify + a Neon write, and
+# /media/signed-url costs a live Neon entitlement read.
+#
+# Counters are PER CLOUDFLARE LOCATION and eventually consistent (Cloudflare
+# documents this API as permissive, not an accounting system) — so these are
+# abuse dampeners, not quotas. Limits sit well above real user behaviour.
+#
+# namespace_id is per-account, so these are distinct from Pakiza's 1001-1003.
+# `period` accepts only 10 or 60.
+[[ratelimits]]
+name = "RL_PAYMENTS"
+namespace_id = "2001"
+  [ratelimits.simple]
+  limit = 15       # mandate-setup attempts per user per minute. Generous ON PURPOSE:
+                   # blocking someone who is TRYING TO PAY is the worst false
+                   # positive in the app; 15/min still stops scripted abuse.
+  period = 60
+
+[[ratelimits]]
+name = "RL_AUTH"
+namespace_id = "2002"
+  [ratelimits.simple]
+  limit = 20       # login/refresh per IDENTITY per minute (google_sub / user id,
+                   # never IP — see the carrier-NAT note in routes/auth.ts)
+  period = 60
+
+[[ratelimits]]
+name = "RL_MEDIA"
+namespace_id = "2003"
+  [ratelimits.simple]
+  limit = 60       # signed-url grants per user per minute (bulk apply/share)
+  period = 60
+
 # ─── Scheduled triggers ──────────────────────────────────────────────────────
 # Hourly: build-catalog → sweep-canonical ∥ sweep-submissions ∥ autopay notify/execute
 [triggers]
 crons = ["0 * * * *"]
 
-# Custom domain arul-api.hsrutility.com: attach in the dashboard after first
-# deploy (Worker → Settings → Domains & Routes). CDN domain arul-cdn.hsrutility.com
-# is attached to the R2 bucket, not the Worker.
+# Custom domains — BOTH still unattached as of 2026-07-20; the worker serves on
+# arul-api.twilight-smoke-d495.workers.dev and media on the r2.dev origin.
+#   arul-api.hsrutility.com → attach in the dashboard (Worker → Settings →
+#     Domains & Routes).
+#   arul-cdn.hsrutility.com → attaches to the R2 bucket, not the Worker.
+# Swap env/dev.json + env/prod.json and the R2_CDN_BASE_URL secret when they land.
 
 # ─── Secrets (`npx wrangler secret put <NAME>` — full descriptions: README.md) ──
 # JWT_SECRET  GOOGLE_WEB_CLIENT_ID
@@ -43,5 +82,18 @@ crons = ["0 * * * *"]
 # PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 # PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 # CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
-# CF_ZONE_ID  CF_PURGE_TOKEN   # optional: purge version pointer on publish
-# (No ADMIN_* here — authoring moved to the standalone hsr-cms worker, 2026-07-20.)
+# (No ADMIN_* here — authoring moved to the standalone hsr-cms worker, 2026-07-20.
+#  No CF_ZONE_ID/CF_PURGE_TOKEN either — purge-on-publish went with it.)
+
+# ─── Observability (Workers Logs) ─────────────────────────────────────────────
+# MUST be declared. Wrangler treats this file as authoritative, so with no
+# [observability] block `wrangler deploy` leaves stored logs OFF — and every
+# failure path here (a webhook that couldn't reach Neon, a refused canonical
+# sweep, a failed rebuild, an autopay debit that errored) is console.error and
+# nothing else. Without retention those are unrecoverable after the fact.
+#
+# KEEP THIS TABLE LAST. In TOML a [table] header captures every bare key that
+# follows it, so placing this above a top-level key silently swallows that key.
+[observability]
+enabled = true
+head_sampling_rate = 1

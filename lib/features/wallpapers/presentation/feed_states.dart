@@ -10,7 +10,7 @@ import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
 
-/// The seven feed category labels, verbatim from the design (README > Reel
+/// The seven feed category labels, verbatim from the design (Spec > Reel
 /// feed). The first is chrome; the rest come from the catalog. Title-cased at the
 /// call site if the catalog ever yields a raw slug.
 const _kAllLabel = 'All';
@@ -73,7 +73,7 @@ class FeedChips extends ConsumerWidget {
 // ─────────────────────────────── Loading ────────────────────────────────────
 
 /// Chip-row skeleton for the feed's top bar while the catalog loads: three
-/// ivory-8% pills (README > Feed states > Loading). The chips themselves render
+/// ivory-8% pills (Spec > Feed states > Loading). The chips themselves render
 /// once categories land.
 class FeedChipsSkeleton extends StatelessWidget {
   const FeedChipsSkeleton({super.key});
@@ -108,7 +108,7 @@ class FeedChipsSkeleton extends StatelessWidget {
   }
 }
 
-/// Feed loading fill (README > Feed states > Loading): the sliding-gradient
+/// Feed loading fill (Spec > Feed states > Loading): the sliding-gradient
 /// card with a centred gopuram + line that pulses on opacity only. No masked
 /// shimmer, no spinner. Renders in the same inset rounded card as the reel so
 /// the loading → content swap doesn't jump.
@@ -152,7 +152,7 @@ class FeedLoading extends StatelessWidget {
   }
 }
 
-/// Opacity pulse .55 ↔ 1 over 2s (README > Feed states > Loading). Transform/
+/// Opacity pulse .55 ↔ 1 over 2s (Spec > Feed states > Loading). Transform/
 /// opacity only.
 class _OpacityPulse extends StatefulWidget {
   const _OpacityPulse({required this.child});
@@ -188,7 +188,7 @@ class _OpacityPulseState extends State<_OpacityPulse>
 
 // ──────────────────────────────── Empty ─────────────────────────────────────
 
-/// Empty state for a category with no wallpapers (README > Feed states > Empty).
+/// Empty state for a category with no wallpapers (Spec > Feed states > Empty).
 /// Chips remain (so the user can jump elsewhere); a gentle gopuram + copy + an
 /// outlined gold "Browse all" that switches the category back to All.
 class FeedEmpty extends StatelessWidget {
@@ -244,7 +244,7 @@ class FeedEmpty extends StatelessWidget {
   }
 }
 
-/// Outlined accent pill (README > Feed states > Empty: `border gold-50%, gold
+/// Outlined accent pill (Spec > Feed states > Empty: `border gold-50%, gold
 /// text, pad 12 26, r999`) — gold on the dark frame, maroon on the light one.
 class _OutlinedAccentPill extends StatelessWidget {
   const _OutlinedAccentPill({required this.label, required this.onTap});
@@ -282,7 +282,7 @@ class _OutlinedAccentPill extends StatelessWidget {
 
 // ──────────────────────────────── Error ─────────────────────────────────────
 
-/// Full-screen feed error (README > Feed states > Error). `cloud_off`, plain
+/// Full-screen feed error (Spec > Feed states > Error). `cloud_off`, plain
 /// words, one green Retry.
 ///
 /// Two modes, same layout/tokens:

@@ -5,7 +5,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The edit-name sheet — README: "'Your name' + sub 'Shown on wallpapers you
+/// The edit-name sheet — spec: "'Your name' + sub 'Shown on wallpapers you
 /// upload'; field 54px r14, 1.5px focus border (gold dark / maroon light),
 /// person icon, live counter '11 / 40' 11.5px right; green Save 50px. Max 40
 /// chars." Resolves to the trimmed new name on Save, or null on dismiss.

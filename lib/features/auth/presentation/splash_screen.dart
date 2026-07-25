@@ -160,7 +160,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             // built-in overlay from VideoBackground competes with it.
             const VideoBackground(overlayOpacity: 0),
 
-            // README > Splash: 180deg .25 → 0 @35% → 0 @55% → .82.
+            // Spec > Splash: 180deg .25 → 0 @35% → 0 @55% → .82.
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
             ),
@@ -190,7 +190,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   /// 120×2px gold hairline with a sliding gradient, 1.6s linear loop. No
-  /// spinner — README > Splash is explicit about that.
+  /// spinner — Spec > Splash is explicit about that.
   Widget _buildHairlineLoader() {
     return SizedBox(
       width: ArulTokens.hairlineWidth,

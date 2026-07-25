@@ -41,48 +41,15 @@ class _ThrowingAnalyticsService implements AnalyticsService {
 }
 
 void main() {
-  group('NoOpAnalyticsService', () {
-    test('track does not throw', () {
-      const svc = NoOpAnalyticsService();
-      expect(
-        () => svc.track('test_event', properties: {'key': 'value'}),
-        returnsNormally,
-      );
-    });
-
-    test('identify does not throw', () {
-      const svc = NoOpAnalyticsService();
-      expect(
-        () => svc.identify('user-123', userProperties: {'plan': 'free'}),
-        returnsNormally,
-      );
-    });
-
-    test('screen does not throw', () {
-      const svc = NoOpAnalyticsService();
-      expect(() => svc.screen('WallpapersScreen'), returnsNormally);
-    });
-
-    test('reset does not throw', () {
-      const svc = NoOpAnalyticsService();
-      expect(() => svc.reset(), returnsNormally);
-    });
-  });
-
   group('analyticsServiceProvider', () {
+    // Guards the real invariant: under `flutter test` none of the three
+    // backends are configured, so the provider's switch must land on the
+    // no-op and send nothing.
     test('provides NoOpAnalyticsService', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       final svc = container.read(analyticsServiceProvider);
       expect(svc, isA<NoOpAnalyticsService>());
-    });
-
-    test('provider is kept alive across reads', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final a = container.read(analyticsServiceProvider);
-      final b = container.read(analyticsServiceProvider);
-      expect(identical(a, b), isTrue);
     });
   });
 

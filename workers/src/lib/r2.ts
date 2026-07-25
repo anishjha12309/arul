@@ -85,39 +85,6 @@ export async function presignPut(
 }
 
 /**
- * Server-side copy of one R2 object to another key via S3 CopyObject
- * (x-amz-copy-source). The bytes never transit the Worker — R2 copies internally.
- * Used by submission approval to move bytes from the user/<sub>/submissions/…
- * path (which leaks the submitter id) to a canonical catalog key.
- *
- * @param contentType when given, the copy REPLACES the content-type metadata.
- */
-export async function r2Copy(
-  env: Env,
-  srcKey: string,
-  dstKey: string,
-  contentType?: string,
-): Promise<void> {
-  const client = makeClient(env);
-  const endpoint = env.R2_ENDPOINT.replace(/\/$/, "");
-  const url = `${endpoint}/${env.R2_BUCKET}/${encodeKey(dstKey)}`;
-
-  const headers: Record<string, string> = {
-    "x-amz-copy-source": `/${env.R2_BUCKET}/${encodeKey(srcKey)}`,
-  };
-  if (contentType) {
-    headers["Content-Type"] = contentType;
-    headers["x-amz-metadata-directive"] = "REPLACE";
-  }
-
-  const signed = await client.sign(new Request(url, { method: "PUT", headers }));
-  const res = await fetch(signed);
-  if (!res.ok) {
-    throw new Error(`R2 copy failed ${res.status}: ${await res.text()}`);
-  }
-}
-
-/**
  * Write a JSON object to R2 as a public-read object (catalog pages).
  * Uses the R2 Workers binding (env.R2_BUCKET is accessed via wrangler binding).
  * This function is used by build-catalog where we have the R2 binding, not S3 API.

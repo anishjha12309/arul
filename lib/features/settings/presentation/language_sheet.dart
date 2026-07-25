@@ -4,7 +4,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The six languages, native label over English name. Order and glyphs are
-/// verbatim per README: English / தமிழ் / తెలుగు / ಕನ್ನಡ / മലയാളം / हिन्दी.
+/// verbatim per spec: English / தமிழ் / తెలుగు / ಕನ್ನಡ / മലയാളം / हिन्दी.
 class _Lang {
   const _Lang(this.native, this.name);
   final String native;
@@ -20,7 +20,7 @@ const _langs = <_Lang>[
   _Lang('हिन्दी', 'Hindi'),
 ];
 
-/// The language picker sheet — README: "Bottom sheet 'Language'; 2-col grid gap
+/// The language picker sheet — spec: "Bottom sheet 'Language'; 2-col grid gap
 /// 10, 6 tiles (r16, 16/8 pad, centered): native 17px/600 over English 12px.
 /// Selected: gold 1.5px border + gold-tint bg + gold native text."
 ///
@@ -90,7 +90,7 @@ class _LangTile extends StatelessWidget {
 
     // Unselected surfaces mirror the dark reference; the light equivalents are an
     // ASSUMPTION (the reference language sheet is dark-only) — white tile, maroon
-    // hairline. Selected is gold in both themes per README.
+    // hairline. Selected is gold in both themes per spec.
     final Color bg = on
         ? ArulTokens.goldTintFill14
         : (isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight);

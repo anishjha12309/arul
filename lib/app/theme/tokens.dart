@@ -31,7 +31,7 @@ abstract final class ArulColors {
   static const rose = Color(0xFF8D2740);
 
   /// Light maroon/rose for TEXT on a dark maroon container, and the muted-logout
-  /// label. `#F0C9BA` (README > Settings > Logout dark text).
+  /// label. `#F0C9BA` (Spec > Settings > Logout dark text).
   static const roseSoft = Color(0xFFF0C9BA);
 
   static const roseTint = Color(
@@ -54,7 +54,7 @@ abstract final class ArulColors {
   static const onTealDeep = Color(0xFF14090C);
   static const onTeal = Color(0xFF14090C);
 
-  /// The commit affordance — ctaGreen `#1FA75A`. README: ALL primary CTAs are
+  /// The commit affordance — ctaGreen `#1FA75A`. The spec: ALL primary CTAs are
   /// green, white label. (The old teal CTA is gone; the redesign mandates green.)
   static const tealCta = Color(0xFF1FA75A);
 
@@ -106,7 +106,7 @@ abstract final class ArulColors {
   static const inkHigh = Color(0xFF241014);
 
   /// Top of the dark ladder: idle chips, skeleton highlight, tile backfill.
-  /// `#2A1218` (README > Feed loading mid-stop).
+  /// `#2A1218` (Spec > Feed loading mid-stop).
   static const inkVariant = Color(0xFF2A1218);
 
   /// Primary text on the dark surface `#FAF5EC`, and the secondary tier `#B9A58F`.

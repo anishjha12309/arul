@@ -21,7 +21,10 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { createRequire } from "module";
 
-const require = createRequire("c:/Anish/Arul/cms/"); // borrow cms deps
+// aws4fetch is a dependency of this repo's own workers/, so borrow it from
+// there — no sibling-checkout needed. (This used to point at the in-repo cms/
+// folder, removed on 2026-07-20.)
+const require = createRequire("c:/Anish/Arul/workers/");
 const { AwsClient } = require("aws4fetch");
 
 const DEV_VARS = "c:/Anish/Pakiza/workers/.dev.vars";

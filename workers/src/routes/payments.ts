@@ -66,6 +66,7 @@ import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
+import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import {
   setupSubscription,
   revokeMandateTolerant,
@@ -105,6 +106,13 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
 
+  // Every call here creates a real PhonePe mandate-setup order. Keyed by user
+  // so one abusive account can't burn the PhonePe API quota for everyone.
+  if (!(await allowRequest(env.RL_PAYMENTS, `initiate:${sub}`))) {
+    console.warn(`[payments/initiate] rate limited user ${sub}`);
+    return tooManyRequests("Too many subscription attempts — please wait a minute");
+  }
+
   let body: { plan?: string };
   try {
     body = await c.req.json();
@@ -126,10 +134,61 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     // trial_end means this user already consumed their trial: authorize the new
     // mandate with a REAL ₹199 first debit (TRANSACTION) instead of the ₹2
     // PENNY_DROP, and skip the trial on completion.
-    const prior = await sql<{ trial_end: string | null }[]>`
-      SELECT trial_end FROM subscriptions WHERE user_id = ${sub} LIMIT 1
+    const prior = await sql<
+      {
+        trial_end: unknown;
+        status: string;
+        merchant_subscription_id: string | null;
+        current_period_end: unknown;
+      }[]
+    >`
+      SELECT trial_end, status, merchant_subscription_id, current_period_end
+      FROM subscriptions WHERE user_id = ${sub} LIMIT 1
     `;
-    const trialEligible = prior.length === 0 || prior[0].trial_end === null;
+    const existing = prior[0] ?? null;
+    const trialEligible = existing === null || existing.trial_end === null;
+
+    // ── Guard: at most ONE live mandate per user ───────────────────────────
+    // Without this, an already-subscribed user reaching this route (stale
+    // entitlement snapshot, a retry, a reinstall before /me resolves, any
+    // non-UI client) got a SECOND mandate authorized. Because trial_end is
+    // already set, that second setup is a TRANSACTION mandate — it charges
+    // ₹199 on the spot — and the upsert below then overwrote
+    // merchant_subscription_id, leaving the FIRST mandate live at PhonePe with
+    // no pointer left in our DB: /payments/cancel and DELETE /me could never
+    // revoke it, and its webhooks matched no row. Refuse instead.
+    //
+    // Scoped to trialing/active with an unexpired period. 'cancelled' is
+    // deliberately NOT blocked — that mandate is already revoked, the user
+    // keeps access to period end, and resubscribing is what they're asking for.
+    const priorPeriodEnd = toDate(existing?.current_period_end);
+    const hasLivePeriod =
+      priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
+    if (
+      existing &&
+      (existing.status === "trialing" || existing.status === "active") &&
+      hasLivePeriod
+    ) {
+      return errorResponse(
+        409,
+        "already_subscribed",
+        "You already have an active subscription",
+      );
+    }
+
+    // A prior NON-cancelled mandate may still be live at PhonePe even though we
+    // are allowed to proceed: a 'pending' setup the user abandoned (or whose
+    // webhook is still in flight), a 'paused' mandate, or one we marked
+    // 'expired' after exhausting debit retries while PhonePe still holds it.
+    // The upsert below overwrites merchant_subscription_id, so revoke the old
+    // one first or it becomes unreachable. Best-effort and OFF the response
+    // path — a PhonePe hiccup must never break a legitimate retry.
+    const staleMandateId =
+      existing &&
+      existing.merchant_subscription_id &&
+      existing.status !== "cancelled"
+        ? existing.merchant_subscription_id
+        : null;
 
     // Build unique IDs
     const merchantSubscriptionId = buildMerchantSubscriptionId(sub);
@@ -137,7 +196,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
     // Redirect URL PhonePe sends the user back to after mandate authorization.
     // Derive the origin from the incoming request so it always matches the host
-    // the app actually called (api.hsrutility.com today) — never a stale hardcode.
+    // the app actually called (arul-api.twilight-smoke-d495.workers.dev today,
+    // arul-api.hsrutility.com once the custom domain is attached) — never a
+    // stale hardcode.
     const origin = new URL(c.req.url).origin;
     const redirectUrl = `${origin}/payments/callback?sub=${encodeURIComponent(sub)}`;
 
@@ -196,6 +257,27 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         updated_at               = now()
     `;
 
+    // Old mandate is now unreferenced by the row — revoke it so the user can
+    // never end up with two live mandates debiting them (see staleMandateId).
+    if (staleMandateId && staleMandateId !== merchantSubscriptionId) {
+      c.executionCtx.waitUntil(
+        revokeMandateTolerant(env, staleMandateId)
+          .then((revoked) => {
+            if (!revoked) {
+              console.error(
+                `[payments/initiate] Superseded mandate ${staleMandateId} may STILL BE LIVE at PhonePe — manual revoke required`,
+              );
+            }
+          })
+          .catch((err: unknown) => {
+            console.error(
+              `[payments/initiate] Revoke of superseded mandate ${staleMandateId} threw:`,
+              err,
+            );
+          }),
+      );
+    }
+
     // The Flutter SDK's startTransaction needs the SDK order token, returned as
     // the top-level `token` by the Create SDK Order endpoint — see phonepe.ts.
     return c.json({
@@ -210,7 +292,11 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       // newline here surfaces on-device as PR004 "Unauthorized" with a healthy
       // 200 from us — the hardest possible bug to trace.
       merchantId: env.PHONEPE_MERCHANT_ID.trim(),
-      environment: env.PHONEPE_ENV,
+      // Trimmed for the same reason. isProduction() trims before choosing the
+      // host, so an untrimmed value here would route the Worker to the RIGHT
+      // host while the app inits the SDK with "PRODUCTION\n" — the two would
+      // silently disagree. The client rejects an empty/missing value outright.
+      environment: env.PHONEPE_ENV.trim(),
       // Additive — old app versions ignore these. trialEligible=false means the
       // user is being charged ₹199 upfront (amountPaise) at mandate setup.
       trialEligible,
@@ -264,14 +350,28 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   const event = rawEvent.toLowerCase().replace(/_/g, ".");
   const pp = payload.payload ?? {};
 
-  // 3. Idempotency — dedupe on PhonePe orderId
+  // 3. Idempotency — dedupe on (event, PhonePe orderId).
+  //
+  // The EVENT MUST be part of the key. One redemption cycle reuses a single
+  // merchantOrderId across notify + redeem, so PhonePe emits several distinct
+  // events carrying the SAME orderId:
+  //   subscription.notification.completed         (not handled here)
+  //   subscription.redemption.order.completed     (the one that grants the month)
+  //   subscription.redemption.transaction.completed
+  // With an order-only key the first arrival — typically the unhandled
+  // notification event — burned the slot and every later event for that order
+  // was dropped as "already processed", so the debit-success handler never ran:
+  // status stayed 'trialing', current_period_end never extended, and the
+  // referral reward never granted. Scoping the key per event keeps genuine
+  // duplicate DELIVERIES of the same event deduped (PhonePe's retry) while
+  // letting each distinct event be processed exactly once.
   const dedupeKey = pp.orderId ?? pp.merchantOrderId ?? "";
   if (!dedupeKey) {
     console.error("[payments/webhook] Missing orderId/merchantOrderId, event:", event);
     return new Response("ok", { status: 200 });
   }
 
-  const kvKey = `txn:${dedupeKey}`;
+  const kvKey = `txn:${event}:${dedupeKey}`;
   const alreadyProcessed = await env.KV.get(kvKey);
   if (alreadyProcessed) {
     console.log(`[payments/webhook] Already processed ${dedupeKey}, event: ${event}`);
@@ -280,8 +380,26 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
 
   const merchantSubId = pp.merchantSubscriptionId;
   if (!merchantSubId) {
-    console.error("[payments/webhook] Missing merchantSubscriptionId, event:", event);
-    await env.KV.put(kvKey, "1", { expirationTtl: KV_TXN_TTL });
+    // Deliberately NO idempotency mark. Marking an unactionable payload
+    // processed permanently consumes the (event, orderId) slot, so a corrected
+    // redelivery of that same event could never be handled by anyone. Ack 200
+    // (there is nothing here to act on) but leave the slot free.
+    console.error(
+      `[payments/webhook] Missing merchantSubscriptionId — not marking processed. ` +
+      `event=${event} order=${dedupeKey}`,
+    );
+    return new Response("ok", { status: 200 });
+  }
+
+  // Belt and braces on the CMS dispatcher's prefix routing: Arul's merchant ids
+  // are "DKS_"-prefixed, and the dispatcher sends everything ELSE to Pakiza. A
+  // non-DKS id arriving here means it misrouted — refuse loudly rather than
+  // matching zero rows and silently acking, which looked identical to success.
+  if (!merchantSubId.startsWith("DKS_")) {
+    console.error(
+      `[payments/webhook] merchantSubscriptionId ${merchantSubId} is not an Arul id — ` +
+      `misrouted by the dispatcher; not processing and not marking`,
+    );
     return new Response("ok", { status: 200 });
   }
 
@@ -452,8 +570,13 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
 
   } catch (err) {
     console.error("[payments/webhook] DB error:", err);
-    // Return 200 to prevent PhonePe retry storm; alert via logs
-    return new Response("ok", { status: 200 });
+    // 500 so PhonePe RETRIES. A transient Hyperdrive/Neon fault on
+    // checkout.order.completed used to be acked 200 here — the user had paid,
+    // the row never updated, and the event was gone forever with no
+    // dead-letter. Retrying is safe precisely because the idempotency mark
+    // above is written ONLY on the success path, so a redelivery re-runs the
+    // handler from a clean slate and lands exactly one state transition.
+    return errorResponse(500, "server_error", "Temporary failure — please retry");
   } finally {
     c.executionCtx.waitUntil(sql.end());
   }
@@ -691,6 +814,22 @@ function addOneMonth(date: Date): Date {
   const d = new Date(date);
   d.setMonth(d.getMonth() + 1);
   return d;
+}
+
+/**
+ * Coerce a DB timestamptz to a Date, or null.
+ *
+ * postgres.js runs with fetch_types:false here (required for Hyperdrive), so a
+ * timestamptz can arrive as either a real Date or an ISO-8601 string depending
+ * on the driver path — never assume one. Anything unparseable becomes null,
+ * which callers must treat as "no live period" (fail closed).
+ */
+function toDate(value: unknown): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string") return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 async function requireAuth(c: Context<{ Bindings: Env }>): Promise<string | null> {

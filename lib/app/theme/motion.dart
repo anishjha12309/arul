@@ -13,28 +13,28 @@ abstract final class Motion {
   static const quick = Durations.short4; // 200ms
   static const quickCurve = Easing.standard;
 
-  /// Sheets & page-level reveals (translateY(24)+fade). README: sheets .3s ease.
+  /// Sheets & page-level reveals (translateY(24)+fade). The spec: sheets .3s ease.
   static const enter = Duration(milliseconds: 300);
   static const enterCurve = Curves.ease;
 
-  /// Dialog entrance. README: dialogs .25s.
+  /// Dialog entrance. The spec: dialogs .25s.
   static const dialogEnter = Duration(milliseconds: 250);
 
-  /// Chrome recede while swiping the feed. README: out 150ms.
+  /// Chrome recede while swiping the feed. The spec: out 150ms.
   static const exit = Duration(milliseconds: 150);
   static const exitCurve = Easing.emphasizedAccelerate;
 
-  /// Chrome settle on release. README: in 250ms ease-out.
+  /// Chrome settle on release. The spec: in 250ms ease-out.
   static const settle = Duration(milliseconds: 250);
   static const settleCurve = Curves.easeOut;
 
-  /// Premium-nudge auto-dismiss. README: ~2.6s.
+  /// Premium-nudge auto-dismiss. The spec: ~2.6s.
   static const nudgeAutoDismiss = Duration(milliseconds: 2600);
 
-  /// The skeleton sliding-gradient loop. README: 1.8s linear.
+  /// The skeleton sliding-gradient loop. The spec: 1.8s linear.
   static const skeletonSweep = Duration(milliseconds: 1800);
 
-  /// Splash hairline loader loop. README: 1.6s linear.
+  /// Splash hairline loader loop. The spec: 1.6s linear.
   static const hairlineSweep = Duration(milliseconds: 1600);
 
   /// Press feedback on the primary CTA. A spring, not a curve — this is the one

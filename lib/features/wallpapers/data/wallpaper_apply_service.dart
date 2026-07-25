@@ -38,10 +38,10 @@ abstract class WallpaperApplyService {
   /// gated download uses; see [downloadUrl].
   Future<String> resolveUrl(Wallpaper w);
 
-  /// The URL the gated apply/share download actually fetches. With a backend
-  /// this is the Worker's `POST /media/signed-url` — the REAL premium gate: a
-  /// live entitlement read returning a short-lived signed URL. Without one
-  /// (pre-Phase-0) it degrades to the public CDN object.
+  /// The URL the gated apply/share download actually fetches: the Worker's
+  /// `POST /media/signed-url` — the REAL premium gate: a live entitlement read
+  /// returning a short-lived signed URL. Only a define-less local run (no
+  /// backend) degrades to the public CDN object.
   Future<String> downloadUrl(Wallpaper w);
 
   /// Downloads [url] to a temp file named [filename]. [onProgress] gets 0.0→1.0.
@@ -96,7 +96,9 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
   Future<String> downloadUrl(Wallpaper w) async {
     final api = _api;
     if (api == null || !AppConfig.hasBackend) {
-      // Pre-backend stub: keys are public by design (soft gate).
+      // Defensive: unreachable in shipped builds (API_BASE_URL is always set).
+      // Kept for define-less local runs — keys are public by design (soft
+      // gate).
       return w.url(AppConfig.cdnBaseUrl);
     }
     try {

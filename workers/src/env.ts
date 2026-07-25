@@ -13,6 +13,16 @@ export interface Env {
   /** R2 bucket binding for catalog JSON writes (build-catalog cron) */
   R2: R2Bucket;
 
+  // ── Rate limiters (see wrangler.toml [[ratelimits]]) ─────────────────────
+  // Optional so tests and any older deployment without the bindings still run —
+  // callers treat an absent limiter as "allow" (see lib/ratelimit.ts).
+  /** /payments/initiate — keyed by user id */
+  RL_PAYMENTS?: RateLimit;
+  /** /auth/login + /auth/refresh — keyed by client IP */
+  RL_AUTH?: RateLimit;
+  /** /media/signed-url — keyed by user id */
+  RL_MEDIA?: RateLimit;
+
   // ── Secrets (wrangler secret put) ────────────────────────────────────────
   /** HS256 signing secret — min 32 bytes of entropy */
   JWT_SECRET: string;
@@ -49,21 +59,30 @@ export interface Env {
   CATALOG_BUILD_SECRET: string;
 
   /**
+   * Operator-only secret for the routes that MOVE REAL MONEY:
+   * /internal/run-redemptions (can debit ₹199 from live subscribers) and
+   * /internal/refund.
+   *
+   * Kept separate from CATALOG_BUILD_SECRET on purpose: that secret is
+   * distributed to the CMS worker for rebuild triggers, and a single string
+   * must never authorize both "rebuild the catalog" and "charge everybody".
+   * Never give this to the CMS or any other service.
+   */
+  OPS_SECRET: string;
+
+  /**
    * HMAC key for trial_tombstones.google_sub_hash (delete-account trial guard).
    * NEVER rotate — a new key orphans every tombstone and re-opens trial farming.
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
-  // ── Optional: instant-update cache purge (publish → evict edge copy) ──────
-  /** Cloudflare zone id; if set with CF_PURGE_TOKEN, publish purges the version pointer. */
-  CF_ZONE_ID?: string;
-  /** Cloudflare API token with "Cache Purge" permission for the zone above. */
-  CF_PURGE_TOKEN?: string;
   /**
    * Comma-separated CORS allow-list for browser-based origins.
    * e.g. "https://arul.hsrutility.com"
-   * The Flutter native app is not browser-based so CORS doesn't apply there;
-   * only browser clients (web tools, operator UIs) need this.
+   * The Flutter native app is not browser-based so CORS doesn't apply there.
+   * Nor does the CMS: hsr-cms reaches this worker over the ARUL_API service
+   * binding, which never goes through CORS. So this only matters if a real
+   * browser client is ever pointed at this API.
    */
   ALLOWED_ORIGINS: string;
 }
