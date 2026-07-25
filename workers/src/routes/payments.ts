@@ -327,15 +327,48 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
     return new Response("ok", { status: 200 }); // ack to stop retries; alert on logs
   }
 
+  // Read the body ONCE, before the auth check, so a rejected delivery can still
+  // be described in the logs (see below). c.req.text() cannot be called twice.
+  const rawBody = await c.req.text();
+
   const authValid = await verifyCallbackAuth(authHeader, webhookUsername, webhookPassword);
   if (!authValid) {
+    // LOUD on purpose. This path used to return 401 silently, which made two
+    // very different situations look identical from the outside: "PhonePe has
+    // never sent us anything" and "PhonePe is sending everything and we are
+    // rejecting all of it because the dashboard credentials don't match our
+    // secrets". Both produce zero DB writes, zero KV idempotency marks and zero
+    // log lines — so a totally broken webhook is indistinguishable from an idle
+    // one, and stays that way until someone notices renewals aren't landing.
+    //
+    // Deliberately logs SHAPE, never content: whether a header arrived, its
+    // length, and whether it looks like the expected 64-char lowercase hex of
+    // SHA256(username:password). Never the header itself, and never the
+    // configured credentials — the log is not a place to leak either.
+    //
+    // Mirrored in Pakiza (workers/src/routes/payments.ts) — keep both in sync.
+    const looksLikeSha256Hex = /^[0-9a-f]{64}$/.test(authHeader.trim());
+    let eventPeek = "<unparseable>";
+    try {
+      const peek = JSON.parse(rawBody) as PhonePeWebhookPayload;
+      eventPeek =
+        `${peek.event ?? peek.type ?? "?"} sub=${peek.payload?.merchantSubscriptionId ?? "?"}`;
+    } catch {
+      // leave the placeholder
+    }
+    console.error(
+      `[payments/webhook] REJECTED a delivery on auth. ` +
+      `authHeader present=${authHeader.length > 0} len=${authHeader.length} ` +
+      `sha256HexShaped=${looksLikeSha256Hex} event=${eventPeek}. ` +
+      `If this is PhonePe, the dashboard's webhook username/password do not match ` +
+      `PHONEPE_WEBHOOK_USERNAME/PHONEPE_WEBHOOK_PASSWORD on this Worker.`,
+    );
     return errorResponse(401, "invalid_signature", "Webhook authorization failed");
   }
 
   // 2. Parse payload
   let payload: PhonePeWebhookPayload;
   try {
-    const rawBody = await c.req.text();
     payload = JSON.parse(rawBody) as PhonePeWebhookPayload;
   } catch {
     return errorResponse(400, "invalid_body", "Invalid JSON payload");
