@@ -28,8 +28,7 @@ export const SWEEP_GRACE_MS = 6 * 60 * 60 * 1000; // 6 hours
 /** Pending submissions older than this are auto-rejected so their bytes free up. */
 export const PENDING_EXPIRY_DAYS = 30;
 
-const SUBMISSION_PREFIX = "user/";
-const SUBMISSION_INFIX = "/submissions/";
+import { SUBMISSION_PREFIX, SUBMISSION_INFIX } from "../lib/r2.js";
 
 export interface SweepCandidate {
   key: string;

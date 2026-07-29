@@ -5,7 +5,7 @@
  *   https://github.com/panva/jose
  *
  * Design:
- *   - Access token:  HS256, sub + prm hint, 15-minute TTL.
+ *   - Access token:  HS256, sub + prm hint, 60-minute TTL (see ACCESS_TTL_SECONDS).
  *     "prm" is a non-authoritative boolean hint for client-side UI only.
  *     Entitlement is ALWAYS read live from Neon on gated actions.
  *   - Refresh token: HS256, sub + jti (UUID v4), 60-day TTL (rotating).
@@ -33,6 +33,27 @@ export interface RefreshClaims extends JWTPayload {
   /** UUID v4 used as the jti for denylist tracking. */
   jti: string;
 }
+
+/**
+ * Token-kind marker — the fix for access/refresh type confusion.
+ *
+ * Both kinds are HS256 signed with the SAME secret and both carry `sub`, so
+ * before this claim existed a REFRESH token presented as `Authorization:
+ * Bearer <refresh>` verified cleanly as an access token. That turned a 60-day
+ * credential into a 60-day access token AND made revocation a no-op: the KV
+ * denylist is only consulted on /auth/refresh, so a token revoked at logout
+ * kept working on every other route until its own 60-day expiry.
+ *
+ * Verification is deliberately asymmetric so no existing session is signed out:
+ * a token minted before this shipped has NO typ, and rejecting those would 401
+ * every live user at once. Instead we reject only a token whose typ is
+ * explicitly WRONG, and — for the legacy, typ-less case — fall back to the
+ * structural tell that has always been there: refresh tokens carry `jti`,
+ * access tokens never have. Both old and new tokens are therefore covered,
+ * with zero forced re-authentication.
+ */
+const TYP_ACCESS = "acc";
+const TYP_REFRESH = "ref";
 
 /**
  * Access-token lifetime.
@@ -68,7 +89,11 @@ export async function signAccessToken(
   jwtSecret: string,
   prmHint?: boolean,
 ): Promise<string> {
-  const builder = new SignJWT({ sub, ...(prmHint !== undefined ? { prm: prmHint } : {}) })
+  const builder = new SignJWT({
+    sub,
+    typ: TYP_ACCESS,
+    ...(prmHint !== undefined ? { prm: prmHint } : {}),
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${ACCESS_TTL_SECONDS}s`);
@@ -82,7 +107,7 @@ export async function signRefreshToken(
   jwtSecret: string,
 ): Promise<{ token: string; jti: string }> {
   const jti = crypto.randomUUID();
-  const token = await new SignJWT({ sub, jti })
+  const token = await new SignJWT({ sub, jti, typ: TYP_REFRESH })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${REFRESH_TTL_SECONDS}s`)
@@ -105,6 +130,12 @@ export async function verifyAccessToken(
     algorithms: ["HS256"],
   });
   if (!payload.sub) throw new Error("missing sub claim");
+  // Refuse a refresh token presented as an access token — see TYP_ACCESS.
+  // `typ` catches tokens minted after this shipped; `jti` catches the legacy
+  // ones that predate it (only refresh tokens have ever carried a jti).
+  if (payload.typ === TYP_REFRESH || payload.jti) {
+    throw new Error("refresh token presented as access token");
+  }
   return payload as AccessClaims;
 }
 
@@ -121,6 +152,11 @@ export async function verifyRefreshToken(
   });
   if (!payload.sub) throw new Error("missing sub claim");
   if (!payload.jti) throw new Error("missing jti claim");
+  // Symmetric guard. Legacy access tokens are already rejected above (they have
+  // never carried a jti); this covers the post-typ ones explicitly.
+  if (payload.typ === TYP_ACCESS) {
+    throw new Error("access token presented as refresh token");
+  }
   return payload as RefreshClaims;
 }
 

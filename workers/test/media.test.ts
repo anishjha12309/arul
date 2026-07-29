@@ -2,14 +2,14 @@
  * Unit tests for the media route handlers. The DB is mocked; R2 presigning runs
  * for real (aws4fetch / Web Crypto). These cover validation, lookup, and the
  * premium-gated signed URL path. NOTE (2026-07-01): ALL content now requires
- * premium to apply/set/save. The success path is premium because the shared
- * single-rows SQL mock returns the same non-empty rows for BOTH the content
- * lookup and the entitlement query, so isPremium() reads as true. A pure
- * 403-deny test isn't expressible with that mock; the deny path is covered by
- * the live deployed-worker checks in the unified CMS repo's smoke plan
- * (c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md — it moved there when the
- * legacy in-repo CMS was removed). (There is no PREMIUM_TEST_USER_IDS bypass —
- * it was removed; premium comes solely from a live Neon subscription row.)
+ * premium to apply/set/save. /media/signed-url now answers the content lookup
+ * AND the entitlement check in ONE combined query (private_key + is_premium in
+ * a single row), so the mock row carries both columns — and the 403-deny path,
+ * previously only coverable by the live deployed-worker checks in the unified
+ * CMS repo's smoke plan (c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md), is now
+ * expressible here with is_premium: false. (There is no PREMIUM_TEST_USER_IDS
+ * bypass — it was removed; premium comes solely from a live Neon subscription
+ * row.)
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -82,9 +82,11 @@ describe("POST /media/signed-url", () => {
   });
 
   it("returns a 300s signed URL for a premium user", async () => {
-    // The mock returns these rows for BOTH the content lookup and the
-    // entitlement query, so isPremium() reads true (premium) for this user.
-    const { env } = envWithSql([{ private_key: "wallpapers/murugan/live.mp4" }]);
+    // The combined query returns the content key and the live entitlement in
+    // one row — the mock row mirrors that shape.
+    const { env } = envWithSql([
+      { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
+    ]);
     const res = await handleSignedUrl(
       makeCtx({ env, token: await token(), jsonBody: { id: "w1", kind: "wallpaper" } }),
     );
@@ -95,12 +97,28 @@ describe("POST /media/signed-url", () => {
     expect(body.url).toContain("wallpapers");
   });
 
+  it("403 premium_required when the live entitlement read says not premium", async () => {
+    // The key exists and is published, but the entitlement half of the combined
+    // row is false — entitlement is read live from Neon, never from the JWT, so
+    // a lapsed/refunded user is refused even with a valid token.
+    const { env } = envWithSql([
+      { private_key: "wallpapers/murugan/live.mp4", is_premium: false },
+    ]);
+    const res = await handleSignedUrl(
+      makeCtx({ env, token: await token(), jsonBody: { id: "w1", kind: "wallpaper" } }),
+    );
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+      "premium_required",
+    );
+  });
+
   it("resolves kind=ringtone via audio_key and returns a signed URL for a premium user", async () => {
-    // Same shared-mock caveat as the wallpaper success path: the mock returns
-    // the row for both the ringtones lookup (audio_key AS private_key) and the
-    // entitlement query, so isPremium() — checked live, never from the JWT —
-    // reads true.
-    const { env } = envWithSql([{ private_key: "ringtones/murugan/abc.mp3" }]);
+    // Same combined-row shape as the wallpaper success path: the ringtones
+    // lookup surfaces audio_key AS private_key next to the live entitlement.
+    const { env } = envWithSql([
+      { private_key: "ringtones/murugan/abc.mp3", is_premium: true },
+    ]);
     const res = await handleSignedUrl(
       makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }),
     );
@@ -151,13 +169,32 @@ describe("POST /media/upload-url", () => {
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_key");
   });
 
+  it("bad_key when the key is in the caller's namespace but not under submissions/", async () => {
+    const { env } = envWithSql([]);
+    const res = await handleUploadUrl(
+      makeCtx({
+        env,
+        token: await token(),
+        // Valid owner prefix, wrong shape — sweep-submissions only reclaims
+        // objects containing "/submissions/", so accepting this would strand
+        // the bytes in R2 forever.
+        jsonBody: { key: `user/${USER_ID}/x.jpg`, contentType: "image/jpeg" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_key");
+  });
+
   it("bad_type for a disallowed content type", async () => {
     const { env } = envWithSql([]);
     const res = await handleUploadUrl(
       makeCtx({
         env,
         token: await token(),
-        jsonBody: { key: `user/${USER_ID}/x.txt`, contentType: "text/plain" },
+        jsonBody: {
+          key: `user/${USER_ID}/submissions/x.txt`,
+          contentType: "text/plain",
+        },
       }),
     );
     expect(res.status).toBe(400);
@@ -171,7 +208,7 @@ describe("POST /media/upload-url", () => {
         env,
         token: await token(),
         jsonBody: {
-          key: `user/${USER_ID}/x.jpg`,
+          key: `user/${USER_ID}/submissions/x.jpg`,
           contentType: "image/jpeg",
           size: 11 * 1024 * 1024, // > 10MB image cap
         },

@@ -43,22 +43,40 @@ export async function isPremium(
   sql: postgres.Sql,
   userId: string,
 ): Promise<boolean> {
-  const rows = await sql`
-    SELECT 1
-    FROM users u
-    WHERE u.id = ${userId}
-      AND (
-        (u.reward_premium_until IS NOT NULL AND u.reward_premium_until > now())
-        OR EXISTS (
-          SELECT 1
-          FROM subscriptions s
-          WHERE s.user_id = u.id
-            AND s.status IN ('trialing', 'active', 'cancelled')
-            AND s.current_period_end IS NOT NULL
-            AND s.current_period_end > now()
+  const rows = await sql`SELECT ${premiumPredicate(sql, userId)} AS ok`;
+  return rows[0]?.ok === true;
+}
+
+/**
+ * The entitlement rule as a composable boolean SQL fragment.
+ *
+ * Callers that already need another row in the same request — /media/signed-url
+ * needs the content key — can inline this instead of issuing a second query,
+ * turning two sequential Hyperdrive round-trips into one. Exported as a fragment
+ * rather than copied so there is exactly ONE place the premium rule lives: a
+ * second hand-written copy that drifted would either hand premium media to a
+ * lapsed user or lock out a paying one.
+ */
+export function premiumPredicate(
+  sql: postgres.Sql,
+  userId: string,
+): postgres.PendingQuery<postgres.Row[]> {
+  return sql`
+    EXISTS (
+      SELECT 1
+      FROM users u
+      WHERE u.id = ${userId}
+        AND (
+          (u.reward_premium_until IS NOT NULL AND u.reward_premium_until > now())
+          OR EXISTS (
+            SELECT 1
+            FROM subscriptions s
+            WHERE s.user_id = u.id
+              AND s.status IN ('trialing', 'active', 'cancelled')
+              AND s.current_period_end IS NOT NULL
+              AND s.current_period_end > now()
+          )
         )
-      )
-    LIMIT 1
+    )
   `;
-  return rows.length > 0;
 }

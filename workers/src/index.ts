@@ -33,9 +33,11 @@
  *   POST /internal/refund           — operator/support ₹199 refund
  *
  * Scheduled handlers:
- *   "0 * * * *"  — hourly: catalog rebuild (no-op if nothing changed) +
- *                           orphaned-submission sweep + canonical-media sweep +
- *                           autopay notify/execute scan
+ *   "0 * * * *"   — hourly: catalog rebuild (no-op if nothing changed) +
+ *                            on-change canonical-media sweep + autopay
+ *                            notify/execute scan
+ *   "30 21 * * *" — daily (21:30 UTC = 03:00 IST, off-peak): unconditional
+ *                            canonical-media sweep + orphaned-submission sweep
  *
  * Error envelope: { "error": { "code": string, "message": string } }
  */
@@ -165,22 +167,33 @@ const worker: WorkerType = {
   fetch: async (req, env, ctx) => app.fetch(req, env, ctx),
 
   async scheduled(event, env, ctx) {
-    // "0 * * * *" — hourly: catalog rebuild + autopay notify/execute
+    // "0 * * * *" — hourly: catalog rebuild + on-change canonical sweep + autopay
     if (event.cron === "0 * * * *") {
       console.log("[cron] Running hourly catalog rebuild");
       ctx.waitUntil(
         buildCatalog(env, null).then(async (results) => {
           console.log("[cron] Catalog rebuild complete:", JSON.stringify(results));
-          // Canonical-media sweep runs strictly AFTER a FULLY SUCCESSFUL
-          // rebuild — if any scope failed, its stale catalog pages may still
-          // reference a just-unreferenced object, and deleting the bytes then
-          // would break the live feed (backstop for abandoned CMS uploads +
-          // lost delete/replace cleanups).
+          // Canonical-media sweep runs strictly AFTER a rebuild that actually
+          // touched a scope — if any scope failed, its stale catalog pages may
+          // still reference a just-unreferenced object, and deleting the bytes
+          // then would break the live feed (backstop for abandoned CMS uploads
+          // + lost delete/replace cleanups). And if every scope was skipped as
+          // { skipped: "no_change" }, nothing was unreferenced this run, so
+          // there's nothing new to reclaim — the daily cron below is the
+          // backstop for everything else (this hourly sweep is purely an
+          // on-change convenience, not the safety net).
           const anyScopeError = Object.values(results).some(
             (r) => r && typeof r === "object" && "error" in r,
           );
           if (anyScopeError) {
             console.warn("[cron] Skipping canonical sweep — a catalog scope failed to rebuild");
+            return;
+          }
+          const anyScopeRebuilt = Object.values(results).some(
+            (r) => r && typeof r === "object" && "pages" in r,
+          );
+          if (!anyScopeRebuilt) {
+            console.log("[cron] Skipping canonical sweep — no scope changed this run");
             return;
           }
           try {
@@ -194,6 +207,27 @@ const worker: WorkerType = {
         }),
       );
 
+      // Autopay: notify 24h before each debit, then execute at/after next_debit_at.
+      console.log("[cron] Running autopay notify/execute scan");
+      ctx.waitUntil(
+        runAutopayNotify(env).catch((err: unknown) => {
+          console.error("[cron] Autopay notify failed:", err);
+        }),
+      );
+    }
+
+    // "30 21 * * *" — daily off-peak backstop: unconditional sweeps for
+    // everything the hourly on-change sweep and inline cleanups might miss.
+    if (event.cron === "30 21 * * *") {
+      console.log("[cron] Running daily canonical + submission sweeps");
+      ctx.waitUntil(
+        sweepCanonical(env).then((result) => {
+          console.log("[cron] Daily canonical sweep complete:", JSON.stringify(result));
+        }).catch((err: unknown) => {
+          console.error("[cron] Daily canonical sweep failed:", err);
+        }),
+      );
+
       // Reclaim orphaned user-submission objects from R2 (backstop for the
       // inline delete-on-approve/reject). No-op when nothing is orphaned.
       ctx.waitUntil(
@@ -201,14 +235,6 @@ const worker: WorkerType = {
           console.log("[cron] Submission sweep complete:", JSON.stringify(result));
         }).catch((err: unknown) => {
           console.error("[cron] Submission sweep failed:", err);
-        }),
-      );
-
-      // Autopay: notify 24h before each debit, then execute at/after next_debit_at.
-      console.log("[cron] Running autopay notify/execute scan");
-      ctx.waitUntil(
-        runAutopayNotify(env).catch((err: unknown) => {
-          console.error("[cron] Autopay notify failed:", err);
         }),
       );
     }

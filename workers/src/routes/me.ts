@@ -1,8 +1,8 @@
 /**
  * "Me" routes — all JWT-gated, scoped to the verified `sub`.
  *
- *   GET /me               — current user identity (cold-start recovery)
- *   GET /me/subscription  — current subscription row (404 if none)
+ *   GET /me               — current user identity + subscription (cold-start recovery)
+ *   GET /me/subscription  — current subscription row (404 if none) — kept for old clients
  *   GET /me/submissions   — caller's content_submissions { items: [...] }
  *   GET /me/referrals     — caller's referrals as referrer { items: [...] }
  *
@@ -31,6 +31,18 @@ import { hashGoogleSub } from "../lib/tombstone.js";
 
 // ── GET /me ──────────────────────────────────────────────────────────────────
 
+/**
+ * GET /me also carries the caller's subscription row (or null) in one query —
+ * WHY: cold-start merge. The app reads profile + entitlement from a single
+ * request on launch instead of two, halving startup Neon round trips through
+ * Hyperdrive. subscriptions is a 1:0..1 relation to users, so a LEFT JOIN keeps
+ * this a single-row result whether or not the user has ever subscribed.
+ *
+ * The `user` object shape is UNCHANGED (old app builds parse it as before).
+ * The `subscription` object, when present, matches handleMeSubscription's
+ * response exactly (same keys, same toIso serialization) — see that handler
+ * below, kept untouched for old clients still calling GET /me/subscription.
+ */
 export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
@@ -38,16 +50,44 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
 
   const sql = getDb(env);
   try {
+    // Alias every joined subscriptions column (sub_*) to avoid collisions with
+    // the users columns of the same name (id, user_id doesn't exist on users
+    // but status/plan-style names could be added later — alias defensively).
     const rows = await sql`
-      SELECT id, display_name, email, referral_code
-      FROM users
-      WHERE id = ${sub}
+      SELECT u.id, u.display_name, u.email, u.referral_code,
+             s.id AS sub_id, s.user_id AS sub_user_id, s.status AS sub_status,
+             s.plan AS sub_plan,
+             s.phonepe_subscription_id AS sub_phonepe_subscription_id,
+             s.merchant_subscription_id AS sub_merchant_subscription_id,
+             s.trial_end AS sub_trial_end,
+             s.current_period_end AS sub_current_period_end,
+             s.updated_at AS sub_updated_at
+      FROM users u
+      LEFT JOIN subscriptions s ON s.user_id = u.id
+      WHERE u.id = ${sub}
       LIMIT 1
     `;
     if (rows.length === 0) {
       return errorResponse(404, "not_found", "User not found");
     }
     const row = rows[0];
+    // No subscriptions row → the LEFT JOIN yields nulls in every s.* column.
+    const subscription =
+      row.sub_id === null
+        ? null
+        : {
+            id: row.sub_id as string,
+            user_id: row.sub_user_id as string,
+            status: row.sub_status as string,
+            plan: (row.sub_plan as string | null) ?? null,
+            phonepe_subscription_id:
+              (row.sub_phonepe_subscription_id as string | null) ?? null,
+            merchant_subscription_id:
+              (row.sub_merchant_subscription_id as string | null) ?? null,
+            trial_end: toIso(row.sub_trial_end),
+            current_period_end: toIso(row.sub_current_period_end),
+            updated_at: toIso(row.sub_updated_at),
+          };
     return c.json({
       user: {
         id: row.id as string,
@@ -55,6 +95,7 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
         email: row.email as string | null,
         referralCode: row.referral_code as string,
       },
+      subscription,
     });
   } catch (err) {
     console.error("[me] DB error:", err);

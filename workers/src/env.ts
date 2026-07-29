@@ -55,7 +55,34 @@ export interface Env {
   /** "SANDBOX" | "PRODUCTION" */
   PHONEPE_ENV: string;
 
-  /** Shared secret for POST /internal/build-catalog and /internal/run-redemptions */
+  /**
+   * LOCAL-DEV-ONLY override for the PhonePe PG base URL.
+   *
+   * WHY: the autopay billing path (notify → execute → the ₹199 debit and the
+   * state transition that follows) can only be exercised end-to-end if a
+   * redemption reaches a TERMINAL state. PhonePe's UAT sandbox will not settle
+   * a redemption on demand — it holds it PENDING through its own retry cycle —
+   * so the COMPLETED and FAILED branches were, before this, unreachable
+   * without spending real money on the live gateway. Pointing this at a local
+   * stub makes both branches testable for free.
+   *
+   * IGNORED whenever PHONEPE_ENV resolves to PRODUCTION (see getPgBase), so
+   * setting it on the deployed Worker can never redirect real money. It is
+   * also never set by wrangler.toml or any secret — only by workers/.dev.vars,
+   * which is git-ignored and loaded solely by `wrangler dev`.
+   *
+   * See .claude/skills/verify-payments/ for the full harness.
+   */
+  PHONEPE_BASE_URL_OVERRIDE?: string;
+
+  /**
+   * Shared secret for the SAFE internal routes: /internal/build-catalog,
+   * /internal/sweep-submissions, /internal/sweep-canonical.
+   *
+   * The CMS worker holds this one purely to trigger rebuilds, so its blast
+   * radius must stay limited to content. It deliberately does NOT authorize
+   * anything that moves money — see OPS_SECRET.
+   */
   CATALOG_BUILD_SECRET: string;
 
   /**

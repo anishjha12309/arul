@@ -32,12 +32,13 @@
  */
 
 import type { Env } from "../env.js";
-import { getDb } from "../lib/db.js";
+import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
 import {
   notifyRedemption,
   executeRedemption,
   getSubscriptionStatus,
+  getOrderStatus,
   buildMerchantOrderId,
   PhonePeApiError,
 } from "../lib/phonepe.js";
@@ -56,6 +57,24 @@ const TERMINAL_MANDATE_STATES = new Set([
 
 /** Maximum failed execute attempts before we expire the subscription. */
 const MAX_RETRIES = 5;
+
+/**
+ * How long past its due date a debit may sit un-settled before we stop trusting
+ * `redeem` and ask the gateway for the order's real state.
+ *
+ * `executeRedemption` answering PENDING is not authoritative — it only says "not
+ * terminal yet". Without a reconciliation, a redemption that PhonePe later
+ * settles (or abandons) is never observed: the row keeps its `notified_at` and
+ * `redemption_order_id`, `current_period_end` stays in the past, the user has no
+ * entitlement, and every subsequent run re-executes and logs PENDING again
+ * forever. Nothing in the cron ever called `getOrderStatus`.
+ *
+ * Two hours is well past the minutes a UPI debit takes to settle, so a row still
+ * un-settled here is either webhook-lost or genuinely stuck — both cases the
+ * gateway can answer. PhonePe's own STANDARD retries continue independently;
+ * reading order status does not interfere with them.
+ */
+const RECONCILE_STUCK_AFTER_MS = 2 * 60 * 60 * 1000;
 
 /** How far ahead to look for upcoming debits when deciding to notify. */
 const NOTIFY_WINDOW_HOURS = 24;
@@ -115,6 +134,29 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     phonePeCalls + needed <= MAX_PHONEPE_CALLS_PER_RUN;
 
   try {
+    // Wake the pooled connection before the passes.
+    //
+    // This Worker idles for hours at a time — browse never touches the DB
+    // (CLAUDE.md: the feed is edge-cached catalog JSON) — so Neon suspends and
+    // Hyperdrive's pooled connection goes stale. The first query of a cron run
+    // then lands on a severed socket and throws CONNECTION_CLOSED, which kills
+    // the whole scan: no row is notified, no debit is executed, and the next
+    // attempt is an hour away.
+    //
+    // Observed in Pakiza production 2026-07-27T02:00:03Z (same worker shape,
+    // same idle profile as this fork): its catalog rebuild retried onto a fresh
+    // connection and recovered, while its autopay scan produced no output at
+    // all.
+    //
+    // A second failure is real and propagates — the caller logs it and the row
+    // is picked up next hour.
+    try {
+      await sql`SELECT 1`;
+    } catch (err) {
+      console.warn("[autopay-notify] cold connection — retrying once:", err);
+      await sql`SELECT 1`;
+    }
+
     const now = new Date();
     const notifyThreshold = new Date(now.getTime() + NOTIFY_WINDOW_HOURS * 60 * 60 * 1000);
 
@@ -237,7 +279,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         user_id,
         merchant_subscription_id,
         redemption_order_id,
-        retry_count
+        retry_count,
+        next_debit_at
       FROM subscriptions
       WHERE notified_at IS NOT NULL
         AND next_debit_at <= ${now.toISOString()}
@@ -278,46 +321,42 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Execute sub=${merchantSubId} state=${execResult.state} txn=${execResult.transactionId}`,
         );
 
-        if (execResult.state === "COMPLETED") {
-          const nextPeriodEnd = addOneMonth(new Date());
-          await sql`
-            UPDATE subscriptions
-            SET status             = 'active',
-                current_period_end = ${nextPeriodEnd.toISOString()},
-                next_debit_at      = ${nextPeriodEnd.toISOString()},
-                notified_at        = NULL,
-                redemption_order_id = NULL,
-                retry_count        = 0,
-                updated_at         = now()
-            WHERE id = ${row.id as string}
-          `;
-          // Referral reward on the referred user's first paid debit. Idempotent:
-          // the status<>'rewarded' guard means monthly renewals never re-credit.
-          await grantReferralReward(sql, row.user_id as string);
-        } else if (execResult.state === "FAILED") {
-          const retries = (row.retry_count as number) + 1;
-          if (retries >= MAX_RETRIES) {
-            await sql`
-              UPDATE subscriptions
-              SET status      = 'expired',
-                  retry_count = ${retries},
-                  updated_at  = now()
-              WHERE id = ${row.id as string}
-            `;
-            console.warn(`[autopay-notify] Sub ${merchantSubId} expired after ${retries} failures`);
+        let settled = await applyDebitOutcome(sql, execResult.state, {
+          id: row.id as string,
+          userId: row.user_id as string,
+          retryCount: row.retry_count as number,
+          merchantSubId,
+        });
+
+        // ── Pass C: reconcile a debit that redeem never settles ──────────────
+        //
+        // `redeem` answering PENDING only means "not terminal yet". If the row
+        // has been past due long enough that PhonePe should have settled it, ask
+        // for the order's actual state — otherwise a webhook that never arrived
+        // strands the user past-period with no entitlement, forever.
+        if (!settled) {
+          const dueAt = toDate(row.next_debit_at);
+          const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
+
+          if (overdueMs > RECONCILE_STUCK_AFTER_MS && budgetLeft(1)) {
+            phonePeCalls += 1;
+            const order = await getOrderStatus(env, redemptionOrderId);
+            console.log(
+              `[autopay-notify] Pass C reconcile sub=${merchantSubId} ` +
+              `order=${redemptionOrderId} state=${order.state} ` +
+              `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
+            );
+            settled = await applyDebitOutcome(sql, order.state, {
+              id: row.id as string,
+              userId: row.user_id as string,
+              retryCount: row.retry_count as number,
+              merchantSubId,
+            });
           } else {
-            await sql`
-              UPDATE subscriptions
-              SET retry_count = ${retries},
-                  notified_at = NULL,
-                  updated_at  = now()
-              WHERE id = ${row.id as string}
-            `;
-            // notified_at = NULL allows pass A to re-notify on the next cron run
+            console.log(
+              `[autopay-notify] Execute PENDING for sub ${merchantSubId} — waiting for STANDARD retry`,
+            );
           }
-        } else {
-          // PENDING — PhonePe STANDARD strategy is still retrying; leave state alone
-          console.log(`[autopay-notify] Execute PENDING for sub ${merchantSubId} — waiting for STANDARD retry`);
         }
 
       } catch (err) {
@@ -334,8 +373,74 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     await refreshIdleMarker(env, sql);
 
   } finally {
-    await sql.end();
+    // Swallow end()'s own rejection. This connection may have been severed
+    // mid-flight and reconnected; tearing down a socket that is already gone
+    // can itself reject, and inside a `finally` that rejection REPLACES the
+    // result — turning a scan that fully completed both passes into a failed
+    // promise the caller reports as an error.
+    await sql.end().catch(() => {});
   }
+}
+
+/**
+ * Apply a terminal debit state to a subscription row.
+ *
+ * Shared by Pass B (the `redeem` response) and Pass C (the reconciled order
+ * status) so the two can never drift — a bug in one would otherwise grant a
+ * month the other refuses.
+ *
+ * @returns true when the state was terminal and the row was updated; false for
+ *          PENDING or any state we do not recognise, meaning "still open".
+ */
+async function applyDebitOutcome(
+  sql: ReturnType<typeof getDb>,
+  state: string,
+  row: { id: string; userId: string; retryCount: number; merchantSubId: string },
+): Promise<boolean> {
+  if (state === "COMPLETED") {
+    const nextPeriodEnd = addOneMonth(new Date());
+    await sql`
+      UPDATE subscriptions
+      SET status             = 'active',
+          current_period_end = ${nextPeriodEnd.toISOString()},
+          next_debit_at      = ${nextPeriodEnd.toISOString()},
+          notified_at        = NULL,
+          redemption_order_id = NULL,
+          retry_count        = 0,
+          updated_at         = now()
+      WHERE id = ${row.id}
+    `;
+    // Referral reward on the referred user's first paid debit. Idempotent:
+    // the status<>'rewarded' guard means monthly renewals never re-credit.
+    await grantReferralReward(sql, row.userId);
+    return true;
+  }
+
+  if (state === "FAILED") {
+    const retries = row.retryCount + 1;
+    if (retries >= MAX_RETRIES) {
+      await sql`
+        UPDATE subscriptions
+        SET status      = 'expired',
+            retry_count = ${retries},
+            updated_at  = now()
+        WHERE id = ${row.id}
+      `;
+      console.warn(`[autopay-notify] Sub ${row.merchantSubId} expired after ${retries} failures`);
+    } else {
+      await sql`
+        UPDATE subscriptions
+        SET retry_count = ${retries},
+            notified_at = NULL,
+            updated_at  = now()
+        WHERE id = ${row.id}
+      `;
+      // notified_at = NULL allows pass A to re-notify on the next cron run
+    }
+    return true;
+  }
+
+  return false;
 }
 
 /**

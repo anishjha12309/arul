@@ -1,7 +1,11 @@
 # Arul Workers
 
-Cloudflare Worker = API + crons. Base `https://arul-api.twilight-smoke-d495.workers.dev`
-(the `arul-api.hsrutility.com` custom domain is still an open provisioning item — see docs/provisioning.md).
+Cloudflare Worker = API + crons. Base **`https://arul-api.hsrutility.com`** (custom domain, live
+2026-07-29 — declared as a `custom_domain` route in wrangler.toml, so `wrangler deploy` owns both the
+hostname and its DNS record). `arul-api.twilight-smoke-d495.workers.dev` still serves in parallel
+(`workers_dev = true`) because installed builds point at it; do not drop that until a release using
+the custom domain has rolled out. **Media is still on the r2.dev origin** — see docs/provisioning.md
+for the one remaining step (`arul-cdn.hsrutility.com`), which is required before launch.
 **Authoring is NOT here** — the unified CMS is the separate `hsr-cms` worker/repo (see below).
 Neon via Hyperdrive · R2 `south-indian-wallpapers` (presign via aws4fetch) · KV (jti denylist,
 webhook dedupe, OAuth cache) · PhonePe v2 Autopay (**PRODUCTION** credentials). `src/` was ported
@@ -12,7 +16,7 @@ R2 `ringtones/` prefix. See port-map.md.)
 ## Routes
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | /auth/login | — | Google idToken → access(15m) + refresh(60d rotating) JWTs; captures referral code |
+| POST | /auth/login | — | Google idToken → access(60m) + refresh(60d rotating) JWTs; captures referral code |
 | POST | /auth/refresh · /auth/logout | —/Bearer | Rotate (old jti denylisted) · denylist refresh jti |
 | POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET (apply/share gate); kind ∈ {wallpaper, ringtone} |
 | POST | /media/upload-url | Bearer | Presigned PUT, `user/<sub>/submissions/…` only |
@@ -42,15 +46,57 @@ secret list` no longer returns them.
 ## Catalog outputs (build-catalog)
 `catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (20/page; no per-tag pages;
 orphaned pages deleted each rebuild; a zero-row scope still writes a valid empty all_1.json) ·
-`catalog/app_config.json` (public subset) · `catalog/version.json` (`no-store` pointer).
+`catalog/app_config.json` (public subset) · `catalog/version.json` (edge-cached pointer:
+`public, max-age=30, stale-while-revalidate=300` — NOT no-store; staleness stays bounded at 30 s).
 App reads version.json → appends `?v=<version>`; pages stay edge-cacheable (max-age=60).
+NOTE: media currently serves from the r2.dev origin (custom domain unattached), so no zone Cache
+Rule applies yet. When `arul-cdn.hsrutility.com` lands, `.json` is not in Cloudflare's default
+cacheable-extension list — add a Cache Rule matching the host + `/catalog/` prefix with Edge TTL
+"Use cache-control header if present, bypass cache if not", and NO per-path exclusions (the origin
+header alone decides; a `version.json` exclusion is exactly the stale trap Pakiza had to remove).
 
-## Cron — ONE hourly trigger (`0 * * * *`)
-1. build-catalog (no-op if version unchanged) → **sweep-canonical** only after a fully successful
-   rebuild (deletes `wallpapers/…` + `ringtones/…` objects no DB row references — full_key,
-   audio_key AND cover_key all count as references — why this bucket must never be shared).
-2. sweep-submissions (reclaim orphaned `user/…/submissions/`; expire 30d-old pending rows).
-3. autopay notify (24h before debit) + execute (notify → redeem at next_debit_at).
+## Cron — TWO triggers (`wrangler.toml [triggers]`)
+
+**Hourly `0 * * * *`** — two independent `waitUntil`s; neither can abort the other:
+1. **build-catalog** — no-op if `content_version` is unchanged, so most hours only rewrite
+   `app_config.json`. → **sweep-canonical**, but *only* after a rebuild that both fully succeeded
+   and actually touched a scope (deletes `wallpapers/…` + `ringtones/…` objects no DB row
+   references — full_key, audio_key AND cover_key all count as references — why this bucket must
+   never be shared). On-change convenience, not the safety net.
+2. **autopay notify + execute** — the renewal path. Pass A notifies 24 h before each debit; Pass B
+   redeems at `next_debit_at`. Short-circuits on a KV `autopay:next_work_at` marker so an idle hour
+   costs one KV read, not a DB wake.
+
+**Daily `30 21 * * *`** (21:30 UTC = **03:00 IST**, off-peak) — the unconditional backstop for
+whatever the on-change hourly sweep missed:
+3. **sweep-canonical** — unconditional this time.
+4. **sweep-submissions** — reclaim orphaned `user/…/submissions/` R2 objects and expire 30-day-old
+   pending rows. "Expire" is a status flip to `rejected` with a reason, **not** a delete.
+
+**Sweep failsafe — do not weaken.** When the DB reports **zero** referenced keys for a prefix,
+sweep-canonical ABORTS that prefix rather than treating "no references" as "delete everything". A
+sweep once wiped live media in the reference app; this is the guard.
+
+**Cold-connection gotcha — the crons' one real hazard.** This Worker idles for hours (browse never
+touches the DB), so Neon suspends and Hyperdrive's pooled connection goes stale. The first query of
+a cron run then lands on a severed socket. postgres.js defaults `connect_timeout` to **30 s** —
+longer than a scheduled invocation can afford — so the run hangs for the full budget and is killed
+by the runtime, taking the rebuild AND the renewal scan with it (observed in the reference app:
+killed the hourly cron for 3 h before anyone noticed, because a dead cron logs nothing).
+
+Three defences, all load-bearing — don't remove one thinking the others cover it:
+- `connect_timeout: 5` in `lib/db.ts` — fail fast instead of hanging.
+- **Retry the first query once** on a fresh connection: `build-catalog` on its `app_config` read,
+  `autopay-notify` on a `SELECT 1` before its passes. postgres.js reconnects transparently, so the
+  second attempt succeeds.
+- `await sql.end().catch(() => {})` — tearing down an already-severed socket can itself reject, and
+  inside a `finally` that rejection **replaces the return value**, turning a fully successful
+  rebuild into a failed promise.
+
+Liveness signal: `catalog/app_config.json` is rewritten every successful run, so its
+`Last-Modified` is what proves the cron is alive — `version.json`'s `built_at` only moves when
+content actually changed. Cache-bust when checking (`?cb=<random>`); `REVALIDATED` can serve a
+stale `Last-Modified`.
 
 ## PhonePe v2 Autopay — hard-won facts, do NOT re-derive (proven in the reference app)
 1. **Mobile SDK setup token** = `POST /checkout/v2/sdk/order`, read top-level `token`. NOT the web
@@ -77,6 +123,15 @@ App reads version.json → appends `?v=<version>`; pages stay edge-cacheable (ma
 9. Symptom map: PR004/Unauthorized on device = bad `merchantId` or a web token (the Worker validates
    NEITHER — it only echoes them, so it still returns 200). `OAuth 401` in the tail = wrong host or a
    whitespace-polluted credential.
+10. **The OAuth token endpoint is `/v1/oauth/token` and that is CORRECT on the v2 flow — do not
+    "upgrade" it to v2.** Verified against PhonePe's own Authorization reference 2026-07-29:
+    sandbox `https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token`, production
+    `https://api.phonepe.com/apis/identity-manager/v1/oauth/token`. PhonePe's "v2" refers to the
+    PRODUCT/API version and to the credential set, not to the token endpoint: v2 onboarding gives
+    you v2 `client_id`/`client_secret`/`client_version`, which you POST to that v1 endpoint and
+    which return a token you send as `Authorization: O-Bearer <token>`. This worker is fully on v2
+    where it counts — `/checkout/v2/sdk/order`, `/subscriptions/v2/{notify,redeem,cancel,status}`,
+    and the `O-Bearer` header. There is no v2 token endpoint to move to.
 
 ## Secrets (`npx wrangler secret bulk <file.json>`) — fresh values, NEVER reuse another app's
 ```
@@ -99,6 +154,17 @@ npm run dev      # wrangler dev — needs .dev.vars (incl DATABASE_URL) + Hyperd
 npm run build && npm test
 npx wrangler deploy   # deploy IS part of "done" (CF login admin@hsrutility.com; see deploy-worker skill)
 ```
+
+**Prod inspection** — `tools/prod-query.mjs` (SELECT/WITH only, refuses stacked statements and
+write keywords) and `tools/prod-sql.mjs` (writes need `--write`; an unqualified UPDATE/DELETE is
+refused even then). Both read the connection string from `.dev.vars`, never the CLI, so it cannot
+leak into shell history. `tools/prod-webhook.mjs` hardcodes `/payments/webhook`, refuses non-`DKS_`
+ids, and cannot be pointed at a money-moving route.
+
+Two traps that silently return the wrong answer rather than erroring:
+- `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]`.
+  Add `--remote`.
+- `wallpapers` / `ringtones` use **`is_published`**, not `published`.
 
 ## Security invariants
 Access token carries only `sub`; entitlement ALWAYS live-read from Neon. All SQL parameterized and

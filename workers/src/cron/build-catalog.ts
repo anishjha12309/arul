@@ -138,99 +138,186 @@ async function buildCatalogLocked(
   const sql = getDb(env);
   const results: BuildResults = {};
 
-  // ── Change-detection signal ────────────────────────────────────────────────
-  // BUG FIX: read the dedicated app_config.content_version (bigint) column,
-  // NOT feature_flags. Per architecture.md §4 and db/schema.sql, the operator
-  // or content editor bumps content_version on any content change; the cron
-  // compares it against the last-built version stored in KV and skips unchanged scopes.
-  // content_version is a bigint, so postgres.js may return it as a string —
-  // normalize to a canonical string for comparison (avoids precision loss).
-  let contentVersion: string | null = null;
-  let appConfigRow: Record<string, unknown> | null = null;
   try {
-    const cfgRows = await sql`
-      SELECT content_version, prices, support_email,
-             policy_urls, feature_flags, min_supported_version
-      FROM app_config WHERE id = 1 LIMIT 1
-    `;
-    if (cfgRows.length > 0) {
-      appConfigRow = cfgRows[0] as Record<string, unknown>;
-      const cv = appConfigRow["content_version"];
-      contentVersion = cv === null || cv === undefined ? null : String(cv);
-    }
-  } catch (err) {
-    console.warn("[build-catalog] Could not fetch app_config:", err);
-  }
+    // ── Change-detection signal ──────────────────────────────────────────────
+    // BUG FIX: read the dedicated app_config.content_version (bigint) column,
+    // NOT feature_flags. Per architecture.md §4 and db/schema.sql, the operator
+    // or content editor bumps content_version on any content change; the cron
+    // compares it against the last-built version stored in KV and skips unchanged scopes.
+    // content_version is a bigint, so postgres.js may return it as a string —
+    // normalize to a canonical string for comparison (avoids precision loss).
+    //
+    // RETRY ONCE. This Worker idles for hours (browse never touches the DB —
+    // CLAUDE.md §2), so Neon suspends and Hyperdrive can hand this first query a
+    // severed connection. That is a stale-pool artifact, not a real outage: a
+    // second attempt gets a fresh connection and succeeds. Without the retry the
+    // whole hour is skipped; with it the cron self-heals.
+    let contentVersion: string | null = null;
+    let appConfigRow: Record<string, unknown> | null = null;
+    let cfgErr: unknown = null;
 
-  // ── Always write the PUBLIC app_config.json subset ─────────────────────────
-  // This is cheap (one R2 write) and the app reads it on launch via the CDN.
-  // NEVER include secrets — only the public subset that AppConfigModel expects.
-  if (appConfigRow) {
-    try {
-      await writeAppConfig(env.R2 as R2Bucket, appConfigRow);
-    } catch (err) {
-      console.error("[build-catalog] Failed to write app_config.json:", err);
-    }
-  }
-
-  for (const s of scopes) {
-    try {
-      // Change-detection: compare content_version against last-built version in
-      // KV. Skipped when force=true (operator-triggered builds always rebuild —
-      // the gate is purely a cron optimization, and applying it to explicit
-      // builds could skip a rebuild a publish/delete actually needs, leaving the
-      // catalog stale).
-      if (!force && contentVersion !== null) {
-        const kvKey = `catalog_version:${s}`;
-        const lastBuilt = await env.KV.get(kvKey);
-        if (lastBuilt === contentVersion) {
-          results[s] = { skipped: "no_change" };
-          continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const cfgRows = await sql`
+          SELECT content_version, prices, support_email,
+                 policy_urls, feature_flags, min_supported_version
+          FROM app_config WHERE id = 1 LIMIT 1
+        `;
+        if (cfgRows.length > 0) {
+          appConfigRow = cfgRows[0] as Record<string, unknown>;
+          const cv = appConfigRow["content_version"];
+          contentVersion = cv === null || cv === undefined ? null : String(cv);
+        }
+        cfgErr = null;
+        break;
+      } catch (err) {
+        cfgErr = err;
+        if (attempt === 0) {
+          console.warn(
+            "[build-catalog] app_config read failed — retrying once on a fresh connection:",
+            err,
+          );
         }
       }
+    }
 
-      const result = await buildScope(sql, env.R2 as R2Bucket, s);
-      results[s] = result;
-
-      // Update last-built version in KV
-      if (contentVersion !== null) {
-        await env.KV.put(`catalog_version:${s}`, contentVersion);
+    // ── Abort if the DB is genuinely unreachable ─────────────────────────────
+    // Falling through here used to be actively harmful. A null contentVersion
+    // DISABLES the change-detection gate below, so the cron would go on to run a
+    // full buildScope() — the most expensive thing it can do — against the very
+    // connection that just failed, then skip writing version.json anyway (that
+    // write is also gated on contentVersion). The result was a 30 s stall that
+    // the runtime killed, taking the concurrently-scheduled autopay scan with
+    // it. Bail out cheaply instead, and mark every requested scope errored so
+    // the caller's anyScopeError guard correctly skips the canonical sweep.
+    if (cfgErr !== null) {
+      console.error(
+        "[build-catalog] Could not fetch app_config after retry — skipping rebuild this run:",
+        cfgErr,
+      );
+      for (const s of scopes) {
+        results[s] = { error: `app_config unreadable: ${String(cfgErr)}` };
       }
-    } catch (err) {
-      console.error(`[build-catalog] failed for scope=${s}:`, err);
-      results[s] = { error: String(err) };
+      return results;
     }
-  }
 
-  // ── Write the always-fresh version pointer LAST (commit marker) ─────────────
-  // The app reads catalog/version.json (served no-store) to learn the current
-  // content_version, then appends ?v=<version> to every catalog fetch. Writing it
-  // only AFTER every page body is durably in R2 — and only if no scope errored —
-  // means advertising version N guarantees N's content already exists, so an app
-  // that polls the pointer can never request a ?v=N page that isn't built yet.
-  // See docs/architecture.md §4.2. (The purge backstop moved to the hsr-cms
-  // worker on 2026-07-20 along with the rest of authoring.)
-  const anyScopeError = Object.values(results).some(
-    (r) => r && typeof r === "object" && "error" in r,
-  );
-  if (contentVersion !== null && !anyScopeError) {
-    try {
-      await writeVersionPointer(env.R2 as R2Bucket, contentVersion);
-    } catch (err) {
-      console.error("[build-catalog] Failed to write version.json:", err);
+    // ── Always write the PUBLIC app_config.json subset ───────────────────────
+    // This is cheap (one R2 write) and the app reads it on launch via the CDN.
+    // NEVER include secrets — only the public subset that AppConfigModel expects.
+    if (appConfigRow) {
+      try {
+        await writeAppConfig(env.R2 as R2Bucket, appConfigRow);
+      } catch (err) {
+        console.error("[build-catalog] Failed to write app_config.json:", err);
+      }
     }
-  }
 
-  await sql.end();
-  return results;
+    for (const s of scopes) {
+      try {
+        // Change-detection: compare content_version against last-built version in
+        // KV. Skipped when force=true (operator-triggered builds always rebuild —
+        // the gate is purely a cron optimization, and applying it to explicit
+        // builds could skip a rebuild a publish/delete actually needs, leaving the
+        // catalog stale).
+        if (!force && contentVersion !== null) {
+          const kvKey = `catalog_version:${s}`;
+          const lastBuilt = await env.KV.get(kvKey);
+          if (lastBuilt === contentVersion) {
+            results[s] = { skipped: "no_change" };
+            continue;
+          }
+        }
+
+        const result = await buildScope(sql, env.R2 as R2Bucket, s);
+        results[s] = result;
+
+        // Update last-built version in KV
+        if (contentVersion !== null) {
+          await env.KV.put(`catalog_version:${s}`, contentVersion);
+        }
+      } catch (err) {
+        console.error(`[build-catalog] failed for scope=${s}:`, err);
+        results[s] = { error: String(err) };
+      }
+    }
+
+    // ── Write the always-fresh version pointer LAST (commit marker) ───────────
+    // The app reads catalog/version.json (served with a short edge TTL — see
+    // VERSION_POINTER_CACHE_CONTROL) to learn the current content_version, then
+    // appends ?v=<version> to every catalog fetch. Writing it only AFTER every
+    // page body is durably in R2 — and only if no scope errored — means
+    // advertising version N guarantees N's content already exists, so an app
+    // that polls the pointer can never request a ?v=N page that isn't built yet.
+    // See docs/architecture.md §4.2. (The purge backstop moved to the hsr-cms
+    // worker on 2026-07-20 along with the rest of authoring.)
+    const anyScopeError = Object.values(results).some(
+      (r) => r && typeof r === "object" && "error" in r,
+    );
+    if (contentVersion !== null && !anyScopeError) {
+      try {
+        await writeVersionPointer(env.R2 as R2Bucket, contentVersion);
+      } catch (err) {
+        console.error("[build-catalog] Failed to write version.json:", err);
+      }
+    }
+
+    return results;
+  } finally {
+    // Release on EVERY path, including the early abort above. Mirrors the
+    // try/finally autopay-notify.ts already uses.
+    //
+    // Swallow end()'s own rejection. The connection this run recovered from was
+    // severed mid-flight, and tearing down a socket that is already gone can
+    // itself reject — inside a `finally` that rejection REPLACES the return
+    // value, turning a rebuild that fully succeeded (pages written, app_config
+    // written) into a failed promise. The caller would then skip the canonical
+    // sweep and log a rebuild failure that did not happen.
+    await sql.end().catch(() => {});
+  }
 }
 
 // ── Always-fresh version pointer ────────────────────────────────────────────
 
 /**
- * Write catalog/version.json with the current content_version, served no-store so
- * it always reflects the latest publish. This is the only file the app must fetch
- * fresh; everything else is keyed by ?v=<version> and stays edge-cacheable.
+ * Cache policy for the version pointer.
+ *
+ * `no-store` made this the ONE uncacheable request on the cold-start path: every
+ * launch, for every user, went to origin — measured on the sibling Pakiza
+ * deployment (identical zone/bucket setup) at a p50 of **240 ms across 20
+ * requests, 20/20 cf-cache-status: DYNAMIC** — before a single catalog page
+ * could be requested, because the `?v=` for those pages comes from here.
+ *
+ * A non-zero `max-age` is what actually gets this cached. The first attempt used
+ * `max-age=0, s-maxage=30` to keep clients from holding their own copy — and
+ * Cloudflare answered `cf-cache-status: DYNAMIC` on 12/12 requests at the same
+ * 240 ms, ignoring the `s-maxage` entirely, while every sibling object on the
+ * same bucket (`max-age=14400`) cached normally. `max-age=0` reads as "do not
+ * cache" here, so the edge never gets to help.
+ *
+ * Holding it client-side is not a real risk: the app talks through
+ * `package:http`, which implements no HTTP cache, so `max-age` only ever binds
+ * the edge and any browser hitting the CDN directly.
+ *
+ * The cost is a bounded staleness window: for at most 30 s after a publish some
+ * clients pin the previous `?v=` and get the previous — still valid, still
+ * complete — catalog. They self-correct on the next poll.
+ *
+ * That trade is safe because the pointer is only ever a HINT about freshness,
+ * never about correctness: writeVersionPointer runs last and only after every
+ * page body is durably in R2, so an advertised version always exists. The
+ * hsr-cms worker purges this key on publish (when CF_ZONE_ID/CF_PURGE_TOKEN are
+ * set), which collapses the window to near-zero for the path that matters.
+ *
+ * Keep `stale-while-revalidate` well above `s-maxage`: it is what stops a burst
+ * of cold starts from stampeding origin the instant the edge copy ages out.
+ */
+const VERSION_POINTER_CACHE_CONTROL =
+  "public, max-age=30, stale-while-revalidate=300";
+
+/**
+ * Write catalog/version.json with the current content_version. This is the only
+ * file the app must fetch near-fresh; everything else is keyed by ?v=<version>
+ * and stays fully edge-cacheable.
  */
 export async function writeVersionPointer(
   r2Bucket: R2Bucket,
@@ -243,8 +330,15 @@ export async function writeVersionPointer(
   // would rewind every client to a stale ?v= and hide freshly published content
   // until the next bump. Skip instead — the newer pointer is already correct,
   // and this build's pages were written under the same keys.
+  //
+  // Only a STRICTLY older version is refused. Re-writing the SAME version is
+  // allowed on purpose: the object's stored Cache-Control is metadata, so a
+  // policy change (or a corrupted/misheadered pointer) would otherwise be
+  // unfixable until someone happened to publish content. Rewriting is idempotent
+  // in everything that matters — content_version is unchanged, so no client's
+  // ?v= moves; only built_at and the headers refresh.
   const current = await readVersionPointer(r2Bucket);
-  if (current !== null && !isNewerVersion(contentVersion, current)) {
+  if (current !== null && isNewerVersion(current, contentVersion)) {
     console.log(
       `[build-catalog] version.json already at ${current}; not rewinding to ${contentVersion}`,
     );
@@ -254,7 +348,7 @@ export async function writeVersionPointer(
     r2Bucket,
     "catalog/version.json",
     { content_version: contentVersion, built_at: new Date().toISOString() },
-    "no-store",
+    VERSION_POINTER_CACHE_CONTROL,
   );
 }
 
@@ -375,13 +469,24 @@ async function buildScope(
 
   // Fetch all published rows — order by sort_order for wallpapers, id for others
   let rows: ContentRow[];
+  // The trailing `id` in both ORDER BYs is a TOTAL-ORDER tiebreaker, not
+  // decoration. Content here arrives via bulk imports (one transaction per
+  // batch), so whole batches share sort_order=0 AND an identical created_at.
+  // Without a unique final key the sort is not total, and Postgres is free to
+  // return tied rows in a different order on any run — a different plan, a
+  // parallel scan, or simply a different heap layout after a VACUUM. Since
+  // pages are cut every 20 rows in returned order, that silently reshuffles
+  // which items land on which page between rebuilds: the feed reorders under
+  // users for no reason, and anyone mid-pagination during a rebuild can see an
+  // item twice or miss it entirely. `id` is unique, so appending it makes the
+  // order reproducible forever.
   if (scope === "wallpapers") {
     // sort_order is no longer surfaced in the CMS (defaults to 0), so created_at
     // is the real tiebreaker — newest first within an equal sort_order.
     rows = await sql`
       SELECT * FROM wallpapers
       WHERE is_published = true
-      ORDER BY sort_order ASC, created_at DESC
+      ORDER BY sort_order ASC, created_at DESC, id ASC
     `;
   } else if (scope === "ringtones") {
     // Same ordering contract as wallpapers: sort_order ASC, created_at DESC —
@@ -391,7 +496,7 @@ async function buildScope(
     rows = await sql`
       SELECT * FROM ringtones
       WHERE is_published = true
-      ORDER BY sort_order ASC, created_at DESC NULLS LAST
+      ORDER BY sort_order ASC, created_at DESC NULLS LAST, id ASC
     `;
   } else {
     throw new Error(`[build-catalog] unknown scope: ${scope}`);

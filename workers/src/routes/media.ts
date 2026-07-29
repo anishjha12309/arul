@@ -19,8 +19,8 @@
 import type { Context } from "hono";
 import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
-import { isPremium } from "../lib/entitlement.js";
-import { presignGet, presignPut } from "../lib/r2.js";
+import { premiumPredicate } from "../lib/entitlement.js";
+import { presignGet, presignPut, SUBMISSION_INFIX } from "../lib/r2.js";
 import { getDb } from "../lib/db.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
@@ -70,34 +70,36 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
   const sql = getDb(env);
 
   try {
-    // Look up content row — fetch the private key only. (is_premium was removed
-    // 2026-07-01; gating no longer depends on a per-row flag — see below.)
+    // Content key + entitlement in ONE round-trip.
+    //
+    // These used to be two sequential awaits, so every gated apply/set/share
+    // paid two Hyperdrive round-trips back to back — on the hot path for the
+    // app's most latency-sensitive action. They are independent reads, so the
+    // DB can answer both in a single statement. The premium half is the shared
+    // fragment from entitlement.ts, NOT a local copy: entitlement is still read
+    // live from Neon on every call, so a refund or expiry applies immediately.
     const rows = await sql`
-      SELECT ${sql(keyCol)} AS private_key
-      FROM ${sql(table)}
-      WHERE id = ${id}
-        AND is_published = true
-      LIMIT 1
+      SELECT
+        (
+          SELECT ${sql(keyCol)}
+          FROM ${sql(table)}
+          WHERE id = ${id}
+            AND is_published = true
+          LIMIT 1
+        ) AS private_key,
+        ${premiumPredicate(sql, sub)} AS is_premium
     `;
 
-    if (rows.length === 0) {
+    const privateKey = rows[0]?.private_key as string | null | undefined;
+    if (!privateKey) {
       return errorResponse(404, "not_found", "Content not found");
     }
 
-    const row = rows[0];
-    const privateKey = row.private_key as string | null;
-    if (!privateKey) {
-      return errorResponse(404, "not_found", "Content key not available");
-    }
-
-    // Entitlement check — ALL content is premium (product decision 2026-07-01:
-    // every wallpaper apply/set/save requires a subscription). There is
-    // no per-row flag anymore (is_premium was removed) and no test allow-list
-    // bypass (PREMIUM_TEST_USER_IDS was removed); premium is read live from Neon,
-    // so a declined/failed payment can never unlock content. Browse/preview stay
-    // free — they use the public CDN keys directly and never reach this route.
-    const premium = await isPremium(sql, sub);
-    if (!premium) {
+    // ALL content is premium — every wallpaper + ringtone apply/set/share needs
+    // a subscription (there is no per-row flag and no test allow-list bypass).
+    // Browse/preview stay free: they read the public CDN keys directly and
+    // never reach this route.
+    if (rows[0]?.is_premium !== true) {
       return errorResponse(403, "premium_required", "Premium subscription required");
     }
 
@@ -142,6 +144,13 @@ export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Re
       400,
       "bad_key",
       `key must start with user/<your-id>/`,
+    );
+  }
+  if (!key.includes(SUBMISSION_INFIX)) {
+    return errorResponse(
+      400,
+      "bad_key",
+      `key must be under user/<your-id>/submissions/`,
     );
   }
 
@@ -204,6 +213,9 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
   // Enforce key still belongs to this user
   if (!fileKey.startsWith(`user/${sub}/`)) {
     return errorResponse(400, "bad_key", "fileKey must be under your user/ prefix");
+  }
+  if (!fileKey.includes(SUBMISSION_INFIX)) {
+    return errorResponse(400, "bad_key", "fileKey must be under your submissions/ prefix");
   }
 
   // The upload must have actually landed — otherwise the row is a dead entry the

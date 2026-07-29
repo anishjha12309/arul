@@ -37,6 +37,19 @@ function encodeKey(key: string): string {
 }
 
 /**
+ * Where user submissions live: `user/<sub>/submissions/<name>`.
+ *
+ * Defined once and shared because the two sides MUST agree. sweep-submissions
+ * only ever considers objects whose key contains the infix, so an object
+ * accepted at any other path under `user/<sub>/` is invisible to reclamation
+ * forever — no rejection, no account deletion, no cron will ever free its bytes,
+ * and R2 storage is the cost model. The upload validators previously checked
+ * only the `user/<sub>/` prefix, so the sweep's contract was never enforced.
+ */
+export const SUBMISSION_PREFIX = "user/";
+export const SUBMISSION_INFIX = "/submissions/";
+
+/**
  * Generate a presigned GET URL for a private R2 object.
  * @param env     Worker environment
  * @param key     R2 object key

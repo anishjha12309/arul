@@ -64,7 +64,7 @@
 import type { Context } from "hono";
 import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
-import { getDb } from "../lib/db.js";
+import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import {
@@ -97,6 +97,39 @@ const MONTHLY_PRICE_PAISE = 19900;
  */
 const TRIAL_DAYS = 1;
 const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * How long a claimed-but-unfinished mandate setup blocks a second attempt.
+ *
+ * Long enough to cover a slow PhonePe setup call plus the user reaching the
+ * mandate sheet, short enough that a genuinely abandoned setup (app killed at
+ * the PhonePe screen) does not lock the user out of retrying for long. A
+ * blocked caller gets 409 and the app's normal "already subscribed" path.
+ */
+const SETUP_CLAIM_WINDOW_MS = 90_000;
+
+/** The columns handleInitiate reads under the per-user lock. */
+interface PriorSubscription {
+  trial_end: unknown;
+  status: string;
+  merchant_subscription_id: string | null;
+  current_period_end: unknown;
+  updated_at: unknown;
+}
+
+/**
+ * Why a claim was refused. The two reasons MUST stay distinguishable all the way
+ * out to the client: "you already pay us" is a success the app should celebrate
+ * (it flips to Manage Subscription), while "your own setup is still running" is
+ * a transient retry — and answering the second with the first told a user who
+ * double-tapped that their purchase had succeeded when NO mandate existed.
+ */
+type ClaimConflict = "active_subscription" | "setup_in_flight";
+
+/** What the claim transaction hands back to the rest of handleInitiate. */
+type ClaimResult =
+  | { conflict: ClaimConflict; supersededMandateId?: undefined; trialEligible?: undefined }
+  | { conflict: false; supersededMandateId: string | null; trialEligible: boolean };
 
 // ── POST /payments/initiate ──────────────────────────────────────────────────
 
@@ -134,41 +167,109 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     // trial_end means this user already consumed their trial: authorize the new
     // mandate with a REAL ₹199 first debit (TRANSACTION) instead of the ₹2
     // PENNY_DROP, and skip the trial on completion.
-    const prior = await sql<
-      {
-        trial_end: unknown;
-        status: string;
-        merchant_subscription_id: string | null;
-        current_period_end: unknown;
-      }[]
-    >`
-      SELECT trial_end, status, merchant_subscription_id, current_period_end
-      FROM subscriptions WHERE user_id = ${sub} LIMIT 1
-    `;
-    const existing = prior[0] ?? null;
-    const trialEligible = existing === null || existing.trial_end === null;
+    // Build the IDs up front — the claim below writes them before PhonePe is
+    // called, so a concurrent request can see that a setup is already underway.
+    const merchantSubscriptionId = buildMerchantSubscriptionId(sub);
+    const merchantOrderId = buildMerchantOrderId(sub, "S");
 
-    // ── Guard: at most ONE live mandate per user ───────────────────────────
-    // Without this, an already-subscribed user reaching this route (stale
-    // entitlement snapshot, a retry, a reinstall before /me resolves, any
-    // non-UI client) got a SECOND mandate authorized. Because trial_end is
-    // already set, that second setup is a TRANSACTION mandate — it charges
-    // ₹199 on the spot — and the upsert below then overwrote
-    // merchant_subscription_id, leaving the FIRST mandate live at PhonePe with
-    // no pointer left in our DB: /payments/cancel and DELETE /me could never
-    // revoke it, and its webhooks matched no row. Refuse instead.
+    // ── Serialize every initiate for this user ─────────────────────────────
     //
-    // Scoped to trialing/active with an unexpired period. 'cancelled' is
-    // deliberately NOT blocked — that mandate is already revoked, the user
-    // keeps access to period end, and resubscribing is what they're asking for.
-    const priorPeriodEnd = toDate(existing?.current_period_end);
-    const hasLivePeriod =
-      priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
-    if (
-      existing &&
-      (existing.status === "trialing" || existing.status === "active") &&
-      hasLivePeriod
-    ) {
+    // Read-then-call-PhonePe-then-write let two concurrent initiates both read
+    // the SAME prior row, both create a mandate, and the second overwrite the
+    // first's merchant_subscription_id — leaving mandate #1 live at PhonePe with
+    // no pointer in our DB. Its webhook then matches no row
+    // ("Setup completed for UNKNOWN sub …" → 200 OK, no grant, no PhonePe
+    // retry), and /payments/cancel and DELETE /me can never revoke it because
+    // both look the id up from the row. Reproduced 2026-07-27.
+    //
+    // The lock is taken on the USERS row, not the subscriptions row: a
+    // first-time subscriber has no subscriptions row yet, so FOR UPDATE there
+    // would lock nothing and the very race we care about would slip through.
+    //
+    // Inside the lock we do three things atomically: re-read the prior row,
+    // refuse a setup that is already in flight, and CLAIM the new ids. Claiming
+    // before the PhonePe call is what makes the in-flight check work — the
+    // marker has to be visible to the second request while the first is still
+    // waiting on PhonePe.
+    const claim = (await sql.begin(async (tx) => {
+      await tx`SELECT 1 FROM users WHERE id = ${sub} FOR UPDATE`;
+
+      const prior = await tx<PriorSubscription[]>`
+        SELECT trial_end, status, merchant_subscription_id, current_period_end,
+               updated_at
+        FROM subscriptions WHERE user_id = ${sub} LIMIT 1
+      `;
+      const existing = prior[0] ?? null;
+
+      const priorPeriodEnd = toDate(existing?.current_period_end);
+      const hasLivePeriod =
+        priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
+      if (
+        existing &&
+        (existing.status === "trialing" || existing.status === "active") &&
+        hasLivePeriod
+      ) {
+        return { conflict: "active_subscription" } as ClaimResult;
+      }
+
+      // A pending row touched moments ago means another request is mid-setup —
+      // a double-tap that beat the client's own CTA disable, a client-side
+      // timeout retry whose first attempt actually succeeded, or a relaunch
+      // mid-flow. Refuse rather than authorize a second mandate; the caller
+      // retries and gets the settled state.
+      const claimedAt = toDate(existing?.updated_at);
+      if (
+        existing &&
+        existing.status === "pending" &&
+        claimedAt !== null &&
+        Date.now() - claimedAt.getTime() < SETUP_CLAIM_WINDOW_MS
+      ) {
+        return { conflict: "setup_in_flight" } as ClaimResult;
+      }
+
+      // Whatever mandate this row pointed at is about to become unreachable.
+      // Capture it under the lock so a losing concurrent request revokes the
+      // WINNER's mandate rather than an id it read before the race started.
+      const superseded =
+        existing && existing.merchant_subscription_id && existing.status !== "cancelled"
+          ? existing.merchant_subscription_id
+          : null;
+
+      await tx`
+        INSERT INTO subscriptions (
+          user_id, status, plan, merchant_subscription_id, merchant_order_id
+        )
+        VALUES (
+          ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId}
+        )
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          status                   = 'pending',
+          plan                     = EXCLUDED.plan,
+          merchant_subscription_id = EXCLUDED.merchant_subscription_id,
+          merchant_order_id        = EXCLUDED.merchant_order_id,
+          phonepe_order_id         = NULL,
+          updated_at               = now()
+      `;
+
+      return {
+        conflict: false,
+        supersededMandateId: superseded,
+        trialEligible: existing === null || existing.trial_end === null,
+      } as ClaimResult;
+    })) as unknown as ClaimResult;
+
+    if (claim.conflict === "setup_in_flight") {
+      // Distinct code on purpose: the app turns `already_subscribed` into a
+      // SUCCESS state, which would be a lie here — nothing has been authorized
+      // yet. See ClaimConflict.
+      return errorResponse(
+        409,
+        "setup_in_progress",
+        "A payment setup is already in progress. Please wait a moment and try again.",
+      );
+    }
+    if (claim.conflict) {
       return errorResponse(
         409,
         "already_subscribed",
@@ -176,23 +277,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       );
     }
 
-    // A prior NON-cancelled mandate may still be live at PhonePe even though we
-    // are allowed to proceed: a 'pending' setup the user abandoned (or whose
-    // webhook is still in flight), a 'paused' mandate, or one we marked
-    // 'expired' after exhausting debit retries while PhonePe still holds it.
-    // The upsert below overwrites merchant_subscription_id, so revoke the old
-    // one first or it becomes unreachable. Best-effort and OFF the response
-    // path — a PhonePe hiccup must never break a legitimate retry.
-    const staleMandateId =
-      existing &&
-      existing.merchant_subscription_id &&
-      existing.status !== "cancelled"
-        ? existing.merchant_subscription_id
-        : null;
-
-    // Build unique IDs
-    const merchantSubscriptionId = buildMerchantSubscriptionId(sub);
-    const merchantOrderId = buildMerchantOrderId(sub, "S");
+    const { supersededMandateId, trialEligible } = claim;
 
     // Redirect URL PhonePe sends the user back to after mandate authorization.
     // Derive the origin from the incoming request so it always matches the host
@@ -231,35 +316,27 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         `trialEligible=${trialEligible}`,
     );
 
-    // Persist pending subscription intent
-    // ON CONFLICT on user_id: a user can only have one active subscription row.
-    // We overwrite pending state but never overwrite an active/trialing one.
+    // Attach PhonePe's order id to the row we already claimed above.
+    //
+    // Scoped to the claimed merchant_order_id: if a later initiate has already
+    // superseded this claim while PhonePe was answering, this UPDATE must not
+    // stamp a stale order id onto the newer mandate. Zero rows updated is the
+    // correct outcome there — the newer request owns the row.
     await sql`
-      INSERT INTO subscriptions (
-        user_id, status, plan,
-        merchant_subscription_id, merchant_order_id, phonepe_order_id
-      )
-      VALUES (
-        ${sub}, 'pending', ${plan},
-        ${merchantSubscriptionId}, ${merchantOrderId}, ${ppResult.orderId}
-      )
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        status                   = CASE
-                                     WHEN subscriptions.status IN ('active', 'trialing')
-                                     THEN subscriptions.status
-                                     ELSE 'pending'
-                                   END,
-        plan                     = EXCLUDED.plan,
-        merchant_subscription_id = EXCLUDED.merchant_subscription_id,
-        merchant_order_id        = EXCLUDED.merchant_order_id,
-        phonepe_order_id         = EXCLUDED.phonepe_order_id,
-        updated_at               = now()
+      UPDATE subscriptions
+      SET phonepe_order_id = ${ppResult.orderId},
+          updated_at       = now()
+      WHERE user_id = ${sub}
+        AND merchant_order_id = ${merchantOrderId}
     `;
 
-    // Old mandate is now unreferenced by the row — revoke it so the user can
-    // never end up with two live mandates debiting them (see staleMandateId).
-    if (staleMandateId && staleMandateId !== merchantSubscriptionId) {
+    // The mandate this row pointed at before the claim is now unreferenced —
+    // revoke it so the user can never end up with two live mandates debiting
+    // them. Captured under the user-row lock, so in a genuine race this is the
+    // OTHER request's mandate, not a pre-race snapshot. Best-effort and OFF the
+    // response path: a PhonePe hiccup must never break a legitimate retry.
+    if (supersededMandateId && supersededMandateId !== merchantSubscriptionId) {
+      const staleMandateId: string = supersededMandateId;
       c.executionCtx.waitUntil(
         revokeMandateTolerant(env, staleMandateId)
           .then((revoked) => {
@@ -452,10 +529,26 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       const paidEnd = addOneMonth(new Date());
       const phonepeSubId = pp.subscriptionId ?? null;
 
+      // `AND status = 'pending'` is LOAD-BEARING — do not drop it.
+      //
+      // The trial/paid decision reads the row's OWN trial_end, and the app's
+      // /payments/status poll runs the identical reconcile the moment the SDK
+      // returns. Whichever lands first writes trial_end. Without this guard the
+      // second one then re-reads that just-written trial_end, concludes "trial
+      // already consumed → repeat subscriber", and hands out `active` + a FULL
+      // MONTH of premium + a referral reward — all off a ₹2 PENNY_DROP that
+      // charged the user nothing. The reconcile path has always been scoped to
+      // pending (see handleStatus); this branch was the unguarded half.
+      //
+      // KV dedupe does not cover this: the two writers are the webhook and the
+      // app poll, which share no dedupe key at all.
+      //
+      // COALESCE on phonepe_subscription_id so a payload that omits
+      // subscriptionId can never blank an id we already hold.
       const updated = await sql<{ user_id: string; status: string }[]>`
         UPDATE subscriptions
         SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
-            phonepe_subscription_id  = ${phonepeSubId},
+            phonepe_subscription_id  = COALESCE(${phonepeSubId}, phonepe_subscription_id),
             trial_end                = COALESCE(trial_end, ${trialEnd.toISOString()}),
             current_period_end       = CASE WHEN trial_end IS NULL
                                             THEN ${trialEnd.toISOString()}::timestamptz
@@ -467,14 +560,58 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             retry_count              = 0,
             updated_at               = now()
         WHERE merchant_subscription_id = ${merchantSubId}
+          AND status = 'pending'
         RETURNING user_id, status
       `;
 
       const row = updated[0];
-      console.log(
-        `[payments/webhook] Setup completed for sub ${merchantSubId} → ` +
-        `${row?.status ?? "no-row"}, amount=${pp.amount ?? "?"}`,
-      );
+
+      if (!row) {
+        // Either the poll already reconciled this exact setup (the common,
+        // entirely benign case) or the id matches nothing. Both are no-ops for
+        // state, but they are NOT the same operationally, so say which.
+        //
+        // We do still backfill phonepe_subscription_id when it is NULL: the
+        // reconcile path can only read it from the order-status response, which
+        // does not always carry paymentFlow.subscriptionId, whereas the webhook
+        // payload does. That write is idempotent, has no financial effect, and
+        // is the only field the guard above would otherwise strand empty.
+        // The ::text casts are LOAD-BEARING. postgres.js runs with
+        // fetch_types:false (required for Hyperdrive), so a bare parameter that
+        // appears only inside `${x} IS NOT NULL` gives Postgres no context to
+        // infer its type and the whole statement fails with
+        //   "could not determine data type of parameter $2".
+        // That threw here for EVERY checkout.order.completed whose row was not
+        // 'pending' — i.e. the common case where the app's /payments/status poll
+        // reconciled first — and the catch below turns it into a 500, so PhonePe
+        // retried a delivery that had in fact nothing left to do.
+        const diag = await sql<{ status: string; had_sub_id: boolean }[]>`
+          UPDATE subscriptions
+          SET phonepe_subscription_id = COALESCE(phonepe_subscription_id, ${phonepeSubId}::text),
+              updated_at              = CASE
+                                          WHEN phonepe_subscription_id IS NULL AND ${phonepeSubId}::text IS NOT NULL
+                                          THEN now() ELSE updated_at
+                                        END
+          WHERE merchant_subscription_id = ${merchantSubId}
+          RETURNING status, (phonepe_subscription_id IS NOT NULL) AS had_sub_id
+        `;
+        if (diag.length === 0) {
+          console.error(
+            `[payments/webhook] Setup completed for UNKNOWN sub ${merchantSubId} — no such row`,
+          );
+        } else {
+          console.log(
+            `[payments/webhook] Setup completed for sub ${merchantSubId} but row is ` +
+            `'${diag[0].status}', not 'pending' — already reconciled by the status poll; ` +
+            `no state change (phonepe_subscription_id present=${diag[0].had_sub_id})`,
+          );
+        }
+      } else {
+        console.log(
+          `[payments/webhook] Setup completed for sub ${merchantSubId} → ` +
+          `${row.status}, amount=${pp.amount ?? "?"}`,
+        );
+      }
 
       if (row?.status === "active") {
         // Repeat subscriber paid ₹199 at setup — that IS a paid debit, so the
@@ -664,10 +801,18 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           const trialEnd = new Date(Date.now() + TRIAL_MS);
           const paidEnd = addOneMonth(new Date());
           const phonepeSubId = orderStatus.paymentFlow?.subscriptionId ?? null;
-          const updated = await sql<{ user_id: string; status: string }[]>`
+          const updated = await sql<
+            {
+              user_id: string;
+              status: string;
+              trial_end: unknown;
+              current_period_end: unknown;
+              next_debit_at: unknown;
+            }[]
+          >`
             UPDATE subscriptions
             SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
-                phonepe_subscription_id  = ${phonepeSubId},
+                phonepe_subscription_id  = COALESCE(${phonepeSubId}, phonepe_subscription_id),
                 trial_end                = COALESCE(trial_end, ${trialEnd.toISOString()}),
                 current_period_end       = CASE WHEN trial_end IS NULL
                                                 THEN ${trialEnd.toISOString()}::timestamptz
@@ -680,10 +825,19 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
                 updated_at               = now()
             WHERE user_id = ${sub}
               AND status  = 'pending'
-            RETURNING user_id, status
+            RETURNING user_id, status, trial_end, current_period_end, next_debit_at
           `;
           if (updated[0]) {
+            // Copy the FRESH values back onto `row` — the response below is built
+            // from the SELECT taken before this UPDATE, so without this the app
+            // was told status='trialing'/'active' while trial_end,
+            // current_period_end and next_debit_at were still the pre-reconcile
+            // values (null on a first setup). That is the one response that
+            // confirms a purchase, and it carried no period at all.
             row.status = updated[0].status;
+            row.trial_end = updated[0].trial_end;
+            row.current_period_end = updated[0].current_period_end;
+            row.next_debit_at = updated[0].next_debit_at;
             if (updated[0].status === "active") {
               // Same paid-debit semantics as the webhook path (idempotent).
               await grantReferralReward(sql, updated[0].user_id);
@@ -720,6 +874,9 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
               AND status IN ('trialing', 'active')
           `;
           row.status = "cancelled";
+          // Mirror the write so the response can't claim a debit is still coming
+          // on a mandate we just recorded as revoked.
+          row.next_debit_at = null;
         }
       } catch (ppErr) {
         console.warn("[payments/status] PhonePe subscription status failed:", ppErr);
@@ -847,22 +1004,6 @@ function addOneMonth(date: Date): Date {
   const d = new Date(date);
   d.setMonth(d.getMonth() + 1);
   return d;
-}
-
-/**
- * Coerce a DB timestamptz to a Date, or null.
- *
- * postgres.js runs with fetch_types:false here (required for Hyperdrive), so a
- * timestamptz can arrive as either a real Date or an ISO-8601 string depending
- * on the driver path — never assume one. Anything unparseable becomes null,
- * which callers must treat as "no live period" (fail closed).
- */
-function toDate(value: unknown): Date | null {
-  if (value === null || value === undefined) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value !== "string") return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 async function requireAuth(c: Context<{ Bindings: Env }>): Promise<string | null> {

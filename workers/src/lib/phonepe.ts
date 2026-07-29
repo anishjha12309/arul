@@ -138,10 +138,15 @@ export class PhonePeApiError extends Error {
   }
 }
 
-function getPgBase(env: Env): string {
-  return isProduction(env)
-    ? "https://api.phonepe.com/apis/pg"
-    : "https://api-preprod.phonepe.com/apis/pg-sandbox";
+/** Exported for the safety test in test/phonepe-base.test.ts — see below. */
+export function getPgBase(env: Env): string {
+  // Local-dev escape hatch — see Env.PHONEPE_BASE_URL_OVERRIDE and
+  // .claude/skills/verify-payments/. The PRODUCTION check is the safety
+  // property and must stay FIRST: a live Worker resolves the real host before
+  // the override is even read, so no value of this var can ever redirect a
+  // real debit. Sandbox-only by construction, not by convention.
+  if (isProduction(env)) return "https://api.phonepe.com/apis/pg";
+  return env.PHONEPE_BASE_URL_OVERRIDE || "https://api-preprod.phonepe.com/apis/pg-sandbox";
 }
 
 function getOAuthUrl(env: Env): string {

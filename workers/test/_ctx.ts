@@ -92,10 +92,14 @@ export function makeCtx(opts: {
   scheme?: string;
   jsonBody?: unknown;
   invalidJson?: boolean;
+  /** Request URL. Handlers that derive an origin from it (e.g. the PhonePe
+   *  redirectUrl in /payments/initiate) throw on undefined, so default it. */
+  url?: string;
 }): Context<{ Bindings: Env }> {
   return {
     env: opts.env,
     req: {
+      url: opts.url ?? "https://arul-api.hsrutility.com/test",
       header: (name: string) =>
         name.toLowerCase() === "authorization" && opts.token != null
           ? `${opts.scheme ?? "Bearer"} ${opts.token}`

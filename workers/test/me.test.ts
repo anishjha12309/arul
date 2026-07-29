@@ -100,22 +100,75 @@ describe("GET /me", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns user envelope with users.id (uuid) on success", async () => {
+  it("returns user envelope with users.id (uuid) + subscription: null when no subscription row", async () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const { sql } = makeMockSql([
       {
         id: USER_ID,
         display_name: "Aisha",
+        email: null,
         referral_code: "ABCD2345",
+        sub_id: null,
+        sub_user_id: null,
+        sub_status: null,
+        sub_plan: null,
+        sub_phonepe_subscription_id: null,
+        sub_merchant_subscription_id: null,
+        sub_trial_end: null,
+        sub_current_period_end: null,
+        sub_updated_at: null,
       },
     ]);
     const { ctx } = makeCtx({ token, sql });
     const res = await handleMe(ctx);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { user: Record<string, unknown> };
+    const body = (await res.json()) as {
+      user: Record<string, unknown>;
+      subscription: unknown;
+    };
     expect(body.user.id).toBe(USER_ID);
     expect(body.user.displayName).toBe("Aisha");
     expect(body.user.referralCode).toBe("ABCD2345");
+    expect(body.subscription).toBeNull();
+  });
+
+  it("returns subscription matching handleMeSubscription's shape when a row exists", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const periodEnd = new Date("2026-12-31T00:00:00.000Z");
+    const { sql } = makeMockSql([
+      {
+        id: USER_ID,
+        display_name: "Aisha",
+        email: "aisha@example.com",
+        referral_code: "ABCD2345",
+        sub_id: "sub-1",
+        sub_user_id: USER_ID,
+        sub_status: "active",
+        sub_plan: "monthly",
+        sub_phonepe_subscription_id: "PP123",
+        sub_merchant_subscription_id: "M123",
+        sub_trial_end: null,
+        sub_current_period_end: periodEnd,
+        sub_updated_at: periodEnd,
+      },
+    ]);
+    const { ctx } = makeCtx({ token, sql });
+    const res = await handleMe(ctx);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      user: Record<string, unknown>;
+      subscription: Record<string, unknown>;
+    };
+    expect(body.user.id).toBe(USER_ID);
+    expect(body.subscription.id).toBe("sub-1");
+    expect(body.subscription.user_id).toBe(USER_ID);
+    expect(body.subscription.status).toBe("active");
+    expect(body.subscription.plan).toBe("monthly");
+    expect(body.subscription.phonepe_subscription_id).toBe("PP123");
+    expect(body.subscription.merchant_subscription_id).toBe("M123");
+    expect(body.subscription.trial_end).toBeNull();
+    expect(body.subscription.current_period_end).toBe("2026-12-31T00:00:00.000Z");
+    expect(body.subscription.updated_at).toBe("2026-12-31T00:00:00.000Z");
   });
 
   it("404 when user row missing", async () => {
