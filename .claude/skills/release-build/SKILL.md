@@ -36,7 +36,7 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    signing) in the Google Cloud OAuth Android client + Firebase — is required after the first
    upload, or Google Sign-In is broken for testers. That state lives in Play Console, so confirm it
    there; re-check only if the upload key rotates. No rebuild needed either way.
-5. Before the app goes PUBLIC (docs/provisioning.md): privacy policy live ✓
+5. Before the app goes PUBLIC: privacy policy live ✓
    (`https://hsrapps.com/arul/privacy-policy/`), PhonePe PROD webhook registered ✓, real analytics
    creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced — v1.0.0+20 shipped
    without it, so the first public build must be newer).

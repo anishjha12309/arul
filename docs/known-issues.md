@@ -35,12 +35,24 @@ line by deleting it. Billing behaviour that is proven lives in [billing-verified
 
 - **The daily 21:30 UTC sweep has never been observed running live** on this worker.
 
+- **Firebase ↔ Google Ads is not linked.** Only blocks install campaigns — `purchase`/`login` already
+  reach GA4, so nothing is lost meanwhile. Three console steps, no code: [analytics-ops.md](analytics-ops.md).
+
 - **No cron run observed on a genuinely cold connection.** The hourly cron succeeded at 11:00:01 on
   2026-07-29, but minutes after a deploy — a warm connection, which is the case that never fails.
   Watch `npx wrangler tail --format json` over a `:00` after several idle hours. Same residual as
   Pakiza.
 
 ## Traps already paid for
+
+- **A bare key written UNDER a `[table]` header in `wrangler.toml`.** *Symptom:* the custom domain is
+  perfectly healthy while `arul-api.<subdomain>.workers.dev` serves a bare Cloudflare `error code:
+  1042` page — so every already-installed build is dead and nothing you test by hand shows it.
+  *Cause:* `workers_dev = true` sat below `[triggers]`, which captured it as `triggers.workers_dev`;
+  with `[[routes]]` declared, workers.dev then defaults to OFF. Wrangler says so on every deploy
+  (`Unexpected fields found in triggers field`) and deploys anyway. *Rule:* every bare top-level key
+  goes ABOVE the first `[table]` header, and `[observability]` stays last. `npx wrangler deploy
+  --dry-run` prints the warning — read it (found + fixed 2026-07-30).
 
 - **Measuring the CDN with `curl -I`.** *Symptom:* `cf-cache-status: DYNAMIC` on an asset a Cache Rule
   plainly covers. *Cause:* HEAD does not populate Cloudflare's cache, so a host without warm traffic

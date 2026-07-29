@@ -57,7 +57,7 @@ flutter run --dart-define-from-file=env/dev.json   # env/ is git-ignored — cop
 ## Map
 ```
 CLAUDE.md          session contract (read first)
-docs/              architecture · data model · media rules · edge cases · caching · cron · phonepe · analytics · provisioning · UI
+docs/              architecture · data model · media rules · edge cases · caching · cron · phonepe · analytics · UI
 lib/               app/{theme,widgets,l10n} · core/{config,api,error,analytics} · data/* · features/*
 android/           edge-to-edge + predictive back + adaptive/themed icon + R8 + release signing
 .claude/           hooks (format, secret guard, .aab guards: version + FLAG_SECURE + commit reminder) + 8 skills

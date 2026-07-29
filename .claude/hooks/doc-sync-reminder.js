@@ -15,7 +15,7 @@ const ROUTES = [
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],
-    docs: ["docs/cron.md", "docs/provisioning.md §Cloudflare"],
+    docs: ["docs/cron.md", "workers/README.md §Dev / deploy"],
   },
   {
     when: ["workers/src/lib/entitlement.ts", "lib/features/premium/**"],
@@ -39,7 +39,7 @@ const ROUTES = [
   },
   {
     when: ["workers/src/env.ts", "env.example.json"],
-    docs: ["docs/provisioning.md", "CLAUDE.md §9 Secrets & Environment"],
+    docs: ["workers/README.md §Secrets", "CLAUDE.md §9 Secrets & Environment"],
   },
   {
     when: ["workers/src/routes/**", "workers/src/index.ts", "lib/core/api/**"],

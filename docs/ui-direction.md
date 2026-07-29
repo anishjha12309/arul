@@ -12,7 +12,9 @@ prefetch, decoder budget) is built around that paradigm; changing it = rebuildin
 Load the frontend-design skill when building screens. Tokenize every color — no literals in screens.
 
 ## Brand
-- **Name:** Arul (दक्षिण / தக்ஷிண — "the South"). Wordmark: `Arul`, tagline `SOUTH INDIAN WALLPAPERS`.
+- **Name:** Arul (அருள் — Tamil for *grace / divine blessing*). Wordmark: `Arul`, tagline
+  `SOUTH INDIAN WALLPAPERS`. The name does NOT mean "the South" — that was Dakshin, the pre-rename
+  working title. Never gloss it that way in copy or in a store listing.
 - **Feel:** Kanjivaram silk + temple gold — rich, warm, **devotional**. The catalogue IS deity
   content: Amman, Ayyappan, Murugan, Perumal, Sivan + Temples. Design reverent, not kitsch: deep
   silks, gold, oil-lamp warmth; no cartoon deity clip-art chrome.
@@ -21,7 +23,9 @@ Load the frontend-design skill when building screens. Tokenize every color — n
   wallpapers interleave inside every category — **never filter or tab by static/live**; type is a
   rendering detail the user shouldn't have to think about.
 
-## Palette (fixed seed — CLAUDE.md §7; never dynamic color)
+## Palette — THE source (never dynamic color; CLAUDE.md §7 points here, it does not restate)
+Read these by role from **`lib/theme/arul_tokens.dart`**. `lib/app/theme/tokens.dart` is the legacy
+ladder whose `rose*`/`teal*` NAMES survive with these values behind them — there is no teal anymore.
 | Token | Value | Use |
 | --- | --- | --- |
 | maroon (primary) | `#7A1E33` | brand seed, accents, active states |

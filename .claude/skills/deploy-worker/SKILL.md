@@ -5,8 +5,8 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
 
 # Deploy Worker
 
-0. Precondition: `workers/wrangler.toml` contains no `TODO_` placeholder — otherwise provisioning
-   (docs/provisioning.md) is incomplete; STOP and tell the user what's missing.
+0. Precondition: `workers/wrangler.toml` contains no `TODO_` placeholder — every binding id must be
+   real. One that isn't means the resource was never created; STOP and name which.
 1. Check: `cd workers && npx tsc --noEmit && npx vitest run` — both green or STOP.
 2. Account: `npx wrangler whoami` must show **admin@hsrutility.com** (account
    `ba8dd87179e2ffd378a50292ca8e69e0`). Wrong/no account → tell the user to `wrangler login` as admin

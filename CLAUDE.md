@@ -1,11 +1,11 @@
 # CLAUDE.md — Arul
 
-> Read first, every session. Behaviour contracts: [docs/edge-cases.md](docs/edge-cases.md) · Backend: [docs/architecture.md](docs/architecture.md) · Media: [docs/media-conventions.md](docs/media-conventions.md) · Data: [docs/data-model.md](docs/data-model.md) · Infra inventory: [docs/provisioning.md](docs/provisioning.md) · Open defects: [docs/known-issues.md](docs/known-issues.md).
+> Read first, every session. Behaviour contracts: [docs/edge-cases.md](docs/edge-cases.md) · Backend: [docs/architecture.md](docs/architecture.md) · Media: [docs/media-conventions.md](docs/media-conventions.md) · Data: [docs/data-model.md](docs/data-model.md) · Open defects: [docs/known-issues.md](docs/known-issues.md).
 
 ## 0. Sibling app — Pakiza (`c:\Anish\Pakiza`)
 Peers, not parent and child. Most shared code came from Pakiza, but fixes flow BOTH ways — on 2026-07-29 five PhonePe/paywall hardening fixes went Arul → Pakiza. Read that repo when a shared behaviour is unclear; it encodes months of on-device fixes (decoder limits, PhonePe endpoint quirks, sweep safety).
 **Fix a shared defect in BOTH repos in the same session.** Skipped one? Record it in that repo's `docs/known-issues.md`.
-**Never sync these deliberate deltas:** `DKS_` order-id prefix (Pakiza's is `PKZ_`) · category browse, never All/New tabs (`type` is a rendering hint only) · ringtone cover art · 6 locales · own theming ([docs/ui-direction.md](docs/ui-direction.md)) · wallpaper-only user uploads. Identifiers are Arul's too: `com.hsrapps.arul`, `arul://`, `arul_*` storage keys, `Arul*` classes.
+**Never sync these deliberate deltas:** `DKS_` order-id prefix (Pakiza's is `PKZ_`) · category browse, never All/New tabs (`type` is a rendering hint only) · ringtone cover art · 6 locales · own theming ([docs/ui-direction.md](docs/ui-direction.md)) · wallpaper-only user uploads · **the in-place live-wallpaper swap — Arul KEEPS it** (`isLiveWallpaperActive` → the running engine's video is swapped with no OS chooser), Pakiza deleted it 2026-07-24 by an explicit product decision. A port sweep that "reconciles" the apply path will silently delete it; don't. Identifiers are Arul's too: `com.hsrapps.arul`, `arul://`, `arul_*` storage keys, `Arul*` classes.
 
 ## 1. Project
 **Arul** — Android-only (v1) South Indian wallpaper app. Flutter, Dart 3.12+. Shipping pillars: **Wallpapers** (Shorts-style feed, static + live video) · **Settings** (incl. upload-your-content, **wallpaper-only** — user submissions never accept audio). Premium gated via PhonePe UPI Autopay. Package `com.hsrapps.arul`. Support `support@hsrutility.com`. Privacy `https://hsrapps.com/arul/privacy-policy/`. Content: R2 bucket `south-indian-wallpapers` — devotional wallpapers (static + live interleaved) in 6 categories (Amman, Ayyappan, Murugan, Perumal, Sivan, Temples); **614 wallpapers, 0 ringtones** live as of 2026-07-29. **Never share a bucket/KV/DB with another app — the sweep would delete the other app's media.**
@@ -50,7 +50,7 @@ Re-applying or re-sharing an already-cached wallpaper still calls the gate — a
 6 languages (ARB, `gen_l10n`): `en, ta, te, kn, ml, hi`. Only UI chrome localized; server content as-authored.
 
 ## 7. Theming
-Light / Dark / System, persisted. Fixed brand seed — **extracted from the splash video** (`assets/video/splash.mp4`): lotus rose primary, teal secondary, temple gold accent, plum-black ink. ALL colors via `lib/app/theme/tokens.dart` — no literal `Color(0x…)` in screens. Schemes are hand-specified, NOT `ColorScheme.fromSeed` (it invents its own secondary/tertiary and loses the video's actual teal + gold). **Never seed from device wallpaper / dynamic color.**
+Light / Dark / System, persisted. Read colours from **`lib/theme/arul_tokens.dart` (`ArulTokens`)** by role name — `lib/app/theme/tokens.dart` (`ArulColors`) is the LEGACY ladder kept only so the ThemeData layer didn't need a big-bang rename; its values are already remapped onto the same palette, but new code must not grow it. No literal `Color(0x…)` in screens, ever. Schemes are hand-specified, NOT `ColorScheme.fromSeed` (it invents its own secondary/tertiary). **Never seed from device wallpaper / dynamic color.** Palette values, type and the perf rules that shape the design: [docs/ui-direction.md](docs/ui-direction.md).
 
 ## 8. Known Gotchas (MUST hold — full checklist in docs/edge-cases.md)
 1. Live video files: **1024×1824 only** (w%128==0, h%32==0, fits 1088×1920 hw-decoder cap) — anything else hits the green-edge / software-decode bug class on budget SoCs.
