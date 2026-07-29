@@ -11,11 +11,14 @@ part of 'analytics_provider.dart';
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
-///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
-///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
-///     (every real build with google-services.json + FIREBASE_ENABLED=true;
-///     skipped under `flutter test`).
+///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+///     in the [AnalyticsCohort] panel; product analytics. Requires a real
+///     `POSTHOG_KEY` AND cohort membership.
+///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
+///     conversion events (login/purchase) for Google Ads — when
+///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
+///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
+///     complete, unsampled record.
 ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
 ///     (real App ID + client token).
 ///
@@ -29,11 +32,14 @@ final analyticsServiceProvider = AnalyticsServiceProvider._();
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
-///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
-///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
-///     (every real build with google-services.json + FIREBASE_ENABLED=true;
-///     skipped under `flutter test`).
+///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+///     in the [AnalyticsCohort] panel; product analytics. Requires a real
+///     `POSTHOG_KEY` AND cohort membership.
+///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
+///     conversion events (login/purchase) for Google Ads — when
+///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
+///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
+///     complete, unsampled record.
 ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
 ///     (real App ID + client token).
 ///
@@ -52,11 +58,14 @@ final class AnalyticsServiceProvider
   /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
   /// are configured, so call sites never change:
   ///
-  ///   * PostHog — all events; product analytics — when `POSTHOG_KEY` is real.
-  ///   * Google Analytics (GA4/Firebase) — all events + ★→standard conversion
-  ///     events (login/purchase) for Google Ads — when `AppConfig.firebaseEnabled`
-  ///     (every real build with google-services.json + FIREBASE_ENABLED=true;
-  ///     skipped under `flutter test`).
+  ///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+  ///     in the [AnalyticsCohort] panel; product analytics. Requires a real
+  ///     `POSTHOG_KEY` AND cohort membership.
+  ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
+  ///     conversion events (login/purchase) for Google Ads — when
+  ///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
+  ///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
+  ///     complete, unsampled record.
   ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
   ///     (real App ID + client token).
   ///
@@ -96,4 +105,4 @@ final class AnalyticsServiceProvider
   }
 }
 
-String _$analyticsServiceHash() => r'27de1a6c3a6e5b69f18f31e9a7acc81fe39e4328';
+String _$analyticsServiceHash() => r'1d45dccc8c97001ac28d286edeba524157c4a90b';

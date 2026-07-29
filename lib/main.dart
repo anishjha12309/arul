@@ -14,6 +14,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'core/analytics/analytics_cohort.dart';
 import 'core/config/app_config.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/referral/data/install_referrer_service.dart';
@@ -95,21 +96,6 @@ Future<void> _startApp() async {
     ..maximumSizeBytes = 32 << 20
     ..maximumSize = 40;
 
-  // PostHog — lean config: manual events only. Session replay OFF and surveys
-  // OFF; lifecycle events ON for free DAU/retention. We never install
-  // PosthogObserver/PostHogWidget, so there is no element-autocapture. Skipped
-  // entirely when no real key is set (placeholder/empty), keeping key-less dev
-  // builds offline — mirrors the guard in analyticsServiceProvider.
-  if (AppConfig.posthogEnabled) {
-    final config = PostHogConfig(AppConfig.posthogKey)
-      ..host = AppConfig.posthogHost
-      ..captureApplicationLifecycleEvents = true
-      ..sessionReplay = false
-      ..surveys = false
-      ..debug = kDebugMode;
-    await Posthog().setup(config);
-  }
-
   // Meta (Facebook) App Events. The native SDK auto-initialises + auto-logs
   // install/launch via the AndroidManifest meta-data (app id + client token
   // baked in from dart-defines); the ★ conversion events are sent explicitly
@@ -127,6 +113,41 @@ Future<void> _startApp() async {
   // on the path to a native call that can recreate the Activity, and there is no
   // room there to await a prefs handle.
   final prefs = await SharedPreferences.getInstance();
+
+  // PostHog — lean config: manual events only, and only for the ~5% analytics
+  // panel (AnalyticsCohort). Session replay OFF and surveys OFF, and we never
+  // install PosthogObserver/PostHogWidget, so there is no element-autocapture.
+  //
+  // captureApplicationLifecycleEvents is OFF deliberately. It emits
+  // `Application Opened`/`Backgrounded`/`Installed`/`Updated` from inside the
+  // native SDK, which never pass through AnalyticsService and so cannot be
+  // filtered by AllowlistedAnalyticsService — at a few sessions a day per user
+  // they were the single largest source of billed PostHog volume in the app.
+  // GA4's auto-collected first_open/session_start already give us DAU and
+  // retention across 100% of installs for free, so this was a paid duplicate.
+  //
+  // The cohort check gates setup() itself rather than individual captures: a
+  // non-panel install then does zero PostHog native init, network and battery
+  // work — which also matters on the budget devices this app targets — and the
+  // SDK's own autocapture can't fire if the SDK was never started. Moved below
+  // the prefs await because the cohort draw is persisted there.
+  //
+  // Mirrored in Pakiza — keep both in sync.
+  if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
+    final config = PostHogConfig(AppConfig.posthogKey)
+      ..host = AppConfig.posthogHost
+      ..captureApplicationLifecycleEvents = false
+      ..sessionReplay = false
+      ..surveys = false
+      ..debug = kDebugMode;
+    // Fire-and-forget, NOT awaited: setup() does native init and opens the
+    // SDK's first network work, and awaiting it here put that on the critical
+    // path to the first frame for every panel member. Nothing captures before
+    // the first user action anyway (lifecycle autocapture is off above), and
+    // this matches the fire-and-forget contract every other PostHog call in the
+    // app already uses (PostHogAnalyticsService).
+    unawaited(Posthog().setup(config));
+  }
 
   // Referral attribution: read the Play Install Referrer once per install and
   // stash any referral code for the first sign-in. Fire-and-forget — off the
