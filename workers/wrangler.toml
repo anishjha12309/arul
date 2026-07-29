@@ -108,6 +108,12 @@ custom_domain = true
 # PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 # PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 # CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
+# OPS_SECRET — operator-only, MOVES REAL MONEY: /internal/run-redemptions
+#   (debits ₹199 from live subscribers) and /internal/refund. Kept separate from
+#   CATALOG_BUILD_SECRET on purpose: that one is handed to the CMS for rebuilds,
+#   and one string must never authorize both "rebuild" and "charge everybody".
+#   Fails closed when unset — a 401 on a money route means the wrong secret, so
+#   never widen the check to accept the catalog one.
 # (No ADMIN_* here — authoring moved to the standalone hsr-cms worker, 2026-07-20.
 #  No CF_ZONE_ID/CF_PURGE_TOKEN either — purge-on-publish went with it.)
 

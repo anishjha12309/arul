@@ -12,7 +12,10 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      `version:` in pubspec.yaml (+1 build number) and retry. Only an `.aab` landing records the
      bump as spent — a subsequent APK from the same source is free.
    - `release-flag-secure-guard.js` BLOCKS an `.aab` unless an ACTIVE `setFlags(FLAG_SECURE)`
-     survives in `MainActivity.kt`; one that only exists inside a comment does not count.
+     survives in `MainActivity.kt`; one that only exists inside a comment does not count. The call
+     sits behind `isPlayInstall()` (installer == `com.android.vending`, failing CLOSED), so the
+     shipped AAB blocks screenshots and screen recording while sideloaded release APKs stay
+     capturable for listing screenshots and on-device debugging.
    - `release-commit-reminder.js` reminds you to commit after a successful release build left
      source uncommitted (an artifact is only reproducible if its source is in git).
 
@@ -37,6 +40,11 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    (`https://hsrapps.com/arul/privacy-policy/`), PhonePe PROD webhook registered ✓, real analytics
    creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced — v1.0.0+20 shipped
    without it, so the first public build must be newer).
-6. **Ringtones ship PARKED** — the tab has no route and `WRITE_SETTINGS` is out of the manifest, on
-   purpose (docs/known-issues.md). A release whose `aapt2 dump permissions` still lists
-   `WRITE_SETTINGS` means the parking regressed. Do not "restore" it to fix a build.
+6. **Ringtones ship PARKED** — the tab has no route and `WRITE_SETTINGS` is commented out of the
+   manifest, on purpose (docs/known-issues.md). `WRITE_SETTINGS` is special-access, shows on the Play
+   listing, and has no feature behind it in v1, so an ACTIVE (uncommented) line means the parking
+   regressed:
+   ```bash
+   grep -n "WRITE_SETTINGS" android/app/src/main/AndroidManifest.xml   # must appear only in comments
+   ```
+   Never "restore" it to make something build.

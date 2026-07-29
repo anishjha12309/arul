@@ -5,62 +5,43 @@ description: Verify the PhonePe Autopay billing path end-to-end without spending
 
 # Verify PhonePe payments without spending money
 
-## Why this exists
-
-The billing path is the least-tested and most expensive-to-get-wrong code in the
-app, because exercising it normally means real ₹199 debits on the live gateway.
-Two things make free verification possible:
-
-1. **PhonePe UAT accepts the whole protocol.** OAuth, mandate setup, mandate
-   status, `notify` and `redeem` all work against `api-preprod.phonepe.com` with
-   the **Test** credentials. UAT even auto-activates mandates.
-2. **UAT will not settle a redemption.** It holds redemptions `PENDING` through
-   its own retry cycle with no way to force a terminal state. So the branches
-   that actually change a user's entitlement — `COMPLETED` and `FAILED` — are
-   unreachable against UAT alone.
-
-So the harness is split: **the PhonePe protocol is proven live against UAT**, and
-**our own terminal-state handling is proven against a local stub**. Be explicit
-about which half proved what when reporting results.
+Exercising billing normally means real ₹199 debits on the live gateway. **PhonePe UAT accepts the
+whole protocol** — OAuth, setup, status, `notify`, `redeem` all work against `api-preprod.phonepe.com`
+with the Test credentials, and mandates auto-activate — but **UAT will not settle a redemption**: it
+holds them `PENDING` with no way to force a terminal state, so `COMPLETED` and `FAILED`, the only
+branches that change entitlement, need a local stub. Report which half proved what; "verified"
+without that split is worthless. Stub modes, referral check, device walkthrough, the idle marker —
+all in [reference.md](reference.md).
 
 ## Safety rules — read before running
 
-- **Never point the harness at Neon.** It seeds rows with a past `next_debit_at`.
-  In production the deployed hourly cron would pick those up and fire real
-  PhonePe calls. `scripts/sbx.mjs` hard-refuses any host matching `neon.tech`.
-- **Check `PHONEPE_ENV` and the client id before every run.** `workers/.dev.vars`
-  must hold `PHONEPE_ENV=SANDBOX` and the **Test** client id (merchant-name form,
-  e.g. `AUTOGRAMAPPSONLINE_26051` if Arul shares the HSR merchant — verify in the
-  PhonePe business dashboard). The **Live** client id is the `SU…` form and
-  exists only in `wrangler secret`. If you ever see an `SU…` id in `.dev.vars`,
-  stop.
-- **`PHONEPE_BASE_URL_OVERRIDE` is ignored when `PHONEPE_ENV=PRODUCTION`** — the
-  production host is returned before the var is read (`getPgBase`). That property
-  is covered by `workers/test/phonepe-base.test.ts`; do not weaken it.
-- Back up `workers/.dev.vars` before editing and restore it afterwards.
+- **Never point the harness at Neon.** It seeds rows with a past `next_debit_at`; against production
+  the deployed hourly cron picks those up and fires real PhonePe calls. `sbx.mjs` hard-refuses any
+  host matching `neon.tech`.
+- **Check `workers/.dev.vars` before every run** (back it up before editing). It must hold
+  `PHONEPE_ENV=SANDBOX` and the **Test** client id — the merchant-name form `AUTOGRAMAPPSONLINE_…`
+  (Arul shares the HSR merchant with Pakiza; the `DKS_` prefix keeps the order streams distinct). The
+  **Live** id is the `SU…` form, lives only in `wrangler secret`, and seeing it here means stop.
+- **`PHONEPE_BASE_URL_OVERRIDE` is ignored when `PHONEPE_ENV=PRODUCTION`** — `getPgBase` returns the
+  production host before reading it; `workers/test/phonepe-base.test.ts` pins that behaviour.
+- **Never call `POST /internal/run-redemptions` against prod.** `force:true` charges every due
+  subscriber ₹199 immediately. It takes `OPS_SECRET`, not `CATALOG_BUILD_SECRET`; local only.
 
-## One-time setup
+## Run — every `node *.mjs` from `.claude/skills/verify-payments/scripts`
 
-```bash
-cd .claude/skills/verify-payments/scripts
-npm init -y && npm i @electric-sql/pglite @electric-sql/pglite-socket postgres jose
-```
-
-## Run
+`npm i` there once (pglite, pglite-socket, postgres, jose). Paths written `workers/…` are repo-root.
 
 ### 1. Isolated Postgres with the production schema
 
 ```bash
-node scripts/pgserver.mjs          # add --reset to wipe
-# [pg] schema loaded: (db/schema/01→04 — expect app_config, content_submissions,
-#      referrals, ringtones, subscriptions, trial_tombstones, users, wallpapers)
-# [pg] listening on 127.0.0.1:5433
+node pgserver.mjs   # → 127.0.0.1:5433, schema from db/schema/*.sql (01→04); loads only
+                    # into a fresh ./pgdata, so --reset is the only way to pick up a change
 ```
 
 ### 2. Point wrangler dev at it
 
-The connection string must be a **real process env var** — wrangler does *not*
-read it from `.dev.vars`, and it wants the `CLOUDFLARE_` prefix, not `WRANGLER_`:
+The connection string must be a **real process env var** — wrangler does not read it from
+`.dev.vars`, and it wants the `CLOUDFLARE_` prefix, not the `WRANGLER_` one that file still carries:
 
 ```bash
 cd workers
@@ -68,119 +49,52 @@ CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://postgres:
   npx wrangler dev --test-scheduled --port 8787
 ```
 
-Only ONE instance may hold 8787. If cron output goes missing, check for a
-second listener (`netstat -ano | grep :8787`) — a stale process will silently
-serve your requests with the old config.
+Only ONE instance may hold 8787. Missing cron output means a second listener
+(`netstat -ano | grep :8787`) is silently serving your requests with the old config.
 
 ### 3. Create a real UAT mandate
 
 ```bash
-node scripts/sbx.mjs seed-user
-TOK=$(node scripts/sbx.mjs token)
+node sbx.mjs seed-user
+TOK=$(node sbx.mjs token)
 curl -s -X POST http://127.0.0.1:8787/payments/initiate \
-  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
-  -d '{"plan":"monthly"}'
+  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" -d '{"plan":"monthly"}'
 ```
 
-Expect `trialEligible:true`, `amountPaise:200`, `environment:"SANDBOX"`. UAT
-returns the mandate as `ACTIVE` immediately — no device needed for the cron
-tests below.
-
-**Only if you need an intent-backed mandate** (a real UPI instrument behind it),
-do the setup through the app — see "On-device mandate" at the end.
+Expect `trialEligible:true`, `amountPaise:200`, `environment:"SANDBOX"`. A second concurrent initiate
+must return 409 `setup_in_progress` — deliberately distinct from 409 `already_subscribed`, which the
+app treats as success. UAT returns the mandate `ACTIVE` at once; only a real UPI instrument behind it
+needs the device walkthrough in reference.md.
 
 ### 4. Drive the cron
 
-`--test-scheduled` exposes the real scheduled handler:
-
 ```bash
-node scripts/sbx.mjs due <merchantSubscriptionId>
+# --test-scheduled exposes the real scheduled handler
+node sbx.mjs due <merchantSubscriptionId>
 curl -s "http://127.0.0.1:8787/__scheduled?cron=0+*+*+*+*"
-node scripts/sbx.mjs subs
+node sbx.mjs subs
 ```
 
-Against UAT this proves **notify and redeem for real**: the log shows
-`Notified … state=NOTIFICATION_IN_PROGRESS` and `Execute … state=PENDING`, and
-the redemption order at PhonePe carries `amount: 19900` (= ₹199).
+Against UAT this proves notify and redeem **for real**: `Notified … state=NOTIFICATION_IN_PROGRESS`,
+`Execute … state=PENDING`, and the redemption order carries `amount: 19900`. A KV marker
+(`autopay:next_work_at`) then short-circuits every later run — clear it between scenarios exactly as
+reference.md shows.
 
 ### 5. Terminal states via the stub
 
 ```bash
-node scripts/ppstub.mjs &                 # 127.0.0.1:8799
+node ppstub.mjs &                 # 127.0.0.1:8799, re-reads mode.txt per request
 echo "PHONEPE_BASE_URL_OVERRIDE=http://127.0.0.1:8799" >> workers/.dev.vars
 # RESTART wrangler dev — it does not hot-reload .dev.vars
+echo COMPLETED > mode.txt         # switch outcome without restarting the stub
 ```
-
-Switch outcomes without restarting the stub: `echo FAILED > scripts/mode.txt`.
-
-| mode | expected result |
-| --- | --- |
-| `COMPLETED` | `status='active'`, `current_period_end` and `next_debit_at` +1 month, `notified_at` + `redemption_order_id` cleared, `retry_count=0`, referral rewarded |
-| `FAILED` | `retry_count` +1 and `notified_at` cleared so Pass A re-notifies; at `MAX_RETRIES` (5) `status='expired'` and the row stops being picked up |
-| `PENDING` | nothing changes — no premium granted on an unsettled debit |
-
-Referral (grant once, never on renewal):
-
-```bash
-node scripts/sbx.mjs referral
-node scripts/sbx.mjs rewards      # before
-# ... run a COMPLETED debit ...
-node scripts/sbx.mjs rewards      # rewarded, reward_days=30, +30d
-# ... run a SECOND COMPLETED debit — reward_premium_until must NOT move ...
-```
-
-### The idle marker will block repeat runs
-
-After a successful debit the cron caches `autopay:next_work_at` in KV and then
-short-circuits every later run with `Nothing due before <date> — skipping DB`.
-Clear it between scenarios — and note it must target the **preview** namespace,
-which is what `wrangler dev` binds:
-
-```bash
-yes | npx wrangler kv key delete --binding KV --local --preview "autopay:next_work_at"
-```
-
-Deleting with `--preview false` silently hits the *other* local namespace and
-appears to succeed while changing nothing.
 
 ## Teardown
 
 ```bash
-cp <backup> workers/.dev.vars       # removes PHONEPE_BASE_URL_OVERRIDE + restores Neon string
+cp <backup> workers/.dev.vars       # drops PHONEPE_BASE_URL_OVERRIDE, restores the Neon string
 adb shell pm enable com.phonepe.app # only if you disabled it
 adb reverse --remove tcp:8787
 ```
-Then `npx tsc --noEmit && npx vitest run`.
 
-## On-device mandate (only when you need a real UPI instrument)
-
-A mandate created by `/payments/initiate` alone is `ACTIVE` but has no payer
-behind it, so its redemption falls back to a `UPI_QR` nobody pays. To authorize
-one properly:
-
-1. `adb reverse tcp:8787 tcp:8787`
-2. Build with `API_BASE_URL=http://127.0.0.1:8787` (copy `env/dev.json` to
-   `env/sbx.json` and change that one key). The debug-only
-   `android/app/src/debug/res/xml/network_security_config.xml` permits cleartext
-   to loopback **in debug builds only** — release still forbids all cleartext.
-3. `flutter run --dart-define-from-file=env/sbx.json`
-4. Sign in (creates the user row), Premium → Start Free Trial.
-5. **Disable the real PhonePe app first** — it grabs the UPI intent and fails,
-   since it cannot process a sandbox order:
-   `adb shell pm disable-user --user 0 com.phonepe.app`
-   Then choose **Apps & UPI QR → Other UPI Apps → PhonePe Simulator**, pick a
-   Test Bank, and enter any 4-digit PIN.
-   **Re-enable it afterwards:** `adb shell pm enable com.phonepe.app`
-
-The simulator's *Test Case Templates → Subscription V2* screen shows which UAT
-behaviour the merchant is configured for. It should read
-*"Setup, notify & redemption success with PhonePe retries auto debit false"* —
-which matches our `redemptionRetryStrategy:"STANDARD"` + `autoDebit:false`.
-
-## Known-good baseline
-
-Arul has its own, recorded 2026-07-29 against UAT on a real device plus a local
-stub: **`docs/billing-verified.md`**. Read it first — it lists what is already
-proven, what UAT refuses to settle, and the cheap way to re-run each step
-(backdate `next_debit_at`; time is the only thing simulated). Pakiza holds an
-equivalent baseline from 2026-07-25.
+Then `cd workers && npx tsc --noEmit && npx vitest run`. Already proven: `docs/billing-verified.md`.

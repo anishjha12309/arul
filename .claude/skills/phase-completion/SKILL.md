@@ -29,11 +29,16 @@ npx wrangler deploy                                 # if workers/ touched — de
 3. Only after explicit approval:
 ```bash
 git add -A
-git status    # MUST NOT show: env/, *.keystore, key.properties, google-services.json
 git commit -m "Phase <N>: <summary>"
 git push
 ```
+Standing exception: a pubspec version bump auto-commits via `.claude/hooks/version-commit.js` — it
+needs no approval and is not the phase commit. After a release build,
+`release-commit-reminder.js` fires because an artifact is only reproducible if its source is in git;
+that reminder still does not authorize committing without approval.
 
 ## Safety
-- Eyeball `git status` before every commit — never stage secrets.
+- `.claude/hooks/guard-secrets.js` DENIES any `git add`/`commit` that names or stages `env/`,
+  `*.keystore`, `*.jks`, `key.properties`, `google-services.json` or `.dev.vars`. A denial is the
+  hook working — find what you staged, don't work around it.
 - One phase = one commit = a known-good baseline.

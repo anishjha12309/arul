@@ -33,8 +33,20 @@ A zero-row scope still writes an explicit empty `all_1.json` (`total: 0`), so a 
 scope FAILED to build — not that it is empty. Ringtones is legitimately empty today (0 published),
 which is exactly why its tab is parked.
 
+Read the CDN with **GET, never `curl -I`** — HEAD does not populate Cloudflare's cache and reports
+`DYNAMIC` for assets that cache perfectly well, which reads exactly like a broken Cache Rule.
+
 Stale content is never a cache problem: rebuild, never purge. Cache behaviour, the two Cache Rules
-and the HEAD-vs-GET measurement trap are in `docs/caching.md`.
+and that measurement trap are in `docs/caching.md`.
+
+## Counting what is actually in the DB
+```bash
+cd workers
+node tools/prod-query.mjs "SELECT category, count(*) FROM wallpapers WHERE is_published GROUP BY 1 ORDER BY 1"
+```
+`prod-query.mjs` is SELECT-only and reads the connection string from `.dev.vars`. The column is
+**`is_published`**, not `published` — and `wrangler kv key list --namespace-id <prod-id>` reads a
+*local* namespace and returns `[]` unless you add `--remote`.
 
 ## Bulk import / replace
 `tools/content-import/` is the pipeline (stages under `c:/Anish/arul-import/`; it stamps
@@ -47,7 +59,8 @@ and the HEAD-vs-GET measurement trap are in `docs/caching.md`.
    axis) · title · dims→width/height · bytes · rank→`sort_order`. Leave `duration_ms` null unless
    ffprobe returns a real value.
 4. Rebuild the catalog; DB, catalog and R2 counts must agree (614 wallpapers today) with all 6
-   categories present.
+   categories present. Count the DB with `prod-query.mjs` (above), the catalog with `total` from
+   `all_1.json`.
 5. Replaced objects are swept once no row references them.
 
 ⚠ **Objects without a DB row are DELETED by the canonical sweep.** Publish rows in the same

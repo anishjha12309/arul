@@ -52,7 +52,7 @@ Arul and Pakiza are peers with near-identical backends. Worker routes, entitleme
 When the change touches shared logic:
 
 1. Update this repo's doc.
-2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `provisioning.md` has no Pakiza twin (it lives in `workers/README.md` + CLAUDE.md §8).
+2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `phonepe.md`, `analytics-events.md`, `architecture.md`, `data-model.md`, `media-conventions.md` and `known-issues.md` share a name. `provisioning.md`, `billing-verified.md` and `analytics-ops.md` have **no Pakiza twin** — Pakiza carries that material in `workers/README.md` + CLAUDE.md, so fold the fact in there rather than creating a new file.
 3. Can't do (2) this session? Add a one-line entry under `## Open` in `c:\Anish\Pakiza\docs\known-issues.md` naming the fact and the doc that needs it.
 
 App-layer UI, theming, localization, and the category browse axis are **not** shared — that axis is a deliberate delta from Pakiza's type-based browse. Don't cross-post those.

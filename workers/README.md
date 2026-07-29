@@ -29,7 +29,8 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 | GET | /me | Bearer | Identity **+ the subscription row in one query** (LEFT JOIN) — one cold-start round-trip |
 | GET/POST | /me/{subscription,submissions,referrals} · /me/profile | Bearer | Scoped to verified sub. `/me/subscription` is kept only for old builds |
 | DELETE | /me | Bearer | Revoke mandate → trial tombstone (HMAC, never-rotate secret) → cascade → denylist |
-| POST | /internal/{build-catalog,sweep-submissions,sweep-canonical,run-redemptions,refund} | CATALOG_BUILD_SECRET | Ops |
+| POST | /internal/{build-catalog,sweep-submissions,sweep-canonical} | CATALOG_BUILD_SECRET | Catalog + storage ops |
+| POST | /internal/{run-redemptions,refund} | **OPS_SECRET** | Moves real money — a separate secret on purpose, and fails closed when OPS_SECRET is unset |
 
 Errors: `{ "error": { "code", "message" } }` with 4xx/5xx.
 
@@ -68,11 +69,11 @@ R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
 PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
+OPS_SECRET(money-moving internal routes; unset = they refuse, which is the safe default)
 ```
 Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` routes production
-credentials to the sandbox host and the 401 looks exactly like bad credentials.
-`CF_ZONE_ID` / `CF_PURGE_TOKEN` moved to `hsr-cms` with purge-on-publish; they are no longer declared
-in `env.ts` and were never set here.
+credentials to the sandbox host and the 401 looks exactly like bad credentials. `CF_ZONE_ID` /
+`CF_PURGE_TOKEN` moved to `hsr-cms` with purge-on-publish — no longer in `env.ts`, never set here.
 
 ## Dev / deploy
 ```bash
@@ -89,8 +90,7 @@ shell history. `tools/prod-webhook.mjs` hardcodes `/payments/webhook`, refuses n
 cannot be pointed at a money-moving route.
 
 Two traps that silently return the wrong answer rather than erroring:
-- `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]`. Add
-  `--remote`.
+- `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]` — add `--remote`.
 - `wallpapers` / `ringtones` use **`is_published`**, not `published`.
 
 ## Security invariants
