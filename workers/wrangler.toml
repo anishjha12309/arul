@@ -65,16 +65,42 @@ namespace_id = "2003"
   period = 60
 
 # ─── Scheduled triggers ──────────────────────────────────────────────────────
-# Hourly: build-catalog → sweep-canonical ∥ sweep-submissions ∥ autopay notify/execute
+# Hourly:  build-catalog → on-change sweep-canonical ∥ autopay notify/execute
+# Daily 21:30 UTC (03:00 IST, off-peak): unconditional sweep-canonical +
+#   sweep-submissions — the backstop for anything the hourly on-change sweep
+#   didn't catch.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "30 21 * * *"]
 
-# Custom domains — BOTH still unattached as of 2026-07-20; the worker serves on
-# arul-api.twilight-smoke-d495.workers.dev and media on the r2.dev origin.
-#   arul-api.hsrutility.com → attach in the dashboard (Worker → Settings →
-#     Domains & Routes).
-#   arul-cdn.hsrutility.com → attaches to the R2 bucket, not the Worker.
-# Swap env/dev.json + env/prod.json and the R2_CDN_BASE_URL secret when they land.
+# ─── Custom domain (API) ─────────────────────────────────────────────────────
+# `custom_domain = true` makes WRANGLER own this hostname: on deploy it creates
+# the Cloudflare custom domain and its DNS record, so there is nothing to click
+# in the dashboard and no zone id to look up (wrangler resolves the zone from the
+# hostname). Costs nothing — a subdomain of a zone you already own is free, and
+# Workers custom domains carry no per-hostname charge.
+#
+# `workers_dev = true` is LOAD-BEARING, not a leftover: declaring any `routes`
+# entry makes wrangler default workers.dev to FALSE, which would silently kill
+# arul-api.twilight-smoke-d495.workers.dev — the host every already-installed
+# build (including the Play testing track) still points at. Keep both serving
+# until a release that uses the custom domain has fully rolled out; only then is
+# it safe to drop this line.
+workers_dev = true
+
+[[routes]]
+pattern = "arul-api.hsrutility.com"
+custom_domain = true
+
+# MEDIA (arul-cdn.hsrutility.com) is NOT here: it attaches to the R2 BUCKET, not
+# to this Worker, so wrangler.toml cannot express it. Use
+#   npx wrangler r2 bucket domain add south-indian-wallpapers \
+#     --domain arul-cdn.hsrutility.com --zone-id <hsrutility.com zone id>
+# or the dashboard (R2 → bucket → Settings → Custom Domains). It is REQUIRED
+# before launch, not cosmetic: Cloudflare rate-limits the r2.dev URL and treats
+# it as development-only, and **caching does not apply to r2.dev at all** — which
+# would break the entire "edge-cached, zero-egress" cost model this app rests on.
+# When it lands, swap R2_CDN_BASE_URL (secret + env/dev.json + env/prod.json).
+# No catalog rebuild needed — catalog rows carry relative keys, not absolute URLs.
 
 # ─── Secrets (`npx wrangler secret put <NAME>` — full descriptions: README.md) ──
 # JWT_SECRET  GOOGLE_WEB_CLIENT_ID

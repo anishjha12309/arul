@@ -32,11 +32,38 @@ const plan = JSON.parse(readFileSync(join(ROOT, "import-plan.json"), "utf8"));
 console.log(`import-plan: ${plan.length} items`);
 
 // ---- 1. upload all R2 objects (media + video thumbs) ----
+
+/**
+ * Cache-Control stamped on every uploaded media object.
+ *
+ * WHY a year, and why `immutable`: media keys are content UUIDs
+ * (`wallpapers/<category>/<uuid>.mp4`). An object at a given key NEVER changes —
+ * a replacement gets a new uuid and the old key is swept — so there is nothing
+ * for a client or the edge to revalidate against.
+ *
+ * WHY it matters at all, given `.mp4` is already cached by Cloudflare's default
+ * extension list: without an origin header the edge falls back to Cloudflare's
+ * (much shorter) default TTL, so objects age out and every miss costs an R2
+ * Class B operation. Those operations are the one part of R2 that is NOT free,
+ * and media is the highest-volume thing this app serves — see CLAUDE.md §2.
+ * Verified 2026-07-29: objects imported before this carried NO Cache-Control at
+ * all (checked against the raw r2.dev origin, which bypasses edge caching).
+ *
+ * NOTE this only fixes objects uploaded FROM HERE ON. Anything already in the
+ * bucket needs a metadata rewrite (S3 CopyObject with REPLACE) or a Cache Rule
+ * that supplies the TTL instead — see docs/provisioning.md.
+ */
+const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 async function put(key, bytes, ct) {
   const url = `${endpoint}/${bucket}/${key}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await aws.fetch(url, { method: "PUT", body: bytes, headers: { "content-type": ct } });
+      const res = await aws.fetch(url, {
+        method: "PUT",
+        body: bytes,
+        headers: { "content-type": ct, "cache-control": MEDIA_CACHE_CONTROL },
+      });
       if (res.ok) return true;
       if (attempt === 3) throw new Error(`${res.status} ${await res.text().catch(() => "")}`);
     } catch (e) { if (attempt === 3) throw e; }

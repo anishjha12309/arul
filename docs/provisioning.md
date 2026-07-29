@@ -19,14 +19,42 @@ accept the other's tokens. Everything below is Arul-only. `[user]` = only you ca
 - [x] R2 CORS rule, method PUT, header `content-type` (CMS browser uploads PUT the S3 endpoint
       cross-origin). Origin is `https://api.hsrutility.com` — the hsr-cms worker, NOT an arul-* host.
 
+- [x] **API custom domain `arul-api.hsrutility.com`** — live 2026-07-29. Declared in
+      `workers/wrangler.toml` as a `custom_domain` route, so `wrangler deploy` created the hostname
+      AND its DNS record; nothing was clicked in the dashboard and no zone id was needed.
+      `workers_dev = true` is kept ALONGSIDE it so
+      `arul-api.twilight-smoke-d495.workers.dev` keeps serving installed builds — dropping that line
+      is what would break them, so it waits for a released build that uses the custom domain.
+      `env/dev.json` + `env/prod.json` already point at the custom domain.
+      Note: a subdomain of a zone you already own costs **nothing** — no registrar fee, no
+      Cloudflare per-hostname charge. There was never a cost reason to avoid these.
+
 ### ⚠ OPEN — the only unfinished infrastructure item
-- [ ] [user] **Custom domains are NOT attached.** Live origins today are
-      `https://arul-api.twilight-smoke-d495.workers.dev` and
-      `https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev` (throttled dev URL). Deliberate interim
-      state — to be migrated to unified CDN domains:
-      · R2 custom domain on the bucket (dashboard → bucket → Settings → Custom Domains)
-      · Worker custom domain (dashboard → worker → Settings → Domains)
-      When attached, update `R2_CDN_BASE_URL`, the R2 CORS origin if it moves, and docs/architecture.md.
+- [ ] [user] **Media CDN custom domain `arul-cdn.hsrutility.com` is NOT attached.** Media still
+      serves from `https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev`.
+      **This is required before launch, not cosmetic.** Cloudflare rate-limits the `r2.dev` URL and
+      documents it as development-only, and — decisively — **caching, WAF and access controls do not
+      apply to `r2.dev` at all**; a bucket must sit behind a custom domain to be cacheable. Shipping
+      media on `r2.dev` therefore breaks the edge-cached / zero-egress cost model this whole app is
+      built on (CLAUDE.md §2). Ref: developers.cloudflare.com/r2/buckets/public-buckets/
+      Attach it either way:
+      · CLI: `npx wrangler r2 bucket domain add south-indian-wallpapers --domain arul-cdn.hsrutility.com --zone-id <hsrutility.com zone id>`
+        (the zone id is on the Cloudflare dashboard's zone Overview page; it is the ONLY reason this
+        step is not already automated here)
+      · Dashboard: R2 → `south-indian-wallpapers` → Settings → Custom Domains → Connect Domain
+      Then: add the catalog Cache Rule (below), set the `R2_CDN_BASE_URL` secret, update
+      `env/dev.json` + `env/prod.json`, rebuild the app. **No catalog rebuild is needed** — catalog
+      rows carry relative keys, never absolute URLs. Leave the R2 CORS origin alone: it is
+      `https://api.hsrutility.com` (the CMS), which does not move.
+
+- [ ] [user] **Catalog Cache Rule for the new CDN host** (Caching → Cache Rules), once the domain is
+      attached. `.json` is NOT in Cloudflare's default cacheable-extension list, so without this every
+      catalog file stays `DYNAMIC`:
+      · Match: `http.host eq "arul-cdn.hsrutility.com" and starts_with(http.request.uri.path, "/catalog/")`
+      · Action: *Eligible for cache*, Edge TTL = **"Use cache-control header if present, bypass cache if not"**
+      · **No per-path exclusions.** The origin header alone decides, so anything the Worker marks
+        `no-store` is bypassed automatically. A leftover `version.json` exclusion is exactly what kept
+        Pakiza's pointer uncached (`DYNAMIC` ~240 ms vs `HIT` ~40 ms) for days.
 
 ## Neon
 - [x] [user] New Neon project `arul` (separate from Pakiza's) → pooled connection string
