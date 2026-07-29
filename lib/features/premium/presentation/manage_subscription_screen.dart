@@ -6,6 +6,7 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/subscription_model.dart';
+import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../settings/presentation/confirm_dialog.dart';
 import '../domain/entitlement.dart';
@@ -158,6 +159,13 @@ class _ManageSubscriptionScreenState
     final view = _PlanView.resolve(entitlement);
     final sub = entitlement.subscription;
 
+    // Real price from the remote app_config (paise), ₹199 fallback — so a
+    // price change ships without an app release and this screen never states
+    // a number the next debit won't match.
+    final monthlyPrice = _monthlyPrice(
+      ref.watch(appConfigProvider).asData?.value?.prices,
+    );
+
     final textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final textSecondary = isDark
         ? ArulTokens.darkTextSecondary
@@ -224,7 +232,7 @@ class _ManageSubscriptionScreenState
                 _BillingDivider(isDark: isDark),
                 _BillingRow(
                   label: 'Price',
-                  value: '₹199 / month',
+                  value: '$monthlyPrice / month',
                   isDark: isDark,
                 ),
                 _BillingDivider(isDark: isDark),
@@ -428,6 +436,18 @@ class _PlanView {
       ),
     };
   }
+}
+
+/// Monthly price from app_config `prices` (paise) → "₹199". Falls back to the
+/// launch price when the remote config hasn't loaded yet.
+String _monthlyPrice(Map<String, dynamic>? prices) {
+  final monthly = prices?['monthly'];
+  if (monthly is Map && monthly['amount'] is num) {
+    final rupees = (monthly['amount'] as num) / 100;
+    final asInt = rupees.truncateToDouble() == rupees;
+    return '₹${asInt ? rupees.toInt() : rupees.toStringAsFixed(2)}';
+  }
+  return '₹199';
 }
 
 /// `14 Jul 2026`. Null in → null out, so callers can hide the row entirely.

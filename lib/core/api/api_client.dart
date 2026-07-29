@@ -70,6 +70,42 @@ class ApiClient {
   /// Prevents concurrent refresh races — only one in-flight refresh at a time.
   Completer<void>? _refreshCompleter;
 
+  /// GET paths whose response is coalesced while in flight and briefly replayed
+  /// after settling (see [_meFreshFor]).
+  ///
+  /// Only `/me`: it now serves the cold-start auth upgrade AND the entitlement
+  /// read, because the Worker LEFT JOINs the subscription row into that one
+  /// response. `/me/subscription` is deliberately NOT here — no client code
+  /// calls it any more (the Worker keeps the route alive only for app builds
+  /// released before the merge), and listing a path nothing requests is dead
+  /// config that reads as if two endpoints were still in play.
+  static const Set<String> _replayableGets = {'/me'};
+
+  /// How long a completed replayable GET may be replayed to a later caller.
+  ///
+  /// In-flight coalescing alone cannot collapse the cold-start pair: the
+  /// optimistic auth emission and the post-`/me` profile upgrade re-resolve the
+  /// entitlement provider about a second apart, so the second
+  /// `/me/subscription` starts after the first has already settled and there is
+  /// nothing left to join. Every authenticated cold start therefore made two
+  /// identical Neon-backed round trips.
+  ///
+  /// A few seconds covers that gap and nothing else. It is safe for entitlement
+  /// because the client copy is UX only — the real gate is the Worker's live
+  /// Neon check on `/media/signed-url` (CLAUDE.md §5) — and because
+  /// [invalidateMe] fires after every mutating request, so a purchase, cancel
+  /// or refund is never masked by a stale snapshot.
+  static const Duration _meFreshFor = Duration(seconds: 5);
+
+  final Map<String, Future<Map<String, dynamic>>> _meInFlight = {};
+  final Map<String, (Map<String, dynamic>, DateTime)> _meCache = {};
+
+  /// Bumped by [invalidateMe]. A replayable GET that STARTED before the bump
+  /// must not repopulate [_meCache] when it settles after the bump — without
+  /// this, a `/me` racing a mutation could re-serve the pre-mutation
+  /// entitlement for up to [_meFreshFor] after the mutation invalidated it.
+  int _meEpoch = 0;
+
   // ─── Token management ──────────────────────────────────────────────────────
 
   Future<String?> readAccessToken() => _storage.read(key: _kAccessTokenKey);
@@ -86,6 +122,9 @@ class ApiClient {
   }
 
   Future<void> clearTokens() async {
+    // Same reason as the profile cache below, one layer up: the in-memory
+    // /me + /me/subscription snapshots belong to the session being torn down.
+    invalidateMe();
     await Future.wait([
       _storage.delete(key: _kAccessTokenKey),
       _storage.delete(key: _kRefreshTokenKey),
@@ -154,8 +193,71 @@ class ApiClient {
   }) => _requestWithRetry('POST', path, body: body, requiresAuth: requiresAuth);
 
   /// GETs [path]; refreshes the token + retries once on 401.
-  Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) =>
-      _requestWithRetry('GET', path, requiresAuth: requiresAuth);
+  ///
+  /// `/me` and `/me/subscription` are coalesced (see [_meInFlight]) and briefly
+  /// reused (see [_meFreshFor]): a request already in flight is handed to every
+  /// additional caller, and one that just completed is replayed.
+  Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) {
+    if (!_replayableGets.contains(path)) {
+      return _requestWithRetry('GET', path, requiresAuth: requiresAuth);
+    }
+    final inFlight = _meInFlight[path];
+    if (inFlight != null) return inFlight;
+
+    final cached = _meCache[path];
+    if (cached != null && DateTime.now().difference(cached.$2) < _meFreshFor) {
+      return Future.value(cached.$1);
+    }
+
+    // The future stored (and returned) is the `whenComplete`-wrapped one, not
+    // the raw `_requestWithRetry` future — every caller (first + joiners) ends
+    // up awaiting THIS future, so the clear-on-settle side effect always runs
+    // before anyone regains control.
+    //
+    // The callback body MUST be a block: `Map.remove` returns the removed
+    // value — this very future — and a `whenComplete` callback that returns a
+    // future is awaited before the wrapped future settles. An arrow body here
+    // makes the future wait on itself: a permanent hang on every /me read.
+    //
+    // Remove-only-if-still-ours: invalidateMe() may have dropped this entry
+    // and a NEWER request may already occupy the slot — blindly removing would
+    // evict the newer flight and lose its coalescing.
+    final epoch = _meEpoch;
+    late final Future<Map<String, dynamic>> future;
+    future = _requestWithRetry('GET', path, requiresAuth: requiresAuth)
+        .whenComplete(() {
+          if (identical(_meInFlight[path], future)) _meInFlight.remove(path);
+        });
+    _meInFlight[path] = future;
+    // Record only on success — an error must never be replayed to a joiner
+    // that arrives after the failure — and only if no mutation invalidated the
+    // window while this request was in flight (see [_meEpoch]).
+    unawaited(
+      future
+          .then((data) {
+            if (epoch == _meEpoch) _meCache[path] = (data, DateTime.now());
+          })
+          .catchError((_) {}),
+    );
+    return future;
+  }
+
+  /// Drop any remembered `/me` / `/me/subscription` snapshot, forcing the next
+  /// read to hit the Worker.
+  ///
+  /// Called automatically after every non-GET request (see [_requestWithRetry]),
+  /// so no caller has to remember: a mandate setup, a cancel, or an account
+  /// delete all invalidate by construction.
+  ///
+  /// Also detaches any in-flight replayable GET (a joiner arriving after the
+  /// mutation must start a FRESH read, not adopt the pre-mutation one) and
+  /// bumps [_meEpoch] so the detached flight cannot repopulate the cache when
+  /// it settles.
+  void invalidateMe() {
+    _meCache.clear();
+    _meInFlight.clear();
+    _meEpoch++;
+  }
 
   /// DELETEs [path] with an optional JSON [body]; refreshes the token +
   /// retries once on 401.
@@ -175,6 +277,12 @@ class ApiClient {
     bool requiresAuth = true,
     bool isRetry = false,
   }) async {
+    // Any non-GET can change what /me or /me/subscription would answer — a
+    // mandate setup, a cancel, an account delete. Drop the remembered snapshot
+    // up front so a caller that reads entitlement immediately after mutating it
+    // can never be served the pre-mutation answer.
+    if (method != 'GET') invalidateMe();
+
     final headers = await _authHeaders();
     final response = await _execute(method, path, headers: headers, body: body);
 

@@ -66,6 +66,7 @@ Future<bool> ensurePremium(
   BuildContext context,
   WidgetRef ref, {
   required String source,
+  Map<String, Object?>? properties,
 }) async {
   bool premium;
   try {
@@ -77,7 +78,11 @@ Future<bool> ensurePremium(
   }
   if (premium) return true;
 
-  ref.read(analyticsServiceProvider).track('${source}_blocked_premium');
+  // `properties` lets callers attribute the block (e.g. the wallpaper id), so
+  // the funnel can say WHICH content converts — mirrors the reference gate.
+  ref
+      .read(analyticsServiceProvider)
+      .track('${source}_blocked_premium', properties: properties);
 
   if (context.mounted) {
     unawaited(context.push('/premium?source=$source'));

@@ -24,7 +24,7 @@
 | Backend | Cloudflare Workers (Hono, TS) = API + crons (CMS is its own repo/worker) · Neon via Hyperdrive · Workers KV · R2. Code in `workers/`. |
 | Auth | Google one-tap (`google_sign_in` v7: instance → initialize → authenticate) → Worker verifies idToken (`aud` = WEB client id) → identity-only JWT (15m access + 60d rotating refresh) |
 | Payments | PhonePe v2 Autopay (OAuth), server calls in Workers only. One trial per user (`trial_end` = consumed-marker); repeat = ₹199 TRANSACTION setup. Endpoint gotchas: [workers/README.md](workers/README.md) — re-verify there, never from memory. |
-| Analytics | `AnalyticsService` → Composite = PostHog (all events) + GA4/`firebase_analytics` (all + ★→`login`/`purchase`) + Meta (★ only, gated on dart-defines). **Never call SDKs from widgets.** |
+| Analytics | `AnalyticsService` → Composite = PostHog (**~5% user panel, allow-listed events only** — free-tier guardrail: `AnalyticsCohort` gates `Posthog().setup()` itself, `AllowlistedAnalyticsService` is default-DENY, lifecycle autocapture OFF) + GA4/`firebase_analytics` (**all events at 100% = the complete record**; ★→`login`/`purchase`) + Meta (★ only, gated on dart-defines). **Never call SDKs from widgets.** Revenue truth = Neon, never PostHog. Mirrored in Pakiza — keep in sync. |
 | Crash/Perf | Crashlytics + Performance behind `CrashReporter`/`PerformanceMonitor`; run in all real builds, only `flutter test` skips. Needs git-ignored `android/app/google-services.json`. |
 | Video | Native Media3 ExoPlayer texture pool (`FeedVideoPlugin` platform channel) — players REUSED across clips (setMediaItem swap, never dispose+recreate). Live MP4 from CDN; shimmer until first frame; no posters. |
 

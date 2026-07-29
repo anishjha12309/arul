@@ -39,6 +39,7 @@ Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
     };
 
 const _$SubscriptionStatusEnumMap = {
+  SubscriptionStatus.pending: 'pending',
   SubscriptionStatus.trialing: 'trialing',
   SubscriptionStatus.active: 'active',
   SubscriptionStatus.paused: 'paused',

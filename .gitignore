@@ -69,3 +69,9 @@ cms/.preview/
 cms/.preview/
 .playwright-mcp/
 cms-shots/
+
+# verify-payments harness (local-only test artifacts)
+.claude/skills/verify-payments/scripts/node_modules/
+.claude/skills/verify-payments/scripts/pgdata/
+.claude/skills/verify-payments/scripts/package*.json
+.claude/skills/verify-payments/scripts/mode.txt

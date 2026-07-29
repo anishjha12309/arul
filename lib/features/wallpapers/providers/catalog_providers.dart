@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/error/app_exception.dart';
 import '../../../data/models/catalog_page.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -57,8 +58,44 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
   /// can never overwrite a newer refresh with older data.
   int _fetchSeq = 0;
 
+  /// Delays between automatic re-checks while the feed is parked on a network
+  /// error with nothing to show, after Riverpod's own exponential-backoff
+  /// retries (~13 s of quick [build] re-runs) are exhausted.
+  ///
+  /// Those quick retries exist for a cold-start radio/DNS blip. They do nothing
+  /// for the real-world case: a user opens the app in a lift, a metro or a dead
+  /// zone, gets the error card, and then signal returns — the app has no
+  /// connectivity listener anywhere, so it never noticed and the card stayed
+  /// until a manual Retry. Mirrors
+  /// [RingtoneCatalogNotifier.offlineRecheckBackoffs]; both feeds shared the
+  /// defect, so both carry the fix.
+  ///
+  /// The ladder lengthens to two minutes and then holds, so a genuinely offline
+  /// device settles into one cheap catalog fetch every two minutes rather than
+  /// spinning the radio. Empty disables it (tests).
+  @visibleForTesting
+  static List<Duration> offlineRecheckBackoffs = const [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+    Duration(seconds: 60),
+    Duration(seconds: 120),
+  ];
+
+  Timer? _recheckTimer;
+  int _recheckAttempt = 0;
+
   @override
   Future<List<Wallpaper>> build() async {
+    // The provider outlives the screen, so the timer has to die with it or it
+    // keeps waking the radio after the tab is gone. Registered per build, so a
+    // rebuild (manual Retry invalidates this provider) also clears any pending
+    // re-check before the new load claims its own.
+    ref.onDispose(() {
+      _recheckTimer?.cancel();
+      _recheckTimer = null;
+    });
+
     final file = await _cacheFile();
     final seq = ++_fetchSeq;
 
@@ -80,9 +117,40 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
 
     // Cold start / self-healed cache: network is the only source. A failure
     // here IS the error state (the feed renders retry).
-    final fresh = await _fetchCatalog();
-    unawaited(_writeCache(file, fresh));
-    return fresh;
+    try {
+      final fresh = await _fetchCatalog();
+      _recheckAttempt = 0;
+      unawaited(_writeCache(file, fresh));
+      return fresh;
+    } catch (e) {
+      // Only a NETWORK failure is worth re-checking on a timer — it is the one
+      // that fixes itself when the link comes back. A parse miss or a missing
+      // catalog will fail identically forever and must wait for a manual retry.
+      // The ladder resets on every build() failure (Riverpod's quick retries
+      // land here too), so the first slow re-check after they give up is 5 s,
+      // not two minutes.
+      if (isNetworkError(e)) {
+        _recheckAttempt = 0;
+        _scheduleOfflineRecheck(seq);
+      }
+      rethrow;
+    }
+  }
+
+  /// Queue the next automatic re-check after a network failure left the feed
+  /// with nothing to show. The timer drives [refresh], which re-reads the
+  /// version pointer — a catalog published during the outage is picked up.
+  void _scheduleOfflineRecheck(int seq) {
+    _recheckTimer?.cancel();
+    final ladder = offlineRecheckBackoffs;
+    if (ladder.isEmpty) return;
+    final delay = ladder[_recheckAttempt.clamp(0, ladder.length - 1)];
+    _recheckAttempt++;
+    _recheckTimer = Timer(delay, () {
+      // A newer load (manual retry, pull-refresh, rebuild) supersedes us.
+      if (seq != _fetchSeq) return;
+      unawaited(refresh());
+    });
   }
 
   /// Background refresh behind a served cache. Failure is silent — the user is
@@ -90,6 +158,7 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
   Future<void> _revalidate(File file, int seq) async {
     try {
       final fresh = await _fetchCatalog();
+      _recheckAttempt = 0;
       await _writeCache(file, fresh);
       if (ref.mounted && seq == _fetchSeq) {
         state = AsyncData(fresh);
@@ -99,22 +168,29 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
     }
   }
 
-  /// Pull-to-refresh: authoritative network reload. Re-reads the version
-  /// pointer (so a just-published catalog is picked up), bypasses the
-  /// serve-cached-first fast path, and only settles when fresh data (or a
-  /// failure) lands. On failure with data on screen the current feed is kept —
-  /// the indicator simply settles; the error state is reserved for a feed that
-  /// has nothing to show.
+  /// Pull-to-refresh AND the offline re-check timer's retry: authoritative
+  /// network reload. Re-reads the version pointer (so a just-published catalog
+  /// is picked up), bypasses the serve-cached-first fast path, and only settles
+  /// when fresh data (or a failure) lands. On failure with data on screen the
+  /// current feed is kept — the indicator simply settles; the error state is
+  /// reserved for a feed that has nothing to show, and only THAT state keeps
+  /// the re-check ladder climbing.
   Future<void> refresh() async {
     invalidateCatalogVersion();
     final seq = ++_fetchSeq;
     try {
       final fresh = await _fetchCatalog();
+      // The link is up — the next outage starts the ladder from the top.
+      _recheckAttempt = 0;
+      _recheckTimer?.cancel();
       unawaited(_writeCache(await _cacheFile(), fresh));
       if (ref.mounted && seq == _fetchSeq) state = AsyncData(fresh);
     } catch (e, st) {
       if (!ref.mounted || seq != _fetchSeq) return;
-      if (!state.hasValue) state = AsyncError(e, st);
+      if (!state.hasValue) {
+        state = AsyncError(e, st);
+        if (isNetworkError(e)) _scheduleOfflineRecheck(seq);
+      }
     }
   }
 

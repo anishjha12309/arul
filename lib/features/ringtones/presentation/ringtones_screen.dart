@@ -12,6 +12,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../data/models/ringtone.dart';
@@ -125,13 +126,23 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
             l10n.ringtoneSetSuccess,
             kind: ToastKind.success,
           );
-        case RingtoneSetError(:final isNetwork):
+        case RingtoneSetError(:final isNetwork, :final premiumRequired):
           ref.read(ringtoneSetProvider.notifier).reset();
-          showArulToast(
-            context,
-            isNetwork ? l10n.offlineBody : l10n.ringtoneSetFailed,
-            kind: ToastKind.error,
-          );
+          if (premiumRequired && !isNetwork) {
+            // The subscription lapsed mid-session and the server's live check
+            // caught it. A toast is a dead end here — retrying fails
+            // identically — so send them to the paywall.
+            ref
+                .read(analyticsServiceProvider)
+                .track('ringtone_set_blocked_premium');
+            context.push('/premium?source=ringtone_set');
+          } else {
+            showArulToast(
+              context,
+              isNetwork ? l10n.offlineBody : l10n.ringtoneSetFailed,
+              kind: ToastKind.error,
+            );
+          }
         default:
           break;
       }

@@ -5,6 +5,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../data/models/ringtone.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../premium/providers/entitlement_provider.dart';
 import '../data/ringtone_set_service.dart';
 
 // ─── Stage & state ────────────────────────────────────────────────────────────
@@ -50,12 +51,20 @@ final class RingtoneSetSuccess extends RingtoneSetState {
 }
 
 final class RingtoneSetError extends RingtoneSetState {
-  const RingtoneSetError({required this.message, this.isNetwork = false});
+  const RingtoneSetError({
+    required this.message,
+    this.isNetwork = false,
+    this.premiumRequired = false,
+  });
   final String message;
 
   /// True when the failure was a connectivity error, so the UI can show a
   /// friendly "no internet" message instead of the raw exception text.
   final bool isNetwork;
+
+  /// The server refused because the subscription is no longer live — the
+  /// screen routes to the paywall instead of toasting a generic failure.
+  final bool premiumRequired;
 }
 
 // ─── Service provider ─────────────────────────────────────────────────────────
@@ -79,6 +88,11 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
   /// Sets [ringtone] as the [target] tone, walking the permission → fetch →
   /// download → set pipeline (see [RingtoneSetStage]).
   Future<void> setRingtone(Ringtone ringtone, RingtoneTarget target) async {
+    // Re-entrancy guard, same as apply/share.
+    if (state is RingtoneSetLoading) {
+      return;
+    }
+
     final service = ref.read(ringtoneSetServiceProvider);
     final analytics = ref.read(analyticsServiceProvider);
 
@@ -137,7 +151,15 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
 
       state = RingtoneSetSuccess(target: target);
     } on RingtoneSetException catch (e) {
-      state = RingtoneSetError(message: e.message);
+      if (e.premiumRequired) {
+        // The client snapshot that let this through is stale — refresh it so
+        // the paywall the screen opens shows the real state.
+        ref.invalidate(entitlementDetailProvider);
+      }
+      state = RingtoneSetError(
+        message: e.message,
+        premiumRequired: e.premiumRequired,
+      );
     } catch (e) {
       // The signed-URL POST and the download throw raw connectivity errors when
       // offline — flag them so the screen shows a friendly message.

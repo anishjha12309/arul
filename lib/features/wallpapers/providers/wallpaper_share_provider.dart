@@ -11,6 +11,7 @@ import '../../../core/error/app_exception.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../data/share_watermark_service.dart';
 import '../data/wallpaper_apply_service.dart';
@@ -33,12 +34,20 @@ final class WallpaperSharePreparing extends WallpaperShareState {
 }
 
 final class WallpaperShareError extends WallpaperShareState {
-  const WallpaperShareError({required this.message, this.isNetwork = false});
+  const WallpaperShareError({
+    required this.message,
+    this.isNetwork = false,
+    this.premiumRequired = false,
+  });
 
   /// DIAGNOSTIC ONLY -- never shown to a user (English, and can be a raw
   /// exception). The UI localizes from [isNetwork].
   final String message;
   final bool isNetwork;
+
+  /// The server refused because the subscription is no longer live — route to
+  /// the paywall rather than showing a generic share failure.
+  final bool premiumRequired;
 }
 
 // ─── Share-sheet launcher ─────────────────────────────────────────────────────
@@ -103,6 +112,29 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         }
       }
 
+      if (file != null) {
+        // The bytes are already on disk (a previous apply/share, or the feed
+        // prefetcher pulled them for playback), so the DOWNLOAD is skipped —
+        // but the gate is not. Share sends the file OFF-DEVICE, so skipping
+        // `/media/signed-url` (the only authoritative entitlement check) here
+        // let a lapsed subscriber keep sharing anything already cached,
+        // indefinitely — the same "cache became a permanent licence" hole the
+        // apply flow closed. (The reference app still has this hole in share;
+        // this is a deliberate Arul improvement, mirroring apply's gate.)
+        try {
+          await service.downloadUrl(wallpaper);
+        } on WallpaperApplyException catch (e) {
+          // A real 403 is the gate doing its job — surface it so the screen
+          // routes to the paywall. Any other API failure on bytes we already
+          // hold is not worth blocking a paying user over.
+          if (e.premiumRequired) rethrow;
+        } catch (e) {
+          if (!isNetworkError(e)) rethrow;
+          // Offline, with the file already on disk from a previously-passing
+          // gate. Allow it — same trade as apply.
+        }
+      }
+
       if (file == null) {
         // The GATED download URL (Worker signed-url when the backend exists).
         final url = await service.downloadUrl(wallpaper);
@@ -161,9 +193,19 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         },
       );
     } on WallpaperApplyException catch (e, st) {
-      // Share failures gate a core premium action — record like apply does.
-      crash.recordError(e, st, reason: 'wallpaper share failed');
-      state = WallpaperShareError(message: e.message);
+      if (e.premiumRequired) {
+        // Expected business condition, not a defect — see
+        // WallpaperApplyException.premiumRequired. No crash record; refresh the
+        // stale client snapshot so the paywall the screen opens tells the truth.
+        ref.invalidate(entitlementDetailProvider);
+      } else {
+        // Share failures gate a core premium action — record like apply does.
+        crash.recordError(e, st, reason: 'wallpaper share failed');
+      }
+      state = WallpaperShareError(
+        message: e.message,
+        premiumRequired: e.premiumRequired,
+      );
     } catch (e, st) {
       final network = isNetworkError(e);
       if (!network) {

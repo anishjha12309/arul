@@ -294,12 +294,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       confirmLabel: 'Delete account',
     );
     if (ok != true) return;
+    // GA4-only (deliberately off the PostHog allow-list): account state lives in
+    // Neon, which is exact. These two exist so churn and delete FAILURES are
+    // visible in the free, unsampled record — a failing delete is a support
+    // problem we would otherwise only hear about by email.
+    final analytics = ref.read(analyticsServiceProvider);
+    analytics.track('account_delete_confirmed');
     try {
       // Server-side: mandate revoke → tombstone → cascade → refresh denylist.
       // Throws on failure — the account is intact and the session stays.
       await ref.read(authControllerProvider.notifier).deleteAccount();
       if (mounted) context.go('/sign-in');
     } catch (e) {
+      analytics.track(
+        'account_delete_failed',
+        properties: {'error': e.toString()},
+      );
       if (!mounted) return;
       final message = e is ApiException && e.message.isNotEmpty
           ? e.message

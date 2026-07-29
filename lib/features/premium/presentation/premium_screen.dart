@@ -6,8 +6,23 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/config/app_config.dart';
+import '../../../data/models/subscription_model.dart';
+import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
+import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
+
+/// Monthly price from app_config `prices` (paise) → "₹199". Falls back to the
+/// launch price when the remote config hasn't loaded yet.
+String _monthlyPrice(Map<String, dynamic>? prices) {
+  final monthly = prices?['monthly'];
+  if (monthly is Map && monthly['amount'] is num) {
+    final rupees = (monthly['amount'] as num) / 100;
+    final asInt = rupees.truncateToDouble() == rupees;
+    return '₹${asInt ? rupees.toInt() : rupees.toStringAsFixed(2)}';
+  }
+  return '₹199';
+}
 
 /// Paywall. Reached only from a blocked gated action; `source` says which — the
 /// one number that tells you which verb actually sells the product.
@@ -16,7 +31,7 @@ import '../providers/premium_purchase_provider.dart';
 /// a perk card, a
 /// gold-bordered plan card and the green CTA. Copy is hardcoded verbatim for
 /// this pass — deliberately not yet routed through l10n.
-class PremiumScreen extends ConsumerWidget {
+class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
 
   final String source;
@@ -29,7 +44,45 @@ class PremiumScreen extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PremiumScreen> createState() => _PremiumScreenState();
+}
+
+class _PremiumScreenState extends ConsumerState<PremiumScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _reconcileIfPending();
+  }
+
+  /// Self-heal a subscription stranded at `pending`.
+  ///
+  /// The one state a user cannot recover from on their own is a row stuck at
+  /// `pending` because the mandate setup completed at PhonePe but the S2S
+  /// webhook never reached us. Re-reading `/me/subscription` can never fix
+  /// that (it serves the same stale row); only POST /payments/status asks
+  /// PhonePe directly and lets the Worker flip the row. So we do it FOR them,
+  /// silently, on paywall open. Scoped to `pending` on purpose — every other
+  /// user already has the right answer locally, so this costs a live PhonePe
+  /// call for nobody else. Best-effort throughout: a reconcile failure must
+  /// never surface here, because the user came to this screen to buy, not to
+  /// be told about our webhook plumbing.
+  Future<void> _reconcileIfPending() async {
+    try {
+      final entitlement = await ref.read(entitlementDetailProvider.future);
+      if (!mounted) return;
+      if (entitlement.subscription?.status != SubscriptionStatus.pending) {
+        return;
+      }
+      // refreshStatus() invalidates entitlement itself, so a row that really
+      // did complete flips this screen to premium with no further work.
+      await ref.read(premiumPurchaseProvider.notifier).refreshStatus();
+    } catch (_) {
+      // Offline / server fault — leave the paywall exactly as it was.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // PhonePe purchase flow (ported): initiate → SDK → status poll → refresh
     // entitlement. Success/failure feedback is reactive so the flow survives
     // rebuilds while the SDK UI is up.
@@ -38,8 +91,14 @@ class PremiumScreen extends ConsumerWidget {
         case PurchaseSuccess():
           showArulToast(context, 'Welcome to Arul Premium!');
           if (context.canPop()) context.pop();
-        case PurchaseError(:final message):
-          showArulToast(context, message, kind: ToastKind.error);
+        case PurchaseError(:final message, :final cancelled):
+          // A self-cancelled payment reads as neutral info, not a red failure
+          // — the user changed their mind; nothing broke.
+          showArulToast(
+            context,
+            message,
+            kind: cancelled ? ToastKind.info : ToastKind.error,
+          );
           ref.read(premiumPurchaseProvider.notifier).reset();
         case _:
           break;
@@ -48,6 +107,18 @@ class PremiumScreen extends ConsumerWidget {
     final purchase = ref.watch(premiumPurchaseProvider);
     final purchaseBusy =
         purchase is PurchaseLoading || purchase is PurchaseProcessing;
+
+    // One free trial per user: a non-null trial_end means it was consumed.
+    // Advertise the trial only from a LOADED entitlement — on loading/error the
+    // safe default is the paid copy (the Worker re-checks trial_end at initiate
+    // anyway, so we must never promise a free day to a user it would charge).
+    final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
+    final trialEligible =
+        entitlement != null && entitlement.subscription?.trialEnd == null;
+
+    final monthlyPrice = _monthlyPrice(
+      ref.watch(appConfigProvider).asData?.value?.prices,
+    );
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -148,15 +219,23 @@ class PremiumScreen extends ConsumerWidget {
                     ),
                     child: Column(
                       children: [
-                        for (var i = 0; i < _perks.length; i++) ...[
+                        for (
+                          var i = 0;
+                          i < PremiumScreen._perks.length;
+                          i++
+                        ) ...[
                           if (i > 0) const SizedBox(height: 14),
                           Row(
                             children: [
-                              Icon(_perks[i].icon, size: 22, color: accent),
+                              Icon(
+                                PremiumScreen._perks[i].icon,
+                                size: 22,
+                                color: accent,
+                              ),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  _perks[i].text,
+                                  PremiumScreen._perks[i].text,
                                   style: TextStyle(
                                     fontSize: 14.5,
                                     color: textPrimary,
@@ -194,7 +273,7 @@ class PremiumScreen extends ConsumerWidget {
                                 text: TextSpan(
                                   children: [
                                     TextSpan(
-                                      text: '₹199 ',
+                                      text: '$monthlyPrice ',
                                       style: ArulTokens.priceNumeral.copyWith(
                                         fontSize: 20,
                                         color: textPrimary,
@@ -221,36 +300,42 @@ class PremiumScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 13,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: ArulTokens.gold,
-                            borderRadius: BorderRadius.circular(
-                              ArulTokens.pillRadius,
+                        // One free trial per user (server-enforced): the pill
+                        // only shows when THIS user still has it. A repeat
+                        // subscriber's mandate is a ₹199 TRANSACTION setup, so
+                        // promising "free" here would charge them on a screen
+                        // that said otherwise.
+                        if (trialEligible)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 13,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: ArulTokens.gold,
+                              borderRadius: BorderRadius.circular(
+                                ArulTokens.pillRadius,
+                              ),
+                            ),
+                            // 1 day, not 7: the server grants exactly TRIAL_DAYS=1
+                            // (payments.ts) and debits ₹199 at trial end. Promising
+                            // more than the mandate honours is how you get chargebacks.
+                            child: const Text(
+                              '1 DAY FREE',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.46, // .04em @ 11.5px
+                                color: ArulTokens.darkSurface,
+                              ),
                             ),
                           ),
-                          // 1 day, not 7: the server grants exactly TRIAL_DAYS=1
-                          // (payments.ts) and debits ₹199 at trial end. Promising
-                          // more than the mandate honours is how you get chargebacks.
-                          child: const Text(
-                            '1 DAY FREE',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.46, // .04em @ 11.5px
-                              color: ArulTokens.darkSurface,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   CtaButton(
-                    label: 'Start free trial',
+                    label: trialEligible ? 'Start free trial' : 'Get Premium',
                     busy: purchaseBusy,
                     height: ArulTokens.ctaHeight54,
                     fontSize: 16,
@@ -275,10 +360,16 @@ class PremiumScreen extends ConsumerWidget {
                   // costs a ₹2 PENNY_DROP that PhonePe reverses immediately — but
                   // the user still SEES ₹2 leave their account, and an unexplained
                   // debit on a screen that said "free" reads as a scam.
+                  // The trial-consumed variant is equally honest the other way:
+                  // the server charges the full month upfront, so say so.
                   Text(
-                    'Free for 1 day, then ₹199/month. UPI Autopay verifies your '
-                    'account with ₹2, refunded instantly. Browsing stays free '
-                    'forever.',
+                    trialEligible
+                        ? 'Free for 1 day, then $monthlyPrice/month. UPI '
+                              'Autopay verifies your account with ₹2, refunded '
+                              'instantly. Browsing stays free forever.'
+                        : '$monthlyPrice charged today, then renews monthly '
+                              'via UPI Autopay. Cancel anytime. Browsing stays '
+                              'free forever.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,

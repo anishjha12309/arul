@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../app/widgets/arul_toast.dart';
@@ -45,7 +46,8 @@ class FeedScreen extends ConsumerStatefulWidget {
   ConsumerState<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
+class _FeedScreenState extends ConsumerState<FeedScreen>
+    with ApplyRestore, WidgetsBindingObserver {
   /// Built lazily from the measured reel height (see [_peek]) rather than in
   /// initState: `viewportFraction` is final on PageController, and the fraction
   /// that yields a constant-size peek can only be computed once we know how tall
@@ -75,7 +77,30 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   /// a populated list after the feed closes. Hold the reference.
   late final VideoPreloadController _video;
 
+  /// Held from initState for the same reason as [_video]: the feed-session
+  /// summary is flushed from `dispose()`, where `ref` is unusable in Riverpod 3.
+  late final AnalyticsService _analytics;
+
   int _index = 0;
+
+  // ── Feed-session counters ──────────────────────────────────────────────────
+  //
+  // Rolled up into ONE `feed_session_ended` event instead of one PostHog event
+  // per card. PostHog bills per event and NOT per property, so a single event
+  // carrying counts answers the same questions (scroll depth, live/static mix,
+  // session length) at a small fraction of the billed volume. The per-card
+  // `wallpaper_engaged` still fires for GA4, which is free and unsampled.
+
+  /// A card counts as engaged only after the user has dwelled on it for
+  /// [_dwellThreshold] — a swipe that passes through is not engagement. Reset on
+  /// every page change.
+  Timer? _dwellTimer;
+  static const _dwellThreshold = Duration(seconds: 2);
+
+  int _engagedCount = 0;
+  int _engagedLive = 0;
+  int _maxDepth = 0;
+  DateTime? _feedSessionStart;
 
   /// The filtered list currently handed to the pager + video pool. Compared by
   /// CONTENT (ordered item ids), not identity: feedProvider re-emits a NEW list
@@ -110,10 +135,22 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
   void initState() {
     super.initState();
     _video = ref.read(videoPreloadControllerProvider);
+    _analytics = ref.read(analyticsServiceProvider);
+    _feedSessionStart = DateTime.now();
+    // This screen lives in a StatefulShellRoute.indexedStack, so it is kept
+    // alive across tab switches and in practice only disposes when the app dies
+    // — dispose() alone would almost never flush the summary. Backgrounding is
+    // the real end-of-session signal, so observe it.
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
+    _dwellTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    // Backstop for the rare path where the screen really is torn down without
+    // the app being backgrounded first.
+    _flushFeedSession();
     _pager?.dispose();
     // Do NOT dispose the controller — it is app-scoped, and disposing here would
     // race the Android 12+ Activity recreate a wallpaper apply can trigger.
@@ -121,6 +158,71 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     // background/resume cannot spin the pool up behind a screen with no video.
     _video.detach();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // `paused` (and `hidden` on the newer lifecycle) is the last callback we are
+    // guaranteed before the process can be killed, so it is the only reliable
+    // place to close out a feed session.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _flushFeedSession();
+    } else if (state == AppLifecycleState.resumed) {
+      // Returning to the foreground starts a NEW session rather than resuming
+      // the closed one, so the `seconds` property stays meaningful.
+      _feedSessionStart = DateTime.now();
+    }
+  }
+
+  /// Emits one `feed_session_ended` summary and resets the counters.
+  ///
+  /// Silent when the user never dwelled on a card, so opening the tab and
+  /// swiping straight back out does not register as a session. Resetting after
+  /// the emit makes this safe to call more than once (background → foreground →
+  /// background) without double-counting.
+  void _flushFeedSession() {
+    if (_engagedCount == 0) return;
+    final start = _feedSessionStart;
+    _analytics.track(
+      'feed_session_ended',
+      properties: {
+        'cards_engaged': _engagedCount,
+        'cards_engaged_live': _engagedLive,
+        'cards_engaged_static': _engagedCount - _engagedLive,
+        'max_depth': _maxDepth,
+        'seconds': start == null
+            ? 0
+            : DateTime.now().difference(start).inSeconds,
+      },
+    );
+    _engagedCount = 0;
+    _engagedLive = 0;
+    _maxDepth = 0;
+    _feedSessionStart = DateTime.now();
+  }
+
+  /// Starts the dwell clock for the card that just landed. Fires the per-card
+  /// `wallpaper_engaged` (GA4-only — it is not on the PostHog allow-list) and
+  /// folds the card into the session counters that `feed_session_ended` reports.
+  void _onCardSettled(int index, Wallpaper wallpaper) {
+    _dwellTimer?.cancel();
+    _dwellTimer = Timer(_dwellThreshold, () {
+      if (!mounted) return;
+      _engagedCount++;
+      if (wallpaper.kind == WallpaperKind.live) _engagedLive++;
+      if (index > _maxDepth) _maxDepth = index;
+      _analytics.track(
+        'wallpaper_engaged',
+        properties: {
+          'wallpaper_id': wallpaper.id,
+          'category': wallpaper.category,
+          // Spelled as `wallpaper_shared` / `wallpaper_applied` spell it, so the
+          // engagement → apply funnel is joinable on the same key.
+          'type': wallpaper.kind.name,
+        },
+      );
+    });
   }
 
   // ─── List sync ─────────────────────────────────────────────────────────────
@@ -170,6 +272,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
         ..reclaimDecoders()
         ..setWallpapers(items, initialIndex: target)
         ..onPageChanged(target);
+      // Start the dwell clock for the card the user LANDS on. onPageChanged only
+      // fires on a swipe, so without this the first card of every session — the
+      // one card guaranteed to be seen — would never count as engaged, and a
+      // session spent on it alone would emit nothing at all.
+      if (target < items.length) _onCardSettled(target, items[target]);
     });
   }
 
@@ -301,11 +408,25 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
       case WallpaperApplySuccess():
         showArulToast(context, l10n.applied);
         _video.reclaimDecoders();
-      case WallpaperApplyError(:final isNetwork):
-        showArulToast(
-          context,
-          isNetwork ? l10n.offlineBody : l10n.errorGeneric,
-        );
+      case WallpaperApplyError(:final isNetwork, :final premiumRequired):
+        if (premiumRequired) {
+          // The subscription lapsed (or was refunded) mid-session and the
+          // server's live check caught it. A generic toast here is a dead
+          // end — retrying fails identically forever — so send the user
+          // somewhere they can actually act.
+          ref
+              .read(analyticsServiceProvider)
+              .track(
+                'apply_blocked_premium',
+                properties: {'wallpaper_id': w.id, 'category': w.category},
+              );
+          unawaited(context.push('/premium?source=apply'));
+        } else {
+          showArulToast(
+            context,
+            isNetwork ? l10n.offlineBody : l10n.errorGeneric,
+          );
+        }
         _video.reclaimDecoders();
       // Idle = the OS live-wallpaper chooser is open OVER us and owns the
       // outcome. Say nothing (we cannot observe the tap) and do NOT reclaim the
@@ -326,10 +447,21 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
     if (!mounted) return;
     final state = ref.read(wallpaperShareProvider);
     if (state is WallpaperShareError) {
-      showArulToast(
-        context,
-        state.isNetwork ? l10n.offlineBody : l10n.errorGeneric,
-      );
+      if (state.premiumRequired) {
+        // Same dead end as apply — route to where they can resubscribe.
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              'share_blocked_premium',
+              properties: {'wallpaper_id': w.id, 'category': w.category},
+            );
+        unawaited(context.push('/premium?source=share'));
+      } else {
+        showArulToast(
+          context,
+          state.isNetwork ? l10n.offlineBody : l10n.errorGeneric,
+        );
+      }
       ref.read(wallpaperShareProvider.notifier).reset();
     }
   }
@@ -629,6 +761,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> with ApplyRestore {
                     setState(() => _index = i);
                     _video.onPageChanged(i);
                     _precacheNextStatic(items, i);
+                    _onCardSettled(i, items[i]);
                   },
                   // Each page is a self-contained card: media, scrim, name and
                   // the two buttons, all clipped to the same rounded rect. The

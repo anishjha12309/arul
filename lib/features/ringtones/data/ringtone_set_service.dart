@@ -25,8 +25,17 @@ extension RingtoneTargetAndroid on RingtoneTarget {
 // ─── Exception ────────────────────────────────────────────────────────────────
 
 class RingtoneSetException implements Exception {
-  const RingtoneSetException(this.message);
+  const RingtoneSetException(this.message, {this.premiumRequired = false});
   final String message;
+
+  /// The Worker refused with 403 `premium_required` → route to the paywall.
+  ///
+  /// Entitlement is read live from Neon on every gated call, so a subscription
+  /// that lapsed or was refunded mid-session lands here even though the client
+  /// still believed it was premium. An ordinary business condition: no crash
+  /// record, and a toast would be a dead end because retrying fails identically
+  /// forever.
+  final bool premiumRequired;
 
   @override
   String toString() => message;
@@ -88,7 +97,13 @@ class AndroidRingtoneSetService implements RingtoneSetService {
       return url;
     } on ApiException catch (e) {
       if (e.isPremiumRequired) {
-        throw const RingtoneSetException('Premium subscription required');
+        // The client-side gate already ran, so reaching here means its
+        // entitlement snapshot was stale — the subscription lapsed or was
+        // refunded mid-session.
+        throw const RingtoneSetException(
+          'Premium subscription required',
+          premiumRequired: true,
+        );
       }
       throw RingtoneSetException('Failed to get signed URL (${e.status})');
     }

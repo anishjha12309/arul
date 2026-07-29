@@ -3,7 +3,14 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'subscription_model.freezed.dart';
 part 'subscription_model.g.dart';
 
+// Must cover EVERY value the Worker can put in subscriptions.status — an
+// unknown status makes fromJson throw, which errors the whole entitlement
+// fetch. `pending` in particular is real: /payments/initiate upserts the row
+// as 'pending' BEFORE the mandate completes, so an abandoned or webhook-lost
+// setup leaves a pending row that /me/subscription then serves.
 enum SubscriptionStatus {
+  @JsonValue('pending')
+  pending,
   @JsonValue('trialing')
   trialing,
   @JsonValue('active')

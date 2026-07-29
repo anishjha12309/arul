@@ -1,10 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
+import '../providers/entitlement_provider.dart';
+
+/// Monthly price from app_config `prices` (paise) → "₹199". Falls back to the
+/// launch price when the remote config hasn't loaded yet.
+String _monthlyPrice(Map<String, dynamic>? prices) {
+  final monthly = prices?['monthly'];
+  if (monthly is Map && monthly['amount'] is num) {
+    final rupees = (monthly['amount'] as num) / 100;
+    final asInt = rupees.truncateToDouble() == rupees;
+    return '₹${asInt ? rupees.toInt() : rupees.toStringAsFixed(2)}';
+  }
+  return '₹199';
+}
 
 /// The premium bottom sheet shown on the SECOND gated tap in a session
 /// (Spec > Premium gate). A soft nudge toward the full premium SCREEN — not
@@ -33,7 +48,7 @@ class PremiumSheet {
   }
 }
 
-class _PremiumSheetBody extends StatelessWidget {
+class _PremiumSheetBody extends ConsumerWidget {
   const _PremiumSheetBody({required this.source});
 
   /// The blocked verb (`apply` / `share`) that opened this sheet; forwarded to
@@ -41,7 +56,20 @@ class _PremiumSheetBody extends StatelessWidget {
   final String source;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // One free trial per user (trial_end = consumed-marker). Only a LOADED
+    // entitlement may advertise the trial — on loading/error the safe default
+    // is the paid copy, because the Worker re-checks trial_end at initiate and
+    // a repeat subscriber's mandate charges the full month upfront.
+    final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
+    final trialEligible =
+        entitlement != null && entitlement.subscription?.trialEnd == null;
+
+    // Real price from the remote app_config (paise), ₹199 fallback.
+    final monthlyPrice = _monthlyPrice(
+      ref.watch(appConfigProvider).asData?.value?.prices,
+    );
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final pitchColor = isDark ? ArulTokens.darkBodyWarm : ArulTokens.lightBody;
@@ -92,7 +120,7 @@ class _PremiumSheetBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '₹199 / month',
+                        '$monthlyPrice / month',
                         style: ArulTokens.rowTitle.copyWith(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -107,32 +135,39 @@ class _PremiumSheetBody extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: ArulTokens.gold,
-                    borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-                  ),
-                  // Must match TRIAL_DAYS in workers/src/routes/payments.ts.
-                  child: Text(
-                    '1 DAY FREE',
-                    style: ArulTokens.caption.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: ArulTokens.darkSurface,
+                // Trial pill only for a user who still HAS the one free trial
+                // — a repeat subscriber is charged the month upfront, and a
+                // sheet that says FREE on a paid mandate reads as a scam.
+                if (trialEligible) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ArulTokens.gold,
+                      borderRadius: BorderRadius.circular(
+                        ArulTokens.pillRadius,
+                      ),
+                    ),
+                    // Must match TRIAL_DAYS in workers/src/routes/payments.ts.
+                    child: Text(
+                      '1 DAY FREE',
+                      style: ArulTokens.caption.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: ArulTokens.darkSurface,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 14),
 
           CtaButton(
-            label: 'Start free trial',
+            label: trialEligible ? 'Start free trial' : 'Get Premium',
             height: ArulTokens.ctaHeight52,
             fontSize: 16,
             onPressed: () {

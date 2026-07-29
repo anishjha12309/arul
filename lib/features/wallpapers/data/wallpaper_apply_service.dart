@@ -23,8 +23,17 @@ enum ApplyTarget {
 // ─── Exception ───────────────────────────────────────────────────────────────
 
 class WallpaperApplyException implements Exception {
-  const WallpaperApplyException(this.message);
+  const WallpaperApplyException(this.message, {this.premiumRequired = false});
   final String message;
+
+  /// The Worker refused with 403 `premium_required`.
+  ///
+  /// This is an ordinary business condition, not a defect: entitlement is read
+  /// live from Neon on every gated call, so a subscription that lapsed (or was
+  /// refunded) mid-session lands here while the client still believes it is
+  /// premium. Callers must route to the paywall and must NOT file a Crashlytics
+  /// non-fatal — doing so would bury real apply failures under expected ones.
+  final bool premiumRequired;
 
   @override
   String toString() => message;
@@ -113,7 +122,10 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
       return url;
     } on ApiException catch (e) {
       if (e.isPremiumRequired) {
-        throw const WallpaperApplyException('Premium subscription required');
+        throw const WallpaperApplyException(
+          'Premium subscription required',
+          premiumRequired: true,
+        );
       }
       throw WallpaperApplyException('Failed to get signed URL (${e.status})');
     }

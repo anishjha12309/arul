@@ -36,8 +36,12 @@ final class PurchaseSuccess extends PurchaseState {
 }
 
 final class PurchaseError extends PurchaseState {
-  const PurchaseError(this.message);
+  const PurchaseError(this.message, {this.cancelled = false});
   final String message;
+
+  /// True when the user backed out of the PhonePe flow themselves — the UI
+  /// shows a neutral "cancelled" toast instead of a red failure.
+  final bool cancelled;
 }
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
@@ -195,7 +199,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       );
 
       if (response == null) {
-        state = const PurchaseError('Payment was cancelled.');
+        state = const PurchaseError('Payment cancelled.', cancelled: true);
         return;
       }
 
@@ -210,10 +214,14 @@ class PremiumPurchase extends _$PremiumPurchase {
       }
 
       if (sdkStatus != 'SUCCESS') {
-        final msg = sdkError.isNotEmpty
-            ? 'Payment failed: $sdkError'
-            : 'Payment was not completed. Please try again.';
-        state = PurchaseError(msg);
+        // sdkError is a raw SDK payload (e.g. `key_txn_result:
+        // {"statusCode":"USER_CANCEL"}`) — never surface it to the user.
+        debugPrint('[PremiumPurchase] SDK failure: $sdkStatus $sdkError');
+        state = sdkError.contains('USER_CANCEL')
+            ? const PurchaseError('Payment cancelled.', cancelled: true)
+            : const PurchaseError(
+                'Payment was not completed. Please try again.',
+              );
         return;
       }
 
@@ -248,8 +256,9 @@ class PremiumPurchase extends _$PremiumPurchase {
           if (serverStatus == 'pending') continue;
 
           // Any other terminal state (cancelled, expired, etc.) = failure.
-          state = PurchaseError(
-            'Subscription status: $serverStatus. Please contact support.',
+          debugPrint('[PremiumPurchase] terminal server status: $serverStatus');
+          state = const PurchaseError(
+            'We couldn’t activate your subscription. Please contact support.',
           );
           return;
         } on ApiException catch (e) {
@@ -272,8 +281,24 @@ class PremiumPurchase extends _$PremiumPurchase {
       // Treat it as success and re-read entitlement so the UI flips to
       // "Manage Subscription" instead of showing an error for a working account.
       if (e.code == 'already_subscribed') {
-        ref.invalidate(entitlementProvider);
+        // Invalidate the DETAIL provider — the narrowed entitlementProvider
+        // derives from it, so invalidating only the narrow one re-reads the
+        // stale cached detail and the UI never flips to "Manage Subscription".
+        ref.invalidate(entitlementDetailProvider);
         state = const PurchaseSuccess();
+        return;
+      }
+      // A setup of OUR OWN is still running (double-tap, or a retry after a
+      // client timeout whose first attempt is still at PhonePe). Emphatically
+      // NOT success: nothing is authorized yet, and reporting success here
+      // would flip the UI to "Manage Subscription" for a user with no
+      // subscription. Ask them to wait — the in-flight attempt is what will
+      // actually settle.
+      if (e.code == 'setup_in_progress') {
+        state = const PurchaseError(
+          'A payment setup is already in progress. '
+          'Please wait a moment and try again.',
+        );
         return;
       }
       state = PurchaseError(
@@ -282,7 +307,9 @@ class PremiumPurchase extends _$PremiumPurchase {
             : 'Something went wrong. Please try again.',
       );
     } catch (e) {
-      state = PurchaseError('Unexpected error: $e');
+      // Never show the raw exception — it can carry SDK/stack detail.
+      debugPrint('[PremiumPurchase] unexpected error: $e');
+      state = const PurchaseError('Something went wrong. Please try again.');
     }
   }
 
@@ -327,7 +354,8 @@ class PremiumPurchase extends _$PremiumPurchase {
           ? e.message
           : 'Could not cancel your subscription. Please try again.';
     } catch (e) {
-      return 'Unexpected error: $e';
+      debugPrint('[PremiumPurchase] cancel failed: $e');
+      return 'Something went wrong. Please try again.';
     }
   }
 }
