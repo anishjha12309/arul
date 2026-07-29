@@ -1,10 +1,41 @@
-# Arul Worker — deploy config. Every provisioned id below is filled in; see
-# docs/provisioning.md for how each was created.
+# Arul Worker — deploy config. Every provisioned id below is real, and the
+# comment above each one carries the command that created it. A `TODO_` here
+# means the resource does not exist yet — never deploy past one.
 name = "arul-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-25"
 compatibility_flags = ["nodejs_compat"]
 account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as the reference app
+
+# `workers_dev = true` is LOAD-BEARING, not a leftover: declaring any `routes`
+# entry makes wrangler default workers.dev to FALSE, which silently kills
+# arul-api.twilight-smoke-d495.workers.dev — the host every already-installed
+# build (including the Play testing track) still points at. Keep both serving
+# until a release using the custom domain has fully rolled out.
+#
+# IT MUST STAY UP HERE, above every `[table]` header. It was originally written
+# beside the `[[routes]]` block at the bottom of this file, where the preceding
+# `[triggers]` header captured it as `triggers.workers_dev` — wrangler warned
+# ("Unexpected fields found in triggers field") and deployed with workers.dev
+# OFF, so that hostname served a bare Cloudflare 1042 error page for every
+# installed build while the custom domain looked perfectly healthy. Same TOML
+# capture rule the [observability] note at the bottom of this file describes.
+workers_dev = true
+
+# `preview_urls` MUST be stated explicitly, because it FOLLOWS `workers_dev`
+# when omitted — and we need workers_dev ON, so leaving this out silently turns
+# previews back on at every deploy.
+#
+# OFF because a preview URL (`<version-prefix>-arul-api.<subdomain>.workers.dev`)
+# is public and runs THAT VERSION against the LIVE bindings — real Neon, KV, R2
+# and PhonePe credentials. Verified 2026-07-30: a superseded version was still
+# answering on its own hostname, which meant pre-fix `/payments/initiate` logic
+# (the one that could create a double mandate) stayed reachable against
+# production data. Cloudflare also serves no logs for preview URL traffic, so it
+# bypasses the payment audit trail `head_sampling_rate = 1` below exists to keep.
+#
+# Turn back on only for a deliberate staging host, behind Cloudflare Access.
+preview_urls = false
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Refresh-token jti denylist · PhonePe webhook idempotency ("txn:<orderId>") ·
@@ -79,13 +110,9 @@ crons = ["0 * * * *", "30 21 * * *"]
 # hostname). Costs nothing — a subdomain of a zone you already own is free, and
 # Workers custom domains carry no per-hostname charge.
 #
-# `workers_dev = true` is LOAD-BEARING, not a leftover: declaring any `routes`
-# entry makes wrangler default workers.dev to FALSE, which would silently kill
-# arul-api.twilight-smoke-d495.workers.dev — the host every already-installed
-# build (including the Play testing track) still points at. Keep both serving
-# until a release that uses the custom domain has fully rolled out; only then is
-# it safe to drop this line.
-workers_dev = true
+# Declaring this block is what flips workers.dev off by default — `workers_dev
+# = true` counteracts it and lives at the TOP of this file, not here. Do not
+# move it down beside this block: a `[table]` header above it swallows it.
 
 [[routes]]
 pattern = "arul-api.hsrutility.com"
