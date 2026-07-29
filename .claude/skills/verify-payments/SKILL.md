@@ -177,11 +177,10 @@ behaviour the merchant is configured for. It should read
 *"Setup, notify & redemption success with PhonePe retries auto debit false"* —
 which matches our `redemptionRetryStrategy:"STANDARD"` + `autoDebit:false`.
 
-## Known-good baseline (reference app, verified 2026-07-25)
+## Known-good baseline
 
-In the REFERENCE app (Pakiza), live against UAT: OAuth, mandate setup with
-correct ₹2/₹199 branching, mandate status, notify, redeem creating a
-**19900-paise** order, and PENDING correctly granting nothing. Via stub:
-COMPLETED → active +1 month; FAILED → retries 1–4 then expiry at 5; referral
-granted once and idempotent on renewal. Arul has NO baseline of its own yet —
-recording one is the point of the first run.
+Arul has its own, recorded 2026-07-29 against UAT on a real device plus a local
+stub: **`docs/billing-verified.md`**. Read it first — it lists what is already
+proven, what UAT refuses to settle, and the cheap way to re-run each step
+(backdate `next_debit_at`; time is the only thing simulated). Pakiza holds an
+equivalent baseline from 2026-07-25.

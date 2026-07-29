@@ -1,14 +1,13 @@
 # Edge Cases & Must-Preserve Behavior
 
-Every box below held on-device as of the **1.0.0+20** release (2026-07-19). They are not a one-time port
-checklist — they are permanent **regression contracts**, to be re-verified on-device before every release.
-Boxes stay unticked on purpose: an unticked box means "not re-verified for the release you are cutting
-now", not "never done". `←` points into the reference (c:\Anish\Pakiza).
-These are regressions that actually happened once — each line is a bug someone already paid for.
-They bind regardless of how different Arul's UI looks.
+Permanent **regression contracts** — each line is a bug someone already paid for, and every box held
+on-device as of the **1.0.0+20** release (2026-07-19). Walk them on-device before cutting a release.
+Boxes stay unticked on purpose: unticked means "not re-checked for the release you are cutting now",
+not "never done". `←` points at the code that implements the contract. They bind regardless of how
+the UI is designed.
 
 ## Video feed (budget-SoC class — hardest-won)
-- [ ] Live MP4s exactly 1024×1824 (w%128==0, h%32==0, ≤1088×1920 hw cap) ← docs/media-conventions.md + `wallpaper-media-spec.md`
+- [ ] Live MP4s exactly 1024×1824 (w%128==0, h%32==0, ≤1088×1920 hw cap) ← docs/media-conventions.md
 - [ ] ExoPlayer pool REUSES players — setMediaItem swap, never dispose+recreate per swipe ← `feedvideo/FeedVideoPlugin.kt`
 - [ ] ONE process-global EventChannel hub — a second listener silently steals the sink ← `feed_video_player.dart`
 - [ ] Silent software-decoder fallback detected (`onVideoDecoderInitialized`) → pool budget demoted 3→2, **floor 2**; only real codec errors may demote to 1 ← adaptive decoder budget
@@ -33,16 +32,18 @@ They bind regardless of how different Arul's UI looks.
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
 - [ ] `cancelled` keeps premium until period end; `paused`/`expired` none; `reward_premium_until` ORed in
 - [ ] One trial ever: `trial_end` consumed-marker + delete-account HMAC tombstone (secret NEVER rotates); re-signup pre-seeds consumed trial → ₹199 TRANSACTION setup
-- [ ] SDK order token = `POST /checkout/v2/sdk/order`; working cancel = `/subscriptions/v2/{id}/cancel` (documented path 401s); 24h pre-debit notify cron; webhook deduped by orderId in KV
+- [ ] SDK order token = `POST /checkout/v2/sdk/order`; working cancel = `/subscriptions/v2/{id}/cancel` (documented path 401s); 24h pre-debit notify cron; webhook deduped by orderId in KV ← docs/phonepe.md
+- [ ] A second `/payments/initiate` while a setup is in flight returns 409 `setup_in_progress` — never a second live mandate
+- [ ] Re-applying or re-sharing an ALREADY-CACHED wallpaper still calls `/media/signed-url` — a cache must never become a permanent licence. Offline with the bytes on disk is the one allowed pass-through ← `wallpaper_share_provider.dart`
 - [ ] Blocked gated action tracks `${action}_blocked_premium` and routes `/premium?source=`
 - [ ] Delete account: mandate revoke → tombstone → cascade → refresh-jti denylist
 
-## Browse (category axis — Arul delta)
+## Browse (category axis — a deliberate delta from Pakiza)
 - [ ] Feed filters by CATEGORY chips (All + 6); static and live interleave — no All/New tabs, no static/live filter anywhere in the UI
 - [ ] Every catalog item carries `category`; unknown/missing category never crashes the feed (falls into All)
 - [ ] Empty category → localized empty state, not a blank feed
 
-## Ringtones (shipped 2026-07-17 — the original strip was reversed)
+## Ringtones
 - [ ] Setting a tone needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to
       `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt:76-149`
       (`setRingtoneFromFile` re-checks and throws `SecurityException` at :149 — surface it localized)
@@ -53,6 +54,8 @@ They bind regardless of how different Arul's UI looks.
       cell ← `db/schema/04_ringtones.sql:6-8`
 - [ ] Preview is FREE (public `audio_key` straight from the CDN); only **Set** is premium-gated, through
       `/media/signed-url` with kind `ringtone` ← `workers/src/routes/media.ts:31`
+- [ ] Set has a re-entrancy guard (same as apply/share) — a double tap must not run two set flows
+      ← `lib/features/ringtones/providers/ringtone_set_provider.dart:91`
 
 ## Upload (wallpaper-only in Arul)
 - [ ] confirm-upload accepts kind `wallpaper` ONLY; idempotent via unique `file_key` upsert; keys forced under `user/<sub>/`
@@ -63,8 +66,8 @@ They bind regardless of how different Arul's UI looks.
 - [ ] Shares the ACTUAL media file (signed-URL gate, reuses apply's cache) + referral-link caption; WhatsApp absent → system sheet fallback
 
 ## Catalog / storage
-- [ ] `version.json` no-store; pages max-age=60 + `?v=` busting; stale content = rebuild, NEVER cache-purge
-- [ ] Orphaned catalog pages deleted each rebuild; sweep-canonical runs only after a fully-successful rebuild and refuses to act on an empty referenced-keys set ← `cron/sweep-canonical.ts`
+- [ ] `version.json` is edge-cacheable (`public, max-age=30, stale-while-revalidate=300`), pages max-age=60 + `?v=` busting; stale content = rebuild, NEVER cache-purge ← docs/caching.md
+- [ ] Orphaned catalog pages deleted each rebuild; the hourly sweep-canonical runs only after a fully-successful rebuild and refuses to act on an empty referenced-keys set; the daily 21:30 UTC sweep is the unconditional backstop ← `cron/sweep-canonical.ts`, docs/cron.md
 - [ ] Hyperdrive query caching OFF (caused ~60s staleness once)
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing with another app = mutual media deletion
 - [ ] R2 objects public BY DESIGN (soft gate); never add a "private" object to this bucket

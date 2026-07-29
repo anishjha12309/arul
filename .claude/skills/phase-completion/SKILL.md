@@ -5,7 +5,7 @@ description: Checklist and workflow for completing a build phase in the Arul app
 
 # Phase Completion
 
-Run at the end of every phase (port-map phases included).
+Run at the end of every phase.
 
 ## 1. Checks — all must pass
 ```bash
