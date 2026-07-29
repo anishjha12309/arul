@@ -6,9 +6,11 @@ import android.content.Intent
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import com.hsrapps.arul.feedvideo.FeedVideoPlugin
 import com.hsrapps.arul.feedvideo.VideoThumbnailChannel
 import com.hsrapps.arul.share.ShareWatermarkChannel
@@ -31,6 +33,45 @@ class MainActivity : FlutterFragmentActivity() {
     private var feedVideoPlugin: FeedVideoPlugin? = null
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Anti-piracy FLAG_SECURE (blocks screenshots + screen recording, blanks the
+        // recents thumbnail) applies ONLY to the Play-delivered build. An AAB reaches
+        // a device solely through Google Play, so "installed by com.android.vending"
+        // is the runtime proxy for "this is the shipped AAB" — there is no BuildConfig
+        // signal that distinguishes an APK from an AAB (both are the `release` type).
+        // Debug and sideloaded release APKs (local test builds) stay visible so
+        // screenshots for the Play listing still work. Set here (not the manifest) so
+        // it re-applies on every activity recreate — e.g. the Android 12+
+        // wallpaper-apply recolor restart. The active setFlags call keeps
+        // release-flag-secure-guard.js (which gates the .aab) satisfied.
+        if (isPlayInstall()) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        }
+    }
+
+    /**
+     * True only when this build was delivered by Google Play (the uploaded AAB).
+     * Fails CLOSED (treats the app as the shipped build → screenshots blocked) if the
+     * installer can't be resolved, so the published app is never left unprotected.
+     */
+    private fun isPlayInstall(): Boolean {
+        return try {
+            val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                packageManager.getInstallSourceInfo(packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getInstallerPackageName(packageName)
+            }
+            installer == "com.android.vending"
+        } catch (e: Exception) {
+            true
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

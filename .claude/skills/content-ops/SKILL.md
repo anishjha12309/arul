@@ -13,6 +13,11 @@ for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo** (`c:\A
 Two scopes: **wallpapers** and **ringtones**. Ringtone audio lives at
 `ringtones/<category>/<uuid>.mp3`, cover art at `ringtones/covers/<category>/<uuid>.jpg`.
 
+⚠ **The app's ringtones tab is PARKED in v1** — the route is commented out, so publishing ringtones
+will NOT make them appear. Publishing is necessary but not sufficient: un-parking is a code change
+(`docs/known-issues.md`). The scope, the prefix and the sweep all still run — publish and sweep
+ringtones normally, just don't expect a shipped build to show them.
+
 ## Manual rebuild / check
 ```bash
 API=https://arul-api.hsrutility.com
@@ -25,7 +30,8 @@ curl -s "$CDN/catalog/ringtones/all_1.json?v=<version>"      # read BOTH — a r
                                                              # for one scope and fail for the other
 ```
 A zero-row scope still writes an explicit empty `all_1.json` (`total: 0`), so a 404 here means that
-scope FAILED to build — not that it is empty. Ringtones is legitimately empty today (0 published).
+scope FAILED to build — not that it is empty. Ringtones is legitimately empty today (0 published),
+which is exactly why its tab is parked.
 
 Stale content is never a cache problem: rebuild, never purge. Cache behaviour, the two Cache Rules
 and the HEAD-vs-GET measurement trap are in `docs/caching.md`.

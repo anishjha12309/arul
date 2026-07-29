@@ -43,10 +43,15 @@ the UI is designed.
 - [ ] Every catalog item carries `category`; unknown/missing category never crashes the feed (falls into All)
 - [ ] Empty category → localized empty state, not a blank feed
 
-## Ringtones
+## Ringtones — PARKED in v1, do NOT walk these
+The tab has no route into it and `WRITE_SETTINGS` is commented out of the manifest, so none of the
+below is reachable in a v1 build and an unticked box here means "parked", not "broken". The contracts
+are kept verbatim because the code is kept verbatim — **re-walk this whole section in the release
+that un-parks the tab** ([known-issues.md](known-issues.md)), starting with the permission.
 - [ ] Setting a tone needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to
-      `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt:76-149`
-      (`setRingtoneFromFile` re-checks and throws `SecurityException` at :149 — surface it localized)
+      `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt`
+      (`setRingtoneFromFile` re-checks and throws `SecurityException` — surface it localized). The
+      manifest declaration must be uncommented in the same change, or every set fails the canWrite check.
 - [ ] ONE shared `just_audio` `AudioPlayer` for ALL preview playback — starting a track stops the previous
       one, so two previews never overlap and only one decoder is held (the feed's video pool shares the
       device) ← `lib/features/ringtones/providers/ringtone_preview_provider.dart`
@@ -76,6 +81,10 @@ the UI is designed.
 - [ ] Loading / empty / error state on every async surface, localized (all 6 locales)
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ events mirror to GA4 `login`/`purchase` + Meta
-- [ ] `allowBackup=false` + data-extraction rules + HTTPS-only network config; **FLAG_SECURE added before public release**
+- [ ] `allowBackup=false` + data-extraction rules + HTTPS-only network config
+- [ ] `FLAG_SECURE` set in `MainActivity.onCreate` (not the manifest — it must survive the Android 12+
+      apply recreate) and **only when `isPlayInstall()`**, which fails CLOSED on an unresolvable
+      installer. The Play build blocks screenshots + recording; debug/sideloaded APKs stay visible so
+      listing screenshots still work. `release-flag-secure-guard.js` denies any `.aab` that loses it
 - [ ] No secrets in repo or APK — dart-defines only; `aapt dump badging` sanity when in doubt
 - [ ] Worker vitest suite + `flutter test` green; `tsc --noEmit` clean; worker deployed

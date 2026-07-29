@@ -58,6 +58,9 @@ so a 404 there means the scope FAILED to build, not that it is empty) · `catalo
 (public subset) · `catalog/version.json` (edge-cached pointer). Scope queries end in `id ASC`, so
 ordering is deterministic. The app reads version.json, then appends `?v=<version>` to page URLs.
 
+**Both scopes stay live though the app's ringtones tab is parked in v1** (`docs/known-issues.md`) —
+parking is front-end only. Keep the scope, `kind='ringtone'`, and the `ringtones/` sweep prefix.
+
 ## Secrets (`npx wrangler secret bulk <file.json>` — fresh values, NEVER reuse another app's)
 ```
 JWT_SECRET  GOOGLE_WEB_CLIENT_ID

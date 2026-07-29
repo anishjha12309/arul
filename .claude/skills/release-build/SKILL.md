@@ -5,12 +5,19 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
 
 # Release Build
 
-0. **Version-bump guard (hook):** a PreToolUse hook (`.claude/hooks/release-version-guard.js`)
-   BLOCKS any release build whose pubspec version was already built from different source
-   (state: git-ignored `.claude/last-release-build.json`). If blocked: bump `version:` in
-   pubspec.yaml (+1 build number) and retry. AAB then APK back-to-back from identical source
-   shares one version — allowed by design. The guard matches the pattern anywhere in a command
-   string, so avoid echoing "flutter build apk" literally.
+0. **Hooks gate the `.aab` only** — it is the only artifact Play ever sees, so APK builds stay free
+   for on-device testing and never consume a version.
+   - `release-version-guard.js` BLOCKS an `.aab` whose pubspec version was already built from
+     different source (state: git-ignored `.claude/last-release-build.json`). If blocked: bump
+     `version:` in pubspec.yaml (+1 build number) and retry. Only an `.aab` landing records the
+     bump as spent — a subsequent APK from the same source is free.
+   - `release-flag-secure-guard.js` BLOCKS an `.aab` unless an ACTIVE `setFlags(FLAG_SECURE)`
+     survives in `MainActivity.kt`; one that only exists inside a comment does not count.
+   - `release-commit-reminder.js` reminds you to commit after a successful release build left
+     source uncommitted (an artifact is only reproducible if its source is in git).
+
+   All three match the command pattern anywhere in a string, so avoid echoing "flutter build
+   appbundle" literally in an unrelated command.
 1. Build: `flutter build appbundle --release --dart-define-from-file=env/prod.json`
    (APK for sideload testing: `flutter build apk --release ...`).
 2. Signing preconditions: `android/key.properties` + keystore `C:\Users\anish\arul-upload.jks`
@@ -28,5 +35,8 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    there; re-check only if the upload key rotates. No rebuild needed either way.
 5. Before the app goes PUBLIC (docs/provisioning.md): privacy policy live ✓
    (`https://hsrapps.com/arul/privacy-policy/`), PhonePe PROD webhook registered ✓, real analytics
-   creds in env/prod.json ✓ — **FLAG_SECURE is the one still open** (docs/edge-cases.md).
-   v1.0.0+20 shipped without it.
+   creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced — v1.0.0+20 shipped
+   without it, so the first public build must be newer).
+6. **Ringtones ship PARKED** — the tab has no route and `WRITE_SETTINGS` is out of the manifest, on
+   purpose (docs/known-issues.md). A release whose `aapt2 dump permissions` still lists
+   `WRITE_SETTINGS` means the parking regressed. Do not "restore" it to fix a build.

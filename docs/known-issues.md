@@ -1,17 +1,24 @@
 # Known Issues
 
-Open defects and unverified claims only. Close a line or delete it — don't let it rot.
+Open defects, deliberate gaps and unverified claims only. Close a line or delete it — don't let it rot.
 Verified-and-closed billing behaviour lives in [billing-verified.md](billing-verified.md).
 
 ## Open
 
-- **`FLAG_SECURE` is not set.** Absent from both `android/` and `lib/` — screenshots and screen
-  recording of the app are unrestricted, and the whole catalogue is premium-gated content. Pakiza
-  ships it app-wide. **Add before the Play listing goes public**, not after.
-
-- **Ringtones have no content.** The `ringtones` table is empty in prod, so `catalog/ringtones/all_1.json`
-  is a valid `total: 0` page and the tab renders its empty state. A content job for the CMS, not a code
-  defect — do not "fix" it in the app.
+- **Ringtones are PARKED for v1, not merely empty.** The `ringtones` table is empty in prod, so the
+  tab only ever rendered "coming soon" — shipping a dead tab is worse than shipping no tab. So the
+  ENTRY POINT is commented out: `lib/app/router.dart` routes `/browse` as a plain top-level route
+  instead of the `StatefulShellRoute` (killing the dock and the ringtones branch), and
+  `AndroidManifest.xml` comments out `WRITE_SETTINGS` — a special-access permission Play reviews, with
+  no feature behind it. Grep `RINGTONES-PARKED` for every line.
+  **Nothing is deleted and nothing is a defect.** `features/ringtones/**`, `app/shell/app_shell.dart`,
+  the `ringtone*` ARB keys, the worker's `ringtones` catalog scope and the `ringtones/` sweep prefix
+  are all intact and still type-checked; Dart just tree-shakes them out of the build.
+  **To un-park:** publish ringtone audio to the bucket FIRST (audio in R2 + rows in Neon + a rebuild —
+  otherwise the tab is dead again), then in `router.dart` uncomment the `StatefulShellRoute` block,
+  delete the temporary `/browse` route, restore the `app_shell.dart` + `ringtones_screen.dart`
+  imports; uncomment `WRITE_SETTINGS`; drop the parked header on `app_shell.dart`. Full procedure and
+  the dock reference screenshots: [reference/ringtones-parked/README.md](reference/ringtones-parked/README.md).
 
 - **Media imported before 2026-07-29 carries no origin `Cache-Control`.** `tools/content-import/import.mjs`
   now stamps `public, max-age=31536000, immutable` on upload, but the ~614 objects already in the

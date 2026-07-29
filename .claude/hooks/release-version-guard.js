@@ -1,11 +1,14 @@
-// Release-build version guard: deny a flutter RELEASE build (apk/appbundle) whose
-// pubspec version was already built from DIFFERENT source — catches "two builds,
-// same versionCode" while allowing the AAB+APK pair from identical source.
+// Release-build version guard: deny a flutter release **appbundle** build (.aab)
+// whose pubspec version was already built from DIFFERENT source — catches "shipped
+// two different builds with the same versionCode" at the only place it matters, Play.
+// The version bump is tied to producing an .aab and nothing else: sideload/prod APK
+// builds are deliberately UNguarded and never record state, so they can rebuild at
+// the same version freely for on-device testing.
 // State: git-ignored .claude/last-release-build.json. Recording is TWO-PHASE
 // (background builds finish long after PostToolUse fires): pre — deny stale-version
 // builds, else write pending.json hashing the source AS OF BUILD START (that is what
-// gets compiled) · post — after every Bash call, promote pending → state once an
-// artifact is newer than pending.startedAt (a failed build never promotes) ·
+// gets compiled) · post — after every Bash call, promote pending → state once the
+// .aab is newer than pending.startedAt (a failed build never promotes) ·
 // reconcile — same promotion, wired to Stop · seed — record unconditionally.
 const { execSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
@@ -15,13 +18,16 @@ const path = require("node:path");
 const ROOT = process.cwd();
 const STATE = path.join(ROOT, ".claude", "last-release-build.json");
 const PENDING = path.join(ROOT, ".claude", "last-release-build.pending.json");
+// Only the .aab is guarded, so only the .aab artifact promotes the pending record —
+// an APK build must never consume a version bump.
 const ARTIFACTS = [
   path.join(ROOT, "build", "app", "outputs", "bundle", "release", "app-release.aab"),
-  path.join(ROOT, "build", "app", "outputs", "flutter-apk", "app-release.apk"),
 ];
 
-const isReleaseBuild = (cmd) =>
-  /flutter\s+build\s+(apk|appbundle)\b/.test(cmd) && !/--(debug|profile)\b/.test(cmd);
+// `flutter build appbundle` defaults to release; an explicit --debug/--profile
+// appbundle isn't a Play artifact, so skip it.
+const isReleaseAabBuild = (cmd) =>
+  /flutter\s+build\s+appbundle\b/.test(cmd) && !/--(debug|profile)\b/.test(cmd);
 
 function pubspecVersion() {
   const m = fs.readFileSync(path.join(ROOT, "pubspec.yaml"), "utf8").match(/^version:\s*(\S+)/m);
@@ -80,7 +86,7 @@ process.stdin.on("data", (d) => (raw += d));
 process.stdin.on("end", () => {
   let cmd = "";
   try { cmd = JSON.parse(raw).tool_input?.command || ""; } catch { return; }
-  if (!isReleaseBuild(cmd)) return;
+  if (!isReleaseAabBuild(cmd)) return;
   try {
     const state = readJson(STATE);
     const v = pubspecVersion();
@@ -88,9 +94,9 @@ process.stdin.on("end", () => {
     const hash = sourceHash();
     if (state && v.code <= state.code && hash !== state.sourceHash) {
       deny(
-        `Release build blocked: pubspec version is ${v.version} but ${state.version} was already built ` +
+        `.aab build blocked: pubspec version is ${v.version} but ${state.version} was already built ` +
           `from DIFFERENT source (${state.at}). Bump the build number in pubspec.yaml ` +
-          `(version: x.y.z+${state.code + 1}) before building, then retry.`,
+          `(version: x.y.z+${state.code + 1}) before building the .aab, then retry.`,
       );
       return;
     }

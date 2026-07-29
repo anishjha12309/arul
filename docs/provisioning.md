@@ -66,7 +66,9 @@ per-hostname charge. There was never a cost reason to avoid these.
 
 ## Bucket content
 `wallpapers/<category>/<uuid|hex>.{jpg|mp4}` across 6 categories (amman, ayyappan, murugan, perumal,
-sivan, temples). **614 wallpapers, 0 ringtones, `content_version` 45** as of 2026-07-29. The original
+sivan, temples). **614 wallpapers, 0 ringtones, `content_version` 45** as of 2026-07-29 — the zero is
+why the app's ringtones tab is parked for v1 ([known-issues.md](known-issues.md)); the R2 prefix, the
+DB table and the catalog scope are all provisioned and waiting. The original
 428 came from the bucket's own `catalog/catalog.json` manifest on 2026-07-14; the app never reads that
 file, and it sits outside the swept prefixes so it survives. Everything since arrived through the CMS
 or `tools/content-import/`.

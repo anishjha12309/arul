@@ -61,9 +61,10 @@ node_modules/
 *.log
 pubspec.lock.bak
 
-# Release-version-guard hook state (local build history; see .claude/hooks/)
+# Release hook state (local build history; see .claude/hooks/)
 .claude/last-release-build.json
 .claude/last-release-build.pending.json
+.claude/release-commit-reminder.pending.json
 docs/cms-redesign-shots/
 cms/.preview/
 cms/.preview/

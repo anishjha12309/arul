@@ -53,6 +53,11 @@ mean "the build failed", not "no content". Every item carries `category`, and th
 filter client-side — no All/New tabs, never a static/live filter. Orphaned page files are deleted each
 rebuild. Cache headers and the rules that serve them: [caching.md](caching.md).
 
+**The `ringtones` scope stays backend-live while the app tab is parked** (v1 — no audio published;
+[known-issues.md](known-issues.md)). Nothing here is conditional on the front end: keep building the
+scope, keep `kind='ringtone'` on `/media/signed-url`, keep the `ringtones/` sweep prefix. Un-parking
+must be a router change, never a backend rebuild.
+
 Exposed keys are public by design (soft gate): wallpaper `full_key`, ringtone `audio_key` +
 `cover_key`. (`catalog/catalog.json` in the bucket is the one-time import manifest, not read by the app.)
 

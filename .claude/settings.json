@@ -39,6 +39,12 @@
             "command": "node .claude/hooks/version-commit.js post",
             "timeout": 30,
             "statusMessage": "version-bump commit"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/doc-sync-reminder.js",
+            "timeout": 15,
+            "statusMessage": "doc-sync route lookup"
           }
         ]
       },
@@ -50,6 +56,12 @@
             "command": "node .claude/hooks/release-version-guard.js post",
             "timeout": 30,
             "statusMessage": "release-version guard (record)"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-commit-reminder.js post",
+            "timeout": 30,
+            "statusMessage": "release commit reminder"
           }
         ]
       }
@@ -60,6 +72,11 @@
           {
             "type": "command",
             "command": "node .claude/hooks/release-version-guard.js reconcile",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-commit-reminder.js reconcile",
             "timeout": 15
           }
         ]
@@ -80,6 +97,18 @@
             "command": "node .claude/hooks/release-version-guard.js pre",
             "timeout": 30,
             "statusMessage": "release-version guard"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-flag-secure-guard.js",
+            "timeout": 15,
+            "statusMessage": "FLAG_SECURE guard (.aab)"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/release-commit-reminder.js pre",
+            "timeout": 15,
+            "statusMessage": "release commit reminder (arm)"
           }
         ]
       }

@@ -1,9 +1,12 @@
-# Arul — South Indian Wallpapers & Ringtones
+# Arul — South Indian Wallpapers
 
-Android-only Flutter app: Shorts-style wallpaper feed (static + live video), category-browsed
-ringtones with cover art, upload-your-content (wallpaper-only), premium via PhonePe UPI Autopay.
-Backend: Cloudflare Workers + Neon + R2. UI/UX is Arul's own design. Shares most of its backend and
-logic with its sibling app Pakiza (`c:\Anish\Pakiza`) — fixes flow both ways; see CLAUDE.md §0.
+Android-only Flutter app: Shorts-style wallpaper feed (static + live video), category browse,
+upload-your-content (wallpaper-only), premium via PhonePe UPI Autopay. Backend: Cloudflare Workers +
+Neon + R2. UI/UX is Arul's own design. Shares most of its backend and logic with its sibling app
+Pakiza (`c:\Anish\Pakiza`) — fixes flow both ways; see CLAUDE.md §0.
+
+A ringtones pillar is **built but parked** for v1 — front end only; the backend still serves it. See
+below.
 
 ## State of this repo
 
@@ -17,11 +20,25 @@ Google sign-in, PhonePe (PRODUCTION credentials), Firebase analytics + Crashlyti
 | Android platform (edge-to-edge, predictive back, themed icon, splash, R8, release signing) | Done |
 | Feed data | Live — per-scope `catalog/<scope>/all_N.json` from the `build-catalog` Worker |
 | Live video playback | Done — native Media3 texture pool (`FeedVideoPlugin`) |
-| Auth · premium · share · upload · ringtones | Done |
+| Auth · premium · share · upload | Done |
 | Custom domains | Live — API `arul-api.hsrutility.com`, media CDN `arul-cdn.hsrutility.com` |
-| Content | 614 wallpapers · 0 ringtones (no ringtone content published yet) |
+| Content | 614 wallpapers · 0 ringtones |
+| Ringtones (app tab) | **Parked for v1** — built, compiling, unreachable. Backend still serves it |
 
-Still open: **FLAG_SECURE** is not added yet — see [docs/known-issues.md](docs/known-issues.md).
+`FLAG_SECURE` is set app-wide, but only on the **Play-installed** build (`MainActivity.onCreate`):
+an AAB can only reach a device through Play, so that is the runtime proxy for "this is the shipped
+artifact". Debug and sideloaded release APKs stay screenshottable for the Play listing. A hook denies
+any `.aab` build that loses it. Remaining open items: [docs/known-issues.md](docs/known-issues.md).
+
+## Ringtones are parked (2026-07-29)
+
+There is no ringtone audio in the bucket, so the tab only ever showed "coming soon". Rather than ship
+a dead tab, the **entry point** is commented out (`lib/app/router.dart` — the two-tab shell and its
+dock go with it) along with the `WRITE_SETTINGS` permission. Nothing was deleted:
+`lib/features/ringtones/**`, `lib/app/shell/app_shell.dart`, the `ringtone*` ARB keys and the whole
+ringtone backend still compile and still work. Grep `RINGTONES-PARKED`; the un-park procedure — which
+starts with publishing audio — is in [docs/known-issues.md](docs/known-issues.md) and
+[docs/reference/ringtones-parked/](docs/reference/ringtones-parked/README.md).
 
 ## Run it
 ```bash
@@ -43,7 +60,7 @@ CLAUDE.md          session contract (read first)
 docs/              architecture · data model · media rules · edge cases · caching · cron · phonepe · analytics · provisioning · UI
 lib/               app/{theme,widgets,l10n} · core/{config,api,error,analytics} · data/* · features/*
 android/           edge-to-edge + predictive back + adaptive/themed icon + R8 + release signing
-.claude/           hooks (format, secret guard, version guards) + 8 skills
+.claude/           hooks (format, secret guard, .aab guards: version + FLAG_SECURE + commit reminder) + 8 skills
 db/schema/         Neon schema (apply 01→04, then seed.sql)
 workers/           Worker API + crons (src/, wrangler.toml)
 tools/             content-import — bulk wallpaper import pipeline

@@ -54,15 +54,17 @@ Static-vs-live rides along as **`type`** (`kind.name` → `image` / `live`), spe
 | wallpaper_shared | wallpaper_id, type, category, result | | | |
 | apply_blocked_premium | wallpaper_id, category | ✓ | | |
 | share_blocked_premium | wallpaper_id, category | | | |
-| ringtone_preview · ringtone_set_attempt | ringtone_id, category | | | |
-| ringtone_set | ringtone_id, category | | | |
-| ringtone_set_blocked_premium | — | | | |
+| ringtone_preview · ringtone_set_attempt ‡ | ringtone_id, category | | | |
+| ringtone_set ‡ | ringtone_id, category | | | |
+| ringtone_set_blocked_premium ‡ | — | | | |
 | referral_shared | — | | | |
 | share_watermark_failed | wallpaper_id, type, reason | | | |
 | profile_name_updated · support_email_opened | has_user | | | |
 | account_delete_{confirmed,failed} · account_deleted | error | | | |
 
 Blank PostHog column = GA4-only (still captured at 100%, just not billed). Screen views: PostHog autocapture is OFF **and** `screen()` is dropped by `AllowlistedAnalyticsService`; GA4 auto `screen_view` covers screens.
+
+**‡ = zero volume in v1.** The ringtones tab is parked (no audio published — `known-issues.md`), so nothing can reach the code that emits these. The wiring is intact and unchanged; read a v1 dashboard showing zero as "unreachable", not "broken", and don't delete the definitions.
 
 ### `wallpaper_applied.confirmed` — read this before quoting an apply rate
 
