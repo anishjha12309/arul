@@ -3,8 +3,15 @@
     <!-- Static wallpaper apply via WallpaperManager. Normal permission, auto-granted.
          Live wallpapers go through the system chooser and need no permission. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
-    <!-- Required to set device ringtone/notification/alarm via RingtoneManager -->
+    <!-- RINGTONES-PARKED (2026-07-29): required to set device
+         ringtone/notification/alarm via RingtoneManager — and nothing else asks
+         for it. WRITE_SETTINGS is special-access and shows on the Play listing,
+         so it stays out while the feature is hidden; restore it in the same
+         change that un-parks the ringtone route.
+         See docs/reference/ringtones-parked/README.md.
     <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
+    -->
+
     <uses-permission android:name="android.permission.VIBRATE"/>
 
     <!-- Live wallpaper support is OPTIONAL: the app still installs and runs on a

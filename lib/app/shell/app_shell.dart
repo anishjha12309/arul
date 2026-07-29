@@ -10,6 +10,14 @@ import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 
+/// RINGTONES-PARKED (2026-07-29): NOT WIRED UP RIGHT NOW. Ringtones ship hidden
+/// in v1, so `router.dart` routes /browse directly and nothing builds this shell
+/// — the dock included. The file is deliberately left whole and compiling so
+/// `flutter analyze` keeps type-checking it while it waits (Dart tree-shakes it
+/// out of the build). Do not "clean up" the dock below: it is the shipping
+/// design, screenshotted in docs/reference/ringtones-parked/. Un-parking is a
+/// router.dart change only.
+///
 /// The tabbed scaffold around the two browse surfaces (Wallpapers /
 /// Ringtones). Everything else — settings, refer, upload, premium — pushes
 /// OVER this shell as a full-screen route.
