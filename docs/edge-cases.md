@@ -17,8 +17,9 @@ the UI is designed.
 
 ## Wallpaper apply
 - [ ] Android 12+ recreate survived: `configChanges` `uiMode|colorMode` + `onConfigurationChanged` + dark launch theme — apply must NOT cold-restart (flutter/flutter#133722)
-- [ ] Live apply downloads MP4 locally first; feed decoder released only AFTER download completes, awaited before the native call; skipped on in-place swap ← apply notifier
-- [ ] In-place swap when our service is live on ANY slot (API 34 home+lock check); system picker only on true first-time
+- [ ] Live apply downloads MP4 locally first; feed decoder released only AFTER download completes, awaited before the native call ← apply notifier
+- [ ] EVERY live apply opens the system live-wallpaper chooser — no in-place swap (matches Pakiza, 2026-07-30). The user's "Set" tap is unobservable, so the notifier finishes IDLE and never claims success
+- [ ] Live wallpaper is ONE engine on ONE record: the chooser commits `which=3` (home+lock together), so home and lock can never hold different live videos — verified on Nothing OS, where the OEM's own live wallpaper does the same
 - [ ] OEM live-wallpaper restrictions caught → localized error, never a crash
 
 ## Auth

@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
+import com.hsrapps.arul.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,6 +33,11 @@ class ImageWallpaperManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ImageWallpaperManager"
+
+        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        private fun logd(msg: String) {
+            if (BuildConfig.DEBUG) Log.d(TAG, msg)
+        }
     }
 
     private val imageNormalizer: ImageNormalizer by lazy {
@@ -69,8 +75,7 @@ class ImageWallpaperManager(private val context: Context) {
             val preparedFile = imageNormalizer.normalizeIfNeeded(imageFile, target)
             validateFile(preparedFile)
 
-            Log.d(
-                TAG,
+            logd(
                 "Setting wallpaper: file=${preparedFile.name}, " +
                         "size=${preparedFile.length()}, target=$target"
             )
@@ -121,7 +126,7 @@ class ImageWallpaperManager(private val context: Context) {
                 )
             }
 
-            Log.d(TAG, "Wallpaper set successfully")
+            logd("Wallpaper set successfully")
         }
 
     private fun setLockWithCompatibilityFallback(
@@ -137,7 +142,7 @@ class ImageWallpaperManager(private val context: Context) {
             didWallpaperIdChange(wallpaperManager, WallpaperManager.FLAG_LOCK, beforeLockId)
 
         if (restrictiveOem || !lockChanged) {
-            Log.d(TAG, "Lock fallback (restrictiveOem=$restrictiveOem, changed=$lockChanged)")
+            logd("Lock fallback (restrictiveOem=$restrictiveOem, changed=$lockChanged)")
             withDecodedBitmap(imageFile) { bitmap ->
                 setWallpaperForFlagsBitmap(wallpaperManager, bitmap, WallpaperManager.FLAG_LOCK)
             }

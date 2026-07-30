@@ -4,7 +4,6 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -30,15 +29,10 @@ import java.util.Locale
  * Methods:
  *  - setImageWallpaper { filePath, target } → ImageWallpaperManager (static)
  *  - setVideoWallpaper { filePath, enableAudio, loop } → persist MP4 to filesDir,
- *    save prefs; if ArulVideoWallpaperService is ALREADY the active wallpaper
- *    on ANY surface (home or lock) the running engine swaps in place (no chooser
- *    — Android ignores a re-Set of the same component), otherwise open the
- *    system live-wallpaper chooser pointing at our service. (Android requires
- *    the chooser for first-time live; we can't observe its result, so success
- *    there only means "chooser opened".)
- *  - isLiveWallpaperActive {} → true when our video service is the active
- *    wallpaper on home or lock (Dart uses it to predict the in-place-swap path).
- *  - getTargetSupportPolicy {} → OEM capability flags for the apply UI.
+ *    save prefs, then ALWAYS open the system live-wallpaper preview/chooser
+ *    pointing at our service — the user makes the final "Set" tap there, every
+ *    time (deliberate product decision; no silent in-place swap). We can't
+ *    observe the chooser's result, so success only means "chooser opened".
  *
  * Adopted/trimmed from the vendored flutter_wallpaper_plus WallpaperMethodHandler.
  */
@@ -99,8 +93,6 @@ class WallpaperApplyChannel(
         when (call.method) {
             "setImageWallpaper" -> handleSetImageWallpaper(call, result)
             "setVideoWallpaper" -> handleSetVideoWallpaper(call, result)
-            "isLiveWallpaperActive" -> result.success(isOwnLiveWallpaperActive())
-            "getTargetSupportPolicy" -> handleGetTargetSupportPolicy(result)
             else -> result.notImplemented()
         }
     }
@@ -133,8 +125,9 @@ class WallpaperApplyChannel(
             } catch (e: WallpaperApplyException) {
                 safeError(result, e.code, e.message)
             } catch (e: Exception) {
+                // Full exception stays in logcat; Dart shows only this authored message.
                 Log.e(TAG, "setImageWallpaper unexpected", e)
-                safeError(result, "unknown", e.message ?: "Unexpected error")
+                safeError(result, "unknown", "Couldn't apply wallpaper. Please try again.")
             }
         }
     }
@@ -171,23 +164,16 @@ class WallpaperApplyChannel(
                 val persisted = persistVideoForWallpaperService(source)
                 saveVideoWallpaperConfig(persisted, enableAudio, loop)
 
-                if (isOwnLiveWallpaperActive()) {
-                    // Already the active system wallpaper (home or lock):
-                    // Android ignores a re-Set of the same component ("Changing
-                    // to the same component, ignoring"), so the chooser is
-                    // pointless. The prefs write above already told the running
-                    // engine(s) to swap videos in place — done, instantly.
-                    Log.d(TAG, "Live wallpaper already active; swapped in place.")
-                    safeSuccess(result, null)
-                    return@launch
-                }
-
+                // ALWAYS the system preview/chooser — even when our service is
+                // already the active wallpaper. The user confirms with the OS
+                // "Set" button every time; no silent in-place swap.
                 launchLiveWallpaperChooser()
                 // Success = chooser opened. We can't observe the user's choice.
                 safeSuccess(result, null)
             } catch (e: Exception) {
+                // Full exception stays in logcat; Dart shows only this authored message.
                 Log.e(TAG, "setVideoWallpaper failed", e)
-                safeError(result, "applyFailed", e.message ?: "Failed to set live wallpaper")
+                safeError(result, "applyFailed", "Couldn't set live wallpaper. Please try again.")
             }
         }
     }
@@ -266,33 +252,6 @@ class WallpaperApplyChannel(
     }
 
     /**
-     * True when OUR video wallpaper service is the active wallpaper on ANY
-     * surface. The no-arg [WallpaperManager.getWallpaperInfo] only reflects the
-     * HOME slot — a wallpaper the user set on the lock screen only (possible
-     * via the OS picker on Android 14+) is invisible to it, which would wrongly
-     * send every re-apply back through the chooser. So on API 34+ the lock slot
-     * is queried too ([WallpaperManager.getWallpaperInfo] with FLAG_LOCK, API 34;
-     * it returns null when the lock screen just mirrors home — the home check
-     * covers that case).
-     */
-    private fun isOwnLiveWallpaperActive(): Boolean {
-        return try {
-            val wm = WallpaperManager.getInstance(context)
-            if (isOurs(wm.wallpaperInfo)) return true
-            Build.VERSION.SDK_INT >= 34 &&
-                    isOurs(wm.getWallpaperInfo(WallpaperManager.FLAG_LOCK))
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not query active wallpaper; assuming not ours", e)
-            false
-        }
-    }
-
-    private fun isOurs(info: android.app.WallpaperInfo?): Boolean =
-        info != null &&
-                info.packageName == context.packageName &&
-                info.serviceName == ArulVideoWallpaperService::class.java.name
-
-    /**
      * Opens the system live-wallpaper chooser pointing straight at our service
      * (so the user lands on a preview of our wallpaper with a "Set" button), with
      * a generic-chooser fallback for OEMs that reject the direct component intent.
@@ -324,25 +283,6 @@ class WallpaperApplyChannel(
                 "Could not open the wallpaper picker; this device may not support live wallpapers.",
             )
         }
-    }
-
-    // ── Capability policy ────────────────────────────────────────────────────────
-
-    private fun handleGetTargetSupportPolicy(result: MethodChannel.Result) {
-        val restrictive = OemPolicy.isRestrictiveOem()
-        result.success(
-            hashMapOf(
-                "manufacturer" to OemPolicy.manufacturerRaw(),
-                "model" to OemPolicy.modelRaw(),
-                "restrictiveOem" to restrictive,
-                "allowImageHome" to true,
-                "allowImageLock" to !restrictive,
-                "allowImageBoth" to !restrictive,
-                "allowVideoHome" to true,
-                "allowVideoLock" to false, // Android has no live lock-only mode
-                "allowVideoBoth" to !restrictive,
-            )
-        )
     }
 
     private fun supportsLiveWallpaper(): Boolean =

@@ -63,17 +63,12 @@ abstract class WallpaperApplyService {
   /// Applies [file] as a static wallpaper to [target] screen(s).
   Future<void> applyStaticWallpaper(File file, ApplyTarget target);
 
-  /// Sets [file] (an MP4) as a live wallpaper. When our service is ALREADY the
-  /// active system wallpaper, the native side swaps the running engine's video
-  /// in place — instant, no chooser. Otherwise it persists the video and opens
-  /// the system live-wallpaper chooser, where the user makes the final tap.
+  /// Sets [file] (an MP4) as a live wallpaper: the native side persists the
+  /// video, then ALWAYS opens the system live-wallpaper preview/chooser, where
+  /// the user makes the final "Set wallpaper" tap — every apply, even when our
+  /// service is already active (deliberate product decision; no silent in-place
+  /// swap). Throws [WallpaperApplyException] if the chooser can't be opened.
   Future<void> applyLiveWallpaper(File file, ApplyTarget target);
-
-  /// True when our own live-wallpaper service is the device's ACTIVE wallpaper
-  /// on any surface — i.e. the next [applyLiveWallpaper] is an instant in-place
-  /// swap with no OS chooser. False on any platform error (callers then assume
-  /// the chooser path, which is the safe assumption).
-  Future<bool> isOwnLiveWallpaperActive();
 }
 
 // ─── CDN-backed implementation ───────────────────────────────────────────────
@@ -216,11 +211,11 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
   @override
   Future<void> applyLiveWallpaper(File file, ApplyTarget target) async {
     try {
-      // Native copies the MP4 into app-internal storage (persistent — the running
-      // wallpaper service reads that local file forever), saves the service
-      // config, then swaps in place or opens the live-wallpaper chooser. The
-      // chooser owns the final home/lock decision, so [target] is not forwarded
-      // for live; it stays in the signature for symmetry with static.
+      // The native side copies the MP4 into app-internal storage (persistent,
+      // so the running wallpaper service reads a local file forever), saves the
+      // service config, and opens the live-wallpaper preview/chooser. The
+      // chooser owns the final home/lock decision, so [target] is not
+      // forwarded for live (kept in the signature for symmetry).
       await _channel.invokeMethod<void>('setVideoWallpaper', {
         'filePath': file.path,
         'enableAudio': false,
@@ -230,18 +225,6 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
       throw WallpaperApplyException(
         e.message ?? 'Failed to set live wallpaper (${e.code})',
       );
-    }
-  }
-
-  @override
-  Future<bool> isOwnLiveWallpaperActive() async {
-    try {
-      return await _channel.invokeMethod<bool>('isLiveWallpaperActive') ??
-          false;
-    } on PlatformException {
-      return false; // conservative: assume the chooser path
-    } on MissingPluginException {
-      return false; // tests / unsupported host
     }
   }
 }

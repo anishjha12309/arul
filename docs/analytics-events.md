@@ -68,15 +68,14 @@ Blank PostHog column = GA4-only (still captured at 100%, just not billed). Scree
 
 ### `wallpaper_applied.confirmed` — read this before quoting an apply rate
 
-Arul has three apply paths and only two are observable:
+Arul has two apply paths and only one is observable:
 
 | Path | `confirmed` | Why |
 |---|:---:|---|
 | static apply | `true` | native call returns or throws |
-| live, our engine already active (in-place swap) | `true` | same — no chooser involved |
-| live, OS chooser opens | `false` | the user makes the final "Set wallpaper" tap in an activity we cannot see |
+| live apply (always the OS chooser) | `false` | the user makes the final "Set wallpaper" tap in an activity we cannot see |
 
-The event fires on all three. Suppressing the chooser case would silently under-count the commonest live path and make the funnel non-comparable with Pakiza (which fires on chooser-open too). Filter `confirmed = true` for a strict completion count; **never quote the unfiltered number as a completion rate.**
+The event fires on both. Suppressing the chooser case would silently under-count live entirely and make the funnel non-comparable with Pakiza (which fires on chooser-open too). Filter `confirmed = true` for a strict completion count; **never quote the unfiltered number as a completion rate.**
 
 ### Where blocked-premium events come from
 

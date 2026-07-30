@@ -4,31 +4,38 @@ import android.os.Build
 import java.util.Locale
 
 /**
- * Centralized OEM policy checks for wallpaper target reliability.
+ * Centralized OEM policy check for wallpaper apply reliability.
  *
- * Some OEM ROMs (Xiaomi/MIUI, Oppo/ColorOS, Vivo/FuntouchOS, Realme) apply
- * extra restrictions that make lock-screen wallpaper targets unreliable for
- * third-party apps, and they control live-wallpaper lock behavior themselves.
- * We use this to fall back to home-only or a bitmap-set retry on those devices.
+ * Some OEM ROMs make the lock-screen wallpaper write silently no-op for
+ * third-party apps via setStream. [ImageWallpaperManager] uses this to FORCE
+ * the decoded-bitmap retry on those devices (in addition to the wallpaper-id
+ * change check, which is the safety net for OEMs not listed here). A false
+ * positive only costs a redundant second write, so the list is deliberately
+ * broad — it includes OEM families we cannot test on directly.
  *
  * Adopted into the app from the vendored flutter_wallpaper_plus package so the
  * apply logic lives in com.hsrapps.arul with no external plugin dependency.
  */
 object OemPolicy {
     private val restrictiveVendors = listOf(
+        // MIUI/HyperOS — Poco devices report MANUFACTURER "Xiaomi".
         "xiaomi",
         "redmi",
+        // ColorOS family — OxygenOS 12+ is ColorOS-based, so OnePlus gets the
+        // same lock-write quirks as Oppo/Realme.
         "oppo",
-        "vivo",
         "realme",
+        "oneplus",
+        // Funtouch/OriginOS — iQOO devices report MANUFACTURER "vivo".
+        "vivo",
+        // Transsion HiOS/XOS/itelOS — heavily skinned budget ROMs (India).
+        "tecno",
+        "infinix",
+        "itel",
     )
 
-    fun manufacturerRaw(): String = Build.MANUFACTURER.orEmpty()
-
-    fun modelRaw(): String = Build.MODEL.orEmpty()
-
     private fun manufacturerNormalized(): String =
-        manufacturerRaw().lowercase(Locale.US)
+        Build.MANUFACTURER.orEmpty().lowercase(Locale.US)
 
     fun isRestrictiveOem(): Boolean {
         val manufacturer = manufacturerNormalized()

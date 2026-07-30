@@ -231,33 +231,20 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       await prefs.setBool(appliedWallpaperPendingKey, true);
 
       if (isLive) {
-        // Two live paths, decided natively:
-        //  • our service is ALREADY the active wallpaper → the running engine's
-        //    video is swapped in place. No chooser, and the outcome IS
-        //    observable, so we report real success.
-        //  • otherwise the OS live-wallpaper chooser opens as its own activity
-        //    and the user makes the final "Set wallpaper" tap. We cannot observe
-        //    that, so we finish IDLE — never a false "applied" confirmation.
-        final swappedInPlace = await service.isOwnLiveWallpaperActive();
-
-        // Chooser path only: hand our decoders to the chooser's preview engine
-        // before it launches. On the in-place path the native side reuses the
-        // already-running engine, and releasing would just black-frame the feed.
-        if (!swappedInPlace && releaseVideoDecoders != null) {
-          await releaseVideoDecoders();
-        }
+        // The OS live-wallpaper preview/chooser opens for EVERY live apply — the
+        // user makes the final "Set wallpaper" tap in an activity we cannot see,
+        // so we finish IDLE and never show a false "applied" confirmation.
+        // Hand the feed's decoders to the chooser's preview engine before it
+        // launches: the chooser creates an engine that claims a hardware
+        // MediaCodec, and on a decoder-constrained SoC a still-held feed pool
+        // would starve it into a frozen or black wallpaper.
+        if (releaseVideoDecoders != null) await releaseVideoDecoders();
         await service.applyLiveWallpaper(file, target);
 
-        if (swappedInPlace) {
-          await _clearPending(prefs);
-          _trackApplied(analytics, wallpaper, target: target, confirmed: true);
-          state = const WallpaperApplySuccess(isLive: true);
-        } else {
-          _trackApplied(analytics, wallpaper, target: target, confirmed: false);
-          // Flags stay set: if the chooser causes a recreate, the feed restores
-          // position; if it doesn't, the feed consumes them on next resume.
-          state = const WallpaperApplyIdle();
-        }
+        _trackApplied(analytics, wallpaper, target: target, confirmed: false);
+        // Flags stay set: if the chooser causes a recreate, the feed restores
+        // position; if it doesn't, the feed consumes them on next resume.
+        state = const WallpaperApplyIdle();
         return;
       }
 
@@ -317,15 +304,15 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
   /// Fires `wallpaper_applied` — the primary value moment, and one of the few
   /// events PostHog is billed for.
   ///
-  /// [confirmed] exists because Arul has two live paths with different
-  /// observability. A static apply and the in-place live swap both return from a
-  /// native call that either worked or threw, so success is a fact. When the OS
-  /// live-wallpaper chooser takes over, the user makes the final "Set wallpaper"
-  /// tap in an activity we cannot see. The event still fires there — suppressing
-  /// it would silently under-count the commonest live path and make the funnel
-  /// non-comparable with Pakiza, which fires on chooser-open too — but it is
-  /// flagged, so filtering `confirmed = true` recovers the strict count. Never
-  /// use the unfiltered number to claim a completion rate.
+  /// [confirmed] exists because static and live apply differ in observability. A
+  /// static apply returns from a native call that either worked or threw, so
+  /// success is a fact. Every live apply hands off to the OS live-wallpaper
+  /// chooser, where the user makes the final "Set wallpaper" tap in an activity
+  /// we cannot see. The event still fires there — suppressing it would silently
+  /// under-count live entirely and make the funnel non-comparable with Pakiza,
+  /// which fires on chooser-open too — but it is flagged, so filtering
+  /// `confirmed = true` recovers the strict count. Never use the unfiltered
+  /// number to claim a completion rate.
   void _trackApplied(
     AnalyticsService analytics,
     Wallpaper wallpaper, {

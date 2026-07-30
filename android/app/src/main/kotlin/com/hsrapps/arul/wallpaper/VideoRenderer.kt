@@ -10,6 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
+import com.hsrapps.arul.BuildConfig
 import java.io.File
 
 /**
@@ -45,6 +46,11 @@ class VideoRenderer(private val context: Context) {
 
         /** Grace period before a now-invisible wallpaper releases its decoder. */
         private const val INVISIBLE_RELEASE_DELAY_MS = 500L
+
+        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        private fun logd(msg: String) {
+            if (BuildConfig.DEBUG) Log.d(TAG, msg)
+        }
     }
 
     private var player: ExoPlayer? = null
@@ -52,7 +58,7 @@ class VideoRenderer(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val releaseOnIdle = Runnable {
-        Log.d(TAG, "Invisible past grace period — releasing decoder")
+        logd("Invisible past grace period — releasing decoder")
         releasePlayerInstance()
     }
 
@@ -78,7 +84,7 @@ class VideoRenderer(private val context: Context) {
         }
 
     fun initialize(videoPath: String, surfaceHolder: SurfaceHolder) {
-        Log.d(TAG, "Initializing with video: $videoPath")
+        logd("Initializing with video: $videoPath")
         mainHandler.removeCallbacks(releaseOnIdle)
 
         currentVideoPath = videoPath
@@ -97,7 +103,7 @@ class VideoRenderer(private val context: Context) {
                 setMediaItem(MediaItem.fromUri("file://$videoPath"))
                 prepare()
             }
-            Log.d(TAG, "Player initialized successfully")
+            logd("Player initialized successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize player", e)
             release()
@@ -117,7 +123,7 @@ class VideoRenderer(private val context: Context) {
      * a pending [releaseOnIdle] still frees the decoder.
      */
     fun swapVideo(videoPath: String, surfaceHolder: SurfaceHolder) {
-        Log.d(TAG, "Swapping video in place: $videoPath")
+        logd("Swapping video in place: $videoPath")
         currentVideoPath = videoPath
         currentSurfaceHolder = surfaceHolder
 
@@ -142,14 +148,14 @@ class VideoRenderer(private val context: Context) {
     }
 
     fun onSurfaceDestroyed() {
-        Log.d(TAG, "Surface destroyed")
+        logd("Surface destroyed")
         mainHandler.removeCallbacks(releaseOnIdle)
         currentSurfaceHolder = null
         releasePlayerInstance()
     }
 
     fun onVisibilityChanged(visible: Boolean) {
-        Log.d(TAG, "Visibility changed: $visible")
+        logd("Visibility changed: $visible")
         try {
             if (visible) {
                 mainHandler.removeCallbacks(releaseOnIdle)
@@ -162,7 +168,7 @@ class VideoRenderer(private val context: Context) {
                     if (path != null && holder != null) {
                         initialize(path, holder)
                     } else {
-                        Log.d(TAG, "Visible but cannot re-init; waiting for surface")
+                        logd("Visible but cannot re-init; waiting for surface")
                     }
                 }
             } else {
@@ -228,7 +234,7 @@ class VideoRenderer(private val context: Context) {
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
-            Log.d(TAG, "Video size: ${videoSize.width}x${videoSize.height}")
+            logd("Video size: ${videoSize.width}x${videoSize.height}")
         }
     }
 }

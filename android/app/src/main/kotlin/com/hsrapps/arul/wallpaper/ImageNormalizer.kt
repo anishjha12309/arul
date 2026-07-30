@@ -10,6 +10,7 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
+import com.hsrapps.arul.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -38,6 +39,11 @@ class ImageNormalizer(private val context: Context) {
         private const val JPEG_QUALITY = 90
         private const val TARGET_PIXEL_RATIO_THRESHOLD = 2L
         private const val MAX_DECODE_ATTEMPTS = 5
+
+        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        private fun logd(msg: String) {
+            if (BuildConfig.DEBUG) Log.d(TAG, msg)
+        }
     }
 
     fun normalizeIfNeeded(imageFile: File, target: String): File {
@@ -65,16 +71,14 @@ class ImageNormalizer(private val context: Context) {
             outputFile.length() > 0 &&
             outputFile.lastModified() >= imageFile.lastModified()
         ) {
-            Log.d(
-                TAG,
+            logd(
                 "Reusing normalized wallpaper ${outputFile.name} " +
                         "(${outputFile.length()} bytes)"
             )
             return outputFile
         }
 
-        Log.d(
-            TAG,
+        logd(
             "Normalizing wallpaper source " +
                     "from ${bounds.width}x${bounds.height}, ${imageFile.length()} bytes " +
                     "to fit within ${targetSize.width}x${targetSize.height}"
@@ -102,8 +106,7 @@ class ImageNormalizer(private val context: Context) {
             }
         }
 
-        Log.d(
-            TAG,
+        logd(
             "Normalized wallpaper ready: ${outputFile.name} " +
                     "(${outputFile.length()} bytes)"
         )
