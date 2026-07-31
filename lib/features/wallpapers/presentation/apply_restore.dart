@@ -62,12 +62,14 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
 
     if (index == null || category == null) return;
 
-    // The saved index is a position within the FILTERED list, so validate it
-    // against the same filter the feed will apply once the category is restored.
-    final items = allItems
-        .where((w) => w.category == category)
-        .toList(growable: false);
-    final list = items.isEmpty ? allItems : items;
+    // The saved index is a position within the list the feed SERVES for that
+    // chip, so validate it against the feed's own ordering — not against the raw
+    // catalog. For All that ordering is a stable shuffle, not catalog order
+    // (feedOrder), and validating against catalog order would restore the user
+    // onto a different wallpaper. An empty result means the saved category is no
+    // longer in the catalog: nothing to restore to, so leave the feed alone
+    // rather than jump into a list that isn't there.
+    final list = feedOrder(category, allItems);
     if (index < 0 || index >= list.length) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {

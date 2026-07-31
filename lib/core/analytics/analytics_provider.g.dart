@@ -11,7 +11,7 @@ part of 'analytics_provider.dart';
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
 ///     in the [AnalyticsCohort] panel; product analytics. Requires a real
 ///     `POSTHOG_KEY` AND cohort membership.
 ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
@@ -32,7 +32,7 @@ final analyticsServiceProvider = AnalyticsServiceProvider._();
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
 ///     in the [AnalyticsCohort] panel; product analytics. Requires a real
 ///     `POSTHOG_KEY` AND cohort membership.
 ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
@@ -58,7 +58,7 @@ final class AnalyticsServiceProvider
   /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
   /// are configured, so call sites never change:
   ///
-  ///   * PostHog — [_postHogAllowedEvents] only, and only for the ~5% of installs
+  ///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
   ///     in the [AnalyticsCohort] panel; product analytics. Requires a real
   ///     `POSTHOG_KEY` AND cohort membership.
   ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
@@ -105,4 +105,4 @@ final class AnalyticsServiceProvider
   }
 }
 
-String _$analyticsServiceHash() => r'1d45dccc8c97001ac28d286edeba524157c4a90b';
+String _$analyticsServiceHash() => r'9a9f69a14754d46f766cd8f260538481237a5107';

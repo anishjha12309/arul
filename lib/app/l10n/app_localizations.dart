@@ -412,16 +412,16 @@ abstract class AppLocalizations {
   /// **'Turn on the internet to see wallpapers.'**
   String get offlineFeedBody;
 
-  /// No description provided for @shareMessage.
+  /// Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder is referral-attributed and a competing hsrapps.com/arul link (which this string used to carry) sends the tap somewhere that earns the sender nothing.
   ///
   /// In en, this message translates to:
-  /// **'Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul'**
-  String get shareMessage;
+  /// **'More devotional wallpapers like this one — still and live — on Arul:\n{link}'**
+  String wallpaperShareCaption(String link);
 
-  /// Text shared to WhatsApp / the system share sheet
+  /// Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and it must NOT mention the sender's referral reward — 'install this so I get free premium' reads as self-serving and suppresses the tap. Link alone on the last line.
   ///
   /// In en, this message translates to:
-  /// **'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: {link}'**
+  /// **'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n{link}'**
   String referShareMessage(String link);
 
   /// No description provided for @tabWallpapers.

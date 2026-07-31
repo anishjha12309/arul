@@ -265,6 +265,92 @@ void main() {
     });
   });
 
+  group('feed order', () {
+    /// A catalog shaped like a real bulk import: a 30-wallpaper Sivan batch at
+    /// the head (one transaction, so they tie on sort_order AND created_at and
+    /// build-catalog emits them consecutively), then older mixed content.
+    void serveClumpedCatalog() {
+      final items = <Map<String, dynamic>>[
+        for (var i = 0; i < 30; i++) _item('sivan$i', category: 'sivan'),
+        for (var i = 0; i < 10; i++) _item('amman$i', category: 'amman'),
+        for (var i = 0; i < 10; i++) _item('murugan$i', category: 'murugan'),
+        for (var i = 0; i < 10; i++) _item('temple$i', category: 'temples'),
+      ];
+      handler = (_) async => http.Response(
+        jsonEncode({
+          'page': 1,
+          'per_page': items.length,
+          'total': items.length,
+          'total_pages': 1,
+          'has_more': false,
+          'items': items,
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    Future<List<Wallpaper>> feedFor(ProviderContainer c, String slug) async {
+      await c.read(catalogProvider.future);
+      c.read(selectedCategoryProvider.notifier).select(slug);
+      return c.read(feedProvider).requireValue;
+    }
+
+    test(
+      'All breaks a bulk import up instead of letting it own the top',
+      () async {
+        serveClumpedCatalog();
+        final container = makeContainer();
+
+        final all = await feedFor(container, WallpaperCategory.allSlug);
+
+        // A permutation of the catalog: reordering must never drop or duplicate.
+        expect(all, hasLength(60));
+        expect(
+          all.map((w) => w.id).toSet(),
+          container.read(catalogProvider).requireValue.map((w) => w.id).toSet(),
+        );
+        // The defect: all 30 of one import sitting in the first 30 slots.
+        expect(
+          all.take(30).where((w) => w.category == 'sivan').length,
+          lessThan(25),
+        );
+        expect(
+          all.take(10).map((w) => w.category).toSet(),
+          hasLength(greaterThan(1)),
+          reason: 'the first screenful is not one category',
+        );
+      },
+    );
+
+    test(
+      'the All order is stable — the same catalog yields the same order '
+      'on a rebuild, so a revalidate never reshuffles under the user',
+      () async {
+        serveClumpedCatalog();
+        final first = await feedFor(makeContainer(), WallpaperCategory.allSlug);
+        final second = await feedFor(
+          makeContainer(),
+          WallpaperCategory.allSlug,
+        );
+        expect(second.map((w) => w.id), first.map((w) => w.id));
+      },
+    );
+
+    test('a category chip keeps catalog order — newest first', () async {
+      serveClumpedCatalog();
+
+      final sivan = await feedFor(makeContainer(), 'sivan');
+
+      expect(sivan, hasLength(30));
+      expect(
+        sivan.map((w) => w.title),
+        [for (var i = 0; i < 30; i++) 'sivan$i'],
+        reason: 'catalog order, untouched by the All shuffle',
+      );
+    });
+  });
+
   group('corrupt cache', () {
     test(
       'self-heals: bad snapshot is deleted and the network path serves',

@@ -170,8 +170,9 @@ class AppLocalizationsKn extends AppLocalizations {
   String get offlineFeedBody => 'ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ನೋಡಲು ಇಂಟರ್ನೆಟ್ ಆನ್ ಮಾಡಿ.';
 
   @override
-  String get shareMessage =>
-      'ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಅರುಳ್ ಪಡೆಯಿರಿ: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {

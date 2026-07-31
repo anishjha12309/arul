@@ -17,6 +17,8 @@ import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/config/app_config.dart';
 import 'core/providers/shared_preferences_provider.dart';
+import 'features/notifications/data/notification_service.dart';
+import 'features/notifications/providers/notification_providers.dart';
 import 'features/referral/data/install_referrer_service.dart';
 
 /// App entry point.
@@ -170,10 +172,29 @@ Future<void> _startApp() async {
     }
   }
 
+  // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED
+  // the app has a live plugin to replay into, but `initialize()` is deliberately
+  // NOT awaited here — see below.
+  final notificationService = NotificationService();
+
   runApp(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        notificationServiceProvider.overrideWithValue(notificationService),
+      ],
       child: const ArulApp(),
     ),
   );
+
+  // Notification setup (IANA timezone-database parse + channel creation) is
+  // deferred ENTIRELY off the startup path. The tz parse is synchronous
+  // UI-isolate work and channel creation is a Binder round-trip, and neither is
+  // needed until either the reminders screen opens or the bootstrap provider
+  // arms the schedule. Both of those call `initialize()` themselves, and it is
+  // single-flight, so this is a warm-up rather than a prerequisite — dropping it
+  // would cost latency, never correctness.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(notificationService.initialize().catchError((Object _) {}));
+  });
 }

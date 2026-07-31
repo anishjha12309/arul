@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/widgets/arul_toast.dart';
+import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
@@ -13,7 +14,9 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../notifications/providers/notification_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
@@ -81,6 +84,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : _fallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
+    // Reads the persisted opt-in, which the reminders screen keeps reconciled
+    // against the real OS permission — so a user who revoked notifications in
+    // system settings sees "Off" here, not a stale "On".
+    final notificationsOn = ref
+        .watch(notificationSettingsProvider)
+        .masterEnabled;
+    final notificationsSub = notificationsOn
+        ? 'Weekly and festival reminders on'
+        : 'Festival and weekly reminders';
+
     // Premium row subtitle reflects the REAL plan. While it resolves (or if the
     // fetch fails) fall back to the upsell wording — the Manage screen re-reads
     // it anyway, so a wrong-for-a-moment subtitle costs nothing, whereas
@@ -138,7 +151,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // First row: the plan is the most consequential thing in
                       // Settings, and it was previously not reachable at all.
                       _RowData(
-                        icon: Icons.workspace_premium,
+                        glyph: (color) => GopuramMark(size: 19, color: color),
                         title: 'Arul Premium',
                         sub: premiumSub,
                         onTap: () => context.push('/premium/manage'),
@@ -148,6 +161,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         title: 'Refer & Earn',
                         sub: 'Earn 30 days free premium',
                         onTap: () => context.push('/refer'),
+                      ),
+                      // Deliberately NOT a second route to /refer. That screen
+                      // is about the user's own rewards; this is the act of
+                      // sharing, and making it one tap from Settings rather
+                      // than three is the whole point of having it here.
+                      _RowData(
+                        icon: Icons.ios_share_rounded,
+                        title: 'Tell a friend',
+                        sub: 'Send Arul to someone who would love it',
+                        onTap: () =>
+                            tellAFriend(context, ref, source: 'settings'),
+                      ),
+                      _RowData(
+                        icon: Icons.notifications_active_outlined,
+                        title: 'Reminders',
+                        sub: notificationsSub,
+                        onTap: () => context.push('/settings/notifications'),
                       ),
                       _RowData(
                         icon: Icons.translate,
@@ -514,13 +544,24 @@ class _ProfileCard extends StatelessWidget {
 
 class _RowData {
   const _RowData({
-    required this.icon,
+    this.icon,
+    this.glyph,
     required this.title,
     required this.sub,
     required this.onTap,
-  });
+  }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
-  final IconData icon;
+  /// A Material icon — the default for the utility rows.
+  final IconData? icon;
+
+  /// A custom mark, used where a Material icon would be the wrong voice.
+  ///
+  /// Exists for the premium row: `workspace_premium` is the same laurel badge a
+  /// hundred other apps use for "pro", and every actual premium surface (the
+  /// paywall, the sheet, Manage) already carries the brand gopuram. The row is
+  /// tinted by the theme, so the glyph builder takes the resolved colour.
+  final Widget Function(Color color)? glyph;
+
   final String title;
   final String sub;
   final VoidCallback onTap;
@@ -597,11 +638,13 @@ class _SettingsRow extends StatelessWidget {
                 color: chipBg,
                 borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius),
               ),
-              child: Icon(
-                data.icon,
-                size: ArulTokens.iconChipIconSize,
-                color: iconColor,
-              ),
+              child:
+                  data.glyph?.call(iconColor) ??
+                  Icon(
+                    data.icon,
+                    size: ArulTokens.iconChipIconSize,
+                    color: iconColor,
+                  ),
             ),
             const SizedBox(width: 14),
             Expanded(

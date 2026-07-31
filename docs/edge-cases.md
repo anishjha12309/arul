@@ -43,6 +43,47 @@ the UI is designed.
 - [ ] Feed filters by CATEGORY chips (All + 6); static and live interleave — no All/New tabs, no static/live filter anywhere in the UI
 - [ ] Every catalog item carries `category`; unknown/missing category never crashes the feed (falls into All)
 - [ ] Empty category → localized empty state, not a blank feed
+- [ ] **Two orderings, one function** — `feedOrder()` in `catalog_providers.dart` is the ONLY definition.
+      A category chip serves catalog order (`sort_order ASC, created_at DESC, id ASC` = newest first).
+      **All serves a stable shuffle** keyed on a hand-rolled FNV-1a of the row id, because catalog order
+      puts a whole bulk import at the head: an import is one transaction, so its rows tie on `sort_order`
+      AND `created_at` and land consecutively (a 30-item batch owned the first 30 slots).
+- [ ] The All order must stay a pure function of catalog CONTENT — never `List.shuffle`, never seeded by
+      time or `content_version`. It is recomputed on every catalog emission (cold start, background
+      revalidate, pull-refresh, hourly cron), and `_syncFeed` compares served lists by ordered ids: a
+      per-call order re-points the pager and the video pool under a scrolling user. `String.hashCode` is
+      not stable across Dart releases — that is why the hash is hand-rolled.
+- [ ] Apply-restore resolves its saved page index through `feedOrder()` too ← `apply_restore.dart`. The
+      index is a position in the list the feed SERVES; validating it against raw catalog order restores
+      the user onto a different wallpaper whenever the saved chip was All.
+- [ ] **The reel card is TALL on tight gutters** (owner's call from rendered mockups, 2026-07-30) ←
+      `feed_card_geometry.dart`, pinned by `feed_card_geometry_test.dart`. 20dp gutters, a **1:1.86**
+      card, 14dp gap, 26 radius, 180 scrim, 14 action inset; **353×656** on a 1080×2400 phone with a
+      ~56dp peek and NO floor. `card + gap + peek + floor` fills the reel EXACTLY.
+- [ ] The floor is bottom padding on the PAGER, not part of it. At this aspect it is **zero on every
+      real phone** — the card eats the reel — but it is the sink for slack on taller screens and returns
+      the moment `cardAspect` is lowered. Anything screen-anchored (the gate nudge, the end-of-feed mark)
+      must still add `floor + peek + gap`, or it lands behind the pager.
+- [ ] Degradation order on a short screen: **floor, then peek down to `minPeek`, and only then the
+      card**. A card taller than its own viewport cannot snap, so it must never overflow.
+- [ ] **1.78 (9:16) is a BOUNDARY, not a dial.** Above it the crop is horizontal and cheap — at 1:1.86
+      about 4.4% comes off the left and right margins. Below it the crop flips to top/bottom, which on
+      devotional art costs crowns and feet. `ViewerMedia.cropAlignment` biases the window UP for exactly
+      that case: dormant at 1.86, but LIVE on a small screen where the card is forced squarer (~1:1.36),
+      so do not delete it as unused. The poster, the full image and the video texture must all share that
+      alignment or the frame visibly jumps when the real media fades in.
+- [ ] Skeleton and reel read the SAME geometry, or the card visibly resizes when the first page lands.
+- [ ] Four rejected shapes, do not revisit: full-bleed width (1:1.71) read as edge-to-edge; the DEVICE
+      aspect (1:2.22) was a sliver that cropped the sides and crowded the action row; Pakiza's card
+      verbatim (1:1.63, 18dp gutters) too tall and tight; short-and-wide (1:1.40, 32dp gutters) cost 21%
+      off the top and bottom.
+
+## Notifications (local only — there is no push channel)
+Full checklist + the on-device testing, chime and panchangam procedures:
+**[notifications.md](notifications.md)**. The three that bite hardest: festival dates are DATA and a
+table that runs out means **skip**, never extrapolate; `res/raw/keep.xml` is what stops R8 stripping the
+icons and breaking release builds only; and the QA tools are gated on `isPlayInstall`, NOT `kDebugMode`,
+so they exist in a sideloaded release APK — the only build where those failures reproduce.
 
 ## Ringtones — PARKED in v1, do NOT walk these
 The tab has no route into it and `WRITE_SETTINGS` is commented out of the manifest, so none of the
@@ -69,7 +110,9 @@ that un-parks the tab** ([known-issues.md](known-issues.md)), starting with the 
 - [ ] Moderation approve NEVER ships a dimension-violating video as-is (bytes copy verbatim) — re-encode or reject
 
 ## Share
-- [ ] Shares the ACTUAL media file (signed-URL gate, reuses apply's cache) + referral-link caption; WhatsApp absent → system sheet fallback
+Full checklist + the copy rules: **[share.md](share.md)**. The two that bite hardest: **exactly one link
+leaves the app per share**, owned by the caption; and WhatsApp-first uses a DIFFERENT mechanism per path,
+because the text-only deep link silently drops a wallpaper's file.
 
 ## Catalog / storage
 - [ ] `version.json` is edge-cacheable (`public, max-age=30, stale-while-revalidate=300`), pages max-age=60 + `?v=` busting; stale content = rebuild, NEVER cache-purge ← docs/caching.md

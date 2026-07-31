@@ -14,6 +14,15 @@
 
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- Local devotional reminders (flutter_local_notifications). Runtime-prompted
+         on Android 13+ and only when the user turns the feature on in Settings —
+         never at launch. Nothing is scheduled while the master toggle is off. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Re-arms the scheduled reminders after a reboot; without it every pending
+         notification is silently dropped the first time the phone restarts.
+         Paired with ScheduledNotificationBootReceiver below. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <!-- Live wallpaper support is OPTIONAL: the app still installs and runs on a
          device without it, and the apply flow degrades to static-only. -->
     <uses-feature
@@ -150,6 +159,25 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/wallpaper_file_paths"/>
         </provider>
+
+        <!-- flutter_local_notifications: fires scheduled reminders, and re-arms
+             the whole schedule after a reboot. The boot receiver is NOT optional
+             — the reminders are one-shot alarms held by AlarmManager, which the
+             OS clears on restart, so without it a phone that reboots once stops
+             notifying until the app is next opened. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
 
     <queries>
@@ -173,9 +201,13 @@
         </intent>
     </queries>
 
-    <!-- Detect whether WhatsApp is installed for the targeted referral share. -->
+    <!-- Detect whether WhatsApp is installed for the targeted referral AND
+         wallpaper shares. w4b (WhatsApp Business) is a separate package with the
+         same whatsapp:// scheme — without it, a user who runs only Business
+         silently falls through to the generic share sheet. -->
     <queries>
         <package android:name="com.whatsapp"/>
+        <package android:name="com.whatsapp.w4b"/>
     </queries>
 
     <!-- PhonePe SDK — enumerate UPI apps for intent-based payment. REQUIRED on

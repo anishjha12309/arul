@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +11,7 @@ import '../../../core/config/app_config.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../referral/presentation/share_moment_sheet.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
 
@@ -81,6 +84,25 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
     }
   }
 
+  /// Offers the share, then closes the paywall.
+  ///
+  /// Order matters: the sheet is shown while this route is still mounted and the
+  /// pop waits for it, so the sheet can never be left floating over a screen
+  /// that has gone. It is entirely skippable — "Not now" is one tap and lands in
+  /// the same place as closing the paywall would have.
+  Future<void> _celebrate(BuildContext context) async {
+    await ShareMomentSheet.show(
+      context,
+      title: "You're in",
+      body:
+          'Arul Premium is active. Know someone who would love these '
+          'wallpapers? Send them one.',
+      source: 'purchase_success',
+    );
+    if (!mounted) return;
+    if (context.mounted && context.canPop()) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     // PhonePe purchase flow (ported): initiate → SDK → status poll → refresh
@@ -90,7 +112,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
       switch (next) {
         case PurchaseSuccess():
           showArulToast(context, 'Welcome to Arul Premium!');
-          if (context.canPop()) context.pop();
+          // The single warmest moment in the app to ask for a share — and the
+          // one point where the user has just decided Arul is worth paying for.
+          // Awaited before the pop so the sheet is never orphaned by this route
+          // disappearing beneath it.
+          unawaited(_celebrate(context));
         case PurchaseError(:final message, :final cancelled):
           // A self-cancelled payment reads as neutral info, not a red failure
           // — the user changed their mind; nothing broke.

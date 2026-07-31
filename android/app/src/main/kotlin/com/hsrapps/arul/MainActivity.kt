@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.view.WindowManager
 import com.hsrapps.arul.feedvideo.FeedVideoPlugin
 import com.hsrapps.arul.feedvideo.VideoThumbnailChannel
+import com.hsrapps.arul.share.DirectShareChannel
 import com.hsrapps.arul.share.ShareWatermarkChannel
 import com.hsrapps.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -27,6 +28,10 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         // Ringtone set channel (ported from the reference app's ringtone block).
         private const val RINGTONE_CHANNEL = "com.hsrapps.arul/ringtone_set"
+
+        // Exposes isPlayInstall() to Dart — see that function, and the QA-tools
+        // gate in the reminders screen.
+        private const val BUILD_INFO_CHANNEL = "com.hsrapps.arul/build_info"
     }
 
     private var wallpaperApplyChannel: WallpaperApplyChannel? = null
@@ -58,6 +63,12 @@ class MainActivity : FlutterFragmentActivity() {
      * True only when this build was delivered by Google Play (the uploaded AAB).
      * Fails CLOSED (treats the app as the shipped build → screenshots blocked) if the
      * installer can't be resolved, so the published app is never left unprotected.
+     *
+     * This is the app's ONE definition of "this is the artifact Play ships", and it now
+     * has two consumers: FLAG_SECURE above, and the reminders screen's QA tools, which
+     * are meant to work in a sideloaded RELEASE apk but not in the store build. Keeping
+     * them on one predicate is what stops the two from ever disagreeing — a build where
+     * screenshots are blocked but the debug tools are showing would be nonsense.
      */
     private fun isPlayInstall(): Boolean {
         return try {
@@ -113,6 +124,26 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             ShareWatermarkChannel.CHANNEL,
         ).setMethodCallHandler(watermark)
+
+        // Build provenance — "was this delivered by Play?". Read by the reminders
+        // screen to decide whether its notification QA tools are reachable.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BUILD_INFO_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isPlayInstall" -> result.success(isPlayInstall())
+                else -> result.notImplemented()
+            }
+        }
+
+        // Targeted share: ACTION_SEND aimed at one package (WhatsApp) so the
+        // wallpaper FILE travels with the caption. Stateless and activity-scoped,
+        // so it needs no disposal.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DirectShareChannel.CHANNEL,
+        ).setMethodCallHandler(DirectShareChannel(this))
 
         // Ringtone set — WRITE_SETTINGS check/deep-link + MediaStore register +
         // RingtoneManager default-tone set. Ported verbatim from the reference

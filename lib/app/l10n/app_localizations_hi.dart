@@ -169,8 +169,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get offlineFeedBody => 'वॉलपेपर देखने के लिए इंटरनेट चालू करें।';
 
   @override
-  String get shareMessage =>
-      'सुंदर दक्षिण भारतीय वॉलपेपर — अरुल पाएँ: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {

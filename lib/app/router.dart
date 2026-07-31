@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/premium/presentation/manage_subscription_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/referral/presentation/refer_screen.dart';
@@ -59,6 +60,10 @@ final router = GoRouter(
     //   ],
     // ),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+    GoRoute(
+      path: '/settings/notifications',
+      builder: (_, _) => const NotificationSettingsScreen(),
+    ),
     GoRoute(path: '/refer', builder: (_, _) => const ReferScreen()),
     GoRoute(path: '/upload', builder: (_, _) => const UploadScreen()),
     GoRoute(

@@ -13,6 +13,7 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/install_referrer_service.dart';
+import '../data/direct_share_service.dart';
 import '../data/share_watermark_service.dart';
 import '../data/wallpaper_apply_service.dart';
 import 'wallpaper_apply_provider.dart';
@@ -67,14 +68,28 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   WallpaperShareState build() => const WallpaperShareIdle();
 
   /// Downloads the media through the signed-URL gate (or reuses the cached copy
-  /// the apply flow / prefetcher already put on disk) and hands it to the
-  /// system share sheet with [message] + a referral-attributed Play link as the
-  /// caption.
+  /// the apply flow / prefetcher already put on disk) and sends it outward:
+  /// straight to WhatsApp when it is installed, otherwise the system sheet.
   ///
-  /// There is no "shared" success state: the share sheet is the OS's, and
-  /// whether the user actually completed a share is not observable. We return to
-  /// idle as soon as the sheet is handed off — claiming success would be a lie.
-  Future<void> share(Wallpaper wallpaper, {required String message}) async {
+  /// [buildCaption] renders the caption AROUND the install link, which can only
+  /// be resolved mid-flow. It is a callback rather than a plain string because
+  /// the caption is localized and this notifier has no `BuildContext`.
+  ///
+  /// It replaced a plain `message` parameter that was concatenated as
+  /// `'$message\n$link'`. That was not a style preference: the message itself
+  /// ended in `https://hsrapps.com/arul`, so every shared wallpaper went out
+  /// carrying TWO links — the hard-coded one and the referral-attributed one —
+  /// and the recipient had even odds of tapping the one that credited nobody.
+  /// Putting the link INSIDE the caption makes a second one impossible to add by
+  /// accident.
+  ///
+  /// There is no "shared" success state: the sheet is the OS's, and whether the
+  /// user actually completed a share is not observable. We return to idle as
+  /// soon as it is handed off — claiming success would be a lie.
+  Future<void> share(
+    Wallpaper wallpaper, {
+    required String Function(String link) buildCaption,
+  }) async {
     if (state is WallpaperSharePreparing) return; // re-entrancy guard
 
     final service = ref.read(wallpaperApplyServiceProvider);
@@ -164,23 +179,47 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       }
 
       final link = await _installLink();
+      final caption = buildCaption(link.url);
+      final mimeType = _mimeType(shared.path);
 
-      // Idle BEFORE the sheet: share() resolves only when the sheet closes, so
-      // leaving Preparing set would strand the progress bar beneath it.
+      // Idle BEFORE the hand-off: the sheet's future resolves only when it
+      // closes, so leaving Preparing set would strand the progress bar beneath
+      // it.
       state = const WallpaperShareIdle();
 
-      final result = await ref.read(shareSheetLauncherProvider)(
-        ShareParams(
-          files: [XFile(shared.path, mimeType: _mimeType(shared.path))],
-          // What the RECIPIENT sees (`arul-<title-slug>.<ext>`) instead of the
-          // R2 object key's opaque name. The cache file is named for its
-          // content, so this is where the brand goes — without forking the cache.
-          // Extension follows the SHARED file (a watermarked .webp re-encodes
-          // to .jpg), not the cache entry.
-          fileNameOverrides: [_recipientFilename(wallpaper, shared.path)],
-          text: '$message\n$link',
-        ),
-      );
+      // WhatsApp first. It is where these wallpapers actually travel, and the
+      // chooser is a tap that loses shares — but it is attempted, never
+      // assumed: a false answer (not installed, or it refused the mime type) is
+      // routine and falls through to the sheet below. The FILE goes with it —
+      // this is a native targeted ACTION_SEND, not the text-only
+      // `whatsapp://send?text=` link the referral screen uses.
+      final direct = await ref
+          .read(directShareServiceProvider)
+          .shareToWhatsApp(
+            filePath: shared.path,
+            mimeType: mimeType,
+            text: caption,
+          );
+
+      // `unavailable` is the honest status for the direct path: WhatsApp owns
+      // the outcome from here and never reports back, exactly as the system
+      // sheet doesn't when it is dismissed.
+      var status = ShareResultStatus.unavailable;
+      if (!direct) {
+        final result = await ref.read(shareSheetLauncherProvider)(
+          ShareParams(
+            files: [XFile(shared.path, mimeType: mimeType)],
+            // What the RECIPIENT sees (`arul-<title-slug>.<ext>`) instead of the
+            // R2 object key's opaque name. The cache file is named for its
+            // content, so this is where the brand goes — without forking the
+            // cache. Extension follows the SHARED file (a watermarked .webp
+            // re-encodes to .jpg), not the cache entry.
+            fileNameOverrides: [_recipientFilename(wallpaper, shared.path)],
+            text: caption,
+          ),
+        );
+        status = result.status;
+      }
 
       analytics.track(
         'wallpaper_shared',
@@ -188,8 +227,15 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
           'wallpaper_id': wallpaper.id,
           'type': wallpaper.kind.name,
           'category': wallpaper.category,
-          'result': result.status.name,
+          'result': status.name,
           'watermarked': watermarked,
+          // Reach telemetry. `link_attributed` false means the outgoing share
+          // carried the plain Play listing and the sender can never be credited
+          // for the install — a silent referral leak that was previously
+          // invisible. `channel` says whether skipping the chooser is earning
+          // its keep.
+          'link_attributed': link.attributed,
+          'channel': direct ? 'whatsapp' : 'sheet',
         },
       );
     } on WallpaperApplyException catch (e, st) {
@@ -285,7 +331,11 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   /// The Play Store link for the share caption: referral-attributed when the
   /// user's code loads in time, otherwise the plain listing. Never blocks the
   /// share on the referral call — the file is the payload, the link is a bonus.
-  Future<String> _installLink() async {
+  ///
+  /// Reports WHICH of the two it returned, because the difference is worth
+  /// money: an unattributed link installs the app and credits nobody, and until
+  /// this was tracked there was no way to tell how often that happened.
+  Future<({String url, bool attributed})> _installLink() async {
     if (AppConfig.hasBackend) {
       try {
         final summary = await ref
@@ -294,13 +344,19 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
             .timeout(const Duration(seconds: 2));
         final code = summary.referralCode;
         if (code != null && code.isNotEmpty) {
-          return InstallReferrerService.buildShareLink(code);
+          return (
+            url: InstallReferrerService.buildShareLink(code),
+            attributed: true,
+          );
         }
       } catch (_) {
         // Offline mid-flow / slow server / no code — fall through.
       }
     }
-    return 'https://play.google.com/store/apps/details?id=$kPlayPackageId';
+    return (
+      url: 'https://play.google.com/store/apps/details?id=$kPlayPackageId',
+      attributed: false,
+    );
   }
 
   /// Friendly filename shown to the recipient (`arul-<title-slug>.<ext>`),

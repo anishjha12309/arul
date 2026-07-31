@@ -169,12 +169,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get offlineFeedBody => 'Turn on the internet to see wallpapers.';
 
   @override
-  String get shareMessage =>
-      'Beautiful South Indian wallpapers — get Arul: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {
-    return 'Beautiful South Indian wallpapers, still and live — I\'m loving Arul. Install it with my link and I\'ll earn free premium: $link';
+    return 'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n$link';
   }
 
   @override

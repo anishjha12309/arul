@@ -40,6 +40,12 @@ dependencies:
                                 # (ringtone_preview_provider), streamed from CDN
   image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
 
+  # ── Local notifications (devotional reminders). Fully on-device: no FCM, no
+  # network, no server. Versions pinned to Pakiza's, which ships the same stack.
+  flutter_local_notifications: ^22.0.1
+  timezone: ^0.11.0             # tz-correct zonedSchedule (wall-clock local times)
+  flutter_timezone: ^5.1.0      # device IANA timezone → tz.setLocalLocation
+
   # ── Phase 4 logic port (versions pinned to the reference app's pubspec).
   riverpod_annotation: ^4.0.3   # codegen'd providers (auth/analytics/premium/…)
   freezed_annotation: ^3.1.0    # models

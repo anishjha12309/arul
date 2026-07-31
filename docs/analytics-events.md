@@ -51,13 +51,13 @@ Static-vs-live rides along as **`type`** (`kind.name` → `image` / `live`), spe
 | wallpaper_engaged | wallpaper_id, category, type | | | |
 | wallpaper_apply_attempt | wallpaper_id, category, type, target | | | |
 | wallpaper_applied | wallpaper_id, category, type, target, **confirmed** | ✓ | | |
-| wallpaper_shared | wallpaper_id, type, category, result | | | |
+| wallpaper_shared | wallpaper_id, type, category, result, watermarked, **link_attributed**, **channel** | | | |
 | apply_blocked_premium | wallpaper_id, category | ✓ | | |
 | share_blocked_premium | wallpaper_id, category | | | |
 | ringtone_preview · ringtone_set_attempt ‡ | ringtone_id, category | | | |
 | ringtone_set ‡ | ringtone_id, category | | | |
 | ringtone_set_blocked_premium ‡ | — | | | |
-| referral_shared | — | | | |
+| referral_shared | **source**, **link_attributed** | | | |
 | share_watermark_failed | wallpaper_id, type, reason | | | |
 | profile_name_updated · support_email_opened | has_user | | | |
 | account_delete_{confirmed,failed} · account_deleted | error | | | |
@@ -77,6 +77,12 @@ Arul has two apply paths and only one is observable:
 
 The event fires on both. Suppressing the chooser case would silently under-count live entirely and make the funnel non-comparable with Pakiza (which fires on chooser-open too). Filter `confirmed = true` for a strict completion count; **never quote the unfiltered number as a completion rate.**
 
+### Reading the share properties
+
+`link_attributed` (both share events) is false when the outgoing link carried no `referrer=` — summary not loaded, no code on the account, or a define-less build. Those installs can never be credited to the sender, and were previously indistinguishable from the ones that could. A `source` that is always unattributed has its referral warm-up in the wrong place; it is not a surface users dislike.
+`channel` (`whatsapp` | `sheet`) says whether skipping the chooser earns its keep. `result` is always `unavailable` on `whatsapp` — the target app owns the outcome and never reports back, as the sheet doesn't when dismissed. Not a failure.
+`referral_shared.source` names the entry point (`refer_screen` · `settings` · `purchase_success` · `upload_success`), so the reach surfaces can be compared and the dead ones removed.
+
 ### Where blocked-premium events come from
 
 `{apply,share}_blocked_premium` fire from the feed's gate and from `ensurePremium()` (`entitlement_provider.dart`) with the `PremiumGateAction.source` name — the same string used as `/premium?source=`. `ringtone_set_blocked_premium` fires from `ensurePremium(source: 'ringtone_set')` **and** from the ringtones screen's error handler when the *server* gate refuses a set (a lapsed subscription with a stale client snapshot). Both paths are intended; one session can emit it twice, so read it as "block encountered", not "distinct blocks". `/premium`'s own `source` query param is display-only and tracks nothing — tracking happens at the gate.
@@ -86,5 +92,6 @@ The event fires on both. Suppressing the chooser case would silently under-count
 - **Gated-action keys are `apply` / `share`**, not Pakiza's `wallpaper_apply` / `wallpaper_share` — the `PremiumGateAction` enum that names the gate also supplies the `?source=` param, so the shorter name is load-bearing in the route.
 - **`category` replaces Pakiza's `type`** as the second property on wallpaper/ringtone events. Do not unify — every saved dashboard in both projects is built on its own app's key.
 - **`wallpaper_applied` carries `confirmed`** (above). Pakiza cannot distinguish the in-place live swap, so it has no equivalent.
-- **Absent because the feature is absent:** Pakiza's All/New feed tab events (Arul filters by category — CLAUDE.md §5b), its Islamic-content and notification events, and per-tag page events (Arul has categories, not tags).
+- **Absent because the feature is absent:** Pakiza's All/New feed tab events (Arul filters by category — CLAUDE.md §5b), its Islamic-content events, and per-tag page events (Arul has categories, not tags).
+- **Notifications are untracked in BOTH apps.** Arul ships the same local-reminder feature (docs/notifications.md) and deliberately instruments none of it: opt-in rate and tap-through would each be a per-user event stream for a feature with no revenue path, and the schedule is on-device anyway. Add events only if a product decision rides on one, and keep them GA4-only.
 - **No upload events** in either app. If Arul instruments upload, keep it GA4-only unless a product decision rides on it.

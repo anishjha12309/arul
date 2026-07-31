@@ -2,16 +2,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers/locale_provider.dart';
+import '../features/notifications/providers/notification_providers.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
+import '../features/wallpapers/providers/catalog_providers.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'theme/theme.dart';
 
-class ArulApp extends ConsumerWidget {
+class ArulApp extends ConsumerStatefulWidget {
   const ArulApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ArulApp> createState() => _ArulAppState();
+}
+
+class _ArulAppState extends ConsumerState<ArulApp> {
+  @override
+  void initState() {
+    super.initState();
+    // A reminder is about ONE deity, so tapping it should land on that deity —
+    // not on wherever the feed happened to be left. The payload is the category
+    // slug; select it first, then route, so the feed's first build already has
+    // the right filter and the user never sees the previous category flash past.
+    ref.read(notificationServiceProvider).onOpenCategory = (category) {
+      if (!mounted) return;
+      ref.read(selectedCategoryProvider.notifier).select(category);
+      router.go('/browse');
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Drives local-reminder (re)scheduling: re-arms whenever the notification
+    // settings change, and once on startup. Watched HERE, from the root, because
+    // the festival reminders are one-shot alarms — the launch-time re-arm is
+    // what carries the schedule past each festival into the next one, so it must
+    // not depend on the user opening any particular screen.
+    ref.watch(notificationBootstrapProvider);
+
     return MaterialApp.router(
       title: 'Arul',
       debugShowCheckedModeBanner: false,

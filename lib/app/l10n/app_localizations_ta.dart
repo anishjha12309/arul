@@ -170,8 +170,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get offlineFeedBody => 'வால்பேப்பர்களைப் பார்க்க இணையத்தை இயக்கவும்.';
 
   @override
-  String get shareMessage =>
-      'அழகான தென்னிந்திய வால்பேப்பர்கள் — அருள் பெறவும்: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {

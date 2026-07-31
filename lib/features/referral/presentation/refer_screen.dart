@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus;
-import 'package:url_launcher/url_launcher.dart';
-
-import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/cta_button.dart';
-import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
-import '../data/install_referrer_service.dart';
+import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
 
 /// Refer & Earn: one warm silk hero
@@ -33,38 +28,14 @@ class ReferScreen extends ConsumerWidget {
     (n: '3', text: '30 days of free premium lands in your account'),
   ];
 
-  /// WhatsApp-first share of the referral-attributed Play link; system share
-  /// sheet when WhatsApp is absent or the launch fails (docs/edge-cases.md).
-  Future<void> _share(BuildContext context, WidgetRef ref) async {
-    // Referral-attributed when the user's code is known; the plain listing
-    // otherwise (the summary hasn't loaded yet, or a define-less local run) —
-    // sharing must never block on the network.
-    final code = AppConfig.hasBackend
-        ? ref.read(referralSummaryProvider).asData?.value.referralCode
-        : null;
-    final link = (code != null && code.isNotEmpty)
-        ? InstallReferrerService.buildShareLink(code)
-        : 'https://play.google.com/store/apps/details?id=$kPlayPackageId';
-    final message = AppLocalizations.of(context).referShareMessage(link);
-
-    ref.read(analyticsServiceProvider).track('referral_shared');
-
-    final whatsapp = Uri.parse(
-      'whatsapp://send?text=${Uri.encodeComponent(message)}',
-    );
-    try {
-      if (await canLaunchUrl(whatsapp)) {
-        final ok = await launchUrl(
-          whatsapp,
-          mode: LaunchMode.externalApplication,
-        );
-        if (ok) return;
-      }
-    } catch (_) {
-      // WhatsApp missing / launch failed → share sheet below.
-    }
-    await SharePlus.instance.share(ShareParams(text: message));
-  }
+  /// WhatsApp-first share of the referral-attributed Play link; system sheet
+  /// when WhatsApp is absent or the launch fails (docs/edge-cases.md).
+  ///
+  /// The mechanics moved to [tellAFriend] when Settings and the post-purchase
+  /// screen grew their own entry points — one copy, one attribution rule, one
+  /// analytics shape for all of them.
+  Future<void> _share(BuildContext context, WidgetRef ref) =>
+      tellAFriend(context, ref, source: 'refer_screen');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

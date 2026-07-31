@@ -23,6 +23,27 @@ import 'wallpaper_tile.dart';
 class ViewerMedia extends StatelessWidget {
   const ViewerMedia({super.key, required this.wallpaper, this.slot});
 
+  /// Where the visible window sits when `cover` has to crop.
+  ///
+  /// At the current card shape (1:1.86 vs the artwork's 9:16) the card is
+  /// slightly TALLER than the source, so cover overflows horizontally and trims
+  /// ~4.4% off the left and right. The `x: 0` here is what matters: a
+  /// composition is centred, so an even trim off both margins is the right
+  /// answer, and there is no vertical overflow for the `y` to act on.
+  ///
+  /// The `y: -0.45` is therefore dormant — and deliberately kept. It is load
+  /// bearing the moment `FeedCardGeometry.cardAspect` drops below 1.78, where
+  /// the crop flips to top/bottom: centred, a squarer card takes half its loss
+  /// off the TOP, and on devotional art the top is the crown, the kireedam, the
+  /// arch of the gopuram, while the bottom is skirt, plinth or background.
+  /// Biasing the window up puts roughly three quarters of that loss below the
+  /// subject instead. One constant, correct in both directions.
+  ///
+  /// Applies to every layer, and they must agree: the poster and the full image
+  /// (or the video texture) are stacked, so a mismatch would visibly shift the
+  /// frame the instant the real media faded in.
+  static const cropAlignment = Alignment(0, -0.45);
+
   final Wallpaper wallpaper;
 
   /// The pooled player serving this page, when it is live AND inside the preload
@@ -52,6 +73,7 @@ class ViewerMedia extends StatelessWidget {
           CachedNetworkImage(
             imageUrl: wallpaper.thumbUrl(AppConfig.cdnBaseUrl),
             fit: BoxFit.cover,
+            alignment: cropAlignment,
             memCacheWidth: WallpaperTile.decodeWidthFor(context),
             fadeInDuration: Duration.zero,
             // No placeholder and no errorWidget: if the poster is missing, the
@@ -65,6 +87,7 @@ class ViewerMedia extends StatelessWidget {
             CachedNetworkImage(
               imageUrl: wallpaper.url(AppConfig.cdnBaseUrl),
               fit: BoxFit.cover,
+              alignment: cropAlignment,
               // A 1080x1920 wallpaper decodes to ~8.3 MB of RGBA regardless of its
               // file size, so it is decoded at the screen's width, not its own.
               memCacheWidth: fullWidth,
@@ -117,6 +140,10 @@ class _LiveTexture extends StatelessWidget {
             return ClipRect(
               child: FittedBox(
                 fit: BoxFit.cover,
+                // Same bias as the static path — see [ViewerMedia.cropAlignment].
+                // A live clip whose crop disagreed with its own poster would jump
+                // the moment the first frame landed.
+                alignment: ViewerMedia.cropAlignment,
                 clipBehavior: Clip.hardEdge,
                 child: SizedBox(
                   width: size.width,

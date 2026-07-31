@@ -171,8 +171,9 @@ class AppLocalizationsTe extends AppLocalizations {
       'వాల్‌పేపర్‌లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.';
 
   @override
-  String get shareMessage =>
-      'అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — అరుళ్ పొందండి: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {

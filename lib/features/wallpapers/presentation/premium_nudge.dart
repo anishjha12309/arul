@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/widgets/gopuram_mark.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The two premium-gated verbs. Browse and preview are free; Apply and Share are
@@ -123,11 +124,13 @@ class _PremiumNudgeState extends State<PremiumNudge>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.workspace_premium_rounded,
-                  size: 17,
-                  color: ArulTokens.gold,
-                ),
+                // The brand gopuram, not Material's `workspace_premium` laurel.
+                // That badge is the same generic icon a hundred other apps use
+                // for "pro", and it was the ONE premium surface not already
+                // carrying the mark — the paywall, the sheet and Manage all use
+                // GopuramMark, so the nudge was quietly off-brand at the exact
+                // moment it asks someone to pay.
+                const GopuramMark(size: 17, color: ArulTokens.gold),
                 const SizedBox(width: 8),
                 Text.rich(
                   TextSpan(

@@ -297,17 +297,71 @@ class SelectedCategory extends Notifier<String> {
   void select(String slug) => state = slug;
 }
 
-/// The feed: catalog filtered by the selected CATEGORY. Never by kind — static
-/// and live interleave by design (CLAUDE.md §5b).
+/// The list the feed serves for [slug] — the ONE definition of feed order.
+///
+/// A category chip keeps catalog order, which is newest-first: build-catalog
+/// emits `sort_order ASC, created_at DESC, id ASC` and filtering preserves
+/// relative order.
+///
+/// All gets a stable shuffle instead, because catalog order makes it unusable
+/// after a bulk import: an import is a single transaction, so a 30-wallpaper
+/// Sivan batch shares `sort_order` AND `created_at` and those 30 tie on every
+/// key but `id` — they land as 30 CONSECUTIVE slots at the head of the default
+/// feed, and one import owns the whole first screenful.
+///
+/// [apply_restore] resolves its saved page index through this too. That index is
+/// a position in the list the feed SERVES, so it must be validated against the
+/// same ordering or a post-apply restart restores to a different wallpaper.
+List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) =>
+    slug == WallpaperCategory.allSlug
+    ? _shuffledForAll(all)
+    : all.where((w) => w.category == slug).toList(growable: false);
+
+/// Order [all] by a hash of each row's id.
+///
+/// The hash is the point: this is recomputed on every catalog emission — cold
+/// start, background revalidate, pull-refresh, the hourly cron's rebuild — and
+/// the feed compares served lists by ORDERED IDS (`_syncFeed`). A per-call
+/// random order would therefore look like new content on every one of those and
+/// re-point the pager and the video pool under a scrolling user. Hashing the id
+/// makes the order a pure function of the catalog's contents: the All feed reads
+/// the same on every launch, and publishing a wallpaper inserts it at its own
+/// position instead of shifting everything below it.
+List<Wallpaper> _shuffledForAll(List<Wallpaper> all) {
+  // Decorate-sort-undecorate: hash each id ONCE (n hashes) instead of twice per
+  // comparison (~2n·log n) — this runs on the chip tap that returns to All.
+  final keyed = [for (final w in all) (_fnv1a(w.id), w)];
+  keyed.sort((a, b) {
+    final byHash = a.$1.compareTo(b.$1);
+    // Two ids can collide in 32 bits. Falling back to the id keeps the order
+    // TOTAL, so it never depends on the order the rows arrived in.
+    return byHash != 0 ? byHash : a.$2.id.compareTo(b.$2.id);
+  });
+  return List<Wallpaper>.unmodifiable([for (final e in keyed) e.$2]);
+}
+
+/// FNV-1a, 32-bit, over the string's UTF-16 code units (low byte then high, so
+/// a non-ASCII id can't silently collide with its ASCII truncation).
+///
+/// Hand-rolled deliberately: `String.hashCode` is not contractually stable
+/// across Dart releases, and this order has to survive app upgrades. Relies on
+/// 64-bit ints to hold the intermediate product exactly — true on the Dart VM,
+/// which is the only target Arul ships (Android-only in v1).
+int _fnv1a(String s) {
+  var hash = 0x811c9dc5;
+  for (var i = 0; i < s.length; i++) {
+    final unit = s.codeUnitAt(i);
+    hash = ((hash ^ (unit & 0xff)) * 0x01000193) & 0xffffffff;
+    hash = ((hash ^ (unit >> 8)) * 0x01000193) & 0xffffffff;
+  }
+  return hash;
+}
+
+/// The feed: catalog filtered by the selected CATEGORY, in [feedOrder]. Never
+/// filtered by kind — static and live interleave by design (CLAUDE.md §5b).
 final feedProvider = Provider<AsyncValue<List<Wallpaper>>>((ref) {
   final slug = ref.watch(selectedCategoryProvider);
-  return ref
-      .watch(catalogProvider)
-      .whenData(
-        (all) => slug == WallpaperCategory.allSlug
-            ? all
-            : all.where((w) => w.category == slug).toList(growable: false),
-      );
+  return ref.watch(catalogProvider).whenData((all) => feedOrder(slug, all));
 });
 
 /// Native first-frame stills — the grid's fallback for a live wallpaper whose

@@ -15,6 +15,7 @@ import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/referral/domain/referral_repository.dart';
 import 'package:arul/features/referral/domain/referral_summary.dart';
 import 'package:arul/data/models/referral_model.dart';
+import 'package:arul/features/wallpapers/data/direct_share_service.dart';
 import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_apply_service.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
@@ -110,13 +111,19 @@ class _NoPrefetch extends WallpaperPrefetchService {
 }
 
 class _FakeReferralRepository implements ReferralRepository {
+  _FakeReferralRepository({this.code});
+
+  /// Null = the account has no referral code yet (or the summary never
+  /// loaded), which is what makes the share fall back to the plain listing.
+  final String? code;
+
   @override
   Future<List<ReferralModel>> getReferrals(String referrerId) async => const [];
 
   @override
-  Future<ReferralSummary> getReferralSummary() async => const ReferralSummary(
-    referralCode: null,
-    referrals: [],
+  Future<ReferralSummary> getReferralSummary() async => ReferralSummary(
+    referralCode: code,
+    referrals: const [],
     totalRewardDays: 0,
   );
 }
@@ -157,18 +164,49 @@ Wallpaper _wallpaper({
       : 'wallpapers/murugan/$id.mp4',
 );
 
+/// Stands in for the native targeted-intent channel. [installed] false is the
+/// common case on a test device AND on a real one without WhatsApp, and is what
+/// makes the notifier fall through to the system sheet.
+class _FakeDirectShare implements DirectShareService {
+  _FakeDirectShare({this.installed = false});
+
+  final bool installed;
+  final calls = <({String filePath, String mimeType, String text})>[];
+
+  @override
+  Future<bool> shareToWhatsApp({
+    required String filePath,
+    required String mimeType,
+    required String text,
+  }) async {
+    calls.add((filePath: filePath, mimeType: mimeType, text: text));
+    return installed;
+  }
+}
+
+/// The default caption builder — mirrors `l10n.wallpaperShareCaption`'s shape:
+/// one line, then the link ALONE on the last line, and no second URL anywhere.
+String _caption(String link) => 'More devotional wallpapers on Arul:\n$link';
+
 ProviderContainer _container({
   required WallpaperApplyService service,
   required _FakeWatermarkService watermark,
   _RecordingAnalytics? analytics,
   List<ShareParams>? sheetCalls,
+  DirectShareService? directShare,
+  ReferralRepository? referrals,
 }) {
   return ProviderContainer(
     overrides: [
       wallpaperApplyServiceProvider.overrideWithValue(service),
       wallpaperPrefetchServiceProvider.overrideWithValue(_NoPrefetch()),
       shareWatermarkServiceProvider.overrideWithValue(watermark),
-      referralRepositoryProvider.overrideWithValue(_FakeReferralRepository()),
+      referralRepositoryProvider.overrideWithValue(
+        referrals ?? _FakeReferralRepository(),
+      ),
+      directShareServiceProvider.overrideWithValue(
+        directShare ?? _FakeDirectShare(),
+      ),
       analyticsServiceProvider.overrideWithValue(
         analytics ?? _RecordingAnalytics(),
       ),
@@ -226,7 +264,7 @@ void main() {
 
       await c
           .read(wallpaperShareProvider.notifier)
-          .share(_wallpaper(), message: 'Check this out');
+          .share(_wallpaper(), buildCaption: _caption);
 
       expect(c.read(wallpaperShareProvider), isA<WallpaperShareIdle>());
       expect(watermark.planned, ['w1']);
@@ -239,7 +277,7 @@ void main() {
       expect(file.path, endsWith('-wm-AR-TESTXY.jpg'));
       expect(file.mimeType, 'image/jpeg');
       expect(params.fileNameOverrides, ['arul-murugan-vel.jpg']);
-      expect(params.text, contains('Check this out'));
+      expect(params.text, contains('More devotional wallpapers on Arul'));
       expect(
         params.text,
         contains(
@@ -256,7 +294,98 @@ void main() {
         'category': 'murugan',
         'result': 'success',
         'watermarked': true,
+        'link_attributed': false,
+        'channel': 'sheet',
       });
+    });
+
+    test('the outgoing caption carries EXACTLY ONE link', () async {
+      // Regression guard. The caption used to be built as `'$message\n$link'`
+      // where `message` itself ended in `https://hsrapps.com/arul`, so every
+      // shared wallpaper went out with two competing URLs and the recipient
+      // could easily tap the one that credits nobody. The caption owns the link
+      // now, so a second one cannot be appended by accident — this proves it.
+      final sheetCalls = <ShareParams>[];
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: _FakeWatermarkService(),
+        sheetCalls: sheetCalls,
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      final text = sheetCalls.single.text!;
+      expect(
+        RegExp(r'https?://').allMatches(text),
+        hasLength(1),
+        reason: 'a second URL splits the tap and loses the attribution',
+      );
+      // And it is the LAST thing in the message — messengers preview a trailing
+      // link and bury an inline one.
+      expect(text.trimRight().split('\n').last, startsWith('https://'));
+    });
+
+    test('WhatsApp takes the share when present, and the sheet never '
+        'opens', () async {
+      final analytics = _RecordingAnalytics();
+      final sheetCalls = <ShareParams>[];
+      final direct = _FakeDirectShare(installed: true);
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: _FakeWatermarkService(),
+        analytics: analytics,
+        sheetCalls: sheetCalls,
+        directShare: direct,
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      // The FILE went to WhatsApp — the whole reason this path is a native
+      // targeted intent rather than a `whatsapp://send?text=` deep link, which
+      // would have dropped it and sent a bare caption.
+      expect(direct.calls, hasLength(1));
+      expect(direct.calls.single.filePath, endsWith('-wm-AR-TESTXY.jpg'));
+      expect(direct.calls.single.mimeType, 'image/jpeg');
+      expect(direct.calls.single.text, contains('play.google.com'));
+
+      expect(sheetCalls, isEmpty);
+      expect(analytics.props['wallpaper_shared']?['channel'], 'whatsapp');
+      expect(c.read(wallpaperShareProvider), isA<WallpaperShareIdle>());
+    });
+
+    test('an unattributed link is REPORTED as unattributed', () async {
+      // `flutter test` has no dart-defines, so `AppConfig.hasBackend` is false
+      // and the referral lookup is skipped entirely — the share ships the plain
+      // Play listing. That is correct behaviour; what matters is that it is
+      // declared. `link_attributed` exists precisely so a share that can never
+      // be credited back to its sender is visible in the funnel instead of
+      // silently indistinguishable from one that can. A code IS present on the
+      // fake repository here, and the flag must still say false, because the
+      // link that actually went out carries no referrer.
+      final analytics = _RecordingAnalytics();
+      final sheetCalls = <ShareParams>[];
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: _FakeWatermarkService(),
+        analytics: analytics,
+        sheetCalls: sheetCalls,
+        referrals: _FakeReferralRepository(code: 'ARUL123'),
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      final text = sheetCalls.single.text!;
+      expect(text, isNot(contains('referrer=')));
+      expect(analytics.props['wallpaper_shared']?['link_attributed'], false);
     });
 
     test('live wallpaper goes through the video path with video/mp4', () async {
@@ -270,7 +399,7 @@ void main() {
 
       await c
           .read(wallpaperShareProvider.notifier)
-          .share(_wallpaper(kind: WallpaperKind.live), message: 'm');
+          .share(_wallpaper(kind: WallpaperKind.live), buildCaption: _caption);
 
       final file = sheetCalls.single.files!.single;
       expect(file.path, endsWith('-wm-AR-TESTXY.mp4'));
@@ -294,7 +423,7 @@ void main() {
 
       await c
           .read(wallpaperShareProvider.notifier)
-          .share(_wallpaper(), message: 'm');
+          .share(_wallpaper(), buildCaption: _caption);
 
       // Share still happened — with the untouched original.
       expect(sheetCalls, hasLength(1));

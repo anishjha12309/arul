@@ -19,16 +19,49 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    - `release-commit-reminder.js` reminds you to commit after a successful release build left
      source uncommitted (an artifact is only reproducible if its source is in git).
 
+   `isPlayInstall()` now has a SECOND consumer besides FLAG_SECURE: the reminders screen's
+   notification QA tools (`qaToolsEnabled`). So a sideloaded release APK deliberately differs from
+   the store build in two visible ways — screenshots work, and Settings → Reminders shows a TESTING
+   card. Both are intended; neither reaches a Play user. See docs/notifications.md.
+
    All three match the command pattern anywhere in a string, so avoid echoing "flutter build
    appbundle" literally in an unrelated command.
-1. Build: `flutter build appbundle --release --dart-define-from-file=env/prod.json`
-   (APK for sideload testing: `flutter build apk --release ...`).
+1. **ABI rule — the bundle stays whole, every APK is split. No exceptions.**
+   - **AAB (the Play artifact): all three ABIs in ONE bundle**, which is the default —
+     ```bash
+     flutter build appbundle --release --dart-define-from-file=env/prod.json
+     ```
+     NEVER pass `--split-per-abi` or `--target-platform` here. Play generates the per-device
+     split itself from the bundle; stripping an architecture out of the upload means every device
+     on that ABI simply cannot install, and it is invisible until a real user hits it.
+   - **APKs, release AND debug: arm64-v8a ONLY** (owner's call, 2026-07-30 — the other two are
+     noise). `--split-per-abi` names the file per ABI, `--target-platform` builds just the one:
+     ```bash
+     flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/prod.json
+     flutter build apk --debug   --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/dev.json
+     ```
+     The ONLY output is `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26 MB, vs 61 MB
+     fat). No `app-release.apk` is written — anything pointing at that path must be updated.
+     Two consequences, both fine because they touch sideloading only and never Play (the AAB still
+     ships all three ABIs, so no real user is affected):
+     · a 32-bit-only phone cannot install it — irrelevant, arm64 has been universal since ~2017;
+     · **a Windows x86_64 emulator cannot install it either.** To test a release build on an
+       emulator, rebuild with `--target-platform android-x64` for that run only.
+     Do NOT add `--target-platform` to the appbundle command to match — see the AAB bullet above.
 2. Signing preconditions: `android/key.properties` + keystore `C:\Users\anish\arul-upload.jks`
    (alias `arul`; passwords in the user's password manager — never ask to paste them into chat).
-   **Missing key.properties silently falls back to DEBUG signing** — always verify:
-   ```bash
-   jarsigner -verify -certs -verbose build/app/outputs/bundle/release/app-release.aab | grep "CN="
-   ```
+   **Missing key.properties silently falls back to DEBUG signing** — always verify. Which tool
+   depends on the artifact:
+   - **AAB** (carries a v1 JAR signature):
+     ```bash
+     jarsigner -verify -certs -verbose build/app/outputs/bundle/release/app-release.aab | grep "CN="
+     ```
+   - **APK** — Flutter signs these **v2-only, with no v1 block**, so `jarsigner` and
+     `keytool -printcert -jarfile` print NOTHING and read as a broken build. Use apksigner:
+     ```bash
+     "$LOCALAPPDATA/Android/Sdk/build-tools/36.0.0/apksigner.bat" verify --print-certs \
+       build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+     ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
 3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
 4. Play upload = user task (Play App Signing ON). **v1.0.0+20 is already uploaded** (not public yet).

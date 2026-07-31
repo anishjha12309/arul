@@ -44,6 +44,11 @@ android {
     }
 
     compileOptions {
+        // Required by flutter_local_notifications (v22+): zonedSchedule uses
+        // java.time, which needs the backport on the older API levels this app
+        // still supports. Without it the build fails outright at
+        // checkDebugAarMetadata. Matches Pakiza.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -129,6 +134,10 @@ kotlin {
 }
 
 dependencies {
+    // Java 8+ API desugaring — required by flutter_local_notifications for the
+    // scheduled (zonedSchedule) devotional reminders. Version pinned to Pakiza's.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
     // Media3 ExoPlayer — the app's single video runtime, used by BOTH:
     //   • feedvideo/FeedVideoPlugin  — the in-feed live-preview texture pool
     //   • wallpaper/VideoRenderer    — the applied live wallpaper's own service

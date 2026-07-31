@@ -10,6 +10,7 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../referral/presentation/share_moment_sheet.dart';
 import '../providers/upload_provider.dart';
 
 /// Upload-your-content. WALLPAPERS ONLY: user submissions are wallpaper-only by
@@ -126,7 +127,19 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       case UploadSuccess():
         showArulToast(context, 'Submitted for review — thank you!');
         ref.read(uploadProvider.notifier).reset();
-        if (context.canPop()) context.pop();
+        // Someone who just contributed a wallpaper is, by definition, someone
+        // invested enough to tell a friend. Awaited before the pop so the sheet
+        // is never orphaned by this route closing under it.
+        await ShareMomentSheet.show(
+          context,
+          title: 'Thank you',
+          body:
+              "We'll review your wallpaper shortly. While you wait — know "
+              'someone who would enjoy Arul?',
+          source: 'upload_success',
+        );
+        if (!mounted) return;
+        if (context.mounted && context.canPop()) context.pop();
       case UploadError(:final message):
         showArulToast(context, message, kind: ToastKind.error);
         ref.read(uploadProvider.notifier).reset();

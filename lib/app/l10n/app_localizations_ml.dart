@@ -171,8 +171,9 @@ class AppLocalizationsMl extends AppLocalizations {
   String get offlineFeedBody => 'വാൾപേപ്പറുകൾ കാണാൻ ഇന്റർനെറ്റ് ഓണാക്കുക.';
 
   @override
-  String get shareMessage =>
-      'മനോഹരമായ ദക്ഷിണേന്ത്യൻ വാൾപേപ്പറുകൾ — അരുൾ നേടുക: https://hsrapps.com/arul';
+  String wallpaperShareCaption(String link) {
+    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+  }
 
   @override
   String referShareMessage(String link) {
