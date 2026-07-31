@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { makeEnv, makeCtx, makeMockSql } from "./_ctx.js";
+import { makeQcR2, jpegFixture, mp4Fixture, mp3Fixture } from "./_media.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 
 vi.mock("../src/lib/db.js", () => ({
@@ -309,7 +310,11 @@ describe("POST /media/confirm-upload", () => {
   it("too_many_pending once the per-user pending cap is reached", async () => {
     // The shared mock returns the same rows for every query, so the pending
     // count reads n=10 — at the cap — and the handler must refuse before insert.
-    const { env } = envWithSql([{ n: 10 }]);
+    // The object must pass QC first, or the 400 arrives before the cap check.
+    const { bucket } = makeQcR2({
+      [`user/${USER_ID}/submissions/x.jpg`]: { bytes: jpegFixture(), contentType: "image/jpeg" },
+    });
+    const { env } = envWithSql([{ n: 10 }], { R2: bucket });
     const res = await handleConfirmUpload(
       makeCtx({
         env,
@@ -322,7 +327,10 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("inserts the submission and returns its id + pending status", async () => {
-    const { env } = envWithSql([{ id: "sm-1", status: "pending" }]);
+    const { bucket } = makeQcR2({
+      [`user/${USER_ID}/submissions/x.jpg`]: { bytes: jpegFixture(), contentType: "image/jpeg" },
+    });
+    const { env } = envWithSql([{ id: "sm-1", status: "pending" }], { R2: bucket });
     const res = await handleConfirmUpload(
       makeCtx({
         env,
@@ -338,5 +346,65 @@ describe("POST /media/confirm-upload", () => {
     const body = (await res.json()) as { id: string; status: string };
     expect(body.id).toBe("sm-1");
     expect(body.status).toBe("pending");
+  });
+
+  // ── Byte-level QC (auto-reject) ─────────────────────────────────────────────
+
+  it("auto-rejects junk bytes behind an image content-type and deletes the object", async () => {
+    const key = `user/${USER_ID}/submissions/x.jpg`;
+    const junk = new TextEncoder().encode("<html>not an image at all</html>".repeat(4));
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: junk, contentType: "image/jpeg" },
+    });
+    const { env, capturedArgs } = envWithSql([{ id: "sm-1", status: "pending" }], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");
+    expect(deletes).toContain(key); // bytes freed immediately — nothing pinned
+    expect(capturedArgs).toHaveLength(0); // no submission row was ever written
+  });
+
+  it("auto-rejects a standard 1080×1920 phone video (green-edge geometry) with the reason", async () => {
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: mp4Fixture({ width: 1080, height: 1920 }), contentType: "video/mp4" },
+    });
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("bad_dimensions");
+    expect(body.error.message).toContain("1024×1824");
+    expect(deletes).toContain(key);
+  });
+
+  it("accepts the canonical 1024×1824 H.264 live wallpaper", async () => {
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const { bucket } = makeQcR2({
+      [key]: { bytes: mp4Fixture(), contentType: "video/mp4" },
+    });
+    const { env } = envWithSql([{ id: "sm-2", status: "pending" }], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("auto-rejects audio bytes submitted as a wallpaper (Arul is wallpaper-only)", async () => {
+    const key = `user/${USER_ID}/submissions/x.mp3`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: mp3Fixture(), contentType: "audio/mpeg" },
+    });
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");
+    expect(deletes).toContain(key);
   });
 });

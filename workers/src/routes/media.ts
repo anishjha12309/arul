@@ -24,6 +24,7 @@ import { presignGet, presignPut, SUBMISSION_INFIX } from "../lib/r2.js";
 import { getDb } from "../lib/db.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
+import { verifyMediaObject } from "../lib/media-verify.js";
 
 // Maps kind → { table, privateKeyCol }
 // Wallpaper full_key is intentionally included (it's the apply gate key).
@@ -218,16 +219,19 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
     return errorResponse(400, "bad_key", "fileKey must be under your submissions/ prefix");
   }
 
-  // The upload must have actually landed — otherwise the row is a dead entry the
-  // moderation queue can never preview or approve.
-  try {
-    const head = await env.R2.head(fileKey);
-    if (!head) {
+  // The upload must have actually landed AND pass byte-level QC (magic bytes
+  // match the signed content-type, image dimensions in range, live-wallpaper
+  // mp4s in the hw-decoder-safe geometry / H.264). A failing object is
+  // auto-rejected: it is deleted immediately, no submission row is created,
+  // and the response carries the reason for the app to show the user.
+  const qc = await verifyMediaObject(env.R2, fileKey, "wallpaper");
+  if (!qc.ok) {
+    if (qc.code === "not_found") {
       return errorResponse(400, "not_uploaded", "Upload not found — complete the upload first");
     }
-  } catch (err) {
-    console.error("[media/confirm-upload] R2 head error:", err);
-    return errorResponse(500, "server_error", "Could not verify the upload");
+    console.warn(`[media/confirm-upload] QC rejected ${fileKey}: ${qc.code} — ${qc.message}`);
+    c.executionCtx.waitUntil(env.R2.delete(fileKey).catch(() => {}));
+    return errorResponse(400, qc.code, qc.message);
   }
 
   const sql = getDb(env);
