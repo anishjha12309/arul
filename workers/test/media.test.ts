@@ -394,6 +394,107 @@ describe("POST /media/confirm-upload", () => {
     expect(res.status).toBe(200);
   });
 
+  it("auto-rejects a non-H.264 video (bad_codec) and deletes the object", async () => {
+    // Right geometry, wrong codec: budget-SoC fleets only hw-decode avc1/avc3;
+    // an HEVC clip would force permanent software decode (CLAUDE.md gotcha 1).
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: mp4Fixture({ codec: "hev1" }), contentType: "video/mp4" },
+    });
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("bad_codec");
+    expect(body.error.message).toContain("H.264");
+    expect(deletes).toContain(key);
+  });
+
+  it("auto-rejects a thumbnail-sized image (below the 480px short-side floor)", async () => {
+    const key = `user/${USER_ID}/submissions/tiny.jpg`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: jpegFixture(320, 400), contentType: "image/jpeg" },
+    });
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("bad_dimensions");
+    expect(body.error.message).toContain("480");
+    expect(deletes).toContain(key);
+  });
+
+  it("auto-rejects an object whose REAL size exceeds the per-mime cap (too_large)", async () => {
+    // The presign endpoint only validates the CLAIMED size; the QC gate is the
+    // first place the actual byte count is checked. Simulate a 11MB jpeg by
+    // inflating the head() report rather than allocating 11MB of fixture.
+    const key = `user/${USER_ID}/submissions/huge.jpg`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: jpegFixture(), contentType: "image/jpeg" },
+    });
+    const origHead = bucket.head.bind(bucket);
+    (bucket as unknown as { head: unknown }).head = async (k: string) => {
+      const h = await origHead(k);
+      return h ? { ...h, size: 11 * 1024 * 1024 } : null;
+    };
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("too_large");
+    expect(deletes).toContain(key);
+  });
+
+  it("accepts a canonical clip with moov AFTER mdat (non-faststart layout)", async () => {
+    // Phone encoders commonly emit moov at the end; the box walk must skip the
+    // multi-MB mdat and still find it, or every such upload is a false reject.
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const { bucket } = makeQcR2({
+      [key]: { bytes: mp4Fixture({ moovAtEnd: true }), contentType: "video/mp4" },
+    });
+    const { env } = envWithSql([{ id: "sm-3", status: "pending" }], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("a retried confirm is idempotent: the insert upserts on file_key and returns the row", async () => {
+    // One object = one submission row (edge-cases §Upload). Postgres enforces
+    // this via the unique file_key index; the unit-level guarantee is that the
+    // insert really is an ON CONFLICT upsert with RETURNING, and that a repeat
+    // confirm answers 200 with the same row instead of erroring.
+    const key = `user/${USER_ID}/submissions/x.jpg`;
+    const { bucket } = makeQcR2({
+      [key]: { bytes: jpegFixture(), contentType: "image/jpeg" },
+    });
+    const { env, capturedArgs } = envWithSql([{ id: "sm-1", status: "pending" }], { R2: bucket });
+
+    const body = { kind: "wallpaper", fileKey: key };
+    const first = await handleConfirmUpload(makeCtx({ env, token: await token(), jsonBody: body }));
+    const second = await handleConfirmUpload(makeCtx({ env, token: await token(), jsonBody: body }));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(((await first.json()) as { id: string }).id).toBe(
+      ((await second.json()) as { id: string }).id,
+    );
+
+    const insertSql = capturedArgs
+      .map((args) => (args[0] as unknown as string[]).join(" "))
+      .filter((text) => text.includes("INSERT INTO content_submissions"));
+    expect(insertSql).toHaveLength(2);
+    for (const text of insertSql) {
+      expect(text).toContain("ON CONFLICT (file_key) DO UPDATE");
+      expect(text).toContain("RETURNING");
+    }
+  });
+
   it("auto-rejects audio bytes submitted as a wallpaper (Arul is wallpaper-only)", async () => {
     const key = `user/${USER_ID}/submissions/x.mp3`;
     const { bucket, deletes } = makeQcR2({

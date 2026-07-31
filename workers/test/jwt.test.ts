@@ -1,6 +1,8 @@
 /**
  * Unit tests for JWT sign/verify/rotation logic.
- * No network calls — all crypto is synchronous via Web Crypto API (mocked by vitest).
+ * No network calls — signing and verification run against the REAL Web Crypto
+ * API (vitest's workerd/node environment provides it; nothing is mocked), so a
+ * failure here means the token format or HMAC actually broke.
  */
 
 import { describe, it, expect, vi } from "vitest";

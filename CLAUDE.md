@@ -76,7 +76,7 @@ curl -X POST https://arul-api.hsrutility.com/internal/build-catalog -H "Authoriz
 ```
 
 ## 11. Definition of Done & Git
-Checklist: `.claude/skills/phase-completion/`. **Quick:** `flutter analyze` clean + formatted · worker `tsc`+tests green **+ deployed** · loading/empty/error states · localized edge cases · analytics fire · no secrets. **No tests for premium/payments/inactive features.** One commit per phase. **Never commit before human approval** — standing exception: pubspec version bumps auto-commit via `.claude/hooks/version-commit.js`. Messages: one line, plain phrasing, no attribution trailers.
+Checklist: `.claude/skills/phase-completion/`. **Quick:** `flutter analyze` clean + formatted · worker `tsc`+tests green **+ deployed** · loading/empty/error states · localized edge cases · analytics fire · no secrets. One commit per phase. **Never commit before human approval** — standing exception: pubspec version bumps auto-commit via `.claude/hooks/version-commit.js`. Messages: one line, plain phrasing, no attribution trailers.
 **The `.aab` is the only guarded artifact** (it is the only one Play ever sees). Three hooks fire on it and on nothing else, so APK builds stay free for on-device testing: `release-flag-secure-guard.js` denies the build unless an ACTIVE `setFlags(FLAG_SECURE)` survives in `MainActivity.kt` · `release-version-guard.js` denies it when the pubspec version was already built from different source, and only an `.aab` landing consumes a bump · `release-commit-reminder.js` reminds you to commit the source a successful release build compiled (`.aab`, or `flutter build apk --release`).
 
 ## Meta — Maintaining This File

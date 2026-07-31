@@ -337,6 +337,53 @@ void main() {
       },
     );
 
+    test('golden pin: All is this exact permutation for these ids, '
+        'regardless of arrival order', () {
+      // The stability tests above prove same-runtime determinism, but they
+      // would still pass if _fnv1a were swapped for String.hashCode — the
+      // exact regression the hand-rolled hash exists to prevent (its output
+      // is not contractually stable across Dart releases). Pinning the
+      // literal permutation guards the other half of the contract: if this
+      // fails, the hash changed, and the All feed silently re-orders under
+      // every existing install on the next app upgrade.
+      final stems = [
+        'sivan0',
+        'sivan1',
+        'sivan2',
+        'sivan3',
+        'amman0',
+        'amman1',
+        'murugan0',
+        'murugan1',
+        'perumal0',
+        'temple0',
+      ];
+      final all = [for (final s in stems) Wallpaper.fromJson(_item(s))];
+
+      final ordered = feedOrder(WallpaperCategory.allSlug, all);
+
+      expect(ordered.map((w) => w.id).toList(), const [
+        'id-murugan0',
+        'id-murugan1',
+        'id-temple0',
+        'id-sivan2',
+        'id-perumal0',
+        'id-sivan3',
+        'id-amman1',
+        'id-sivan0',
+        'id-amman0',
+        'id-sivan1',
+      ]);
+
+      // Pure function of catalog CONTENT: the rows arriving in a different
+      // order must not change the served order.
+      final fromReversed = feedOrder(
+        WallpaperCategory.allSlug,
+        all.reversed.toList(growable: false),
+      );
+      expect(fromReversed.map((w) => w.id), ordered.map((w) => w.id));
+    });
+
     test('a category chip keeps catalog order — newest first', () async {
       serveClumpedCatalog();
 
