@@ -32,6 +32,12 @@ below are the ones that were paid for by getting the second half wrong.
 - [ ] The FileProvider (`@xml/wallpaper_file_paths`) must keep covering `cache-path` — the watermarked
       copy is written to the temp dir, and a path outside every `<paths>` entry makes the direct share
       degrade to the sheet silently.
+- [ ] **The watermark is optional by DEVICE, mandatory by CAPABILITY.** Live burn-in needs API 31 —
+      below that Media3 kills the process, not the call ([known-issues.md](known-issues.md)) — so a
+      pre-Android-12 live share goes out CLEAN and tracks `share_watermark_skipped` with `sdk_int`.
+      On a device that CAN watermark, a failure (after one retry) FAILS the share instead of shipping
+      an untraced copy: silently degrading there made the trace code worthless exactly where it works.
+      Statics are watermarked on EVERY Android version — that path never touches Media3.
 - [ ] Resolving the link never blocks the share (2s timeout, cached summary): the file is the payload,
       the attribution is a bonus. Never invert that.
 - [ ] `link_attributed` tells the truth — never report true for a link with no `referrer=`.

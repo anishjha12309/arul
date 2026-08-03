@@ -59,10 +59,29 @@ class _FakeApplyService implements WallpaperApplyService {
 }
 
 class _FakeWatermarkService implements ShareWatermarkService {
-  _FakeWatermarkService({this.failWith});
+  _FakeWatermarkService({
+    this.failWith,
+    this.failTimes,
+    this.unsupportedSdkInt,
+  });
 
+  /// Thrown by watermark attempts — every one of them, or just the first
+  /// [failTimes] when that is set.
   final ShareWatermarkException? failWith;
+
+  /// null = [failWith] applies forever; N = only the first N attempts fail,
+  /// which is how the one-shot retry gets exercised.
+  final int? failTimes;
+
+  /// Non-null → this device cannot watermark VIDEO, and reports this API
+  /// level. Stands in for anything below API 31 (androidx/media#2535).
+  final int? unsupportedSdkInt;
+
   final planned = <String>[];
+
+  /// Watermark attempts made, across both media kinds — the retry assertions
+  /// read this.
+  int attempts = 0;
 
   @override
   WatermarkSpec plan({required String wallpaperId, String? userId}) {
@@ -71,15 +90,22 @@ class _FakeWatermarkService implements ShareWatermarkService {
   }
 
   @override
+  Future<({bool supported, int sdkInt})> videoWatermarkSupport() async =>
+      (supported: unsupportedSdkInt == null, sdkInt: unsupportedSdkInt ?? 34);
+
+  File _attempt(String outPath) {
+    attempts++;
+    final f = failWith;
+    if (f != null && (failTimes == null || attempts <= failTimes!)) throw f;
+    return File(outPath)..writeAsBytesSync(List.filled(16, 9));
+  }
+
+  @override
   Future<File> watermarkImage(
     File src,
     WatermarkSpec spec, {
     required String outPath,
-  }) async {
-    final f = failWith;
-    if (f != null) throw f;
-    return File(outPath)..writeAsBytesSync(List.filled(16, 9));
-  }
+  }) async => _attempt(outPath);
 
   @override
   Future<File> watermarkVideo(
@@ -87,9 +113,11 @@ class _FakeWatermarkService implements ShareWatermarkService {
     WatermarkSpec spec, {
     required String outPath,
   }) async {
-    final f = failWith;
-    if (f != null) throw f;
-    return File(outPath)..writeAsBytesSync(List.filled(16, 9));
+    // Mirrors the real service: the support probe runs BEFORE any work, so an
+    // unsupported device never reaches the exporter or the overlay render.
+    final sdk = unsupportedSdkInt;
+    if (sdk != null) throw ShareWatermarkUnsupportedException(sdk);
+    return _attempt(outPath);
   }
 
   @override
@@ -407,15 +435,80 @@ void main() {
       expect(sheetCalls.single.fileNameOverrides, ['arul-murugan-vel.mp4']);
     });
 
-    test('watermark failure falls back to the ORIGINAL file and tracks '
-        'share_watermark_failed', () async {
+    test('a device that CANNOT watermark video shares the clean original and '
+        'tracks share_watermark_skipped', () async {
+      // Below API 31 Media3's Transformer resolves an API-31-only class on
+      // every API level and takes the process down with it (androidx/media#2535),
+      // so the export is not attempted at all. The share must still go out —
+      // untraced beats not happening.
       final analytics = _RecordingAnalytics();
+      final sheetCalls = <ShareParams>[];
+      final watermark = _FakeWatermarkService(unsupportedSdkInt: 28);
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: watermark,
+        analytics: analytics,
+        sheetCalls: sheetCalls,
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(kind: WallpaperKind.live), buildCaption: _caption);
+
+      expect(c.read(wallpaperShareProvider), isA<WallpaperShareIdle>());
+      expect(sheetCalls, hasLength(1));
+      final file = sheetCalls.single.files!.single;
+      expect(file.path, isNot(contains('-wm-')));
+      expect(file.path, endsWith('w1.mp4'));
+      expect(file.mimeType, 'video/mp4');
+      // The recipient still gets a branded filename and the referral caption.
+      expect(sheetCalls.single.fileNameOverrides, ['arul-murugan-vel.mp4']);
+
+      // A skip is NOT a failure and must never be reported as one.
+      expect(analytics.events, isNot(contains('share_watermark_failed')));
+      expect(analytics.props['share_watermark_skipped'], {
+        'wallpaper_id': 'w1',
+        'type': 'live',
+        'sdk_int': 28,
+      });
+      expect(analytics.props['wallpaper_shared']?['watermarked'], false);
+      // Not retried — the answer cannot change on this device.
+      expect(watermark.attempts, 0);
+    });
+
+    test('a STATIC share is still watermarked on a device that cannot do '
+        'video', () async {
+      // The static path never touches Media3, so the API-31 skip must not leak
+      // into it — those shares stay traceable on every Android version.
       final sheetCalls = <ShareParams>[];
       final c = _container(
         service: _FakeApplyService(tmpDir),
-        watermark: _FakeWatermarkService(
-          failWith: const ShareWatermarkException('encode blew up'),
-        ),
+        watermark: _FakeWatermarkService(unsupportedSdkInt: 28),
+        sheetCalls: sheetCalls,
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      expect(
+        sheetCalls.single.files!.single.path,
+        endsWith('-wm-AR-TESTXY.jpg'),
+      );
+    });
+
+    test('watermark failure on a CAPABLE device fails the share rather than '
+        'shipping an untraced copy', () async {
+      final analytics = _RecordingAnalytics();
+      final sheetCalls = <ShareParams>[];
+      final watermark = _FakeWatermarkService(
+        failWith: const ShareWatermarkException('encode blew up'),
+      );
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: watermark,
         analytics: analytics,
         sheetCalls: sheetCalls,
       );
@@ -425,20 +518,48 @@ void main() {
           .read(wallpaperShareProvider.notifier)
           .share(_wallpaper(), buildCaption: _caption);
 
-      // Share still happened — with the untouched original.
-      expect(sheetCalls, hasLength(1));
-      final file = sheetCalls.single.files!.single;
-      expect(file.path, isNot(contains('-wm-')));
-      expect(file.path, endsWith('w1.jpg'));
-      expect(file.mimeType, 'image/jpeg');
+      // NOTHING left the device.
+      expect(sheetCalls, isEmpty);
+      final state = c.read(wallpaperShareProvider);
+      expect(state, isA<WallpaperShareError>());
+      expect((state as WallpaperShareError).premiumRequired, isFalse);
+      expect(state.isNetwork, isFalse);
 
-      expect(analytics.events, contains('share_watermark_failed'));
+      expect(analytics.events, isNot(contains('wallpaper_shared')));
       expect(analytics.props['share_watermark_failed'], {
         'wallpaper_id': 'w1',
         'type': 'image',
         'reason': 'encode blew up',
       });
-      expect(analytics.props['wallpaper_shared']?['watermarked'], false);
+      // Tried twice before giving up.
+      expect(watermark.attempts, 2);
+    });
+
+    test('a transient watermark failure is retried once and the share '
+        'succeeds', () async {
+      final analytics = _RecordingAnalytics();
+      final sheetCalls = <ShareParams>[];
+      final watermark = _FakeWatermarkService(
+        failWith: const ShareWatermarkException('busy'),
+        failTimes: 1,
+      );
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: watermark,
+        analytics: analytics,
+        sheetCalls: sheetCalls,
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      expect(watermark.attempts, 2);
+      expect(sheetCalls, hasLength(1));
+      expect(sheetCalls.single.files!.single.path, contains('-wm-'));
+      expect(analytics.props['wallpaper_shared']?['watermarked'], true);
+      expect(analytics.events, isNot(contains('share_watermark_failed')));
       expect(c.read(wallpaperShareProvider), isA<WallpaperShareIdle>());
     });
   });

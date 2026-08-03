@@ -21,6 +21,28 @@ class ShareWatermarkException implements Exception {
   String toString() => message;
 }
 
+/// The device cannot burn a watermark into VIDEO at all (below API 31).
+///
+/// Deliberately a distinct type, because it is a DESIGNED outcome rather than a
+/// failure: the caller shares the clean original and shows the user nothing. On
+/// a device that CAN watermark, a failure is treated as a defect and fails the
+/// share instead — see `wallpaper_share_provider`.
+///
+/// Why API 31: Media3's `ExoPlayerAssetLoader.Factory` references
+/// `android.media.metrics.LogSessionId` (an API-31 type) from a field, a
+/// constructor parameter and `createAssetLoader`, with no `SDK_INT` guard, so
+/// `Transformer.start()` throws `NoClassDefFoundError` on Android 11 and below
+/// and kills the process. androidx/media#2535, open; 1.7.1 is the last clean
+/// release. Statics are unaffected — that path never touches Media3.
+class ShareWatermarkUnsupportedException extends ShareWatermarkException {
+  ShareWatermarkUnsupportedException(this.sdkInt)
+    : super('video watermarking needs API 31, device is API $sdkInt');
+
+  /// The device's `Build.VERSION.SDK_INT`, reported so the skip rate can be
+  /// broken down by OS version without a second probe.
+  final int sdkInt;
+}
+
 // ─── Spec ────────────────────────────────────────────────────────────────────
 
 /// One share's watermark plan: WHERE the logo and code go, and WHICH unique
@@ -69,6 +91,10 @@ class ShareWatermarkService {
   final MethodChannel _channel;
 
   ui.Image? _logo; // decoded once, reused across shares
+
+  /// Cached for the life of the service — the OS version cannot change under a
+  /// running process, and every live share would otherwise re-ask.
+  ({bool supported, int sdkInt})? _videoSupport;
 
   static Future<Uint8List> _loadBundledLogo() async =>
       (await rootBundle.load(_logoAsset)).buffer.asUint8List();
@@ -252,10 +278,37 @@ class ShareWatermarkService {
 
   // ─── Image path ────────────────────────────────────────────────────────────
 
-  /// Decodes [src] (jpg/webp), composites the overlay at source dimensions and
-  /// writes a NEW quality-90 JPEG to [outPath] (never mutates [src] — it may
-  /// be a cache-manager entry). JPEG encoding runs in [Isolate.run] so the UI
-  /// isolate never blocks on a full-resolution encode.
+  /// Longest edge a share decodes at. Canonical statics are 1080x1920
+  /// (docs/media-conventions.md), already well under this, so real content
+  /// decodes at its native size and its output is byte-for-byte unchanged. The
+  /// cap only bites on an unexpectedly large master — which would otherwise
+  /// materialise tens of MB of uncompressed RGBA on the UI isolate and then
+  /// COPY all of it into the encode isolate.
+  static const _maxShareEdge = 2560;
+
+  /// The frame dimensions to decode [w]x[h] at: capped to [_maxShareEdge] on the
+  /// longer edge, aspect-ratio-preserving, and NEVER upscaled (a small source is
+  /// returned as-is). See [watermarkImage].
+  (int, int) _cappedDecodeSize(int w, int h) {
+    final long = w > h ? w : h;
+    if (long <= _maxShareEdge) return (w, h);
+    final scale = _maxShareEdge / long;
+    return ((w * scale).round().clamp(1, w), (h * scale).round().clamp(1, h));
+  }
+
+  /// Decodes [src] (jpg/webp) — CAPPED to a phone-appropriate resolution so the
+  /// decode, the raster pass and the uncompressed RGBA readback are all bounded
+  /// — composites the overlay, and writes a NEW quality-90 JPEG to [outPath]
+  /// (never mutates [src] — it may be a cache-manager entry). JPEG encoding runs
+  /// in [Isolate.run] so the UI isolate never blocks on a full-resolution
+  /// encode. The overlay layout is fully fractional, so the watermark lands
+  /// identically at any frame size.
+  ///
+  /// Every intermediate is disposed explicitly. The codec, the descriptor, its
+  /// buffer and the recorded picture each hold native memory that the GC frees
+  /// only on its own schedule — which on a low-RAM device is far too late when
+  /// a share is already holding a decoded frame, a composited frame and two
+  /// copies of the RGBA buffer.
   Future<File> watermarkImage(
     File src,
     WatermarkSpec spec, {
@@ -263,9 +316,26 @@ class ShareWatermarkService {
   }) async {
     try {
       final srcBytes = await src.readAsBytes();
-      final codec = await ui.instantiateImageCodec(srcBytes);
+
+      // Read the header dimensions cheaply (no full decode), then decode DOWN
+      // to the capped size. Only ever downscales.
+      final buffer = await ui.ImmutableBuffer.fromUint8List(srcBytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final (targetW, targetH) = _cappedDecodeSize(
+        descriptor.width,
+        descriptor.height,
+      );
+      final codec = await descriptor.instantiateCodec(
+        targetWidth: targetW,
+        targetHeight: targetH,
+      );
       final frame = await codec.getNextFrame();
       final source = frame.image;
+      // The decoded image is independent of these now — release the encoded data.
+      codec.dispose();
+      descriptor.dispose();
+      buffer.dispose();
+
       final w = source.width;
       final h = source.height;
 
@@ -274,7 +344,9 @@ class ShareWatermarkService {
       canvas.drawImage(source, Offset.zero, Paint());
       await _drawOverlay(canvas, spec, w.toDouble(), h.toDouble());
 
-      final composed = await recorder.endRecording().toImage(w, h);
+      final picture = recorder.endRecording();
+      final composed = await picture.toImage(w, h);
+      picture.dispose();
       final rgba = await composed.toByteData(
         format: ui.ImageByteFormat.rawRgba,
       );
@@ -337,15 +409,45 @@ class ShareWatermarkService {
     }
   }
 
+  /// Whether this device can burn a watermark into video, and its API level.
+  ///
+  /// Asked before any work is done, so a device that cannot export never pays
+  /// for an overlay render it would only throw away. Anything unexpected — no
+  /// channel (plain `flutter test`), a malformed reply — reports UNSUPPORTED:
+  /// the failure mode of guessing wrong here used to be a dead app, so the
+  /// pessimistic answer is the safe one.
+  Future<({bool supported, int sdkInt})> videoWatermarkSupport() async {
+    final cached = _videoSupport;
+    if (cached != null) return cached;
+    try {
+      final raw = await _channel.invokeMapMethod<String, Object?>(
+        'videoWatermarkSupport',
+      );
+      return _videoSupport = (
+        supported: raw?['supported'] as bool? ?? false,
+        sdkInt: raw?['sdkInt'] as int? ?? 0,
+      );
+    } on Object {
+      return _videoSupport = (supported: false, sdkInt: 0);
+    }
+  }
+
   /// Burns the overlay into [src] (an MP4) via the native transformer.
   /// Live wallpapers are 1024x1824 BY RULE (docs/media-conventions.md), so the
   /// overlay is rendered at exactly that size — the native side scales it to
   /// the frame anyway, and probing the container here would cost a full parse.
+  ///
+  /// Throws [ShareWatermarkUnsupportedException] below API 31 WITHOUT doing any
+  /// work; the caller shares the clean original in that case.
   Future<File> watermarkVideo(
     File src,
     WatermarkSpec spec, {
     required String outPath,
   }) async {
+    final support = await videoWatermarkSupport();
+    if (!support.supported) {
+      throw ShareWatermarkUnsupportedException(support.sdkInt);
+    }
     final overlay = await renderOverlayPng(spec, width: 1024, height: 1824);
     try {
       final result = await _channel.invokeMethod<String>('watermarkVideo', {
@@ -355,7 +457,12 @@ class ShareWatermarkService {
       });
       return File(result ?? outPath);
     } on PlatformException catch (e) {
-      // codes: transform_failed | bad_input
+      // codes: transform_failed | bad_input | unsupported_api. The last one can
+      // only appear if the native gate disagrees with the probe above; honour it
+      // as a skip rather than a failure so the share still goes out.
+      if (e.code == 'unsupported_api') {
+        throw ShareWatermarkUnsupportedException(support.sdkInt);
+      }
       throw ShareWatermarkException(
         'video watermark failed (${e.code}): ${e.message}',
       );

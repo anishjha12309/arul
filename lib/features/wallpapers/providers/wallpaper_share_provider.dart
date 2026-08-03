@@ -160,13 +160,32 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
 
       // Watermark AFTER the source resolves, still under Preparing. Output is
       // always a NEW file — the source may be a cache entry shared with apply/
-      // prefetch and must never be mutated. On any failure the ORIGINAL file is
-      // shared: a missing watermark must never break the share.
+      // prefetch and must never be mutated.
+      //
+      // The two failure modes are deliberately NOT the same:
+      //   · CANNOT watermark (live video below API 31) → share the clean
+      //     original, silently. The device is incapable, not broken.
+      //   · CAN watermark but did not → fail the share.
+      // The second half is the one that changed. Falling through to the
+      // original on a capable device made the trace code worthless precisely
+      // where it works: an untraced copy left the phone and nothing recorded
+      // that it had. A share the user can retry is the better failure.
       var shared = file;
       var watermarked = false;
       try {
-        shared = await _watermark(wallpaper, file, tmpDir.path);
+        shared = await _watermarkWithRetry(wallpaper, file, tmpDir.path);
         watermarked = true;
+      } on ShareWatermarkUnsupportedException catch (e) {
+        // By design, and invisible to the user — see the exception's doc for
+        // why API 31 is the line (androidx/media#2535).
+        analytics.track(
+          'share_watermark_skipped',
+          properties: {
+            'wallpaper_id': wallpaper.id,
+            'type': wallpaper.kind.name,
+            'sdk_int': e.sdkInt,
+          },
+        );
       } on Object catch (e) {
         analytics.track(
           'share_watermark_failed',
@@ -176,6 +195,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
             'reason': e.toString(),
           },
         );
+        rethrow;
       }
 
       final link = await _installLink();
@@ -258,6 +278,29 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         crash.recordError(e, st, reason: 'wallpaper share unexpected error');
       }
       state = WallpaperShareError(message: e.toString(), isNetwork: network);
+    }
+  }
+
+  /// One retry before a watermark failure is allowed to fail the share.
+  ///
+  /// The native exporter runs a single export at a time and answers `busy` to a
+  /// second one, and a hardware codec can be briefly unavailable behind the
+  /// feed's player pool — neither is worth refusing a share over now that a
+  /// failure is fatal to it. The retry re-plans, so the second attempt gets its
+  /// own code and its own output path. An unsupported DEVICE is not retried:
+  /// that answer will never change.
+  Future<File> _watermarkWithRetry(
+    Wallpaper wallpaper,
+    File src,
+    String tmpPath,
+  ) async {
+    try {
+      return await _watermark(wallpaper, src, tmpPath);
+    } on ShareWatermarkUnsupportedException {
+      rethrow;
+    } on Object {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      return _watermark(wallpaper, src, tmpPath);
     }
   }
 

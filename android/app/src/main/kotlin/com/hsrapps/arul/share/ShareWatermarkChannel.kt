@@ -2,6 +2,7 @@ package com.hsrapps.arul.share
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Log
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -28,10 +29,29 @@ import java.io.File
  *
  * Contract (the Dart caller is built against exactly this):
  *   channel  com.hsrapps.arul/share_watermark
+ *   method   videoWatermarkSupport {} → {supported: Boolean, sdkInt: Int}
  *   method   watermarkVideo {inputPath, outputPath, overlayPng}
  *   success  → outputPath
  *   errors   → "bad_input" (bad args / unreadable input),
+ *              "unsupported_api" (below API 31 — see below),
  *              "transform_failed" (export error, or a second call while busy)
+ *
+ * REQUIRES API 31. Media3's `ExoPlayerAssetLoader.Factory` holds a field, a
+ * constructor parameter and a `createAssetLoader` local of type
+ * `android.media.metrics.LogSessionId` — an API-31 type — with NO `SDK_INT`
+ * guard anywhere in the class (verified in the shipped bytecode of 1.9.2 and
+ * 1.10.1; 1.7.1 predates the field and is clean). ART therefore resolves that
+ * type on every API level and `Transformer.start()` dies with
+ * `NoClassDefFoundError` on Android 11 and below. Upstream: androidx/media#2535,
+ * still open. Below API 31 we do NOT export at all and the caller shares the
+ * clean original; a pre-Android-12 share is untraced by design.
+ *
+ * Everything here catches [Throwable], not [Exception]. That is the whole
+ * lesson of the crash above: `NoClassDefFoundError` is an `Error`, so a
+ * `catch (Exception)` let a library defect past the handler, past Dart's own
+ * catch, and out through `Looper.loop()` — killing the app instead of falling
+ * back to sharing the original. A watermark must never break the share, and
+ * that promise is only real if the net catches Errors too.
  *
  * Only ONE export runs at a time: Transformer holds a hardware decoder AND an
  * encoder for the duration, and on budget SoCs that budget is shared with the
@@ -70,12 +90,38 @@ class ShareWatermarkChannel(private val context: Context) :
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "videoWatermarkSupport" -> result.success(
+                mapOf(
+                    "supported" to videoWatermarkSupported,
+                    "sdkInt" to Build.VERSION.SDK_INT,
+                ),
+            )
             "watermarkVideo" -> watermarkVideo(call, result)
             else -> result.notImplemented()
         }
     }
 
+    /**
+     * Whether an export can run at all on this device — see the class doc for
+     * why API 31 and not a codec probe. The Dart side asks FIRST so it can skip
+     * rendering a full 1024x1824 overlay PNG it would only throw away.
+     */
+    private val videoWatermarkSupported: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     private fun watermarkVideo(call: MethodCall, result: MethodChannel.Result) {
+        if (!videoWatermarkSupported) {
+            // Defence in depth: the Dart side gates on videoWatermarkSupport,
+            // but calling Transformer here would be fatal, not merely wrong, so
+            // this never relies on the caller having asked.
+            result.error(
+                "unsupported_api",
+                "video watermarking needs API 31, this is ${Build.VERSION.SDK_INT}",
+                null,
+            )
+            return
+        }
+
         val inputPath = call.argument<String>("inputPath")
         val outputPath = call.argument<String>("outputPath")
         val overlayPng = call.argument<ByteArray>("overlayPng")
@@ -101,7 +147,9 @@ class ShareWatermarkChannel(private val context: Context) :
         val overlayBitmap = try {
             BitmapFactory.decodeByteArray(overlayPng, 0, overlayPng.size)
                 ?: throw IllegalArgumentException("overlayPng did not decode")
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable, not Exception: a full-frame decode can OOM, which is an
+            // Error — and an OOM here must degrade to an unwatermarked share.
             result.error("bad_input", "overlayPng is not a decodable image: ${e.message}", null)
             return
         }
@@ -127,7 +175,12 @@ class ShareWatermarkChannel(private val context: Context) :
             // Registered BEFORE start(): the listener resolves the call via this.
             activeExport = ActiveExport(transformer, outputPath, result)
             transformer.start(editedItem, outputPath)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable, NOT Exception. androidx/media#2535 threw
+            // NoClassDefFoundError straight out of Transformer.start() and an
+            // `Exception` handler could not see it, so a library defect became
+            // a process kill. Anything that escapes start() is a failed export,
+            // whatever its supertype.
             Log.e(TAG, "watermark start failed", e)
             activeExport = null
             File(outputPath).delete()
@@ -166,7 +219,7 @@ class ShareWatermarkChannel(private val context: Context) :
         export.replied = true
         try {
             reply(export)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             // A dead engine's Result can throw; the export itself already ended.
             Log.w(TAG, "could not deliver export result", e)
         }
@@ -180,7 +233,7 @@ class ShareWatermarkChannel(private val context: Context) :
         activeExport = null
         try {
             export.transformer.cancel()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "cancel on dispose failed", e)
         }
         File(export.outputPath).delete()

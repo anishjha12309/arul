@@ -162,6 +162,30 @@ void main() {
         throwsA(isA<ShareWatermarkException>()),
       );
     });
+
+    test('an oversized master is decoded DOWN to the share cap', () async {
+      // Guards the memory ceiling, not the look. An uncapped decode
+      // materialises w*h*4 bytes of RGBA on the UI isolate and then COPIES all
+      // of it into the encode isolate — on a low-RAM device that is how a share
+      // gets the process killed. Canonical 1080x1920 statics are unaffected
+      // (see the same-size test above); this only bites an unexpected master.
+      const w = 2600, h = 1300;
+      final source = img.Image(width: w, height: h);
+      img.fill(source, color: img.ColorRgb8(90, 90, 90));
+      final srcFile = File('${tmp.path}/huge.jpg')
+        ..writeAsBytesSync(img.encodeJpg(source, quality: 90));
+
+      final out = await _service().watermarkImage(
+        srcFile,
+        const WatermarkSpec(logoCorner: 0, code: 'AR-TESTXY'),
+        outPath: '${tmp.path}/huge-wm-AR-TESTXY.jpg',
+      );
+
+      final decoded = img.decodeJpg(out.readAsBytesSync())!;
+      // Long edge pinned to the cap, aspect ratio preserved, never upscaled.
+      expect(decoded.width, 2560);
+      expect(decoded.height, 1280);
+    });
   });
 
   group('renderOverlayPng', () {
@@ -203,6 +227,9 @@ void main() {
         final calls = <MethodCall>[];
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, (call) async {
+              if (call.method == 'videoWatermarkSupport') {
+                return {'supported': true, 'sdkInt': 34};
+              }
               calls.add(call);
               return (call.arguments as Map)['outputPath'] as String;
             });
@@ -237,6 +264,9 @@ void main() {
     test('maps PlatformException codes to ShareWatermarkException', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'videoWatermarkSupport') {
+              return {'supported': true, 'sdkInt': 34};
+            }
             throw PlatformException(code: 'transform_failed', message: 'boom');
           });
 
@@ -253,6 +283,59 @@ void main() {
             contains('transform_failed'),
           ),
         ),
+      );
+    });
+
+    test('below API 31 it throws Unsupported WITHOUT invoking the '
+        'exporter', () async {
+      // The device cannot export at all (androidx/media#2535), so the whole
+      // pipeline must be skipped — including the 1024x1824 overlay render,
+      // which is exactly the work a low-end device can least afford to waste.
+      final methods = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            methods.add(call.method);
+            if (call.method == 'videoWatermarkSupport') {
+              return {'supported': false, 'sdkInt': 28};
+            }
+            return '/out/x.mp4';
+          });
+
+      await expectLater(
+        () => _service().watermarkVideo(
+          File('/in/clip.mp4'),
+          const WatermarkSpec(logoCorner: 0, code: 'AR-TESTXY'),
+          outPath: '/out/x.mp4',
+        ),
+        throwsA(
+          isA<ShareWatermarkUnsupportedException>().having(
+            (e) => e.sdkInt,
+            'sdkInt',
+            28,
+          ),
+        ),
+      );
+      expect(methods, ['videoWatermarkSupport']);
+    });
+
+    test('an unsupported_api reply is a SKIP, not a failure', () async {
+      // Only reachable if the native gate disagrees with the probe. It must
+      // still degrade to sharing the original rather than failing the share.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'videoWatermarkSupport') {
+              return {'supported': true, 'sdkInt': 30};
+            }
+            throw PlatformException(code: 'unsupported_api', message: 'no');
+          });
+
+      await expectLater(
+        () => _service().watermarkVideo(
+          File('/in/clip.mp4'),
+          const WatermarkSpec(logoCorner: 1, code: 'AR-TESTXY'),
+          outPath: '/out/x.mp4',
+        ),
+        throwsA(isA<ShareWatermarkUnsupportedException>()),
       );
     });
   });

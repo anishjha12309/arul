@@ -59,6 +59,7 @@ Static-vs-live rides along as **`type`** (`kind.name` → `image` / `live`), spe
 | ringtone_set_blocked_premium ‡ | — | | | |
 | referral_shared | **source**, **link_attributed** | | | |
 | share_watermark_failed | wallpaper_id, type, reason | | | |
+| share_watermark_skipped | wallpaper_id, type, **sdk_int** | | | |
 | profile_name_updated · support_email_opened | has_user | | | |
 | account_delete_{confirmed,failed} · account_deleted | error | | | |
 

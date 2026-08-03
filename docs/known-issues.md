@@ -45,6 +45,20 @@ line by deleting it. Billing behaviour that is proven lives in [billing-verified
 
 ## Traps already paid for
 
+- **Media3 ≥ 1.8.0 cannot run Transformer below API 31, and it kills the PROCESS, not the call.**
+  `ExoPlayerAssetLoader.Factory` holds a field, a constructor parameter and a `createAssetLoader`
+  local of type `android.media.metrics.LogSessionId` (API 31) with **no `SDK_INT` guard**, so ART
+  resolves it on every API level and `Transformer.start()` throws `NoClassDefFoundError` on Android
+  9–11. Verified in shipped bytecode: **1.7.1 = 0 refs (clean) · 1.8.0 added the field · 1.9.2 and
+  1.10.1 = 8 refs, unguarded.** [androidx/media#2535](https://github.com/androidx/media/issues/2535)
+  is OPEN — bumping the version does NOT fix it, and no ProGuard rule can (it is a platform class).
+  *Symptom:* Share on a LIVE wallpaper → black → launcher. *Why it was fatal instead of a degraded
+  share:* the channel caught `Exception`, and `NoClassDefFoundError` is an `Error`. Everything in
+  `ShareWatermarkChannel` catches **`Throwable`** now — keep it that way, in both apps.
+  *Live consequence:* live shares below API 31 go out unwatermarked (`share_watermark_skipped`). If
+  that ever needs fixing, the choices are pinning media3 to 1.7.1 (costs the feed three releases of
+  decoder workarounds) or a hand-rolled MediaCodec+GL pipeline — never re-opening the gate.
+
 - **A bare key written UNDER a `[table]` header in `wrangler.toml`.** *Symptom:* the custom domain is
   perfectly healthy while `arul-api.<subdomain>.workers.dev` serves a bare Cloudflare `error code:
   1042` page — so every already-installed build is dead and nothing you test by hand shows it.
