@@ -47,6 +47,8 @@ Sign-in + splash backgrounds: **kolam dot-grid patterns** (subtle line-drawn loo
 silhouette** gradient at the horizon, gold particle shimmer — CustomPainter + video-bg variant
 (same architecture as Pakiza's painter, entirely new artwork). Premium screen: silk-texture
 gradient (maroon→deep plum) with gold zari border strips; benefits copy is wallpaper-focused.
+The 2026-08 red/gold static splash art was tried and REJECTED by the owner (2026-08-03) — the
+splash + sign-in keep the lotus video; don't re-propose a static art backdrop.
 
 ## Copy tone
 English + 5 South Indian languages. Warm, festive, plain — no religious salutations. Share message
@@ -69,9 +71,12 @@ pattern: "Beautiful South Indian wallpapers — get Arul: <link>".
   system above + Material's real motion tokens (`Easing`, `Durations`) + one spring on the CTA.
 
 ## Assets still owed
-Real launcher-icon artwork · premium art. Keep masters outside the repo.
-The shipped launcher icon is a placeholder gopuram mark in **RASTER** form — no vector drawable:
-`ic_launcher{,_foreground,_monochrome}.png` in `mipmap-mdpi…xxxhdpi`, composed (adaptive + `<monochrome>`
-themed layer) by `mipmap-anydpi-v26/ic_launcher.xml`.
+Premium art. Keep masters outside the repo.
+**Shipped 2026-08-03:** the real launcher icon — red/gold gopuram, RASTER masters outside the repo:
+`ic_launcher{,_foreground,_monochrome,_background}.png` in `mipmap-mdpi…xxxhdpi`, composed (adaptive +
+`<monochrome>` themed layer) by `mipmap-anydpi-v26/ic_launcher.xml`. Regenerate from new masters with
+`node assets/brand/icon_from_png.mjs <icon.png> <splash.png>` — it ALSO writes
+`assets/images/splash_bg.jpg`, which must be deleted after a run: the static splash art was rejected
+(see §Motifs) and anything left in assets/images/ ships in the APK.
 **Shipped, no longer owed:** sign-in background video — `assets/video/splash.mp4` (1024×1824, same spec as
-live wallpapers), loaded at `lib/features/auth/presentation/widgets/video_background.dart:191`.
+live wallpapers), loaded by `lib/features/auth/presentation/widgets/video_background.dart`.

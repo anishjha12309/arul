@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Must stay in sync with ArulColors.ink (lib/app/theme/tokens.dart) and the
-         flutter_native_splash color in pubspec.yaml. -->
+    <!-- Must stay in sync with ArulTokens.darkSurface (lib/theme/arul_tokens.dart)
+         and the flutter_native_splash color in pubspec.yaml. Still the pre-A12
+         launch surface and the NormalTheme window Flutter draws onto. -->
     <color name="splash_bg">#14090C</color>
-    <color name="ic_launcher_background">#14090C</color>
+
+    <!-- The Android 12+ splash field. NOT brand ink: it is the exact colour of
+         the launcher icon's own background layer AT THE CIRCLE MASK EDGE, so the
+         icon's crimson disc dissolves into the field and only the gold gopuram
+         reads. Sampled from mipmap-xxxhdpi/ic_launcher_background.png at
+         r = W/3 (the adaptive mask is the inner 72dp of the 108dp canvas); that
+         layer is a radial gradient — #A7233E at the centre, #911B35 at the edge —
+         so the EDGE value is the only one that makes the seam vanish.
+         Re-sample if the icon art is ever regenerated. -->
+    <color name="splash_icon_field">#911B35</color>
 </resources>

@@ -124,11 +124,19 @@ flutter:
       fonts:
         - asset: assets/fonts/Marcellus-Regular.ttf
 
+# Regenerating (`flutter_native_splash:create`) REWRITES values/colors.xml and
+# values/styles.xml, so these values must stay equal to what is checked in there
+# or a regen silently reverts the splash.
 flutter_native_splash:
-  color: "#14090C"        # == ArulColors.ink == values/colors.xml splash_bg. If these three ever
-                          # disagree, the OS splash flashes a different black than
+  color: "#14090C"        # == ArulTokens.darkSurface == values/colors.xml splash_bg. If these three
+                          # ever disagree, the OS splash flashes a different black than
                           # the app paints, and the handoff visibly pops.
+                          # Pre-Android-12 only — there is no OS icon treatment there.
   color_dark: "#14090C"
+  # Android 12+ draws the adaptive launcher icon on this field, crimson disc and
+  # all. == values/colors.xml splash_icon_field: the icon background layer's
+  # colour at the circle-mask edge, so the disc dissolves into the field instead
+  # of floating on brand ink. Deliberately NOT #14090C.
   android_12:
-    color: "#14090C"
-    icon_background_color: "#14090C"
+    color: "#911B35"
+    icon_background_color: "#911B35"
