@@ -41,6 +41,14 @@ abstract class Wallpaper with _$Wallpaper {
     @JsonKey(name: 'full_key') required String key,
     int? width,
     int? height,
+
+    /// Curated position in the All feed, set by drag-and-drop in the CMS.
+    /// Non-null puts the item in the curated block at the head of All (ascending,
+    /// sparse: 10, 20, 30 …); null — the usual case — leaves it in the stable
+    /// shuffle behind that block. Category chips ignore it entirely. Absent from
+    /// an older cached catalog parses as null, which is exactly "uncurated".
+    /// The ordering itself lives in `feedOrder()`.
+    int? feedRank,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>

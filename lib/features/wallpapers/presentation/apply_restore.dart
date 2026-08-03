@@ -64,9 +64,9 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
 
     // The saved index is a position within the list the feed SERVES for that
     // chip, so validate it against the feed's own ordering — not against the raw
-    // catalog. For All that ordering is a stable shuffle, not catalog order
-    // (feedOrder), and validating against catalog order would restore the user
-    // onto a different wallpaper. An empty result means the saved category is no
+    // catalog. For All that ordering is the curated head plus a stable shuffle,
+    // not catalog order (feedOrder), and validating against catalog order would
+    // restore the user onto a different wallpaper. An empty result means the saved category is no
     // longer in the catalog: nothing to restore to, so leave the feed alone
     // rather than jump into a list that isn't there.
     final list = feedOrder(category, allItems);

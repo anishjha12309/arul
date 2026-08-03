@@ -1,14 +1,16 @@
-# Schema (Neon — source of truth: db/schema/, apply 01→04)
+# Schema (Neon — source of truth: db/schema/, apply 01→05)
 
-Ringtones live in `04_ringtones.sql`. Apply migrations in order, then `db/seed.sql`.
+Ringtones live in `04_ringtones.sql`, the curated-feed column in `05_feed_rank.sql`. Apply migrations in order, then `db/seed.sql`.
 
 **users:** id(PK) · google_sub(unique) · email · display_name · display_name_custom (true once user edits — login stops syncing from Google) · referral_code(unique) · referred_by(FK) · reward_premium_until (referral credit; read by isPremium, decoupled from subscriptions) · created_at
 
 **subscriptions:** id(PK) · user_id(FK, unique — one row per user) · status(pending|trialing|active|paused|cancelled|expired) · plan · phonepe_subscription_id · merchant_subscription_id · merchant_order_id · phonepe_order_id · redemption_order_id · trial_end (**one-trial consumed-marker — written once, never cleared**) · current_period_end · next_debit_at · notified_at · retry_count · updated_at
 
-**wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) · **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text + index so new categories need no migration) · tags[] (free-form extras) · full_key(R2, public) · mime · duration_ms(null for static) · width · height · bytes · is_published · sort_order (from manifest `scores.rank`) · created_at. No is_premium — the gate is in the Worker.
+**wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) · **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text + index so new categories need no migration) · tags[] (free-form extras) · full_key(R2, public) · mime · duration_ms(null for static) · width · height · bytes · is_published · sort_order (from manifest `scores.rank`) · created_at · **feed_rank** (nullable int, added 2026-08-01 — the curated head of the All feed ONLY, drag-ordered in the CMS, written sparsely 10/20/30…; null = uncurated, which is every row until an admin curates). No is_premium — the gate is in the Worker.
 
-**Browse model (a deliberate delta from Pakiza — never sync it away):** the feed filters by **category**; static and live wallpapers interleave in every category. There are NO All/New tabs and NO static-vs-live filter. `category` rides in each catalog page; filtering is client-side.
+Keep `feed_rank` and `sort_order` apart: `sort_order` drives CATEGORY-chip order and 341 of the live rows carry distinct non-zero values from their import manifests, so reusing it would reorder every chip.
+
+**Browse model (a deliberate delta from Pakiza — never sync it away):** the feed filters by **category**; static and live wallpapers interleave in every category. There are NO All/New tabs and NO static-vs-live filter. `category` and `feed_rank` ride in each catalog page; filtering and ordering are client-side (`feedOrder()`).
 
 **ringtones:** id(PK) · title · **category** (same first-class browse axis as wallpapers — chips, free text + index) · tags[] · audio_key(R2, public — `ringtones/<category>/<uuid>.mp3`) · cover_key(R2, public, nullable — `ringtones/covers/<category>/<uuid>.jpg`, 512×512 JPG; CMS requires it at upload, app renders fallback art if missing) · mime (kept in catalog — set-file extension inference) · duration_ms · bytes · is_published · sort_order · created_at. Ordering matches wallpapers: sort_order ASC, created_at DESC. No is_premium — preview is free from CDN; "set as ringtone" gates via Worker /media/signed-url `kind='ringtone'`. Catalog scope `ringtones` → `catalog/ringtones/all_<page>.json` (strips duration_ms/bytes). Both keys live under the `ringtones/` canonical prefix so the hourly sweep protects audio and covers together.
 

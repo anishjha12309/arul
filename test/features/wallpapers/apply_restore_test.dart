@@ -3,7 +3,8 @@
 //   - the saved page index is a position in the list the feed SERVES for the
 //     saved chip, so it must be validated through feedOrder() — validating
 //     against the raw catalog accepts indices that don't exist in a filtered
-//     chip and restores the user onto a different wallpaper.
+//     chip and restores the user onto a different wallpaper. That holds for
+//     All's curated head as much as for its shuffled tail.
 //   - the pending flags are consumed exactly once, even when the restore is
 //     rejected, so a stale flag can never hijack every future cold start.
 //   - the saved category chip is re-selected, so the feed lands on the
@@ -158,6 +159,41 @@ void main() {
       expect(h.host.restoreCalls, [
         (index: _catalog.length - 1, category: all, wasLive: false),
       ]);
+    },
+  );
+
+  testWidgets(
+    'an All index resolves through the CURATED order: index 0 is the curated '
+    'head, not the first item of the shuffle',
+    (tester) async {
+      // temple0 sits mid-shuffle uncurated; a rank moves it to slot 0, which is
+      // the slot the saved index refers to.
+      final curated = [
+        for (final w in _catalog)
+          w.id == 'id-temple0' ? w.copyWith(feedRank: 10) : w,
+      ];
+      final all = WallpaperCategory.allSlug;
+      final h = await pumpHost(tester, {
+        appliedWallpaperPendingKey: true,
+        pendingApplyPageIndexKey: 0,
+        pendingApplyCategoryKey: all,
+        pendingApplyIsLiveKey: false,
+      });
+
+      h.host.maybeRestoreAfterApply(curated);
+      await tester.pump();
+
+      expect(h.host.restoreCalls, [(index: 0, category: all, wasLive: false)]);
+      expect(
+        feedOrder(all, curated).first.id,
+        'id-temple0',
+        reason: 'the index the restore accepted must address the curated list',
+      );
+      expect(
+        feedOrder(all, _catalog).first.id,
+        isNot('id-temple0'),
+        reason: '…and that is only meaningful because curation moved it',
+      );
     },
   );
 

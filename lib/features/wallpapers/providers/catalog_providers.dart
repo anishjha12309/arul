@@ -303,19 +303,47 @@ class SelectedCategory extends Notifier<String> {
 /// emits `sort_order ASC, created_at DESC, id ASC` and filtering preserves
 /// relative order.
 ///
-/// All gets a stable shuffle instead, because catalog order makes it unusable
-/// after a bulk import: an import is a single transaction, so a 30-wallpaper
+/// All is a curated block followed by a stable shuffle of everything else.
+///
+/// The shuffled tail is the older half of the contract, and catalog order is
+/// what it exists to fix: an import is a single transaction, so a 30-wallpaper
 /// Sivan batch shares `sort_order` AND `created_at` and those 30 tie on every
 /// key but `id` — they land as 30 CONSECUTIVE slots at the head of the default
 /// feed, and one import owns the whole first screenful.
+///
+/// The curated block in front of it is [Wallpaper.feedRank], set by hand in the
+/// CMS: All is the landing view, and a hash gives filler the same odds of the
+/// first screen as a hero wallpaper. Only ranked rows join it. An uncurated
+/// import therefore lands in the TAIL, deliberately — putting new rows on top
+/// instead would re-create the consecutive-block defect above.
 ///
 /// [apply_restore] resolves its saved page index through this too. That index is
 /// a position in the list the feed SERVES, so it must be validated against the
 /// same ordering or a post-apply restart restores to a different wallpaper.
 List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) =>
     slug == WallpaperCategory.allSlug
-    ? _shuffledForAll(all)
+    ? _orderedForAll(all)
     : all.where((w) => w.category == slug).toList(growable: false);
+
+/// Curated head (`feedRank` ascending) + [_shuffledForAll] of the remainder.
+///
+/// Ranks are sparse and hand-assigned, so a tie is possible (two saves racing,
+/// a hand-edited row); `id` breaks it to keep the order TOTAL, exactly as the
+/// shuffle does. With no ranks set — the shipped state — this is byte-identical
+/// to the plain shuffle.
+List<Wallpaper> _orderedForAll(List<Wallpaper> all) {
+  final curated = <Wallpaper>[];
+  final rest = <Wallpaper>[];
+  for (final w in all) {
+    (w.feedRank == null ? rest : curated).add(w);
+  }
+  if (curated.isEmpty) return _shuffledForAll(rest);
+  curated.sort((a, b) {
+    final byRank = a.feedRank!.compareTo(b.feedRank!);
+    return byRank != 0 ? byRank : a.id.compareTo(b.id);
+  });
+  return List<Wallpaper>.unmodifiable([...curated, ..._shuffledForAll(rest)]);
+}
 
 /// Order [all] by a hash of each row's id.
 ///

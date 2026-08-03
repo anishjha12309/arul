@@ -546,6 +546,11 @@ async function buildScope(
   //               preview/stream + cover rendering; mime stays — used to infer
   //               the file extension on set-as-ringtone; created_at STAYS.)
   //   `category` (the browse axis — feed chips filter on it) is always emitted.
+  //   `feed_rank` (wallpapers only, usually null) is always emitted too: it IS
+  //   the curated head of the app's All feed, so it has to ride inside the
+  //   catalog JSON for a CMS save to reach users the way a publish does
+  //   (version bump → rebuild → purge). Ordering here is unchanged — the app
+  //   applies the rank in feedOrder().
   const publicRows = validRows.map((row) => {
     const r = { ...row } as Record<string, unknown>;
     // Normalize text[] columns: postgres.js (fetch_types:false, required for
@@ -554,7 +559,8 @@ async function buildScope(
     if ("tags" in r) r["tags"] = pgTextArrayToList(r["tags"]);
 
     if (scope === "wallpapers") {
-      // `category` (the browse axis) is emitted as-is; it must never be dropped here.
+      // `category` (the browse axis) and `feed_rank` (the curated All head) are
+      // emitted as-is; neither may ever be added to the drop list below.
       for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes"]) {
         delete r[k];
       }

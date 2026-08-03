@@ -45,9 +45,15 @@ the UI is designed.
 - [ ] Empty category → localized empty state, not a blank feed
 - [ ] **Two orderings, one function** — `feedOrder()` in `catalog_providers.dart` is the ONLY definition.
       A category chip serves catalog order (`sort_order ASC, created_at DESC, id ASC` = newest first).
-      **All serves a stable shuffle** keyed on a hand-rolled FNV-1a of the row id, because catalog order
-      puts a whole bulk import at the head: an import is one transaction, so its rows tie on `sort_order`
-      AND `created_at` and land consecutively (a 30-item batch owned the first 30 slots).
+      **All serves a curated block, then a stable shuffle** of everything else. The shuffle is a
+      hand-rolled FNV-1a of the row id, because catalog order puts a whole bulk import at the head: an
+      import is one transaction, so its rows tie on `sort_order` AND `created_at` and land consecutively
+      (a 30-item batch owned the first 30 slots).
+- [ ] The curated block is `wallpapers.feed_rank` (nullable int, sparse 10/20/30… from the CMS Feed-order
+      panel), ASC with `id` breaking a tie; it rides in the catalog JSON so a save propagates like a
+      publish. **Uncurated rows go in the TAIL, never on top** — a fresh import as a consecutive head
+      block is the defect the shuffle exists to kill. All ranks NULL ⇒ byte-identical to the pure shuffle
+      (the shipped state, held by the golden pin). Category chips ignore `feed_rank`.
 - [ ] The All order must stay a pure function of catalog CONTENT — never `List.shuffle`, never seeded by
       time or `content_version`. It is recomputed on every catalog emission (cold start, background
       revalidate, pull-refresh, hourly cron), and `_syncFeed` compares served lists by ordered ids: a
@@ -110,9 +116,10 @@ that un-parks the tab** ([known-issues.md](known-issues.md)), starting with the 
 - [ ] Moderation approve NEVER ships a dimension-violating video as-is (bytes copy verbatim) — re-encode or reject
 
 ## Share
-Full checklist + the copy rules: **[share.md](share.md)**. The two that bite hardest: **exactly one link
-leaves the app per share**, owned by the caption; and WhatsApp-first uses a DIFFERENT mechanism per path,
-because the text-only deep link silently drops a wallpaper's file.
+Full checklist + the copy rules: **[share.md](share.md)**. The three that bite hardest: **exactly one link
+leaves the app per share**, owned by the caption; WhatsApp-first uses a DIFFERENT mechanism per path,
+because the text-only deep link silently drops a wallpaper's file; and the live-video watermark needs
+**API 31** — below it the share ships clean rather than crashing ([known-issues.md](known-issues.md)).
 
 ## Catalog / storage
 - [ ] `version.json` is edge-cacheable (`public, max-age=30, stale-while-revalidate=300`), pages max-age=60 + `?v=` busting; stale content = rebuild, NEVER cache-purge ← docs/caching.md

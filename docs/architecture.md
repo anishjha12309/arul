@@ -49,8 +49,9 @@ the hourly cron (no-op if the version is unchanged). Output per scope (`wallpape
 created_at DESC NULLS LAST, id ASC`, so paging is deterministic.
 
 A zero-row scope still writes a valid empty `all_1.json` (ringtones today), which makes a 404 there
-mean "the build failed", not "no content". Every item carries `category`, and the app's category chips
-filter client-side — no All/New tabs, never a static/live filter. Orphaned page files are deleted each
+mean "the build failed", not "no content". Every wallpaper item carries `category` and `feed_rank` —
+the app's chips filter and `feedOrder()` orders client-side (no All/New tabs, never a static/live
+filter), so the build's own row order is untouched by curation. Orphaned page files are deleted each
 rebuild. Cache headers and the rules that serve them: [caching.md](caching.md).
 
 **The `ringtones` scope stays backend-live while the app tab is parked** (v1 — no audio published;
