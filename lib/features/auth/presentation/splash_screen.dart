@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
@@ -165,7 +164,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
             ),
 
-            // Bottom-centered column, bottom:64, gap 10.
+            // Bottom-centered column, bottom:64, gap 10. The gopuram mark that
+            // used to head this stack is gone — the wordmark grew to carry the
+            // brand alone, and the loader keeps its 64px anchor, so the block
+            // simply reads shorter from the top.
             Positioned(
               left: 0,
               right: 0,
@@ -173,8 +175,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const GopuramMark(size: 44, color: ArulTokens.gold),
-                  const SizedBox(height: 10),
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
                   const Text(_tagline, style: ArulTokens.tagline),

@@ -267,12 +267,15 @@ abstract final class ArulTokens {
   /// The bundled display-serif family. Latin-only; must NOT wrap Indic text.
   static const String serif = 'Marcellus';
 
-  /// Splash wordmark "Arul". 44px, Marcellus, ls `.04em` (44 × .04 = 1.76).
+  /// Splash wordmark "Arul". 54px, Marcellus, ls `.04em` (54 × .04 = 2.16).
+  /// Was 44px under a 44px gopuram mark; with the mark gone the type carries
+  /// the splash alone, so it takes the weight — and stays the largest wordmark
+  /// in the app, above the 38px sign-in.
   static const TextStyle wordmarkSplash = TextStyle(
     fontFamily: serif,
-    fontSize: 44,
+    fontSize: 54,
     height: 1.05,
-    letterSpacing: 1.76,
+    letterSpacing: 2.16,
     color: ivory,
   );
 
