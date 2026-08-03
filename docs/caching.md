@@ -62,3 +62,11 @@ query string is a unique cache key, so nothing can ever be a hit. (Use it only w
 
 Catalog pages go stale because `content_version` did not move or a rebuild failed. Rebuild
 (`POST /internal/build-catalog`); never reach for a cache purge.
+
+## Negative caching: a 404 outlives the upload that fixes it (accepted tradeoff)
+
+The media Cache Rule caches 404s briefly too, so probing a key on the CDN **before** uploading it
+(observed 2026-08-01 with backfilled `thumbs/`) leaves that edge serving 404 for a few minutes after
+the object lands. Accepted: it self-heals, and every `thumbs/` consumer falls back (the app to the
+native first-frame still, the CMS panel to the static original). Check existence against the
+S3 API or with a `?v=` cache-buster, not the bare CDN URL.
