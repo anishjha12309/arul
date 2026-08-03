@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/widgets/arul_sheet.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/theme_mode_provider.dart';
 
@@ -68,9 +71,18 @@ class _ThemeSheet extends ConsumerWidget {
             _ThemeRow(
               option: o,
               on: selected == o.mode,
-              onTap: () async {
-                await ref.read(themeModeProvider.notifier).select(o.mode);
-                if (context.mounted) Navigator.of(context).pop();
+              // Flip the theme and close in the SAME frame, so the sheet slides
+              // away already wearing the new theme.
+              //
+              // `select` applies the mode synchronously and only then awaits the
+              // SharedPreferences write, so awaiting it here parked the pop
+              // behind a disk round-trip: the theme changed, the sheet sat there
+              // for however long the write took, and only then began to dismiss.
+              // That gap is what made the switch feel like it stuttered. The
+              // write is fire-and-forget — nothing on screen is waiting on it.
+              onTap: () {
+                unawaited(ref.read(themeModeProvider.notifier).select(o.mode));
+                Navigator.of(context).pop();
               },
             ),
         ],
@@ -103,6 +115,9 @@ class _ThemeRow extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      // Picking a theme moves between discrete values, so it ticks rather than
+      // presses — same beat as a radio or a chip.
+      onTapDown: (_) => ArulHaptics.selection(),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),

@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/haptics/arul_haptics.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
@@ -68,8 +68,10 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   void _onTap(int index) {
+    // A tab picks between values, so it ticks rather than presses. Re-tapping
+    // the active tab stays silent — nothing changed.
     if (index != widget.navigationShell.currentIndex) {
-      HapticFeedback.lightImpact();
+      ArulHaptics.selection();
     }
     widget.navigationShell.goBranch(
       index,

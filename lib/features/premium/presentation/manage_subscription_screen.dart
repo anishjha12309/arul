@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
@@ -120,6 +121,7 @@ class _ManageSubscriptionScreenState
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => ArulHaptics.tap(),
                     onTap: () {
                       if (context.canPop()) context.pop();
                     },
@@ -601,7 +603,14 @@ class _CancelButtonState extends State<_CancelButton> {
     return Opacity(
       opacity: disabled ? 0.6 : 1,
       child: GestureDetector(
-        onTapDown: disabled ? null : (_) => setState(() => _pressed = true),
+        // An ordinary press: this only OPENS the cancel confirmation, and the
+        // heavy beat belongs on the confirm button inside that dialog.
+        onTapDown: disabled
+            ? null
+            : (_) {
+                ArulHaptics.tap();
+                setState(() => _pressed = true);
+              },
         onTapUp: disabled ? null : (_) => setState(() => _pressed = false),
         onTapCancel: disabled ? null : () => setState(() => _pressed = false),
         onTap: disabled ? null : widget.onTap,

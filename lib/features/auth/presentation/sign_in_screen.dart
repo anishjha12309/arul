@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../domain/auth_service.dart';
 import '../providers/auth_providers.dart';
@@ -113,18 +113,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               decoration: BoxDecoration(gradient: ArulTokens.signInScrim),
             ),
 
-            // Top-center, top:96px.
+            // Top-center. The wordmark stands alone — the gopuram mark that
+            // used to sit above it is gone, so the type carries the brand and
+            // `top` compensates for the ~39px the mark + gap occupied, keeping
+            // the block's optical centre where it was.
             const Positioned(
               left: 0,
               right: 0,
-              top: 96,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GopuramMark(size: 34, color: ArulTokens.gold),
-                  SizedBox(height: 8),
-                  Text('Arul', style: ArulTokens.wordmarkSignIn),
-                ],
+              top: 112,
+              child: Text(
+                'Arul',
+                textAlign: TextAlign.center,
+                style: ArulTokens.wordmarkSignIn,
               ),
             ),
 
@@ -195,7 +195,10 @@ class _SignInPillState extends State<_SignInPill> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => _setPressed(true),
+      onTapDown: (_) {
+        ArulHaptics.tap();
+        _setPressed(true);
+      },
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),
       onTap: widget.onTap,

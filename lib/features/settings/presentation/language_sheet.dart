@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/widgets/arul_sheet.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The six languages, native label over English name. Order and glyphs are
@@ -106,6 +107,9 @@ class _LangTile extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      // A language tile picks between discrete values — same tick as the theme
+      // rows and the category chips.
+      onTapDown: (_) => ArulHaptics.selection(),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),

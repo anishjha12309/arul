@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// A centered confirm dialog — spec (Settings): "Centered card (24px side
@@ -172,7 +173,15 @@ class _DialogButtonState extends State<_DialogButton> {
         : (widget.textColor ?? ArulTokens.darkText);
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
+      // The filled button IS the destructive one here (sign out, delete
+      // account), so it gets the heaviest beat in the app; Cancel is an
+      // ordinary press.
+      onTapDown: (_) {
+        ArulHaptics.fire(
+          widget.filled ? ArulHapticStyle.heavy : ArulHapticStyle.tap,
+        );
+        setState(() => _pressed = true);
+      },
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onTap,

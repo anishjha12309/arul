@@ -13,6 +13,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
@@ -307,7 +308,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // _syncFeed, which will land on this index.
     setState(() => _pendingRestoreIndex = index);
     if (!wasLive) {
-      showArulToast(context, AppLocalizations.of(context).applied);
+      showArulToast(
+        context,
+        AppLocalizations.of(context).applied,
+        kind: ToastKind.success,
+      );
     }
   }
 
@@ -411,7 +416,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final state = ref.read(wallpaperApplyProvider);
     switch (state) {
       case WallpaperApplySuccess():
-        showArulToast(context, l10n.applied);
+        showArulToast(context, l10n.applied, kind: ToastKind.success);
         _video.reclaimDecoders();
       case WallpaperApplyError(:final isNetwork, :final premiumRequired):
         if (premiumRequired) {
@@ -430,6 +435,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           showArulToast(
             context,
             isNetwork ? l10n.offlineBody : l10n.errorGeneric,
+            kind: ToastKind.error,
           );
         }
         _video.reclaimDecoders();
@@ -465,6 +471,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         showArulToast(
           context,
           state.isNetwork ? l10n.offlineBody : l10n.errorGeneric,
+          kind: ToastKind.error,
         );
       }
       ref.read(wallpaperShareProvider.notifier).reset();
@@ -547,15 +554,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 ),
                 child: Row(
                   children: [
-                    GopuramMark(
-                      size: 20,
-                      color: isDark ? ArulTokens.gold : ArulTokens.maroon,
-                    ),
-                    const SizedBox(width: 8),
+                    // Wordmark only — no mark beside it. At 24px with the
+                    // wordmark's own ≈.04em tracking it reads as a masthead
+                    // rather than a screen title, and it still clears the 34px
+                    // buttons, so the header height (and the reel geometry
+                    // solved from it) is unchanged.
                     Text(
                       'Arul',
                       style: ArulTokens.screenTitle.copyWith(
-                        fontSize: 20,
+                        fontSize: 24,
+                        letterSpacing: 0.96,
                         color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
                       ),
                     ),
@@ -567,36 +575,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 ),
               ),
 
-              // Chips get the FULL width — nothing overlaps them, and a
-              // frame-colored fade on the trailing edge shows the row scrolls
-              // on past the last visible chip.
-              Stack(
-                children: [
-                  feed is AsyncLoading
-                      ? const FeedChipsSkeleton()
-                      : const FeedChips(),
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    width: 24,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerRight,
-                            end: Alignment.centerLeft,
-                            colors: [
-                              frameColor,
-                              frameColor.withValues(alpha: 0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              // Chips get the FULL width — nothing overlaps them.
+              feed is AsyncLoading
+                  ? const FeedChipsSkeleton()
+                  : const FeedChips(),
 
               // The header's floor: a full-width hairline the reel begins
               // directly beneath, so an outgoing card is clipped exactly at a
@@ -744,7 +726,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         Padding(
           padding: EdgeInsets.only(bottom: geo.floor),
           child: RefreshIndicator(
-            onRefresh: _refreshCatalog,
+            // Fires when the pull actually commits, not on every drag pixel.
+            onRefresh: () {
+              ArulHaptics.firm();
+              return _refreshCatalog();
+            },
             color: ArulTokens.gold,
             backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
             child: PageView.builder(
@@ -895,10 +881,8 @@ class _GiftButtonState extends State<_GiftButton>
       button: true,
       label: 'Refer and earn',
       child: GestureDetector(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          widget.onTap();
-        },
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 34,
@@ -938,10 +922,8 @@ class _SettingsButton extends StatelessWidget {
       button: true,
       label: 'Settings',
       child: GestureDetector(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
           width: 34,
@@ -1137,7 +1119,7 @@ class _CardChrome extends StatelessWidget {
 /// meta text, LIVE badge). So Apply is that language in pill form — solid ivory,
 /// maroon label — and Share is its secondary weight: the same ivory, held as
 /// glass. Hierarchy comes from fill and width, never from a hue that has to win
-/// a fight with 428 devotional wallpapers.
+/// a fight with several hundred devotional wallpapers.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.busy,
@@ -1195,12 +1177,11 @@ class _ApplyPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
           elevation: 0,
           child: InkWell(
-            onTap: disabled
-                ? null
-                : () {
-                    HapticFeedback.lightImpact();
-                    onTap!();
-                  },
+            // Apply is one of the feed's two commit verbs, so it presses firmer
+            // than ordinary chrome. The outcome beat comes separately, from the
+            // toast that reports what happened.
+            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
+            onTap: disabled ? null : onTap,
             borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
             splashColor: ArulTokens.maroonTintFill08,
             highlightColor: ArulTokens.maroonTintFill07,
@@ -1266,12 +1247,9 @@ class _ShareCircle extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: disabled
-                ? null
-                : () {
-                    HapticFeedback.lightImpact();
-                    onTap!();
-                  },
+            // Share is the other commit verb — same weight as Apply.
+            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
+            onTap: disabled ? null : onTap,
             child: const SizedBox(
               width: _ActionBar.height,
               height: _ActionBar.height,

@@ -8,6 +8,7 @@ import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/package_info_provider.dart';
 import '../../../data/models/subscription_model.dart';
@@ -120,6 +121,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) => ArulHaptics.tap(),
                     onTap: () {
                       if (context.canPop()) context.pop();
                     },
@@ -212,6 +214,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    // Deleting an account is the app's one irreversible act, so
+                    // it gets the strongest beat on the way in as well as at the
+                    // confirm step.
+                    onTapDown: (_) => ArulHaptics.heavy(),
                     onTap: _delete,
                     // Hand-drawn underline. TextDecoration.underline sits hard
                     // on the baseline; this hairline gets 3px of air. The
@@ -625,6 +631,10 @@ class _SettingsRow extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      // Every settings row presses the same, whether it pushes a screen or
+      // opens a picker sheet. The sheet itself stays silent — the tap that
+      // opened it has already answered the finger.
+      onTapDown: (_) => ArulHaptics.tap(),
       onTap: data.onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -703,7 +713,12 @@ class _LogoutButtonState extends State<_LogoutButton> {
     final Color text = isDark ? _logoutTextDark : ArulTokens.maroon;
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
+      // Signing out is deliberate but not destructive — a firm press, one step
+      // below the delete-account beat.
+      onTapDown: (_) {
+        ArulHaptics.firm();
+        setState(() => _pressed = true);
+      },
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onTap,

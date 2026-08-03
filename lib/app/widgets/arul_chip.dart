@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 
 /// Which surface an [ArulChip] sits on.
@@ -41,6 +42,9 @@ class ArulChip extends StatelessWidget {
     final (Color bg, Color border, Color fg) = _palette(isDark);
 
     return GestureDetector(
+      // A chip picks between values, so it gets the lightest tick rather than a
+      // button press — and on press-down, like every other control.
+      onTapDown: onTap == null ? null : (_) => ArulHaptics.selection(),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(

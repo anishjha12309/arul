@@ -21,9 +21,7 @@ const _kAllLabel = 'All';
 /// (`pad 0 16px, gap 8, h-scroll`).
 ///
 /// Sits on the themed frame, not over media, so the chips use
-/// [ArulChipVariant.surface] and follow light/dark. The trailing padding is
-/// wider than the leading one so the last chip can scroll fully clear of the
-/// frame-colored continuation fade the feed paints over this row's right edge.
+/// [ArulChipVariant.surface] and follow light/dark.
 class FeedChips extends ConsumerWidget {
   const FeedChips({super.key});
 
@@ -45,11 +43,8 @@ class FeedChips extends ConsumerWidget {
       height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(
-          left: ArulTokens.screenPadding,
-          // Wider than the leading pad so the final chip can scroll clear of
-          // the frame-colored "scrolls on" fade the feed paints over this edge.
-          right: 28,
+        padding: const EdgeInsets.symmetric(
+          horizontal: ArulTokens.screenPadding,
         ),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),

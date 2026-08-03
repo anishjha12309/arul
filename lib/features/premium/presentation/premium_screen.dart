@@ -8,6 +8,7 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
@@ -39,9 +40,12 @@ class PremiumScreen extends ConsumerStatefulWidget {
 
   final String source;
 
+  // Deliberately no wallpaper count. The library grows with every import, so
+  // any number baked in here is wrong within weeks — it had drifted from 428 to
+  // 635 before anyone noticed. Pakiza's paywall states no count for the same
+  // reason.
   static const _perks = [
-    (icon: Icons.wallpaper, text: 'All 428 wallpapers, still and live'),
-    (icon: Icons.movie, text: 'Live wallpapers play on your home screen'),
+    (icon: Icons.wallpaper, text: 'Every wallpaper, still and live'),
     (icon: Icons.ios_share, text: 'Apply and share without limits'),
     (icon: Icons.auto_awesome, text: 'New arrivals every week'),
   ];
@@ -111,7 +115,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
     ref.listen<PurchaseState>(premiumPurchaseProvider, (prev, next) {
       switch (next) {
         case PurchaseSuccess():
-          showArulToast(context, 'Welcome to Arul Premium!');
+          showArulToast(
+            context,
+            'Welcome to Arul Premium!',
+            kind: ToastKind.success,
+          );
           // The single warmest moment in the app to ask for a share — and the
           // one point where the user has just decided Arul is worth paying for.
           // Awaited before the pop so the sheet is never orphaned by this route
@@ -365,6 +373,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                     busy: purchaseBusy,
                     height: ArulTokens.ctaHeight54,
                     fontSize: 16,
+                    // The buy decision — the weightiest press in the app.
+                    haptic: ArulHapticStyle.firm,
                     onPressed: purchaseBusy
                         ? null
                         : () {

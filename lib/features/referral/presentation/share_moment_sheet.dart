@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 
@@ -69,6 +70,8 @@ class _Body extends ConsumerWidget {
           CtaButton(
             label: 'Share Arul',
             icon: Icons.share_rounded,
+            // Sharing is a commit verb, like Apply on the feed.
+            haptic: ArulHapticStyle.firm,
             onPressed: () {
               final nav = Navigator.of(context);
               // The NAVIGATOR's context, not this sheet's: popping unmounts

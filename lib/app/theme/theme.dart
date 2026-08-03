@@ -16,11 +16,27 @@ import 'typography.dart';
 /// scheme (schemes.dart), its own deepened rose/gold (the dark values fail 4.5:1
 /// on ivory), and a hairline-outlined card treatment it needs and dark does not.
 abstract final class ArulTheme {
-  static ThemeData light() =>
-      _build(scheme: ArulSchemes.light(), muted: ArulSchemes.lightMuted);
+  /// Both themes are built ONCE, lazily, and reused forever.
+  ///
+  /// [_build] is not cheap — a 15-slot [TextTheme] plus fifteen component
+  /// sub-themes — and the root widget rebuilds on theme, locale and the
+  /// notification bootstrap, so calling it per build meant constructing two
+  /// full [ThemeData] on every one of those. Caching is only safe because the
+  /// palette is fixed: no dynamic colour, no wallpaper seeding (§7), so there is
+  /// no input that could make a second call differ from the first.
+  static final ThemeData _light = _build(
+    scheme: ArulSchemes.light(),
+    muted: ArulSchemes.lightMuted,
+  );
 
-  static ThemeData dark() =>
-      _build(scheme: ArulSchemes.dark(), muted: ArulSchemes.darkMuted);
+  static final ThemeData _dark = _build(
+    scheme: ArulSchemes.dark(),
+    muted: ArulSchemes.darkMuted,
+  );
+
+  static ThemeData light() => _light;
+
+  static ThemeData dark() => _dark;
 
   static ThemeData _build({required ColorScheme scheme, required Color muted}) {
     final text = ArulType.scale(scheme.onSurface, muted);

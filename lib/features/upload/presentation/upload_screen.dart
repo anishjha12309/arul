@@ -9,6 +9,7 @@ import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
 import '../providers/upload_provider.dart';
@@ -125,7 +126,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     if (!mounted) return;
     switch (ref.read(uploadProvider)) {
       case UploadSuccess():
-        showArulToast(context, 'Submitted for review — thank you!');
+        showArulToast(
+          context,
+          'Submitted for review — thank you!',
+          kind: ToastKind.success,
+        );
         ref.read(uploadProvider.notifier).reset();
         // Someone who just contributed a wallpaper is, by definition, someone
         // invested enough to tell a friend. Awaited before the pop so the sheet
@@ -207,6 +212,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                 children: [
                   // Pick zone.
                   GestureDetector(
+                    onTapDown: (_) => ArulHaptics.tap(),
                     onTap: _pickFile,
                     child: CustomPaint(
                       painter: _DashedRectPainter(
@@ -332,6 +338,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   // Rights checkbox.
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
+                    // A checkbox flips a discrete value — the toggle tick.
+                    onTapDown: (_) => ArulHaptics.selection(),
                     onTap: () =>
                         setState(() => _rightsAccepted = !_rightsAccepted),
                     child: Padding(

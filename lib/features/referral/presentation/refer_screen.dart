@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
@@ -154,6 +155,8 @@ class ReferScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 16),
                         CtaButton(
+                          // Sharing is a commit verb, like Apply on the feed.
+                          haptic: ArulHapticStyle.firm,
                           label: 'Share via WhatsApp',
                           icon: Icons.share_rounded,
                           height: ArulTokens.ctaHeight50,

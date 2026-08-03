@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/entitlement_provider.dart';
@@ -170,6 +171,8 @@ class _PremiumSheetBody extends ConsumerWidget {
             label: trialEligible ? 'Start free trial' : 'Get Premium',
             height: ArulTokens.ctaHeight52,
             fontSize: 16,
+            // The buy decision — the weightiest press in the app.
+            haptic: ArulHapticStyle.firm,
             onPressed: () {
               Navigator.of(context).pop();
               context.push('/premium?source=$source');
@@ -178,6 +181,7 @@ class _PremiumSheetBody extends ConsumerWidget {
           const SizedBox(height: 14),
 
           GestureDetector(
+            onTapDown: (_) => ArulHaptics.tap(),
             onTap: () => Navigator.of(context).pop(),
             behavior: HitTestBehavior.opaque,
             child: Text(

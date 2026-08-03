@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/build_info.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../domain/devotional_event.dart';
 import '../providers/notification_providers.dart';
@@ -162,7 +162,7 @@ class _NotificationSettingsScreenState
       'and the rest. Around two a month.';
 
   Future<void> _onMasterChanged(bool value) async {
-    unawaited(HapticFeedback.lightImpact());
+    ArulHaptics.selection();
     final granted = await ref
         .read(notificationSettingsProvider.notifier)
         .setMasterEnabled(value);
@@ -344,7 +344,7 @@ class _TimeRow extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () async {
-        unawaited(HapticFeedback.lightImpact());
+        ArulHaptics.tap();
         final picked = await showTimePicker(
           context: context,
           initialTime: time,

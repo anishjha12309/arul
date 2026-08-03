@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The two premium-gated verbs. Browse and preview are free; Apply and Share are
@@ -90,7 +90,7 @@ class _PremiumNudgeState extends State<PremiumNudge>
   /// feed that has already pushed the paywall.
   void _handleTap() {
     _dismiss?.cancel();
-    HapticFeedback.lightImpact();
+    ArulHaptics.tap();
     widget.onTap();
     widget.onDismissed();
   }

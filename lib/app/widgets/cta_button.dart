@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 
 /// The green primary CTA — spec: "ctaGreen `#1FA75A` — ALL primary CTAs".
@@ -19,10 +19,16 @@ class CtaButton extends StatefulWidget {
     this.fontSize = 15,
     this.expand = true,
     this.busy = false,
+    this.haptic = ArulHapticStyle.tap,
   });
 
   final String label;
   final VoidCallback? onPressed;
+
+  /// The impulse fired as the finger lands. [ArulHapticStyle.firm] suits the
+  /// committing presses (start premium, apply); [ArulHapticStyle.none] where an
+  /// outcome toast already carries the beat.
+  final ArulHapticStyle haptic;
 
   /// One of 50 / 52 / 54 per the design (spec: "primary 50–54px"). Defaults to
   /// [ArulTokens.ctaHeight52].
@@ -86,15 +92,16 @@ class _CtaButtonState extends State<CtaButton> {
       enabled: _enabled,
       label: widget.label,
       child: GestureDetector(
-        onTapDown: _enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
-        onTap: _enabled
-            ? () {
-                HapticFeedback.lightImpact();
-                widget.onPressed!();
+        // Press-DOWN, in step with the scale dip and the colour swap.
+        onTapDown: _enabled
+            ? (_) {
+                ArulHaptics.fire(widget.haptic);
+                setState(() => _pressed = true);
               }
             : null,
+        onTapUp: _enabled ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
+        onTap: _enabled ? widget.onPressed : null,
         child: AnimatedScale(
           scale: _pressed ? 0.97 : 1,
           duration: const Duration(milliseconds: 90),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/haptics/arul_haptics.dart';
 import '../theme/tokens.dart';
 
 enum ToastKind { info, success, error }
@@ -10,12 +11,30 @@ enum ToastKind { info, success, error }
 /// No action button by design: since Flutter 3.38 a SnackBar WITH an action no
 /// longer auto-dismisses, which turns a transient toast into a permanent bar.
 /// Anything needing a decision belongs in a sheet, not a toast.
+///
+/// Every meaningful outcome in the app lands here — wallpaper applied, share
+/// failed, name updated — so this is also the ONE place the outcome haptic
+/// fires, keyed off [kind]. Callers must not add their own; that would double up
+/// on the same beat. Pass `haptic: false` for a toast that is pure chrome.
 void showArulToast(
   BuildContext context,
   String message, {
   ToastKind kind = ToastKind.info,
+  bool haptic = true,
 }) {
   final messenger = ScaffoldMessenger.of(context);
+
+  if (haptic) {
+    switch (kind) {
+      case ToastKind.success:
+        ArulHaptics.success();
+      case ToastKind.error:
+        ArulHaptics.error();
+      case ToastKind.info:
+        ArulHaptics.warning();
+    }
+  }
+
   final (accent, icon) = switch (kind) {
     ToastKind.info => (ArulColors.gold, Icons.info_outline_rounded),
     ToastKind.success => (ArulColors.cta, Icons.check_circle_outline_rounded),

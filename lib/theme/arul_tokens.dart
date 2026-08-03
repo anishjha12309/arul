@@ -276,12 +276,15 @@ abstract final class ArulTokens {
     color: ivory,
   );
 
-  /// Sign-in wordmark "Arul". 30px, Marcellus.
+  /// Sign-in wordmark "Arul". 38px, Marcellus. Was 30px when a 34px gopuram
+  /// mark sat above it; with the mark gone the type is the only brand element
+  /// on the screen, so it takes the weight (still clearly below the 44px
+  /// splash, which keeps its mark).
   static const TextStyle wordmarkSignIn = TextStyle(
     fontFamily: serif,
-    fontSize: 30,
+    fontSize: 38,
     height: 1.1,
-    letterSpacing: 1.2, // ≈ .04em
+    letterSpacing: 1.52, // ≈ .04em
     color: ivory,
   );
 

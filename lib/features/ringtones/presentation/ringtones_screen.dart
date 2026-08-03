@@ -15,6 +15,7 @@ import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
@@ -252,7 +253,11 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
                     : switch (feed) {
                         AsyncLoading() => const RingtonesLoading(),
                         AsyncData(:final value) => RefreshIndicator(
-                          onRefresh: _refresh,
+                          // Fires when the pull commits, not per drag pixel.
+                          onRefresh: () {
+                            ArulHaptics.firm();
+                            return _refresh();
+                          },
                           color: ArulTokens.gold,
                           backgroundColor: isDark
                               ? ArulTokens.darkSheetSurface
@@ -539,10 +544,9 @@ class _RingtoneCard extends ConsumerWidget {
             label: l10n.ringtonePreviewSemantic,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () {
-                HapticFeedback.lightImpact();
-                ref.read(ringtonePreviewProvider.notifier).toggle(ringtone);
-              },
+              onTapDown: (_) => ArulHaptics.tap(),
+              onTap: () =>
+                  ref.read(ringtonePreviewProvider.notifier).toggle(ringtone),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
@@ -702,12 +706,10 @@ class _SetPill extends StatelessWidget {
           color: fill,
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
           child: InkWell(
-            onTap: disabled
-                ? null
-                : () {
-                    HapticFeedback.lightImpact();
-                    onTap!();
-                  },
+            // Setting a ringtone is a commit verb — same weight as Apply on the
+            // wallpaper feed. The outcome beat comes from the toast.
+            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
+            onTap: disabled ? null : onTap,
             borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
             splashColor: ArulTokens.maroonTintFill08,
             highlightColor: ArulTokens.maroonTintFill07,
@@ -758,10 +760,8 @@ class _SettingsButton extends StatelessWidget {
       button: true,
       label: 'Settings',
       child: GestureDetector(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
           width: 34,

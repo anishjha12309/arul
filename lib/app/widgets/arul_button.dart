@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
-import 'package:flutter/services.dart';
 
+import '../../core/haptics/arul_haptics.dart';
 import '../theme/motion.dart';
 import '../theme/tokens.dart';
 import 'button_content.dart';
@@ -21,6 +21,7 @@ class ArulButton extends StatefulWidget {
     this.icon,
     this.busy = false,
     this.expand = true,
+    this.haptic = ArulHapticStyle.tap,
   });
 
   final String label;
@@ -29,6 +30,11 @@ class ArulButton extends StatefulWidget {
   final IconData? icon;
   final bool busy;
   final bool expand;
+
+  /// The impulse fired as the finger lands. Pass [ArulHapticStyle.firm] for a
+  /// deliberate, committing press, or [ArulHapticStyle.none] where the outcome
+  /// toast already covers the beat.
+  final ArulHapticStyle haptic;
 
   @override
   State<ArulButton> createState() => _ArulButtonState();
@@ -59,15 +65,19 @@ class _ArulButtonState extends State<ArulButton>
       enabled: _enabled,
       label: widget.label,
       child: GestureDetector(
-        onTapDown: _enabled ? (_) => _springTo(0.96) : null,
-        onTapUp: _enabled ? (_) => _springTo(1) : null,
-        onTapCancel: _enabled ? () => _springTo(1) : null,
-        onTap: _enabled
-            ? () {
-                HapticFeedback.lightImpact();
-                widget.onPressed!();
+        // Haptic on press-DOWN, in step with the spring dip, so the phone
+        // answers before the animation does. A disabled button is silent, and a
+        // press that turns into a scroll never gets here — inside a scrollable
+        // the tap recognizer only reports down once it survives the arena.
+        onTapDown: _enabled
+            ? (_) {
+                ArulHaptics.fire(widget.haptic);
+                _springTo(0.96);
               }
             : null,
+        onTapUp: _enabled ? (_) => _springTo(1) : null,
+        onTapCancel: _enabled ? () => _springTo(1) : null,
+        onTap: _enabled ? widget.onPressed : null,
         child: AnimatedBuilder(
           animation: _c,
           builder: (context, child) =>
