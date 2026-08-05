@@ -9,20 +9,13 @@ import '../../features/ringtones/providers/ringtone_preview_provider.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/arul_line_icons.dart';
 
-/// RINGTONES-PARKED (2026-07-29): NOT WIRED UP RIGHT NOW. Ringtones ship hidden
-/// in v1, so `router.dart` routes /browse directly and nothing builds this shell
-/// — the dock included. The file is deliberately left whole and compiling so
-/// `flutter analyze` keeps type-checking it while it waits (Dart tree-shakes it
-/// out of the build). Do not "clean up" the dock below: it is the shipping
-/// design, screenshotted in docs/reference/ringtones-parked/. Un-parking is a
-/// router.dart change only.
+/// The tabbed scaffold around the three top-level surfaces (Wallpapers /
+/// Ringtones / Settings). Everything else — refer, upload, premium, the
+/// settings sub-screens — pushes OVER this shell as a full-screen route.
 ///
-/// The tabbed scaffold around the two browse surfaces (Wallpapers /
-/// Ringtones). Everything else — settings, refer, upload, premium — pushes
-/// OVER this shell as a full-screen route.
-///
-/// The [StatefulShellRoute.indexedStack] keeps BOTH branches alive, which is
+/// The [StatefulShellRoute.indexedStack] keeps every branch alive, which is
 /// what makes tab switches instant — but it also means neither media system
 /// tears itself down when its tab hides. This widget is the referee:
 ///
@@ -41,6 +34,26 @@ class AppShell extends ConsumerStatefulWidget {
 
   static const int wallpapersBranch = 0;
   static const int ringtonesBranch = 1;
+  static const int settingsBranch = 2;
+
+  /// How much bottom padding a scrollable owes the floating dock, which
+  /// overlays it (`extendBody: true`) — or ZERO when there is no dock above it.
+  ///
+  /// The handoff's 120 is measured on a 390×844 frame with no gesture bar. On a
+  /// real device the dock is pushed up by the bottom safe area, so that much is
+  /// added on top — otherwise the last row hides behind the capsule on exactly
+  /// the phones that have a gesture pill.
+  ///
+  /// The ancestor check is what makes this safe to call anywhere. Settings is
+  /// reached BOTH as a dock branch and as a route pushed over the feed (that is
+  /// how it works today, with ringtones parked); a flat 120 would have left a
+  /// screen's worth of dead space at the bottom of the pushed one. Callers
+  /// should not have to know which way they were opened.
+  static double dockClearance(BuildContext context) {
+    if (context.findAncestorWidgetOfExactType<AppShell>() == null) return 0;
+    return ArulTokens.listBottomInsetUnderDock +
+        MediaQuery.viewPaddingOf(context).bottom;
+  }
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
@@ -89,34 +102,137 @@ class _AppShellState extends ConsumerState<AppShell> {
       // scrolls under the capsule (the island treatment).
       extendBody: true,
       body: widget.navigationShell,
-      bottomNavigationBar: _ArulNavDock(
+      bottomNavigationBar: ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,
         items: [
-          _NavItem(icon: Icons.wallpaper_outlined, label: l10n.tabWallpapers),
-          _NavItem(icon: Icons.music_note_outlined, label: l10n.tabRingtones),
+          // "Settings" is the screen's own title in every locale — the tab and
+          // the screen are the same word, so it shares one ARB key.
+          (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
+          (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
+          (glyph: ArulLineGlyph.settings, label: l10n.settingsTitle),
         ],
       ),
     );
   }
 }
 
-class _NavItem {
-  const _NavItem({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
+/// One dock tab's content.
+typedef ArulNavItem = ({ArulLineGlyph glyph, String label});
+
+// ─── Branch crossfade ─────────────────────────────────────────────────────────
+
+/// Cross-fades between the branches over [ArulTokens.tabSwitch] instead of
+/// cutting between them.
+///
+/// `StatefulShellRoute.indexedStack` swaps branches on a single frame, which on
+/// this app is a hard cut from a playing video reel to a list of cards — the
+/// jump the eye notices most. Pakiza cross-fades, and this is that container.
+///
+/// It is careful about what a fade normally costs:
+///
+///   * every branch stays MOUNTED, so each tab keeps its own scroll position
+///     (the whole reason for a stateful shell);
+///   * only the incoming and outgoing branches are [Offstage]-visible, so an
+///     idle branch is laid out but never painted;
+///   * `TickerMode` is off for everything but the current branch, so the feed's
+///     animations — and the ringtone diya's flicker — stop dead on a hidden
+///     tab rather than burning frames behind one.
+class ArulBranchCrossfade extends StatefulWidget {
+  const ArulBranchCrossfade({
+    super.key,
+    required this.currentIndex,
+    required this.children,
+  });
+
+  final int currentIndex;
+  final List<Widget> children;
+
+  @override
+  State<ArulBranchCrossfade> createState() => _ArulBranchCrossfadeState();
+}
+
+class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: ArulTokens.tabSwitch,
+    value: 1,
+  );
+  late int _previous = widget.currentIndex;
+
+  @override
+  void didUpdateWidget(covariant ArulBranchCrossfade old) {
+    super.didUpdateWidget(old);
+    if (widget.currentIndex != old.currentIndex) {
+      _previous = old.currentIndex;
+      _c.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => Stack(
+        children: [
+          for (var i = 0; i < widget.children.length; i++) _branch(i, _c.value),
+        ],
+      ),
+    );
+  }
+
+  Widget _branch(int i, double t) {
+    final isCurrent = i == widget.currentIndex;
+    final isOutgoing = i == _previous && t < 1;
+    final opacity = isCurrent ? t : (isOutgoing ? 1 - t : 0.0);
+
+    return Offstage(
+      offstage: !isCurrent && !isOutgoing,
+      child: IgnorePointer(
+        ignoring: !isCurrent,
+        child: TickerMode(
+          enabled: isCurrent,
+          child: Opacity(
+            opacity: opacity.clamp(0, 1),
+            child: widget.children[i],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// The floating island dock — a detached capsule hovering above the bottom
 /// edge; branch content scrolls full-bleed behind it (Scaffold.extendBody).
 ///
-/// Statement treatment, paint-only (no blur / shaders — ui-direction.md):
-///   * dark capsule with a gold hairline rim and a warm drop shadow;
-///   * a SOLID gold pill glides between the two halves ([AnimatedAlign]) with
-///     a soft diya-glow (gold [BoxShadow]);
-///   * the label reveals only on the active side; inactive is a quiet glyph.
-class _ArulNavDock extends StatelessWidget {
-  const _ArulNavDock({
+/// Every tab shows its icon AND its label; the active one sits in a
+/// gold-tinted rounded cell that simply moves between tabs rather than gliding.
+/// That is deliberate: the previous dock slid a solid pill and revealed the
+/// label only on the active side, which made the two inactive tabs read as
+/// unlabelled glyphs and put a moving object under the user's thumb. Three
+/// tabs need names.
+///
+/// Paint-only, no blur: the handoff asks for `backdrop-blur 14`, but
+/// `BackdropFilter` costs ~6–9 ms of raster per frame on mid-tier Android and
+/// this capsule sits over a playing video feed (docs/ui-direction.md > Perf).
+/// The opaque [ArulTokens.dockFillDark] carries the same separation.
+///
+/// Behind the capsule is a vertical fade to the screen's own surface — Pakiza's
+/// treatment, and the reason its dock does not look see-through. Without it,
+/// content keeps scrolling past in the 18px side channels and the 14px below
+/// the capsule, so the eye reads a bar with rows sliding out from under it. The
+/// fade dissolves that content instead of slicing it. It absorbs no touches, so
+/// a drag that starts in the transparent zone still scrolls the list.
+class ArulNavDock extends StatelessWidget {
+  const ArulNavDock({
+    super.key,
     required this.currentIndex,
     required this.onTap,
     required this.items,
@@ -124,84 +240,72 @@ class _ArulNavDock extends StatelessWidget {
 
   final int currentIndex;
   final ValueChanged<int> onTap;
-  final List<_NavItem> items;
-
-  static const double _height = 64;
-  static const double _pillInset = 6;
+  final List<ArulNavItem> items;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
 
-    final capsule = isDark
-        ? ArulTokens.darkSheetSurface
-        : ArulTokens.cardBgLight;
-    final rim = isDark ? ArulTokens.goldBorder35 : ArulTokens.maroonBorder18;
-    final pill = isDark ? ArulTokens.gold : ArulTokens.maroon;
-    final glow = isDark
-        ? ArulTokens.gold.withValues(alpha: 0.30)
-        : ArulTokens.maroon.withValues(alpha: 0.22);
-
-    // -1 → left half, 1 → right half (two tabs).
-    final align = Alignment(currentIndex == 0 ? -1.0 : 1.0, 0);
-
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-        child: Container(
-          height: _height,
-          decoration: BoxDecoration(
-            color: capsule,
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-            border: Border.all(color: rim),
-            boxShadow: [
-              // Grounding shadow so the island reads as floating over the reel.
-              BoxShadow(
-                color: ArulTokens.darkSurface.withValues(alpha: 0.55),
-                blurRadius: 22,
-                offset: const Offset(0, 8),
-              ),
-            ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          // Fade to the SURFACE's own alpha-0, never Colors.transparent — that
+          // is transparent black, and lerping through it drags the fade toward
+          // a grey smear on the ivory theme.
+          colors: [
+            surface.withValues(alpha: 0),
+            surface.withValues(alpha: ArulTokens.dockScrimAlpha),
+            surface.withValues(alpha: ArulTokens.dockScrimAlpha),
+          ],
+          stops: const [0, ArulTokens.dockScrimStop, 1],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: ArulTokens.dockBottomInset),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: ArulTokens.dockSideInset,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(_pillInset),
-            child: Stack(
-              children: [
-                // The gliding gold pill + its diya glow.
-                AnimatedAlign(
-                  alignment: align,
-                  duration: ArulTokens.chromeSettleIn,
-                  curve: ArulTokens.settleCurve,
-                  child: FractionallySizedBox(
-                    widthFactor: 0.5,
-                    heightFactor: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: pill,
-                        borderRadius: BorderRadius.circular(
-                          ArulTokens.pillRadius,
-                        ),
-                        boxShadow: [BoxShadow(color: glow, blurRadius: 16)],
+          // The pane is a fixed height with fixed-size labels, so an unclamped
+          // system font scale (2x on Android) would burst it. Same clamp Pakiza
+          // puts on its dock, and the same reason.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.1,
+            child: Container(
+              height: ArulTokens.dockHeight,
+              padding: const EdgeInsets.symmetric(
+                horizontal: ArulTokens.dockInnerPadding,
+              ),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? ArulTokens.dockFillDark
+                    : ArulTokens.cardBgLight,
+                borderRadius: BorderRadius.circular(ArulTokens.dockRadius),
+                border: Border.all(
+                  color: isDark
+                      ? ArulTokens.cardBorderDark08
+                      : ArulTokens.maroonBorder08,
+                ),
+                boxShadow: isDark
+                    ? ArulTokens.dockShadowDark
+                    : ArulTokens.dockShadowLight,
+              ),
+              child: Row(
+                children: [
+                  for (var i = 0; i < items.length; i++)
+                    Expanded(
+                      child: _DockTab(
+                        item: items[i],
+                        selected: i == currentIndex,
+                        onTap: () => onTap(i),
                       ),
-                      child: const SizedBox.expand(),
                     ),
-                  ),
-                ),
-                Row(
-                  children: [
-                    for (var i = 0; i < items.length; i++)
-                      Expanded(
-                        child: _DockItem(
-                          item: items[i],
-                          selected: i == currentIndex,
-                          onTap: () => onTap(i),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -210,14 +314,14 @@ class _ArulNavDock extends StatelessWidget {
   }
 }
 
-class _DockItem extends StatelessWidget {
-  const _DockItem({
+class _DockTab extends StatelessWidget {
+  const _DockTab({
     required this.item,
     required this.selected,
     required this.onTap,
   });
 
-  final _NavItem item;
+  final ArulNavItem item;
   final bool selected;
   final VoidCallback onTap;
 
@@ -225,13 +329,14 @@ class _DockItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Content over the gold pill is surface-dark (ink on gold — the selected
-    // chip's grammar); inactive is a lone muted glyph.
-    final activeFg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-    final inactiveFg = isDark
-        ? ArulTokens.darkMuted
-        : ArulTokens.lightSecondary;
-    final fg = selected ? activeFg : inactiveFg;
+    // Active reads as a lit cell: gold ink on a gold tint in the dark, and dark
+    // ink on solid pale gold in the light (gold-on-gold would vanish there).
+    final Color fg;
+    if (selected) {
+      fg = isDark ? ArulTokens.gold : ArulTokens.lightText;
+    } else {
+      fg = isDark ? ArulTokens.darkMuted : ArulTokens.lightSecondary;
+    }
 
     return Semantics(
       button: true,
@@ -240,26 +345,54 @@ class _DockItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        child: Container(
+          height: ArulTokens.dockTabHeight,
+          decoration: selected
+              ? BoxDecoration(
+                  color: isDark
+                      ? ArulTokens.goldTintFill13
+                      : ArulTokens.dockActiveFillLight,
+                  borderRadius: BorderRadius.circular(
+                    ArulTokens.dockActiveTabRadius,
+                  ),
+                  border: Border.all(
+                    color: isDark
+                        ? ArulTokens.goldBorder45
+                        : ArulTokens.goldBorder50,
+                  ),
+                  // No halo. The handoff puts a 20px gold glow here; on a real
+                  // panel it fogged the cell's edge and made the dark theme
+                  // look hazy. Fill + rim already say "active".
+                )
+              : null,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(item.icon, size: 20, color: fg),
-              // Label reveals only while this side is active; the glide and
-              // the reveal share one clock so the pill never outruns its text.
-              AnimatedSize(
-                duration: ArulTokens.chromeSettleIn,
-                curve: ArulTokens.settleCurve,
-                child: selected
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: 7),
-                        child: Text(
-                          item.label,
-                          maxLines: 1,
-                          style: ArulTokens.chipActive.copyWith(color: fg),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+              ArulLineIcon(
+                glyph: item.glyph,
+                size: ArulTokens.dockIconSize,
+                color: fg,
+              ),
+              const SizedBox(height: ArulTokens.dockTabGap),
+              // The cell is a fixed 58 inside a fixed 78 capsule, so a label at
+              // a 2× OS font size would overflow it. Flexible lets the Column
+              // hand it less room; scaleDown then fits the type into whatever
+              // room it got, instead of breaking the dock.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style:
+                        (selected
+                                ? ArulTokens.dockLabelActive
+                                : ArulTokens.dockLabel)
+                            .copyWith(color: fg),
+                  ),
+                ),
               ),
             ],
           ),

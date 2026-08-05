@@ -71,6 +71,10 @@
   },
   "tabWallpapers": "Wallpapers",
   "tabRingtones": "Ringtones",
+  "earn": "Earn",
+  "@earn": {
+    "description": "Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase."
+  },
   "ringtoneSet": "Set",
   "ringtonePreviewSemantic": "Preview",
   "ringtonePreviewUnavailable": "Preview not available yet",

@@ -50,8 +50,9 @@ class FeedCardGeometry {
     required this.floor,
   });
 
-  /// Card margin. Horizontal only — the card sits flush with the top of the
-  /// reel, and the gap below it belongs to the page (see [pageExtent]).
+  /// Card margin. Horizontal only — the card is flush with the top of the
+  /// PAGER (which is itself dropped by [headroom]), and the gap below it
+  /// belongs to the page (see [pageExtent]).
   final EdgeInsets margin;
 
   final Size size;
@@ -59,9 +60,24 @@ class FeedCardGeometry {
   /// How much of the NEXT card shows below this one.
   final double peek;
 
-  /// Frame-coloured space below the peek. The reel's visible bottom edge, and
-  /// the reason the card reads as placed rather than jammed against the screen.
+  /// Frame-coloured space left over once card, gap and peek are placed.
+  ///
+  /// It used to sit entirely BELOW the peek. It is now split either side of the
+  /// reel ([headroom] / [underhang]) so the card is vertically centred in the
+  /// space it has rather than hung from the top — owner's call, 2026-08-06,
+  /// alongside dropping the hairline that used to cap the reel.
+  ///
+  /// Note this is frequently ZERO: at [cardAspect] 1.86 the card consumes the
+  /// whole reel on an ordinary phone, so there is nothing to split and centring
+  /// is a no-op. It earns its keep on tall screens, where the slack is real.
   final double floor;
+
+  /// The half of [floor] that sits ABOVE the card.
+  double get headroom => floor / 2;
+
+  /// The half that stays below the peek. Carries the odd pixel, so
+  /// `headroom + underhang == floor` exactly and the reel cannot drift.
+  double get underhang => floor - headroom;
 
   // ─── The knobs ──────────────────────────────────────────────────────────────
 

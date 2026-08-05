@@ -13,10 +13,10 @@ for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo** (`c:\A
 Two scopes: **wallpapers** and **ringtones**. Ringtone audio lives at
 `ringtones/<category>/<uuid>.mp3`, cover art at `ringtones/covers/<category>/<uuid>.jpg`.
 
-⚠ **The app's ringtones tab is PARKED in v1** — the route is commented out, so publishing ringtones
-will NOT make them appear. Publishing is necessary but not sufficient: un-parking is a code change
-(`docs/known-issues.md`). The scope, the prefix and the sweep all still run — publish and sweep
-ringtones normally, just don't expect a shipped build to show them.
+The ringtones tab is LIVE (un-parked 2026-08-05; first 30 tracks imported the same day), so a
+published ringtone reaches users exactly like a wallpaper does. **Bulk ringtone drops go through
+`tools/content-import/ringtones-plan.mjs` → `ringtones-import.mjs`**, not the CMS one-at-a-time
+form; the plan script is also where the title→category map lives.
 
 ## Manual rebuild / check
 ```bash

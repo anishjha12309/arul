@@ -186,6 +186,9 @@ class AppLocalizationsKn extends AppLocalizations {
   String get tabRingtones => 'ರಿಂಗ್‌ಟೋನ್‌ಗಳು';
 
   @override
+  String get earn => 'ಗಳಿಸಿ';
+
+  @override
   String get ringtoneSet => 'ಹೊಂದಿಸಿ';
 
   @override

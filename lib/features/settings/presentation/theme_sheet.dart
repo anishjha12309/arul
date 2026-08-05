@@ -28,23 +28,35 @@ String themeModeLabel(ThemeMode mode) => switch (mode) {
   ThemeMode.dark => 'Dark',
 };
 
+/// Glyph for a [ThemeMode] — the ONE mapping, read by the sheet's own options
+/// and by the Settings row that opens it.
+///
+/// The row used to hardcode [Icons.dark_mode], so it sat there showing a
+/// crescent moon while its own sub-label read "Light": the glyph is the thing
+/// the eye checks first in a list of rows, and it was the one part of the row
+/// that never moved. It answers to the selection now, and because the sheet
+/// reads the same function the row's icon is always the chosen option's icon.
+IconData themeModeIcon(ThemeMode mode) => switch (mode) {
+  // Not a sun-and-moon composite: "follow the device" is a rule, not a
+  // brightness, and the sheet has always drawn it as one.
+  ThemeMode.system => Icons.settings_suggest,
+  ThemeMode.light => Icons.light_mode,
+  ThemeMode.dark => Icons.dark_mode,
+};
+
 class _ThemeOption {
-  const _ThemeOption(this.mode, this.icon, this.title, this.sub);
+  const _ThemeOption(this.mode, this.title, this.sub);
   final ThemeMode mode;
-  final IconData icon;
   final String title;
   final String sub;
+
+  IconData get icon => themeModeIcon(mode);
 }
 
 const _options = <_ThemeOption>[
-  _ThemeOption(
-    ThemeMode.system,
-    Icons.settings_suggest,
-    'System default',
-    'Follow device setting',
-  ),
-  _ThemeOption(ThemeMode.light, Icons.light_mode, 'Light', 'Ivory & silk'),
-  _ThemeOption(ThemeMode.dark, Icons.dark_mode, 'Dark', 'Lamp-lit maroon'),
+  _ThemeOption(ThemeMode.system, 'System default', 'Follow device setting'),
+  _ThemeOption(ThemeMode.light, 'Light', 'Ivory & silk'),
+  _ThemeOption(ThemeMode.dark, 'Dark', 'Lamp-lit maroon'),
 ];
 
 class _ThemeSheet extends ConsumerWidget {

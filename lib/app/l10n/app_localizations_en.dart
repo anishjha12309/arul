@@ -185,6 +185,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tabRingtones => 'Ringtones';
 
   @override
+  String get earn => 'Earn';
+
+  @override
   String get ringtoneSet => 'Set';
 
   @override

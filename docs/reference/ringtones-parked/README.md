@@ -1,126 +1,76 @@
-# Ringtones — parked for the v1 production release (2026-07-29)
+# Ringtones — parked 2026-07-29, un-parked 2026-08-05
 
-Ringtones ship **hidden** in v1: there is no ringtone audio in the bucket yet, so
-the tab led to a "Ringtones are coming soon" empty state. Rather than ship a dead
-tab, the *entry point* is commented out and everything behind it is left intact.
+> Historical record. The tab is LIVE again; nothing here is a current
+> instruction. Live status and what is still owed:
+> [known-issues.md](../../known-issues.md).
 
-**Nothing was deleted, and nothing was gutted.** The whole ringtone tree still
-compiles and is still type-checked by `flutter analyze` — it just has no route
-into it, so Dart tree-shakes it out of the release build and the user can't reach
-it. Un-parking is a one-file change.
+## Why it was parked
 
----
+There was no ringtone audio in the bucket, so the tab could only ever render
+"Ringtones are coming soon". Shipping a dead tab is worse than shipping no tab,
+so the *entry point* was commented out and everything behind it left intact —
+`features/ringtones/**`, `app/shell/app_shell.dart`, the models, every
+`ringtone*` ARB key in all 6 locales, the worker's `catalog/ringtones/…` scope
+and the `ringtones/` sweep prefix all still compiled and were still
+type-checked. Dart simply tree-shook them out of the build.
 
-## What actually changed
+That was verified rather than assumed: with `--print-instructions-sizes-to`
+against the release APK, not one symbol from `features/ringtones/**`,
+`app_shell.dart` or `arul_line_icons.dart` reached the AOT snapshot, and
+`aapt2 dump permissions` showed no `WRITE_SETTINGS`.
 
-Two files. Search the repo for `RINGTONES-PARKED` to find every line to touch.
+## What un-parking changed (2026-08-05)
 
-1. [lib/app/router.dart](../../../lib/app/router.dart) — the
-   `StatefulShellRoute.indexedStack` (Wallpapers branch + Ringtones branch) is
-   commented out and `/browse` is promoted to a plain top-level `GoRoute`.
-2. [android/app/src/main/AndroidManifest.xml](../../../android/app/src/main/AndroidManifest.xml)
-   — `WRITE_SETTINGS` is commented out. It exists **only** so `RingtoneManager`
-   can set the device tone; it is a special-access permission that shows on the
-   Play listing, so shipping it with no feature behind it invites review
-   questions. It must come back in the same change that un-parks the route,
-   otherwise "Set" fails the `Settings.System.canWrite` check on every device.
+The owner reviewed the redesign on a device and asked for the tab permanently.
 
-Untouched and still compiling:
+1. [lib/app/router.dart](../../../lib/app/router.dart) — the `StatefulShellRoute`
+   is live: Wallpapers · Ringtones · Settings. **Settings moved INTO the dock**;
+   it is a branch, not a route pushed over the feed, so the feed's header gear
+   now `go`s to that branch instead of `push`ing a second copy. Its sub-screens
+   (notifications, premium, refer, upload) stay top-level pushes over the shell.
+2. [AndroidManifest.xml](../../../android/app/src/main/AndroidManifest.xml) —
+   `WRITE_SETTINGS` is back. It exists **only** so `RingtoneManager` can set the
+   device tone; without it every "Set" fails the `Settings.System.canWrite`
+   check. It is special-access and shows on the Play listing, so the store form
+   has to justify it.
+3. The `/dev/*` shell and the "Ringtones preview (dev)" row in Settings are
+   gone — the real route replaces them.
 
-- `lib/features/ringtones/**` — repository, providers, screen, set-service
-- `lib/app/shell/app_shell.dart` — the shell + the floating dock (see below)
-- `lib/data/models/ringtone.dart` (+ freezed/g.dart)
-- every `ringtone*` / `tabRingtones` ARB key in all 6 locales
-- the worker's `catalog/ringtones/…` scope and the `ringtones/` R2 sweep prefix
+## The catalog filled the same day
 
-## Consequence for the UI
+30 tracks (30 s MP3, six categories) were imported on 2026-08-05, hours after
+un-parking — so the "empty tab in a Play build" trade never actually reached a
+release. Bulk imports run through
+[tools/content-import/](../../../tools/content-import/) (`ringtones-plan.mjs`
+→ `ringtones-import.mjs`).
 
-With one browse surface left, the floating dock had nothing to switch between, so
-the shell around `/browse` is gone for now. The feed keeps its own `Scaffold` and
-`SafeArea`, and its reel geometry is computed from available height (`_peek`,
-`_cardInsetTop/Bottom` in `feed_screen.dart`) — no hardcoded dock offset — so the
-reel simply reclaims the ~78 px the dock used to occupy. Nothing else moved.
+The same change ported Pakiza's **pre-Android-10 set path**, which Arul had
+never had: below API 29 a tone must be copied into the public Ringtones
+directory and registered on the external MediaStore volume, behind a runtime
+`WRITE_EXTERNAL_STORAGE` prompt. Contracts in
+[edge-cases.md](../../edge-cases.md) §Ringtones.
 
-Verified on device after the change, in both themes: the card grows taller and
-the next-card peek sits clear at the bottom instead of being clipped by the
-capsule. Everything else — header, chips, divider, the Apply/Share rail — is
-unmoved.
+## The sample rows that outlived the park — DELETED 2026-08-05
 
-The paywall needed no edit: `premiumHeadline` / `premiumBenefit*` were already
-wallpaper-only ("Unlock every wallpaper"), and Settings never had a ringtone row.
+`lib/features/ringtones/dev/` existed only because an empty catalog made the
+screen unreviewable on a device: it filled an **empty** catalog with the
+handoff's eight sample tracks behind a compile-time
+`kDebugMode || --dart-define=ARUL_RINGTONES_PREVIEW=true` guard, injecting at
+the CATALOG provider so the chips and the filter saw the rows too. It was built
+to self-retire once one real row existed, and it did — the directory and the
+dart-define are both gone. Recover it from git if a future design review ever
+needs a populated screen before its content exists.
 
-`aapt2 dump permissions` on the built APK confirms the shipped permission set is
-now `INTERNET`, `SET_WALLPAPER`, `VIBRATE` plus the SDK-contributed ones — no
-`WRITE_SETTINGS`. Re-run that check after un-parking to confirm it came back.
+## The dock
 
----
+Rebuilt 2026-08-05 — three tabs, icon + label on every one, a 200ms crossfade
+between branches. Shape, perf rules and branch refereeing:
+**[../nav-dock.md](../nav-dock.md)**.
 
-## How to un-park (when ringtone audio exists)
+### The dock this replaced — historical only
 
-1. In `lib/app/router.dart`: uncomment the `StatefulShellRoute.indexedStack`
-   block, delete the temporary top-level `/browse` route, and restore the
-   `shell/app_shell.dart` + `ringtones_screen.dart` imports.
-2. In `AndroidManifest.xml`: uncomment `WRITE_SETTINGS`.
-3. Drop the header note at the top of `lib/app/shell/app_shell.dart`.
-4. `flutter analyze && flutter test`, then run on device and compare against the
-   screenshots below — the dock must look pixel-identical. Check "Set" on a real
-   ringtone too: that is what proves step 2 landed.
-
-Nothing in the worker, the DB, the CMS or the ARB files needs to change.
-
----
-
-## The floating dock — visual reference
-
-Captured on a physical device (1080×2392, OnePlus/Galaga) at the commit that
-parked ringtones, so the restored dock can be diffed against these.
-
-| | Wallpapers active | Ringtones active |
-| --- | --- | --- |
-| **Light** | [01-current-state.png](01-current-state.png) | [02-light-ringtones-active.png](02-light-ringtones-active.png) |
-| **Dark** | [03-dark-wallpapers-active.png](03-dark-wallpapers-active.png) | [04-dark-ringtones-active.png](04-dark-ringtones-active.png) |
-
-What the reference shots establish:
-
-- The dock is a **detached floating capsule** — 24 px side margins, 10 px above
-  the gesture bar, 64 px tall, `ArulTokens.pillRadius`. Feed content runs
-  full-bleed *behind* it (`Scaffold.extendBody: true`); in the light shot the
-  next card's peek is visibly clipped by the capsule.
-- A **solid pill fills exactly half** the capsule (`FractionallySizedBox`,
-  `widthFactor: 0.5`) and glides between the halves with `AnimatedAlign`.
-- **Light:** ivory capsule, maroon hairline rim, maroon pill, ivory label.
-  **Dark:** near-black capsule, gold hairline rim, gold pill, dark-surface label
-  — plus the gold diya-glow, clearly visible around the pill in the dark shots.
-- The **label only renders on the active side** (`AnimatedSize`); the inactive
-  side is a lone muted glyph — `Icons.wallpaper_outlined` / `Icons.music_note_outlined`.
-- Icon 20 px, 7 px gap to the label, label in `ArulTokens.chipActive`.
-
-### Paint recipe (as built)
-
-| Token role | Light | Dark |
-| --- | --- | --- |
-| capsule | `ArulTokens.cardBgLight` | `ArulTokens.darkSheetSurface` |
-| rim | `ArulTokens.maroonBorder18` | `ArulTokens.goldBorder35` |
-| pill | `ArulTokens.maroon` | `ArulTokens.gold` |
-| pill glow | `maroon @ 22%`, blur 16 | `gold @ 30%`, blur 16 |
-| active label/icon | `ArulTokens.ivory` | `ArulTokens.darkSurface` |
-| inactive glyph | `ArulTokens.lightSecondary` | `ArulTokens.darkMuted` |
-| drop shadow | `darkSurface @ 55%`, blur 22, offset (0, 8) | same |
-
-Motion is `ArulTokens.chromeSettleIn` / `ArulTokens.settleCurve` for **both** the
-pill glide and the label reveal — deliberately one clock, so the pill never
-outruns its text. Paint-only: no blur, no shaders (per `docs/ui-direction.md`).
-
-### Behaviour the dock owned
-
-`AppShell` was the referee for the two always-alive branches, and this logic must
-come back with it:
-
-- leaving **Wallpapers** → `videoPreloadController.releaseDecoders()` (budget SoCs
-  have very few hardware decoders, and the hidden feed must not keep playing);
-- returning to **Wallpapers** → `reclaimDecoders()` reconciles the pool onto the
-  feed's current page;
-- leaving **Ringtones** → `ringtonePreviewProvider.stop()` (idempotent — the
-  screen's own route listener also stops it);
-- tapping a tab fires `HapticFeedback.lightImpact()`; re-tapping the active tab
-  pops that branch to its root.
+[01](01-current-state.png) · [02](02-light-ringtones-active.png) ·
+[03](03-dark-wallpapers-active.png) · [04](04-dark-ringtones-active.png) — a
+physical device (1080×2392) at the parking commit. **Do not diff the new dock
+against these.** The one thing they still prove: the dock is a detached floating
+capsule with branch content running full-bleed behind it.

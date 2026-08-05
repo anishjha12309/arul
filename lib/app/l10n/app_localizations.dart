@@ -436,6 +436,12 @@ abstract class AppLocalizations {
   /// **'Ringtones'**
   String get tabRingtones;
 
+  /// Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Earn'**
+  String get earn;
+
   /// No description provided for @ringtoneSet.
   ///
   /// In en, this message translates to:

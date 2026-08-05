@@ -20,8 +20,14 @@ const _kAllLabel = 'All';
 /// The horizontal category-chip row on the feed's solid top bar
 /// (`pad 0 16px, gap 8, h-scroll`).
 ///
-/// Sits on the themed frame, not over media, so the chips use
-/// [ArulChipVariant.surface] and follow light/dark.
+/// Sits on the themed frame, not over media, so the chips follow light/dark.
+///
+/// [ArulChipVariant.category] — the SAME variant the ringtone browse row uses.
+/// Both rows are the one browse axis (CLAUDE.md §5b) doing the one job, and
+/// running them on different variants meant the two tabs disagreed on what a
+/// category pill looks like: different height, different inactive fill, and an
+/// inactive label at primary weight here versus secondary there. The chip is
+/// the same control; it gets the same clothes.
 class FeedChips extends ConsumerWidget {
   const FeedChips({super.key});
 
@@ -30,9 +36,11 @@ class FeedChips extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final selected = ref.watch(selectedCategoryProvider);
 
-    // No category names until the catalog lands; hold the row's height so the
-    // media below does not jump.
-    if (categories.isEmpty) return const SizedBox(height: 34);
+    // A loaded catalog with no categories at all: collapse, rather than leave a
+    // 34px band of nothing under the title. (The loading case never reaches
+    // here — the frame swaps in FeedChipsSkeleton, which holds the height, so
+    // there is no jump when the chips arrive.) Same rule in the ringtone row.
+    if (categories.isEmpty) return const SizedBox.shrink();
 
     final items = <WallpaperCategory>[
       const WallpaperCategory(WallpaperCategory.allSlug, _kAllLabel),
@@ -50,14 +58,12 @@ class FeedChips extends ConsumerWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final c = items[i];
-          return Center(
-            child: ArulChip(
-              label: c.label,
-              selected: c.slug == selected,
-              variant: ArulChipVariant.surface,
-              onTap: () =>
-                  ref.read(selectedCategoryProvider.notifier).select(c.slug),
-            ),
+          return ArulChip(
+            label: c.label,
+            selected: c.slug == selected,
+            variant: ArulChipVariant.category,
+            onTap: () =>
+                ref.read(selectedCategoryProvider.notifier).select(c.slug),
           );
         },
       ),

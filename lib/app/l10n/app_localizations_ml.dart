@@ -187,6 +187,9 @@ class AppLocalizationsMl extends AppLocalizations {
   String get tabRingtones => 'റിംഗ്ടോണുകൾ';
 
   @override
+  String get earn => 'നേടുക';
+
+  @override
   String get ringtoneSet => 'സെറ്റ് ചെയ്യുക';
 
   @override

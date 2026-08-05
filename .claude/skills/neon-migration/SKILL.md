@@ -11,8 +11,7 @@ directory.
 
 **Fresh install:** `01_identity.sql` → `02_content.sql` → `03_referral_config.sql` →
 `04_ringtones.sql` → `db/seed.sql`. **04 is not optional** — build-catalog queries the ringtones
-scope every hour and crash-loops against a missing table, even though the app's ringtones tab is
-parked.
+scope every hour and crash-loops against a missing table.
 
 ## Changes after that
 

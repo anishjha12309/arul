@@ -44,9 +44,26 @@ abstract final class AppConfig {
     defaultValue: 'support@hsrutility.com',
   );
 
+  /// Privacy policy. The SHARED HSR page — titled "Privacy Policy — Pakiza &
+  /// Arul", so it covers this app by name.
+  ///
+  /// Was `hsrapps.com/arul/privacy-policy/`, the per-app page. Both policies now
+  /// point at the one company domain so there is a single document to keep
+  /// current instead of one per app drifting apart.
+  ///
+  /// NOTE: the Play listing carries its own privacy-policy URL — changing this
+  /// constant does NOT change that, and the two must not disagree.
   static const privacyUrl = String.fromEnvironment(
     'PRIVACY_URL',
-    defaultValue: 'https://hsrapps.com/arul/privacy-policy/',
+    defaultValue: 'https://hsrutility.com/privacy/',
+  );
+
+  /// Terms & Conditions, linked from the Settings footer beside [privacyUrl].
+  /// The exact URL Pakiza serves from its `app_config.policy_urls`; the
+  /// published page is titled "Terms of Service — Pakiza & Arul".
+  static const termsUrl = String.fromEnvironment(
+    'TERMS_URL',
+    defaultValue: 'https://hsrutility.com/terms/',
   );
 
   /// Always true in real builds — the Worker has been live since 2026-07-14 and

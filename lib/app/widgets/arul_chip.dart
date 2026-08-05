@@ -12,6 +12,13 @@ enum ArulChipVariant {
   /// On a themed surface — the Upload screen's category chips (Spec > Upload).
   /// Follows light/dark.
   surface,
+
+  /// The browse-axis chip row on a themed surface — the Ringtones screen
+  /// (design_handoff_ringtones_screen). Taller and flatter than [surface], and
+  /// its inactive label is the secondary text colour rather than the primary:
+  /// a browse filter should recede until it is chosen, where a form chip like
+  /// Upload's must read as an available answer. Follows light/dark.
+  category,
 }
 
 /// The category / selection chip used by the feed row and the Upload screen.
@@ -48,7 +55,19 @@ class ArulChip extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+        // The browse row is spec'd as a fixed 34 tall with 16 of side padding;
+        // the other two size themselves off the label's own line box.
+        height: variant == ArulChipVariant.category ? _categoryHeight : null,
+        alignment: variant == ArulChipVariant.category
+            ? Alignment.center
+            : null,
+        padding: variant == ArulChipVariant.category
+            ? const EdgeInsets.symmetric(horizontal: 16)
+            // 10, not the spec's 7: the label's line box lost the theme's 1.45
+            // leading when the chip styles pinned `height: 1` (see
+            // ArulTokens.chip), so the padding takes back the ~6px the box
+            // used to carry and this chip stays the size it has always been.
+            : const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
@@ -63,6 +82,9 @@ class ArulChip extends StatelessWidget {
       ),
     );
   }
+
+  /// The browse chip's fixed height.
+  static const double _categoryHeight = 34;
 
   (Color, Color, Color) _palette(bool isDark) {
     switch (variant) {
@@ -94,6 +116,26 @@ class ArulChip extends StatelessWidget {
           ArulTokens.cardBgLight,
           ArulTokens.cardBorderLight,
           ArulTokens.lightText,
+        );
+      case ArulChipVariant.category:
+        if (selected) {
+          // Solid gold on dark, solid maroon on light — borderless, so the
+          // rim is the fill and the pill reads as one flat token.
+          final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
+          final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+          return (fill, fill, fg);
+        }
+        if (isDark) {
+          return (
+            ArulTokens.cardBgDark045,
+            ArulTokens.cardBorderDark12,
+            ArulTokens.darkTextSecondary,
+          );
+        }
+        return (
+          ArulTokens.cardBgLight,
+          ArulTokens.cardBorderLight,
+          ArulTokens.lightBody,
         );
     }
   }

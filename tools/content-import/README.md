@@ -48,6 +48,27 @@ is never committed. Adjust the `ROOT` const at the top of each script for a new 
 | 10 | `verify.mjs` | QC every imported file against all conventions (dims, codec, pix_fmt, faststart, audio, size, frame-0) |
 | 11 | `fix.mjs` | re-encode any non-conformant live video (e.g. full-range yuvj420p → yuv420p) and overwrite the same R2 key in place |
 
+## Ringtones — a separate, much shorter pipeline
+
+The eight wallpaper stages exist because images arrive unlabelled, mis-sized and
+duplicated. Ringtone drops are not like that: they arrive cut to length and **named after
+the deity**, so classification is a title map and QC is one ffprobe. Two scripts:
+
+| # | Script | Role |
+|---|--------|------|
+| 1 | `ringtones-plan.mjs` | ffprobe + QC (codec/length/size) · title→category map · UUID keys · interleaved `sort_order` → `ringtone-import-plan.json`. No network, no credentials, safe to re-run. |
+| 2 | `ringtones-import.mjs` | **live write:** R2 PUT → one Neon txn (rows + `content_version`) → `build-catalog` → verify. `--dry-run` prints only. Checkpointed, so a partial failure re-runs cheaply. |
+
+- **Add new titles to `CATEGORY_BY_TITLE`** in stage 1 — an unmapped title aborts the plan
+  rather than guessing. Category drives the app's medallion motif, so it is not cosmetic.
+- `cover_key` is always null: the app DRAWS its kolam medallion. No cover art is uploaded.
+- Objects go up via `wrangler r2 object put --remote`, not the S3 API — the R2 S3 keys are
+  not on disk anywhere, and wrangler is already authenticated against the account. Invoke
+  wrangler's JS entrypoint with `node`, never `npx` through a shell: a shell re-splits every
+  argument on whitespace and both the filenames and the cache-control value contain spaces.
+- Stage 2 **refuses to run against a non-empty `ringtones` table** — it was written for the
+  first import. Drop that guard deliberately (and check for duplicates) for the second.
+
 ## Notes
 
 - **Dedup is perceptual**, not byte-hash: existing R2 images were re-encoded, so their bytes

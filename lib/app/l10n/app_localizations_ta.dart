@@ -186,6 +186,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get tabRingtones => 'ரிங்டோன்கள்';
 
   @override
+  String get earn => 'சம்பாதி';
+
+  @override
   String get ringtoneSet => 'அமை';
 
   @override

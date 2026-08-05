@@ -91,20 +91,33 @@ table that runs out means **skip**, never extrapolate; `res/raw/keep.xml` is wha
 icons and breaking release builds only; and the QA tools are gated on `isPlayInstall`, NOT `kDebugMode`,
 so they exist in a sideloaded release APK — the only build where those failures reproduce.
 
-## Ringtones — PARKED in v1, do NOT walk these
-The tab has no route into it and `WRITE_SETTINGS` is commented out of the manifest, so none of the
-below is reachable in a v1 build and an unticked box here means "parked", not "broken". The contracts
-are kept verbatim because the code is kept verbatim — **re-walk this whole section in the release
-that un-parks the tab** ([known-issues.md](known-issues.md)), starting with the permission.
+## Ringtones — LIVE since 2026-08-05 (30 tracks), walk these
 - [ ] Setting a tone needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to
       `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt`
       (`setRingtoneFromFile` re-checks and throws `SecurityException` — surface it localized). The
-      manifest declaration must be uncommented in the same change, or every set fails the canWrite check.
+      deep-link walks a FALLBACK CHAIN (per-package → app-list → app details): some MIUI/ColorOS
+      settings apps do not resolve the per-package form and `startActivity` throws there.
+- [ ] **Below API 29 the tone is COPIED into the public Ringtones dir** and THAT path registered on
+      the EXTERNAL volume: the app-private cache path is unreadable by the ringtone player and routes
+      the row to the read-only `internal` volume, which never validates as a ringtone (both seen
+      on-device in Pakiza). Needs `WRITE_EXTERNAL_STORAGE` (capped `maxSdkVersion=28`),
+      runtime-prompted at the first Set and resumed in `onRequestPermissionsResult` — never at launch.
+- [ ] Picker name = the CATALOG TITLE threaded through the channel and sanitized natively, never the
+      downloaded filename (the ringtone id). `mime` rides along: some OEM scanners re-derive type
+      from the extension and misindex a row whose MIME disagrees.
+- [ ] Stale-row cleanup before re-insert must NEVER abort the set — rows from a previous install
+      throw `RecoverableSecurityException`; skip them and let MediaStore uniquify the name, or
+      re-setting any pre-reinstall tone breaks permanently.
 - [ ] ONE shared `just_audio` `AudioPlayer` for ALL preview playback — starting a track stops the previous
       one, so two previews never overlap and only one decoder is held (the feed's video pool shares the
       device) ← `lib/features/ringtones/providers/ringtone_preview_provider.dart`
-- [ ] `cover_key` is NULLABLE — a missing cover degrades to fallback art in app AND CMS, never a broken
-      cell ← `db/schema/04_ringtones.sql:6-8`
+- [ ] Row art is DRAWN, never fetched: a kolam medallion hashed from the ringtone **id** (ground, dot
+      count, rotation) with the motif from its **category**, so a tile never re-rolls across launches or
+      when a filter reorders the list ← `ringtone_medallion.dart`. `cover_key` stays nullable, CMS-only.
+      Every tile draws the SAME skeleton — only the parameters permute; never add a structural coin-flip
+      or the list reads as individually-styled rows rather than one system.
+- [ ] Every now-playing affordance — row fill, border, title, button, cover overlay — derives from the ONE
+      `currentId`; clearing it stops the audio, never just dims the row
 - [ ] Preview is FREE (public `audio_key` straight from the CDN); only **Set** is premium-gated, through
       `/media/signed-url` with kind `ringtone` ← `workers/src/routes/media.ts:31`
 - [ ] Set has a re-entrancy guard (same as apply/share) — a double tap must not run two set flows

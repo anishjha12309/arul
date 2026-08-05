@@ -3,14 +3,23 @@
     <!-- Static wallpaper apply via WallpaperManager. Normal permission, auto-granted.
          Live wallpapers go through the system chooser and need no permission. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
-    <!-- RINGTONES-PARKED (2026-07-29): required to set device
-         ringtone/notification/alarm via RingtoneManager — and nothing else asks
-         for it. WRITE_SETTINGS is special-access and shows on the Play listing,
-         so it stays out while the feature is hidden; restore it in the same
-         change that un-parks the ringtone route.
-         See docs/reference/ringtones-parked/README.md.
+    <!-- Required to set the device ringtone via RingtoneManager — nothing else
+         asks for it. Restored 2026-08-05 with the ringtone route (it was out
+         while the tab was parked): without it every "Set" fails the
+         Settings.System.canWrite check on every device.
+         WRITE_SETTINGS is special-access and shows on the Play listing, so the
+         store form has to justify it — see
+         docs/reference/ringtones-parked/README.md. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
-    -->
+    <!-- Pre-Android-10 ONLY (capped at 28, so it never reaches a modern device or
+         the Play listing's runtime-permission list). Below API 29 a custom tone
+         must be copied into the PUBLIC Ringtones directory and registered on the
+         EXTERNAL MediaStore volume — both need this. Android 10+ uses scoped
+         storage and needs nothing. Runtime-prompted at the moment of the first
+         "Set" on those devices, never at launch — see MainActivity.setRingtone.
+         Same shape as Pakiza's (CLAUDE.md §0: shared behaviour, both repos). -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"/>
 
     <uses-permission android:name="android.permission.VIBRATE"/>
 

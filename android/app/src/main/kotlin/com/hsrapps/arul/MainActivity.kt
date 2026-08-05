@@ -1,8 +1,10 @@
 package com.hsrapps.arul
 
+import android.Manifest
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
@@ -10,6 +12,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Log
 import android.view.WindowManager
 import com.hsrapps.arul.feedvideo.FeedVideoPlugin
 import com.hsrapps.arul.feedvideo.VideoThumbnailChannel
@@ -26,8 +29,14 @@ import java.io.File
 class MainActivity : FlutterFragmentActivity() {
 
     companion object {
+        private const val TAG = "MainActivity"
+
         // Ringtone set channel (ported from the reference app's ringtone block).
         private const val RINGTONE_CHANNEL = "com.hsrapps.arul/ringtone_set"
+
+        // Runtime-permission request code for the pre-Android-10 WRITE_EXTERNAL_STORAGE
+        // grant a custom ringtone needs there (see setRingtone / onRequestPermissionsResult).
+        private const val STORAGE_PERMISSION_REQUEST = 5001
 
         // Exposes isPlayInstall() to Dart — see that function, and the QA-tools
         // gate in the reminders screen.
@@ -38,6 +47,15 @@ class MainActivity : FlutterFragmentActivity() {
     private var feedVideoPlugin: FeedVideoPlugin? = null
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
+
+    // A setRingtone call parked while the pre-Q WRITE_EXTERNAL_STORAGE prompt is
+    // shown; resumed (or failed) in onRequestPermissionsResult. Only one is ever
+    // in flight — the ringtone row shows a per-item spinner and blocks re-taps.
+    private var pendingRingtonePath: String? = null
+    private var pendingRingtoneTitle: String? = null
+    private var pendingRingtoneMime: String? = null
+    private var pendingRingtoneType: Int = RingtoneManager.TYPE_RINGTONE
+    private var pendingRingtoneResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,18 +183,15 @@ class MainActivity : FlutterFragmentActivity() {
 
                 "openWriteSettings" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        val intent =
-                            Intent(
-                                Settings.ACTION_MANAGE_WRITE_SETTINGS,
-                                Uri.parse("package:$packageName"),
-                            )
-                        startActivity(intent)
+                        openWriteSettingsScreen()
                     }
                     result.success(null)
                 }
 
                 "setRingtone" -> {
                     val filePath = call.argument<String>("filePath")
+                    val title = call.argument<String>("title")
+                    val mime = call.argument<String>("mime")
                     val type = call.argument<Int>("type") ?: RingtoneManager.TYPE_RINGTONE
 
                     if (filePath == null) {
@@ -184,14 +199,27 @@ class MainActivity : FlutterFragmentActivity() {
                         return@setMethodCallHandler
                     }
 
-                    try {
-                        setRingtoneFromFile(filePath, type)
-                        result.success(null)
-                    } catch (e: SecurityException) {
-                        result.error("PERMISSION_DENIED", e.message, null)
-                    } catch (e: Exception) {
-                        result.error("SET_FAILED", e.message, null)
+                    // Pre-Android-10 needs WRITE_EXTERNAL_STORAGE to register the tone
+                    // on the external MediaStore volume (Android 10+ uses scoped
+                    // storage and needs nothing). If it's missing, prompt for it and
+                    // resume the set in onRequestPermissionsResult; otherwise set now.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                        checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        pendingRingtonePath = filePath
+                        pendingRingtoneTitle = title
+                        pendingRingtoneMime = mime
+                        pendingRingtoneType = type
+                        pendingRingtoneResult = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                            STORAGE_PERMISSION_REQUEST,
+                        )
+                        return@setMethodCallHandler
                     }
+
+                    completeRingtoneSet(filePath, title, mime, type, result)
                 }
 
                 else -> result.notImplemented()
@@ -213,8 +241,156 @@ class MainActivity : FlutterFragmentActivity() {
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
+    /**
+     * Opens the "modify system settings" grant screen. The per-package form of
+     * ACTION_MANAGE_WRITE_SETTINGS is not resolvable on every OEM build (some
+     * MIUI/ColorOS/Transsion settings apps ship only the app-list form), and
+     * startActivity throws ActivityNotFoundException there — so this walks a
+     * fallback chain instead of crashing: per-package grant page → app-list
+     * grant page → this app's details page (resolvable everywhere). Never
+     * throws; if every intent fails the tap is a no-op and the permission
+     * sheet stays up for a retry.
+     */
+    private fun openWriteSettingsScreen() {
+        val candidates = listOf(
+            Intent(
+                Settings.ACTION_MANAGE_WRITE_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+            Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "write-settings intent unresolvable, trying fallback", e)
+            }
+        }
+        Log.e(TAG, "No settings screen resolvable for WRITE_SETTINGS grant")
+    }
+
+    /**
+     * Resumes (or fails) a setRingtone call that was parked to prompt for the
+     * pre-Android-10 WRITE_EXTERNAL_STORAGE permission.
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != STORAGE_PERMISSION_REQUEST) return
+
+        val result = pendingRingtoneResult
+        val path = pendingRingtonePath
+        val title = pendingRingtoneTitle
+        val mime = pendingRingtoneMime
+        val type = pendingRingtoneType
+        pendingRingtoneResult = null
+        pendingRingtonePath = null
+        pendingRingtoneTitle = null
+        pendingRingtoneMime = null
+        pendingRingtoneType = RingtoneManager.TYPE_RINGTONE
+        if (result == null || path == null) return
+
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            result.error(
+                "PERMISSION_DENIED",
+                "Storage access is needed to set a ringtone on this Android version.",
+                null,
+            )
+            return
+        }
+        completeRingtoneSet(path, title, mime, type, result)
+    }
+
+    /** Runs the actual ringtone set for [filePath] and completes [result]. */
+    private fun completeRingtoneSet(
+        filePath: String,
+        title: String?,
+        mime: String?,
+        type: Int,
+        result: MethodChannel.Result,
+    ) {
+        try {
+            setRingtoneFromFile(filePath, title, mime, type)
+            result.success(null)
+        } catch (e: SecurityException) {
+            result.error("PERMISSION_DENIED", e.message, null)
+        } catch (e: Exception) {
+            result.error("SET_FAILED", e.message, null)
+        }
+    }
+
+    /**
+     * The tone's human-visible name in the system sound picker. The download is
+     * named by catalog id (a stable cache key the user should never see), so the
+     * catalog title is threaded through the channel and sanitized here: path
+     * separators + control chars stripped, whitespace collapsed, capped at 60
+     * chars, falling back to the raw filename when blank/absent.
+     */
+    private fun ringtoneToneTitle(title: String?, file: File): String {
+        val cleaned = title.orEmpty()
+            .replace(Regex("[\\\\/\\p{Cntrl}]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(60)
+        return cleaned.ifBlank { file.nameWithoutExtension }
+    }
+
+    /**
+     * Removes our stale MediaStore rows matching [selection] before re-inserting
+     * the tone. On Android 10+ rows created by a PREVIOUS install of the app are
+     * no longer owned by us — deleting them throws RecoverableSecurityException
+     * (a SecurityException). That must NOT abort the set (it would permanently
+     * break re-setting any tone the user set before a reinstall): skip instead —
+     * MediaStore uniquifies the new row's DISPLAY_NAME ("name (1).mp3"), which
+     * is harmless. Never throws.
+     */
+    private fun deleteStaleRingtoneRows(
+        externalUri: Uri,
+        selection: String,
+        selectionArgs: Array<String>,
+    ) {
+        try {
+            contentResolver.query(
+                externalUri,
+                arrayOf(MediaStore.MediaColumns._ID),
+                selection,
+                selectionArgs,
+                null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    try {
+                        contentResolver.delete(
+                            ContentUris.withAppendedId(externalUri, id),
+                            null, null,
+                        )
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "Skipping non-owned stale ringtone row $id", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Stale ringtone row cleanup failed (non-critical)", e)
+        }
+    }
+
     @Suppress("DEPRECATION")
-    private fun setRingtoneFromFile(filePath: String, type: Int) {
+    private fun setRingtoneFromFile(
+        filePath: String,
+        title: String?,
+        mime: String?,
+        type: Int,
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.System.canWrite(this)
         ) {
@@ -224,6 +400,13 @@ class MainActivity : FlutterFragmentActivity() {
         val file = File(filePath)
         if (!file.exists()) throw IllegalArgumentException("File not found: $filePath")
 
+        val toneTitle = ringtoneToneTitle(title, file)
+        val ext = file.extension.takeIf { it.isNotBlank() } ?: "mp3"
+        val displayName = "$toneTitle.$ext"
+        // Real content type from the catalog; some OEM media scanners re-derive
+        // type from the extension and misindex rows whose MIME disagrees.
+        val resolvedMime = mime?.takeIf { it.isNotBlank() } ?: "audio/mpeg"
+
         val externalUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val contentUri: Uri
 
@@ -231,35 +414,26 @@ class MainActivity : FlutterFragmentActivity() {
             // Android 10+ (API 29+): scoped storage — use RELATIVE_PATH + openOutputStream
             val values =
                 ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "audio/mpeg")
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, resolvedMime)
                     put(
                         MediaStore.MediaColumns.RELATIVE_PATH,
                         Environment.DIRECTORY_RINGTONES,
                     )
-                    put(MediaStore.Audio.Media.TITLE, file.nameWithoutExtension)
+                    put(MediaStore.Audio.Media.TITLE, toneTitle)
                     put(MediaStore.Audio.Media.IS_RINGTONE, if (type == RingtoneManager.TYPE_RINGTONE) 1 else 0)
                     put(MediaStore.Audio.Media.IS_NOTIFICATION, if (type == RingtoneManager.TYPE_NOTIFICATION) 1 else 0)
                     put(MediaStore.Audio.Media.IS_ALARM, if (type == RingtoneManager.TYPE_ALARM) 1 else 0)
                     put(MediaStore.Audio.Media.IS_MUSIC, 0)
                 }
 
-            // Remove any existing entry with the same name to avoid OEM cache stale tones
-            contentResolver.query(
+            // Best-effort removal of our previous entry for this tone so repeat
+            // sets don't pile up rows / serve an OEM-cached stale tone.
+            deleteStaleRingtoneRows(
                 externalUri,
-                arrayOf(MediaStore.MediaColumns._ID),
                 "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-                arrayOf(file.name),
-                null,
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(0)
-                    contentResolver.delete(
-                        ContentUris.withAppendedId(externalUri, id),
-                        null, null,
-                    )
-                }
-            }
+                arrayOf(displayName),
+            )
 
             val uri =
                 contentResolver.insert(externalUri, values)
@@ -271,12 +445,37 @@ class MainActivity : FlutterFragmentActivity() {
 
             contentUri = uri
         } else {
-            // Below Android 10: insert with deprecated DATA column
+            // Below Android 10 (API < 29): the downloaded tone lives in our app-
+            // PRIVATE cache (/data/data/<pkg>/cache), which the system ringtone
+            // player — a different process — cannot read; and inserting that
+            // internal path routed the row to the read-only `internal` MediaStore
+            // volume, which never validates as a ringtone ("Uri is not ringtone,
+            // alarm, or notification"). Both were seen on-device (Pakiza). Fix: copy
+            // the tone into the PUBLIC Ringtones directory (world-readable +
+            // indexable) and register THAT path on the EXTERNAL volume. The copy +
+            // the external insert both need WRITE_EXTERNAL_STORAGE, already ensured
+            // granted by the caller on this API level.
+            val ringtonesDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES)
+            if (!ringtonesDir.exists() && !ringtonesDir.mkdirs()) {
+                throw IllegalStateException("Could not create the Ringtones directory.")
+            }
+            val destFile = File(ringtonesDir, displayName)
+            file.copyTo(destFile, overwrite = true)
+
+            // Drop any stale row for this exact path so re-setting the same tone
+            // doesn't collide with a leftover entry carrying different flags.
+            deleteStaleRingtoneRows(
+                externalUri,
+                "${MediaStore.MediaColumns.DATA} = ?",
+                arrayOf(destFile.absolutePath),
+            )
+
             val values =
                 ContentValues().apply {
-                    put(MediaStore.MediaColumns.DATA, filePath)
-                    put(MediaStore.MediaColumns.TITLE, file.nameWithoutExtension)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "audio/mpeg")
+                    put(MediaStore.MediaColumns.DATA, destFile.absolutePath)
+                    put(MediaStore.MediaColumns.TITLE, toneTitle)
+                    put(MediaStore.MediaColumns.MIME_TYPE, resolvedMime)
                     put(MediaStore.Audio.Media.IS_RINGTONE, if (type == RingtoneManager.TYPE_RINGTONE) 1 else 0)
                     put(MediaStore.Audio.Media.IS_NOTIFICATION, if (type == RingtoneManager.TYPE_NOTIFICATION) 1 else 0)
                     put(MediaStore.Audio.Media.IS_ALARM, if (type == RingtoneManager.TYPE_ALARM) 1 else 0)
@@ -284,11 +483,8 @@ class MainActivity : FlutterFragmentActivity() {
                 }
 
             contentUri =
-                contentResolver.insert(
-                    MediaStore.Audio.Media.getContentUriForPath(filePath)
-                        ?: externalUri,
-                    values,
-                ) ?: throw IllegalStateException("MediaStore insert returned null")
+                contentResolver.insert(externalUri, values)
+                    ?: throw IllegalStateException("MediaStore insert returned null")
         }
 
         RingtoneManager.setActualDefaultRingtoneUri(this, type, contentUri)

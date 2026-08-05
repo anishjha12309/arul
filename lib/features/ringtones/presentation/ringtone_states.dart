@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../app/widgets/skeleton.dart';
 import '../../../theme/arul_tokens.dart';
+import 'ringtones_screen.dart';
 
-/// Loading skeleton for the ringtone list: card-shaped rows (cover square +
-/// two text bars + a pill) built on the theme-following sliding-gradient
-/// [Skeleton] — the app's one sanctioned loading pattern (no shimmer package,
-/// no ShaderMask; docs/ui-direction.md).
+/// Loading skeleton for the ringtone list: rows in the SAME geometry the real
+/// list uses (46 cover at radius 13, one title bar, a 34 circle, a 32 pill in a
+/// 44 box), built on the theme-following sliding-gradient [Skeleton] — the
+/// app's one sanctioned loading pattern (no shimmer package, no ShaderMask;
+/// docs/ui-direction.md).
+///
+/// Mirroring the geometry is the point: a skeleton whose rows are a different
+/// height makes the whole list jump the moment the first page lands.
 class RingtonesLoading extends StatelessWidget {
   const RingtonesLoading({super.key});
 
@@ -17,13 +23,13 @@ class RingtonesLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         ArulTokens.screenPadding,
-        14,
+        0,
         ArulTokens.screenPadding,
-        14,
+        AppShell.dockClearance(context),
       ),
-      itemCount: 6,
+      itemCount: 7,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, _) => const _SkeletonRow(),
     );
@@ -37,58 +43,63 @@ class _SkeletonRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight,
-        borderRadius: BorderRadius.circular(ArulTokens.cardRadius),
+        color: isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight,
+        borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
         border: Border.all(
           color: isDark
               ? ArulTokens.cardBorderDark09
               : ArulTokens.cardBorderLight,
         ),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const SizedBox(
-            width: 56,
-            height: 56,
-            child: Skeleton(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                SizedBox(
-                  width: double.infinity,
-                  height: 14,
-                  child: Skeleton(
-                    borderRadius: BorderRadius.all(Radius.circular(7)),
-                  ),
-                ),
-                SizedBox(height: 8),
-                FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 0.4,
-                  child: SizedBox(
-                    height: 11,
-                    child: Skeleton(
-                      borderRadius: BorderRadius.all(Radius.circular(5.5)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          const SizedBox(
-            width: 64,
-            height: 32,
+          SizedBox.square(
+            dimension: RingtoneRow.coverSize,
             child: Skeleton(
               borderRadius: BorderRadius.all(
-                Radius.circular(ArulTokens.pillRadius),
+                Radius.circular(ArulTokens.coverRadius),
+              ),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 0.82,
+              child: SizedBox(
+                height: 14,
+                child: Skeleton(
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 7),
+          SizedBox.square(
+            dimension: ArulTokens.minHitTarget,
+            child: Center(
+              child: SizedBox.square(
+                dimension: 34,
+                child: Skeleton(
+                  borderRadius: BorderRadius.all(Radius.circular(17)),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 7),
+          SizedBox(
+            width: 62,
+            height: ArulTokens.minHitTarget,
+            child: Center(
+              child: SizedBox(
+                height: 32,
+                child: Skeleton(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(ArulTokens.pillRadius),
+                  ),
+                ),
               ),
             ),
           ),
@@ -101,7 +112,9 @@ class _SkeletonRow extends StatelessWidget {
 /// Designed empty state — ringtone content launches after wallpapers, so this
 /// is a first-class "coming soon" surface, not an apology: the brand gopuram
 /// over a quiet gold note, with devotional-register copy. Scrollable so
-/// pull-to-refresh keeps working while empty.
+/// pull-to-refresh keeps working while empty, and inset at the bottom so the
+/// composition centres in the space ABOVE the floating dock rather than behind
+/// it.
 class RingtonesEmpty extends StatelessWidget {
   const RingtonesEmpty({super.key});
 
@@ -117,7 +130,11 @@ class RingtonesEmpty extends StatelessWidget {
         child: SizedBox(
           height: constraints.maxHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
+            padding: EdgeInsets.only(
+              left: 48,
+              right: 48,
+              bottom: AppShell.dockClearance(context),
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -183,6 +200,8 @@ class RingtonesEmpty extends StatelessWidget {
 
 /// Full-body ringtone error state — same layout/tokens as the feed's
 /// [FeedError], with ringtone copy. [offline] selects the no-internet copy.
+/// Bottom-inset like [RingtonesEmpty] so the Retry button never sits under the
+/// dock.
 class RingtonesError extends StatelessWidget {
   const RingtonesError({
     super.key,
@@ -200,7 +219,11 @@ class RingtonesError extends StatelessWidget {
     final title = offline ? l10n.offlineTitle : l10n.ringtonesErrorTitle;
     final body = offline ? l10n.offlineBody : l10n.feedErrorBody;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 48),
+      padding: EdgeInsets.only(
+        left: 48,
+        right: 48,
+        bottom: AppShell.dockClearance(context),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -59,6 +60,39 @@ class RingtonePreviewState {
 class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   late final AudioPlayer _player;
 
+  // ── Preview audio disk cache ───────────────────────────────────────────────
+  // Nothing cached ringtone bytes: every tap re-streamed the clip from the CDN,
+  // so replaying a track heard seconds earlier paid the whole network round
+  // trip again — and a preview was impossible offline. This is the same shape
+  // as the live-wallpaper disk cache in
+  // `wallpapers/data/wallpaper_prefetch_service.dart` (same package, same
+  // stalePeriod, same LRU-by-object-count bound, same static-so-it-survives-a-
+  // remount lifetime) and the same fix Pakiza already carries for its own
+  // ringtone previews.
+  //
+  // Static for the same reason the wallpaper one is: flutter_cache_manager keys
+  // its store by the Config `key`, so a rebuilt notifier (tab remount, re-login)
+  // reads the same files — the singleton just avoids redundant managers.
+  static final CacheManager _audioCache = CacheManager(
+    Config(
+      'arulRingtonePreviews',
+      // Published audio never changes at a given key (keys are content UUIDs),
+      // so this only bounds how long an UNPLAYED clip lingers.
+      stalePeriod: const Duration(days: 14),
+      maxNrOfCacheObjects: _maxCacheObjects,
+    ),
+  );
+
+  /// LRU bound on object COUNT — flutter_cache_manager has no byte cap.
+  ///
+  /// The whole catalog is 30 clips of ~0.7 MB, so this holds it several times
+  /// over and never evicts during normal use, which is the end Pakiza reaches
+  /// via a free-storage ladder; at this size that ladder would be machinery for
+  /// nothing. Worst case here is ~84 MB, comfortably below what the live-
+  /// wallpaper cache already budgets for 120 multi-MB clips. Revisit if the
+  /// catalog ever grows past a few hundred tracks.
+  static const _maxCacheObjects = 120;
+
   @override
   RingtonePreviewState build() {
     _player = AudioPlayer();
@@ -115,11 +149,45 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
 
     try {
       final url = ringtone.audioUrl(AppConfig.cdnBaseUrl);
-      debugPrint('[RingtonePreview] loading $url');
-      await _player.setUrl(url);
+
+      // Serve from disk when the clip is already there: a track previewed
+      // earlier starts instantly and plays offline. getSingleFile returns the
+      // cached file on a hit and downloads once on a miss, so the FIRST play
+      // fills the cache as a side effect of playing.
+      //
+      // On ANY cache-backend failure — path_provider unavailable under
+      // `flutter test`, a full disk, a corrupt store — fall back to streaming
+      // the CDN URL. Preview must never break because caching did.
+      String? localPath;
+      try {
+        localPath = (await _audioCache.getSingleFile(url)).path;
+      } catch (e) {
+        debugPrint('[RingtonePreview] audio cache unavailable, streaming: $e');
+      }
+
+      // A cache MISS awaits a full download, which is a much wider window than
+      // the old bare setUrl — long enough for the user to tap another row. That
+      // tap has already moved `currentId`, so completing here would start the
+      // wrong track against the new row's highlight. Drop the stale load.
+      if (state.currentId != ringtone.id) return;
+
+      // Names the source, so "did the cache actually engage on this device?" is
+      // answerable from logcat instead of by timing a tap.
+      debugPrint(
+        '[RingtonePreview] ${localPath != null ? 'disk' : 'net'} $url',
+      );
+      if (localPath != null) {
+        await _player.setFilePath(localPath);
+      } else {
+        await _player.setUrl(url);
+      }
+      if (state.currentId != ringtone.id) return;
       await _player.play();
     } catch (e, st) {
       debugPrint('[RingtonePreview] error: $e\n$st');
+      // Same reasoning as the guards above: a failure belonging to a track the
+      // user has already tapped away from must not toast over the new one.
+      if (state.currentId != ringtone.id) return;
       state = const RingtonePreviewState(hasError: true);
     }
   }

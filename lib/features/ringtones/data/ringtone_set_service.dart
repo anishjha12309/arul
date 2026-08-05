@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -65,8 +66,18 @@ abstract interface class RingtoneSetService {
   Future<void> openWriteSettings();
 
   /// Registers [file] in MediaStore and sets it as the device [target] tone.
-  /// Throws [RingtoneSetException] on failure.
-  Future<void> setRingtone(File file, RingtoneTarget target);
+  ///
+  /// [title] is the human-visible name shown in the system sound picker
+  /// (sanitized natively); [mime] is the real content type registered with
+  /// MediaStore. Both come from the catalog row — the downloaded file is named
+  /// by ringtone id, which the user must never see. Throws
+  /// [RingtoneSetException] on failure.
+  Future<void> setRingtone(
+    File file,
+    RingtoneTarget target, {
+    required String title,
+    required String mime,
+  });
 }
 
 // ─── Android implementation ───────────────────────────────────────────────────
@@ -158,13 +169,23 @@ class AndroidRingtoneSetService implements RingtoneSetService {
       _channel.invokeMethod<void>('openWriteSettings');
 
   @override
-  Future<void> setRingtone(File file, RingtoneTarget target) async {
+  Future<void> setRingtone(
+    File file,
+    RingtoneTarget target, {
+    required String title,
+    required String mime,
+  }) async {
     try {
       await _channel.invokeMethod<void>('setRingtone', {
         'filePath': file.path,
         'type': target.androidType,
+        'title': title,
+        'mime': mime,
       });
     } on PlatformException catch (e) {
+      // e.message is raw platform text (a MediaStore exception, an OEM string) —
+      // log it, but surface only the authored message.
+      debugPrint('[RingtoneSet] ${e.code}: ${e.message}');
       throw RingtoneSetException(e.message ?? 'Failed to set ringtone');
     }
   }

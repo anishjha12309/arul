@@ -187,6 +187,9 @@ class AppLocalizationsTe extends AppLocalizations {
   String get tabRingtones => 'రింగ్‌టోన్లు';
 
   @override
+  String get earn => 'సంపాదించు';
+
+  @override
   String get ringtoneSet => 'సెట్ చేయి';
 
   @override

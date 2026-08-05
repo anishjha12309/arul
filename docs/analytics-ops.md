@@ -39,5 +39,5 @@ recipe and the reasons blind UI-driving fails under `FLAG_SECURE`.
 
 ## Before launch
 
-The privacy policy (`https://hsrapps.com/arul/privacy-policy/`, served to the app through
-`app_config.policy_urls`) must disclose Meta, Google/Firebase and advertiser-ID collection.
+The privacy policy (`https://hsrutility.com/privacy/` — SHARED with Pakiza, so a change there
+lands in both apps) must disclose Meta, Google/Firebase and advertiser-ID collection.

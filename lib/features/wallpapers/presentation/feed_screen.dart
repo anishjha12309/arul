@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -14,6 +12,8 @@ import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../app/widgets/arul_browse_header.dart';
+import '../../../app/widgets/arul_earn_button.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
@@ -480,17 +480,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   // ─── Build ───────────────────────────────────────────────────────────────────
 
-  /// The frame-owned breathing room between the chips row and the divider.
-  static const _chipsGap = 10.0;
-
-  /// Distance from the header's hairline divider down to the top of the card —
-  /// Pakiza's header gap, so the reel starts the way its does.
-  ///
-  /// The divider is what makes the scroll exit read as intentional: the reel's
-  /// clip line — the one place an outgoing card can vanish — sits EXACTLY under
-  /// a drawn boundary, so mid-scroll a card slides beneath a line you can see.
-  /// No gradient, no fade — a pure clip at a visible edge.
-  static const _reelTopGap = FeedCardGeometry.gap;
+  // The chips gap and the gap below the hairline now live in
+  // [ArulBrowseHeader], which both browse tabs share — the reel's card is still
+  // solved from whatever height that frame leaves, so its 1:1.86 ratio holds by
+  // construction (see [FeedCardGeometry.resolve]).
 
   static const _cardRadius = FeedCardGeometry.radius;
 
@@ -543,58 +536,29 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         body: SafeArea(
           child: Column(
             children: [
-              // Brand header — the wordmark anchors the app and gives settings
-              // its own home, so nothing sits on top of the chips.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  ArulTokens.screenPadding,
-                  6,
-                  ArulTokens.screenPadding,
-                  8,
-                ),
-                child: Row(
-                  children: [
-                    // Wordmark only — no mark beside it. At 24px with the
-                    // wordmark's own ≈.04em tracking it reads as a masthead
-                    // rather than a screen title, and it still clears the 34px
-                    // buttons, so the header height (and the reel geometry
-                    // solved from it) is unchanged.
-                    Text(
-                      'Arul',
-                      style: ArulTokens.screenTitle.copyWith(
-                        fontSize: 24,
-                        letterSpacing: 0.96,
-                        color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-                      ),
-                    ),
-                    const Spacer(),
-                    _GiftButton(onTap: () => context.push('/refer')),
-                    const SizedBox(width: 8),
-                    _SettingsButton(onTap: () => context.push('/settings')),
-                  ],
-                ),
-              ),
-
-              // Chips get the FULL width — nothing overlaps them.
-              feed is AsyncLoading
-                  ? const FeedChipsSkeleton()
-                  : const FeedChips(),
-
-              // The header's floor: a full-width hairline the reel begins
-              // directly beneath, so an outgoing card is clipped exactly at a
-              // line the eye can see (see [_reelTopGap]). Same hairline tokens
-              // as the frame's other quiet borders.
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: _chipsGap,
-                  bottom: _reelTopGap,
-                ),
-                child: Container(
-                  height: 1,
-                  color: isDark
-                      ? ArulTokens.cardBorderDark14
-                      : ArulTokens.cardBorderLight,
-                ),
+              // Brand header — the wordmark anchors the app, so nothing sits on
+              // top of the chips. Shared with the other two tabs
+              // ([ArulScreenHeader]); its metrics are the ones the reel
+              // geometry below is solved against, so they did not move when the
+              // three headers were unified.
+              //
+              // Earn is the ONLY action up here. Settings used to sit beside it
+              // and no longer does: it is a dock branch with its own permanent
+              // tab, so a second entry in the corner was a duplicate control —
+              // and it made this header the one that differed from Ringtones'
+              // across the cross-fade.
+              ArulBrowseHeader(
+                title: 'Arul',
+                // The WORDMARK, not a page title — bigger than Ringtones' and
+                // Settings' labels and sat a touch lower in the band, because
+                // it is the brand rather than a name for this screen. The other
+                // two tabs deliberately do NOT take these.
+                titleStyle: ArulTokens.wordmarkHeader,
+                titleDrop: 1.5,
+                actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
+                chips: feed is AsyncLoading
+                    ? const FeedChipsSkeleton()
+                    : const FeedChips(),
               ),
 
               Expanded(
@@ -673,12 +637,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
     final m = geo.margin;
 
-    // Distance from the REEL's bottom edge up to the card's — floor, then peek,
-    // then the gap. Only the nudge and the end mark are screen-anchored, so they
-    // are the only things that need it; forgetting the floor here would drop
+    // Distance from the REEL's bottom edge up to the card's — underhang, then
+    // peek, then the gap. Only the nudge and the end mark are screen-anchored,
+    // so they are the only things that need it; forgetting it here would drop
     // both of them behind the pager. The nudge then sits just above the Apply
     // bar (a 16px gap over the bar's top), right over the verb it gates.
-    final cardBottom = geo.floor + geo.peek + FeedCardGeometry.gap;
+    //
+    // `underhang`, NOT the whole floor: half of it now sits above the card so
+    // the reel is centred, and measuring from the bottom with the full floor
+    // would put both of these half a floor too high.
+    final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
     final nudgeBottom = cardBottom + _CardChrome.actionBarTop + 16;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -713,18 +681,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         // fraction (see [_pagerFor]) decides how much of the following one stays
         // visible.
         //
-        // The FLOOR is bottom padding on the pager, not part of it: the reel's
+        // The FLOOR is padding around the pager, not part of it: the reel's
         // visible bottom edge sits above the system inset, so a card scrolling
         // away is clipped at a deliberate line rather than sliding off the
         // screen. Everything inside — card + gap + peek — fills exactly the
-        // height that is left (`geo.pagerHeight`).
+        // height that is left (`geo.pagerHeight`), which is why splitting the
+        // floor across top and bottom recentres the reel without resizing
+        // anything in it.
         //
         // Wrapped in a RefreshIndicator: on the first page a downward pull
         // has no previous page to reveal, so it overscrolls and refreshes
         // the whole catalog; on later pages the pull just navigates, so
         // refresh only fires "from the top", as intended.
         Padding(
-          padding: EdgeInsets.only(bottom: geo.floor),
+          padding: EdgeInsets.only(top: geo.headroom, bottom: geo.underhang),
           child: RefreshIndicator(
             // Fires when the pull actually commits, not on every drag pixel.
             onRefresh: () {
@@ -821,131 +791,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             ),
           ),
       ],
-    );
-  }
-}
-
-/// The Refer & Earn entry on the feed's top bar — a bare gold gift that catches
-/// the eye through motion, not glow: it rests for [_restBeat], then gives one
-/// short shake (a few damped rotations, like a wrapped box being rattled) and
-/// settles.
-///
-/// Transform/opacity only, per the design rules — no ShaderMask sweep (that is
-/// an offscreen pass every frame, on the surface that also decodes video).
-class _GiftButton extends StatefulWidget {
-  const _GiftButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  State<_GiftButton> createState() => _GiftButtonState();
-}
-
-class _GiftButtonState extends State<_GiftButton>
-    with SingleTickerProviderStateMixin {
-  /// One shake every ~2.8s: long enough to read as an invitation, not a nag.
-  static const _restBeat = Duration(milliseconds: 2800);
-  static const _shake = Duration(milliseconds: 700);
-
-  /// Peak tilt, radians (~16°), and the number of half-swings in one shake.
-  static const _amplitude = 0.28;
-  static const _swings = 4.0;
-
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: _restBeat,
-  )..repeat();
-
-  /// The shake occupies the tail of each cycle; the rest of it is the pause.
-  late final Animation<double> _t = CurvedAnimation(
-    parent: _c,
-    curve: Interval(
-      1 - _shake.inMilliseconds / _restBeat.inMilliseconds,
-      1,
-      curve: Curves.linear,
-    ),
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
-
-    return Semantics(
-      button: true,
-      label: 'Refer and earn',
-      child: GestureDetector(
-        onTapDown: (_) => ArulHaptics.tap(),
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: SizedBox(
-          width: 34,
-          height: 34,
-          child: AnimatedBuilder(
-            animation: _t,
-            builder: (context, child) {
-              // A sine wobble that decays across the shake window, so it ends
-              // dead-level instead of snapping back mid-swing.
-              final decay = 1 - _t.value;
-              final angle =
-                  math.sin(_t.value * _swings * 2 * math.pi) *
-                  _amplitude *
-                  decay;
-              return Transform.rotate(angle: angle, child: child);
-            },
-            child: Icon(Icons.card_giftcard_rounded, size: 22, color: accent),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The settings entry on the feed's top bar. Styled like an inactive surface
-/// chip in the current theme so it reads as quiet chrome next to the category
-/// pills rather than an accent.
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Semantics(
-      button: true,
-      label: 'Settings',
-      child: GestureDetector(
-        onTapDown: (_) => ArulHaptics.tap(),
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isDark
-                  ? ArulTokens.cardBorderDark14
-                  : ArulTokens.cardBorderLight,
-            ),
-          ),
-          child: Icon(
-            Icons.settings_rounded,
-            size: 19,
-            color: isDark
-                ? ArulTokens.ivory.withValues(alpha: 0.92)
-                : ArulTokens.maroon,
-          ),
-        ),
-      ),
     );
   }
 }

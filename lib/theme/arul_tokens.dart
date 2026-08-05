@@ -79,6 +79,12 @@ abstract final class ArulTokens {
   /// Card fill, high end. `rgba(250,245,236,.05)`.
   static const Color cardBgDark05 = Color.fromRGBO(250, 245, 236, 0.05);
 
+  /// Card border, quietest. `rgba(250,245,236,.08)` — the floating dock's rim,
+  /// which only needs to describe an edge because the shadow does the lifting.
+  /// Same value as [rowDividerDark]; kept separate because one is a border role
+  /// and the other a divider role, and they move independently.
+  static const Color cardBorderDark08 = Color.fromRGBO(250, 245, 236, 0.08);
+
   /// Card border, low end. `rgba(250,245,236,.09)`.
   static const Color cardBorderDark09 = Color.fromRGBO(250, 245, 236, 0.09);
 
@@ -94,8 +100,79 @@ abstract final class ArulTokens {
   /// Gold-tint fill, high end. `rgba(212,160,23,.14)`.
   static const Color goldTintFill14 = Color.fromRGBO(212, 160, 23, 0.14);
 
+  /// Card fill, ringtone-row idle. `rgba(250,245,236,.045)` — the ringtones
+  /// handoff's row/chip fill, a hair below [cardBgDark04]/[cardBgDark05].
+  static const Color cardBgDark045 = Color.fromRGBO(250, 245, 236, 0.045);
+
+  /// Card border, ringtone chip row. `rgba(250,245,236,.12)` — sits between
+  /// [cardBorderDark09] and [cardBorderDark14].
+  static const Color cardBorderDark12 = Color.fromRGBO(250, 245, 236, 0.12);
+
+  /// Outlined-control border on dark. `rgba(250,245,236,.22)` — the feed chip's
+  /// inactive rim and the ringtone row's play button / "Set" pill.
+  static const Color ivoryBorder22 = Color.fromRGBO(250, 245, 236, 0.22);
+
+  /// Outlined-control label on dark. `rgba(250,245,236,.86)` — the ringtone
+  /// row's "Set" pill text.
+  static const Color ivoryText86 = Color.fromRGBO(250, 245, 236, 0.86);
+
+  /// Gold-tint fill, Earn chip. `rgba(212,160,23,.12)`.
+  static const Color goldTintFill12 = Color.fromRGBO(212, 160, 23, 0.12);
+
+  // ───────────────────────── Earn button surface ──────────────────────────
+  // Ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`
+  // (2026-08-06). The gradient IS the "shimmer" in the reference art — a soft
+  // vertical sheen, not a moving highlight. Alphas and stops are Pakiza's; the
+  // gold they are struck from is ARUL's [gold], because a palette is the one
+  // thing the two apps deliberately do not share (CLAUDE.md §0).
+
+  /// Earn button fill, LIGHT. White falling to cream, exactly as Pakiza draws
+  /// it — the sheen comes from the step, so neither stop is tinted gold.
+  static const LinearGradient earnFillLight = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFFFFFF), Color(0xFFF8F0DC)],
+  );
+
+  /// Earn button fill, DARK. [gold] at `.20` falling to `.08`.
+  static const LinearGradient earnFillDark = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color.fromRGBO(212, 160, 23, 0.20),
+      Color.fromRGBO(212, 160, 23, 0.08),
+    ],
+  );
+
+  /// Earn button rim, light `.38` / dark `.35`.
+  static const Color earnBorderLight = Color.fromRGBO(212, 160, 23, 0.38);
+  static const Color earnBorderDark = Color.fromRGBO(212, 160, 23, 0.35);
+
+  /// Barely-there lift under a LIGHT-theme header control, and null on dark.
+  ///
+  /// The app is otherwise flat by design, but the light theme's Earn button
+  /// starts at pure white on a cream ground, where a rim alone leaves it
+  /// looking painted on rather than raised. Pakiza's `controlLift`, struck from
+  /// Arul's ink instead of Pakiza's.
+  static const List<BoxShadow> controlLift = [
+    BoxShadow(
+      color: Color.fromRGBO(43, 17, 22, 0.05),
+      blurRadius: 6,
+      offset: Offset(0, 2),
+    ),
+  ];
+
+  /// Gold-tint fill, dock active tab. `rgba(212,160,23,.13)`.
+  static const Color goldTintFill13 = Color.fromRGBO(212, 160, 23, 0.13);
+
   /// Gold border, low end. `rgba(212,160,23,.35)`.
   static const Color goldBorder35 = Color.fromRGBO(212, 160, 23, 0.35);
+
+  /// Gold border, Earn chip + dock active tab. `rgba(212,160,23,.45)`.
+  static const Color goldBorder45 = Color.fromRGBO(212, 160, 23, 0.45);
+
+  /// Gold border, now-playing ringtone row. `rgba(212,160,23,.52)`.
+  static const Color goldBorder52 = Color.fromRGBO(212, 160, 23, 0.52);
 
   /// Gold border, high end. `rgba(212,160,23,.50)`.
   static const Color goldBorder50 = Color.fromRGBO(212, 160, 23, 0.50);
@@ -138,6 +215,69 @@ abstract final class ArulTokens {
 
   /// Light-theme selection / hero border. `rgba(122,30,51,.18)`.
   static const Color maroonBorder18 = Color.fromRGBO(122, 30, 51, 0.18);
+
+  /// Light-theme dock rim. `rgba(122,30,51,.08)` — quieter than
+  /// [cardBorderLight] because the dock already carries a drop shadow.
+  static const Color maroonBorder08 = Color.fromRGBO(122, 30, 51, 0.08);
+
+  // ──────────────── Ringtones: now-playing + dock chrome ──────────────────
+  // Ringtones handoff (design_handoff_ringtones_screen/README.md). Roles the
+  // rest of the system had no equivalent for.
+
+  /// The now-playing row's title on the LIGHT theme. `#A3760F` — [gold] itself
+  /// fails contrast on a white card, so the design darkens it for light only;
+  /// dark stays on [gold].
+  static const Color nowPlayingTitleLight = Color(0xFFA3760F);
+
+  // ─────────────────────────── Gold ink on light ──────────────────────────
+
+  /// Gold TEXT/glyph ink on a LIGHT surface. `#A3760F`.
+  ///
+  /// Same value as [nowPlayingTitleLight] and the same cause — [gold] does not
+  /// carry on ivory — but a different role, so they move independently: that
+  /// one is a list row's playing state, this one is a gold-led control's label
+  /// (the Earn pill). Anything gold-on-light that is TYPE, not fill, reads this.
+  static const Color goldInkLight = Color(0xFFA3760F);
+
+  /// The floating dock's surface on DARK. `#1B1215` — deliberately a step
+  /// warmer/lighter than [darkSurface] so the capsule separates from the feed
+  /// behind it without a rim doing the work. Light uses [cardBgLight].
+  static const Color dockFillDark = Color(0xFF1B1215);
+
+  /// The dock's active-tab cell on LIGHT. `#F0DCAA` — a solid pale gold; the
+  /// dark theme uses the translucent [goldTintFill13] instead.
+  static const Color dockActiveFillLight = Color(0xFFF0DCAA);
+
+  /// Dock drop shadow, dark. `0 16px 38px rgba(0,0,0,.6)`.
+  static const List<BoxShadow> dockShadowDark = [
+    BoxShadow(
+      offset: Offset(0, 16),
+      blurRadius: 38,
+      color: Color.fromRGBO(0, 0, 0, 0.6),
+    ),
+  ];
+
+  /// Dock drop shadow, light. `0 14px 34px rgba(43,17,22,.14)`.
+  static const List<BoxShadow> dockShadowLight = [
+    BoxShadow(
+      offset: Offset(0, 14),
+      blurRadius: 34,
+      color: Color.fromRGBO(43, 17, 22, 0.14),
+    ),
+  ];
+
+  /// The gold halo around a now-playing row's pause button.
+  ///
+  /// The handoff asks for `0 0 14px rgba(212,160,23,.35)`, and the dock's
+  /// active cell for a second `0 0 20px` halo. On a phone rather than a design
+  /// canvas those two read as haze: a 20px gold blur on a near-black capsule
+  /// fogs the tab's edge, and stacked with the button's halo the dark theme
+  /// looked smeared. The dock's is GONE — its cell has fill and a rim, which is
+  /// enough — and this one is halved to a tight contact glow that still says
+  /// "lit" without bleeding into the row.
+  static const List<BoxShadow> nowPlayingButtonGlow = [
+    BoxShadow(blurRadius: 8, color: Color.fromRGBO(212, 160, 23, 0.18)),
+  ];
 
   // ────────────────────────────── Scrims ──────────────────────────────────
   // Spec > Colors > Scrims: all `rgba(20,9,12,x)`. `Color(0x0014090C)` is a
@@ -309,6 +449,45 @@ abstract final class ArulTokens {
     letterSpacing: 0.3,
   );
 
+  /// The title in a top-level tab's header band ([ArulScreenHeader]). 26px
+  /// Marcellus, ls `.04em` (26 × .04 = 1.04).
+  ///
+  /// ONE size for all three tabs. They cross-fade into each other, so a title
+  /// that resized between them read as the whole screen jumping. Do not tune
+  /// this per screen — change it here and all three move together.
+  ///
+  /// Was 24 (the wallpaper feed's original metric) until 2026-08-06. The band
+  /// itself is unchanged at [headerControlSize]: 26 × 1.15 line height is 29.9,
+  /// which still clears 34, so the type grew without the header growing and the
+  /// reel below it did not move. That headroom runs out around 29 — past there
+  /// the band has to grow too, and growing the band resizes the reel card.
+  static const TextStyle screenHeaderTitle = TextStyle(
+    fontFamily: serif,
+    fontSize: 26,
+    height: 1.15,
+    letterSpacing: 1.04,
+  );
+
+  /// The WORDMARK in the wallpaper feed's header band — "Arul", 28px Marcellus,
+  /// ls `.04em` (28 × .04 = 1.12).
+  ///
+  /// The one deliberate exception to "one size for all three tabs". Ringtones
+  /// and Settings show a page TITLE; the feed shows the brand, and a wordmark
+  /// that matched the labels around it read as a third tab name rather than as
+  /// the app's own mark. It is a different kind of object, so it gets its own
+  /// token instead of a per-screen override of [screenHeaderTitle].
+  ///
+  /// 28 is near the ceiling: `28 × 1.15 = 32.2` inside a [headerControlSize]
+  /// band of 34 leaves 1.8 total, and the feed spends some of that dropping the
+  /// mark ([ArulScreenHeader.titleDrop]). Past ~29 the line box exceeds the band
+  /// and the Row overflows — grow the band first if this ever needs to.
+  static const TextStyle wordmarkHeader = TextStyle(
+    fontFamily: serif,
+    fontSize: 28,
+    height: 1.15,
+    letterSpacing: 1.12,
+  );
+
   /// Hero heading (refer / premium). 21px Marcellus.
   static const TextStyle heroHeading = TextStyle(
     fontFamily: serif,
@@ -338,8 +517,41 @@ abstract final class ArulTokens {
     fontWeight: FontWeight.w500,
   );
 
+  /// Row title with the list's optical tracking. 15px w500, ls `.005em`
+  /// (15 × .005 = 0.075) — the ringtone row, where a single ellipsised line
+  /// needs the extra air that a two-line [rowTitle] block does not.
+  static const TextStyle rowTitleTracked = TextStyle(
+    fontSize: 15,
+    height: 1.35,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.075,
+  );
+
   /// Row sub-label. 12.5px.
   static const TextStyle rowSub = TextStyle(fontSize: 12.5, height: 1.35);
+
+  /// Floating-dock label, inactive. 12px w500, ls `.2`.
+  ///
+  /// The tracking is the point: every other small label in the app carries the
+  /// theme's `labelMedium`/`labelSmall` tracking, and a dock label set at 0
+  /// read as a different typeface sitting under the same screen. Size dropped
+  /// from the handoff's 12.5 to 12 so three labels — one of them "Wallpapers" —
+  /// sit in their thirds without FittedBox having to shrink them on a 360dp
+  /// phone, which is what actually made the dock look off-family.
+  static const TextStyle dockLabel = TextStyle(
+    fontSize: 12,
+    height: 1.15,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.2,
+  );
+
+  /// Floating-dock label, active. 12px w600, ls `.2`.
+  static const TextStyle dockLabelActive = TextStyle(
+    fontSize: 12,
+    height: 1.15,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.2,
+  );
 
   /// Body copy. 13.5px, line-height 1.5.
   static const TextStyle body = TextStyle(fontSize: 13.5, height: 1.5);
@@ -350,14 +562,36 @@ abstract final class ArulTokens {
   /// Category / feed chip, inactive. 13.5px w500.
   static const TextStyle chip = TextStyle(
     fontSize: 13.5,
+    height: 1,
+    leadingDistribution: TextLeadingDistribution.even,
     fontWeight: FontWeight.w500,
   );
 
   /// Category / feed chip, active. 13.5px w600.
   static const TextStyle chipActive = TextStyle(
     fontSize: 13.5,
+    height: 1,
+    leadingDistribution: TextLeadingDistribution.even,
     fontWeight: FontWeight.w600,
   );
+
+  // Why both chip styles pin `height` and `leadingDistribution`, when the rest
+  // of this file leaves line-height to the theme:
+  //
+  // A `Text` merges its style into the ambient `DefaultTextStyle`, which in a
+  // MaterialApp is `bodyMedium` — and ours carries `height: 1.45`. So a chip
+  // label with no height of its own got a 19.6px line box for 13.5px of type,
+  // and Flutter's DEFAULT leading distribution is `proportional`: it hands the
+  // 6px of slack out in the font's own ascent:descent ratio, ~79% of it above
+  // the baseline. Centring that box centres the SLACK, not the letters, so
+  // every chip label and the Earn pill's sat ~2.7px low inside a 34px pill —
+  // obvious next to an icon that really is centred.
+  //
+  // `height: 1` makes the box the type, and `even` splits what is left equally.
+  // Both fixed-height chip rows and the Earn pill come out actually centred.
+  // Anything else that centres one of these styles in a box of its own gets it
+  // right for free; a control that SIZES to the label instead now measures ~6px
+  // shorter, which is why the surface chip's padding was re-cut to match.
 
   /// Button label. spec range 15–16px; chosen 15px w600. Bump per site with
   /// `.copyWith(fontSize: 16)` where the design calls for 16.
@@ -399,6 +633,19 @@ abstract final class ArulTokens {
   /// Icon-chip corner. 12.
   static const double iconChipRadius = 12;
 
+  /// List-row corner (the ringtone row card). 15 — tighter than [cardRadius],
+  /// because a 66-tall row with a 20 radius reads as a lozenge.
+  static const double rowRadius = 15;
+
+  /// Cover-art corner (the ringtone medallion). 13.
+  static const double coverRadius = 13;
+
+  /// Floating-dock corner. 26.
+  static const double dockRadius = 26;
+
+  /// The dock's active-tab cell corner. 18.
+  static const double dockActiveTabRadius = 18;
+
   // ────────────────────────────── Spacing ─────────────────────────────────
 
   /// Screen edge padding. 16.
@@ -412,6 +659,49 @@ abstract final class ArulTokens {
 
   /// Card inner padding, high end. 20.
   static const double cardPadding20 = 20;
+
+  // ────────────────────── Top-level tab header band ───────────────────────
+  // One band for Wallpapers / Ringtones / Settings — see [ArulScreenHeader].
+  // These ARE the wallpaper feed's existing metrics; changing them moves the
+  // reel, whose card geometry is solved from the height left below the band.
+
+  /// Drop above the header's title row. 6.
+  static const double headerTopPadding = 6;
+
+  /// Gap below the header band before a tab's own content. 8.
+  static const double headerBottomPadding = 8;
+
+  /// The height of the band, and of every control that sits in it. 34.
+  ///
+  /// It briefly went to 42 to match Pakiza's header controls and came back:
+  /// the handoff draws the Earn button at the SAME height as the category chips
+  /// under it, and 34 is what those are. It is also the ONE number the reel's
+  /// card geometry is solved against (`feed_card_geometry.dart` derives
+  /// everything from the height left below the band), so this is the value that
+  /// keeps the card its designed size.
+  static const double headerControlSize = 34;
+
+  /// Header control corner. 14 — Pakiza's `AppRadius.headerButton`. NOT
+  /// [pillRadius]: the Earn button is a rounded rectangle, not a capsule, and
+  /// that is most of why it reads as a button rather than a chip.
+  static const double headerButtonRadius = 14;
+
+  /// Gap between a tab's chip row and the content below it. 18.
+  ///
+  /// One value for both browse tabs. At 10 the chips sat almost on top of the
+  /// content and the browse row read as part of the list rather than as chrome
+  /// above it.
+  static const double chipsBottomGap = 20;
+
+  /// The air ABOVE the chip row, on top of [headerBottomPadding].
+  ///
+  /// The chip row is meant to sit in equal air, and it did not: the title band
+  /// left only [headerBottomPadding] (8) above it while the drop to the content
+  /// below was 33, so the row rode high in its own band. These two constants
+  /// now resolve to the same gap either side — `headerBottomPadding + this ==
+  /// chipsBottomGap` — and the pair sums to what the old lopsided pair summed
+  /// to, so the reel below did not resize when the row was recentred.
+  static const double chipsTopGap = chipsBottomGap - headerBottomPadding;
 
   // ──────────────────────────── Button heights ────────────────────────────
 
@@ -432,6 +722,46 @@ abstract final class ArulTokens {
 
   /// Minimum interactive hit target. 44.
   static const double minHitTarget = 44;
+
+  // ───────────────────────── Floating dock geometry ───────────────────────
+  // Ringtones handoff > "Floating bottom dock". The dock overlays the branch
+  // content (Scaffold.extendBody), so these are also what a scrolling list
+  // must clear — see [listBottomInsetUnderDock].
+
+  /// Dock capsule height. 78.
+  static const double dockHeight = 78;
+
+  /// Dock inset from the screen's left/right edges. 18.
+  static const double dockSideInset = 18;
+
+  /// Dock inset above the bottom safe area. 14.
+  static const double dockBottomInset = 14;
+
+  /// Horizontal padding inside the dock capsule. 10.
+  static const double dockInnerPadding = 10;
+
+  /// The height of one tab's column inside the capsule. 58.
+  static const double dockTabHeight = 58;
+
+  /// Dock icon size. 22.
+  static const double dockIconSize = 22;
+
+  /// Gap between a dock tab's icon and its label. 6.
+  static const double dockTabGap = 6;
+
+  /// Bottom padding a scrollable owes the floating dock so its last item stays
+  /// reachable. 120 — the handoff's number, and comfortably clear of
+  /// [dockHeight] + [dockBottomInset].
+  static const double listBottomInsetUnderDock = 120;
+
+  /// How opaque the fade behind the dock becomes. `.95`, not 1: a hairline of
+  /// the content below still shows through, which reads as depth rather than as
+  /// a pasted-on bar.
+  static const double dockScrimAlpha = 0.95;
+
+  /// Where that fade reaches full strength, as a fraction of its own height.
+  /// `.42` — content dissolves on the way in instead of meeting a hard edge.
+  static const double dockScrimStop = 0.42;
 
   // ──────────────────────────── Icon chip ─────────────────────────────────
   // Spec: 40×40 r12, gold-tint (dark) / maroon-tint (light), 21px icon.
@@ -474,6 +804,14 @@ abstract final class ArulTokens {
 
   /// Splash hairline loader loop. 1600ms linear.
   static const Duration hairlineLoop = Duration(milliseconds: 1600);
+
+  /// Cross-fade between two dock branches. 200ms — long enough to read as a
+  /// dissolve rather than a cut, short enough that a tab still feels instant.
+  static const Duration tabSwitch = Duration(milliseconds: 200);
+
+  /// The now-playing diya's flame sway + glow pulse. 1100ms ease-in-out,
+  /// alternating (so one full there-and-back is 2200ms).
+  static const Duration diyaFlicker = Duration(milliseconds: 1100);
 
   /// The ease-out curve for chrome settle. spec: "ease-out".
   static const Curve settleCurve = Curves.easeOut;

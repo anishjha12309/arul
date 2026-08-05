@@ -7,20 +7,22 @@ line by deleting it. Billing behaviour that is proven lives in [billing-verified
 
 ## Open
 
-- **Ringtones are PARKED for v1, not merely empty.** The `ringtones` table is empty in prod, so the
-  tab only ever rendered "coming soon" — shipping a dead tab is worse than shipping no tab. The ENTRY
-  POINT is therefore commented out: `lib/app/router.dart` serves `/browse` as a plain top-level route
-  instead of the `StatefulShellRoute` (which takes the dock and the ringtones branch with it), and
-  `AndroidManifest.xml` comments out `WRITE_SETTINGS` — special-access, Play-reviewed, and nothing
-  behind it. Grep `RINGTONES-PARKED`.
-  **Nothing is deleted and nothing here is a defect.** `features/ringtones/**`,
-  `app/shell/app_shell.dart`, the `ringtone*` ARB keys, the worker's `ringtones` catalog scope and the
-  `ringtones/` sweep prefix are intact and still type-checked; Dart tree-shakes them out of the build.
-  **To un-park:** publish ringtone audio FIRST (R2 bytes + Neon rows + a rebuild — otherwise the tab
-  is dead again), then uncomment the `StatefulShellRoute` block, delete the temporary `/browse` route,
-  restore the `app_shell.dart` + `ringtones_screen.dart` imports, uncomment `WRITE_SETTINGS`, and drop
-  the parked header on `app_shell.dart`. Full procedure and the dock reference screenshots:
-  [reference/ringtones-parked/README.md](reference/ringtones-parked/README.md).
+- **Ringtone "Set" has never been run on a pre-Android-10 device.** API 29+ and below-29 are two
+  different code paths in `MainActivity.setRingtoneFromFile`, and only the modern one has been
+  exercised here. The pre-Q path — copy into the public Ringtones dir, register that path on the
+  EXTERNAL volume, behind a runtime `WRITE_EXTERNAL_STORAGE` prompt — was ported from Pakiza on
+  2026-08-05, where it was written against two real on-device failures (app-private path unreadable
+  by the ringtone player; internal-volume row never validating as a ringtone). Ported, not
+  re-verified: needs an API 23–28 handset. Arul had NO pre-Q path at all before that date, so every
+  Set on such a device would have failed.
+
+- **The Play listing must now justify `WRITE_SETTINGS` and (below API 29) `WRITE_EXTERNAL_STORAGE`.**
+  Both are declared and both are genuinely reachable now that ringtones ship — the storage one is
+  capped at `maxSdkVersion=28` so it does not appear for modern devices.
+
+- **30 ringtones shipped with `cover_key = null`** — by design (the app draws its kolam medallion),
+  but it means the CMS ringtone editor's cover field has never been exercised against a real row,
+  and `ringtones/covers/…` is an empty prefix the sweep has never had to consider.
 
 - **Media imported before 2026-07-29 carries no origin `Cache-Control`.**
   `tools/content-import/import.mjs` now stamps `public, max-age=31536000, immutable` on upload, but

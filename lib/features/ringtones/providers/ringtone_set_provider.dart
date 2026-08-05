@@ -121,6 +121,9 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         stage: RingtoneSetStage.downloading,
         progress: 0.0,
       );
+      // Named by catalog id — a stable cache key, never shown to the user; the
+      // human-visible tone name is `ringtone.title`, threaded to the native
+      // MediaStore insert below.
       final ext = ringtone.mime == 'audio/mpeg' ? 'mp3' : 'aac';
       final filename = '${ringtone.id}.$ext';
       final file = await service.downloadFile(signedUrl, filename, (p) {
@@ -142,7 +145,12 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         properties: {'ringtone_id': ringtone.id, 'category': ringtone.category},
       );
 
-      await service.setRingtone(file, target);
+      await service.setRingtone(
+        file,
+        target,
+        title: ringtone.title,
+        mime: ringtone.mime ?? 'audio/mpeg',
+      );
 
       analytics.track(
         'ringtone_set',

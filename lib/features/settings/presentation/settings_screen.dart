@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/shell/app_shell.dart';
+import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
@@ -114,30 +118,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: back arrow + 'Settings' Marcellus 22px.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (_) => ArulHaptics.tap(),
-                    onTap: () {
-                      if (context.canPop()) context.pop();
-                    },
-                    child: Icon(Icons.arrow_back, size: 24, color: headerColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Settings',
-                    style: ArulTokens.screenTitle.copyWith(color: headerColor),
-                  ),
-                ],
-              ),
+            // The shared tab header band. Settings is reached BOTH as a pushed
+            // route (today) and as a dock branch (once ringtones un-park), so
+            // the back arrow only appears when there is something to pop.
+            ArulScreenHeader(
+              title: 'Settings',
+              leading: context.canPop()
+                  ? GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (_) => ArulHaptics.tap(),
+                      onTap: context.pop,
+                      child: SizedBox.square(
+                        dimension: ArulTokens.headerControlSize,
+                        child: Icon(
+                          Icons.arrow_back,
+                          size: 24,
+                          color: headerColor,
+                        ),
+                      ),
+                    )
+                  : null,
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                // Settings is a dock branch in the shell, and the dock floats
+                // OVER it — so the footer owes the capsule its clearance or the
+                // policy links and the version sit under it with nothing left
+                // to scroll. AppShell.dockClearance already folds in the
+                // gesture inset; the extra 24 is the footer's own breathing
+                // room, which it had before the dock existed.
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  24 + AppShell.dockClearance(context),
+                ),
                 children: [
                   _ProfileCard(
                     name: name,
@@ -188,7 +203,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: () => _pickLanguage(language),
                       ),
                       _RowData(
-                        icon: Icons.dark_mode,
+                        // Follows the selection, like the sub-label beside it
+                        // — a fixed moon on a row reading "Light" was the one
+                        // stale thing in the list.
+                        icon: themeModeIcon(themeMode),
                         title: 'Theme',
                         sub: themeModeLabel(themeMode),
                         onTap: () => showThemeSheet(context),
@@ -250,16 +268,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Privacy Policy · Terms · Copyright',
-                    textAlign: TextAlign.center,
-                    style: ArulTokens.caption.copyWith(
-                      color: isDark
-                          ? ArulTokens.darkFaint
-                          : ArulTokens.lightFaint,
-                    ),
-                  ),
+                  const SizedBox(height: 18),
+                  const _PolicyFooter(),
                 ],
               ),
             ),
@@ -684,6 +694,153 @@ class _SettingsRow extends StatelessWidget {
 
 /// Muted-maroon logout pill (spec): dark bg maroon 35% / border maroon 60% /
 /// text #F0C9BA; light bg maroon 8% / border maroon 35% / text maroon.
+// ─── Policy footer ────────────────────────────────────────────────────────────
+
+/// The screen's closing block: the two policy links, the DMCA trust badge, and
+/// the real installed version.
+///
+/// It replaced a single faint 'Privacy Policy · Terms · Copyright' line that was
+/// not tappable — three promises the user could not act on. The badge is here
+/// for the same reason it is in Pakiza: this is a wallpaper app built on
+/// devotional artwork, and saying the catalogue is protected is worth the two
+/// lines it costs.
+class _PolicyFooter extends ConsumerWidget {
+  const _PolicyFooter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // The real installed version; blank until the platform read lands, and the
+    // row simply stays out until it does rather than flashing a placeholder.
+    final info = ref.watch(packageInfoProvider).asData?.value;
+
+    return Column(
+      children: [
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 10,
+          runSpacing: 4,
+          children: [
+            _FooterLink(label: 'Privacy Policy', url: AppConfig.privacyUrl),
+            Text(
+              '·',
+              style: ArulTokens.body.copyWith(
+                color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
+              ),
+            ),
+            _FooterLink(label: 'Terms & Conditions', url: AppConfig.termsUrl),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const _DmcaBadge(),
+        if (info != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Version: ${info.version} (${info.buildNumber})',
+            style: ArulTokens.caption.copyWith(
+              color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FooterLink extends StatelessWidget {
+  const _FooterLink({required this.label, required this.url});
+
+  final String label;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Semantics(
+      link: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => ArulHaptics.tap(),
+        // Fire-and-forget: a device with no browser must not throw into the
+        // Settings tree over a footer link.
+        onTap: () => unawaited(
+          launchUrl(
+            Uri.parse(url),
+            mode: LaunchMode.externalApplication,
+          ).catchError((_) => false),
+        ),
+        child: Text(
+          label,
+          style: ArulTokens.body.copyWith(
+            fontWeight: FontWeight.w500,
+            color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "DMCA PROTECTED" — a hairline pill in the same language as every other
+/// surface chip in the app: card fill, card border, accent glyph.
+class _DmcaBadge extends StatelessWidget {
+  const _DmcaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+      decoration: BoxDecoration(
+        color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
+        borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+        border: Border.all(
+          color: isDark
+              ? ArulTokens.cardBorderDark14
+              : ArulTokens.cardBorderLight,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_rounded, size: 16, color: accent),
+          const SizedBox(width: 8),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: 'DMCA ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.7,
+                    color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
+                  ),
+                ),
+                TextSpan(
+                  text: 'PROTECTED',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.7,
+                    color: isDark
+                        ? ArulTokens.darkTextSecondary
+                        : ArulTokens.lightSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LogoutButton extends StatefulWidget {
   const _LogoutButton({required this.onTap});
 

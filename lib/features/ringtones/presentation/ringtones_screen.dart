@@ -1,19 +1,19 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_chip.dart';
+import '../../../app/widgets/arul_browse_header.dart';
+import '../../../app/widgets/arul_earn_button.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
-import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/ringtone.dart';
@@ -24,16 +24,25 @@ import '../data/ringtone_set_service.dart';
 import '../providers/ringtone_catalog_providers.dart';
 import '../providers/ringtone_preview_provider.dart';
 import '../providers/ringtone_set_provider.dart';
+import 'ringtone_medallion.dart';
 import 'ringtone_states.dart';
 
-/// The Ringtones tab: category-chip browse over a scrollable list of ringtone
-/// cards — preview free (streamed from the public CDN), "Set" premium-gated
-/// via the Worker's signed-url check.
+/// The Ringtones tab: a category-chip browse over a list of ringtone rows —
+/// preview free (streamed from the public CDN), "Set" premium-gated via the
+/// Worker's signed-url check.
 ///
-/// Same frame language as the wallpaper feed: brand header, category chips on
-/// the themed surface, a full-width hairline floor, content below. Category is
-/// THE browse axis (CLAUDE.md §5b) — the reference's All/New tabs are
-/// deliberately not ported.
+/// Built to design_handoff_ringtones_screen/README.md. Two things about it are
+/// load-bearing rather than decorative:
+///
+///   * **One value drives the whole now-playing look.** Row fill, border, title
+///     colour, button fill/glyph and the cover-art diya all read the same
+///     `currentId` from [ringtonePreviewProvider]. There is no per-row playing
+///     flag to fall out of sync, and clearing it stops the audio.
+///   * **The cover art is drawn, not fetched** ([RingtoneMedallion]) — the
+///     catalog carries no ringtone cover art, and a row of identical fallback
+///     tiles would make the list look broken rather than sparse.
+///
+/// Category is THE browse axis (CLAUDE.md §5b) — there are no All/New tabs.
 class RingtonesScreen extends ConsumerStatefulWidget {
   const RingtonesScreen({super.key});
 
@@ -53,14 +62,14 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     super.didChangeDependencies();
     _previewNotifier ??= ref.read(ringtonePreviewProvider.notifier);
     if (_router == null) {
-      // Ported from the reference: stop preview audio the moment the location
-      // leaves /ringtones — this covers BOTH a pushed route (settings, premium
-      // paywall) and a bottom-bar branch switch, where the IndexedStack keeps
-      // this screen alive and no dispose/deactivate ever fires.
+      // Stop preview audio the moment the location leaves /ringtones — this
+      // covers BOTH a pushed route (premium paywall, refer) and a dock branch
+      // switch, where the IndexedStack keeps this screen alive and no
+      // dispose/deactivate ever fires.
       _router = GoRouter.of(context);
       _routeListener = () {
         final loc = _router!.routeInformationProvider.value.uri.path;
-        if (!loc.startsWith('/ringtones')) {
+        if (!loc.contains('ringtones')) {
           _previewNotifier?.stop();
         }
       };
@@ -167,77 +176,31 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
       child: Scaffold(
         backgroundColor: frameColor,
         body: SafeArea(
+          // The list runs full-bleed under the floating dock; its own bottom
+          // inset (AppShell.dockClearance) covers the gesture bar, so a SafeArea
+          // pad here would only double it up.
+          bottom: false,
           child: Column(
             children: [
-              // Brand header — same composition as the feed's, so the two tabs
-              // read as one app.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  ArulTokens.screenPadding,
-                  6,
-                  ArulTokens.screenPadding,
-                  8,
-                ),
-                child: Row(
-                  children: [
-                    GopuramMark(
-                      size: 20,
-                      color: isDark ? ArulTokens.gold : ArulTokens.maroon,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Arul',
-                      style: ArulTokens.screenTitle.copyWith(
-                        fontSize: 20,
-                        color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-                      ),
-                    ),
-                    const Spacer(),
-                    _SettingsButton(onTap: () => context.push('/settings')),
-                  ],
-                ),
-              ),
-
-              // Category chips — same chip visuals + fade as the feed's row.
-              Stack(
-                children: [
-                  const _RingtoneChips(),
-                  Positioned(
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    width: 24,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerRight,
-                            end: Alignment.centerLeft,
-                            colors: [
-                              frameColor,
-                              frameColor.withValues(alpha: 0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              // The header's floor — the same hairline the feed draws.
-              Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Container(
-                  height: 1,
-                  color: isDark
-                      ? ArulTokens.cardBorderDark14
-                      : ArulTokens.cardBorderLight,
-                ),
+              // ── The browse frame ──────────────────────────────────────
+              // Byte-for-byte the wallpaper feed's upper portion: same title
+              // band, same chip row geometry, same gap, same hairline floor,
+              // same drop to the content below it. The tabs cross-fade, so
+              // anything that differed up here read as the screen jumping.
+              ArulBrowseHeader(
+                title: l10n.tabRingtones,
+                // Literally the same control the wallpaper feed puts here, not
+                // a matching one — same glyph, same word, same glint, same
+                // destination. Two look-alike buttons is how they drifted
+                // apart the first time.
+                actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
+                chips: const _RingtoneChips(),
               ),
 
               // In-flight set pipeline: a gold hairline progress bar + stage
-              // label directly under the header floor.
+              // label, directly under the chips. Not in the handoff — the
+              // handoff draws one resting moment, and this is the only place
+              // that reports a multi-second download the user started.
               if (setState_ is RingtoneSetLoading)
                 _SetProgress(state: setState_, l10n: l10n),
 
@@ -262,9 +225,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
                           backgroundColor: isDark
                               ? ArulTokens.darkSheetSurface
                               : ArulTokens.cardBgLight,
-                          child: value.isEmpty
-                              ? const RingtonesEmpty()
-                              : _buildList(value),
+                          child: _buildBody(value),
                         ),
                         AsyncError() => RingtonesError(
                           onRetry: () =>
@@ -279,26 +240,32 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     );
   }
 
+  Widget _buildBody(List<Ringtone> items) {
+    // The dev preview's sample tracks are injected at the CATALOG, not here, so
+    // the chips and the category filter see them too — see
+    // ringtone_catalog_providers.dart.
+    if (items.isEmpty) return const RingtonesEmpty();
+    return _buildList(items);
+  }
+
   Widget _buildList(List<Ringtone> items) {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         ArulTokens.screenPadding,
-        14,
+        0,
         ArulTokens.screenPadding,
-        14,
+        AppShell.dockClearance(context),
       ),
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _RingtoneCard(
-        ringtone: items[i],
-        onSet: () => _onSetTapped(items[i]),
-      ),
+      itemBuilder: (context, i) =>
+          RingtoneRow(ringtone: items[i], onSet: () => _onSetTapped(items[i])),
     );
   }
 
-  /// WRITE_SETTINGS explainer — the reference's permission sheet, restyled as
-  /// an Arul sheet (dark #1A0B0F surface, gold hairline, grabber).
+  /// WRITE_SETTINGS explainer — restyled as an Arul sheet (dark #1A0B0F
+  /// surface, gold hairline, grabber).
   void _showPermissionSheet(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     showArulSheet<void>(
@@ -366,11 +333,13 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
 
 // ─── Chips row ────────────────────────────────────────────────────────────────
 
-/// Ringtone-scoped clone of the feed's chip row: same [ArulChip] visuals, same
-/// geometry, its OWN selected-category provider (tab filters never bleed
-/// across). Skeleton pills render while categories are unknown.
+/// Ringtone-scoped chip row: the handoff's browse pills, its OWN selected-
+/// category provider (tab filters never bleed across). Skeleton pills render
+/// while categories are unknown. Scrolls horizontally with no scrollbar.
 class _RingtoneChips extends ConsumerWidget {
   const _RingtoneChips();
+
+  static const double _height = 34;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -380,8 +349,10 @@ class _RingtoneChips extends ConsumerWidget {
     final loading = ref.watch(ringtoneCatalogProvider) is AsyncLoading;
 
     if (categories.isEmpty) {
-      // Hold the row's height; sliding pills only while genuinely loading.
-      if (!loading) return const SizedBox(height: 34);
+      // Nothing to browse by: take up NO height at all rather than holding an
+      // empty 34px band, which reads as a gap the designer forgot. Sliding
+      // pills only while a catalog is genuinely on its way.
+      if (!loading) return const SizedBox.shrink();
       return const _ChipsSkeleton();
     }
 
@@ -391,28 +362,31 @@ class _RingtoneChips extends ConsumerWidget {
     ];
 
     return SizedBox(
-      height: 34,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(
-          left: ArulTokens.screenPadding,
-          right: 28,
-        ),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final c = items[i];
-          return Center(
-            child: ArulChip(
+      height: _height,
+      child: ScrollConfiguration(
+        // The handoff's chip rail shows no scrollbar in either theme. copyWith
+        // rather than a fresh ScrollBehavior, so the platform's physics and
+        // overscroll treatment are untouched — only the bar goes.
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(
+            horizontal: ArulTokens.screenPadding,
+          ),
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final c = items[i];
+            return ArulChip(
               label: c.label,
               selected: c.slug == selected,
-              variant: ArulChipVariant.surface,
+              variant: ArulChipVariant.category,
               onTap: () => ref
                   .read(selectedRingtoneCategoryProvider.notifier)
                   .select(c.slug),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -427,17 +401,17 @@ class _ChipsSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fill = isDark
-        ? ArulTokens.ivory.withValues(alpha: 0.08)
+        ? ArulTokens.cardBgDark045
         : ArulTokens.maroonTintFill08;
     return SizedBox(
-      height: 34,
+      height: _RingtoneChips._height,
       child: Row(
         children: [
           const SizedBox(width: ArulTokens.screenPadding),
           for (final w in _widths) ...[
             Container(
               width: w,
-              height: 32,
+              height: _RingtoneChips._height,
               decoration: BoxDecoration(
                 color: fill,
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
@@ -470,41 +444,57 @@ class _SetProgress extends StatelessWidget {
       RingtoneSetStage.downloading => l10n.ringtoneSetDownloading,
       RingtoneSetStage.setting => l10n.ringtoneSetApplying,
     };
-    return Column(
-      children: [
-        LinearProgressIndicator(
-          value: state.stage == RingtoneSetStage.downloading
-              ? state.progress
-              : null,
-          minHeight: 3,
-          backgroundColor: const Color(0x00000000),
-          color: ArulTokens.gold,
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            label,
-            style: ArulTokens.caption.copyWith(
-              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightSecondary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        children: [
+          LinearProgressIndicator(
+            value: state.stage == RingtoneSetStage.downloading
+                ? state.progress
+                : null,
+            minHeight: 3,
+            backgroundColor: const Color(0x00000000),
+            color: ArulTokens.gold,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              label,
+              style: ArulTokens.caption.copyWith(
+                color: isDark
+                    ? ArulTokens.darkMuted
+                    : ArulTokens.lightSecondary,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-// ─── Ringtone card ────────────────────────────────────────────────────────────
+// ─── Ringtone row ─────────────────────────────────────────────────────────────
 
-/// One ringtone: rounded cover (or the decorated ♪ fallback) with a play/pause
-/// preview overlay, title + category, and the "Set" pill.
-class _RingtoneCard extends ConsumerWidget {
-  const _RingtoneCard({required this.ringtone, required this.onSet});
+/// One ringtone: procedural medallion, title, a circular play/pause, and the
+/// outlined "Set" pill.
+///
+/// Public so the widget tests can find rows by type rather than by string.
+class RingtoneRow extends ConsumerWidget {
+  const RingtoneRow({super.key, required this.ringtone, required this.onSet});
 
   final Ringtone ringtone;
   final VoidCallback onSet;
 
-  static const double _cover = 56;
+  /// Handoff geometry. The row is `46 + 2×9 = 64` tall.
+  static const double coverSize = RingtoneMedallion.defaultSize;
+  static const double _padH = 12;
+  static const double _padV = 9;
+
+  /// The gap the handoff draws between the row's children. Both trailing
+  /// controls lay out in a [ArulTokens.minHitTarget]-wide/tall box with the
+  /// visual centred inside it, so the drawn gap is this plus that box's own
+  /// slack — see [_PlayButton].
+  static const double _gap = 12;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -518,107 +508,65 @@ class _RingtoneCard extends ConsumerWidget {
         setStateValue is RingtoneSetLoading &&
         setStateValue.ringtoneId == ringtone.id;
 
+    // ONE value drives every now-playing affordance in this row.
     final isPlaying = preview.isPlayingId(ringtone.id);
     final isBuffering = preview.isLoadingId(ringtone.id);
 
+    // The medallion keeps its lit overlay through the buffering beat, so the
+    // tile does not flash dark → lit when the stream finally opens.
+    final lit = isPlaying || isBuffering;
+
+    final playSlack = (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: _padH, vertical: _padV),
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
-        borderRadius: BorderRadius.circular(ArulTokens.cardRadius),
+        color: lit
+            ? ArulTokens.goldTintFill10
+            : (isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight),
+        borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
         border: Border.all(
-          color: isDark
-              ? (isPlaying
-                    ? ArulTokens.goldBorder35
-                    : ArulTokens.cardBorderDark09)
-              : (isPlaying
-                    ? ArulTokens.maroonBorder18
+          color: lit
+              ? ArulTokens.goldBorder52
+              : (isDark
+                    ? ArulTokens.cardBorderDark09
                     : ArulTokens.cardBorderLight),
         ),
       ),
       child: Row(
         children: [
-          // ── Cover + preview toggle ─────────────────────────────────────
-          Semantics(
-            button: true,
-            label: l10n.ringtonePreviewSemantic,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) => ArulHaptics.tap(),
-              onTap: () =>
-                  ref.read(ringtonePreviewProvider.notifier).toggle(ringtone),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(
-                  width: _cover,
-                  height: _cover,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _CoverArt(ringtone: ringtone),
-                      // Scrim keeps the glyph legible over any cover art.
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Color.fromRGBO(20, 9, 12, 0.30),
-                        ),
-                      ),
-                      Center(
-                        child: isBuffering
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: ArulTokens.gold,
-                                ),
-                              )
-                            : Icon(
-                                isPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                                size: 26,
-                                color: ArulTokens.ivory,
-                                shadows: ArulTokens.railIconShadow,
-                              ),
-                      ),
-                    ],
-                  ),
-                ),
+          RingtoneMedallion(
+            spec: RingtoneMedallionSpec.forRingtone(
+              id: ringtone.id,
+              category: ringtone.category,
+            ),
+            playing: lit,
+            size: coverSize,
+          ),
+          const SizedBox(width: _gap),
+          Expanded(
+            child: Text(
+              ringtone.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: ArulTokens.rowTitleTracked.copyWith(
+                color: lit
+                    ? (isDark
+                          ? ArulTokens.gold
+                          : ArulTokens.nowPlayingTitleLight)
+                    : (isDark ? ArulTokens.ivory : ArulTokens.lightText),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-
-          // ── Title + category ──────────────────────────────────────────
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ringtone.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArulTokens.rowTitle.copyWith(
-                    color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  ringtone.categoryLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArulTokens.rowSub.copyWith(
-                    color: isDark
-                        ? ArulTokens.darkTextSecondary
-                        : ArulTokens.lightSecondary,
-                  ),
-                ),
-              ],
-            ),
+          SizedBox(width: _gap - playSlack),
+          _PlayButton(
+            playing: isPlaying,
+            buffering: isBuffering,
+            semanticLabel: l10n.ringtonePreviewSemantic,
+            onTap: () =>
+                ref.read(ringtonePreviewProvider.notifier).toggle(ringtone),
           ),
-          const SizedBox(width: 12),
-
-          // ── Set pill — the feed Apply pill's language at card scale ───
+          SizedBox(width: _gap - playSlack),
           _SetPill(
             label: l10n.ringtoneSet,
             busy: setLoadingThis,
@@ -630,54 +578,156 @@ class _RingtoneCard extends ConsumerWidget {
   }
 }
 
-/// Cover art, or the decorated fallback tile (gold ♪ on a maroon→darkSurface
-/// silk gradient) when the catalog carries no cover — never a broken image.
-class _CoverArt extends StatelessWidget {
-  const _CoverArt({required this.ringtone});
+/// The row's preview toggle: a 34px circle whose touch target is grown to the
+/// 44px minimum by laying out in a 44px box with the circle centred — the
+/// handoff is explicit that the visual stays 34 and only the hit area grows.
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({
+    required this.playing,
+    required this.buffering,
+    required this.semanticLabel,
+    required this.onTap,
+  });
 
-  final Ringtone ringtone;
+  final bool playing;
+  final bool buffering;
+  final String semanticLabel;
+  final VoidCallback onTap;
+
+  static const double visualSize = 34;
+  static const double _glyphSize = 15;
 
   @override
   Widget build(BuildContext context) {
-    final url = ringtone.coverUrl(AppConfig.cdnBaseUrl);
-    if (url == null) return const _FallbackTile();
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      memCacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
-      placeholder: (_, _) => const _FallbackTile(),
-      errorWidget: (_, _, _) => const _FallbackTile(),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lit = playing || buffering;
+
+    final fill = lit
+        ? ArulTokens.gold
+        : (isDark ? const Color(0x00000000) : ArulTokens.cardBgLight);
+    final border = lit
+        ? ArulTokens.gold
+        : (isDark ? ArulTokens.ivoryBorder22 : ArulTokens.maroonBorder18);
+    final glyph = lit
+        ? ArulTokens.darkSurface
+        : (isDark ? ArulTokens.ivory : ArulTokens.lightText);
+
+    return Semantics(
+      button: true,
+      toggled: playing,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox.square(
+          dimension: ArulTokens.minHitTarget,
+          child: Center(
+            child: Container(
+              width: visualSize,
+              height: visualSize,
+              decoration: BoxDecoration(
+                color: fill,
+                shape: BoxShape.circle,
+                border: Border.all(color: border),
+                boxShadow: lit ? ArulTokens.nowPlayingButtonGlow : null,
+              ),
+              child: Center(
+                child: buffering
+                    // Not in the handoff, which draws a settled state: a
+                    // CDN stream can take a beat to open and a dead pause
+                    // glyph would read as a failed tap.
+                    ? SizedBox.square(
+                        dimension: _glyphSize,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: glyph,
+                        ),
+                      )
+                    : _TransportIcon(
+                        playing: playing,
+                        size: _glyphSize,
+                        color: glyph,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _FallbackTile extends StatelessWidget {
-  const _FallbackTile();
+/// The play triangle / pause bars, in the handoff's 24-unit viewBox. Filled
+/// shapes, so they are not part of the stroke-only `ArulLineIcon` set.
+class _TransportIcon extends StatelessWidget {
+  const _TransportIcon({
+    required this.playing,
+    required this.size,
+    required this.color,
+  });
+
+  final bool playing;
+  final double size;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [ArulTokens.maroon, ArulTokens.darkSurface],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.music_note_rounded,
-          size: 24,
-          color: ArulTokens.gold.withValues(alpha: 0.9),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: size,
+    child: CustomPaint(
+      painter: _TransportIconPainter(playing: playing, color: color),
+    ),
+  );
 }
 
-/// The card's primary verb, in the feed Apply pill's language scaled to a row:
-/// solid ivory + maroon label on the dark frame, solid maroon + ivory label on
-/// the light one.
+class _TransportIconPainter extends CustomPainter {
+  const _TransportIconPainter({required this.playing, required this.color});
+
+  final bool playing;
+  final Color color;
+
+  static const double _vb = 24;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / _vb);
+    final paint = Paint()
+      ..color = color
+      ..isAntiAlias = true;
+
+    if (playing) {
+      // Two rounded bars: 8,6 and 13.2,6 — 3.2 × 12, r1.1.
+      for (final x in const [8.0, 13.2]) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(x, 6, 3.2, 12),
+            const Radius.circular(1.1),
+          ),
+          paint,
+        );
+      }
+    } else {
+      canvas.drawPath(
+        Path()
+          ..moveTo(8.6, 6.4)
+          ..lineTo(17.6, 12)
+          ..lineTo(8.6, 17.6)
+          ..close(),
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_TransportIconPainter old) =>
+      old.playing != playing || old.color != color;
+}
+
+/// The row's commit verb — outlined in both themes and identical whether or not
+/// the row is playing, so the eye never mistakes it for the transport control.
+/// Lays out at the 44px minimum height with the 32px pill centred inside.
 class _SetPill extends StatelessWidget {
   const _SetPill({
     required this.label,
@@ -689,11 +739,23 @@ class _SetPill extends StatelessWidget {
   final bool busy;
   final VoidCallback? onTap;
 
+  static const double _visualHeight = 32;
+
+  /// The widest the pill may grow. English "Set" is ~56 here, but the same
+  /// string is "സെറ്റ് ചെയ്യുക" in Malayalam and the OS font-size setting can
+  /// double it; unbounded, the pill would push the whole row off a 320dp
+  /// screen, because a Row lays its inflexible children out first and only then
+  /// hands the remainder to the title. Past this width the label ellipsises
+  /// instead — a clipped verb beats a broken row.
+  static const double _maxWidth = 120;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fill = isDark ? ArulTokens.ivory : ArulTokens.maroon;
-    final fg = isDark ? ArulTokens.maroon : ArulTokens.ivory;
+    final border = isDark
+        ? ArulTokens.ivoryBorder22
+        : ArulTokens.maroonBorder18;
+    final fg = isDark ? ArulTokens.ivoryText86 : ArulTokens.maroon;
     final disabled = onTap == null;
 
     return Semantics(
@@ -702,85 +764,44 @@ class _SetPill extends StatelessWidget {
       label: label,
       child: Opacity(
         opacity: disabled && !busy ? 0.55 : 1,
-        child: Material(
-          color: fill,
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          child: InkWell(
-            // Setting a ringtone is a commit verb — same weight as Apply on the
-            // wallpaper feed. The outcome beat comes from the toast.
-            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
-            onTap: disabled ? null : onTap,
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-            splashColor: ArulTokens.maroonTintFill08,
-            highlightColor: ArulTokens.maroonTintFill07,
-            child: Container(
-              height: 36,
-              constraints: const BoxConstraints(minWidth: 68),
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Center(
-                widthFactor: 1,
-                child: busy
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: fg,
-                        ),
-                      )
-                    : Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ArulTokens.button.copyWith(
-                          fontSize: 14,
-                          color: fg,
-                        ),
-                      ),
+        child: GestureDetector(
+          // Setting a ringtone is a commit verb — same weight as Apply on the
+          // wallpaper feed. The outcome beat comes from the toast.
+          onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
+          onTap: disabled ? null : onTap,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            height: ArulTokens.minHitTarget,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: _maxWidth),
+                child: Container(
+                  height: _visualHeight,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+                    border: Border.all(color: border),
+                  ),
+                  child: Center(
+                    widthFactor: 1,
+                    child: busy
+                        ? SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: fg,
+                            ),
+                          )
+                        : Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ArulTokens.chipActive.copyWith(color: fg),
+                          ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Settings button (matches the feed header's) ─────────────────────────────
-
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Semantics(
-      button: true,
-      label: 'Settings',
-      child: GestureDetector(
-        onTapDown: (_) => ArulHaptics.tap(),
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isDark
-                  ? ArulTokens.cardBorderDark14
-                  : ArulTokens.cardBorderLight,
-            ),
-          ),
-          child: Icon(
-            Icons.settings_rounded,
-            size: 19,
-            color: isDark
-                ? ArulTokens.ivory.withValues(alpha: 0.92)
-                : ArulTokens.maroon,
           ),
         ),
       ),
