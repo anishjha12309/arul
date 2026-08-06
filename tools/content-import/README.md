@@ -56,18 +56,32 @@ the deity**, so classification is a title map and QC is one ffprobe. Two scripts
 
 | # | Script | Role |
 |---|--------|------|
-| 1 | `ringtones-plan.mjs` | ffprobe + QC (codec/length/size) · title→category map · UUID keys · interleaved `sort_order` → `ringtone-import-plan.json`. No network, no credentials, safe to re-run. |
+| 1 | `ringtones-plan.mjs` | ffprobe + QC · classify · dedup vs the LIVE catalog · UUID keys · interleaved `sort_order` → `ringtone-import-plan.json`. Read-only, safe to re-run. |
 | 2 | `ringtones-import.mjs` | **live write:** R2 PUT → one Neon txn (rows + `content_version`) → `build-catalog` → verify. `--dry-run` prints only. Checkpointed, so a partial failure re-runs cheaply. |
 
-- **Add new titles to `CATEGORY_BY_TITLE`** in stage 1 — an unmapped title aborts the plan
-  rather than guessing. Category drives the app's medallion motif, so it is not cosmetic.
+```bash
+SRC=c:/path/to/drop node ringtones-plan.mjs      # review the printed plan first
+cp ringtones-import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node ringtones-import.mjs
+```
+
+- **Two source layouts, auto-detected.** Subfolders → category from `FOLDER_CATEGORY`
+  (how the drive drops arrive: `Govinda/`, `Murugan/`, `Shiv ji/`); a flat folder →
+  category from `CATEGORY_BY_TITLE`. An unmapped folder or title **aborts** rather than
+  guessing — category drives the app's medallion motif, so it is not cosmetic.
+- **Drops are incremental.** Stage 1 reads the live catalog to dedup on normalised title
+  and to continue `sort_order` past its high-water mark, so existing users' first screen
+  does not re-shuffle. A title collision aborts; override with `--allow-duplicate-titles`
+  only after confirming the audio really differs (compare RMS envelopes — near-identical
+  names are usually a re-run, occasionally a genuine second recording).
+- Stage 2 refuses if any planned `audio_key` already has a row, and ignores a checkpoint
+  left over from a previous drop.
+- QC: codec and size **abort**; length only **warns** — media-conventions.md says "≤40 s
+  recommended", and one over-long track should not block a drop.
 - `cover_key` is always null: the app DRAWS its kolam medallion. No cover art is uploaded.
 - Objects go up via `wrangler r2 object put --remote`, not the S3 API — the R2 S3 keys are
   not on disk anywhere, and wrangler is already authenticated against the account. Invoke
   wrangler's JS entrypoint with `node`, never `npx` through a shell: a shell re-splits every
   argument on whitespace and both the filenames and the cache-control value contain spaces.
-- Stage 2 **refuses to run against a non-empty `ringtones` table** — it was written for the
-  first import. Drop that guard deliberately (and check for duplicates) for the second.
 
 ## Notes
 

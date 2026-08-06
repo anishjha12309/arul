@@ -20,9 +20,14 @@ line by deleting it. Billing behaviour that is proven lives in [billing-verified
   Both are declared and both are genuinely reachable now that ringtones ship — the storage one is
   capped at `maxSdkVersion=28` so it does not appear for modern devices.
 
-- **30 ringtones shipped with `cover_key = null`** — by design (the app draws its kolam medallion),
-  but it means the CMS ringtone editor's cover field has never been exercised against a real row,
-  and `ringtones/covers/…` is an empty prefix the sweep has never had to consider.
+- **All 63 ringtones have `cover_key = null`** — by design (the app draws its kolam medallion), so
+  the CMS ringtone editor's cover field has never been exercised against a real row and
+  `ringtones/covers/…` is an empty prefix the sweep has never had to consider.
+
+- **"Vetrivel Muruga" (30 s) and "Vetri Vel Muruga" (33 s) both ship** — different recordings (RMS
+  envelopes do not match), so both were kept, but they read as a duplicate. Rename one in the CMS.
+  From the same drop, "Venkat Ramana Govinda" is 49 s, the only track over the ≤40 s convention —
+  harmless, a phone rings ~30 s.
 
 - **Media imported before 2026-07-29 carries no origin `Cache-Control`.**
   `tools/content-import/import.mjs` now stamps `public, max-age=31536000, immutable` on upload, but

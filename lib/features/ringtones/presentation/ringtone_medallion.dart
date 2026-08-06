@@ -43,7 +43,10 @@ enum RingtoneMotif {
   /// Ayyappan — the 18 sacred steps.
   steps,
 
-  /// Temples — a three-tier gopuram.
+  /// The neutral motif — a three-tier gopuram. Drawn for `others`, the category
+  /// that holds tracks belonging to no single one of the five deities (Hanuman,
+  /// Ganesha, the Madhwa guru Raghavendra). It was originally the `temples`
+  /// motif; ringtones no longer use that category, but wallpapers still do.
   gopuram,
 }
 
@@ -84,12 +87,22 @@ class RingtoneMedallionSpec {
 
   /// Categories → motifs. Category is free text (CLAUDE.md §5b), so an unknown
   /// one must not crash or all look alike — it falls through to a hashed pick.
+  ///
+  /// `others` MUST be listed. It is the catch-all for tracks outside the five
+  /// deities, and its members are deliberately unlike each other (Hanuman,
+  /// Ganesha, Raghavendra) — so the hashed fallback would hand each one a
+  /// different deity's emblem, e.g. Murugan's vel on a Ganesha track. That is
+  /// worse than neutral art, hence the explicit neutral mapping.
+  ///
+  /// `temples` is kept for wallpapers' sake and because a stray row must still
+  /// render sensibly; no ringtone has used it since 2026-08-06.
   static const Map<String, RingtoneMotif> _motifByCategory = {
     'murugan': RingtoneMotif.vel,
     'sivan': RingtoneMotif.trishul,
     'amman': RingtoneMotif.lotus,
     'perumal': RingtoneMotif.shankha,
     'ayyappan': RingtoneMotif.steps,
+    'others': RingtoneMotif.gopuram,
     'temples': RingtoneMotif.gopuram,
   };
 

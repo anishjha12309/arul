@@ -56,9 +56,16 @@ console.log(`plan: ${plan.length} ringtones${DRY ? "  (DRY RUN)" : ""}`);
 
 // ─── 1. Upload audio to R2 ───────────────────────────────────────────────────
 // A checkpoint file makes a re-run after a partial failure cheap: already-PUT
-// keys are skipped rather than re-uploaded.
+// keys are skipped rather than re-uploaded. It is scoped to the CURRENT plan —
+// a stale checkpoint from a previous drop would otherwise mark this drop's
+// (different, freshly-minted) keys as done and skip real uploads.
 const ckPath = join(ROOT, "ringtone-upload-checkpoint.json");
-const done = new Set(existsSync(ckPath) ? JSON.parse(readFileSync(ckPath, "utf8")) : []);
+const planKeys = new Set(plan.map((p) => p.audio_key));
+const done = new Set(
+  (existsSync(ckPath) ? JSON.parse(readFileSync(ckPath, "utf8")) : []).filter((k) =>
+    planKeys.has(k),
+  ),
+);
 
 const failed = [];
 for (const [i, p] of plan.entries()) {
@@ -117,10 +124,17 @@ const sql = postgres(E.DATABASE_URL, { ssl: "require", prepare: false });
 let before, after, newVersion;
 try {
   before = Number((await sql`SELECT count(*)::int AS n FROM ringtones`)[0].n);
-  if (before > 0) {
+
+  // Incremental drops are normal, so the table being non-empty is fine — what
+  // is NOT fine is re-importing a drop that already landed. Stage 1 dedups on
+  // TITLE against the live catalog; this is the last line of defence and checks
+  // the key, which is the thing that would actually collide in R2.
+  const keys = plan.map((p) => p.audio_key);
+  const clash = await sql`SELECT audio_key FROM ringtones WHERE audio_key = ANY(${keys})`;
+  if (clash.length) {
     console.error(
-      `\nREFUSING: the ringtones table already has ${before} row(s). This script is ` +
-        `written for the first import; re-check for duplicates before re-running.`,
+      `\nREFUSING: ${clash.length} audio_key(s) in this plan already exist as rows, ` +
+        `e.g. ${clash[0].audio_key}. Re-generate the plan (stage 1 mints fresh UUIDs).`,
     );
     process.exit(1);
   }

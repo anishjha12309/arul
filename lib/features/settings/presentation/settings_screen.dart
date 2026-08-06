@@ -69,7 +69,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-    final headerColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final themeMode = ref.watch(themeModeProvider);
 
     // Real identity once signed in; neutral stand-ins otherwise. Watch the
@@ -118,27 +117,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The shared tab header band. Settings is reached BOTH as a pushed
-            // route (today) and as a dock branch (once ringtones un-park), so
-            // the back arrow only appears when there is something to pop.
-            ArulScreenHeader(
-              title: 'Settings',
-              leading: context.canPop()
-                  ? GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (_) => ArulHaptics.tap(),
-                      onTap: context.pop,
-                      child: SizedBox.square(
-                        dimension: ArulTokens.headerControlSize,
-                        child: Icon(
-                          Icons.arrow_back,
-                          size: 24,
-                          color: headerColor,
-                        ),
-                      ),
-                    )
-                  : null,
-            ),
+            // The shared tab header band. Settings is a dock BRANCH — never a
+            // pushed route — so it gets no back arrow. (A canPop() check here
+            // is a trap: while a sub-screen pops back OVER the shell, the
+            // departing route is still on the stack, so the arrow flashes in
+            // and then vanishes when the transition settles.)
+            const ArulScreenHeader(title: 'Settings'),
             Expanded(
               child: ListView(
                 // Settings is a dock branch in the shell, and the dock floats

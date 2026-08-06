@@ -13,10 +13,12 @@ for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo** (`c:\A
 Two scopes: **wallpapers** and **ringtones**. Ringtone audio lives at
 `ringtones/<category>/<uuid>.mp3`, cover art at `ringtones/covers/<category>/<uuid>.jpg`.
 
-The ringtones tab is LIVE (un-parked 2026-08-05; first 30 tracks imported the same day), so a
-published ringtone reaches users exactly like a wallpaper does. **Bulk ringtone drops go through
+The ringtones tab is LIVE (un-parked 2026-08-05; 63 tracks as of 2026-08-06). Ringtone categories
+are NOT the wallpaper ones — five deities plus `others`, and no `temples`. So a published
+ringtone reaches users exactly like a wallpaper does. **Bulk drops go through
 `tools/content-import/ringtones-plan.mjs` → `ringtones-import.mjs`**, not the CMS one-at-a-time
-form; the plan script is also where the title→category map lives.
+form. They are incremental: the plan script dedups on title against the live catalog and continues
+`sort_order` past its high-water mark, so a re-run aborts rather than doubling the list.
 
 ## Manual rebuild / check
 ```bash

@@ -38,7 +38,7 @@ The owner reviewed the redesign on a device and asked for the tab permanently.
 
 ## The catalog filled the same day
 
-30 tracks (30 s MP3, six categories) were imported on 2026-08-05, hours after
+30 tracks (30 s MP3) were imported on 2026-08-05, hours after
 un-parking — so the "empty tab in a Play build" trade never actually reached a
 release. Bulk imports run through
 [tools/content-import/](../../../tools/content-import/) (`ringtones-plan.mjs`

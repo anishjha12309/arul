@@ -3,15 +3,19 @@
 // The wallpaper pipeline (probe → normalize → dedup → classify → review →
 // buildplan) exists because images arrive unlabelled, mis-sized and duplicated.
 // Ringtone drops are not like that: they arrive already cut to length and
-// already NAMED after the deity, so classification is a title map and the QC is
-// one ffprobe. Hence one small script instead of eight.
+// already NAMED after the deity, so classification is a lookup and the QC is one
+// ffprobe. Hence one small script instead of eight.
 //
-//   node ringtones-plan.mjs            # writes ringtone-import-plan.json
+//   node ringtones-plan.mjs                        # writes ringtone-import-plan.json
+//   SRC=c:/path/to/drop node ringtones-plan.mjs
+//   node ringtones-plan.mjs --allow-duplicate-titles
 //
-// Reads   c:/ringtones/output/*.mp3   (override with SRC)
-// Writes  <ROOT>/ringtone-import-plan.json
+// Two source layouts, auto-detected:
+//   FOLDERED  <SRC>/<FolderName>/*.mp3   → category from FOLDER_CATEGORY
+//   FLAT      <SRC>/*.mp3                → category from CATEGORY_BY_TITLE
 //
-// No credentials, no network, no writes outside ROOT — safe to re-run.
+// Writes <ROOT>/ringtone-import-plan.json. No credentials and no writes outside
+// ROOT; the only network call is a READ of the live catalog, for dedup.
 import { readdirSync, statSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { join, basename, extname } from "path";
@@ -19,73 +23,140 @@ import { randomUUID } from "crypto";
 
 const SRC = process.env.SRC || "c:/ringtones/output";
 const ROOT = process.env.ROOT || "c:/Anish/arul-import";
+const CDN = process.env.CDN || "https://arul-cdn.hsrutility.com";
+const ALLOW_DUPES = process.argv.includes("--allow-duplicate-titles");
 
 // ─── Classification ──────────────────────────────────────────────────────────
 // Category is THE browse axis (CLAUDE.md §5b) and the ringtone medallion picks
 // its motif from it (`_motifByCategory` in ringtone_medallion.dart), so a
-// category outside the six deliberately-supported ones would render an
-// arbitrary hashed motif — a real cost, not a cosmetic one. Ganesha tracks are
-// therefore filed under `sivan` (the Shaiva family) rather than opening a
-// seventh category; revisit if a Ganesha motif is ever drawn.
+// category outside the supported set would render an arbitrary hashed motif —
+// a real cost, not a cosmetic one.
+//
+// RINGTONE CATEGORIES ARE NOT THE WALLPAPER ONES. There is no `temples`, and
+// there IS an `others` (owner, 2026-08-06). The five deities are
+// perumal · murugan · sivan · amman · ayyappan; anything belonging to none of
+// them — Hanuman, Ganesha, the Madhwa guru Raghavendra — goes to `others`, which
+// has its own neutral medallion motif. Each tab derives its chips from its own
+// catalog, so the two tabs legitimately differ.
+//
+// **Classify from the track's LYRICS, never from its file name.** The first
+// pass of the 2026-08-05 drop was named-based and got five of thirty wrong: a
+// Chottanikkara Devi chant filed as Vishnu, two Hanuman tracks as Ayyappan, two
+// Ganesha tracks as Shiva. Generated drops ship auto-titles ("Divine Call",
+// "Devout Offering") that say nothing about the deity at all.
+
+/// Drop-folder name → category. Folder names come from whoever assembled the
+/// drive folder, so match loosely (lowercased, punctuation-stripped) and keep
+/// every spelling that has actually arrived rather than renaming the source.
+const FOLDER_CATEGORY = {
+  amman: "amman",
+  ayyappan: "ayyappan",
+  murugan: "murugan",
+  muruga: "murugan",
+  perumal: "perumal",
+  // Venkateswara / Balaji / Govinda are all Vishnu at Tirumala.
+  govinda: "perumal",
+  balaji: "perumal",
+  venkateswara: "perumal",
+  sivan: "sivan",
+  shivji: "sivan",
+  shivan: "sivan",
+  shiva: "sivan",
+  // Anything outside the five deities — Hanuman, Ganesha, gurus/saints.
+  others: "others",
+  hanuman: "others",
+  anjaneya: "others",
+  ganesha: "others",
+  vinayagar: "others",
+};
+
+// The 2026-08-05 drop, classified from the generation prompts' lyrics and
+// verified against published sources. The trailing comment on each line is the
+// SPECIFIC deity, which is what was actually established — the category is a
+// coarser bucket laid over it. This is the record of truth for these titles;
+// do not re-derive it from the file names.
 const CATEGORY_BY_TITLE = {
+  // perumal — Vishnu and his avatars
+  "Anantha Padmanabha": "perumal", // Vishnu, Thiruvananthapuram
+  "Bhadradri Ramayya": "perumal", // Rama, Bhadrachalam
+  "Ferocious Roar": "perumal", // Narasimha (Ugram Viram mantra)
+  "Jaya Narasimha": "perumal", // Narasimha, Yadadri
+  "Namo Venkatesaya": "perumal", // Venkateswara, Tirumala
+  "Ranga Ranga": "perumal", // Ranganatha, Srirangam
+  "Seven Hills Govinda": "perumal", // Venkateswara, Tirumala
+  "Unni Kanna": "perumal", // Krishna, Guruvayur
+
   // amman — Devi in her forms
-  "Amme Narayana": "amman",
-  "Attukal Amma": "amman",
-  "Guardian Mother": "amman",
-  "Jaya Jaya Chamundeshwari": "amman",
-  "Kanaka Durga": "amman",
-  "Meenakshi Thaye": "amman",
+  "Amme Narayana": "amman", // Chottanikkara Bhagavathy — NOT Vishnu
+  "Attukal Amma": "amman", // Attukal Bhagavathy
+  "Guardian Mother": "amman", // Mariamman
+  "Jaya Jaya Chamundeshwari": "amman", // Chamundeshwari, Mysore
+  "Kanaka Durga": "amman", // Durga, Vijayawada
+  "Meenakshi Thaye": "amman", // Meenakshi, Madurai
 
   // ayyappan
-  "Saranam Ayyappa": "ayyappan",
+  "Saranam Ayyappa": "ayyappan", // Ayyappan, Sabarimala
 
-  // murugan — incl. Subrahmanya
-  "Kukke Subrahmanya": "murugan",
-  "Vetrivel Muruga": "murugan",
+  // murugan
+  "Divine Call": "murugan", // Shanmukha — confirmed by ear, 2026-08-06
+  "Kukke Subrahmanya": "murugan", // Subrahmanya, Kukke
+  "Vetrivel Muruga": "murugan", // Murugan, Palani
 
-  // perumal — Vishnu, his avatars, and the Vaishnava saints/devotees
-  "Anantha Padmanabha": "perumal",
-  "Bhadradri Ramayya": "perumal",
-  "Ferocious Roar": "perumal", // Narasimha
-  "Guru Raghavendra": "perumal",
-  "Jaya Mukhyaprana": "perumal", // Hanuman (Madhwa)
-  "Jaya Narasimha": "perumal",
-  "Namo Venkatesaya": "perumal",
-  "Ranga Ranga": "perumal", // Ranganatha
-  "Seven Hills Govinda": "perumal",
-  "Unni Kanna": "perumal", // Guruvayurappan
-  "Veera Anjaneya": "perumal", // Hanuman
+  // sivan
+  "Cosmic Tandava": "sivan", // Nataraja, Chidambaram
+  "Devout Offering": "sivan", // Shiva — confirmed by ear, 2026-08-06
+  "Dharmasthala Manjunatha": "sivan", // Manjunatha (Shiva), Dharmasthala
+  "Hara Hara Mahadeva": "sivan", // Mallikarjuna, Srisailam
+  "Shiva Shankara": "sivan", // Shiva, Murudeshwara
 
-  // sivan — Shiva, and (see note above) Ganesha
-  "Cosmic Tandava": "sivan",
-  "Dharmasthala Manjunatha": "sivan",
-  "Hara Hara Mahadeva": "sivan",
-  "Shiva Shankara": "sivan",
-  "Vigneshwara Namaha": "sivan",
-  "Vinayaga Arul": "sivan",
-
-  // temples — non-deity-specific devotional pieces
-  "Devout Offering": "temples",
-  "Divine Call": "temples",
-  "Sacred Raga": "temples",
-  "Temple Surge": "temples",
+  // others — belongs to none of the five deities
+  "Guru Raghavendra": "others", // a Madhwa SAINT, not a deity
+  "Jaya Mukhyaprana": "others", // Hanuman (Madhwa name)
+  "Veera Anjaneya": "others", // Hanuman
+  "Vigneshwara Namaha": "others", // Ganesha — not Shiva
+  "Vinayaga Arul": "others", // Ganesha — not Shiva
 };
 
 // The order categories are drawn from when interleaving. Largest first so the
 // round-robin never leaves a long tail of one category at the end of the feed.
-const INTERLEAVE = ["perumal", "amman", "sivan", "temples", "murugan", "ayyappan"];
+const INTERLEAVE = ["perumal", "murugan", "sivan", "amman", "others", "ayyappan"];
 
-// docs/media-conventions.md — ringtone audio.
+// docs/media-conventions.md — ringtone audio. Size and codec are HARD (they
+// break playback or the budget); length is the doc's word: "≤40 s recommended",
+// so an over-long track warns and ships rather than blocking a drop.
 const MAX_BYTES = 15 * 1024 * 1024;
-const MAX_SECONDS = 40;
+const SOFT_MAX_SECONDS = 40;
 
-// ─── Read + probe ────────────────────────────────────────────────────────────
-/** "Amme Narayana-30s.mp3" → "Amme Narayana". The cut length is a production
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// ─── Read the drop ───────────────────────────────────────────────────────────
+/** "Amme Narayana-30s.mp3" → "Amme Narayana". A cut length is a production
  *  detail; it must never reach a title the user reads. */
 function titleFrom(file) {
   return basename(file, extname(file))
     .replace(/-\d+s$/i, "")
     .trim();
+}
+
+const isAudio = (f) => /\.(mp3|m4a|aac)$/i.test(f);
+
+/** [{path, title, category|null, folder}] across both layouts. */
+function collectSources() {
+  const entries = readdirSync(SRC);
+  const dirs = entries.filter((e) => statSync(join(SRC, e)).isDirectory());
+  const out = [];
+
+  for (const d of dirs) {
+    const category = FOLDER_CATEGORY[norm(d)];
+    for (const f of readdirSync(join(SRC, d)).filter(isAudio)) {
+      out.push({ path: join(SRC, d, f), title: titleFrom(f), category, folder: d });
+    }
+  }
+  for (const f of entries.filter(isAudio)) {
+    const title = titleFrom(f);
+    out.push({ path: join(SRC, f), title, category: CATEGORY_BY_TITLE[title], folder: null });
+  }
+  return out;
 }
 
 function probe(path) {
@@ -112,69 +183,110 @@ function probe(path) {
   };
 }
 
-const files = readdirSync(SRC)
-  .filter((f) => /\.(mp3|m4a|aac)$/i.test(f))
-  .sort();
-if (!files.length) {
-  console.error(`No audio in ${SRC}`);
+// ─── Live catalog, for dedup + the sort_order high-water mark ────────────────
+// Read from the CDN rather than the DB: no credentials, and the catalog is what
+// users actually see. A drop re-run by mistake is the failure this prevents —
+// nothing else in the pipeline would notice 35 duplicate rows.
+async function readLiveCatalog() {
+  const items = [];
+  for (let page = 1; page <= 50; page++) {
+    const r = await fetch(`${CDN}/catalog/ringtones/all_${page}.json`, {
+      headers: { "cache-control": "no-cache" },
+    });
+    if (!r.ok) break;
+    const j = await r.json();
+    items.push(...(j.items ?? []));
+    if (!j.has_more) break;
+  }
+  return items;
+}
+
+const sources = collectSources();
+if (!sources.length) {
+  console.error(`No audio under ${SRC}`);
   process.exit(1);
 }
 
+const live = await readLiveCatalog();
+const liveByTitle = new Map(live.map((i) => [norm(i.title), i.title]));
+const maxSortOrder = live.reduce((m, i) => Math.max(m, Number(i.sort_order ?? 0)), 0);
+console.log(`live catalog: ${live.length} ringtones, max sort_order ${maxSortOrder}`);
+
+// ─── Classify + QC ───────────────────────────────────────────────────────────
 const items = [];
 const problems = [];
+const warnings = [];
 const unclassified = [];
+const collisions = [];
+const seen = new Map();
 
-for (const file of files) {
-  const path = join(SRC, file);
-  const title = titleFrom(file);
-  const category = CATEGORY_BY_TITLE[title];
-  if (!category) {
-    unclassified.push(title);
+for (const src of sources) {
+  if (!src.category) {
+    unclassified.push(
+      src.folder ? `${src.title}  (folder "${src.folder}" unmapped)` : src.title,
+    );
     continue;
   }
 
-  const bytes = statSync(path).size;
-  const p = probe(path);
+  const dupLive = liveByTitle.get(norm(src.title));
+  if (dupLive) collisions.push(`"${src.title}" is already live as "${dupLive}"`);
+  const dupBatch = seen.get(norm(src.title));
+  if (dupBatch) collisions.push(`"${src.title}" duplicates "${dupBatch}" in this batch`);
+  seen.set(norm(src.title), src.title);
 
-  // QC gate. A ringtone has no dimension rules to break, so the whole gate is
-  // codec + length + size; anything failing is REPORTED, never silently fixed —
-  // this repo does no server-side transcoding and the fix belongs upstream.
-  if (p.codec !== "mp3") problems.push(`${title}: codec=${p.codec}, expected mp3`);
-  if (bytes > MAX_BYTES) problems.push(`${title}: ${(bytes / 1048576).toFixed(1)}MB > 15MB`);
-  if (p.durationMs > MAX_SECONDS * 1000)
-    problems.push(`${title}: ${(p.durationMs / 1000).toFixed(1)}s > ${MAX_SECONDS}s`);
-  if (!p.durationMs) problems.push(`${title}: unreadable duration`);
+  const bytes = statSync(src.path).size;
+  const p = probe(src.path);
+
+  // Anything failing is REPORTED, never silently fixed — this repo does no
+  // server-side transcoding and the fix belongs upstream.
+  if (p.codec !== "mp3") problems.push(`${src.title}: codec=${p.codec}, expected mp3`);
+  if (bytes > MAX_BYTES) problems.push(`${src.title}: ${(bytes / 1048576).toFixed(1)}MB > 15MB`);
+  if (!p.durationMs) problems.push(`${src.title}: unreadable duration`);
+  if (p.durationMs > SOFT_MAX_SECONDS * 1000)
+    warnings.push(`${src.title}: ${(p.durationMs / 1000).toFixed(1)}s > ${SOFT_MAX_SECONDS}s (recommended max)`);
 
   const id = randomUUID();
   items.push({
     id,
-    title,
-    category,
+    title: src.title,
+    category: src.category,
     tags: [],
-    audio_key: `ringtones/${category}/${id}.mp3`,
+    audio_key: `ringtones/${src.category}/${id}.mp3`,
     cover_key: null, // the app draws its procedural kolam medallion — no cover art exists
     mime: "audio/mpeg",
     duration_ms: p.durationMs,
     bytes,
-    localFile: path,
+    localFile: src.path,
     _probe: p,
   });
 }
 
 if (unclassified.length) {
-  console.error(`\nUNCLASSIFIED (add to CATEGORY_BY_TITLE):\n  ${unclassified.join("\n  ")}`);
+  console.error(
+    `\nUNCLASSIFIED — add the folder to FOLDER_CATEGORY or the title to ` +
+      `CATEGORY_BY_TITLE:\n  ${unclassified.join("\n  ")}`,
+  );
   process.exit(1);
 }
 if (problems.length) {
   console.error(`\nQC FAILURES:\n  ${problems.join("\n  ")}`);
   process.exit(1);
 }
+if (collisions.length && !ALLOW_DUPES) {
+  console.error(
+    `\nTITLE COLLISIONS:\n  ${collisions.join("\n  ")}\n\n` +
+      `Re-running an already-imported drop is the usual cause. If these really are ` +
+      `distinct recordings, re-run with --allow-duplicate-titles.`,
+  );
+  process.exit(1);
+}
 
 // ─── Interleave → sort_order ─────────────────────────────────────────────────
-// The catalog is ordered `sort_order ASC, created_at DESC` and every row here is
-// inserted in ONE transaction, so without an explicit sort_order all 30 tie and
-// the list would clump by whatever order they were written. Round-robin across
-// categories so the unfiltered list alternates deities the way the feed does.
+// Ordering is `sort_order ASC, created_at DESC` and a drop is ONE transaction,
+// so without an explicit sort_order every new row ties and the list clumps by
+// insertion order. Continue from the live high-water mark so an existing user's
+// first screen does not re-shuffle, then round-robin the categories inside the
+// new block so it alternates deities instead of running 18 of one.
 const byCategory = new Map(INTERLEAVE.map((c) => [c, []]));
 for (const it of items) byCategory.get(it.category).push(it);
 for (const list of byCategory.values()) list.sort((a, b) => a.title.localeCompare(b.title));
@@ -187,19 +299,22 @@ for (let round = 0; ordered.length < items.length; round++) {
   }
 }
 ordered.forEach((it, i) => {
-  it.sort_order = i + 1;
+  it.sort_order = maxSortOrder + i + 1;
 });
 
 // ─── Report + write ──────────────────────────────────────────────────────────
 const counts = {};
 for (const it of ordered) counts[it.category] = (counts[it.category] ?? 0) + 1;
 
-console.log(`\n${ordered.length} tracks, all QC-clean.\n`);
+console.log(`\n${ordered.length} tracks to import.\n`);
 console.log("category counts:", counts);
-console.log("\nfeed order (unfiltered list, top first):");
+if (warnings.length) console.log(`\nWARNINGS (shipping anyway):\n  ${warnings.join("\n  ")}`);
+if (collisions.length) console.log(`\nCOLLISIONS ALLOWED:\n  ${collisions.join("\n  ")}`);
+
+console.log("\nappended feed order:");
 for (const it of ordered) {
   console.log(
-    `  ${String(it.sort_order).padStart(2)}  ${it.category.padEnd(9)} ${it.title.padEnd(26)} ` +
+    `  ${String(it.sort_order).padStart(3)}  ${it.category.padEnd(9)} ${it.title.padEnd(30)} ` +
       `${(it.duration_ms / 1000).toFixed(0)}s  ${(it.bytes / 1024).toFixed(0)}KB`,
   );
 }

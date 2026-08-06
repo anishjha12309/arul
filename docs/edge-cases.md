@@ -91,7 +91,7 @@ table that runs out means **skip**, never extrapolate; `res/raw/keep.xml` is wha
 icons and breaking release builds only; and the QA tools are gated on `isPlayInstall`, NOT `kDebugMode`,
 so they exist in a sideloaded release APK — the only build where those failures reproduce.
 
-## Ringtones — LIVE since 2026-08-05 (30 tracks), walk these
+## Ringtones — LIVE since 2026-08-05 (63 tracks; 5 deities + `others`, no `temples`), walk these
 - [ ] Setting a tone needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to
       `ACTION_MANAGE_WRITE_SETTINGS` when absent, never assume granted ← `MainActivity.kt`
       (`setRingtoneFromFile` re-checks and throws `SecurityException` — surface it localized). The

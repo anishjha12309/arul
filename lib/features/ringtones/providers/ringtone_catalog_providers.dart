@@ -172,8 +172,26 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   return labels.entries
       .map((e) => WallpaperCategory(e.key, e.value))
       .toList(growable: false)
-    ..sort((a, b) => a.label.compareTo(b.label));
+    ..sort(compareRingtoneCategories);
 });
+
+/// Slug of the catch-all category — tracks belonging to none of the five
+/// deities (Hanuman, Ganesha, gurus). Ringtones only; wallpapers have no such
+/// bucket.
+const String othersCategorySlug = 'others';
+
+/// Alphabetical by label, except `others` is always LAST.
+///
+/// Plain alphabetical puts "Others" between "Murugan" and "Perumal", where it
+/// reads as one more deity in the row rather than the leftovers bucket it is.
+/// Pinning it to the end is the whole point of the category.
+@visibleForTesting
+int compareRingtoneCategories(WallpaperCategory a, WallpaperCategory b) {
+  final aOther = a.slug == othersCategorySlug;
+  final bOther = b.slug == othersCategorySlug;
+  if (aOther != bOther) return aOther ? 1 : -1;
+  return a.label.compareTo(b.label);
+}
 
 /// The ringtone list's OWN selected category — deliberately separate state from
 /// the wallpaper feed's, so switching tabs never cross-filters the other list.
