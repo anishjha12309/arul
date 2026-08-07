@@ -1,5 +1,5 @@
--- Arul — Neon Postgres schema (3/4: referral + tombstones + config).
--- Apply after 02_content.sql, then 04_ringtones.sql, then ../seed.sql.
+-- Arul — Neon Postgres schema (referral + tombstones + config).
+-- Apply after 02_content.sql; ../seed.sql comes after every schema file.
 
 -- referrals — one row per referred user. Created at signup (status 'pending')
 -- when a new user arrives with a valid referrer code; flipped to 'rewarded'

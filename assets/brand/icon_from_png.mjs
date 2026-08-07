@@ -2,11 +2,11 @@
 /**
  * Regenerate the Android launcher PNGs + splash art from RASTER masters
  * (the 2026-08 red/gold gopuram icon is AI-generated art — there is no SVG).
- * Masters live OUTSIDE the repo (ui-direction.md §Assets still owed).
+ * Masters live OUTSIDE the repo (docs/ui-direction.md §Launcher icon).
  *
  *   node assets/brand/icon_from_png.mjs <icon_1024.png> <splash_portrait.png>
  *
- * Rasterises with headless Chrome (no npm install), like rasterize.mjs.
+ * Rasterises with headless Chrome (no npm install).
  *
  * Outputs, under android/app/src/main/res/ :
  *   mipmap-*\/ic_launcher_foreground.png  108dp canvas; gold mark chroma-keyed

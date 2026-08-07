@@ -134,8 +134,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         // `/media/signed-url` (the only authoritative entitlement check) here
         // let a lapsed subscriber keep sharing anything already cached,
         // indefinitely — the same "cache became a permanent licence" hole the
-        // apply flow closed. Proven here first, then back-ported to Pakiza the
-        // same day (2026-07-29) — keep both in sync.
+        // apply flow closed. The same fix lives in Pakiza — keep both in sync.
         try {
           await service.downloadUrl(wallpaper);
         } on WallpaperApplyException catch (e) {

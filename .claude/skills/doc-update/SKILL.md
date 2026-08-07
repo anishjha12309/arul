@@ -17,7 +17,11 @@ The `[doc-sync]` reminder already named the file. Open that file and edit it. Do
 
 ## House style
 
-Write the way the codebase's docs already read. Six rules:
+Write the way the codebase's docs already read. Seven rules:
+
+**Constraints only.** A doc line earns its place by encoding a trap paid for on device, a behaviour
+contract, or a dead end worth not repeating. Anything readable from the code or the running app —
+layouts, positions, copy, feature descriptions, what-was-done-when — does not get written down.
 
 **Imperative, not descriptive.** The doc is an instruction to the next agent, not a description of the system.
 > before: `Media is served from R2 because egress is free.`
@@ -52,11 +56,11 @@ Arul and Pakiza are peers with near-identical backends. Worker routes, entitleme
 When the change touches shared logic:
 
 1. Update this repo's doc.
-2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `phonepe.md`, `analytics-events.md`, `architecture.md`, `data-model.md`, `media-conventions.md` and `known-issues.md` share a name. `billing-verified.md` and `analytics-ops.md` have **no Pakiza twin** — Pakiza carries that material in `workers/README.md` + CLAUDE.md, so fold the fact in there rather than creating a new file. Infrastructure facts get no doc of their own in either repo: the binding lives beside its comment in `workers/wrangler.toml`, the secret in `workers/README.md §Secrets`, the console step in the skill that needs it. A standalone inventory only duplicates them and then rots.
+2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `phonepe.md`, `analytics-events.md`, `architecture.md`, `data-model.md`, `media-conventions.md` and `known-issues.md` share a name. `analytics-ops.md` has **no Pakiza twin** — Pakiza carries that material in `workers/README.md` + CLAUDE.md, so fold the fact in there rather than creating a new file. Infrastructure facts get no doc of their own in either repo: the binding lives beside its comment in `workers/wrangler.toml`, the secret in `workers/README.md §Secrets`, the console step in the skill that needs it. A standalone inventory only duplicates them and then rots.
 3. Can't do (2) this session? Add a one-line entry under `## Open` in `c:\Anish\Pakiza\docs\known-issues.md` naming the fact and the doc that needs it.
 
 App-layer UI, theming, localization, and the category browse axis are **not** shared — that axis is a deliberate delta from Pakiza's type-based browse. Don't cross-post those.
 
 ## Skip it when
 
-The edit was a rename, a formatting pass, a type-only change, or a fix that restores documented behaviour rather than changing it. The reminder is not an obligation.
+The edit was a rename, a formatting pass, a type-only change, moved/restyled UI, a copy tweak, or a fix that restores documented behaviour rather than changing it. The reminder is not an obligation — most edits deserve no doc update at all.

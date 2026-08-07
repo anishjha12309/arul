@@ -64,7 +64,7 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
 3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
-4. Play upload = user task (Play App Signing ON). **v1.0.0+20 went to the OLD pre-rename listing** — retired by the 2026-08 package rename; the `com.hsrutility.arul` app on the business account starts with no uploads (PACKAGE-RENAME-PLAN.md).
+4. Play upload = user task (Play App Signing ON). **v1.0.0+20 went to the OLD pre-rename listing** — retired by the 2026-08 package rename; `com.hsrutility.arul` lives on the business account.
    SHA-1/256 registration — BOTH the app-signing and upload certs (Play Console → Setup → App
    signing) in the Google Cloud OAuth Android client + Firebase — is required after the first
    upload, or Google Sign-In is broken for testers. That state lives in Play Console, so confirm it

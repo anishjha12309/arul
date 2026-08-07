@@ -120,8 +120,8 @@ abstract final class ArulTokens {
   static const Color goldTintFill12 = Color.fromRGBO(212, 160, 23, 0.12);
 
   // ───────────────────────── Earn button surface ──────────────────────────
-  // Ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`
-  // (2026-08-06). The gradient IS the "shimmer" in the reference art — a soft
+  // Ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`.
+  // The gradient IS the "shimmer" in the reference art — a soft
   // vertical sheen, not a moving highlight. Alphas and stops are Pakiza's; the
   // gold they are struck from is ARUL's [gold], because a palette is the one
   // thing the two apps deliberately do not share (CLAUDE.md §0).

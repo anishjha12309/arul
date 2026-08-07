@@ -62,6 +62,5 @@ superseded mandates are revoked rather than orphaned.
   Harmless: the cron addresses PhonePe by *our* `merchant_subscription_id`.
 - Dunning: retries 1–4 stay alive, the subscription **expires at retry 5** and is then ignored.
 
-What has already been proven end-to-end, so you need not re-test it:
-[billing-verified.md](billing-verified.md). To re-prove it after a change:
-`.claude/skills/verify-payments/`.
+The billing lifecycle has been proven end-to-end against UAT + a local stub — re-prove after a
+change with `.claude/skills/verify-payments/` (its reference.md holds the known-good baseline).

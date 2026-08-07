@@ -63,9 +63,16 @@ makes UAT's responses disagree with the code for reasons that look like bugs.
 
 ## Known-good baseline
 
-`docs/billing-verified.md` (2026-07-29, worker `cc00fb34`) lists every step already proven against
-UAT plus the local stub, what UAT refuses to settle, and the cheap way to re-run each one — time is
-the only thing simulated, so backdating `next_debit_at` is indistinguishable from waiting. Read it
-before re-running anything; Pakiza holds an equivalent baseline from 2026-07-25.
+The full lifecycle was proven against UAT + the local stub on 2026-07-29: trial mandate, repeat ₹199,
+double-tap → 409, 24h notify with **Pass B refusing an early debit**, settle, dunning to `expired` at
+retry 5, cancel keeping the period live, rebuy at ₹199, delete→re-login pre-seeding the consumed
+trial. Expected behaviour per step is specified as rules in `docs/phonepe.md` — re-run THIS skill
+when billing code changes rather than re-deriving. Two facts that make re-runs cheap:
+
+- **Time is the only thing simulated.** Notify/redeem/renewal key off `next_debit_at`, so backdating
+  it is indistinguishable from waiting. Never wait out a real trial day.
+- **Local dev cannot receive the real S2S webhook** (`127.0.0.1` is unreachable from PhonePe). Drive
+  the handler with `workers/tools/prod-webhook.mjs`; production webhook delivery stays the one
+  unproven hop (`docs/known-issues.md` §Open).
 
 Endpoint facts and the traps that return 200 while broken: `docs/phonepe.md`.

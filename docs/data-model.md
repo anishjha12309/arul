@@ -1,6 +1,4 @@
-# Schema (Neon — source of truth: db/schema/, apply 01→05)
-
-Ringtones live in `04_ringtones.sql`, the curated-feed column in `05_feed_rank.sql`. Apply migrations in order, then `db/seed.sql`.
+# Schema (Neon — source of truth: db/schema/, apply *.sql in filename order, then seed.sql)
 
 **users:** id(PK) · google_sub(unique) · email · display_name · display_name_custom (true once user edits — login stops syncing from Google) · referral_code(unique) · referred_by(FK) · reward_premium_until (referral credit; read by isPremium, decoupled from subscriptions) · created_at
 
@@ -10,9 +8,9 @@ Ringtones live in `04_ringtones.sql`, the curated-feed column in `05_feed_rank.s
 
 Keep `feed_rank` and `sort_order` apart: `sort_order` drives CATEGORY-chip order and 341 of the live rows carry distinct non-zero values from their import manifests, so reusing it would reorder every chip.
 
-**Browse model (a deliberate delta from Pakiza — never sync it away):** the feed filters by **category**; static and live wallpapers interleave in every category. There are NO All/New tabs and NO static-vs-live filter. `category` and `feed_rank` ride in each catalog page; filtering and ordering are client-side (`feedOrder()`).
+Browse model (category axis, `feedOrder()` ordering) is owned by CLAUDE.md §5b — `category` and `feed_rank` ride in each catalog page; filtering and ordering are entirely client-side.
 
-**ringtones:** id(PK) · title · **category** (same first-class browse axis as wallpapers — chips, free text + index) · tags[] · audio_key(R2, public — `ringtones/<category>/<uuid>.mp3`) · cover_key(R2, public, nullable — `ringtones/covers/<category>/<uuid>.jpg`, 512×512 JPG; CMS requires it at upload, app renders fallback art if missing) · mime (kept in catalog — set-file extension inference) · duration_ms · bytes · is_published · sort_order · created_at. Ordering matches wallpapers: sort_order ASC, created_at DESC. No is_premium — preview is free from CDN; "set as ringtone" gates via Worker /media/signed-url `kind='ringtone'`. Catalog scope `ringtones` → `catalog/ringtones/all_<page>.json` (strips duration_ms/bytes). Both keys live under the `ringtones/` canonical prefix so the hourly sweep protects audio and covers together.
+**ringtones:** id(PK) · title · **category** (same first-class browse axis as wallpapers — chips, free text + index) · tags[] · audio_key(R2, public — `ringtones/<category>/<uuid>.mp3`) · cover_key(R2, public, nullable — `ringtones/covers/<category>/<uuid>.jpg`; every live row ships null, the app draws its kolam medallion instead) · mime (kept in catalog — set-file extension inference) · duration_ms · bytes · is_published · sort_order · created_at. Ordering matches wallpapers: sort_order ASC, created_at DESC. No is_premium — preview is free from CDN; "set as ringtone" gates via Worker /media/signed-url `kind='ringtone'`. Catalog scope `ringtones` → `catalog/ringtones/all_<page>.json` (strips duration_ms/bytes). Both keys live under the `ringtones/` canonical prefix so the hourly sweep protects audio and covers together.
 
 **content_submissions:** id(PK) · user_id(FK) · kind (only `'wallpaper'` in Arul — Worker validates) · file_key(R2, **unique** — confirm-upload upserts, idempotent) · title · **category** (required — the user picks one at upload; approval copies the object to `wallpapers/<category>/…` and carries it onto the wallpapers row) · status(pending|approved|rejected) · rejection_reason · reviewed_by(FK) · created_at
 

@@ -34,7 +34,7 @@ all in [reference.md](reference.md).
 ### 1. Isolated Postgres with the production schema
 
 ```bash
-node pgserver.mjs   # → 127.0.0.1:5433, schema from db/schema/*.sql (01→04); loads only
+node pgserver.mjs   # → 127.0.0.1:5433, schema from db/schema/*.sql in filename order; loads only
                     # into a fresh ./pgdata, so --reset is the only way to pick up a change
 ```
 
@@ -97,4 +97,5 @@ adb shell pm enable com.phonepe.app # only if you disabled it
 adb reverse --remove tcp:8787
 ```
 
-Then `cd workers && npx tsc --noEmit && npx vitest run`. Already proven: `docs/billing-verified.md`.
+Then `cd workers && npx tsc --noEmit && npx vitest run`. The known-good baseline (what was already
+proven, and the cheap re-run tricks) is in [reference.md](reference.md) §Known-good baseline.

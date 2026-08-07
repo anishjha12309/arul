@@ -4,12 +4,10 @@
          Live wallpapers go through the system chooser and need no permission. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
     <!-- Required to set the device ringtone via RingtoneManager — nothing else
-         asks for it. Restored 2026-08-05 with the ringtone route (it was out
-         while the tab was parked): without it every "Set" fails the
-         Settings.System.canWrite check on every device.
-         WRITE_SETTINGS is special-access and shows on the Play listing, so the
-         store form has to justify it — see
-         docs/reference/ringtones-parked/README.md. -->
+         asks for it; without it every "Set" fails the Settings.System.canWrite
+         check on every device. Special-access, shows on the Play listing, so
+         the store form has to justify it (ringtones are a live feature —
+         docs/known-issues.md §Open). -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
     <!-- Pre-Android-10 ONLY (capped at 28, so it never reaches a modern device or
          the Play listing's runtime-permission list). Below API 29 a custom tone

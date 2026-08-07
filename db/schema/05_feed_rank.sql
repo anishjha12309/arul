@@ -1,5 +1,5 @@
--- Arul — Neon Postgres schema (5/5: curated All-feed head). Apply after
--- 04_ringtones.sql. Added 2026-08-01.
+-- Arul — Neon Postgres schema (curated All-feed head). Apply after
+-- 04_ringtones.sql.
 --
 -- feed_rank is the CURATED head of the All feed only, managed by drag-and-drop
 -- in the CMS. Rows with a non-null rank sort first by feed_rank ASC (tie → id);

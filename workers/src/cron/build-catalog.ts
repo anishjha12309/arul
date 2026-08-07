@@ -140,8 +140,8 @@ async function buildCatalogLocked(
 
   try {
     // ── Change-detection signal ──────────────────────────────────────────────
-    // BUG FIX: read the dedicated app_config.content_version (bigint) column,
-    // NOT feature_flags. Per architecture.md §4 and db/schema.sql, the operator
+    // Read the dedicated app_config.content_version (bigint) column,
+    // NOT feature_flags. Per docs/architecture.md §Catalog generation and db/schema/, the operator
     // or content editor bumps content_version on any content change; the cron
     // compares it against the last-built version stored in KV and skips unchanged scopes.
     // content_version is a bigint, so postgres.js may return it as a string —

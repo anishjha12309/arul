@@ -1,8 +1,7 @@
--- Arul — Neon Postgres schema (2/4: content). Apply after 01_identity.sql.
--- Originally wallpapers-only (the reference's ringtones were stripped per
--- docs/port-map.md); ringtones were added 2026-07-17 in 04_ringtones.sql —
--- 04 must be applied before deploying a Worker whose build-catalog includes
--- the ringtones scope, or the cron crashes querying a missing table.
+-- Arul — Neon Postgres schema (content). Apply after 01_identity.sql.
+-- The ringtones table lives in 04_ringtones.sql — it must be applied before
+-- deploying a Worker whose build-catalog includes the ringtones scope, or the
+-- hourly cron crashes querying a missing table.
 
 -- wallpapers — static (JPG) + live (MP4), mixed together in one feed. full_key is
 -- the sole content key and is PUBLIC in the catalog (preview is free; applying it

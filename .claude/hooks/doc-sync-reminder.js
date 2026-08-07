@@ -11,7 +11,7 @@
 const ROUTES = [
   {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
-    docs: ["docs/phonepe.md", "docs/billing-verified.md"],
+    docs: ["docs/phonepe.md"],
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],
@@ -46,8 +46,12 @@ const ROUTES = [
     docs: ["docs/architecture.md §API", "workers/README.md"],
   },
   {
-    when: ["db/schema/**", "db/seed.sql", "db/migrations/**"],
+    when: ["db/schema/**", "db/seed.sql"],
     docs: ["docs/data-model.md", "docs/architecture.md §Schema"],
+  },
+  {
+    when: ["lib/features/notifications/**"],
+    docs: ["docs/notifications.md"],
   },
   {
     when: ["lib/core/analytics/**"],
@@ -59,7 +63,11 @@ const ROUTES = [
   },
   {
     when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/wallpaper/**", "android/**/share/**"],
-    docs: ["docs/edge-cases.md §Wallpaper apply", "docs/known-issues.md §Traps already paid for"],
+    docs: ["docs/edge-cases.md §Wallpaper apply", "docs/known-issues.md §Traps already paid for", "docs/share.md"],
+  },
+  {
+    when: ["lib/features/wallpapers/**/*share*"],
+    docs: ["docs/share.md", "docs/edge-cases.md §Share"],
   },
   {
     when: ["lib/theme/**", "lib/app/theme/**"],
@@ -157,7 +165,9 @@ process.stdin.on("end", () => {
       if (alreadyReminded(sessionId, hit)) return;
       const msg =
         `[doc-sync] ${hit} changed → ${route.docs.join(", ")}\n` +
-        `Update it in this session if behaviour changed. Skip if this was a refactor.`;
+        `Update the doc ONLY if a constraint changed: a new trap paid for on device, a changed ` +
+        `contract, a dead end worth not repeating. Moved/restyled UI, copy tweaks, refactors, and ` +
+        `anything readable from the code or the running app get NO doc update.`;
       process.stdout.write(
         JSON.stringify({
           hookSpecificOutput: {

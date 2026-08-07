@@ -2,7 +2,7 @@
  * Embedded Postgres for the payment harness.
  *
  * Speaks the real PG wire protocol on 127.0.0.1:5433 so `wrangler dev` can bind
- * its HYPERDRIVE binding to it. Loads db/schema/*.sql in order (01→04), so every
+ * its HYPERDRIVE binding to it. Loads db/schema/*.sql in filename order, so every
  * table, index, constraint and trigger matches production exactly.
  *
  * Nothing here ever touches Neon. That is the point: the harness seeds

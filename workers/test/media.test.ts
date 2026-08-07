@@ -1,13 +1,13 @@
 /**
  * Unit tests for the media route handlers. The DB is mocked; R2 presigning runs
  * for real (aws4fetch / Web Crypto). These cover validation, lookup, and the
- * premium-gated signed URL path. NOTE (2026-07-01): ALL content now requires
- * premium to apply/set/save. /media/signed-url now answers the content lookup
- * AND the entitlement check in ONE combined query (private_key + is_premium in
- * a single row), so the mock row carries both columns — and the 403-deny path,
- * previously only coverable by the live deployed-worker checks in the unified
- * CMS repo's smoke plan (c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md), is now
- * expressible here with is_premium: false. (There is no PREMIUM_TEST_USER_IDS
+ * premium-gated signed URL path. ALL content requires premium to
+ * apply/set/save. /media/signed-url answers the content lookup AND the
+ * entitlement check in ONE combined query (private_key + is_premium in a
+ * single row), so the mock row carries both columns — the 403-deny path is
+ * covered here with is_premium: false (the CMS repo's live smoke plan,
+ * c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md, also exercises it against the
+ * deployed worker). (There is no PREMIUM_TEST_USER_IDS
  * bypass — it was removed; premium comes solely from a live Neon subscription
  * row.)
  */

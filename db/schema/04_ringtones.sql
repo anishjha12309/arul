@@ -1,13 +1,10 @@
--- Arul — Neon Postgres schema (4/4: ringtones). Apply after 03_referral_config.sql.
--- Added 2026-07-17, reversing the original wallpapers-only strip (docs/port-map.md).
--- Ported from the reference `ringtones` table but reshaped for Arul:
+-- Arul — Neon Postgres schema (ringtones). Apply after 03_referral_config.sql.
 --   · `category` is first-class (CLAUDE.md §5b — the browse axis, same as
---     wallpapers; the reference browsed ringtones by All/New tabs, not ported).
---   · `cover_key` is NET-NEW (the reference had no ringtone artwork). Nullable:
---     the CMS requires a cover at upload, but a missing cover must degrade to
---     fallback art in the app/CMS, never a broken cell.
---   · `sort_order` added to match wallpapers ordering (sort_order ASC,
---     created_at DESC); the reference ordered by created_at alone.
+--     wallpapers; never All/New tabs).
+--   · `cover_key` nullable — every live row ships null (row art is the app's
+--     drawn kolam medallion); a missing cover must degrade to fallback art,
+--     never a broken cell.
+--   · `sort_order` matches wallpapers ordering (sort_order ASC, created_at DESC).
 --   · No is_premium column: ALL content is premium-gated in the Worker
 --     (/media/signed-url with kind='ringtone'), never on the row.
 --

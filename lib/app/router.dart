@@ -14,14 +14,13 @@ import 'shell/app_shell.dart';
 
 /// Routes.
 ///
-/// Auth flow is unchanged: splash decides (loading → stays here, unauthed →
-/// /sign-in, authed → /browse) — imperatively, exactly as before the shell.
+/// Splash decides imperatively: loading → stays here, unauthed → /sign-in,
+/// authed → /browse.
 ///
-/// RINGTONES UN-PARKED (2026-08-05). The three-tab shell is the app's shape
-/// again: Wallpapers · Ringtones · Settings, each an always-alive branch behind
-/// the floating dock. Settings moved INTO the dock — it is no longer a route
-/// pushed over the feed — while its sub-screens (notifications, premium, refer,
-/// upload) stay top-level pushes OVER the shell.
+/// The three-tab shell is the app's shape: Wallpapers · Ringtones · Settings,
+/// each an always-alive branch behind the floating dock. Settings lives IN the
+/// dock — never a route pushed over the feed — while its sub-screens
+/// (notifications, premium, refer, upload) stay top-level pushes OVER the shell.
 ///
 /// Page transitions come from the theme, not from custom pageBuilders, so every
 /// push inherits `PredictiveBackPageTransitionsBuilder` — hand-rolling a
