@@ -5,6 +5,7 @@ import 'package:phonepe_payment_sdk/phonepe_payment_sdk.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/app_instance_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
@@ -109,9 +110,14 @@ class PremiumPurchase extends _$PremiumPurchase {
 
     try {
       // ── Step 1: Initiate payment on the server ───────────────────────────
+      // appInstanceId: the debits this mandate produces settle app-closed, so
+      // the Worker needs the GA4 join key ON the users row before the first
+      // one — login also uploads it, but not for users who signed in on an
+      // older build (app_instance_id.dart).
+      final appInstanceId = await fetchAppInstanceId();
       final initResp = await _api.post(
         '/payments/initiate',
-        body: {'plan': 'monthly'},
+        body: {'plan': 'monthly', 'appInstanceId': ?appInstanceId},
       );
 
       final merchantOrderId = initResp['merchantOrderId'] as String? ?? '';

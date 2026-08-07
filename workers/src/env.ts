@@ -103,6 +103,21 @@ export interface Env {
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
+  // ── GA4 Measurement Protocol (server-side `purchase` — lib/ga4.ts) ───────
+  /**
+   * Firebase App ID of the Android app stream (google-services.json
+   * `mobilesdk_app_id`). Ships inside every APK, so NOT a secret — set in
+   * wrangler.toml [vars]. Optional: absent → server-side purchase reporting is
+   * skipped (fail-open), which is also how tests run.
+   */
+  GA4_FIREBASE_APP_ID?: string;
+  /**
+   * Measurement Protocol api_secret — GA4 Admin → Data streams → <Android
+   * stream> → Measurement Protocol API secrets. A real secret (grants event
+   * write into the GA4 property): wrangler secret bulk, never [vars].
+   */
+  GA4_API_SECRET?: string;
+
   /**
    * Comma-separated CORS allow-list for browser-based origins.
    * e.g. "https://arul.hsrutility.com"

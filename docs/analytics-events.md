@@ -50,8 +50,9 @@ four wallpaper funnel events so the funnel joins on it — a rendering hint, nev
   (lapsed subscription, stale client snapshot) — one session can emit it twice. Read as "block
   encountered", never "distinct blocks". Tracking happens at the gate; `/premium?source=` is
   display-only.
-- **Revenue truth is Neon**, never a sampled analytics tool — and GA4 `purchase` under-reports
-  ([analytics-ops.md](analytics-ops.md)).
+- **Revenue truth is Neon**, never a sampled analytics tool. GA4 `purchase` has TWO reporters split
+  by settle location (client = app-open setup; Worker MP = app-closed trial→paid/renewals) — keep
+  the split or purchases double-count ([analytics-ops.md](analytics-ops.md)).
 
 ## Deltas vs Pakiza — do not unify
 

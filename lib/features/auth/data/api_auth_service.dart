@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/analytics/analytics_service.dart';
+import '../../../core/analytics/app_instance_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../referral/data/install_referrer_service.dart';
@@ -237,13 +238,19 @@ class ApiAuthService implements AuthService {
       // on later logins is harmless. Cleared after a successful exchange below.
       final referralCode = _referral?.pendingCode;
 
+      // GA4 join key for server-side purchase reporting (app_instance_id.dart).
+      // Sent every login: the id changes on reinstall, and reinstall forces a
+      // fresh sign-in — so login is exactly where it stays current.
+      final appInstanceId = await fetchAppInstanceId();
+
       // Exchange Google ID token for our own Worker-issued JWT pair.
       final data = await _api.post(
         '/auth/login',
         body: {
           'idToken': idToken,
-          // Null-aware element: dropped entirely when there's no pending code.
+          // Null-aware elements: dropped entirely when absent.
           'referralCode': ?referralCode,
+          'appInstanceId': ?appInstanceId,
         },
         requiresAuth: false,
       );

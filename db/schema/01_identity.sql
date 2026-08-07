@@ -21,8 +21,15 @@ create table if not exists users (
   -- Referral reward credit — decoupled from subscriptions so it stacks with (and
   -- outlives) any PhonePe state. Read by isPremium().
   reward_premium_until timestamptz,
+  -- Firebase Analytics app_instance_id (32 hex chars) — the join key GA4's
+  -- Measurement Protocol needs so the Worker can log `purchase` for debits that
+  -- settle with the app closed (trial→paid, renewals). Uploaded by the app on
+  -- /auth/login and /payments/initiate; read by lib/ga4.ts. Nullable: absent
+  -- until a build that sends it logs in.
+  app_instance_id     text,
   created_at          timestamptz not null default now()
 );
+alter table users add column if not exists app_instance_id text;
 create index if not exists users_referred_by_idx   on users (referred_by);
 create index if not exists users_referral_code_idx on users (referral_code);
 

@@ -23,15 +23,17 @@ import 'analytics_service.dart';
 ///      nothing, so mapping it to `purchase` booked phantom revenue and counted
 ///      one subscriber twice — once at trial start, again on conversion. The raw
 ///      `trial_started` event (logged above, with `value`/`plan`/`order_id`) is
-///      itself markable as a GA4 key event and importable into Google Ads, so
-///      trial optimisation keeps a conversion to bid on without polluting ROAS.
+///      a GA4 key event IMPORTED into Google Ads alongside `purchase`, so
+///      trial optimisation has a conversion to bid on without polluting ROAS.
 ///
-///      CAVEAT — trial→paid is invisible here. `subscription_active` only fires
-///      when the purchase flow itself returns `active` (a repeat subscriber
-///      paying ₹199 upfront). A trial that converts later does so server-side
-///      with the app closed, so no client event exists for it. Until the Worker
-///      reports that conversion via the GA4 Measurement Protocol, `purchase`
-///      under-reports trial-originated revenue — Neon remains revenue truth.
+///      SPLIT BY SETTLE LOCATION — this class only logs `purchase` for the
+///      app-OPEN flow (`subscription_active`: a repeat subscriber paying ₹199
+///      at setup). Trial→paid and every renewal settle server-side with the
+///      app closed, and the Worker reports THOSE via the GA4 Measurement
+///      Protocol (workers/src/lib/ga4.ts, keyed on the app_instance_id
+///      uploaded at login/initiate). The split is what prevents double
+///      counting; both sides carry the PhonePe order id as `transaction_id`
+///      so GA4 dedupes any overlap. Neon remains revenue truth.
 ///
 /// GA4 auto-collects `first_open`, `session_start`, and `screen_view`, so we
 /// don't log app-launch here. [screen] is a no-op for the same reason (PostHog
@@ -77,6 +79,9 @@ class GoogleAnalyticsService implements AnalyticsService {
           _analytics.logPurchase(
             currency: _currency,
             value: _value(properties),
+            // PhonePe merchant order id — lets GA4 dedupe this against any
+            // server-side MP report of the same settle (workers ga4.ts).
+            transactionId: properties?['order_id'] as String?,
           ),
         );
     }

@@ -66,6 +66,7 @@ import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
+import { reportServerPurchase, normalizeAppInstanceId } from "../lib/ga4.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import {
   setupSubscription,
@@ -146,7 +147,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string };
+  let body: { plan?: string; appInstanceId?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -154,13 +155,26 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   }
 
   const { plan } = body;
-  // v1: monthly only. Yearly is accepted for schema compatibility but maps to monthly for now.
+  // v1 sells monthly only — deliberate. "yearly" is accepted for schema
+  // compatibility and maps to monthly until a yearly plan actually exists.
   if (plan !== "monthly" && plan !== "yearly") {
     return errorResponse(400, "invalid_plan", "plan must be 'monthly' or 'yearly'");
   }
 
+  // Firebase app_instance_id, refreshed at the moment it matters most: the
+  // debits this mandate will produce settle app-closed, and lib/ga4.ts can only
+  // attribute them if the id is on the users row. /auth/login also uploads it,
+  // but a user who signed in on an older build reaches here without one.
+  const appInstanceId = normalizeAppInstanceId(body.appInstanceId);
+
   const sql = getDb(env);
   try {
+    if (appInstanceId) {
+      await sql`
+        UPDATE users SET app_instance_id = ${appInstanceId}::text
+        WHERE id = ${sub}
+      `;
+    }
     // ── One free trial per user ────────────────────────────────────────────
     // trial_end is written exactly once — the first time a mandate setup
     // completes (webhook/reconcile COALESCE it, never overwrite). So a non-null
@@ -281,9 +295,8 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
     // Redirect URL PhonePe sends the user back to after mandate authorization.
     // Derive the origin from the incoming request so it always matches the host
-    // the app actually called (arul-api.twilight-smoke-d495.workers.dev today,
-    // arul-api.hsrutility.com once the custom domain is attached) — never a
-    // stale hardcode.
+    // the app actually called — both arul-api.hsrutility.com and the legacy
+    // workers.dev host serve live builds, so a hardcode would break one of them.
     const origin = new URL(c.req.url).origin;
     const redirectUrl = `${origin}/payments/callback?sub=${encodeURIComponent(sub)}`;
 
@@ -664,6 +677,14 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // FIRST ever grants (renewals/retries no-op via the status<>'rewarded' guard).
       if (activated.length > 0) {
         await grantReferralReward(sql, activated[0].user_id);
+        // Server-side settle → the app is closed, no client event exists. The
+        // order+transaction event pair and any cron double-settle collapse via
+        // the transaction-id dedupe inside. Fail-open — never blocks the grant.
+        await reportServerPurchase(env, sql, {
+          userId: activated[0].user_id as string,
+          transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
+          amountPaise: typeof pp.amount === "number" ? pp.amount : null,
+        });
       }
 
     } else if (

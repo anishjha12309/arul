@@ -3,9 +3,9 @@
 Cloudflare Worker = API + crons. Base **`https://arul-api.hsrutility.com`** — declared in
 `wrangler.toml` as a `custom_domain` route, so `wrangler deploy` owns both the hostname and its DNS
 record. `arul-api.twilight-smoke-d495.workers.dev` still serves in parallel (`workers_dev = true`)
-because installed builds point at it; **do not drop that line until a release using the custom domain
-has rolled out** — declaring any `routes` entry makes wrangler default workers.dev to false and would
-silently kill every existing install.
+because pre-rename installed builds point at it; **keep that line while any such install exists** —
+declaring any `routes` entry makes wrangler default workers.dev to false and would silently kill
+every one of them.
 
 Neon via Hyperdrive · R2 `south-indian-wallpapers` behind `https://arul-cdn.hsrutility.com`
 (presign via aws4fetch) · KV (jti denylist, webhook dedupe, OAuth cache) · PhonePe v2 Autopay on
@@ -59,8 +59,8 @@ so a 404 there means the scope FAILED to build, not that it is empty) · `catalo
 (public subset) · `catalog/version.json` (edge-cached pointer). Scope queries end in `id ASC`, so
 ordering is deterministic. The app reads version.json, then appends `?v=<version>` to page URLs.
 
-**Both scopes stay live though the app's ringtones tab is parked in v1** (`docs/known-issues.md`) —
-parking is front-end only. Keep the scope, `kind='ringtone'`, and the `ringtones/` sweep prefix.
+**The backend is never conditional on the front end**: both scopes build unconditionally — keep the
+scope, `kind='ringtone'`, and the `ringtones/` sweep prefix regardless of what the app ships.
 
 ## Secrets (`npx wrangler secret bulk <file.json>` — fresh values, NEVER reuse another app's)
 ```
@@ -70,6 +70,8 @@ PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VE
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
 OPS_SECRET(money-moving internal routes; unset = they refuse, which is the safe default)
+GA4_API_SECRET(GA4 Admin → Data streams → Android stream → MP API secrets; unset = server-side
+  purchase reporting silently skips — its pair GA4_FIREBASE_APP_ID is plain config in wrangler.toml [vars])
 ```
 Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` routes production
 credentials to the sandbox host and the 401 looks exactly like bad credentials. `CF_ZONE_ID` /

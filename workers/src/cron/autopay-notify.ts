@@ -28,11 +28,14 @@
  *     → on FAILED:    increment retry_count; if retry_count >= MAX_RETRIES, mark expired
  *     → on PENDING:   leave as-is (PhonePe is still processing / retrying via STANDARD strategy)
  *
- * NOTE: Notification delivery to users (FCM/push) is a TODO stub below.
+ * NOTE: sendUserNotification below is a log-only stub BY DESIGN — Arul has no
+ * push channel (docs/notifications.md); PhonePe's notify call delivers the
+ * payer-facing pre-debit notice through its own rails.
  */
 
 import type { Env } from "../env.js";
 import { getDb, toDate } from "../lib/db.js";
+import { reportServerPurchase } from "../lib/ga4.js";
 import { grantReferralReward } from "../lib/referral.js";
 import {
   notifyRedemption,
@@ -108,7 +111,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
   // WHY: this cron runs hourly forever and used to query `subscriptions`
   // unconditionally, so it woke the Neon compute every single hour whether or
   // not any debit was due. Neon bills by compute-time and autosuspend is what
-  // keeps that near zero pre-launch. A cached "nothing is due before T" marker
+  // keeps idle hours near zero cost. A cached "nothing is due before T" marker
   // makes an idle hour cost one KV read instead of a cold start.
   //
   // Fail-open in every direction: no marker, unparseable marker, or KV error
@@ -245,7 +248,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           WHERE id = ${row.id as string}
         `;
 
-        // Stub: notify the user via push/FCM
+        // Log-only by design — see sendUserNotification.
         await sendUserNotification({
           userId,
           nextDebitAt: new Date(row.next_debit_at as string),
@@ -321,11 +324,12 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Execute sub=${merchantSubId} state=${execResult.state} txn=${execResult.transactionId}`,
         );
 
-        let settled = await applyDebitOutcome(sql, execResult.state, {
+        let settled = await applyDebitOutcome(env, sql, execResult.state, {
           id: row.id as string,
           userId: row.user_id as string,
           retryCount: row.retry_count as number,
           merchantSubId,
+          redemptionOrderId,
         });
 
         // ── Pass C: reconcile a debit that redeem never settles ──────────────
@@ -346,11 +350,12 @@ export async function runAutopayNotify(env: Env): Promise<void> {
               `order=${redemptionOrderId} state=${order.state} ` +
               `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
             );
-            settled = await applyDebitOutcome(sql, order.state, {
+            settled = await applyDebitOutcome(env, sql, order.state, {
               id: row.id as string,
               userId: row.user_id as string,
               retryCount: row.retry_count as number,
               merchantSubId,
+              redemptionOrderId,
             });
           } else {
             console.log(
@@ -393,9 +398,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
  *          PENDING or any state we do not recognise, meaning "still open".
  */
 async function applyDebitOutcome(
+  env: Env,
   sql: ReturnType<typeof getDb>,
   state: string,
-  row: { id: string; userId: string; retryCount: number; merchantSubId: string },
+  row: {
+    id: string;
+    userId: string;
+    retryCount: number;
+    merchantSubId: string;
+    redemptionOrderId: string;
+  },
 ): Promise<boolean> {
   if (state === "COMPLETED") {
     const nextPeriodEnd = addOneMonth(new Date());
@@ -413,6 +425,14 @@ async function applyDebitOutcome(
     // Referral reward on the referred user's first paid debit. Idempotent:
     // the status<>'rewarded' guard means monthly renewals never re-credit.
     await grantReferralReward(sql, row.userId);
+    // App-closed settle → report `purchase` server-side (GA4 MP). Same
+    // transaction id as the webhook path, so whichever lands second dedupes.
+    // Fail-open — never blocks the grant above.
+    await reportServerPurchase(env, sql, {
+      userId: row.userId,
+      transactionId: row.redemptionOrderId,
+      amountPaise: 19900,
+    });
     return true;
   }
 
@@ -540,16 +560,12 @@ interface UserNotificationParams {
 }
 
 /**
- * Notify the user that a debit is imminent.
- *
- * TODO: implement with FCM or another push provider.
- * Steps:
- *   1. Add a `fcm_token` column to the `users` table.
- *   2. Store the token from the Flutter app on notification permission grant.
- *   3. Call the FCM HTTP v1 API:
- *      POST https://fcm.googleapis.com/v1/projects/{projectId}/messages:send
- *      Authorization: Bearer <google-service-account-token>
- *   4. Add FIREBASE_PROJECT_ID and a service-account key as Worker secrets.
+ * Log-only BY DESIGN. Arul deliberately has no push channel — reminders are
+ * on-device only and no screen may promise push (docs/notifications.md) — and
+ * the payer-facing pre-debit notice is delivered by PhonePe's own rails when
+ * the notify call above succeeds, so an app push here would be redundant.
+ * If that decision ever reverses, the shape is FCM HTTP v1 plus an
+ * `fcm_token` column on `users`.
  */
 async function sendUserNotification(params: UserNotificationParams): Promise<void> {
   console.log(
