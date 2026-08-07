@@ -235,4 +235,338 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ringtoneSetApplying => 'Setting ringtone…';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get errorGenericRetry => 'Something went wrong. Please try again.';
+
+  @override
+  String get settingsFallbackName => 'Your account';
+
+  @override
+  String get settingsFallbackEmail => 'Signed in with Google';
+
+  @override
+  String get settingsPremiumSubLocked => 'Unlock apply & share';
+
+  @override
+  String get settingsPremiumSubTrial => 'You\'re on the free trial';
+
+  @override
+  String get settingsPremiumSubCancelled => 'Auto-renew off · access continues';
+
+  @override
+  String get settingsPremiumSubActive => 'You\'re a member';
+
+  @override
+  String get settingsReferSub => 'Earn 30 days free premium';
+
+  @override
+  String get settingsTellFriend => 'Tell a friend';
+
+  @override
+  String get settingsTellFriendSub => 'Send Arul to someone who would love it';
+
+  @override
+  String get settingsRemindersSubOn => 'Weekly and festival reminders on';
+
+  @override
+  String get settingsRemindersSubOff => 'Festival and weekly reminders';
+
+  @override
+  String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get settingsNeedHelp => 'Need help?';
+
+  @override
+  String get settingsNeedHelpSub => 'Contact support';
+
+  @override
+  String get settingsUpload => 'Upload your wallpaper';
+
+  @override
+  String get settingsUploadSub => 'Share your own image or video';
+
+  @override
+  String get settingsLogout => 'Logout';
+
+  @override
+  String get settingsLogoutConfirmTitle => 'Logout?';
+
+  @override
+  String get settingsLogoutConfirmBody =>
+      'You can sign back in anytime with Google.';
+
+  @override
+  String get settingsDeleteAccount => 'Delete account';
+
+  @override
+  String get settingsDeleteConfirmTitle => 'Delete account?';
+
+  @override
+  String get settingsDeleteConfirmBody =>
+      'This removes your account, favourites and rewards for good.';
+
+  @override
+  String get settingsDeleteConfirmBodyPremium =>
+      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+
+  @override
+  String get settingsTerms => 'Terms & Conditions';
+
+  @override
+  String get settingsSupportEmailPrompt =>
+      'Please describe your issue or feedback:';
+
+  @override
+  String get settingsSupportEmailDetails =>
+      'The details below help us resolve your request faster:';
+
+  @override
+  String settingsNoEmailApp(String email) {
+    return 'No email app found. Write to us at $email';
+  }
+
+  @override
+  String get settingsEditNameTitle => 'Your name';
+
+  @override
+  String get settingsEditNameSub => 'Shown on wallpapers you upload';
+
+  @override
+  String get themeSystemDefault => 'System default';
+
+  @override
+  String get themeSystemSub => 'Follow device setting';
+
+  @override
+  String get themeLightSub => 'Ivory & silk';
+
+  @override
+  String get themeDarkSub => 'Lamp-lit maroon';
+
+  @override
+  String get remindersTitle => 'Reminders';
+
+  @override
+  String get remindersToggleTitle => 'Devotional reminders';
+
+  @override
+  String get remindersToggleSub => 'The weekly day, and every major festival';
+
+  @override
+  String get remindersScheduleNote =>
+      'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.';
+
+  @override
+  String get remindersPermissionToast =>
+      'Notifications are off for Arul. Turn them on in your phone settings to get reminders.';
+
+  @override
+  String get remindersTimeLabel => 'Reminder time';
+
+  @override
+  String get remindersComingUp => 'Coming up';
+
+  @override
+  String get remindersMonthJan => 'Jan';
+
+  @override
+  String get remindersMonthFeb => 'Feb';
+
+  @override
+  String get remindersMonthMar => 'Mar';
+
+  @override
+  String get remindersMonthApr => 'Apr';
+
+  @override
+  String get remindersMonthMay => 'May';
+
+  @override
+  String get remindersMonthJun => 'Jun';
+
+  @override
+  String get remindersMonthJul => 'Jul';
+
+  @override
+  String get remindersMonthAug => 'Aug';
+
+  @override
+  String get remindersMonthSep => 'Sep';
+
+  @override
+  String get remindersMonthOct => 'Oct';
+
+  @override
+  String get remindersMonthNov => 'Nov';
+
+  @override
+  String get remindersMonthDec => 'Dec';
+
+  @override
+  String get premiumBrandTitle => 'Arul Premium';
+
+  @override
+  String get premiumScreenSubline =>
+      'The full collection, alive on your screen';
+
+  @override
+  String get premiumPerkEvery => 'Every wallpaper, still and live';
+
+  @override
+  String get premiumPerkApplyShare => 'Apply and share without limits';
+
+  @override
+  String get premiumPerkNew => 'New arrivals every week';
+
+  @override
+  String get premiumPerMonth => '/ month';
+
+  @override
+  String get premiumPlanNote => 'UPI Autopay · cancel anytime';
+
+  @override
+  String get premiumTrialPill => '1 DAY FREE';
+
+  @override
+  String get premiumCtaPaid => 'Get Premium';
+
+  @override
+  String premiumFootnoteTrial(String price) {
+    return 'Free for 1 day, then $price/month. UPI Autopay verifies your account with ₹2, refunded instantly. Browsing stays free forever.';
+  }
+
+  @override
+  String premiumFootnotePaid(String price) {
+    return '$price charged today, then renews monthly via UPI Autopay. Cancel anytime. Browsing stays free forever.';
+  }
+
+  @override
+  String get premiumComingSoonToast => 'Premium is coming soon.';
+
+  @override
+  String get premiumWelcomeToast => 'Welcome to Arul Premium!';
+
+  @override
+  String get premiumCelebrateTitle => 'You\'re in';
+
+  @override
+  String get premiumCelebrateBody =>
+      'Arul Premium is active. Know someone who would love these wallpapers? Send them one.';
+
+  @override
+  String get premiumSheetPitch =>
+      'Every wallpaper, live and still. Apply and share freely across all six categories.';
+
+  @override
+  String get premiumKeepBrowsing => 'Keep browsing free';
+
+  @override
+  String get referTitle => 'Refer & Earn';
+
+  @override
+  String get referHeroTitle => 'Gift a friend, earn a month';
+
+  @override
+  String get referHeroBody =>
+      '30 days of free premium for every friend who subscribes with your link';
+
+  @override
+  String get referShareWhatsapp => 'Share via WhatsApp';
+
+  @override
+  String get referRewardsLabel => 'Rewards earned';
+
+  @override
+  String referRewardDays(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get referHowItWorks => 'How it works';
+
+  @override
+  String get referStep1 => 'Share your link with friends and family';
+
+  @override
+  String get referStep2 => 'They install Arul and subscribe to premium';
+
+  @override
+  String get referStep3 => '30 days of free premium lands in your account';
+
+  @override
+  String get referEmpty =>
+      'No referrals yet — your first friend is one share away';
+
+  @override
+  String get referShareCta => 'Share Arul';
+
+  @override
+  String get referNotNow => 'Not now';
+
+  @override
+  String get uploadScreenTitle => 'Upload wallpaper';
+
+  @override
+  String get uploadPickZoneTitle => 'Choose an image or video';
+
+  @override
+  String get uploadPickZoneSub => 'Portrait, 1080×2400 or larger';
+
+  @override
+  String get uploadTitleLabel => 'Title';
+
+  @override
+  String get uploadTitleOptional => '(optional)';
+
+  @override
+  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
+
+  @override
+  String get uploadCategoryLabel => 'Category';
+
+  @override
+  String get uploadRightsCheckbox =>
+      'I own the rights to this content or have permission to share it';
+
+  @override
+  String get uploadSubmitCta => 'Submit for review';
+
+  @override
+  String get uploadFootnote =>
+      'Approved wallpapers appear in the feed with your name';
+
+  @override
+  String get uploadRejectStatic => 'Please choose a JPEG, PNG or WebP image.';
+
+  @override
+  String get uploadRejectLive => 'Please choose an MP4 video.';
+
+  @override
+  String uploadTooLarge(String max) {
+    return 'File is too large (max $max).';
+  }
+
+  @override
+  String get uploadSuccessToast => 'Submitted for review — thank you!';
+
+  @override
+  String get uploadShareMomentTitle => 'Thank you';
+
+  @override
+  String get uploadShareMomentBody =>
+      'We\'ll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?';
+
+  @override
+  String get uploadComingSoonToast => 'Upload is coming soon.';
 }

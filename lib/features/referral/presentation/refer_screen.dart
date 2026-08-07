@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -23,10 +24,10 @@ import '../providers/referral_providers.dart';
 class ReferScreen extends ConsumerWidget {
   const ReferScreen({super.key});
 
-  static const _steps = [
-    (n: '1', text: 'Share your link with friends and family'),
-    (n: '2', text: 'They install Arul and subscribe to premium'),
-    (n: '3', text: '30 days of free premium lands in your account'),
+  static List<({String n, String text})> _steps(AppLocalizations l10n) => [
+    (n: '1', text: l10n.referStep1),
+    (n: '2', text: l10n.referStep2),
+    (n: '3', text: l10n.referStep3),
   ];
 
   /// WhatsApp-first share of the referral-attributed Play link; system sheet
@@ -40,12 +41,14 @@ class ReferScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     // Rewards summary; the zero state stands while it loads, and in a
     // define-less local run that has no backend to read it from.
     final rewardDays = AppConfig.hasBackend
         ? (ref.watch(referralSummaryProvider).asData?.value.totalRewardDays ??
               0)
         : 0;
+    final steps = _steps(l10n);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -99,7 +102,7 @@ class ReferScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Refer & Earn',
+                    l10n.referTitle,
                     style: ArulTokens.screenTitle.copyWith(color: textPrimary),
                   ),
                 ],
@@ -140,7 +143,7 @@ class ReferScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'Gift a friend, earn a month',
+                          l10n.referHeroTitle,
                           textAlign: TextAlign.center,
                           style: ArulTokens.heroHeading.copyWith(
                             color: textPrimary,
@@ -148,8 +151,7 @@ class ReferScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          '30 days of free premium for every friend who '
-                          'subscribes with your link',
+                          l10n.referHeroBody,
                           textAlign: TextAlign.center,
                           style: ArulTokens.body.copyWith(color: heroSubText),
                         ),
@@ -157,7 +159,7 @@ class ReferScreen extends ConsumerWidget {
                         CtaButton(
                           // Sharing is a commit verb, like Apply on the feed.
                           haptic: ArulHapticStyle.firm,
-                          label: 'Share via WhatsApp',
+                          label: l10n.referShareWhatsapp,
                           icon: Icons.share_rounded,
                           height: ArulTokens.ctaHeight50,
                           onPressed: () => _share(context, ref),
@@ -186,13 +188,13 @@ class ReferScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Rewards earned',
+                              l10n.referRewardsLabel,
                               style: ArulTokens.rowSub.copyWith(
                                 color: heroSubText,
                               ),
                             ),
                             Text(
-                              '$rewardDays days',
+                              l10n.referRewardDays(rewardDays),
                               style: ArulTokens.priceNumeral.copyWith(
                                 fontSize: 22,
                                 color: rewardValueColor,
@@ -219,7 +221,7 @@ class ReferScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'How it works',
+                          l10n.referHowItWorks,
                           style: TextStyle(
                             fontSize: 14.5,
                             fontWeight: FontWeight.w600,
@@ -227,7 +229,7 @@ class ReferScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        for (var i = 0; i < _steps.length; i++) ...[
+                        for (var i = 0; i < steps.length; i++) ...[
                           if (i > 0) const SizedBox(height: 12),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,7 +243,7 @@ class ReferScreen extends ConsumerWidget {
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
-                                  _steps[i].n,
+                                  steps[i].n,
                                   style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
@@ -254,7 +256,7 @@ class ReferScreen extends ConsumerWidget {
                                 child: Padding(
                                   padding: const EdgeInsets.only(top: 3),
                                   child: Text(
-                                    _steps[i].text,
+                                    steps[i].text,
                                     style: ArulTokens.body.copyWith(
                                       color: stepText,
                                     ),
@@ -282,8 +284,7 @@ class ReferScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'No referrals yet — your first friend is one '
-                          'share away',
+                          l10n.referEmpty,
                           textAlign: TextAlign.center,
                           style: ArulTokens.body.copyWith(
                             fontSize: 13.5,

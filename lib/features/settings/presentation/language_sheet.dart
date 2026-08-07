@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
@@ -52,7 +53,7 @@ class _LanguageSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Language',
+            AppLocalizations.of(context).settingsLanguage,
             style: ArulTokens.sheetTitle.copyWith(color: titleColor),
           ),
           const SizedBox(height: 14),

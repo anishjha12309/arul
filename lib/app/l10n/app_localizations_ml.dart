@@ -237,4 +237,345 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get ringtoneSetApplying => 'റിംഗ്ടോൺ സെറ്റ് ചെയ്യുന്നു…';
+
+  @override
+  String get save => 'സേവ് ചെയ്യുക';
+
+  @override
+  String get cancel => 'റദ്ദാക്കുക';
+
+  @override
+  String get errorGenericRetry =>
+      'എന്തോ കുഴപ്പം സംഭവിച്ചു. വീണ്ടും ശ്രമിക്കുക.';
+
+  @override
+  String get settingsFallbackName => 'നിങ്ങളുടെ അക്കൗണ്ട്';
+
+  @override
+  String get settingsFallbackEmail => 'Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു';
+
+  @override
+  String get settingsPremiumSubLocked =>
+      'പ്രയോഗിക്കാനും പങ്കിടാനും അൺലോക്ക് ചെയ്യുക';
+
+  @override
+  String get settingsPremiumSubTrial => 'നിങ്ങൾ സൗജന്യ ട്രയലിലാണ്';
+
+  @override
+  String get settingsPremiumSubCancelled =>
+      'ഓട്ടോ റിന്യൂവൽ ഓഫ് · ആക്‌സസ് തുടരും';
+
+  @override
+  String get settingsPremiumSubActive => 'നിങ്ങൾ അംഗമാണ്';
+
+  @override
+  String get settingsReferSub => '30 ദിവസം സൗജന്യ പ്രീമിയം നേടുക';
+
+  @override
+  String get settingsTellFriend => 'ഒരു സുഹൃത്തിനോട് പറയൂ';
+
+  @override
+  String get settingsTellFriendSub => 'Arul ഇഷ്ടപ്പെടുന്ന ഒരാൾക്ക് അയക്കൂ';
+
+  @override
+  String get settingsRemindersSubOn => 'പ്രതിവാര, ഉത്സവ റിമൈൻഡറുകൾ ഓണാണ്';
+
+  @override
+  String get settingsRemindersSubOff => 'ഉത്സവ, പ്രതിവാര റിമൈൻഡറുകൾ';
+
+  @override
+  String get settingsLanguage => 'ഭാഷ';
+
+  @override
+  String get settingsTheme => 'തീം';
+
+  @override
+  String get settingsNeedHelp => 'സഹായം വേണോ?';
+
+  @override
+  String get settingsNeedHelpSub => 'സപ്പോർട്ടിനെ ബന്ധപ്പെടുക';
+
+  @override
+  String get settingsUpload => 'നിങ്ങളുടെ വാൾപേപ്പർ അപ്‌ലോഡ് ചെയ്യുക';
+
+  @override
+  String get settingsUploadSub => 'നിങ്ങളുടെ ചിത്രമോ വീഡിയോയോ പങ്കിടുക';
+
+  @override
+  String get settingsLogout => 'ലോഗ് ഔട്ട്';
+
+  @override
+  String get settingsLogoutConfirmTitle => 'ലോഗ് ഔട്ട് ചെയ്യണോ?';
+
+  @override
+  String get settingsLogoutConfirmBody =>
+      'എപ്പോൾ വേണമെങ്കിലും Google ഉപയോഗിച്ച് വീണ്ടും സൈൻ ഇൻ ചെയ്യാം.';
+
+  @override
+  String get settingsDeleteAccount => 'അക്കൗണ്ട് ഡിലീറ്റ് ചെയ്യുക';
+
+  @override
+  String get settingsDeleteConfirmTitle => 'അക്കൗണ്ട് ഡിലീറ്റ് ചെയ്യണോ?';
+
+  @override
+  String get settingsDeleteConfirmBody =>
+      'ഇത് നിങ്ങളുടെ അക്കൗണ്ട്, പ്രിയപ്പെട്ടവ, റിവാർഡുകൾ എന്നിവ എന്നന്നേക്കുമായി നീക്കും.';
+
+  @override
+  String get settingsDeleteConfirmBodyPremium =>
+      'ഇത് നിങ്ങളുടെ അക്കൗണ്ട്, പ്രിയപ്പെട്ടവ, റിവാർഡുകൾ എന്നിവ എന്നന്നേക്കുമായി നീക്കും.\n\nനിങ്ങളുടെ Arul Premium സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാകും, ബാക്കിയുള്ള കാലാവധി നഷ്ടമാകും — റീഫണ്ട് ഇല്ല. വീണ്ടും സൈൻ അപ്പ് ചെയ്താലും അത് തിരികെ വരില്ല, മറ്റൊരു സൗജന്യ ട്രയലും ലഭിക്കില്ല.';
+
+  @override
+  String get settingsTerms => 'നിബന്ധനകളും വ്യവസ്ഥകളും';
+
+  @override
+  String get settingsSupportEmailPrompt =>
+      'നിങ്ങളുടെ പ്രശ്നമോ അഭിപ്രായമോ വിവരിക്കുക:';
+
+  @override
+  String get settingsSupportEmailDetails =>
+      'താഴെയുള്ള വിവരങ്ങൾ നിങ്ങളുടെ അഭ്യർത്ഥന വേഗത്തിൽ പരിഹരിക്കാൻ സഹായിക്കും:';
+
+  @override
+  String settingsNoEmailApp(String email) {
+    return 'ഇമെയിൽ ആപ്പ് കണ്ടില്ല. $email എന്ന വിലാസത്തിൽ എഴുതുക';
+  }
+
+  @override
+  String get settingsEditNameTitle => 'നിങ്ങളുടെ പേര്';
+
+  @override
+  String get settingsEditNameSub =>
+      'നിങ്ങൾ അപ്‌ലോഡ് ചെയ്യുന്ന വാൾപേപ്പറുകളിൽ കാണിക്കും';
+
+  @override
+  String get themeSystemDefault => 'സിസ്റ്റം ഡിഫോൾട്ട്';
+
+  @override
+  String get themeSystemSub => 'ഉപകരണ ക്രമീകരണം പിന്തുടരുക';
+
+  @override
+  String get themeLightSub => 'ഐവറി & പട്ട്';
+
+  @override
+  String get themeDarkSub => 'വിളക്കുവെളിച്ചത്തിലെ മെറൂൺ';
+
+  @override
+  String get remindersTitle => 'റിമൈൻഡറുകൾ';
+
+  @override
+  String get remindersToggleTitle => 'ഭക്തി റിമൈൻഡറുകൾ';
+
+  @override
+  String get remindersToggleSub => 'പ്രതിവാര ദിവസവും എല്ലാ പ്രധാന ഉത്സവവും';
+
+  @override
+  String get remindersScheduleNote =>
+      'എല്ലാ ആഴ്ചയും വെള്ളിയാഴ്ച ഒരു റിമൈൻഡർ, ഓരോ പ്രധാന ഉത്സവത്തിനും കുറച്ചു ദിവസം മുൻപ് ഒന്ന് — പൊങ്കൽ, ദീപാവലി, നവരാത്രി, ശിവരാത്രി തുടങ്ങിയവ. മാസത്തിൽ ഏകദേശം രണ്ട്.';
+
+  @override
+  String get remindersPermissionToast =>
+      'Arul-ന് അറിയിപ്പുകൾ ഓഫാണ്. റിമൈൻഡറുകൾ കിട്ടാൻ ഫോൺ ക്രമീകരണങ്ങളിൽ ഓണാക്കുക.';
+
+  @override
+  String get remindersTimeLabel => 'റിമൈൻഡർ സമയം';
+
+  @override
+  String get remindersComingUp => 'വരാനിരിക്കുന്നത്';
+
+  @override
+  String get remindersMonthJan => 'ജനു';
+
+  @override
+  String get remindersMonthFeb => 'ഫെബ്രു';
+
+  @override
+  String get remindersMonthMar => 'മാർ';
+
+  @override
+  String get remindersMonthApr => 'ഏപ്രി';
+
+  @override
+  String get remindersMonthMay => 'മേയ്';
+
+  @override
+  String get remindersMonthJun => 'ജൂൺ';
+
+  @override
+  String get remindersMonthJul => 'ജൂലൈ';
+
+  @override
+  String get remindersMonthAug => 'ഓഗ';
+
+  @override
+  String get remindersMonthSep => 'സെപ്';
+
+  @override
+  String get remindersMonthOct => 'ഒക്ടോ';
+
+  @override
+  String get remindersMonthNov => 'നവം';
+
+  @override
+  String get remindersMonthDec => 'ഡിസം';
+
+  @override
+  String get premiumBrandTitle => 'Arul Premium';
+
+  @override
+  String get premiumScreenSubline =>
+      'മുഴുവൻ ശേഖരം, നിങ്ങളുടെ സ്ക്രീനിൽ ജീവനോടെ';
+
+  @override
+  String get premiumPerkEvery => 'എല്ലാ വാൾപേപ്പറും — സ്റ്റാറ്റിക്കും ലൈവും';
+
+  @override
+  String get premiumPerkApplyShare => 'പരിധിയില്ലാതെ പ്രയോഗിക്കുക, പങ്കിടുക';
+
+  @override
+  String get premiumPerkNew => 'എല്ലാ ആഴ്ചയും പുതിയവ';
+
+  @override
+  String get premiumPerMonth => '/ മാസം';
+
+  @override
+  String get premiumPlanNote => 'UPI ഓട്ടോപേ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം';
+
+  @override
+  String get premiumTrialPill => '1 ദിവസം സൗജന്യം';
+
+  @override
+  String get premiumCtaPaid => 'പ്രീമിയം എടുക്കൂ';
+
+  @override
+  String premiumFootnoteTrial(String price) {
+    return '1 ദിവസം സൗജന്യം, പിന്നെ മാസം $price. UPI ഓട്ടോപേ നിങ്ങളുടെ അക്കൗണ്ട് ₹2 ഉപയോഗിച്ച് പരിശോധിക്കും, ഉടൻ തിരികെ കിട്ടും. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.';
+  }
+
+  @override
+  String premiumFootnotePaid(String price) {
+    return 'ഇന്ന് $price ഈടാക്കും, പിന്നീട് UPI ഓട്ടോപേ വഴി എല്ലാ മാസവും പുതുക്കും. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.';
+  }
+
+  @override
+  String get premiumComingSoonToast => 'പ്രീമിയം ഉടൻ വരുന്നു.';
+
+  @override
+  String get premiumWelcomeToast => 'Arul Premium-ലേക്ക് സ്വാഗതം!';
+
+  @override
+  String get premiumCelebrateTitle => 'നിങ്ങൾ ചേർന്നു';
+
+  @override
+  String get premiumCelebrateBody =>
+      'Arul Premium സജീവമാണ്. ഈ വാൾപേപ്പറുകൾ ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ? ഒന്ന് അയക്കൂ.';
+
+  @override
+  String get premiumSheetPitch =>
+      'എല്ലാ വാൾപേപ്പറും — ലൈവും സ്റ്റാറ്റിക്കും. ആറു വിഭാഗങ്ങളിലും സ്വതന്ത്രമായി പ്രയോഗിക്കുക, പങ്കിടുക.';
+
+  @override
+  String get premiumKeepBrowsing => 'സൗജന്യമായി ബ്രൗസ് ചെയ്യൂ';
+
+  @override
+  String get referTitle => 'റഫർ ചെയ്ത് നേടൂ';
+
+  @override
+  String get referHeroTitle => 'സുഹൃത്തിന് സമ്മാനം, നിങ്ങൾക്ക് ഒരു മാസം';
+
+  @override
+  String get referHeroBody =>
+      'നിങ്ങളുടെ ലിങ്ക് വഴി സബ്‌സ്‌ക്രൈബ് ചെയ്യുന്ന ഓരോ സുഹൃത്തിനും 30 ദിവസം സൗജന്യ പ്രീമിയം';
+
+  @override
+  String get referShareWhatsapp => 'WhatsApp വഴി പങ്കിടുക';
+
+  @override
+  String get referRewardsLabel => 'നേടിയ റിവാർഡുകൾ';
+
+  @override
+  String referRewardDays(int days) {
+    return '$days ദിവസം';
+  }
+
+  @override
+  String get referHowItWorks => 'ഇത് എങ്ങനെ പ്രവർത്തിക്കുന്നു';
+
+  @override
+  String get referStep1 =>
+      'നിങ്ങളുടെ ലിങ്ക് സുഹൃത്തുക്കൾക്കും കുടുംബത്തിനും പങ്കിടുക';
+
+  @override
+  String get referStep2 =>
+      'അവർ Arul ഇൻസ്റ്റാൾ ചെയ്ത് പ്രീമിയം സബ്‌സ്‌ക്രൈബ് ചെയ്യുന്നു';
+
+  @override
+  String get referStep3 =>
+      '30 ദിവസം സൗജന്യ പ്രീമിയം നിങ്ങളുടെ അക്കൗണ്ടിൽ എത്തും';
+
+  @override
+  String get referEmpty => 'ഇതുവരെ റഫറലുകളില്ല — ഒരു ഷെയറിൽ ആദ്യ സുഹൃത്ത്';
+
+  @override
+  String get referShareCta => 'Arul പങ്കിടുക';
+
+  @override
+  String get referNotNow => 'ഇപ്പോൾ വേണ്ട';
+
+  @override
+  String get uploadScreenTitle => 'വാൾപേപ്പർ അപ്‌ലോഡ്';
+
+  @override
+  String get uploadPickZoneTitle => 'ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക';
+
+  @override
+  String get uploadPickZoneSub => 'പോർട്രെയ്റ്റ്, 1080×2400 അല്ലെങ്കിൽ വലുത്';
+
+  @override
+  String get uploadTitleLabel => 'തലക്കെട്ട്';
+
+  @override
+  String get uploadTitleOptional => '(നിർബന്ധമല്ല)';
+
+  @override
+  String get uploadTitleHint => 'ഉദാ. സന്ധ്യയിൽ മീനാക്ഷി';
+
+  @override
+  String get uploadCategoryLabel => 'വിഭാഗം';
+
+  @override
+  String get uploadRightsCheckbox =>
+      'ഈ ഉള്ളടക്കത്തിന്റെ അവകാശം എനിക്കാണ്, അല്ലെങ്കിൽ പങ്കിടാൻ അനുമതിയുണ്ട്';
+
+  @override
+  String get uploadSubmitCta => 'പരിശോധനയ്ക്ക് അയക്കുക';
+
+  @override
+  String get uploadFootnote =>
+      'അനുവദിച്ച വാൾപേപ്പറുകൾ നിങ്ങളുടെ പേരോടെ ഫീഡിൽ വരും';
+
+  @override
+  String get uploadRejectStatic =>
+      'JPEG, PNG അല്ലെങ്കിൽ WebP ചിത്രം തിരഞ്ഞെടുക്കുക.';
+
+  @override
+  String get uploadRejectLive => 'MP4 വീഡിയോ തിരഞ്ഞെടുക്കുക.';
+
+  @override
+  String uploadTooLarge(String max) {
+    return 'ഫയൽ വളരെ വലുതാണ് (പരമാവധി $max).';
+  }
+
+  @override
+  String get uploadSuccessToast => 'പരിശോധനയ്ക്ക് അയച്ചു — നന്ദി!';
+
+  @override
+  String get uploadShareMomentTitle => 'നന്ദി';
+
+  @override
+  String get uploadShareMomentBody =>
+      'നിങ്ങളുടെ വാൾപേപ്പർ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?';
+
+  @override
+  String get uploadComingSoonToast => 'അപ്‌ലോഡ് ഉടൻ വരുന്നു.';
 }

@@ -89,5 +89,148 @@
   "ringtonePermissionCancel": "Not now",
   "ringtoneSetPreparing": "Preparing…",
   "ringtoneSetDownloading": "Downloading…",
-  "ringtoneSetApplying": "Setting ringtone…"
+  "ringtoneSetApplying": "Setting ringtone…",
+  "save": "Save",
+  "cancel": "Cancel",
+  "errorGenericRetry": "Something went wrong. Please try again.",
+  "settingsFallbackName": "Your account",
+  "settingsFallbackEmail": "Signed in with Google",
+  "settingsPremiumSubLocked": "Unlock apply & share",
+  "settingsPremiumSubTrial": "You're on the free trial",
+  "settingsPremiumSubCancelled": "Auto-renew off · access continues",
+  "settingsPremiumSubActive": "You're a member",
+  "settingsReferSub": "Earn 30 days free premium",
+  "settingsTellFriend": "Tell a friend",
+  "settingsTellFriendSub": "Send Arul to someone who would love it",
+  "settingsRemindersSubOn": "Weekly and festival reminders on",
+  "settingsRemindersSubOff": "Festival and weekly reminders",
+  "settingsLanguage": "Language",
+  "settingsTheme": "Theme",
+  "settingsNeedHelp": "Need help?",
+  "settingsNeedHelpSub": "Contact support",
+  "settingsUpload": "Upload your wallpaper",
+  "settingsUploadSub": "Share your own image or video",
+  "settingsLogout": "Logout",
+  "settingsLogoutConfirmTitle": "Logout?",
+  "settingsLogoutConfirmBody": "You can sign back in anytime with Google.",
+  "settingsDeleteAccount": "Delete account",
+  "settingsDeleteConfirmTitle": "Delete account?",
+  "settingsDeleteConfirmBody": "This removes your account, favourites and rewards for good.",
+  "settingsDeleteConfirmBodyPremium": "This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.",
+  "settingsTerms": "Terms & Conditions",
+  "settingsSupportEmailPrompt": "Please describe your issue or feedback:",
+  "settingsSupportEmailDetails": "The details below help us resolve your request faster:",
+  "settingsNoEmailApp": "No email app found. Write to us at {email}",
+  "@settingsNoEmailApp": {
+    "description": "Error toast when no mail client can handle the mailto: intent. Names the support address so the user can copy it by hand — without it the tap on \"Need help?\" simply does nothing.",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsEditNameTitle": "Your name",
+  "settingsEditNameSub": "Shown on wallpapers you upload",
+  "themeSystemDefault": "System default",
+  "themeSystemSub": "Follow device setting",
+  "themeLightSub": "Ivory & silk",
+  "themeDarkSub": "Lamp-lit maroon",
+  "remindersTitle": "Reminders",
+  "remindersToggleTitle": "Devotional reminders",
+  "remindersToggleSub": "The weekly day, and every major festival",
+  "remindersScheduleNote": "You'll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.",
+  "remindersPermissionToast": "Notifications are off for Arul. Turn them on in your phone settings to get reminders.",
+  "remindersTimeLabel": "Reminder time",
+  "remindersComingUp": "Coming up",
+  "remindersMonthJan": "Jan",
+  "remindersMonthFeb": "Feb",
+  "remindersMonthMar": "Mar",
+  "remindersMonthApr": "Apr",
+  "remindersMonthMay": "May",
+  "remindersMonthJun": "Jun",
+  "remindersMonthJul": "Jul",
+  "remindersMonthAug": "Aug",
+  "remindersMonthSep": "Sep",
+  "remindersMonthOct": "Oct",
+  "remindersMonthNov": "Nov",
+  "remindersMonthDec": "Dec",
+  "premiumBrandTitle": "Arul Premium",
+  "premiumScreenSubline": "The full collection, alive on your screen",
+  "premiumPerkEvery": "Every wallpaper, still and live",
+  "premiumPerkApplyShare": "Apply and share without limits",
+  "premiumPerkNew": "New arrivals every week",
+  "premiumPerMonth": "/ month",
+  "premiumPlanNote": "UPI Autopay · cancel anytime",
+  "premiumTrialPill": "1 DAY FREE",
+  "premiumCtaPaid": "Get Premium",
+  "premiumFootnoteTrial": "Free for 1 day, then {price}/month. UPI Autopay verifies your account with ₹2, refunded instantly. Browsing stays free forever.",
+  "@premiumFootnoteTrial": {
+    "description": "Paywall footnote for a user who still has their one free trial. The ₹2 PENNY_DROP is named on purpose: the user SEES ₹2 leave their account during UPI mandate setup, and an unexplained debit on a screen that said \"free\" reads as a scam.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "premiumFootnotePaid": "{price} charged today, then renews monthly via UPI Autopay. Cancel anytime. Browsing stays free forever.",
+  "@premiumFootnotePaid": {
+    "description": "Paywall footnote for a user whose trial is consumed — the server charges the full month upfront, so this must say so rather than promise a free day.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "premiumComingSoonToast": "Premium is coming soon.",
+  "premiumWelcomeToast": "Welcome to Arul Premium!",
+  "premiumCelebrateTitle": "You're in",
+  "premiumCelebrateBody": "Arul Premium is active. Know someone who would love these wallpapers? Send them one.",
+  "premiumSheetPitch": "Every wallpaper, live and still. Apply and share freely across all six categories.",
+  "premiumKeepBrowsing": "Keep browsing free",
+  "referTitle": "Refer & Earn",
+  "referHeroTitle": "Gift a friend, earn a month",
+  "referHeroBody": "30 days of free premium for every friend who subscribes with your link",
+  "referShareWhatsapp": "Share via WhatsApp",
+  "referRewardsLabel": "Rewards earned",
+  "referRewardDays": "{days} days",
+  "@referRewardDays": {
+    "description": "Reward total on Refer & Earn, rendered under the \"Rewards earned\" label. Days of free premium granted, never a currency amount.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "referHowItWorks": "How it works",
+  "referStep1": "Share your link with friends and family",
+  "referStep2": "They install Arul and subscribe to premium",
+  "referStep3": "30 days of free premium lands in your account",
+  "referEmpty": "No referrals yet — your first friend is one share away",
+  "referShareCta": "Share Arul",
+  "referNotNow": "Not now",
+  "uploadScreenTitle": "Upload wallpaper",
+  "uploadPickZoneTitle": "Choose an image or video",
+  "uploadPickZoneSub": "Portrait, 1080×2400 or larger",
+  "uploadTitleLabel": "Title",
+  "uploadTitleOptional": "(optional)",
+  "uploadTitleHint": "e.g. Meenakshi at dusk",
+  "uploadCategoryLabel": "Category",
+  "uploadRightsCheckbox": "I own the rights to this content or have permission to share it",
+  "uploadSubmitCta": "Submit for review",
+  "uploadFootnote": "Approved wallpapers appear in the feed with your name",
+  "uploadRejectStatic": "Please choose a JPEG, PNG or WebP image.",
+  "uploadRejectLive": "Please choose an MP4 video.",
+  "uploadTooLarge": "File is too large (max {max}).",
+  "@uploadTooLarge": {
+    "description": "Rejection toast when the picked file exceeds the per-type cap. {max} is already a formatted size (\"10MB\" / \"50MB\") from UploadConstraints.maxLabel.",
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSuccessToast": "Submitted for review — thank you!",
+  "uploadShareMomentTitle": "Thank you",
+  "uploadShareMomentBody": "We'll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?",
+  "uploadComingSoonToast": "Upload is coming soon."
 }

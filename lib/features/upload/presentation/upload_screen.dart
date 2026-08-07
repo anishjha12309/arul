@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
@@ -69,6 +70,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// Picks an image or MP4 and validates its MIME type + size against
   /// [UploadConstraints] — rejects with a toast if it doesn't fit.
   Future<void> _pickFile() async {
+    final l10n = AppLocalizations.of(context);
     final result = await FilePicker.pickFiles(type: FileType.media);
     final file = result?.files.singleOrNull;
     if (file?.path == null || !mounted) return;
@@ -80,7 +82,12 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     if (!UploadConstraints.allowedTypes(wallpaperType).contains(mime)) {
       showArulToast(
         context,
-        'Please choose a ${UploadConstraints.typeLabel(wallpaperType)}.',
+        // The allowed-type wording is spelled out per branch rather than
+        // interpolating UploadConstraints.typeLabel — that label is English-only
+        // and would sit untranslated in the middle of a translated sentence.
+        wallpaperType == 'live'
+            ? l10n.uploadRejectLive
+            : l10n.uploadRejectStatic,
         kind: ToastKind.error,
       );
       return;
@@ -90,7 +97,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     if (size > UploadConstraints.maxBytes(wallpaperType)) {
       showArulToast(
         context,
-        'File is too large (max ${UploadConstraints.maxLabel(wallpaperType)}).',
+        l10n.uploadTooLarge(UploadConstraints.maxLabel(wallpaperType)),
         kind: ToastKind.error,
       );
       return;
@@ -105,9 +112,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context);
     if (!AppConfig.hasBackend) {
       // Pre-Phase-0 stub: there is no Worker to presign/confirm against.
-      showArulToast(context, 'Upload is coming soon.');
+      showArulToast(context, l10n.uploadComingSoonToast);
       return;
     }
     await ref
@@ -128,7 +136,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       case UploadSuccess():
         showArulToast(
           context,
-          'Submitted for review — thank you!',
+          l10n.uploadSuccessToast,
           kind: ToastKind.success,
         );
         ref.read(uploadProvider.notifier).reset();
@@ -137,10 +145,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         // is never orphaned by this route closing under it.
         await ShareMomentSheet.show(
           context,
-          title: 'Thank you',
-          body:
-              "We'll review your wallpaper shortly. While you wait — know "
-              'someone who would enjoy Arul?',
+          title: l10n.uploadShareMomentTitle,
+          body: l10n.uploadShareMomentBody,
           source: 'upload_success',
         );
         if (!mounted) return;
@@ -155,6 +161,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
@@ -200,7 +207,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Upload wallpaper',
+                    l10n.uploadScreenTitle,
                     style: ArulTokens.screenTitle.copyWith(color: textPrimary),
                   ),
                 ],
@@ -240,7 +247,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _fileName ?? 'Choose an image or video',
+                              _fileName ?? l10n.uploadPickZoneTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
@@ -250,7 +257,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Portrait, 1080×2400 or larger',
+                              l10n.uploadPickZoneSub,
                               textAlign: TextAlign.center,
                               style: ArulTokens.rowSub.copyWith(
                                 color: pickSubLabel,
@@ -271,9 +278,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                         text: TextSpan(
                           style: ArulTokens.rowSub.copyWith(color: labelColor),
                           children: [
-                            const TextSpan(text: 'Title '),
+                            TextSpan(text: '${l10n.uploadTitleLabel} '),
                             TextSpan(
-                              text: '(optional)',
+                              text: l10n.uploadTitleOptional,
                               style: TextStyle(color: placeholderColor),
                             ),
                           ],
@@ -297,7 +304,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           decoration: InputDecoration(
                             isCollapsed: true,
                             border: InputBorder.none,
-                            hintText: 'e.g. Meenakshi at dusk',
+                            hintText: l10n.uploadTitleHint,
                             hintStyle: TextStyle(
                               fontSize: 14.5,
                               color: placeholderColor,
@@ -314,7 +321,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Category',
+                        l10n.uploadCategoryLabel,
                         style: ArulTokens.rowSub.copyWith(color: labelColor),
                       ),
                       const SizedBox(height: 8),
@@ -364,8 +371,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'I own the rights to this content or have '
-                              'permission to share it',
+                              l10n.uploadRightsCheckbox,
                               style: ArulTokens.caption.copyWith(
                                 fontSize: 13,
                                 color: rightsTextColor,
@@ -381,7 +387,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   // Submit — disabled until file + category + rights (spec),
                   // and while an upload is in flight (re-entrancy).
                   CtaButton(
-                    label: 'Submit for review',
+                    label: l10n.uploadSubmitCta,
                     busy: ref.watch(uploadProvider) is UploadLoading,
                     fontSize: 15.5,
                     onPressed:
@@ -392,7 +398,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Approved wallpapers appear in the feed with your name',
+                    l10n.uploadFootnote,
                     textAlign: TextAlign.center,
                     style: ArulTokens.caption.copyWith(color: footnoteColor),
                   ),

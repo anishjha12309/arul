@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/build_info.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -51,6 +52,7 @@ class _NotificationSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final headerColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
@@ -81,7 +83,7 @@ class _NotificationSettingsScreenState
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Reminders',
+                    l10n.remindersTitle,
                     style: ArulTokens.screenTitle.copyWith(color: headerColor),
                   ),
                 ],
@@ -95,8 +97,8 @@ class _NotificationSettingsScreenState
                   _Card(
                     child: _ToggleRow(
                       icon: Icons.notifications_active_rounded,
-                      title: 'Devotional reminders',
-                      sub: 'The weekly day, and every major festival',
+                      title: l10n.remindersToggleTitle,
+                      sub: l10n.remindersToggleSub,
                       value: settings.masterEnabled,
                       onChanged: _onMasterChanged,
                     ),
@@ -118,8 +120,12 @@ class _NotificationSettingsScreenState
                     const SizedBox(height: 12),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
+                      // Says what arrives and roughly how often, so the opt-in
+                      // is informed. The wording is deliberately vague about
+                      // dates — the festival reminders fire a few days ahead
+                      // and never name one (see [kFestivalLeadDays]).
                       child: Text(
-                        _scheduleNote,
+                        l10n.remindersScheduleNote,
                         style: ArulTokens.rowSub.copyWith(
                           color: subColor,
                           height: 1.5,
@@ -153,26 +159,15 @@ class _NotificationSettingsScreenState
     );
   }
 
-  /// Says what arrives and roughly how often, so the opt-in is informed. The
-  /// wording is deliberately vague about dates — the festival reminders fire a
-  /// few days ahead and never name one (see [kFestivalLeadDays]).
-  static const _scheduleNote =
-      "You'll get one reminder each week on Velli Kizhamai, and one a few days "
-      'before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri '
-      'and the rest. Around two a month.';
-
   Future<void> _onMasterChanged(bool value) async {
     ArulHaptics.selection();
+    final l10n = AppLocalizations.of(context);
     final granted = await ref
         .read(notificationSettingsProvider.notifier)
         .setMasterEnabled(value);
     if (!mounted) return;
     if (value && !granted) {
-      showArulToast(
-        context,
-        'Notifications are off for Arul. Turn them on in your phone settings to '
-        'get reminders.',
-      );
+      showArulToast(context, l10n.remindersPermissionToast);
     }
   }
 
@@ -359,7 +354,7 @@ class _TimeRow extends StatelessWidget {
             const SizedBox(width: 14),
             Expanded(
               child: Text(
-                'Reminder time',
+                AppLocalizations.of(context).remindersTimeLabel,
                 style: ArulTokens.rowTitle.copyWith(color: titleColor),
               ),
             ),
@@ -394,6 +389,7 @@ class _WhatYoullGet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final subColor = isDark
@@ -416,7 +412,7 @@ class _WhatYoullGet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Coming up',
+            l10n.remindersComingUp,
             style: ArulTokens.rowSub.copyWith(
               color: subColor,
               fontWeight: FontWeight.w700,
@@ -438,7 +434,7 @@ class _WhatYoullGet extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _monthDay(e.date!),
+                    _monthDay(l10n, e.date!),
                     style: ArulTokens.rowSub.copyWith(color: subColor),
                   ),
                 ],
@@ -449,22 +445,23 @@ class _WhatYoullGet extends StatelessWidget {
     );
   }
 
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
+  static String _month(AppLocalizations l10n, int month) => switch (month) {
+    1 => l10n.remindersMonthJan,
+    2 => l10n.remindersMonthFeb,
+    3 => l10n.remindersMonthMar,
+    4 => l10n.remindersMonthApr,
+    5 => l10n.remindersMonthMay,
+    6 => l10n.remindersMonthJun,
+    7 => l10n.remindersMonthJul,
+    8 => l10n.remindersMonthAug,
+    9 => l10n.remindersMonthSep,
+    10 => l10n.remindersMonthOct,
+    11 => l10n.remindersMonthNov,
+    _ => l10n.remindersMonthDec,
+  };
 
-  static String _monthDay(DateTime d) => '${_months[d.month - 1]} ${d.day}';
+  static String _monthDay(AppLocalizations l10n, DateTime d) =>
+      '${_month(l10n, d.month)} ${d.day}';
 }
 
 /// On-device QA for the reminder system. Present in debug and in a sideloaded

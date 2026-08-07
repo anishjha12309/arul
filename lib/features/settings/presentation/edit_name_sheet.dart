@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
@@ -56,6 +57,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final subColor = isDark
@@ -80,12 +82,12 @@ class _EditNameSheetState extends State<_EditNameSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Your name',
+            l10n.settingsEditNameTitle,
             style: ArulTokens.sheetTitle.copyWith(color: titleColor),
           ),
           const SizedBox(height: 4),
           Text(
-            'Shown on wallpapers you upload',
+            l10n.settingsEditNameSub,
             textAlign: TextAlign.center,
             style: ArulTokens.rowSub.copyWith(fontSize: 13, color: subColor),
           ),
@@ -147,7 +149,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
           ),
           const SizedBox(height: 16),
           CtaButton(
-            label: 'Save',
+            label: l10n.save,
             height: ArulTokens.ctaHeight50,
             fontSize: 15.5,
             onPressed: _controller.text.trim().isEmpty ? null : _save,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
@@ -33,8 +34,7 @@ String _monthlyPrice(Map<String, dynamic>? prices) {
 ///
 /// Design-only pass: close X top-left, centered gopuram + wordmark + subline,
 /// a perk card, a
-/// gold-bordered plan card and the green CTA. Copy is hardcoded verbatim for
-/// this pass — deliberately not yet routed through l10n.
+/// gold-bordered plan card and the green CTA.
 class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
 
@@ -44,10 +44,10 @@ class PremiumScreen extends ConsumerStatefulWidget {
   // any number baked in here is wrong within weeks — it had drifted from 428 to
   // 635 before anyone noticed. Pakiza's paywall states no count for the same
   // reason.
-  static const _perks = [
-    (icon: Icons.wallpaper, text: 'Every wallpaper, still and live'),
-    (icon: Icons.ios_share, text: 'Apply and share without limits'),
-    (icon: Icons.auto_awesome, text: 'New arrivals every week'),
+  static List<({IconData icon, String text})> _perks(AppLocalizations l10n) => [
+    (icon: Icons.wallpaper, text: l10n.premiumPerkEvery),
+    (icon: Icons.ios_share, text: l10n.premiumPerkApplyShare),
+    (icon: Icons.auto_awesome, text: l10n.premiumPerkNew),
   ];
 
   @override
@@ -95,12 +95,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
   /// that has gone. It is entirely skippable — "Not now" is one tap and lands in
   /// the same place as closing the paywall would have.
   Future<void> _celebrate(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     await ShareMomentSheet.show(
       context,
-      title: "You're in",
-      body:
-          'Arul Premium is active. Know someone who would love these '
-          'wallpapers? Send them one.',
+      title: l10n.premiumCelebrateTitle,
+      body: l10n.premiumCelebrateBody,
       source: 'purchase_success',
     );
     if (!mounted) return;
@@ -109,6 +108,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     // PhonePe purchase flow (ported): initiate → SDK → status poll → refresh
     // entitlement. Success/failure feedback is reactive so the flow survives
     // rebuilds while the SDK UI is up.
@@ -117,7 +117,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
         case PurchaseSuccess():
           showArulToast(
             context,
-            'Welcome to Arul Premium!',
+            l10n.premiumWelcomeToast,
             kind: ToastKind.success,
           );
           // The single warmest moment in the app to ask for a share — and the
@@ -153,6 +153,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
     final monthlyPrice = _monthlyPrice(
       ref.watch(appConfigProvider).asData?.value?.prices,
     );
+    final perks = PremiumScreen._perks(l10n);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -218,7 +219,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                       GopuramMark(size: 40, color: accent),
                       const SizedBox(height: 8),
                       Text(
-                        'Arul Premium',
+                        l10n.premiumBrandTitle,
                         style: ArulTokens.screenTitle.copyWith(
                           fontSize: 30,
                           color: textPrimary,
@@ -226,7 +227,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'The full collection, alive on your screen',
+                        l10n.premiumScreenSubline,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -253,23 +254,15 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                     ),
                     child: Column(
                       children: [
-                        for (
-                          var i = 0;
-                          i < PremiumScreen._perks.length;
-                          i++
-                        ) ...[
+                        for (var i = 0; i < perks.length; i++) ...[
                           if (i > 0) const SizedBox(height: 14),
                           Row(
                             children: [
-                              Icon(
-                                PremiumScreen._perks[i].icon,
-                                size: 22,
-                                color: accent,
-                              ),
+                              Icon(perks[i].icon, size: 22, color: accent),
                               const SizedBox(width: 14),
                               Expanded(
                                 child: Text(
-                                  PremiumScreen._perks[i].text,
+                                  perks[i].text,
                                   style: TextStyle(
                                     fontSize: 14.5,
                                     color: textPrimary,
@@ -314,7 +307,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                                       ),
                                     ),
                                     TextSpan(
-                                      text: '/ month',
+                                      text: l10n.premiumPerMonth,
                                       style: TextStyle(
                                         fontSize: 13,
                                         color: planSecondary,
@@ -325,7 +318,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'UPI Autopay · cancel anytime',
+                                l10n.premiumPlanNote,
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   color: planSecondary,
@@ -354,9 +347,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                             // 1 day, not 7: the server grants exactly TRIAL_DAYS=1
                             // (payments.ts) and debits ₹199 at trial end. Promising
                             // more than the mandate honours is how you get chargebacks.
-                            child: const Text(
-                              '1 DAY FREE',
-                              style: TextStyle(
+                            child: Text(
+                              l10n.premiumTrialPill,
+                              style: const TextStyle(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.46, // .04em @ 11.5px
@@ -369,7 +362,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   CtaButton(
-                    label: trialEligible ? 'Start free trial' : 'Get Premium',
+                    label: trialEligible
+                        ? l10n.premiumCta
+                        : l10n.premiumCtaPaid,
                     busy: purchaseBusy,
                     height: ArulTokens.ctaHeight54,
                     fontSize: 16,
@@ -383,7 +378,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                               // (API_BASE_URL is always set). Kept for
                               // define-less local runs, where there is no
                               // Worker to initiate against.
-                              showArulToast(context, 'Premium is coming soon.');
+                              showArulToast(
+                                context,
+                                l10n.premiumComingSoonToast,
+                              );
                               return;
                             }
                             ref
@@ -400,12 +398,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                   // the server charges the full month upfront, so say so.
                   Text(
                     trialEligible
-                        ? 'Free for 1 day, then $monthlyPrice/month. UPI '
-                              'Autopay verifies your account with ₹2, refunded '
-                              'instantly. Browsing stays free forever.'
-                        : '$monthlyPrice charged today, then renews monthly '
-                              'via UPI Autopay. Cancel anytime. Browsing stays '
-                              'free forever.',
+                        ? l10n.premiumFootnoteTrial(monthlyPrice)
+                        : l10n.premiumFootnotePaid(monthlyPrice),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12,

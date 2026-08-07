@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
@@ -29,8 +30,7 @@ import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
 /// Settings — profile card, one rows-card, muted logout, demoted delete link,
-/// faint legal line. Copy is hardcoded verbatim per the handoff: the row and
-/// theme labels are deliberate constants. Wired (phase 4): profile identity
+/// faint legal line. Wired (phase 4): profile identity
 /// comes from the auth state (neutral stand-ins while it loads), edit-name
 /// persists via `POST /me/profile`, language drives the app locale, and logout /
 /// delete account run the real auth actions before routing back to sign-in.
@@ -42,11 +42,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Neutral stand-ins while the profile is still loading (settings is only
-  // reachable signed in, so this is momentary) — never a fake person.
-  static const _fallbackName = 'Your account';
-  static const _fallbackEmail = 'Signed in with Google';
-
   /// English name ↔ locale code for the language sheet (visual labels are the
   /// sheet's own; persistence goes through [LocaleNotifier]).
   static const _languageCodes = {
@@ -67,6 +62,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final themeMode = ref.watch(themeModeProvider);
@@ -81,11 +77,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final auth = ref.read(authServiceProvider).currentState;
     final authName = auth.displayName?.trim();
     final hasRealName = authName != null && authName.isNotEmpty;
-    final name = hasRealName ? authName : _fallbackName;
+    // Neutral stand-ins while the profile is still loading (settings is only
+    // reachable signed in, so this is momentary) — never a fake person.
+    final name = hasRealName ? authName : l10n.settingsFallbackName;
     final authEmail = auth.email?.trim();
     final email = (authEmail != null && authEmail.isNotEmpty)
         ? authEmail
-        : _fallbackEmail;
+        : l10n.settingsFallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
     // Reads the persisted opt-in, which the reminders screen keeps reconciled
@@ -95,8 +93,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .watch(notificationSettingsProvider)
         .masterEnabled;
     final notificationsSub = notificationsOn
-        ? 'Weekly and festival reminders on'
-        : 'Festival and weekly reminders';
+        ? l10n.settingsRemindersSubOn
+        : l10n.settingsRemindersSubOff;
 
     // Premium row subtitle reflects the REAL plan. While it resolves (or if the
     // fetch fails) fall back to the upsell wording — the Manage screen re-reads
@@ -104,10 +102,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // claiming membership the user doesn't have would.
     final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
     final premiumSub = switch (entitlement?.subscription?.status) {
-      _ when entitlement?.isPremium != true => 'Unlock apply & share',
-      SubscriptionStatus.trialing => "You're on the free trial",
-      SubscriptionStatus.cancelled => 'Auto-renew off · access continues',
-      _ => "You're a member",
+      _ when entitlement?.isPremium != true => l10n.settingsPremiumSubLocked,
+      SubscriptionStatus.trialing => l10n.settingsPremiumSubTrial,
+      SubscriptionStatus.cancelled => l10n.settingsPremiumSubCancelled,
+      _ => l10n.settingsPremiumSubActive,
     };
 
     return Scaffold(
@@ -122,7 +120,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // is a trap: while a sub-screen pops back OVER the shell, the
             // departing route is still on the stack, so the arrow flashes in
             // and then vanishes when the transition settles.)
-            const ArulScreenHeader(title: 'Settings'),
+            ArulScreenHeader(title: l10n.settingsTitle),
             Expanded(
               child: ListView(
                 // Settings is a dock branch in the shell, and the dock floats
@@ -153,14 +151,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // Settings, and it was previously not reachable at all.
                       _RowData(
                         glyph: (color) => GopuramMark(size: 19, color: color),
-                        title: 'Arul Premium',
+                        title: l10n.premiumBrandTitle,
                         sub: premiumSub,
                         onTap: () => context.push('/premium/manage'),
                       ),
                       _RowData(
                         icon: Icons.card_giftcard,
-                        title: 'Refer & Earn',
-                        sub: 'Earn 30 days free premium',
+                        title: l10n.referTitle,
+                        sub: l10n.settingsReferSub,
                         onTap: () => context.push('/refer'),
                       ),
                       // Deliberately NOT a second route to /refer. That screen
@@ -169,20 +167,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // than three is the whole point of having it here.
                       _RowData(
                         icon: Icons.ios_share_rounded,
-                        title: 'Tell a friend',
-                        sub: 'Send Arul to someone who would love it',
+                        title: l10n.settingsTellFriend,
+                        sub: l10n.settingsTellFriendSub,
                         onTap: () =>
                             tellAFriend(context, ref, source: 'settings'),
                       ),
                       _RowData(
                         icon: Icons.notifications_active_outlined,
-                        title: 'Reminders',
+                        title: l10n.remindersTitle,
                         sub: notificationsSub,
                         onTap: () => context.push('/settings/notifications'),
                       ),
                       _RowData(
                         icon: Icons.translate,
-                        title: 'Language',
+                        title: l10n.settingsLanguage,
                         sub: language,
                         onTap: () => _pickLanguage(language),
                       ),
@@ -191,22 +189,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         // — a fixed moon on a row reading "Light" was the one
                         // stale thing in the list.
                         icon: themeModeIcon(themeMode),
-                        title: 'Theme',
-                        sub: themeModeLabel(themeMode),
+                        title: l10n.settingsTheme,
+                        sub: themeModeLabel(l10n, themeMode),
                         onTap: () => showThemeSheet(context),
                       ),
                       _RowData(
                         icon: Icons.help_outline,
-                        title: 'Need help?',
+                        title: l10n.settingsNeedHelp,
                         // No longer "& subscription" — that lives in its own row
                         // now, and pointing at a mailto for it would be a lie.
-                        sub: 'Contact support',
+                        sub: l10n.settingsNeedHelpSub,
                         onTap: _support,
                       ),
                       _RowData(
                         icon: Icons.upload,
-                        title: 'Upload your wallpaper',
-                        sub: 'Share your own image or video',
+                        title: l10n.settingsUpload,
+                        sub: l10n.settingsUploadSub,
                         onTap: () => context.push('/upload'),
                       ),
                     ],
@@ -231,7 +229,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Delete account',
+                            l10n.settingsDeleteAccount,
                             textAlign: TextAlign.center,
                             style: ArulTokens.body.copyWith(
                               height: 1,
@@ -264,6 +262,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _editName(String current) async {
+    final l10n = AppLocalizations.of(context);
     final next = await showEditNameSheet(context, current);
     if (next == null || next.trim().isEmpty || next.trim() == current) return;
     // Defensive: unreachable in shipped builds — nothing to persist to in a
@@ -277,7 +276,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       final message = e is ApiException && e.message.isNotEmpty
           ? e.message
-          : 'Something went wrong. Please try again.';
+          : l10n.errorGenericRetry;
       showArulToast(context, message, kind: ToastKind.error);
     }
   }
@@ -290,11 +289,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showArulConfirmDialog(
       context,
-      title: 'Logout?',
-      message: 'You can sign back in anytime with Google.',
-      confirmLabel: 'Logout',
+      title: l10n.settingsLogoutConfirmTitle,
+      message: l10n.settingsLogoutConfirmBody,
+      confirmLabel: l10n.settingsLogout,
     );
     if (ok != true) return;
     // Best-effort server logout (refresh-token denylist) + local token clear;
@@ -304,6 +304,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _delete() async {
+    final l10n = AppLocalizations.of(context);
     // Deleting cancels the UPI mandate server-side and forfeits whatever is left
     // of the paid period — and, because the trial tombstone survives deletion,
     // signing up again does NOT hand back a second free trial. A user who bought
@@ -314,14 +315,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final ok = await showArulConfirmDialog(
       context,
-      title: 'Delete account?',
+      title: l10n.settingsDeleteConfirmTitle,
       message: hasPremium
-          ? 'This removes your account, favourites and rewards for good.\n\n'
-                'Your Arul Premium subscription will be cancelled and any time '
-                'left on it is lost — no refund. Signing up again will not '
-                'restore it, and you will not get another free trial.'
-          : 'This removes your account, favourites and rewards for good.',
-      confirmLabel: 'Delete account',
+          ? l10n.settingsDeleteConfirmBodyPremium
+          : l10n.settingsDeleteConfirmBody,
+      confirmLabel: l10n.settingsDeleteAccount,
     );
     if (ok != true) return;
     // GA4-only (deliberately off the PostHog allow-list): account state lives in
@@ -343,7 +341,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       final message = e is ApiException && e.message.isNotEmpty
           ? e.message
-          : 'Something went wrong. Please try again.';
+          : l10n.errorGenericRetry;
       showArulToast(context, message, kind: ToastKind.error);
     }
   }
@@ -356,6 +354,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // signed-in-only screen still guards the identity fields.
     // Recipient read LIVE from the remote app config (brand delta: the
     // documented fallback is support@hsrutility.com via AppConfig).
+    final l10n = AppLocalizations.of(context);
     final config = await ref
         .read(appConfigProvider.future)
         .catchError((_) => null);
@@ -388,12 +387,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final versionText = version.isEmpty ? 'Unknown' : version;
 
     // Blank lines give the user room to type ABOVE the diagnostics block.
+    // The two prose lines are localized; the diagnostics block below them is
+    // deliberately NOT — support triages on those exact labels, and a mail
+    // arriving with them in six different scripts is harder to read, not easier.
     final body = StringBuffer()
-      ..writeln('Please describe your issue or feedback:')
+      ..writeln(l10n.settingsSupportEmailPrompt)
       ..writeln()
       ..writeln()
       ..writeln('— — — — — — — — — —')
-      ..writeln('The details below help us resolve your request faster:')
+      ..writeln(l10n.settingsSupportEmailDetails)
       ..writeln('App: Arul $versionText')
       ..writeln(
         'Account: ${(email != null && email.isNotEmpty) ? email : 'Not signed in'}',
@@ -436,7 +438,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Name the address so the user can still reach us by copying it manually.
       showArulToast(
         context,
-        'No email app found. Write to us at $supportEmail',
+        l10n.settingsNoEmailApp(supportEmail),
         kind: ToastKind.error,
       );
     }
@@ -693,6 +695,7 @@ class _PolicyFooter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // The real installed version; blank until the platform read lands, and the
     // row simply stays out until it does rather than flashing a placeholder.
@@ -706,14 +709,14 @@ class _PolicyFooter extends ConsumerWidget {
           spacing: 10,
           runSpacing: 4,
           children: [
-            _FooterLink(label: 'Privacy Policy', url: AppConfig.privacyUrl),
+            _FooterLink(label: l10n.settingsPrivacy, url: AppConfig.privacyUrl),
             Text(
               '·',
               style: ArulTokens.body.copyWith(
                 color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
               ),
             ),
-            _FooterLink(label: 'Terms & Conditions', url: AppConfig.termsUrl),
+            _FooterLink(label: l10n.settingsTerms, url: AppConfig.termsUrl),
           ],
         ),
         const SizedBox(height: 14),
@@ -839,6 +842,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Derived from ArulTokens.maroon (base brand token) where no pre-exposed
@@ -876,7 +880,10 @@ class _LogoutButtonState extends State<_LogoutButton> {
           children: [
             Icon(Icons.logout, size: 20, color: text),
             const SizedBox(width: 8),
-            Text('Logout', style: ArulTokens.button.copyWith(color: text)),
+            Text(
+              l10n.settingsLogout,
+              style: ArulTokens.button.copyWith(color: text),
+            ),
           ],
         ),
       ),

@@ -531,6 +531,624 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Setting ringtone…'**
   String get ringtoneSetApplying;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @errorGenericRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get errorGenericRetry;
+
+  /// No description provided for @settingsFallbackName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account'**
+  String get settingsFallbackName;
+
+  /// No description provided for @settingsFallbackEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in with Google'**
+  String get settingsFallbackEmail;
+
+  /// No description provided for @settingsPremiumSubLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock apply & share'**
+  String get settingsPremiumSubLocked;
+
+  /// No description provided for @settingsPremiumSubTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on the free trial'**
+  String get settingsPremiumSubTrial;
+
+  /// No description provided for @settingsPremiumSubCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-renew off · access continues'**
+  String get settingsPremiumSubCancelled;
+
+  /// No description provided for @settingsPremiumSubActive.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re a member'**
+  String get settingsPremiumSubActive;
+
+  /// No description provided for @settingsReferSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Earn 30 days free premium'**
+  String get settingsReferSub;
+
+  /// No description provided for @settingsTellFriend.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell a friend'**
+  String get settingsTellFriend;
+
+  /// No description provided for @settingsTellFriendSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Arul to someone who would love it'**
+  String get settingsTellFriendSub;
+
+  /// No description provided for @settingsRemindersSubOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly and festival reminders on'**
+  String get settingsRemindersSubOn;
+
+  /// No description provided for @settingsRemindersSubOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Festival and weekly reminders'**
+  String get settingsRemindersSubOff;
+
+  /// No description provided for @settingsLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
+  /// No description provided for @settingsTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get settingsTheme;
+
+  /// No description provided for @settingsNeedHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Need help?'**
+  String get settingsNeedHelp;
+
+  /// No description provided for @settingsNeedHelpSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support'**
+  String get settingsNeedHelpSub;
+
+  /// No description provided for @settingsUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload your wallpaper'**
+  String get settingsUpload;
+
+  /// No description provided for @settingsUploadSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your own image or video'**
+  String get settingsUploadSub;
+
+  /// No description provided for @settingsLogout.
+  ///
+  /// In en, this message translates to:
+  /// **'Logout'**
+  String get settingsLogout;
+
+  /// No description provided for @settingsLogoutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Logout?'**
+  String get settingsLogoutConfirmTitle;
+
+  /// No description provided for @settingsLogoutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You can sign back in anytime with Google.'**
+  String get settingsLogoutConfirmBody;
+
+  /// No description provided for @settingsDeleteAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get settingsDeleteAccount;
+
+  /// No description provided for @settingsDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account?'**
+  String get settingsDeleteConfirmTitle;
+
+  /// No description provided for @settingsDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes your account, favourites and rewards for good.'**
+  String get settingsDeleteConfirmBody;
+
+  /// No description provided for @settingsDeleteConfirmBodyPremium.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.'**
+  String get settingsDeleteConfirmBodyPremium;
+
+  /// No description provided for @settingsTerms.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms & Conditions'**
+  String get settingsTerms;
+
+  /// No description provided for @settingsSupportEmailPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Please describe your issue or feedback:'**
+  String get settingsSupportEmailPrompt;
+
+  /// No description provided for @settingsSupportEmailDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'The details below help us resolve your request faster:'**
+  String get settingsSupportEmailDetails;
+
+  /// Error toast when no mail client can handle the mailto: intent. Names the support address so the user can copy it by hand — without it the tap on "Need help?" simply does nothing.
+  ///
+  /// In en, this message translates to:
+  /// **'No email app found. Write to us at {email}'**
+  String settingsNoEmailApp(String email);
+
+  /// No description provided for @settingsEditNameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get settingsEditNameTitle;
+
+  /// No description provided for @settingsEditNameSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown on wallpapers you upload'**
+  String get settingsEditNameSub;
+
+  /// No description provided for @themeSystemDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get themeSystemDefault;
+
+  /// No description provided for @themeSystemSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow device setting'**
+  String get themeSystemSub;
+
+  /// No description provided for @themeLightSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Ivory & silk'**
+  String get themeLightSub;
+
+  /// No description provided for @themeDarkSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Lamp-lit maroon'**
+  String get themeDarkSub;
+
+  /// No description provided for @remindersTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders'**
+  String get remindersTitle;
+
+  /// No description provided for @remindersToggleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Devotional reminders'**
+  String get remindersToggleTitle;
+
+  /// No description provided for @remindersToggleSub.
+  ///
+  /// In en, this message translates to:
+  /// **'The weekly day, and every major festival'**
+  String get remindersToggleSub;
+
+  /// No description provided for @remindersScheduleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.'**
+  String get remindersScheduleNote;
+
+  /// No description provided for @remindersPermissionToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off for Arul. Turn them on in your phone settings to get reminders.'**
+  String get remindersPermissionToast;
+
+  /// No description provided for @remindersTimeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder time'**
+  String get remindersTimeLabel;
+
+  /// No description provided for @remindersComingUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming up'**
+  String get remindersComingUp;
+
+  /// No description provided for @remindersMonthJan.
+  ///
+  /// In en, this message translates to:
+  /// **'Jan'**
+  String get remindersMonthJan;
+
+  /// No description provided for @remindersMonthFeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Feb'**
+  String get remindersMonthFeb;
+
+  /// No description provided for @remindersMonthMar.
+  ///
+  /// In en, this message translates to:
+  /// **'Mar'**
+  String get remindersMonthMar;
+
+  /// No description provided for @remindersMonthApr.
+  ///
+  /// In en, this message translates to:
+  /// **'Apr'**
+  String get remindersMonthApr;
+
+  /// No description provided for @remindersMonthMay.
+  ///
+  /// In en, this message translates to:
+  /// **'May'**
+  String get remindersMonthMay;
+
+  /// No description provided for @remindersMonthJun.
+  ///
+  /// In en, this message translates to:
+  /// **'Jun'**
+  String get remindersMonthJun;
+
+  /// No description provided for @remindersMonthJul.
+  ///
+  /// In en, this message translates to:
+  /// **'Jul'**
+  String get remindersMonthJul;
+
+  /// No description provided for @remindersMonthAug.
+  ///
+  /// In en, this message translates to:
+  /// **'Aug'**
+  String get remindersMonthAug;
+
+  /// No description provided for @remindersMonthSep.
+  ///
+  /// In en, this message translates to:
+  /// **'Sep'**
+  String get remindersMonthSep;
+
+  /// No description provided for @remindersMonthOct.
+  ///
+  /// In en, this message translates to:
+  /// **'Oct'**
+  String get remindersMonthOct;
+
+  /// No description provided for @remindersMonthNov.
+  ///
+  /// In en, this message translates to:
+  /// **'Nov'**
+  String get remindersMonthNov;
+
+  /// No description provided for @remindersMonthDec.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec'**
+  String get remindersMonthDec;
+
+  /// No description provided for @premiumBrandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Arul Premium'**
+  String get premiumBrandTitle;
+
+  /// No description provided for @premiumScreenSubline.
+  ///
+  /// In en, this message translates to:
+  /// **'The full collection, alive on your screen'**
+  String get premiumScreenSubline;
+
+  /// No description provided for @premiumPerkEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'Every wallpaper, still and live'**
+  String get premiumPerkEvery;
+
+  /// No description provided for @premiumPerkApplyShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply and share without limits'**
+  String get premiumPerkApplyShare;
+
+  /// No description provided for @premiumPerkNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New arrivals every week'**
+  String get premiumPerkNew;
+
+  /// No description provided for @premiumPerMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'/ month'**
+  String get premiumPerMonth;
+
+  /// No description provided for @premiumPlanNote.
+  ///
+  /// In en, this message translates to:
+  /// **'UPI Autopay · cancel anytime'**
+  String get premiumPlanNote;
+
+  /// No description provided for @premiumTrialPill.
+  ///
+  /// In en, this message translates to:
+  /// **'1 DAY FREE'**
+  String get premiumTrialPill;
+
+  /// No description provided for @premiumCtaPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Get Premium'**
+  String get premiumCtaPaid;
+
+  /// Paywall footnote for a user who still has their one free trial. The ₹2 PENNY_DROP is named on purpose: the user SEES ₹2 leave their account during UPI mandate setup, and an unexplained debit on a screen that said "free" reads as a scam.
+  ///
+  /// In en, this message translates to:
+  /// **'Free for 1 day, then {price}/month. UPI Autopay verifies your account with ₹2, refunded instantly. Browsing stays free forever.'**
+  String premiumFootnoteTrial(String price);
+
+  /// Paywall footnote for a user whose trial is consumed — the server charges the full month upfront, so this must say so rather than promise a free day.
+  ///
+  /// In en, this message translates to:
+  /// **'{price} charged today, then renews monthly via UPI Autopay. Cancel anytime. Browsing stays free forever.'**
+  String premiumFootnotePaid(String price);
+
+  /// No description provided for @premiumComingSoonToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Premium is coming soon.'**
+  String get premiumComingSoonToast;
+
+  /// No description provided for @premiumWelcomeToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Arul Premium!'**
+  String get premiumWelcomeToast;
+
+  /// No description provided for @premiumCelebrateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re in'**
+  String get premiumCelebrateTitle;
+
+  /// No description provided for @premiumCelebrateBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Arul Premium is active. Know someone who would love these wallpapers? Send them one.'**
+  String get premiumCelebrateBody;
+
+  /// No description provided for @premiumSheetPitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Every wallpaper, live and still. Apply and share freely across all six categories.'**
+  String get premiumSheetPitch;
+
+  /// No description provided for @premiumKeepBrowsing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep browsing free'**
+  String get premiumKeepBrowsing;
+
+  /// No description provided for @referTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Refer & Earn'**
+  String get referTitle;
+
+  /// No description provided for @referHeroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Gift a friend, earn a month'**
+  String get referHeroTitle;
+
+  /// No description provided for @referHeroBody.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days of free premium for every friend who subscribes with your link'**
+  String get referHeroBody;
+
+  /// No description provided for @referShareWhatsapp.
+  ///
+  /// In en, this message translates to:
+  /// **'Share via WhatsApp'**
+  String get referShareWhatsapp;
+
+  /// No description provided for @referRewardsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rewards earned'**
+  String get referRewardsLabel;
+
+  /// Reward total on Refer & Earn, rendered under the "Rewards earned" label. Days of free premium granted, never a currency amount.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days'**
+  String referRewardDays(int days);
+
+  /// No description provided for @referHowItWorks.
+  ///
+  /// In en, this message translates to:
+  /// **'How it works'**
+  String get referHowItWorks;
+
+  /// No description provided for @referStep1.
+  ///
+  /// In en, this message translates to:
+  /// **'Share your link with friends and family'**
+  String get referStep1;
+
+  /// No description provided for @referStep2.
+  ///
+  /// In en, this message translates to:
+  /// **'They install Arul and subscribe to premium'**
+  String get referStep2;
+
+  /// No description provided for @referStep3.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days of free premium lands in your account'**
+  String get referStep3;
+
+  /// No description provided for @referEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No referrals yet — your first friend is one share away'**
+  String get referEmpty;
+
+  /// No description provided for @referShareCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Arul'**
+  String get referShareCta;
+
+  /// No description provided for @referNotNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get referNotNow;
+
+  /// No description provided for @uploadScreenTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload wallpaper'**
+  String get uploadScreenTitle;
+
+  /// No description provided for @uploadPickZoneTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an image or video'**
+  String get uploadPickZoneTitle;
+
+  /// No description provided for @uploadPickZoneSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait, 1080×2400 or larger'**
+  String get uploadPickZoneSub;
+
+  /// No description provided for @uploadTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get uploadTitleLabel;
+
+  /// No description provided for @uploadTitleOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'(optional)'**
+  String get uploadTitleOptional;
+
+  /// No description provided for @uploadTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Meenakshi at dusk'**
+  String get uploadTitleHint;
+
+  /// No description provided for @uploadCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get uploadCategoryLabel;
+
+  /// No description provided for @uploadRightsCheckbox.
+  ///
+  /// In en, this message translates to:
+  /// **'I own the rights to this content or have permission to share it'**
+  String get uploadRightsCheckbox;
+
+  /// No description provided for @uploadSubmitCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit for review'**
+  String get uploadSubmitCta;
+
+  /// No description provided for @uploadFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved wallpapers appear in the feed with your name'**
+  String get uploadFootnote;
+
+  /// No description provided for @uploadRejectStatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose a JPEG, PNG or WebP image.'**
+  String get uploadRejectStatic;
+
+  /// No description provided for @uploadRejectLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose an MP4 video.'**
+  String get uploadRejectLive;
+
+  /// Rejection toast when the picked file exceeds the per-type cap. {max} is already a formatted size ("10MB" / "50MB") from UploadConstraints.maxLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'File is too large (max {max}).'**
+  String uploadTooLarge(String max);
+
+  /// No description provided for @uploadSuccessToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted for review — thank you!'**
+  String get uploadSuccessToast;
+
+  /// No description provided for @uploadShareMomentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you'**
+  String get uploadShareMomentTitle;
+
+  /// No description provided for @uploadShareMomentBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?'**
+  String get uploadShareMomentBody;
+
+  /// No description provided for @uploadComingSoonToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload is coming soon.'**
+  String get uploadComingSoonToast;
 }
 
 class _AppLocalizationsDelegate

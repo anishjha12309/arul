@@ -234,4 +234,335 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get ringtoneSetApplying => 'रिंगटोन सेट हो रहा है…';
+
+  @override
+  String get save => 'सेव करें';
+
+  @override
+  String get cancel => 'रद्द करें';
+
+  @override
+  String get errorGenericRetry => 'कुछ गड़बड़ हो गई। फिर कोशिश करें।';
+
+  @override
+  String get settingsFallbackName => 'आपका खाता';
+
+  @override
+  String get settingsFallbackEmail => 'Google से साइन इन किया है';
+
+  @override
+  String get settingsPremiumSubLocked => 'लगाना और साझा करना अनलॉक करें';
+
+  @override
+  String get settingsPremiumSubTrial => 'आप मुफ़्त ट्रायल पर हैं';
+
+  @override
+  String get settingsPremiumSubCancelled => 'ऑटो-रिन्यू बंद · पहुँच जारी है';
+
+  @override
+  String get settingsPremiumSubActive => 'आप सदस्य हैं';
+
+  @override
+  String get settingsReferSub => '30 दिन मुफ़्त प्रीमियम कमाएँ';
+
+  @override
+  String get settingsTellFriend => 'दोस्त को बताएँ';
+
+  @override
+  String get settingsTellFriendSub => 'जिसे Arul पसंद आएगा, उसे भेजें';
+
+  @override
+  String get settingsRemindersSubOn => 'साप्ताहिक और त्योहार रिमाइंडर चालू';
+
+  @override
+  String get settingsRemindersSubOff => 'त्योहार और साप्ताहिक रिमाइंडर';
+
+  @override
+  String get settingsLanguage => 'भाषा';
+
+  @override
+  String get settingsTheme => 'थीम';
+
+  @override
+  String get settingsNeedHelp => 'मदद चाहिए?';
+
+  @override
+  String get settingsNeedHelpSub => 'सपोर्ट से संपर्क करें';
+
+  @override
+  String get settingsUpload => 'अपना वॉलपेपर अपलोड करें';
+
+  @override
+  String get settingsUploadSub => 'अपनी तस्वीर या वीडियो साझा करें';
+
+  @override
+  String get settingsLogout => 'लॉग आउट';
+
+  @override
+  String get settingsLogoutConfirmTitle => 'लॉग आउट करें?';
+
+  @override
+  String get settingsLogoutConfirmBody =>
+      'आप कभी भी Google से दोबारा साइन इन कर सकते हैं।';
+
+  @override
+  String get settingsDeleteAccount => 'खाता मिटाएँ';
+
+  @override
+  String get settingsDeleteConfirmTitle => 'खाता मिटाएँ?';
+
+  @override
+  String get settingsDeleteConfirmBody =>
+      'इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।';
+
+  @override
+  String get settingsDeleteConfirmBodyPremium =>
+      'इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।\n\nआपकी Arul Premium सदस्यता रद्द हो जाएगी और बची हुई अवधि खत्म हो जाएगी — कोई रिफ़ंड नहीं। दोबारा साइन अप करने पर वह वापस नहीं मिलेगी, और दूसरा मुफ़्त ट्रायल भी नहीं मिलेगा।';
+
+  @override
+  String get settingsTerms => 'नियम और शर्तें';
+
+  @override
+  String get settingsSupportEmailPrompt => 'कृपया अपनी समस्या या सुझाव लिखें:';
+
+  @override
+  String get settingsSupportEmailDetails =>
+      'नीचे दी गई जानकारी आपकी शिकायत जल्दी हल करने में मदद करती है:';
+
+  @override
+  String settingsNoEmailApp(String email) {
+    return 'कोई ईमेल ऐप नहीं मिला। हमें $email पर लिखें';
+  }
+
+  @override
+  String get settingsEditNameTitle => 'आपका नाम';
+
+  @override
+  String get settingsEditNameSub => 'आपके अपलोड किए वॉलपेपर पर दिखेगा';
+
+  @override
+  String get themeSystemDefault => 'सिस्टम डिफ़ॉल्ट';
+
+  @override
+  String get themeSystemSub => 'डिवाइस सेटिंग के अनुसार';
+
+  @override
+  String get themeLightSub => 'आइवरी और रेशम';
+
+  @override
+  String get themeDarkSub => 'दीप-प्रकाश मैरून';
+
+  @override
+  String get remindersTitle => 'रिमाइंडर';
+
+  @override
+  String get remindersToggleTitle => 'भक्ति रिमाइंडर';
+
+  @override
+  String get remindersToggleSub => 'साप्ताहिक दिन, और हर बड़ा त्योहार';
+
+  @override
+  String get remindersScheduleNote =>
+      'हर हफ़्ते शुक्रवार को एक रिमाइंडर, और हर बड़े त्योहार से कुछ दिन पहले एक — पोंगल, दीपावली, नवरात्रि, शिवरात्रि वगैरह। महीने में करीब दो।';
+
+  @override
+  String get remindersPermissionToast =>
+      'Arul के लिए नोटिफ़िकेशन बंद हैं। रिमाइंडर पाने के लिए फ़ोन सेटिंग्स में चालू करें।';
+
+  @override
+  String get remindersTimeLabel => 'रिमाइंडर का समय';
+
+  @override
+  String get remindersComingUp => 'आने वाले';
+
+  @override
+  String get remindersMonthJan => 'जन';
+
+  @override
+  String get remindersMonthFeb => 'फ़र';
+
+  @override
+  String get remindersMonthMar => 'मार्च';
+
+  @override
+  String get remindersMonthApr => 'अप्रैल';
+
+  @override
+  String get remindersMonthMay => 'मई';
+
+  @override
+  String get remindersMonthJun => 'जून';
+
+  @override
+  String get remindersMonthJul => 'जुल';
+
+  @override
+  String get remindersMonthAug => 'अग';
+
+  @override
+  String get remindersMonthSep => 'सित';
+
+  @override
+  String get remindersMonthOct => 'अक्टू';
+
+  @override
+  String get remindersMonthNov => 'नव';
+
+  @override
+  String get remindersMonthDec => 'दिस';
+
+  @override
+  String get premiumBrandTitle => 'Arul Premium';
+
+  @override
+  String get premiumScreenSubline => 'पूरा संग्रह, आपकी स्क्रीन पर जीवंत';
+
+  @override
+  String get premiumPerkEvery => 'हर वॉलपेपर — स्थिर और लाइव';
+
+  @override
+  String get premiumPerkApplyShare => 'बिना किसी सीमा के लगाएँ और साझा करें';
+
+  @override
+  String get premiumPerkNew => 'हर हफ़्ते नए वॉलपेपर';
+
+  @override
+  String get premiumPerMonth => '/ माह';
+
+  @override
+  String get premiumPlanNote => 'UPI ऑटोपे · कभी भी रद्द करें';
+
+  @override
+  String get premiumTrialPill => '1 दिन मुफ़्त';
+
+  @override
+  String get premiumCtaPaid => 'प्रीमियम लें';
+
+  @override
+  String premiumFootnoteTrial(String price) {
+    return '1 दिन मुफ़्त, फिर $price/माह। UPI ऑटोपे आपका खाता ₹2 से जाँचता है, जो तुरंत वापस हो जाता है। ब्राउज़ करना हमेशा मुफ़्त रहेगा।';
+  }
+
+  @override
+  String premiumFootnotePaid(String price) {
+    return 'आज $price लिया जाएगा, फिर UPI ऑटोपे से हर महीने रिन्यू होगा। कभी भी रद्द करें। ब्राउज़ करना हमेशा मुफ़्त रहेगा।';
+  }
+
+  @override
+  String get premiumComingSoonToast => 'प्रीमियम जल्द आ रहा है।';
+
+  @override
+  String get premiumWelcomeToast => 'Arul Premium में आपका स्वागत है!';
+
+  @override
+  String get premiumCelebrateTitle => 'आप जुड़ गए';
+
+  @override
+  String get premiumCelebrateBody =>
+      'Arul Premium चालू है। किसी को ये वॉलपेपर पसंद आएँगे? उन्हें एक भेजें।';
+
+  @override
+  String get premiumSheetPitch =>
+      'हर वॉलपेपर — लाइव और स्थिर। छहों श्रेणियों में बेरोक लगाएँ और साझा करें।';
+
+  @override
+  String get premiumKeepBrowsing => 'मुफ़्त में देखते रहें';
+
+  @override
+  String get referTitle => 'रेफ़र करें और कमाएँ';
+
+  @override
+  String get referHeroTitle => 'दोस्त को तोहफ़ा, आपको एक महीना';
+
+  @override
+  String get referHeroBody =>
+      'आपकी लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम';
+
+  @override
+  String get referShareWhatsapp => 'WhatsApp पर साझा करें';
+
+  @override
+  String get referRewardsLabel => 'कमाए रिवॉर्ड';
+
+  @override
+  String referRewardDays(int days) {
+    return '$days दिन';
+  }
+
+  @override
+  String get referHowItWorks => 'यह कैसे काम करता है';
+
+  @override
+  String get referStep1 => 'अपनी लिंक दोस्तों और परिवार के साथ साझा करें';
+
+  @override
+  String get referStep2 => 'वे Arul इंस्टॉल करके प्रीमियम लेते हैं';
+
+  @override
+  String get referStep3 => '30 दिन मुफ़्त प्रीमियम आपके खाते में आ जाता है';
+
+  @override
+  String get referEmpty => 'अभी कोई रेफ़रल नहीं — एक शेयर में पहला दोस्त';
+
+  @override
+  String get referShareCta => 'Arul साझा करें';
+
+  @override
+  String get referNotNow => 'अभी नहीं';
+
+  @override
+  String get uploadScreenTitle => 'वॉलपेपर अपलोड';
+
+  @override
+  String get uploadPickZoneTitle => 'तस्वीर या वीडियो चुनें';
+
+  @override
+  String get uploadPickZoneSub => 'पोर्ट्रेट, 1080×2400 या बड़ा';
+
+  @override
+  String get uploadTitleLabel => 'शीर्षक';
+
+  @override
+  String get uploadTitleOptional => '(वैकल्पिक)';
+
+  @override
+  String get uploadTitleHint => 'जैसे, संध्या में मीनाक्षी';
+
+  @override
+  String get uploadCategoryLabel => 'श्रेणी';
+
+  @override
+  String get uploadRightsCheckbox =>
+      'इस सामग्री के अधिकार मेरे हैं, या मुझे इसे साझा करने की अनुमति है';
+
+  @override
+  String get uploadSubmitCta => 'समीक्षा के लिए भेजें';
+
+  @override
+  String get uploadFootnote =>
+      'मंज़ूर वॉलपेपर आपके नाम के साथ फ़ीड में दिखेंगे';
+
+  @override
+  String get uploadRejectStatic => 'JPEG, PNG या WebP तस्वीर चुनें।';
+
+  @override
+  String get uploadRejectLive => 'MP4 वीडियो चुनें।';
+
+  @override
+  String uploadTooLarge(String max) {
+    return 'फ़ाइल बहुत बड़ी है (अधिकतम $max)।';
+  }
+
+  @override
+  String get uploadSuccessToast => 'समीक्षा के लिए भेज दिया — धन्यवाद!';
+
+  @override
+  String get uploadShareMomentTitle => 'धन्यवाद';
+
+  @override
+  String get uploadShareMomentBody =>
+      'हम आपका वॉलपेपर जल्द देखेंगे। तब तक — किसी को Arul पसंद आएगा?';
+
+  @override
+  String get uploadComingSoonToast => 'अपलोड जल्द आ रहा है।';
 }

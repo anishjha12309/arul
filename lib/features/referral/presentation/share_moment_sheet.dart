@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -47,6 +48,7 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final bodyColor = isDark
@@ -68,7 +70,7 @@ class _Body extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           CtaButton(
-            label: 'Share Arul',
+            label: l10n.referShareCta,
             icon: Icons.share_rounded,
             // Sharing is a commit verb, like Apply on the feed.
             haptic: ArulHapticStyle.firm,
@@ -89,7 +91,7 @@ class _Body extends ConsumerWidget {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             style: TextButton.styleFrom(foregroundColor: accent),
-            child: const Text('Not now'),
+            child: Text(l10n.referNotNow),
           ),
         ],
       ),

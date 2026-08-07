@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
@@ -22,10 +23,10 @@ Future<void> showThemeSheet(BuildContext context) {
 }
 
 /// Human label for a [ThemeMode], used both here and for the settings row sub.
-String themeModeLabel(ThemeMode mode) => switch (mode) {
-  ThemeMode.system => 'System default',
-  ThemeMode.light => 'Light',
-  ThemeMode.dark => 'Dark',
+String themeModeLabel(AppLocalizations l10n, ThemeMode mode) => switch (mode) {
+  ThemeMode.system => l10n.themeSystemDefault,
+  ThemeMode.light => l10n.themeLight,
+  ThemeMode.dark => l10n.themeDark,
 };
 
 /// Glyph for a [ThemeMode] — the ONE mapping, read by the sheet's own options
@@ -53,10 +54,10 @@ class _ThemeOption {
   IconData get icon => themeModeIcon(mode);
 }
 
-const _options = <_ThemeOption>[
-  _ThemeOption(ThemeMode.system, 'System default', 'Follow device setting'),
-  _ThemeOption(ThemeMode.light, 'Light', 'Ivory & silk'),
-  _ThemeOption(ThemeMode.dark, 'Dark', 'Lamp-lit maroon'),
+List<_ThemeOption> _options(AppLocalizations l10n) => <_ThemeOption>[
+  _ThemeOption(ThemeMode.system, l10n.themeSystemDefault, l10n.themeSystemSub),
+  _ThemeOption(ThemeMode.light, l10n.themeLight, l10n.themeLightSub),
+  _ThemeOption(ThemeMode.dark, l10n.themeDark, l10n.themeDarkSub),
 ];
 
 class _ThemeSheet extends ConsumerWidget {
@@ -64,6 +65,7 @@ class _ThemeSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final selected = ref.watch(themeModeProvider);
     final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
@@ -75,11 +77,11 @@ class _ThemeSheet extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Theme',
+            l10n.settingsTheme,
             style: ArulTokens.sheetTitle.copyWith(color: titleColor),
           ),
           const SizedBox(height: 12),
-          for (final o in _options)
+          for (final o in _options(l10n))
             _ThemeRow(
               option: o,
               on: selected == o.mode,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
@@ -113,7 +114,7 @@ class _ConfirmDialog extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _DialogButton(
-                        label: 'Cancel',
+                        label: AppLocalizations.of(context).cancel,
                         filled: false,
                         borderColor: cancelBorder,
                         textColor: cancelText,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
@@ -33,11 +34,6 @@ String _monthlyPrice(Map<String, dynamic>? prices) {
 class PremiumSheet {
   const PremiumSheet._();
 
-  /// Copy is hardcoded verbatim for this design pass (Spec > Premium gate).
-  static const _pitch =
-      'Every wallpaper, live and still. Apply and share freely '
-      'across all six categories.';
-
   static Future<void> show(BuildContext context, {required String source}) {
     return showArulSheet<void>(
       context,
@@ -58,6 +54,7 @@ class _PremiumSheetBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     // One free trial per user (trial_end = consumed-marker). Only a LOADED
     // entitlement may advertise the trial — on loading/error the safe default
     // is the paid copy, because the Worker re-checks trial_end at initiate and
@@ -91,7 +88,7 @@ class _PremiumSheetBody extends ConsumerWidget {
               const GopuramMark(size: 30, color: ArulTokens.gold),
               const SizedBox(height: 6),
               Text(
-                'Arul Premium',
+                l10n.premiumBrandTitle,
                 style: ArulTokens.screenTitle.copyWith(
                   fontSize: 22,
                   color: titleColor,
@@ -99,7 +96,7 @@ class _PremiumSheetBody extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                PremiumSheet._pitch,
+                l10n.premiumSheetPitch,
                 textAlign: TextAlign.center,
                 style: ArulTokens.body.copyWith(color: pitchColor),
               ),
@@ -121,7 +118,7 @@ class _PremiumSheetBody extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '$monthlyPrice / month',
+                        '$monthlyPrice ${l10n.premiumPerMonth}',
                         style: ArulTokens.rowTitle.copyWith(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -130,7 +127,7 @@ class _PremiumSheetBody extends ConsumerWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'UPI Autopay · cancel anytime',
+                        l10n.premiumPlanNote,
                         style: ArulTokens.rowSub.copyWith(color: subColor),
                       ),
                     ],
@@ -154,7 +151,7 @@ class _PremiumSheetBody extends ConsumerWidget {
                     ),
                     // Must match TRIAL_DAYS in workers/src/routes/payments.ts.
                     child: Text(
-                      '1 DAY FREE',
+                      l10n.premiumTrialPill,
                       style: ArulTokens.caption.copyWith(
                         fontWeight: FontWeight.w700,
                         color: ArulTokens.darkSurface,
@@ -168,7 +165,7 @@ class _PremiumSheetBody extends ConsumerWidget {
           const SizedBox(height: 14),
 
           CtaButton(
-            label: trialEligible ? 'Start free trial' : 'Get Premium',
+            label: trialEligible ? l10n.premiumCta : l10n.premiumCtaPaid,
             height: ArulTokens.ctaHeight52,
             fontSize: 16,
             // The buy decision — the weightiest press in the app.
@@ -185,7 +182,7 @@ class _PremiumSheetBody extends ConsumerWidget {
             onTap: () => Navigator.of(context).pop(),
             behavior: HitTestBehavior.opaque,
             child: Text(
-              'Keep browsing free',
+              l10n.premiumKeepBrowsing,
               textAlign: TextAlign.center,
               style: ArulTokens.body.copyWith(color: subColor),
             ),
