@@ -142,25 +142,19 @@ class FestivalEvent {
   DateTime? get coverageEnd => dates.isEmpty ? null : dates.last;
 }
 
-/// ╔══════════════════════════════════════════════════════════════════════════╗
-/// ║  UNVERIFIED DATES — CHECK AGAINST A PANCHANGAM BEFORE THE PLAY RELEASE.  ║
-/// ╚══════════════════════════════════════════════════════════════════════════╝
-///
-/// These were authored from general knowledge, not computed from an ephemeris,
-/// and they have NOT been checked against an authority. The solar entries
+/// Dates are DATA, verified by hand against a published Tamil panchangam —
+/// never computed (lunisolar dates are astronomy no Dart package computes to a
+/// standard worth putting in front of a devotee). The list is laid out one
+/// date per line, weekday in the comment, precisely so it can be eyeballed —
+/// when EXTENDING coverage (the test starts failing from 2030), verify the new
+/// rows against a panchangam the same way before shipping; the solar entries
 /// (Pongal, Makaravilakku, Puthandu, Aadi Perukku) follow fixed Tamil-calendar
-/// rules and are dependable; every tithi- or nakshatra-based entry below is a
-/// best effort and can be out by a day or more.
+/// rules, everything tithi/nakshatra-based must be checked.
 ///
-/// Verifying is a ~20-minute job against any published Tamil panchangam, and the
-/// list is laid out one date per line, weekday in the comment, precisely so it
-/// can be eyeballed. `docs/notifications.md` has the procedure and a printable
-/// table.
-///
-/// Until then the design contains the damage: reminders fire
-/// [kFestivalLeadDays] days early and never name a date, so a small error is
-/// invisible; and a festival with no future date is skipped outright rather than
-/// guessed at.
+/// The design also contains any residual error: reminders fire
+/// [kFestivalLeadDays] days early and never name a date, so a ±1-day slip is
+/// invisible; and a festival with no future date is skipped outright rather
+/// than guessed at.
 ///
 /// Ordered by the Tamil year (Chithirai → Panguni). Every one of the six catalog
 /// categories is represented.

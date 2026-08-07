@@ -13,9 +13,8 @@ for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo** (`c:\A
 Two scopes: **wallpapers** and **ringtones**. Ringtone audio lives at
 `ringtones/<category>/<uuid>.mp3`, cover art at `ringtones/covers/<category>/<uuid>.jpg`.
 
-The ringtones tab is LIVE (un-parked 2026-08-05; 63 tracks as of 2026-08-06). Ringtone categories
-are NOT the wallpaper ones — five deities plus `others`, and no `temples`. So a published
-ringtone reaches users exactly like a wallpaper does. **Bulk drops go through
+The ringtones tab is LIVE. Ringtone categories are NOT the wallpaper ones — five deities plus
+`others`, and no `temples`. A published ringtone reaches users exactly like a wallpaper does. **Bulk drops go through
 `tools/content-import/ringtones-plan.mjs` → `ringtones-import.mjs`**, not the CMS one-at-a-time
 form. They are incremental: the plan script dedups on title against the live catalog and continues
 `sort_order` past its high-water mark, so a re-run aborts rather than doubling the list.
@@ -32,8 +31,8 @@ curl -s "$CDN/catalog/ringtones/all_1.json?v=<version>"      # read BOTH — a r
                                                              # for one scope and fail for the other
 ```
 A zero-row scope still writes an explicit empty `all_1.json` (`total: 0`), so a 404 here means that
-scope FAILED to build — not that it is empty. Ringtones is legitimately empty today (0 published),
-which is exactly why its tab is parked.
+scope FAILED to build — never "no content". Both scopes are populated: an unexpectedly empty
+`total: 0` is itself a finding, check the DB count before shrugging.
 
 Read the CDN with **GET, never `curl -I`** — HEAD does not populate Cloudflare's cache and reports
 `DYNAMIC` for assets that cache perfectly well, which reads exactly like a broken Cache Rule.
@@ -60,14 +59,13 @@ node tools/prod-query.mjs "SELECT category, count(*) FROM wallpapers WHERE is_pu
    Map per asset: key→`full_key` · image/video→`type` static/live · **category→category** (the browse
    axis) · title · dims→width/height · bytes · rank→`sort_order`. Leave `duration_ms` null unless
    ffprobe returns a real value.
-4. Rebuild the catalog; DB, catalog and R2 counts must agree (614 wallpapers today) with all 6
-   categories present. Count the DB with `prod-query.mjs` (above), the catalog with `total` from
-   `all_1.json`.
+4. Rebuild the catalog; DB, catalog and R2 counts must agree, with all 6 categories present.
+   Count the DB with `prod-query.mjs` (above), the catalog with `total` from `all_1.json`.
 5. Replaced objects are swept once no row references them.
 
 ⚠ **Objects without a DB row are DELETED by the canonical sweep.** Publish rows in the same
-transaction that puts the bytes in reach of it. The bucket's `catalog/catalog.json` (the 2026-07-14
-import manifest, 428 assets) sits outside the swept prefixes and survives; the app never reads it.
+transaction that puts the bytes in reach of it. The bucket's `catalog/catalog.json` (the original
+one-time import manifest) sits outside the swept prefixes and survives; the app never reads it.
 
 ## Orphan sweeps (manual)
 ```bash

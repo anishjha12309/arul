@@ -114,7 +114,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     if (!AppConfig.hasBackend) {
-      // Pre-Phase-0 stub: there is no Worker to presign/confirm against.
+      // Defensive: define-less local builds only — unreachable in shipped
+      // builds, which always carry API_BASE_URL.
       showArulToast(context, l10n.uploadComingSoonToast);
       return;
     }

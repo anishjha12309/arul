@@ -18,9 +18,9 @@ missing table.
 1. Write the change as idempotent SQL (`IF NOT EXISTS` / `IF EXISTS`; wrap multi-statement changes
    in `BEGIN; … COMMIT;`) and put the END STATE in `db/schema/` — a new table is a new
    `NN_short-name.sql`, an altered table is an edit to its existing file. There is **no
-   `db/migrations/` diary** (retired 2026-08-07 — it only ever held byte-copies of schema files):
+   `db/migrations/` diary** — it was retired because it only ever held byte-copies of schema files:
    the schema files ARE the source of truth, and because every statement is idempotent, applying the
-   schema file IS the migration.
+   schema file IS the migration. Never recreate the directory.
 2. **Get explicit user approval before running anything destructive (DROP / DELETE / ALTER-narrowing)
    on prod.**
 3. Apply with `workers/tools/prod-sql.mjs`. It reads the connection string out of git-ignored

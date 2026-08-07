@@ -8,7 +8,7 @@ import { createRequire } from "module";
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
-const CDN = "https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev";
+const CDN = "https://arul-cdn.hsrutility.com";
 
 function arulThumbKey(fullKey) {
   const m = /^wallpapers\/([^/]+)\/([^/]+)$/.exec(fullKey);

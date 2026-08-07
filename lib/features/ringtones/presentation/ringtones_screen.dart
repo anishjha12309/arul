@@ -31,8 +31,7 @@ import 'ringtone_states.dart';
 /// preview free (streamed from the public CDN), "Set" premium-gated via the
 /// Worker's signed-url check.
 ///
-/// Built to design_handoff_ringtones_screen/README.md. Two things about it are
-/// load-bearing rather than decorative:
+/// Two things about it are load-bearing rather than decorative:
 ///
 ///   * **One value drives the whole now-playing look.** Row fill, border, title
 ///     colour, button fill/glyph and the cover-art diya all read the same

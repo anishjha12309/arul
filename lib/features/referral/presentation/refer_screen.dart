@@ -13,7 +13,7 @@ import '../providers/referral_providers.dart';
 /// card with the WhatsApp CTA, a rewards summary card, a numbered "how it
 /// works" card, and a quiet empty state below.
 ///
-/// Wired (phase 4): the CTA shares the referral-attributed Play link
+/// The CTA shares the referral-attributed Play link
 /// (WhatsApp-first, share-sheet fallback) and "Rewards earned" reads
 /// `/me/referrals` via [referralSummaryProvider]. Both degrade to the plain
 /// link / zero state while the summary loads, and in define-less local runs

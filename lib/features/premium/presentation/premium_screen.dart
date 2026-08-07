@@ -32,9 +32,9 @@ String _monthlyPrice(Map<String, dynamic>? prices) {
 /// Paywall. Reached only from a blocked gated action; `source` says which — the
 /// one number that tells you which verb actually sells the product.
 ///
-/// Design-only pass: close X top-left, centered gopuram + wordmark + subline,
-/// a perk card, a
-/// gold-bordered plan card and the green CTA.
+/// Layout: close X top-left, centered gopuram + wordmark + subline, a perk
+/// card, a gold-bordered plan card and the green CTA — which initiates the
+/// real PhonePe purchase and self-heals a `pending` row on return.
 class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
 

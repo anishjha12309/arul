@@ -46,7 +46,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   void initState() {
     super.initState();
-    // PHASE CONTRACT: auto-launch the FULL Google `authenticate()` on the first
+    // CONTRACT: auto-launch the FULL Google `authenticate()` on the first
     // frame (google_sign_in v7: instance → initialize() [done in main()] →
     // authenticate()). NEVER lightweight/silent auth — retention decision.
     // The pill below is the fallback for a dismissed sheet.
@@ -311,7 +311,7 @@ class _TermsPrivacyLine extends StatelessWidget {
 
 /// Self-contained multicolor Google "G" mark — a CustomPainter pinwheel
 /// approximation (four brand-colour ring arcs + the blue crossbar), so no
-/// network asset and no new package is needed for a design-only pass.
+/// network asset and no new package is needed.
 class _GoogleGMark extends StatelessWidget {
   const _GoogleGMark({required this.size});
 

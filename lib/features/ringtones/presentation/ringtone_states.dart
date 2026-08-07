@@ -109,8 +109,9 @@ class _SkeletonRow extends StatelessWidget {
   }
 }
 
-/// Designed empty state — ringtone content launches after wallpapers, so this
-/// is a first-class "coming soon" surface, not an apology: the brand gopuram
+/// Designed empty state — reachable only when the catalog serves zero rows
+/// (an upstream build failure, or a genuinely emptied catalog), so it is a
+/// first-class branded surface, not an apology: the brand gopuram
 /// over a quiet gold note, with devotional-register copy. Scrollable so
 /// pull-to-refresh keeps working while empty, and inset at the bottom so the
 /// composition centres in the space ABOVE the floating dock rather than behind

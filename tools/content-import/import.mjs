@@ -6,8 +6,8 @@ import { AwsClient } from "aws4fetch";
 import postgres from "postgres";
 
 const ROOT = "c:/Anish/arul-import";
-const CDN = "https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev";
-const API = "https://arul-api.twilight-smoke-d495.workers.dev";
+const CDN = "https://arul-cdn.hsrutility.com";
+const API = "https://arul-api.hsrutility.com";
 
 // ---- config from workers/.dev.vars ----
 function parseEnv(path) {
@@ -51,7 +51,7 @@ console.log(`import-plan: ${plan.length} items`);
  *
  * NOTE this only fixes objects uploaded FROM HERE ON. Anything already in the
  * bucket needs a metadata rewrite (S3 CopyObject with REPLACE) or a Cache Rule
- * that supplies the TTL instead — see docs/provisioning.md.
+ * that supplies the TTL instead — see docs/caching.md and known-issues.md §Open.
  */
 const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 

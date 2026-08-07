@@ -6,26 +6,11 @@ close a line by deleting it.
 
 ## Open
 
-- **Ringtone "Set" has never been run on a pre-Android-10 device.** The below-29 path in
-  `MainActivity.setRingtoneFromFile` (copy to public Ringtones dir, register on the EXTERNAL volume,
-  runtime `WRITE_EXTERNAL_STORAGE`) was ported from Pakiza against two real on-device failures, but
-  ported ≠ re-verified: needs an API 23–28 handset. Before the port every Set there would have failed.
-- **The Play listing must justify `WRITE_SETTINGS`** and (below API 29) `WRITE_EXTERNAL_STORAGE` —
-  both declared and genuinely reachable now that ringtones ship.
 - **The CMS ringtone cover field has never been exercised** — all rows ship `cover_key = null` by
   design, so `ringtones/covers/…` is an empty prefix the sweep has never had to consider.
-- **"Vetrivel Muruga" and "Vetri Vel Muruga" both ship** — different recordings (RMS envelopes
-  differ), but they read as a duplicate. Rename one in the CMS.
 - **Media imported before 2026-07-29 carries no origin `Cache-Control`** — the media Cache Rule
   covers them at the edge, so latent, but it bites if that rule is removed or narrowed. Fix with an
   S3 CopyObject metadata rewrite (`MetadataDirective=REPLACE`; server-side, no egress).
-- **Production webhook delivery for Arul is unverified** — PhonePe → `api.hsrutility.com` → `DKS_`
-  dispatcher → arul-api is the one hop neither UAT nor local can cover (the path already works in
-  production for Pakiza). Needs a human watching a real production debit.
-- **The daily 21:30 UTC sweep has never been observed running live** on this worker.
-- **No cron run observed on a genuinely cold connection** — the only observed success was minutes
-  after a deploy (warm, the case that never fails). Watch `npx wrangler tail --format json` over a
-  `:00` after several idle hours.
 
 ## Traps already paid for
 

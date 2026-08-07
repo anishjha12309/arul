@@ -18,11 +18,11 @@ no screen may promise a push channel. Contracts: [edge-cases.md](edge-cases.md) 
 - QA tools gate on `qaToolsEnabled` → native `isPlayInstall()` (same source as FLAG_SECURE),
   deliberately NOT `kDebugMode` — every failure worth catching reproduces only in a release build.
 
-`festivalEvents` (`domain/devotional_event.dart`) is **hand-authored and UNVERIFIED** — check
-tithi/nakshatra dates against a published Tamil panchangam before the Play release (solar entries are
-dependable). Coverage to end-2031; `devotional_event_test.dart` fails from 2030 so the refresh is a
-chore, not an outage. A festival count short of expected in the QA card = the table ran out, silent
-otherwise.
+`festivalEvents` (`domain/devotional_event.dart`) is hand-authored and VERIFIED against a published
+Tamil panchangam. When EXTENDING coverage (`devotional_event_test.dart` fails from 2030, so the
+refresh is a chore, not an outage), verify the new rows the same way — solar entries follow fixed
+rules, every tithi/nakshatra date must be checked. A festival count short of expected in the QA
+card = the table ran out, silent otherwise.
 
 ## Traps already paid for
 

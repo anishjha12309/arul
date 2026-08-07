@@ -72,7 +72,7 @@ when billing code changes rather than re-deriving. Two facts that make re-runs c
 - **Time is the only thing simulated.** Notify/redeem/renewal key off `next_debit_at`, so backdating
   it is indistinguishable from waiting. Never wait out a real trial day.
 - **Local dev cannot receive the real S2S webhook** (`127.0.0.1` is unreachable from PhonePe). Drive
-  the handler with `workers/tools/prod-webhook.mjs`; production webhook delivery stays the one
-  unproven hop (`docs/known-issues.md` §Open).
+  the handler with `workers/tools/prod-webhook.mjs`; production delivery itself (PhonePe →
+  `api.hsrutility.com` → `DKS_` dispatcher → arul-api) has been observed live.
 
 Endpoint facts and the traps that return 200 while broken: `docs/phonepe.md`.

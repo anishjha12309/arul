@@ -1,8 +1,8 @@
 /// The ringtone list's signature element: a unique 46×46 medallion per track,
 /// drawn rather than downloaded.
 ///
-/// Four layers, bottom to top (design_handoff_ringtones_screen/README.md >
-/// "Cover art"): a jewel-tone gradient ground with a hairline rim, a ring of
+/// Four layers, bottom to top: a jewel-tone gradient ground with a hairline
+/// rim, a ring of
 /// kolam pulli dots woven with a dashed circle, a gold line-work
 /// centre motif chosen by the track's deity category, and — only while the
 /// track is previewing — a scrim with an oil-lamp diya whose flame sways.

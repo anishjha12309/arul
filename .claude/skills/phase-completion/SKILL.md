@@ -18,7 +18,7 @@ npx wrangler deploy                                 # if workers/ touched — de
 - [ ] `flutter analyze` clean; `dart format .` applied
 - [ ] Loading / empty / error states on every async surface
 - [ ] Edge cases handled with localized, user-visible messages (docs/edge-cases.md items for this phase)
-- [ ] Tests green (premium/payments are testable like everything else — rule dropped 2026-07-31)
+- [ ] Tests green — premium/payments included, testable like everything else
 - [ ] Analytics fire through `AnalyticsService`; update docs/analytics-events.md if events changed
 - [ ] UI matches docs/ui-direction.md (tokens only — no literal colors), dark + light
 - [ ] No secrets; config via `--dart-define-from-file`

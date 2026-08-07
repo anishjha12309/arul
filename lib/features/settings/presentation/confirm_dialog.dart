@@ -9,10 +9,10 @@ import '../../../theme/arul_tokens.dart';
 /// secondary, two 46px r999 buttons: Cancel (outlined ivory 25%) + confirm
 /// (solid #7A1E33, press #8D2740)."
 ///
-/// The confirm button is DESIGN-ONLY: [showArulConfirmDialog] resolves to `true`
-/// when confirmed and `false` (or `null`) when cancelled/dismissed, and the
-/// caller wires the real action behind a TODO. Entrance is translateY(24)+fade
-/// 250ms; barrier is [ArulTokens.dialogOverlay].
+/// The dialog only RESOLVES the answer: [showArulConfirmDialog] returns `true`
+/// when confirmed and `false` (or `null`) when cancelled/dismissed — the
+/// caller runs the real action (logout, delete account) on `true`. Entrance is
+/// translateY(24)+fade 250ms; barrier is [ArulTokens.dialogOverlay].
 Future<bool?> showArulConfirmDialog(
   BuildContext context, {
   required String title,

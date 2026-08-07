@@ -26,9 +26,9 @@ const _langs = <_Lang>[
 /// 10, 6 tiles (r16, 16/8 pad, centered): native 17px/600 over English 12px.
 /// Selected: gold 1.5px border + gold-tint bg + gold native text."
 ///
-/// Selection is VISUAL-ONLY (deliberate — locale switching is NOT wired):
-/// resolves to the chosen English name so the caller can persist it into the
-/// settings row sub-label.
+/// The sheet only RESOLVES the choice — it applies nothing itself: it returns
+/// the chosen English name, and the caller persists it and drives the app
+/// locale from it.
 Future<String?> showLanguageSheet(BuildContext context, String current) {
   return showArulSheet<String>(
     context,

@@ -108,7 +108,8 @@
              captures the install/launch events Meta Ads needs for attribution
              automatically; the ★ conversion events are logged explicitly via
              MetaAnalyticsService. Advertiser-ID collection ON for install
-             attribution — surface this in the privacy policy before launch. -->
+             attribution — the shared hsrutility.com privacy policy must keep
+             disclosing it (docs/analytics-ops.md). -->
         <meta-data
             android:name="com.facebook.sdk.ApplicationId"
             android:value="fb${facebookAppId}" />

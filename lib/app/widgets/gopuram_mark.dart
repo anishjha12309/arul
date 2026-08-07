@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 /// The Arul gopuram (temple-tower) logo mark.
 ///
-/// Draws the five stacked tiers from the design handoff's SVG (viewBox
-/// `0 0 44 40`) — a placeholder for the real fixed launcher mark, at the sizes
-/// and placements the design specifies. Gold `#D4A017` on dark, maroon `#7A1E33`
-/// on light (the caller supplies [color]).
+/// Draws the five stacked tiers (viewBox `0 0 44 40`) — the shipped IN-APP
+/// mark, at the sizes and placements the design specifies. The launcher icon
+/// is separate raster art (`assets/brand/icon_from_png.mjs`), not this widget.
+/// Gold `#D4A017` on dark, maroon `#7A1E33` on light (the caller supplies
+/// [color]).
 ///
 /// [size] is the WIDTH in logical pixels (the 44-unit viewBox axis); height is
 /// `size * 40 / 44`, preserving the source aspect ratio.

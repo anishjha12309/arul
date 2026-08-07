@@ -221,8 +221,8 @@ abstract final class ArulTokens {
   static const Color maroonBorder08 = Color.fromRGBO(122, 30, 51, 0.08);
 
   // ──────────────── Ringtones: now-playing + dock chrome ──────────────────
-  // Ringtones handoff (design_handoff_ringtones_screen/README.md). Roles the
-  // rest of the system had no equivalent for.
+  // From the ringtones design handoff (external; these values ARE the record).
+  // Roles the rest of the system had no equivalent for.
 
   /// The now-playing row's title on the LIGHT theme. `#A3760F` — [gold] itself
   /// fails contrast on a white card, so the design darkens it for light only;
@@ -724,9 +724,9 @@ abstract final class ArulTokens {
   static const double minHitTarget = 44;
 
   // ───────────────────────── Floating dock geometry ───────────────────────
-  // Ringtones handoff > "Floating bottom dock". The dock overlays the branch
-  // content (Scaffold.extendBody), so these are also what a scrolling list
-  // must clear — see [listBottomInsetUnderDock].
+  // Constraints in docs/ui-direction.md §Dock; these values are the record.
+  // The dock overlays the branch content (Scaffold.extendBody), so these are
+  // also what a scrolling list must clear — see [listBottomInsetUnderDock].
 
   /// Dock capsule height. 78.
   static const double dockHeight = 78;

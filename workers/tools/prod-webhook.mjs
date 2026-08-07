@@ -16,8 +16,8 @@
  *
  * Defaults to http://127.0.0.1:8787 (the wrangler dev sandbox). --prod is
  * required, explicitly, to reach api.hsrutility.com — PhonePe delivers Arul
- * webhooks there too: the Pakiza worker's dispatcher forwards DKS_-prefixed
- * orders to arul-api over the service binding (see docs/provisioning.md).
+ * webhooks there too: the hsr-cms dispatcher forwards DKS_-prefixed
+ * orders to arul-api over the service binding (docs/architecture.md).
  *
  * Credentials come from workers/.dev.vars and are never printed.
  */

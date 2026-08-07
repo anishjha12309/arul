@@ -64,16 +64,15 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
 3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
-4. Play upload = user task (Play App Signing ON). **v1.0.0+20 went to the OLD pre-rename listing** — retired by the 2026-08 package rename; `com.hsrutility.arul` lives on the business account.
-   SHA-1/256 registration — BOTH the app-signing and upload certs (Play Console → Setup → App
-   signing) in the Google Cloud OAuth Android client + Firebase — is required after the first
-   upload, or Google Sign-In is broken for testers. That state lives in Play Console, so confirm it
-   there; re-check only if the upload key rotates. No rebuild needed either way.
+4. Play upload = user task (Play App Signing ON) — the `com.hsrutility.arul` listing on the business
+   account; the pre-rename listing is retired.
+   SHA-1/256 of BOTH the app-signing and upload certs are REGISTERED in the Google Cloud OAuth
+   Android client + Firebase. Re-register only if the upload key rotates or Play re-signs — the
+   symptom of a missing registration is Google Sign-In failing for testers. No rebuild needed.
 5. Before the app goes PUBLIC: privacy policy live ✓
    (`https://hsrutility.com/privacy/` — the shared company page), PhonePe PROD webhook registered ✓, real analytics
-   creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced — v1.0.0+20 shipped
-   without it, so the first public build must be newer).
-6. **Ringtones SHIP** (un-parked 2026-08-05, 63 tracks live), so `WRITE_SETTINGS` must be an ACTIVE
+   creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced).
+6. **Ringtones SHIP**, so `WRITE_SETTINGS` must be an ACTIVE
    line in the manifest — a commented one now breaks Set on every device:
    ```bash
    grep -n "WRITE_SETTINGS" android/app/src/main/AndroidManifest.xml   # must be uncommented

@@ -25,8 +25,8 @@ final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
 ///
 /// No disk snapshot (unlike the wallpaper catalog): the list is a handful of
 /// tiny JSON pages and the tab is not the launch surface, so a network drain
-/// per session is fine. An empty catalog (nothing published yet) is DATA, not
-/// an error — the screen shows the designed "coming soon" state.
+/// per session is fine. An empty catalog is DATA, not an error — the screen
+/// shows the designed empty state instead of a spinner or a retry wall.
 final ringtoneCatalogProvider =
     AsyncNotifierProvider<RingtoneCatalogNotifier, List<Ringtone>>(
       RingtoneCatalogNotifier.new,
@@ -133,8 +133,8 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
   }
 
   /// Sequential page drain. The repository maps a CDN miss on page 1 to an
-  /// empty page, so "no catalog published yet" resolves to an empty LIST (the
-  /// designed coming-soon state), while a genuine connectivity failure throws
+  /// empty page, so an absent catalog resolves to an empty LIST (the designed
+  /// empty state), while a genuine connectivity failure throws
   /// [NetworkException] out of the client and lands in AsyncError → retry.
   Future<List<Ringtone>> _fetchCatalog() async {
     final repo = ref.read(ringtoneRepositoryProvider);

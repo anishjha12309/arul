@@ -13,8 +13,8 @@ enum ArulChipVariant {
   /// Follows light/dark.
   surface,
 
-  /// The browse-axis chip row on a themed surface — the Ringtones screen
-  /// (design_handoff_ringtones_screen). Taller and flatter than [surface], and
+  /// The browse-axis chip row on a themed surface — the Ringtones screen.
+  /// Taller and flatter than [surface], and
   /// its inactive label is the secondary text colour rather than the primary:
   /// a browse filter should recede until it is chosen, where a form chip like
   /// Upload's must read as an available answer. Follows light/dark.

@@ -24,9 +24,10 @@ class CdnRingtoneRepository implements RingtoneRepository {
 
     if (cdnPage != null) return cdnPage;
 
-    // CDN miss — an empty page, never a DB fallback. Page 1 missing simply
-    // means no ringtone catalog has been published yet (content launches
-    // later), which the screen renders as the designed "coming soon" state.
+    // CDN miss — an empty page, never a DB fallback. The build always writes
+    // page 1 even for a zero-row scope (architecture.md §Catalog generation),
+    // so a missing page means the build failed upstream; the screen degrades
+    // to its empty state rather than erroring.
     return CatalogPage<Ringtone>(
       items: const [],
       page: page,

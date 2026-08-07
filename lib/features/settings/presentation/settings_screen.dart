@@ -30,7 +30,7 @@ import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
 /// Settings — profile card, one rows-card, muted logout, demoted delete link,
-/// faint legal line. Wired (phase 4): profile identity
+/// faint legal line. Profile identity
 /// comes from the auth state (neutral stand-ins while it loads), edit-name
 /// persists via `POST /me/profile`, language drives the app locale, and logout /
 /// delete account run the real auth actions before routing back to sign-in.

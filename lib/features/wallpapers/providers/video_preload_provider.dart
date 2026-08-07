@@ -12,9 +12,9 @@ import 'wallpaper_prefetch_provider.dart';
 /// `dispose()` in flight against a recreating Activity. Living for the process
 /// removes that race entirely.
 ///
-/// NOTE: `prewarmFirst` on the controller is currently DEAD CODE. It exists for a
-/// splash gate that warms the first clip before reveal; this app does not have one
-/// (the splash is a fixed beat straight to the grid). Wire it or delete it — do
+/// NOTE: `prewarmFirst` on the controller is DEAD CODE — nothing calls it. The
+/// splash's own warm-up goes through the thumbnail path in `splash_screen.dart`
+/// instead (images, not MP4 decoders). Wire `prewarmFirst` or delete it — do
 /// not assume it runs.
 ///
 /// Decoder budget: the controller holds at most previous/current/next (3

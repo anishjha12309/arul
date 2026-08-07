@@ -44,11 +44,11 @@ class AppShell extends ConsumerStatefulWidget {
   /// added on top — otherwise the last row hides behind the capsule on exactly
   /// the phones that have a gesture pill.
   ///
-  /// The ancestor check is what makes this safe to call anywhere. Settings is
-  /// reached BOTH as a dock branch and as a route pushed over the feed (that is
-  /// how it works today, with ringtones parked); a flat 120 would have left a
-  /// screen's worth of dead space at the bottom of the pushed one. Callers
-  /// should not have to know which way they were opened.
+  /// The ancestor check is what makes this safe to call anywhere. Settings'
+  /// sub-screens (notifications, premium, refer, upload) are pushed OVER the
+  /// shell, so they have no [AppShell] ancestor and get 0; a flat 120 left a
+  /// screen's worth of dead space at the bottom of those. Callers should not
+  /// have to know which way they were opened.
   static double dockClearance(BuildContext context) {
     if (context.findAncestorWidgetOfExactType<AppShell>() == null) return 0;
     return ArulTokens.listBottomInsetUnderDock +

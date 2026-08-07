@@ -26,7 +26,7 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 - [ ] Sign-in bg video: shared ref-counted player with 2s dispose grace (screen swaps must not kill it)
 - [ ] Auth failures surface a localized message + retry, never a stuck spinner
 
-## Premium / payments (server is source of truth; NO tests for this area — project rule)
+## Premium / payments (server is source of truth)
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user ← `premium_gate.dart`
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
 - [ ] `cancelled` keeps premium until period end; `paused`/`expired` none; `reward_premium_until` ORed in

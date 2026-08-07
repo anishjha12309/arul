@@ -5,18 +5,17 @@ import 'package:flutter/foundation.dart';
 /// Build-time config. Values arrive via `--dart-define-from-file=env/dev.json`.
 /// No secrets ever live here — the app holds none (CLAUDE.md §9).
 abstract final class AppConfig {
-  /// The bucket's public r2.dev origin — CURRENTLY the CDN for BOTH dev and
-  /// prod (env/*.json ship this exact URL, and v1.0.0+20 released on it). A
-  /// deliberate interim: r2.dev is throttled, and the move to a unified custom
-  /// CDN domain (`arul-cdn.hsrutility.com`) is still pending.
+  /// The media CDN — the custom domain in both env files. Never the bucket's
+  /// r2.dev origin: Cloudflare rate-limits it and Cache Rules/WAF do not apply
+  /// there (CLAUDE.md §2), so the default matches the env files rather than
+  /// keeping a throttled fallback alive.
   static const cdnBaseUrl = String.fromEnvironment(
     'R2_CDN_BASE_URL',
-    defaultValue: 'https://pub-9eeee142ae6e4f109589922622e1d632.r2.dev',
+    defaultValue: 'https://arul-cdn.hsrutility.com',
   );
 
-  /// Base URL for the Cloudflare Worker API. Set in BOTH env files to the
-  /// worker's workers.dev origin; the custom `arul-api.hsrutility.com` domain
-  /// is still pending. Empty only in define-less builds — see [hasBackend].
+  /// Base URL for the Cloudflare Worker API (`arul-api.hsrutility.com` in both
+  /// env files). Empty only in define-less builds — see [hasBackend].
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   /// Web OAuth 2.0 client ID from the NEW Arul Google Cloud project.
