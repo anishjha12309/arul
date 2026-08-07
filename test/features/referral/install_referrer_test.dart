@@ -51,7 +51,7 @@ void main() {
 
     test('buildShareLink embeds the code as an encoded referrer payload', () {
       final link = InstallReferrerService.buildShareLink('ABCD1234');
-      expect(link, contains('id=com.hsrapps.arul'));
+      expect(link, contains('id=com.hsrutility.arul'));
       // "ref=ABCD1234" URL-encoded → "ref%3DABCD1234".
       expect(link, contains('referrer=ref%3DABCD1234'));
       // Round-trips back to the same code.

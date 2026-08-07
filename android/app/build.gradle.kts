@@ -34,7 +34,7 @@ val keystoreProperties = Properties().apply {
 val hasReleaseKey = keystoreProperties.containsKey("storeFile")
 
 android {
-    namespace = "com.hsrapps.arul"
+    namespace = "com.hsrutility.arul"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -54,7 +54,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.hsrapps.arul"
+        applicationId = "com.hsrutility.arul"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion   // 36 -> edge-to-edge is ENFORCED
         versionCode = flutter.versionCode

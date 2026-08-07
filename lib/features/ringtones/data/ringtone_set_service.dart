@@ -92,7 +92,7 @@ class AndroidRingtoneSetService implements RingtoneSetService {
   final ApiClient _api;
   final http.Client _http;
 
-  static const _channel = MethodChannel('com.hsrapps.arul/ringtone_set');
+  static const _channel = MethodChannel('com.hsrutility.arul/ringtone_set');
 
   @override
   Future<String> fetchSignedUrl(String id) async {

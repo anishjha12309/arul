@@ -4,7 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'build_info.g.dart';
 
-const _channel = MethodChannel('com.hsrapps.arul/build_info');
+const _channel = MethodChannel('com.hsrutility.arul/build_info');
 
 /// Whether this build was delivered by Google Play — i.e. whether it is the
 /// uploaded `.aab` rather than a sideloaded APK.

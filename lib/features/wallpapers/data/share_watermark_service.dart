@@ -75,7 +75,7 @@ class ShareWatermarkService {
        _channel = channel ?? const MethodChannel(channelName);
 
   /// EXACT contract with the native side (built in parallel) — do not change.
-  static const channelName = 'com.hsrapps.arul/share_watermark';
+  static const channelName = 'com.hsrutility.arul/share_watermark';
 
   static const _logoAsset = 'assets/images/watermark_logo.png';
 

@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.content.SharedPreferences
 import android.service.wallpaper.WallpaperService

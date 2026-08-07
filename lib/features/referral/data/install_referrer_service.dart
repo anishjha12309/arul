@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Play Store package id — the Refer & Earn share link points here with a
 /// `referrer` payload that [captureOnce] reads back after the friend installs.
-const String kPlayPackageId = 'com.hsrapps.arul';
+const String kPlayPackageId = 'com.hsrutility.arul';
 
 /// Captures the Play Install Referrer once per install and hands the extracted
 /// referral code to the first sign-in.

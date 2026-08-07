@@ -412,7 +412,7 @@ abstract class AppLocalizations {
   /// **'Turn on the internet to see wallpapers.'**
   String get offlineFeedBody;
 
-  /// Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder is referral-attributed and a competing hsrapps.com/arul link (which this string used to carry) sends the tap somewhere that earns the sender nothing.
+  /// Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder is referral-attributed and a competing marketing-site link (which this string used to carry) sends the tap somewhere that earns the sender nothing.
   ///
   /// In en, this message translates to:
   /// **'More devotional wallpapers like this one — still and live — on Arul:\n{link}'**

@@ -137,7 +137,7 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
       content_version: 42, // must NOT leak
       prices: { monthly: { amount: 4900, currency: "INR" } },
       support_email: "support@hsrutility.com",
-      policy_urls: { privacy: "https://hsrapps.com/p" },
+      policy_urls: { privacy: "https://hsrutility.com/p" },
       feature_flags: { ramadan_mode: true },
       min_supported_version: "1.0.0",
     });
@@ -148,7 +148,7 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
     // Public fields present, matching AppConfigModel.fromJson (snake_case)
     expect(body.prices).toEqual({ monthly: { amount: 4900, currency: "INR" } });
     expect(body.support_email).toBe("support@hsrutility.com");
-    expect(body.policy_urls).toEqual({ privacy: "https://hsrapps.com/p" });
+    expect(body.policy_urls).toEqual({ privacy: "https://hsrutility.com/p" });
     expect(body.feature_flags).toEqual({ ramadan_mode: true });
     expect(body.min_supported_version).toBe("1.0.0");
   });
@@ -194,14 +194,14 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
     // as the raw JSON string. These must be parsed, not double-encoded.
     await writeAppConfig(bucket, {
       prices: '{"monthly":{"amount":4900,"currency":"INR"}}',
-      policy_urls: '{"privacy":"https://hsrapps.com/p"}',
+      policy_urls: '{"privacy":"https://hsrutility.com/p"}',
       feature_flags: "{}",
       support_email: "support@hsrutility.com",
       min_supported_version: "1.0.0",
     });
     const body = puts[0].body as Record<string, unknown>;
     expect(body.prices).toEqual({ monthly: { amount: 4900, currency: "INR" } });
-    expect(body.policy_urls).toEqual({ privacy: "https://hsrapps.com/p" });
+    expect(body.policy_urls).toEqual({ privacy: "https://hsrutility.com/p" });
     expect(body.feature_flags).toEqual({});
     // A string column stays a string (not wrapped in an object).
     expect(body.support_email).toBe("support@hsrutility.com");

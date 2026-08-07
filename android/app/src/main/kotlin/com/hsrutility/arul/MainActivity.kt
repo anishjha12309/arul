@@ -1,4 +1,4 @@
-package com.hsrapps.arul
+package com.hsrutility.arul
 
 import android.Manifest
 import android.content.ContentUris
@@ -14,11 +14,11 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
-import com.hsrapps.arul.feedvideo.FeedVideoPlugin
-import com.hsrapps.arul.feedvideo.VideoThumbnailChannel
-import com.hsrapps.arul.share.DirectShareChannel
-import com.hsrapps.arul.share.ShareWatermarkChannel
-import com.hsrapps.arul.wallpaper.WallpaperApplyChannel
+import com.hsrutility.arul.feedvideo.FeedVideoPlugin
+import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
+import com.hsrutility.arul.share.DirectShareChannel
+import com.hsrutility.arul.share.ShareWatermarkChannel
+import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -32,7 +32,7 @@ class MainActivity : FlutterFragmentActivity() {
         private const val TAG = "MainActivity"
 
         // Ringtone set channel (ported from the reference app's ringtone block).
-        private const val RINGTONE_CHANNEL = "com.hsrapps.arul/ringtone_set"
+        private const val RINGTONE_CHANNEL = "com.hsrutility.arul/ringtone_set"
 
         // Runtime-permission request code for the pre-Android-10 WRITE_EXTERNAL_STORAGE
         // grant a custom ringtone needs there (see setRingtone / onRequestPermissionsResult).
@@ -40,7 +40,7 @@ class MainActivity : FlutterFragmentActivity() {
 
         // Exposes isPlayInstall() to Dart — see that function, and the QA-tools
         // gate in the reminders screen.
-        private const val BUILD_INFO_CHANNEL = "com.hsrapps.arul/build_info"
+        private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
     }
 
     private var wallpaperApplyChannel: WallpaperApplyChannel? = null

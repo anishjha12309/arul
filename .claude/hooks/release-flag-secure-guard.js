@@ -17,7 +17,7 @@ const ROOT = process.cwd();
 const MAIN_ACTIVITY = path.join(
   ROOT,
   "android", "app", "src", "main", "kotlin",
-  "com", "hsrapps", "arul", "MainActivity.kt",
+  "com", "hsrutility", "arul", "MainActivity.kt",
 );
 
 // Only the release .aab is gated. `flutter build appbundle` defaults to release;

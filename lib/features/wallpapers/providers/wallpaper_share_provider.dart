@@ -77,7 +77,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   ///
   /// It replaced a plain `message` parameter that was concatenated as
   /// `'$message\n$link'`. That was not a style preference: the message itself
-  /// ended in `https://hsrapps.com/arul`, so every shared wallpaper went out
+  /// ended in a hard-coded marketing-site URL, so every shared wallpaper went out
   /// carrying TWO links — the hard-coded one and the referral-attributed one —
   /// and the recipient had even odds of tapping the one that credited nobody.
   /// Putting the link INSIDE the caption makes a second one impossible to add by

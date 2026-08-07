@@ -1,4 +1,4 @@
-package com.hsrapps.arul.feedvideo
+package com.hsrutility.arul.feedvideo
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -37,7 +37,7 @@ class VideoThumbnailChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
 
     companion object {
-        const val CHANNEL = "com.hsrapps.arul/video_thumb"
+        const val CHANNEL = "com.hsrutility.arul/video_thumb"
 
         /** Not frame 0: many clips fade in from black and frame 0 is a dead frame. */
         private const val FRAME_US = 500_000L

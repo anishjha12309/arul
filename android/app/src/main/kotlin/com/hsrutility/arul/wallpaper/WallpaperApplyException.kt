@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 /**
  * Thrown by the native apply layer on failure. [code] is a stable machine code

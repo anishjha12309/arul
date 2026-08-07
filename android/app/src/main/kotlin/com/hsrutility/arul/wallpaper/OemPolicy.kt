@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.os.Build
 import java.util.Locale
@@ -14,7 +14,7 @@ import java.util.Locale
  * broad — it includes OEM families we cannot test on directly.
  *
  * Adopted into the app from the vendored flutter_wallpaper_plus package so the
- * apply logic lives in com.hsrapps.arul with no external plugin dependency.
+ * apply logic lives in com.hsrutility.arul with no external plugin dependency.
  */
 object OemPolicy {
     private val restrictiveVendors = listOf(

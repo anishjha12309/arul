@@ -1,4 +1,4 @@
-package com.hsrapps.arul.share
+package com.hsrutility.arul.share
 
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -28,7 +28,7 @@ import java.io.File
  * this class does zero layout math: decode → static [BitmapOverlay] → re-encode.
  *
  * Contract (the Dart caller is built against exactly this):
- *   channel  com.hsrapps.arul/share_watermark
+ *   channel  com.hsrutility.arul/share_watermark
  *   method   videoWatermarkSupport {} → {supported: Boolean, sdkInt: Int}
  *   method   watermarkVideo {inputPath, outputPath, overlayPng}
  *   success  → outputPath
@@ -69,7 +69,7 @@ class ShareWatermarkChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
 
     companion object {
-        const val CHANNEL = "com.hsrapps.arul/share_watermark"
+        const val CHANNEL = "com.hsrutility.arul/share_watermark"
         private const val TAG = "ShareWatermark"
     }
 

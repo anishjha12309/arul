@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.app.WallpaperManager
 import android.content.ComponentName
@@ -25,7 +25,7 @@ import java.util.Locale
  * handler never touches the network — it only reads local files. That keeps the
  * native side small and the entitlement gate where it belongs (the Worker).
  *
- * Channel: `com.hsrapps.arul/wallpaper`
+ * Channel: `com.hsrutility.arul/wallpaper`
  * Methods:
  *  - setImageWallpaper { filePath, target } → ImageWallpaperManager (static)
  *  - setVideoWallpaper { filePath, enableAudio, loop } → persist MP4 to filesDir,
@@ -41,7 +41,7 @@ class WallpaperApplyChannel(
 ) : MethodChannel.MethodCallHandler {
 
     companion object {
-        const val CHANNEL = "com.hsrapps.arul/wallpaper"
+        const val CHANNEL = "com.hsrutility.arul/wallpaper"
         private const val TAG = "WallpaperApplyChannel"
         private const val LIVE_VIDEO_DIR_NAME = "arul_live_video"
         private const val ACTIVE_LIVE_VIDEO_BASENAME = "active_live_video"

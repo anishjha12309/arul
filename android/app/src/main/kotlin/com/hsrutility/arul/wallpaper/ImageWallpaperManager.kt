@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.app.WallpaperManager
 import android.content.Context
@@ -6,7 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
-import com.hsrapps.arul.BuildConfig
+import com.hsrutility.arul.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

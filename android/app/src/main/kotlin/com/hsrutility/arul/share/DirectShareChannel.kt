@@ -1,4 +1,4 @@
-package com.hsrapps.arul.share
+package com.hsrutility.arul.share
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -27,7 +27,7 @@ import java.io.File
  * URI would throw FileUriExposedException on anything since Android 7.
  *
  * Contract (the Dart caller is built against exactly this):
- *   channel  com.hsrapps.arul/direct_share
+ *   channel  com.hsrutility.arul/direct_share
  *   method   shareToPackage {package, filePath, mimeType, text}
  *   success  → true  = the target app opened and owns the share from here
  *              false = target not installed, or it cannot receive this mime
@@ -41,7 +41,7 @@ class DirectShareChannel(private val activity: Activity) :
     MethodChannel.MethodCallHandler {
 
     companion object {
-        const val CHANNEL = "com.hsrapps.arul/direct_share"
+        const val CHANNEL = "com.hsrutility.arul/direct_share"
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {

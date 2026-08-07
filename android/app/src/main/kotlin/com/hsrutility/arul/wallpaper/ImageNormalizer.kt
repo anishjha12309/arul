@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.app.WallpaperManager
 import android.content.Context
@@ -10,7 +10,7 @@ import android.os.Build
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
-import com.hsrapps.arul.BuildConfig
+import com.hsrutility.arul.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest

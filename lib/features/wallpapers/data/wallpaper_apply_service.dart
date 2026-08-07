@@ -82,14 +82,14 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
        _http = httpClient ?? http.Client(),
        _channel = channel ?? const MethodChannel(_channelName);
 
-  static const _channelName = 'com.hsrapps.arul/wallpaper';
+  static const _channelName = 'com.hsrutility.arul/wallpaper';
 
   /// Present only when the Worker exists — drives the signed-url gate.
   final ApiClient? _api;
 
   final http.Client _http;
 
-  /// Our own channel (com.hsrapps.arul.wallpaper.WallpaperApplyChannel) — there
+  /// Our own channel (com.hsrutility.arul.wallpaper.WallpaperApplyChannel) — there
   /// is no third-party wallpaper plugin in this app.
   final MethodChannel _channel;
 

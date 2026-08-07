@@ -130,8 +130,8 @@ class _FeedVideoChannelHub {
   static _FeedVideoChannelHub? _instance;
   static _FeedVideoChannelHub get instance =>
       _instance ??= _FeedVideoChannelHub(
-        const MethodChannel('com.hsrapps.arul/feed_video'),
-        const EventChannel('com.hsrapps.arul/feed_video_events'),
+        const MethodChannel('com.hsrutility.arul/feed_video'),
+        const EventChannel('com.hsrutility.arul/feed_video_events'),
       );
 
   /// Test seam: a fresh, isolated hub bound to fake channels (never the

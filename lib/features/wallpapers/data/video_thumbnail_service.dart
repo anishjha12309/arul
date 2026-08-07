@@ -18,7 +18,7 @@ class VideoThumbnailService {
   VideoThumbnailService({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
 
-  static const _channelName = 'com.hsrapps.arul/video_thumb';
+  static const _channelName = 'com.hsrutility.arul/video_thumb';
 
   final MethodChannel _channel;
 

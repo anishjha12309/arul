@@ -47,7 +47,7 @@ abstract final class AppConfig {
   /// Privacy policy. The SHARED HSR page — titled "Privacy Policy — Pakiza &
   /// Arul", so it covers this app by name.
   ///
-  /// Was `hsrapps.com/arul/privacy-policy/`, the per-app page. Both policies now
+  /// Was a per-app page on the retired old company domain. Both policies now
   /// point at the one company domain so there is a single document to keep
   /// current instead of one per app drifting apart.
   ///

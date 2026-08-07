@@ -310,7 +310,7 @@ void main() {
         params.text,
         contains(
           'https://play.google.com/store/apps/details'
-          '?id=com.hsrapps.arul',
+          '?id=com.hsrutility.arul',
         ),
       );
 
@@ -329,7 +329,7 @@ void main() {
 
     test('the outgoing caption carries EXACTLY ONE link', () async {
       // Regression guard. The caption used to be built as `'$message\n$link'`
-      // where `message` itself ended in `https://hsrapps.com/arul`, so every
+      // where `message` itself ended in a hard-coded marketing-site URL, so every
       // shared wallpaper went out with two competing URLs and the recipient
       // could easily tap the one that credits nobody. The caption owns the link
       // now, so a second one cannot be appended by accident — this proves it.

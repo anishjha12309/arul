@@ -170,7 +170,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String wallpaperShareCaption(String link) {
-    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+    return 'इस जैसे और भक्ति वॉलपेपर — स्थिर और लाइव — Arul पर:\n$link';
   }
 
   @override

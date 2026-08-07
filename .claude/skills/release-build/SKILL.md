@@ -64,20 +64,19 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
 3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
-4. Play upload = user task (Play App Signing ON). **v1.0.0+20 is already uploaded** (not public yet).
+4. Play upload = user task (Play App Signing ON). **v1.0.0+20 went to the OLD pre-rename listing** — retired by the 2026-08 package rename; the `com.hsrutility.arul` app on the business account starts with no uploads (PACKAGE-RENAME-PLAN.md).
    SHA-1/256 registration — BOTH the app-signing and upload certs (Play Console → Setup → App
    signing) in the Google Cloud OAuth Android client + Firebase — is required after the first
    upload, or Google Sign-In is broken for testers. That state lives in Play Console, so confirm it
    there; re-check only if the upload key rotates. No rebuild needed either way.
 5. Before the app goes PUBLIC: privacy policy live ✓
-   (`https://hsrapps.com/arul/privacy-policy/`), PhonePe PROD webhook registered ✓, real analytics
+   (`https://hsrutility.com/privacy/` — the shared company page), PhonePe PROD webhook registered ✓, real analytics
    creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced — v1.0.0+20 shipped
    without it, so the first public build must be newer).
-6. **Ringtones ship PARKED** — the tab has no route and `WRITE_SETTINGS` is commented out of the
-   manifest, on purpose (docs/known-issues.md). `WRITE_SETTINGS` is special-access, shows on the Play
-   listing, and has no feature behind it in v1, so an ACTIVE (uncommented) line means the parking
-   regressed:
+6. **Ringtones SHIP** (un-parked 2026-08-05, 63 tracks live), so `WRITE_SETTINGS` must be an ACTIVE
+   line in the manifest — a commented one now breaks Set on every device:
    ```bash
-   grep -n "WRITE_SETTINGS" android/app/src/main/AndroidManifest.xml   # must appear only in comments
+   grep -n "WRITE_SETTINGS" android/app/src/main/AndroidManifest.xml   # must be uncommented
    ```
-   Never "restore" it to make something build.
+   It is special-access and shows on the Play listing; the **Data safety form and the listing copy
+   must both account for it**, because there is a real feature behind it.

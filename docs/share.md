@@ -14,8 +14,8 @@ below are the ones that were paid for by getting the second half wrong.
       permanent licence (CLAUDE.md §5).
 - [ ] **EXACTLY ONE link leaves the app per share**, and it is the LAST line of the caption.
       The caption OWNS the link (`buildCaption(link)`); it is never appended beside a second one.
-      The old form concatenated `'$message\n$link'` where `message` itself ended in
-      `https://hsrapps.com/arul` — so every shared wallpaper went out with two competing URLs and the
+      The old form concatenated `'$message\n$link'` where `message` itself ended in a hard-coded
+      marketing-site URL — so every shared wallpaper went out with two competing URLs and the
       recipient had even odds of tapping the one that credits nobody. Guarded by a test in
       `wallpaper_share_test.dart`; keep it.
 - [ ] Trailing, never inline: messengers preview a link at the end of a message and bury one mid-sentence.

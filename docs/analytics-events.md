@@ -45,7 +45,7 @@ Static-vs-live rides along as **`type`** (`kind.name` → `image` / `live`), spe
 | Event | Properties | PostHog | Meta | GA4 standard |
 |-------|------------|:---:|------|--------------|
 | login_success / login_failed | provider, error, kind | | fb_mobile_complete_registration (success) | ★ login (success) |
-| trial_started | plan, order_id, value | | ★ StartTrial | ★ purchase |
+| trial_started | plan, order_id, value | | ★ StartTrial | raw only — **no** `purchase` |
 | subscription_active | plan, order_id, value | ✓ | ★ Subscribe | ★ purchase |
 | feed_session_ended | cards_engaged, cards_engaged_live, cards_engaged_static, max_depth, seconds | ✓ | | |
 | wallpaper_engaged | wallpaper_id, category, type | | | |

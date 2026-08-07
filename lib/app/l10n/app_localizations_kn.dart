@@ -171,7 +171,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String wallpaperShareCaption(String link) {
-    return 'More devotional wallpapers like this one — still and live — on Arul:\n$link';
+    return 'ಇಂತಹ ಇನ್ನಷ್ಟು ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಸ್ಥಿರ ಮತ್ತು ಲೈವ್ — Arul ನಲ್ಲಿ:\n$link';
   }
 
   @override

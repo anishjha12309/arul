@@ -1,4 +1,4 @@
-package com.hsrapps.arul.wallpaper
+package com.hsrutility.arul.wallpaper
 
 import android.content.Context
 import android.os.Handler
@@ -10,7 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
-import com.hsrapps.arul.BuildConfig
+import com.hsrutility.arul.BuildConfig
 import java.io.File
 
 /**

@@ -1,4 +1,4 @@
-package com.hsrapps.arul.feedvideo
+package com.hsrutility.arul.feedvideo
 
 import android.content.Context
 import android.media.MediaCodecList
@@ -52,8 +52,8 @@ class FeedVideoPlugin(
 ) : MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
 
     companion object {
-        const val METHOD_CHANNEL = "com.hsrapps.arul/feed_video"
-        const val EVENT_CHANNEL = "com.hsrapps.arul/feed_video_events"
+        const val METHOD_CHANNEL = "com.hsrutility.arul/feed_video"
+        const val EVENT_CHANNEL = "com.hsrutility.arul/feed_video_events"
         private const val TAG = "FeedVideoPlugin"
 
         // Small demuxer/loading budget — mirrors the old libmpv 4 MB / ~2-4s

@@ -31,7 +31,7 @@ recording and the recents thumbnail — driving that one visually is impossible;
 `WRITE_EXTERNAL_STORAGE` prompt) than API 29+, and no pre-Q device has ever run it here — test Set
 on real API 23–28 hardware, not just a modern phone (docs/known-issues.md).
 
-**GA4 DebugView:** `adb shell setprop debug.firebase.analytics.app com.hsrapps.arul` → Firebase console → DebugView. Off: same command with `.none`. Release builds have no DebugView — prove the upload path from logcat instead (docs/analytics-ops.md).
+**GA4 DebugView:** `adb shell setprop debug.firebase.analytics.app com.hsrutility.arul` → Firebase console → DebugView. Off: same command with `.none`. Release builds have no DebugView — prove the upload path from logcat instead (docs/analytics-ops.md).
 
 **Wallpaper-apply testing:** apply triggers an OS activity recreate — the `configChanges` fix must keep the app alive; a cold restart on apply = regression (docs/edge-cases.md).
 

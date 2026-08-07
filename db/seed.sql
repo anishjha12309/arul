@@ -21,7 +21,7 @@ values (
   0,
   '{ "monthly": { "amount": 19900, "currency": "INR" } }'::jsonb,
   'support@hsrutility.com',
-  '{ "privacy": "https://hsrapps.com/arul/privacy-policy/" }'::jsonb,
+  '{ "privacy": "https://hsrutility.com/privacy/", "terms": "https://hsrutility.com/terms/" }'::jsonb,
   '{}'::jsonb,
   '1.0.0'
 )
