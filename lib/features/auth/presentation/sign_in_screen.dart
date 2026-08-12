@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../legal/presentation/policy_screen.dart';
 import '../domain/auth_service.dart';
 import '../providers/auth_providers.dart';
 import 'widgets/video_background.dart';
@@ -405,9 +405,9 @@ class _TermsPrivacyLine extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _PolicyLink(label: 'Terms', url: AppConfig.termsUrl),
+        _PolicyLink(label: 'Terms', doc: PolicyDoc.terms),
         Text(' · ', style: _policyBase),
-        _PolicyLink(label: 'Privacy', url: AppConfig.privacyUrl),
+        _PolicyLink(label: 'Privacy', doc: PolicyDoc.privacy),
       ],
     );
   }
@@ -422,17 +422,17 @@ const _policyLink = TextStyle(
   color: Color.fromRGBO(212, 160, 23, 0.85),
 );
 
-/// One policy link, opening in the browser.
+/// One policy link, opening the in-app reader.
 ///
-/// The URLs come from [AppConfig] (dart-define overridable, defaulting to the
-/// canonical company pages) — never spelled here, because the SAME pages are
-/// linked from the Settings footer and named in the Play listing, and three
-/// copies of a policy URL is how one of them goes stale.
+/// The URLs come from [AppConfig] via [PolicyDoc] (dart-define overridable,
+/// defaulting to the canonical company pages) — never spelled here, because the
+/// SAME pages are linked from the Settings footer and named in the Play
+/// listing, and three copies of a policy URL is how one of them goes stale.
 class _PolicyLink extends StatelessWidget {
-  const _PolicyLink({required this.label, required this.url});
+  const _PolicyLink({required this.label, required this.doc});
 
   final String label;
-  final String url;
+  final PolicyDoc doc;
 
   @override
   Widget build(BuildContext context) {
@@ -442,15 +442,11 @@ class _PolicyLink extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),
-        // Fire-and-forget, mirroring the Settings footer: a device with no
-        // browser must not throw into the sign-in tree over a policy link —
-        // this screen is mid-auth and has nowhere useful to surface it.
-        onTap: () => unawaited(
-          launchUrl(
-            Uri.parse(url),
-            mode: LaunchMode.externalApplication,
-          ).catchError((_) => false),
-        ),
+        // Pushed OVER this screen, mirroring the Settings footer, and popping
+        // straight back to it — sign-in never gets left behind in another app.
+        // Safe mid-auth: the one-shot authenticate() has already been launched
+        // from the first frame, and coming back does not re-arm it.
+        onTap: () => context.push(doc.route),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
           child: Text(label, style: _policyLink),

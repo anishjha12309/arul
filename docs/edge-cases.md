@@ -88,6 +88,7 @@ file); the live watermark needs **API 31** — below it the share ships clean ra
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing with another app = mutual media deletion. R2 objects public BY DESIGN (soft gate); never add a "private" object
 
 ## App-wide
+- [ ] Privacy / Terms open the IN-APP reader (`/policy/:doc`, `PolicyDoc.route`) — never `launchUrl`. Reviewer's call 2026-08-12: leaving for Chrome is a rejection. It fences navigation to the policy host (everything else, incl. `mailto:`, goes out to the OS), hides the site's own navbar/footer, and holds the page back until it has — reveal early and the nav flashes. The document stays REMOTE (shared with Pakiza, one page to keep current), so this surface needs a real offline state
 - [ ] Loading / empty / error state on every async surface, localized (all 6 locales)
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ events mirror to GA4 `login`/`purchase` + Meta

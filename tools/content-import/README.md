@@ -34,6 +34,7 @@ is never committed. Adjust the `ROOT` const at the top of each script for a new 
 
 | # | Script | Role |
 |---|--------|------|
+| 0 | `archive-check.mjs` | check the drop against `archive-index.json` **before** any ffmpeg time — catches clips already staged once, including ones imported and later deleted |
 | 1 | `probe.mjs` | ffprobe every input; collapse byte-exact dupes → `inventory.json` |
 | 2 | `refhash.mjs` | perceptual-hash (dHash) all existing R2 objects → `refhashes.json` |
 | 3 | `normalize.mjs` | transcode to spec (statics→JPG, videos→mp4 + first-frame thumb) → `normalized/`, `normalized-manifest.json` |
@@ -82,6 +83,12 @@ cp ringtones-import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node
   not on disk anywhere, and wrangler is already authenticated against the account. Invoke
   wrangler's JS entrypoint with `node`, never `npx` through a shell: a shell re-splits every
   argument on whitespace and both the filenames and the cache-control value contain spaces.
+
+## The staging archive
+
+ROOT masters are pruned once the library confirms them; `archive-index.json` is the ~40 KB
+record replacing them, and what step 0 checks a drop against. **Read [ARCHIVE.md](ARCHIVE.md)
+when de-duplicating a drop, or when ROOT fills up.**
 
 ## Notes
 

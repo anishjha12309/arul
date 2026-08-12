@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+30
+version: 1.0.0+31
 
 environment:
   sdk: ^3.12.0
@@ -29,7 +29,11 @@ dependencies:
   shared_preferences: ^2.5.5    # theme mode, locale
   http: ^1.2.0                  # CDN catalog fetches
   connectivity_plus: ^7.2.0     # offline gate — transport-level online/offline
-  url_launcher: ^6.3.2          # support mail, privacy policy
+  url_launcher: ^6.3.2          # support mail, share sheet, links OUT of the
+                                # in-app policy reader (mailto:, PhonePe, Google)
+  webview_flutter: ^4.14.1      # the in-app Privacy/Terms reader. Policy pages
+                                # must open INSIDE the app, never in the browser
+                                # (reviewer, 2026-08-12) — see policy_screen.dart
   package_info_plus: ^10.2.0    # version row in Settings
 
   # ── Live wallpapers + apply (ported with the native Media3 pipeline).

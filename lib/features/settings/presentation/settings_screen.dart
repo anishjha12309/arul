@@ -20,6 +20,7 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../legal/presentation/policy_screen.dart';
 import '../../notifications/providers/notification_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/tell_a_friend.dart';
@@ -709,14 +710,14 @@ class _PolicyFooter extends ConsumerWidget {
           spacing: 10,
           runSpacing: 4,
           children: [
-            _FooterLink(label: l10n.settingsPrivacy, url: AppConfig.privacyUrl),
+            _FooterLink(label: l10n.settingsPrivacy, doc: PolicyDoc.privacy),
             Text(
               '·',
               style: ArulTokens.body.copyWith(
                 color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
               ),
             ),
-            _FooterLink(label: l10n.settingsTerms, url: AppConfig.termsUrl),
+            _FooterLink(label: l10n.settingsTerms, doc: PolicyDoc.terms),
           ],
         ),
         const SizedBox(height: 14),
@@ -736,10 +737,10 @@ class _PolicyFooter extends ConsumerWidget {
 }
 
 class _FooterLink extends StatelessWidget {
-  const _FooterLink({required this.label, required this.url});
+  const _FooterLink({required this.label, required this.doc});
 
   final String label;
-  final String url;
+  final PolicyDoc doc;
 
   @override
   Widget build(BuildContext context) {
@@ -750,14 +751,11 @@ class _FooterLink extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),
-        // Fire-and-forget: a device with no browser must not throw into the
-        // Settings tree over a footer link.
-        onTap: () => unawaited(
-          launchUrl(
-            Uri.parse(url),
-            mode: LaunchMode.externalApplication,
-          ).catchError((_) => false),
-        ),
+        // In-app, never the browser: the policy opens as a pushed screen with
+        // its own back arrow (reviewer, 2026-08-12). Nothing to guard against
+        // here any more — it is a route, not an intent that can find no
+        // handler.
+        onTap: () => context.push(doc.route),
         child: Text(
           label,
           style: ArulTokens.body.copyWith(

@@ -24,6 +24,12 @@ Sources come from more than one generator and the removers are **not interchange
 `clean-batch.mjs` therefore **routes every file by measurement** (`wm-probe.py`, shape-correlation against both glyph templates — scoring brightness alone false-fires on busy artwork). Thresholds and their calibration: `ROOT/wm-probe-calibration.md`. Don't hand-force `--mode` unless you have already proven the batch.
 
 ## Steps (run in order; STOP and report on any failure)
+0. **Archive check** — `cd c:/Anish/Arul/tools/content-import && node archive-check.mjs <srcDir>`.
+   The masters under ROOT were pruned once they were confirmed in the library, so
+   `archive-index.json` is the only record that a clip was ever staged. A `RE-DOWNLOAD` or
+   `NEAR-DUP` hit tells you which — and whether it shipped, or **shipped and had its row
+   deleted** (3 Ayyappan tigers did). Re-importing one of those needs a reason, not a re-run.
+   The index is *not* redundant with step 5: `refhashes.json` only knows what is live now.
 1. **Probe** every `.mp4` (dims + duration). **Standard source = 720×1280** — both watermark models are positioned in that space, so any other size misplaces them. Exclude off-size files and tell the user to re-export at 720×1280. Duration is not enforced; short clips are fine.
 2. **Title offset:** find the highest existing number so labels never collide, and start at `N+1`:
    ```bash
@@ -31,7 +37,7 @@ Sources come from more than one generator and the removers are **not interchange
      "SELECT max((regexp_match(title,'^<Cat> ([0-9]+)$'))[1]::int) FROM wallpapers WHERE category='<category>'"
    ```
    `prod-query.mjs` is SELECT-only and reads the connection string from `.dev.vars` itself. (Column is `is_published`, not `published`.)
-3. **Stage:** clear `ROOT/normalized` + `ROOT/drive`; copy the folder's `.mp4`s into `ROOT/drive` and into `ROOT/masters-<category>` (backup).
+3. **Stage:** clear `ROOT/normalized` + `ROOT/drive`; copy the folder's `.mp4`s into `ROOT/drive` and into `ROOT/masters-<category>` (backup). Both dirs may not exist — the prune removes them once empty; create them.
 4. **Clean:** `node ROOT/clean-batch.mjs ROOT/drive` — probes each file, routes it to the matching remover, normalizes to 1024×1824 h264/yuv420p/faststart/no-audio, writes thumbnails + `normalized-manifest.json` (which records the `wm` kind and its scores per file). Read the `probe:` tally it prints — a batch you expected to be one generator coming back mixed means look before continuing. Any file routed `none` gets **no watermark removed** and is flagged; treat it as unverified until step 6.
 5. **Dedup:** `cd tools/content-import && node refhash.mjs && node dedup.mjs`. VIEW every flagged pair (new thumb vs the matched existing thumb). dhash flags dark, low-detail frames that share only a silhouette, so most flags are false positives. Keep live-versions of existing stills (established precedent); drop only true re-uploads. Never auto-drop.
 6. **Watermark audit (BEFORE import) — measure AND look:**
@@ -41,6 +47,10 @@ Sources come from more than one generator and the removers are **not interchange
 8. **QC gate:** `cd tools/content-import && node verify.mjs` — must show 0 failures.
 9. **Import:** `node ROOT/import.mjs` — R2 PUT (media + thumbs) → one Neon txn (rows + `content_version` bump) → build-catalog. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
 10. **Verify:** `node ROOT/e2e-verify.mjs`. Its "titles 1..N" line false-fails for offset batches — confirm titles via a DB query instead; all other checks must pass.
+
+11. **Archive + prune:** `node archive-index.mjs` records the new masters (merges, never
+    truncates), then `node archive-prune.mjs` — dry run first — deletes only what the index
+    records AND the library confirms, so the ROOT does not grow back to 250 MB.
 
 **Report:** count imported, title range, DB + catalog totals, which remover each file was routed to, and any excluded / dedup-flagged files.
 

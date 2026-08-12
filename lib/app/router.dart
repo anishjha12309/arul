@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
+import '../features/legal/presentation/policy_screen.dart';
 import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/referral/presentation/refer_screen.dart';
@@ -72,6 +73,15 @@ final router = GoRouter(
     ),
     GoRoute(path: '/refer', builder: (_, _) => const ReferScreen()),
     GoRoute(path: '/upload', builder: (_, _) => const UploadScreen()),
+    // Privacy / Terms, read in-app. A top-level push OVER the shell like every
+    // other sub-screen, so it works the same whether it was opened from the
+    // Settings branch or from /sign-in, which sits outside the shell entirely.
+    // Push it with `PolicyDoc.route` rather than a literal path.
+    GoRoute(
+      path: '/policy/:doc',
+      builder: (_, state) =>
+          PolicyScreen(doc: PolicyDoc.fromSlug(state.pathParameters['doc'])),
+    ),
     GoRoute(
       path: '/premium',
       // THE premium route — paywall AND plan home in one screen; it renders
