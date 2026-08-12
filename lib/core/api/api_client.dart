@@ -108,6 +108,27 @@ class ApiClient {
 
   // ─── Token management ──────────────────────────────────────────────────────
 
+  /// Opens the encrypted-storage channel early, off the critical path.
+  ///
+  /// The FIRST read of a process pays for the platform channel plus Android
+  /// keystore init, and on a cold start that was measured at most of the ~990ms
+  /// between the first frame and the app knowing whether a session exists —
+  /// which is the gate on launching Google sign-in. Called fire-and-forget from
+  /// `main()`, it overlaps that cost with Firebase and prefs setup instead of
+  /// serialising after them.
+  ///
+  /// Uses the same default [FlutterSecureStorage] instance the constructor
+  /// falls back to, so this warms the channel the real read will use. Purely a
+  /// cache warm: it reads nothing anyone consumes and swallows every failure,
+  /// so the worst case is the old timing, never a wrong answer.
+  static Future<void> warmSecureStorage() async {
+    try {
+      await const FlutterSecureStorage().read(key: _kAccessTokenKey);
+    } catch (_) {
+      // Keystore unavailable / locked user: the real read will surface it.
+    }
+  }
+
   Future<String?> readAccessToken() => _storage.read(key: _kAccessTokenKey);
   Future<String?> readRefreshToken() => _storage.read(key: _kRefreshTokenKey);
 

@@ -26,6 +26,7 @@ import {
   denylistJti,
 } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
+import { premiumPredicate } from "../lib/entitlement.js";
 import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 
@@ -53,6 +54,14 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
     // Alias every joined subscriptions column (sub_*) to avoid collisions with
     // the users columns of the same name (id, user_id doesn't exist on users
     // but status/plan-style names could be added later — alias defensively).
+    // `premium` is the SERVER-COMPUTED entitlement (premiumPredicate — the one
+    // place the rule lives: subscription statuses + debit grace + the referral
+    // reward pool). The app's gate reads THIS flag and never re-derives the
+    // rule from the row: the client-side copy of the rule drifted (it knew
+    // nothing about reward_premium_until, so a reward-only referrer was bounced
+    // to the paywall while /media/signed-url would have signed for them).
+    // The row still ships alongside — the premium screen needs status/dates to
+    // say anything true about the plan.
     const rows = await sql`
       SELECT u.id, u.display_name, u.email, u.referral_code,
              s.id AS sub_id, s.user_id AS sub_user_id, s.status AS sub_status,
@@ -61,7 +70,8 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
              s.merchant_subscription_id AS sub_merchant_subscription_id,
              s.trial_end AS sub_trial_end,
              s.current_period_end AS sub_current_period_end,
-             s.updated_at AS sub_updated_at
+             s.updated_at AS sub_updated_at,
+             ${premiumPredicate(sql, sub)} AS premium
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
       WHERE u.id = ${sub}
@@ -96,6 +106,9 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
         referralCode: row.referral_code as string,
       },
       subscription,
+      // Additive — old builds ignore it. Strict === true so a missing/odd
+      // value fails CLOSED (free), matching the gate's philosophy everywhere.
+      premium: row.premium === true,
     });
   } catch (err) {
     console.error("[me] DB error:", err);

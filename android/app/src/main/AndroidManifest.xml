@@ -218,10 +218,13 @@
         <package android:name="com.whatsapp.w4b"/>
     </queries>
 
-    <!-- PhonePe SDK — enumerate UPI apps for intent-based payment. REQUIRED on
-         Android 11+: without this, package-visibility rules hide every UPI app
-         from the SDK, it cannot launch a payment app, and the mandate setup dies
-         with a generic failure. Ported from the reference app. -->
+    <!-- PhonePe SDK + our own UpiIntentChannel — enumerate UPI apps for
+         intent-based payment. REQUIRED on Android 11+: without this,
+         package-visibility rules hide every UPI app, the picker lists nothing,
+         no payment app can be launched, and the mandate setup dies with a
+         generic failure. Every package in UpiIntentChannel.MANDATE_APPS must
+         appear here. Ported from the reference app, extended for the direct
+         UPI-intent mandate flow (BHIM, CRED, SuperMoney, PhonePe simulator). -->
     <queries>
         <package android:name="com.phonepe.app"/>
         <package android:name="com.google.android.apps.nbu.paisa.user"/>
@@ -229,5 +232,18 @@
         <package android:name="in.amazon.mShop.android.shopping"/>
         <package android:name="com.axis.mobile"/>
         <package android:name="com.whatsapp"/>
+        <package android:name="in.org.npci.upiapp"/>
+        <package android:name="com.dreamplug.androidapp"/>
+        <package android:name="money.super.payments"/>
+        <package android:name="com.phonepe.simulator"/>
+        <!-- Resolve upi:// (and the sandbox simulator's ppesim://) view intents. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="ppesim"/>
+        </intent>
     </queries>
 </manifest>

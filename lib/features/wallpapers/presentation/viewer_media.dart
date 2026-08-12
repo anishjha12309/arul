@@ -20,6 +20,13 @@ import 'wallpaper_tile.dart';
 /// user keeps seeing a perfectly good image of the wallpaper they chose — never a
 /// black frame, never a spinner, never a broken-image glyph. There is no
 /// "waiting for video" state, because there is nothing worth waiting for.
+///
+/// **The cost of that, and it is the thing to know before debugging this:** a
+/// live wallpaper whose texture has not revealed yet is PIXEL-IDENTICAL to a
+/// static one. No shimmer, no spinner, no badge. So "none of the live wallpapers
+/// are moving" is what a cold prefetch cache looks like (players stream ~5MB
+/// each before the first frame) — it is not, on its own, evidence of a broken
+/// pipeline. Check the pool, not the catalog.
 class ViewerMedia extends StatelessWidget {
   const ViewerMedia({super.key, required this.wallpaper, this.slot});
 

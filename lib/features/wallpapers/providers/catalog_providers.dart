@@ -25,7 +25,7 @@ final catalogCacheDirProvider = FutureProvider<Directory>(
 
 /// The catalog: the Worker-built, edge-cached page set
 /// (`catalog/version.json` no-store → `catalog/wallpapers/all_{page}.json?v=`,
-/// 20 items/page), drained to a single list because the feed filters by
+/// 200 items/page), drained to a single list because the feed filters by
 /// category client-side.
 ///
 /// **Cache-FIRST (stale-while-revalidate), deliberately.** On a warm start the
@@ -45,12 +45,14 @@ final catalogProvider = AsyncNotifierProvider<CatalogNotifier, List<Wallpaper>>(
 );
 
 class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
-  /// Bounded fan-out for the page drain. The pages are tiny edge-cached JSON,
-  /// but the drain is up to ~22 requests — strictly sequential it serialises
-  /// every RTT on a throttled CDN path. Mirrors the reference's bounded-
-  /// concurrency discipline (WallpaperPrefetchService pumps at most a few
-  /// transfers at once so nothing is starved); one shared http.Client keeps
-  /// the TCP/TLS sessions pooled.
+  /// Bounded fan-out for the page drain. At 200 rows/page the whole drain is
+  /// page 1 + one parallel batch today, but the pool must stay: the catalog
+  /// grows in bulk imports, and a strictly sequential drain serialises every
+  /// RTT on a throttled CDN path — the cold start (no disk snapshot yet) sat
+  /// at ~5 s when 634 items were 32 pages of 20. Mirrors the reference's
+  /// bounded-concurrency discipline (WallpaperPrefetchService pumps at most a
+  /// few transfers at once so nothing is starved); one shared http.Client
+  /// keeps the TCP/TLS sessions pooled.
   static const _maxConcurrentPages = 4;
 
   /// Monotonic token: each build()/refresh() claims a new one, and a background

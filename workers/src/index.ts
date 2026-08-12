@@ -19,6 +19,7 @@
  *   POST /payments/webhook      — PhonePe S2S callback (idempotent)
  *   POST /payments/status       — live subscription state reconciliation
  *   POST /payments/cancel       — revoke mandate (Manage Subscription)
+ *   POST /payments/abandon      — release a claimed setup after SDK cancel
  *   GET  /payments/callback     — PhonePe post-mandate browser redirect
  *   GET  /me
  *   POST /me/profile            — update display name
@@ -56,6 +57,7 @@ import {
   handleWebhook,
   handleStatus,
   handleCancel,
+  handleAbandon,
   handleCallback,
 } from "./routes/payments.js";
 import {
@@ -115,6 +117,7 @@ app.post("/payments/initiate", handleInitiate);    // JWT — mandate: ₹2 PENN
 app.post("/payments/webhook", handleWebhook);      // S2S callback (callback-auth verified)
 app.post("/payments/status", handleStatus);        // JWT — reconcile live subscription state
 app.post("/payments/cancel", handleCancel);        // JWT — revoke mandate (Manage Subscription)
+app.post("/payments/abandon", handleAbandon);      // JWT — release a claimed setup after SDK cancel
 app.get("/payments/callback", handleCallback);     // PhonePe post-mandate browser redirect
 
 // ── Me routes (all gated, scoped to verified sub) ─────────────────────────────

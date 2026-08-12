@@ -153,7 +153,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         glyph: (color) => GopuramMark(size: 19, color: color),
                         title: l10n.premiumBrandTitle,
                         sub: premiumSub,
-                        onTap: () => context.push('/premium/manage'),
+                        onTap: () => context.push('/premium?source=settings'),
                       ),
                       _RowData(
                         icon: Icons.card_giftcard,

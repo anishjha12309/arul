@@ -382,6 +382,99 @@ export async function setupSubscription(
   };
 }
 
+// ── Setup subscription — direct UPI intent (/subscriptions/v2/setup) ──────────
+
+export interface SetupIntentParams {
+  merchantOrderId: string;
+  merchantSubscriptionId: string;
+  /** Android package of the UPI app the user picked (e.g. "com.phonepe.app"). */
+  targetApp: string;
+  /**
+   * Present = trial consumed → TRANSACTION with this real first debit.
+   * Absent  = PENNY_DROP (₹2, auto-reversed).
+   */
+  upfrontAmountPaise?: number | undefined;
+}
+
+export interface SetupIntentResult {
+  orderId: string;
+  state: string;
+  /** upi://mandate?… — launch as an ACTION_VIEW intent aimed at targetApp. */
+  intentUrl: string;
+}
+
+/**
+ * POST {base}/subscriptions/v2/setup — Autopay "API integration" variant.
+ *
+ * Skips the hosted PAY_PAGE entirely: the response's intentUrl opens the chosen
+ * UPI app straight onto its mandate-approval sheet. No SDK, no web checkout, so
+ * the PR004/web-token trap class does not exist on this path. Same order-status
+ * family as everything else (`/subscriptions/v2/order/{id}/status`), so the
+ * webhook + reconcile pipeline is unchanged.
+ *
+ * Shape verified against sandbox 2026-08-11: request needs paymentFlow.type
+ * "SUBSCRIPTION_SETUP" (NOT the checkout variant's "SUBSCRIPTION_CHECKOUT_SETUP"),
+ * paymentMode {type:"UPI_INTENT", targetApp}, and deviceContext.deviceOS;
+ * response is {orderId, state, intentUrl}. Sandbox returns a ppesim:// link
+ * (PhonePe simulator app), production upi://mandate.
+ *
+ * No intentUrl in a 200 = the same class of trap as the missing SDK token:
+ * THROW so the caller falls back to the SDK page, never ship a broken response.
+ */
+export async function setupSubscriptionIntent(
+  env: Env,
+  params: SetupIntentParams,
+): Promise<SetupIntentResult> {
+  const base = getPgBase(env);
+  const headers = await authHeaders(env);
+
+  const upfront = params.upfrontAmountPaise;
+  const body = {
+    merchantOrderId: params.merchantOrderId,
+    amount: upfront ?? 200,
+    paymentFlow: {
+      type: "SUBSCRIPTION_SETUP",
+      merchantSubscriptionId: params.merchantSubscriptionId,
+      authWorkflowType: upfront ? "TRANSACTION" : "PENNY_DROP",
+      amountType: "FIXED",
+      maxAmount: 19900, // ₹199 in paise — must match setupSubscription
+      frequency: "MONTHLY",
+      paymentMode: { type: "UPI_INTENT", targetApp: params.targetApp },
+    },
+    deviceContext: { deviceOS: "ANDROID" },
+  };
+
+  const res = await fetch(`${base}/subscriptions/v2/setup`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new PhonePeApiError(
+      `PhonePe intent setup error ${res.status}: ${text}`,
+      res.status,
+      text,
+    );
+  }
+
+  const data = await res.json() as {
+    orderId: string;
+    state: string;
+    intentUrl?: string;
+  };
+
+  if (!data.intentUrl) {
+    throw new Error(
+      `PhonePe subscriptions/v2/setup returned no intentUrl ` +
+        `(keys: ${Object.keys(data).join(",")}, state: ${data.state})`,
+    );
+  }
+
+  return { orderId: data.orderId, state: data.state, intentUrl: data.intentUrl };
+}
+
 // ── Cancel (revoke) subscription ──────────────────────────────────────────────
 
 /**
@@ -463,7 +556,23 @@ export async function revokeMandateTolerant(
       stillLive =
         st.state === "ACTIVE" || st.state === "ACTIVATION_IN_PROGRESS";
     } catch (statusErr) {
-      console.warn("[revokeMandate] status re-check failed:", statusErr);
+      // A mandate the user never authorized (setup abandoned/superseded before
+      // the sheet was completed) does not exist at PhonePe AT ALL — cancel and
+      // status both answer 400 SUBSCRIPTION_NOT_FOUND. That is the desired end
+      // state: nothing exists, so nothing can ever debit. Without this branch
+      // every abandoned setup logged "may STILL BE LIVE — manual revoke
+      // required", burying the one alarm that matters under routine noise.
+      // Scoped to NOT_FOUND on purpose: a 401/5xx means "we can't see", and
+      // the conservative false (caller retries / alarms) stays correct there.
+      if (
+        statusErr instanceof PhonePeApiError &&
+        (statusErr.status === 404 ||
+          statusErr.body.includes("SUBSCRIPTION_NOT_FOUND"))
+      ) {
+        stillLive = false;
+      } else {
+        console.warn("[revokeMandate] status re-check failed:", statusErr);
+      }
     }
     return !stillLive;
   }

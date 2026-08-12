@@ -95,6 +95,43 @@ describe("entitlement.isPremium", () => {
     expect(query).toContain("'cancelled'");
   });
 
+  it("carries the DEBIT_GRACE window for trialing/active only", async () => {
+    // The renewal debit rides the HOURLY autopay cron, so a flawless payer
+    // sits past current_period_end for up to ~1h + settle time every cycle. A
+    // strict `> now()` cutoff closed the gate on the mainline path at every
+    // period boundary. The grace branch must exist, and must be scoped to the
+    // statuses a debit is actually coming for — 'cancelled' gets NO grace
+    // (period end IS the end), and dunning's flip to 'expired' ends it.
+    const mockFn = vi.fn().mockResolvedValue([]);
+    const sql = mockFn as unknown as postgres.Sql;
+    await premiumPredicate(sql, "user-uuid-123");
+    const strings = (mockFn.mock.calls[0] as unknown[])[0] as string[];
+    const query = strings.join("");
+    expect(query).toContain("interval '6 hours'");
+    // The grace OR-branch names only trialing/active; the strict branch is the
+    // only place 'cancelled' appears, so it occurs exactly once in the SQL.
+    const cancelledMentions = query.split("'cancelled'").length - 1;
+    expect(cancelledMentions).toBe(1);
+    // Grace never resurrects terminal rows.
+    expect(query).not.toContain("'expired'");
+    expect(query).not.toContain("'paused'");
+  });
+
+  it("keeps a still-paid period working through a 'pending' resubscribe claim", async () => {
+    // A resubscribe overwrites the user's ONE subscriptions row to 'pending'
+    // while the sheet is open. Without 'pending' in the strict branch, tapping
+    // Resubscribe instantly stripped a cancelled-but-still-paid trial (device
+    // 2026-08-12). Strict branch only — a pending attempt gets no debit grace.
+    const mockFn = vi.fn().mockResolvedValue([]);
+    const sql = mockFn as unknown as postgres.Sql;
+    await premiumPredicate(sql, "user-uuid-123");
+    const strings = (mockFn.mock.calls[0] as unknown[])[0] as string[];
+    const query = strings.join("");
+    expect(query).toContain("'pending'");
+    const pendingMentions = query.split("'pending'").length - 1;
+    expect(pendingMentions).toBe(1);
+  });
+
   it("passes userId as a parameterized argument", async () => {
     const userId = "user-abc";
     const mockFn = vi.fn().mockResolvedValue([{ ok: true }]);

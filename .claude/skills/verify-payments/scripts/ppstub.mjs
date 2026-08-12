@@ -27,14 +27,39 @@ const here = dirname(fileURLToPath(import.meta.url));
 const modeFile = resolve(here, "mode.txt");
 const PORT = 8799;
 
-function mode() {
+/**
+ * mode.txt, two forms:
+ *   COMPLETED                       — one word drives redeem AND order status
+ *   redeem:PENDING order:COMPLETED  — per-endpoint tokens; unlisted keep defaults
+ * Tokens: redeem / order (COMPLETED|FAILED|PENDING), mandate (ACTIVE|CANCELLED|
+ * PAUSED…), cancel (OK|FAIL). Split modes exist for Pass C: a debit whose
+ * `redeem` stays PENDING while the order's real state is COMPLETED is exactly
+ * the webhook-lost case the reconcile exists for — one shared mode can't say it.
+ */
+function modes() {
+  const out = { redeem: "COMPLETED", order: "COMPLETED", mandate: "ACTIVE", cancel: "OK" };
+  let raw = "";
   try {
-    const m = readFileSync(modeFile, "utf8").trim().toUpperCase();
-    return ["COMPLETED", "FAILED", "PENDING"].includes(m) ? m : "COMPLETED";
+    raw = readFileSync(modeFile, "utf8").trim();
   } catch {
-    return "COMPLETED";
+    return out;
   }
+  if (!raw) return out;
+  if (!raw.includes(":")) {
+    const m = raw.toUpperCase();
+    if (["COMPLETED", "FAILED", "PENDING"].includes(m)) {
+      out.redeem = m;
+      out.order = m;
+    }
+    return out;
+  }
+  for (const tok of raw.split(/\s+/)) {
+    const i = tok.indexOf(":");
+    if (i > 0) out[tok.slice(0, i).toLowerCase()] = tok.slice(i + 1).toUpperCase();
+  }
+  return out;
 }
+const mode = () => modes().redeem; // back-compat for the redeem branch
 
 createServer((req, res) => {
   let body = "";
@@ -43,7 +68,37 @@ createServer((req, res) => {
     const url = req.url ?? "";
     let out;
 
-    if (url.includes("/subscriptions/v2/") && url.includes("/status")) {
+    if (url.includes("/subscriptions/v2/order/") && url.includes("/status")) {
+      // Order/redemption status (getOrderStatus) — mode-driven so Pass C's
+      // stuck-debit reconcile and the status-guarded abandon are testable.
+      // MUST match before the generic mandate-status branch below: an order
+      // URL contains both "/subscriptions/v2/" and "/status", so the generic
+      // branch would swallow it and answer with a mandate shape.
+      const m = modes().order;
+      const moid = decodeURIComponent(
+        url.split("/subscriptions/v2/order/")[1].split("/status")[0],
+      );
+      out = {
+        orderId: `STUB_PP_${moid}`,
+        merchantOrderId: moid,
+        state: m,
+        amount: 19900,
+        paymentFlow: { subscriptionId: "STUB_SUB_1" },
+      };
+    } else if (url.includes("/subscriptions/v2/") && url.includes("/cancel")) {
+      // Merchant cancel — 204 success, or 500 when mode carries cancel:FAIL
+      // (the delete-account abort path needs a revoke that verifiably fails
+      // while the mandate still reads live).
+      if (modes().cancel === "FAIL") {
+        console.log(`[stub] ${req.method} ${url.split("?")[0]} -> 500 (cancel:FAIL)`);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end('{"code":"INTERNAL_SERVER_ERROR"}');
+        return;
+      }
+      console.log(`[stub] ${req.method} ${url.split("?")[0]} -> 204`);
+      res.writeHead(204).end();
+      return;
+    } else if (url.includes("/subscriptions/v2/") && url.includes("/status")) {
       // Pass A refuses to notify unless the mandate is ACTIVE.
       const msid = decodeURIComponent(
         url.split("/subscriptions/v2/")[1].split("/status")[0],
@@ -51,7 +106,7 @@ createServer((req, res) => {
       out = {
         merchantSubscriptionId: msid,
         subscriptionId: "STUB_SUB_1",
-        state: "ACTIVE",
+        state: modes().mandate,
         authWorkflowType: "PENNY_DROP",
         amountType: "FIXED",
         maxAmount: "19900",

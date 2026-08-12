@@ -42,6 +42,11 @@ Base: Roboto (system). Display/wordmark: **Marcellus**, BUNDLED at `assets/fonts
 wired in `lib/app/theme/typography.dart` — never `google_fonts`, a banned dependency (§Perf). Every
 locale string must render in Tamil/Telugu/Kannada/Malayalam, so the serif applies ONLY to the
 display/headline tiers + Latin wordmark; all UI text uses the base stack (Noto fallbacks).
+**`/premium` is the ONE screen off this stack**: Cinzel/Lora/Gelasio, bundled, `ArulTokens.paywall*` only, instanced+subset by `tools/build-fonts.py`
+— safe only because that page is English-by-decision. **No bundled serif has U+20B9 ₹** (Marcellus/Cinzel/Lora all lack it), so a bare ₹ drops to
+Roboto mid-sentence; Gelasio carries it and every paywall Lora style names it in `fontFamilyFallback`. Gelasio is Georgia's metric twin, so the price
+gets OLD-STYLE figures (3/5/7/9 fall below the baseline) and an amount's ink centre MOVES with its digits — centring the ₹ is a per-price calc off the
+glyph table (`PriceLockup`, pixel-asserted), never `Row`+`center`, which centres BOXES and leaves the rupee ~8px high, as the handoff's HTML does.
 
 ## Drawn art is ARTWORK, not chrome
 The ringtone kolam medallion's ten grounds and `#EBD6A3` gold ink live in `ringtone_medallion.dart`

@@ -8,7 +8,7 @@
  *   - Strips private keys per scope:
  *       wallpapers → keep full_key (public preview) + category (the browse axis)
  *       ringtones  → keep audio_key + cover_key (public preview) + category
- *   - Paginates 20/page (PAGE_SIZE=20) with the exact catalog JSON shape
+ *   - Paginates PAGE_SIZE/page with the exact catalog JSON shape
  *   - Writes per-scope all_N.json to R2 (App filters by category client-side)
  *
  * Additional outputs (written on every build):
@@ -33,7 +33,23 @@ import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 import { putPublicJson, getJsonString } from "../lib/r2.js";
 
-const PAGE_SIZE = 20;
+// The app drains a WHOLE catalog before rendering its feed (category
+// filtering is client-side), so every extra page is user-visible first-paint
+// latency. At 20/page that was measured on device: 8 serial round trips put
+// the ringtone tab at ~5 s, and 32 pages held the wallpaper cold start (no
+// disk snapshot yet) around 5 s even through a 4-wide drain pool. 200/page
+// keeps ringtones to one page and today's 634 wallpapers to 4 (page 1 + one
+// parallel batch); the app reads per_page/total_pages from the JSON, so the
+// size is not a client contract.
+const PAGE_SIZE = 200;
+
+// Catalog pages are fetched with `?v=<content_version>` (a publish mints a new
+// version, hence a new edge-cache key), so a page body is immutable for its
+// key and can sit at the edge for a day. The old default (max-age=60) made the
+// edge revalidate against R2 origin on nearly every real-world fetch — 0.5–1 s
+// per page, with multi-second outliers. The only un-versioned fetch is the
+// rare version.json-failed fallback, and a day bounds its staleness.
+const CATALOG_PAGE_CACHE_CONTROL = "public, max-age=86400";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -475,7 +491,7 @@ async function buildScope(
   // Without a unique final key the sort is not total, and Postgres is free to
   // return tied rows in a different order on any run — a different plan, a
   // parallel scan, or simply a different heap layout after a VACUUM. Since
-  // pages are cut every 20 rows in returned order, that silently reshuffles
+  // pages are cut every PAGE_SIZE rows in returned order, that silently reshuffles
   // which items land on which page between rebuilds: the feed reorders under
   // users for no reason, and anyone mid-pagination during a rebuild can see an
   // item twice or miss it entirely. `id` is unique, so appending it makes the
@@ -588,14 +604,19 @@ async function buildScope(
   for (let page = 1; page <= totalPages; page++) {
     const pageItems = publicRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const key = `catalog/${scope}/all_${page}.json`;
-    await putPublicJson(r2Bucket, key, {
-      page,
-      per_page: PAGE_SIZE,
-      total: publicRows.length,
-      total_pages: totalPages,
-      has_more: page < totalPages,
-      items: pageItems,
-    });
+    await putPublicJson(
+      r2Bucket,
+      key,
+      {
+        page,
+        per_page: PAGE_SIZE,
+        total: publicRows.length,
+        total_pages: totalPages,
+        has_more: page < totalPages,
+        items: pageItems,
+      },
+      CATALOG_PAGE_CACHE_CONTROL,
+    );
     writtenKeys.add(key);
   }
 

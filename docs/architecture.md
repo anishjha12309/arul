@@ -10,14 +10,24 @@ Crons: hourly (catalog + on-change canonical sweep ∥ autopay notify/execute) a
 ## API
 JSON; errors `{error:{code,message}}`; gated routes `Authorization: Bearer <accessJWT>`. THE route
 table with auth + semantics is [../workers/README.md](../workers/README.md) — this file does not
-restate it. `GET /me` returns identity AND the subscription row in one LEFT JOIN, so a cold start
-costs one round-trip to a possibly-suspended Neon instead of two; `/me/subscription` exists only for
-builds shipped before that merge.
+restate it. `GET /me` returns identity, the subscription row AND the server-computed `premium` flag
+in one LEFT JOIN, so a cold start costs one round-trip to a possibly-suspended Neon instead of two;
+`/me/subscription` exists only for builds shipped before that merge. The app's gate reads that
+`premium` flag — never re-derive it from the row (see §Entitlement for the drift that rule prevents).
 
 ## Entitlement (live read from Neon, never authoritative in the JWT)
-`isPremium = (status ∈ {trialing,active,cancelled} ∧ current_period_end > now()) ∨ users.reward_premium_until > now()`.
-Cancelled keeps access until period end. Live read → purchase/refund apply instantly. No test bypass.
-The access token's `prm` claim is a UI hint only; never gate on it.
+`isPremium = (status ∈ {trialing,active,cancelled,pending} ∧ current_period_end > now()) ∨ users.reward_premium_until > now()`,
+plus a **6 h debit grace** past `current_period_end` for `trialing`/`active` ONLY — the renewal debit
+rides the hourly cron, so a strict cutoff closed the gate on every paying user for up to ~1 h at every
+period boundary. `cancelled` gets NO grace (no debit is coming; period end IS the end), and dunning's
+flip to `expired` ends grace instantly. `pending` counts (strict branch only) because a resubscribe
+claims the user's ONE row — paid days must survive the attempt, and a failed setup RESTORES to
+`cancelled` while the period lives, never `expired` (stripped a live trial on device 2026-08-12;
+mechanics in [phonepe.md](phonepe.md)). Live read → purchase/refund apply instantly. No test bypass.
+The rule's ONE home is `premiumPredicate` in `workers/src/lib/entitlement.ts`; the app consumes the
+`premium` flag `GET /me` computes from it. A client-side copy of the rule drifted once — it missed
+`reward_premium_until`, so reward-only referrers were paywalled while `/media/signed-url` would have
+signed for them. Never re-create one. The access token's `prm` claim is a UI hint only; never gate on it.
 
 **One trial per user:** `subscriptions.trial_end` is the consumed-marker (written once, kept forever).
 NULL → PENNY_DROP setup + trial; NOT NULL → TRANSACTION setup with a real ₹199 first debit → straight

@@ -10,11 +10,14 @@ import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 import '../providers/catalog_providers.dart';
 
-/// One grid tile: pure image, plus a single glyph if the wallpaper is live.
+/// One grid tile: pure image, nothing else.
 ///
-/// No caption and no title. At 190dp the image IS the information, and no text
-/// means no truncation to fight across six languages — Tamil, Telugu, Kannada and
-/// Malayalam labels are all materially longer than their English equivalents.
+/// No caption, no title and no live/static marker. At 190dp the image IS the
+/// information, and no text means no truncation to fight across six languages —
+/// Tamil, Telugu, Kannada and Malayalam labels are all materially longer than
+/// their English equivalents. The play-arrow glyph that used to mark live items
+/// went the same way as the reel's LIVE pill (2026-08-11): `type` is a rendering
+/// hint, never something the user browses by (CLAUDE.md §5b).
 ///
 /// A tile NEVER creates a video surface. That is the entire reason the grid is
 /// affordable: the hardware decoder stays idle until the user deliberately opens
@@ -55,21 +58,10 @@ class WallpaperTile extends ConsumerWidget {
           borderRadius: radius,
           child: ColoredBox(
             color: scheme.surfaceContainerHighest,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // No Hero: the viewer has no matching destination, so the flight
-                // never ran. The continuity comes from the poster instead — the
-                // viewer opens on the exact image this tile already decoded.
-                _TileImage(wallpaper: wallpaper, decodeWidth: decodeWidth),
-                if (wallpaper.kind == WallpaperKind.live)
-                  const Positioned(
-                    left: Gap.sm,
-                    bottom: Gap.sm,
-                    child: _LiveGlyph(),
-                  ),
-              ],
-            ),
+            // No Hero: the viewer has no matching destination, so the flight
+            // never ran. The continuity comes from the poster instead — the
+            // viewer opens on the exact image this tile already decoded.
+            child: _TileImage(wallpaper: wallpaper, decodeWidth: decodeWidth),
           ),
         ),
       ),
@@ -161,31 +153,6 @@ class _TileBroken extends StatelessWidget {
         Icons.image_not_supported_outlined,
         size: 24,
         color: color.withValues(alpha: 0.6),
-      ),
-    );
-  }
-}
-
-/// The only per-tile chrome: live vs static, said as quietly as possible.
-class _LiveGlyph extends StatelessWidget {
-  const _LiveGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        // Ink, not a themed surface: this sits on arbitrary imagery in both
-        // light and dark, so it must defend its own contrast. 0.55 alpha over
-        // the brightest wallpaper in the catalog still clears 3:1 for the glyph.
-        color: ArulColors.mediaFillStrong,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.play_arrow_rounded,
-        size: 14,
-        color: Colors.white,
       ),
     );
   }

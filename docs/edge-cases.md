@@ -10,7 +10,7 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 - [ ] ONE process-global EventChannel hub — a second listener silently steals the sink ← `feed_video_player.dart`
 - [ ] Silent software-decoder fallback detected (`onVideoDecoderInitialized`) → pool budget demoted 3→2, **floor 2**; only real codec errors may demote to 1
 - [ ] Decoder capability APIs untrusted — attempt and degrade, never query and assume
-- [ ] Shimmer until first decoded frame; NO poster thumbnails
+- [ ] Every card paints the `thumbs/` poster FIRST and keeps it mounted under the texture, which reveals only on `onRenderedFirstFrame` — so an undecoded live card is pixel-identical to a static one (no shimmer, no spinner). "Nothing is moving" is normally cold-cache latency; check the pool, not the catalog
 - [ ] `BLASTBufferQueue … max frames` logspam while feed idles = benign compositor noise — do not chase
 
 ## Wallpaper apply
@@ -22,6 +22,7 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 
 ## Auth
 - [ ] Sign-in auto-launches FULL `authenticate()` on first frame — NON-NEGOTIABLE, never lightweight/silent
+- [ ] EXACTLY ONE account picker per sign-in. `attemptLightweightAuthentication()` as a warm-up ahead of `authenticate()` is REVERTED (measured 2026-08-11): its "minimal UI" is a real Credential Manager bottom sheet on Android, so the user got a drawer that appeared, hung, then vanished before the real picker — and a stall-guard timeout on it added 2.5s of dead air. It saves ~230ms of Credential Manager cold start and costs a second visible sheet; do not retry it
 - [ ] `google_sign_in` v7: `instance` → `initialize()` → `authenticate()`; idToken `aud` = WEB client id, verified in the Worker
 - [ ] Sign-in bg video: shared ref-counted player with 2s dispose grace (screen swaps must not kill it)
 - [ ] Auth failures surface a localized message + retry, never a stuck spinner
@@ -29,20 +30,27 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 ## Premium / payments (server is source of truth)
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user ← `premium_gate.dart`
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
-- [ ] `cancelled` keeps premium until period end; `paused`/`expired` none; `reward_premium_until` ORed in
+- [ ] `cancelled` keeps premium until period end (NO grace); `trialing`/`active` get a 6 h debit-grace past period end — the renewal debit rides the hourly cron, so a strict cutoff gated every payer at every boundary; `pending` with a live period keeps premium (a resubscribe claims the ONE row; paid days survive the attempt); `paused`/`expired` none; `reward_premium_until` ORed in ← `premiumPredicate`, the rule's ONE home
+- [ ] A failed/abandoned setup RESTORES to `cancelled` while `current_period_end > now()`, never `expired` — expiring it stripped a cancelled-but-live trial on a backed-out resubscribe (device 2026-08-12); the setup-completed resurrect matches `('expired','cancelled')` so a paid approval racing the restore still grants ← `payments.ts` (all three failure paths)
+- [ ] Unpause REARMS `next_debit_at` (COALESCE to `current_period_end`) and is scoped to `paused` rows; `/payments/status` heals lost pause AND unpause webhooks — a status-only unpause left an "Active" row no cron pass could ever bill again (zombie, 2026-08-13) ← `payments.ts` webhook + status reconcile
+- [ ] The app's gate reads the server-computed `premium` flag from `GET /me` and NEVER re-derives the rule from the row — the client copy drifted (missed `reward_premium_until`) and paywalled reward-only referrers ← `entitlement_provider.dart`
 - [ ] One trial ever: `trial_end` consumed-marker + delete-account HMAC tombstone (secret NEVER rotates); re-signup pre-seeds consumed trial → ₹199 TRANSACTION setup
 - [ ] Endpoint contracts (SDK order token, working cancel path, 409 `setup_in_progress` on concurrent initiate, webhook dedupe) hold ← docs/phonepe.md
 - [ ] Re-applying or re-sharing an ALREADY-CACHED wallpaper still calls `/media/signed-url` — a cache must never become a permanent licence; offline with bytes on disk is the one allowed pass-through ← `wallpaper_share_provider.dart`
-- [ ] Blocked gated action tracks `${action}_blocked_premium` and routes `/premium?source=`
+- [ ] Blocked gated action tracks `${action}_blocked_premium` and routes STRAIGHT to `/premium?source=` — no nudge pill, no teaser sheet, no interstitial of any kind between the tap and the screen (owner's call, 2026-08-11; the once-per-session pill + bottom sheet the feed used to run were deleted, not disabled)
+- [ ] Confirmation poll TOLERATES network failure: the app is backgrounded behind the UPI app, so `SocketException: Failed host lookup` mid-poll is normal, not terminal. Rethrowing it abandoned the budget, showed "Something went wrong", and nulled `_intentOrderId` so the resume checkpoint bailed too — a settled mandate with nobody watching (device 2026-08-11). Never reached the server at all → say confirmation is late, never the refund line ← `premium_purchase_provider.dart`
 - [ ] Delete account: mandate revoke → tombstone → cascade → refresh-jti denylist
 
 ## Browse (category axis — a deliberate delta from Pakiza)
 - [ ] CATEGORY chips only (All + 6); static/live interleave; unknown category falls into All, empty category → localized empty state, neither crashes
 - [ ] Ordering model (curated `feed_rank` head + stable-shuffle tail, one pure `feedOrder()`) is owned by CLAUDE.md §5b. Pinned here: category order = `sort_order ASC, created_at DESC, id ASC`; the shuffle is a hand-rolled FNV-1a of the row id (`String.hashCode` is NOT stable across Dart releases); `_syncFeed` compares served lists by ordered ids, so a per-call order re-points the pager under a scrolling user; all-NULL ranks ⇒ byte-identical to the pure shuffle (held by the golden pin)
 - [ ] Apply-restore resolves its saved page index through `feedOrder()` ← `apply_restore.dart` — the index is a position in the SERVED list; raw catalog order restores the wrong wallpaper whenever the saved chip was All
-- [ ] Reel card geometry has ONE knob ← `feed_card_geometry.dart`, pinned by its test: 20dp gutters, **1:1.86** card, 14dp gap, 26 radius — 353×656 on 1080×2400 with ~56dp peek and NO floor; `card + gap + peek + floor` fills the reel EXACTLY
+- [ ] Reel card geometry lives ONLY in `feed_card_geometry.dart`, pinned by its test: 12dp gutters, **1:1.86 asked**, 14dp gap, 26 radius — 369×672 on 1080×2400, peek pinned at `minPeek` (40) and NO floor; `card + gap + peek + floor` fills the reel EXACTLY
+- [ ] The card is HEIGHT-CLAMPED on a real phone, so `cardAspect` is a request and ~1.82 is what ships — read the solved size, never the constant. `gutter` therefore buys WIDTH only and flattens the realised aspect toward 1.78 as it shrinks; `minPeek` is the only knob that buys height
 - [ ] The floor is bottom padding on the PAGER (zero on real phones, the sink for slack on tall screens) — anything screen-anchored must add `floor + peek + gap` or it lands behind the pager. Short-screen degradation: floor, then peek to `minPeek`, only then the card (a card taller than its viewport cannot snap)
-- [ ] **1.78 (9:16) is a BOUNDARY, not a dial** — above it the crop is horizontal and cheap; below it it flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases the window UP for that case: dormant at 1.86, LIVE on small screens (~1:1.36), so do not delete it as unused; poster, full image and video texture must share the alignment or the frame jumps on fade-in
+- [ ] **1.78 (9:16) is a BOUNDARY, not a dial** — above it the crop is horizontal and cheap; below it it flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases the window UP for that case: dormant at ~1.82, LIVE on small screens (~1:1.31), so do not delete it as unused; poster, full image and video texture must share the alignment or the frame jumps on fade-in
+- [ ] Live cards are marked by `LiveMark` ONLY — 24dp glass disc + play glyph, top-right, and **STATIC**: it shares a card with a live `Texture`, so the cheapest mark is one that never asks for a frame. Never text (the `LIVE` pill it replaced shipped untranslated English in 6 locales). Its inset is load-bearing: **22, not the action row's 14** — at 14 it rides the 26dp corner arc and reads as stuck to the rim. **No shadow** (owner's call, 2026-08-11): it shipped with the rail glyphs' dark halo as insurance against washing out on a white temple, and on the real catalog that halo read as a black smudge on EVERY wallpaper — a louder failure than the one it insured against. Contrast comes from a dark fill INSIDE the disc instead (next line); a shadow bleeds outside the object onto the artwork, which is the whole difference. Do not re-add one
+- [ ] The two over-media glass objects share a RIM (`overMediaGlassBorder`) but NOT a fill, and that split is deliberate: the Share circle sits inside the bottom scrim so it can be the bright half (`overMediaGlassFill`, ivory); `LiveMark` sits on raw artwork where the ground is unknown, so it must be the dark half (`overMediaInkFill`). **Ivory chrome on a white marble temple is invisible at ANY alpha** — raising the alpha makes it whiter, not clearer. Never "unify" these two fills
 - [ ] Skeleton and reel read the SAME geometry, or the card resizes when the first page lands
 - [ ] Rejected card shapes, do not revisit: 1:1.71 full-bleed · 1:2.22 device-aspect · Pakiza's 1:1.63 verbatim · 1:1.40 short-and-wide
 
@@ -52,6 +60,7 @@ that runs out means **skip**, never extrapolate; `keep.xml` stops R8 stripping i
 QA tools gate on `isPlayInstall`, NOT `kDebugMode`.
 
 ## Ringtones (5 deities + `others`, no `temples`)
+- [ ] The tab renders nothing until the WHOLE catalog is drained (category filtering is client-side), so every extra page is user-visible latency: build-catalog cuts ringtones at 200/page (one page for any realistic catalog), the notifier drains pages in a 4-wide pool (never serially — serial × 8 pages measured ~5 s), and `AppShell` warms the provider post-first-frame so the first tap lands on a ready list
 - [ ] Set needs `WRITE_SETTINGS`: check `Settings.System.canWrite()` first, deep-link to `ACTION_MANAGE_WRITE_SETTINGS` when absent ← `MainActivity.kt` (`setRingtoneFromFile` re-checks; surface `SecurityException` localized). The deep-link walks a FALLBACK CHAIN (per-package → app-list → app details) — some MIUI/ColorOS settings apps throw on the per-package form
 - [ ] **Below API 29 the tone is COPIED into the public Ringtones dir** and THAT path registered on the EXTERNAL volume — the app-private path is unreadable by the ringtone player, and the `internal` volume never validates as a ringtone (both seen on-device in Pakiza). Needs `WRITE_EXTERNAL_STORAGE` (capped `maxSdkVersion=28`), runtime-prompted at the first Set, never at launch
 - [ ] Picker name = the CATALOG TITLE threaded through the channel, never the downloaded filename; `mime` rides along (some OEM scanners re-derive type from the extension and misindex a disagreeing row)

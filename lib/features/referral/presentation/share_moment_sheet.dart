@@ -8,6 +8,8 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../premium/presentation/paywall_ornaments.dart';
+import '../../premium/presentation/paywall_view.dart';
 import '../data/tell_a_friend.dart';
 
 /// A short, dismissible invitation to pass Arul on, shown at the two moments a
@@ -31,20 +33,29 @@ class ShareMomentSheet {
     required String title,
     required String body,
     required String source,
+    bool premium = false,
   }) async {
     await showArulSheet<void>(
       context,
-      builder: (_) => _Body(title: title, body: body, source: source),
+      surfaceColor: premium ? ArulTokens.paywallCream : null,
+      builder: (_) =>
+          _Body(title: title, body: body, source: source, premium: premium),
     );
   }
 }
 
 class _Body extends ConsumerWidget {
-  const _Body({required this.title, required this.body, required this.source});
+  const _Body({
+    required this.title,
+    required this.body,
+    required this.source,
+    required this.premium,
+  });
 
   final String title;
   final String body;
   final String source;
+  final bool premium;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -55,6 +66,92 @@ class _Body extends ConsumerWidget {
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
     final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+
+    if (premium) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          ArulTokens.premiumCelebrateHorizontal,
+          ArulTokens.premiumCelebrateTop,
+          ArulTokens.premiumCelebrateHorizontal,
+          ArulTokens.premiumCelebrateBottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                PaywallOrnamentWing(
+                  ruleWidth: ArulTokens.premiumCelebrateRuleWidth,
+                  floretSize: ArulTokens.premiumCelebrateFloretSize,
+                  gap: ArulTokens.premiumCelebrateOrnamentGap,
+                ),
+                SizedBox(width: ArulTokens.premiumCelebrateOrnamentGap),
+                PaywallOrnamentImage(
+                  ornament: PaywallOrnament.gopuram,
+                  width: ArulTokens.premiumCelebrateGopuramSize,
+                ),
+                SizedBox(width: ArulTokens.premiumCelebrateOrnamentGap),
+                PaywallOrnamentWing(
+                  ruleWidth: ArulTokens.premiumCelebrateRuleWidth,
+                  floretSize: ArulTokens.premiumCelebrateFloretSize,
+                  gap: ArulTokens.premiumCelebrateOrnamentGap,
+                  mirrored: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: ArulTokens.premiumCelebrateTitleTop),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: ArulTokens.premiumCelebrateTitle,
+            ),
+            const SizedBox(height: ArulTokens.premiumCelebrateBodyTop),
+            Text(
+              body,
+              textAlign: TextAlign.center,
+              style: ArulTokens.premiumCelebrateBody,
+            ),
+            const SizedBox(height: ArulTokens.premiumCelebrateRuleTop),
+            const Center(
+              child: SizedBox(
+                width: ArulTokens.premiumCelebrateRuleWidthFull,
+                height: ArulTokens.paywallOrnamentRuleThickness,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: ArulTokens.paywallHeaderHairline,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: ArulTokens.premiumCelebrateCtaTop),
+            ShrineCta(
+              label: l10n.referShareCta,
+              busy: false,
+              bottomLotus: true,
+              labelStyle: ArulTokens.premiumCelebrateCta,
+              onPressed: () {
+                final nav = Navigator.of(context);
+                final host = nav.context;
+                nav.pop();
+                unawaited(tellAFriend(host, ref, source: source));
+              },
+            ),
+            const SizedBox(height: ArulTokens.premiumCelebrateLotusClearance),
+            const SizedBox(height: ArulTokens.premiumCelebrateDismissTop),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: ArulTokens.paywallMaroon,
+                textStyle: ArulTokens.premiumCelebrateDismiss,
+              ),
+              child: Text(l10n.referNotNow),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),

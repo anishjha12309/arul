@@ -18,7 +18,6 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../premium/presentation/premium_sheet.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../data/wallpaper_apply_service.dart';
 import '../providers/catalog_providers.dart';
@@ -29,7 +28,8 @@ import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
 import 'feed_states.dart';
-import 'premium_nudge.dart';
+import 'live_mark.dart';
+import 'premium_gate_action.dart';
 import 'video_preload_controller.dart';
 import 'viewer_media.dart';
 
@@ -118,12 +118,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
   /// Set by [restoreFeedTo] after an apply-driven cold restart: the page to jump
   /// to once the restored category's list lands. Consumed by [_syncFeed].
   int? _pendingRestoreIndex;
-
-  /// The gate nudge shows at most ONCE per session; every gated tap after that
-  /// opens the premium sheet.
-  bool _nudgeShown = false;
-  PremiumGateAction? _nudge;
-  int _nudgeSeq = 0;
 
   /// The gate AWAITS `entitlementProvider.future` (CLAUDE.md §5): a loading
   /// snapshot must never bounce a premium user to the paywall on a cold start.
@@ -327,7 +321,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   /// Ported from the reference feed: warm the NEXT item's full image when it
   /// is static, so a static→static swipe paints from cache instead of
-  /// shimmering through the whole download. Live items are prefetched as bytes
+  /// showing only the poster through the whole download. Live items are prefetched as bytes
   /// ahead of time by the prefetch service's data window, not here. Same URL
   /// AND the same decode width as [ViewerMedia]'s full-resolution layer, so
   /// this precache and the page's render share ONE image-cache entry.
@@ -365,23 +359,23 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       return;
     }
     if (!mounted) return;
-    // Free user: nudge once, then the sheet. Either way the blocked verb is
-    // tracked (docs/edge-cases.md).
+    // Free user: STRAIGHT to the paywall (owner's call, 2026-08-11). A gated tap
+    // is already an intent to act, and the premium SCREEN is the only surface
+    // that can satisfy it — so the two soft steps that used to stand in the way
+    // (a nudge pill on the first tap of a session, a teaser bottom sheet on
+    // every one after) are gone, and every gated verb in the app now behaves
+    // like `ensurePremium`: track, then push. Do not re-introduce an interstitial
+    // here without re-deciding that.
+    //
+    // The blocked verb is still tracked, with the wallpaper attributed
+    // (docs/edge-cases.md).
     ref
         .read(analyticsServiceProvider)
         .track(
           '${action.source}_blocked_premium',
           properties: {'wallpaper_id': w.id, 'category': w.category},
         );
-    if (!_nudgeShown) {
-      setState(() {
-        _nudgeShown = true;
-        _nudge = action;
-        _nudgeSeq++;
-      });
-    } else {
-      unawaited(PremiumSheet.show(context, source: action.source));
-    }
+    unawaited(context.push('/premium?source=${action.source}'));
   }
 
   // ─── Apply / share (ported plumbing) ─────────────────────────────────────────
@@ -638,16 +632,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final m = geo.margin;
 
     // Distance from the REEL's bottom edge up to the card's — underhang, then
-    // peek, then the gap. Only the nudge and the end mark are screen-anchored,
-    // so they are the only things that need it; forgetting it here would drop
-    // both of them behind the pager. The nudge then sits just above the Apply
-    // bar (a 16px gap over the bar's top), right over the verb it gates.
+    // peek, then the gap. The end mark is the only screen-anchored thing left,
+    // so it is the only one that needs it; forgetting it here would drop it
+    // behind the pager.
     //
     // `underhang`, NOT the whole floor: half of it now sits above the card so
     // the reel is centred, and measuring from the bottom with the full floor
-    // would put both of these half a floor too high.
+    // would put it half a floor too high.
     final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
-    final nudgeBottom = cardBottom + _CardChrome.actionBarTop + 16;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -747,27 +739,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             ),
           ),
         ),
-
-        // Gate nudge — floats above the meta, keyed so each tap replays the
-        // rise.
-        if (_nudge != null)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: nudgeBottom,
-            child: Center(
-              child: PremiumNudge(
-                key: ValueKey(_nudgeSeq),
-                action: _nudge!,
-                onTap: () {
-                  final action = _nudge!;
-                  setState(() => _nudge = null);
-                  context.push('/premium?source=${action.source}');
-                },
-                onDismissed: () => setState(() => _nudge = null),
-              ),
-            ),
-          ),
 
         // In-flight transfer bar for an apply/share download.
         if (apply is WallpaperApplyLoading || share is WallpaperSharePreparing)
@@ -889,10 +860,15 @@ class _CardChrome extends StatelessWidget {
   static const double _barInset = FeedCardGeometry.actionInset;
   static const double _barInsetH = FeedCardGeometry.actionInset;
 
-  /// Distance from the card's bottom edge up to the TOP of the action bar. The
-  /// feed anchors the gate nudge just above this so it rises right over Apply,
-  /// not stranded in the middle of the artwork.
-  static const double actionBarTop = _barInset + _ActionBar.height;
+  /// Inset of the live mark from the card's top and right edges.
+  ///
+  /// NOT [_barInsetH]. The action row can sit on 14 because it runs the width
+  /// of the card and reads as a bar; a lone 24dp disc at 14 reads as jammed
+  /// into the corner, because [FeedCardGeometry.radius] (26) is curving away
+  /// directly behind it. 22 puts the disc's outer edge clear of that arc, so it
+  /// sits ON the wallpaper rather than on its rim — while staying far enough in
+  /// from the centre that it never lands on a face or a crown.
+  static const double _liveMarkInset = 22;
 
   final Wallpaper wallpaper;
   final bool busy;
@@ -928,21 +904,32 @@ class _CardChrome extends StatelessWidget {
           child: _ActionBar(busy: busy, onApply: onApply, onShare: onShare),
         ),
 
-        // Pointer-transparent: a DecoratedBox hit-tests true anywhere in its
-        // box, so the LIVE pill would otherwise be a dead zone over the pager.
-        // Anchored top-right, on the same gutter as the action row so the card's
-        // chrome shares one edge.
+        // The live marker, and the ONLY thing in the card's upper field.
         //
-        // Inset from the CARD, not from the status bar. It used to add
-        // `viewPadding.top`, left over from when the reel ran full-bleed under
-        // the system bars; the card has sat below a header, a chips row and a
-        // divider for a while now, so that was ~24dp of phantom offset pushing
-        // the badge into the artwork.
-        Positioned(
-          top: 14,
-          right: _barInsetH,
-          child: IgnorePointer(child: _FeedMeta(wallpaper: wallpaper)),
-        ),
+        // A gold "LIVE" text pill sat here until 2026-08-11; it read as a
+        // warning on half the catalog and was untranslated English in a
+        // six-language app. [LiveMark] replaces it with the Share circle's own
+        // glass recipe at half scale — nothing to localize.
+        //
+        // Deliberately NOT on the action row's 14dp gutter (owner's call): at
+        // that inset the mark rides the rim, and the card's 26dp corner radius
+        // curves away right behind it, so it reads as stuck to the edge rather
+        // than placed on the wallpaper. [_liveMarkInset] clears the corner arc
+        // entirely and sits the mark inside the artwork's own field.
+        //
+        // Pointer-transparent for the same reason the pill was: a DecoratedBox
+        // hit-tests true anywhere in its box, so without this the mark would be
+        // a dead zone over the pager.
+        //
+        // Inset from the CARD, not the status bar — the reel has sat below a
+        // header and a chips row for a while, so a `viewPadding.top` here would
+        // be ~24dp of phantom offset pushing the mark into the artwork.
+        if (wallpaper.kind == WallpaperKind.live)
+          const Positioned(
+            top: _liveMarkInset,
+            right: _liveMarkInset,
+            child: IgnorePointer(child: LiveMark()),
+          ),
       ],
     );
   }
@@ -1086,9 +1073,12 @@ class _ShareCircle extends StatelessWidget {
       child: Opacity(
         opacity: disabled ? 0.55 : 1,
         child: Material(
-          color: const Color.fromRGBO(250, 245, 236, 0.18),
+          // The over-media glass recipe, shared with [LiveMark] so the card's
+          // two glass objects cannot drift apart. This one needs no shadow: it
+          // sits inside the bottom scrim, which supplies its contrast.
+          color: ArulTokens.overMediaGlassFill,
           shape: const CircleBorder(
-            side: BorderSide(color: Color.fromRGBO(250, 245, 236, 0.45)),
+            side: BorderSide(color: ArulTokens.overMediaGlassBorder),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -1108,29 +1098,6 @@ class _ShareCircle extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Top-right meta: only the gold LIVE badge (live items). The category label and
-/// the deity name were intentionally removed so the wallpaper stands on its own;
-/// static cards render nothing here.
-class _FeedMeta extends StatelessWidget {
-  const _FeedMeta({required this.wallpaper});
-
-  final Wallpaper wallpaper;
-
-  @override
-  Widget build(BuildContext context) {
-    if (wallpaper.kind != WallpaperKind.live) return const SizedBox.shrink();
-    // Sizes to its own label; the enclosing Positioned pins it top-right.
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: ArulTokens.gold,
-        borderRadius: BorderRadius.circular(ArulTokens.liveBadgeRadius),
-      ),
-      child: const Text('LIVE', style: ArulTokens.liveBadge),
     );
   }
 }

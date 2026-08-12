@@ -28,7 +28,7 @@ import 'package:flutter/services.dart';
 /// `VideoPreloadController` and the sign-in background pool in `VideoBackground`)
 /// that can be alive at the same time. If each opened its own EventChannel
 /// subscription, the second one to listen would steal the sink and strand the
-/// other pool's cards on a permanent shimmer/dark-fill — this was the "only the
+/// other pool's cards on a permanent poster/dark-fill — this was the "only the
 /// first live wallpaper renders" bug.
 ///
 /// The fix: all pools share a single process-global [_FeedVideoChannelHub] that
@@ -158,7 +158,7 @@ class _FeedVideoChannelHub {
       return await _method.invokeMapMethod<String, dynamic>('create');
     } catch (_) {
       // No platform implementation (tests / unsupported host) — caller falls
-      // back to shimmer-only.
+      // back to poster-only.
       return null;
     }
   }
@@ -249,7 +249,7 @@ class FeedVideoPlayer {
 
   /// True once the current open has errored natively. Reset per [open]. Gates
   /// [forceFirstFrame]: revealing a card whose media never decoded paints a
-  /// black texture — worse than the shimmer it would replace.
+  /// black texture — worse than the poster it would replace.
   bool _openErrored = false;
 
   bool _disposed = false;
@@ -313,7 +313,7 @@ class FeedVideoPlayer {
 
   /// Safety-net reveal: flip [firstFrame] true without a native event. The Dart
   /// controller calls this from its reveal-timeout timer so a stream that never
-  /// emits onRenderedFirstFrame can't strand a card on a permanent shimmer.
+  /// emits onRenderedFirstFrame can't strand a card on its poster.
   /// No-ops when the current open has ERRORED: its texture never painted, so
   /// revealing it would show a black card — the error path retries instead.
   void forceFirstFrame() {
@@ -369,7 +369,7 @@ class FeedVideoPlayer {
       case 'error':
         // Staleness-matched the same way as firstFrame: an error tagged with an
         // openId below the current open belongs to a since-swapped media — drop
-        // it. A current-open error keeps the card on shimmer (never a black
+        // it. A current-open error keeps the card on its poster (never a black
         // force-reveal) and is surfaced to the controller, which retries /
         // shrinks the decoder window on budget SoCs.
         final openId = (event['openId'] as num?)?.toInt();

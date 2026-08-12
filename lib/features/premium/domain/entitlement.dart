@@ -1,31 +1,21 @@
 import '../../../data/models/subscription_model.dart';
 
-/// Derived entitlement state from a user's subscription row.
-/// isPremium = status ∈ {trialing, active, cancelled} AND current_period_end > now().
-/// `cancelled` is included so a user who cancels keeps premium until the paid
-/// period ends (only renewal stops); `paused`/`expired` get no access.
+/// The user's premium entitlement, as the SERVER computed it.
+///
+/// [isPremium] is the Worker's answer (`premium` on `GET /me`), never derived
+/// client-side. The rule lives in exactly ONE place —
+/// workers/src/lib/entitlement.ts (subscription statuses + the debit-grace
+/// window + the referral reward pool) — because the client-side copy that used
+/// to live here drifted: it knew nothing about `reward_premium_until`, so a
+/// referrer holding only earned reward days was bounced to the paywall by the
+/// gate while the Worker's `/media/signed-url` would happily have signed for
+/// them. Do not re-derive premium from [subscription]; it is carried only so
+/// the premium screen can display status and dates.
 class Entitlement {
   const Entitlement({required this.isPremium, this.subscription});
 
-  /// No subscription found — free-tier access only.
+  /// No account / no backend / row gone — free-tier access only.
   const Entitlement.none() : isPremium = false, subscription = null;
-
-  /// Builds entitlement from a subscription row (null → free tier).
-  factory Entitlement.fromSubscription(SubscriptionModel? sub) {
-    if (sub == null) return const Entitlement.none();
-
-    final isActive =
-        sub.status == SubscriptionStatus.trialing ||
-        sub.status == SubscriptionStatus.active ||
-        // Cancelled but still inside the paid period → keep access until it ends.
-        sub.status == SubscriptionStatus.cancelled;
-
-    final notExpired =
-        sub.currentPeriodEnd != null &&
-        sub.currentPeriodEnd!.isAfter(DateTime.now());
-
-    return Entitlement(isPremium: isActive && notExpired, subscription: sub);
-  }
 
   final bool isPremium;
   final SubscriptionModel? subscription;

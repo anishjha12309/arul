@@ -8,6 +8,7 @@ import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/app_instance_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/perf/boot_trace.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
 
@@ -213,6 +214,16 @@ class ApiAuthService implements AuthService {
 
   Future<AuthResult> _signInWithGoogle() async {
     try {
+      // EXACTLY ONE account picker, always.
+      //
+      // `attemptLightweightAuthentication()` was tried here as a warm-up ahead
+      // of this call and REVERTED (measured on device, 2026-08-11): on Android
+      // its "minimal UI" is a real Credential Manager bottom sheet, so the user
+      // got a drawer that appeared, sat there, and vanished — and then the
+      // actual picker. Two pickers for one sign-in. Do not reintroduce it to
+      // "warm up" Credential Manager; the cold start it saves is ~230ms and it
+      // costs a second visible sheet.
+      //
       // v7: use the singleton; initialize() was already called in main().
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
         return const AuthFailure(
@@ -222,7 +233,9 @@ class ApiAuthService implements AuthService {
         );
       }
 
+      BootTrace.mark('signIn: authenticate() called');
       final account = await GoogleSignIn.instance.authenticate();
+      BootTrace.mark('signIn: authenticate() returned');
 
       // v7: idToken is a synchronous property on GoogleSignInAuthentication.
       final idToken = account.authentication.idToken;
@@ -241,9 +254,12 @@ class ApiAuthService implements AuthService {
       // GA4 join key for server-side purchase reporting (app_instance_id.dart).
       // Sent every login: the id changes on reinstall, and reinstall forces a
       // fresh sign-in — so login is exactly where it stays current.
+      BootTrace.mark('signIn: fetchAppInstanceId() start');
       final appInstanceId = await fetchAppInstanceId();
+      BootTrace.mark('signIn: fetchAppInstanceId() done');
 
       // Exchange Google ID token for our own Worker-issued JWT pair.
+      BootTrace.mark('signIn: POST /auth/login start');
       final data = await _api.post(
         '/auth/login',
         body: {
@@ -254,6 +270,7 @@ class ApiAuthService implements AuthService {
         },
         requiresAuth: false,
       );
+      BootTrace.mark('signIn: POST /auth/login done');
 
       final accessToken = data['accessToken'] as String?;
       final refreshToken = data['refreshToken'] as String?;

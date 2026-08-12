@@ -15,7 +15,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
+import 'core/api/api_client.dart';
 import 'core/config/app_config.dart';
+import 'core/perf/boot_trace.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
 import 'features/notifications/providers/notification_providers.dart';
@@ -33,6 +35,7 @@ import 'features/referral/data/install_referrer_service.dart';
 /// `performanceMonitorProvider` / `analyticsServiceProvider`, so the SDK is
 /// never touched uninitialised.
 Future<void> main() async {
+  BootTrace.mark('main() entry');
   if (!AppConfig.firebaseEnabled) {
     await _startApp();
     return;
@@ -53,6 +56,7 @@ Future<void> main() async {
       // GoogleAnalyticsService behind the AnalyticsService seam. Enabling here
       // (not per-event) also turns on auto-collected first_open/screen_view.
       await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+      BootTrace.mark('firebase init done');
 
       FlutterError.onError =
           FirebaseCrashlytics.instance.recordFlutterFatalError;
@@ -114,7 +118,14 @@ Future<void> _startApp() async {
   // Resolved before runApp: the wallpaper-apply flow persists its restore flags
   // on the path to a native call that can recreate the Activity, and there is no
   // room there to await a prefs handle.
+  // Encrypted-storage channel + keystore init, started here so the stored-
+  // session check — which gates how early sign-in can launch — is not paying
+  // for it. Fire-and-forget; see ApiClient.warmSecureStorage.
+  unawaited(ApiClient.warmSecureStorage());
+
+  BootTrace.mark('SharedPreferences start');
   final prefs = await SharedPreferences.getInstance();
+  BootTrace.mark('SharedPreferences done');
 
   // PostHog — lean config: manual events only, and only for the ~5% analytics
   // panel (AnalyticsCohort). Session replay OFF and surveys OFF, and we never
@@ -162,6 +173,7 @@ Future<void> _startApp() async {
   // failure instead of a crash-loop against Google's servers with a bogus
   // audience.
   if (AppConfig.googleAuthConfigured) {
+    BootTrace.mark('GoogleSignIn.initialize start');
     try {
       await GoogleSignIn.instance.initialize(
         serverClientId: AppConfig.googleWebClientId,
@@ -170,6 +182,7 @@ Future<void> _startApp() async {
       // Non-fatal: authenticate() will surface a localized failure + retry.
       debugPrint('[main] GoogleSignIn.initialize failed: $e');
     }
+    BootTrace.mark('GoogleSignIn.initialize done');
   }
 
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED
@@ -177,6 +190,7 @@ Future<void> _startApp() async {
   // NOT awaited here — see below.
   final notificationService = NotificationService();
 
+  BootTrace.mark('runApp()');
   runApp(
     ProviderScope(
       overrides: [

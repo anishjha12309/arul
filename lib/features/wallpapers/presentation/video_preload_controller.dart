@@ -12,7 +12,7 @@ import '../data/wallpaper_prefetch_service.dart';
 /// its media opened. A fast multi-page fling snaps PageView through intermediate
 /// pages, firing onPageChanged for each; without this gate every passing page
 /// would re-`open()` a player, churning demuxer/decoder work faster than it
-/// settles. While settling we mount nothing new (shimmer only) and reassign no
+/// settles. While settling we mount nothing new (the poster alone) and reassign no
 /// players.
 const Duration _settleDebounce = Duration(milliseconds: 160);
 
@@ -51,7 +51,7 @@ class LiveVideoSlot {
 
   /// The backing video's intrinsic size once known, for BoxFit.cover scaling of
   /// the [Texture] (a raw [Texture] does not scale itself). Null until the
-  /// native `videoSize` event arrives — while null the shimmer covers the card.
+  /// native `videoSize` event arrives — while null the poster alone covers the card.
   final ValueListenable<Size?> videoSize;
 
   /// Per-item first-frame flag the card listens to in isolation.
@@ -124,8 +124,8 @@ class _PooledPlayer {
   bool swFallbackHandled = false;
 
   /// Safety-net timer: reveals the card even if the native `firstFrame` event
-  /// never arrives (a driver/stream quirk), so a card can't strand on a
-  /// permanent shimmer. With onRenderedFirstFrame this should rarely fire. Reset
+  /// never arrives (a driver/stream quirk), so a card can't strand on a poster
+  /// that never reveals. With onRenderedFirstFrame this should rarely fire. Reset
   /// per open.
   Timer? _revealTimer;
 
@@ -175,7 +175,7 @@ class _PooledPlayer {
 ///     their first frame (instant swap on a swipe in either direction) but they
 ///     do not keep playing.
 ///   - A live item outside the window is served by no player (its card shows
-///     shimmer), and its player has been reassigned to an in-window index.
+///     its poster alone), and its player has been reassigned to an in-window index.
 ///   - On background, every player is disposed ([releaseDecoders]) so the OEM
 ///     live-wallpaper chooser / our own wallpaper service can claim a decoder;
 ///     the pool re-creates lazily on resume.
@@ -209,7 +209,7 @@ class VideoPreloadController extends ChangeNotifier
 
   // Decoder-window radius around the current index (live items within it get a
   // real player). keepBehind = 1 keeps the PREVIOUS item's player alive too, so
-  // a back-swipe lands on an already-decoded first frame (instant, no shimmer)
+  // a back-swipe lands on an already-decoded first frame (instant, no poster hold)
   // exactly like a forward swipe — symmetric scrolling. Cost: at most
   // previous + current + next = 3 concurrent decoders. That's one more than the
   // budget-SoC-minimal 2, and is only affordable because players open from the
@@ -235,11 +235,11 @@ class VideoPreloadController extends ChangeNotifier
   /// exact previous+current+next pipeline. Budget SoCs cap concurrent hardware
   /// decoder instances (commonly at 2) below that; the 3rd `prepare()` then
   /// fails codec init (`ERROR_CODE_DECODER_INIT_FAILED`) and, before this
-  /// budget existed, its card stayed a permanent black/shimmer. Capability
+  /// budget existed, its card stayed permanently on its poster. Capability
   /// APIs (getMaxSupportedInstances) lie in both directions, so instead of
   /// trusting them we **attempt-and-degrade**: a REPEATED decoder-class error
   /// on the same open demotes the budget by one ([_demoteBudget]) — dropping
-  /// the previous-index slot first (back-swipe shimmers briefly), worst case
+  /// the previous-index slot first (back-swipe holds its poster briefly), worst case
   /// current-only. Devices that never error never demote.
   static int _decoderBudget = _poolSize;
 
@@ -255,13 +255,13 @@ class VideoPreloadController extends ChangeNotifier
   static const _errorRetryDelay = Duration(milliseconds: 250);
 
   /// Decoder-error retries allowed per open before giving up (the card stays
-  /// on shimmer; the next reconcile — swipe or refresh — tries again fresh).
+  /// on its poster; the next reconcile — swipe or refresh — tries again fresh).
   static const _maxRetriesPerOpen = 2;
 
-  /// Upper bound on how long a card holds its shimmer waiting for the first
+  /// Upper bound on how long a card holds its poster waiting for the first
   /// frame. With the native onRenderedFirstFrame event the reveal normally fires
   /// well before this; it exists purely so a driver/stream quirk that never
-  /// emits a first frame can't strand the card on a permanent shimmer. The
+  /// emits a first frame can't strand the card on its poster. The
   /// native handle's own [FeedVideoPlayer.firstFrame] flip is the primary path.
   static const _revealTimeout = Duration(milliseconds: 300);
 
@@ -271,7 +271,7 @@ class VideoPreloadController extends ChangeNotifier
   bool _appPaused = false;
 
   /// True between a page change and the [_settleDebounce] firing. While set, no
-  /// player is reassigned (the feed shows shimmer for not-yet-served indices) so
+  /// player is reassigned (the feed shows the poster alone for not-yet-served indices) so
   /// a fast fling triggers no `open()` churn. Reconcile runs once the feed rests.
   bool _settling = false;
   Timer? _settleTimer;
@@ -297,12 +297,12 @@ class VideoPreloadController extends ChangeNotifier
   /// a player that is ALREADY serving an in-window index. Dropping every slot on
   /// page-change tore down the just-landed card's texture for the settle window
   /// and remounted it after — and since that player's first frame was already
-  /// decoded (its `ready` flag already true, shimmer already faded), the
+  /// decoded (its `ready` flag already true, texture already revealed), the
   /// remounted texture flashed its dark `fill` for a frame or two before
   /// re-attaching: the live-scroll black blink. Keeping an in-window served slot
   /// mounted means a swipe onto a pre-decoded neighbour shows its (paused) frame
   /// continuously — no teardown, no blink. Indices with no serving player still
-  /// return null (shimmer), so a fast fling past not-yet-assigned players is
+  /// return null (poster only), so a fast fling past not-yet-assigned players is
   /// unaffected.
   LiveVideoSlot? slotForIndex(int index) {
     if (index < 0 || index >= _wallpapers.length) return null;
@@ -359,7 +359,7 @@ class VideoPreloadController extends ChangeNotifier
 
   /// Splash-gate hook: warm ONLY the first item's decoder and begin decoding so
   /// the branded splash can be held until the top live wallpaper has painted its
-  /// first frame (no shimmer on reveal). Deliberately limited to a SINGLE decoder
+  /// first frame (no poster-to-video pop on reveal). Deliberately limited to a SINGLE decoder
   /// — not the usual previous/current/next window — so it's safe to call even
   /// while the sign-in background video still holds one, staying within the
   /// budget-SoC concurrent-decoder limit. The normal current±1 window takes over
@@ -412,7 +412,7 @@ class VideoPreloadController extends ChangeNotifier
     final players = _pool_.toList();
     _pool_.clear();
     final disposals = [for (final p in players) p.dispose()];
-    notifyListeners(); // cards re-read slotForIndex → shimmer
+    notifyListeners(); // cards re-read slotForIndex → poster only
     await Future.wait(disposals);
   }
 
@@ -424,7 +424,7 @@ class VideoPreloadController extends ChangeNotifier
   /// (in-place live swap, static apply, or a failed apply). [releaseDecoders]
   /// used to be reclaimed only by the resumed-lifecycle reconcile — which never
   /// fires when no chooser/backgrounding happened, stranding every live card on
-  /// a permanent shimmer. No-op while backgrounded (the resume path owns that
+  /// a poster that never reveals. No-op while backgrounded (the resume path owns that
   /// case) and idempotent when the pool is already serving (reconcile reassigns
   /// nothing).
   void reclaimDecoders() {
@@ -446,7 +446,7 @@ class VideoPreloadController extends ChangeNotifier
     // Enter settling: pause every player so nothing plays during the scroll,
     // then rebuild the feed subtree. Already-serving in-window cards keep their
     // slot (their Texture stays mounted, showing a paused frame — no teardown);
-    // not-yet-served cards still read null and show shimmer. Player
+    // not-yet-served cards still read null and show their poster. Player
     // *reassignment* is what's debounced, in the _reconcile below.
     final wasSettling = _settling;
     _settling = true;
@@ -686,15 +686,15 @@ class VideoPreloadController extends ChangeNotifier
     // player was created by an async native create() that lands AFTER
     // _reconcile's own notifyListeners already fired — the feed is still
     // holding a null slot for this index and, with no later notify, the card
-    // stays on shimmer forever while the video decodes invisibly (stuck
-    // shimmer after background→resume; any swipe masked it by re-notifying).
+    // stays on its poster forever while the video decodes invisibly (stuck
+    // poster-only after background→resume; any swipe masked it by re-notifying).
     // Notify now that slotForIndex returns this player. Harmless duplicate on
     // the reused-player path.
     notifyListeners();
 
     // Safety net: reveal even if the native first-frame event never arrives
     // within _revealTimeout, so a driver/stream quirk can't strand this card on
-    // a permanent shimmer.
+    // a poster that never reveals.
     _armReveal(pooled, index, token);
 
     await _setupAndOpen(pooled, index, token, playWhenReady: playWhenReady);
@@ -803,7 +803,7 @@ class VideoPreloadController extends ChangeNotifier
   ///      many concurrent decoders: demote the session [_decoderBudget] (the
   ///      window shrinks, previous-slot first) and retry once more.
   ///   3. [_maxRetriesPerOpen] exhausted → give up quietly; the card keeps its
-  ///      shimmer (never a black reveal) and the next reconcile — a swipe or
+  ///      its poster (never a black reveal) and the next reconcile — a swipe or
   ///      refresh — starts fresh.
   void _onPlayerError(_PooledPlayer pooled, String codeName) {
     if (_disposed || _appPaused) return;
@@ -880,7 +880,7 @@ class VideoPreloadController extends ChangeNotifier
 
   /// Frees the codec of the pooled player serving the index FARTHEST from
   /// [index] (never [index] itself): stop() releases the decoder but keeps the
-  /// player + surface for reassignment. Its card returns to shimmer until a
+  /// player + surface for reassignment. Its card returns to its poster until a
   /// later reconcile re-serves it — the price of guaranteeing the current card
   /// renders on codec-starved SoCs.
   void _stopFarthestFrom(int index) {
@@ -934,7 +934,7 @@ class VideoPreloadController extends ChangeNotifier
   ///     is an occasional lottery loss even when the full window fits — and
   ///     since 128/32-aligned content renders CLEAN on the sw path, a
   ///     sw-decoded neighbour costs only battery, while budget 1 costs
-  ///     preloading: every swipe shimmers. Real decoder ERRORS
+  ///     preloading: every swipe drops back to the poster. Real decoder ERRORS
   ///     ([_onPlayerError]) can still take the budget to 1);
   ///   - if the VISIBLE card is the one that landed on software, re-open it
   ///     after the demote so it re-initializes onto the freed hw decoder now

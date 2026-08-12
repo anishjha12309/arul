@@ -32,7 +32,13 @@ metadata rewrite is needed for anything already in the bucket.
 - `catalog/version.json` — `public, max-age=30, stale-while-revalidate=300`. Short TTL keeps the
   pointer fresh; SWR stops a burst of cold clients stampeding the Worker. **Not `no-store`** — that
   made it the one uncacheable request on every cold start.
-- `catalog/<scope>/all_{page}.json` — `max-age=60`, busted by `?v=<content_version>`.
+- `catalog/<scope>/all_{page}.json` — `public, max-age=86400`, busted by `?v=<content_version>`.
+  A page body is immutable for its `?v` key, so a long TTL is safe. **Never let these fall back to
+  `putPublicJson`'s `max-age=60` default**: at 60 s effectively every real fetch was `REVALIDATED`
+  against R2 origin — 0.5–1 s per page with multi-second outliers — and the ringtone tab's serial
+  8-page drain stacked that into a ~5 s first open, and the wallpaper cold start (no disk snapshot
+  yet) idled just as long behind 32 pages (fixed 2026-08-11: 200 rows/page for both scopes plus a
+  parallel drain in the app).
 - Media uploaded by `tools/content-import/import.mjs` — `public, max-age=31536000, immutable`
   (keys are content UUIDs and never change). The ~614 objects imported before that stamp carry only
   a `content-type` and rely on the media Cache Rule instead.
@@ -62,6 +68,18 @@ query string is a unique cache key, so nothing can ever be a hit. (Use it only w
 
 Catalog pages go stale because `content_version` did not move or a rebuild failed. Rebuild
 (`POST /internal/build-catalog`); never reach for a cache purge.
+
+**A rebuild that does not move `content_version` no longer propagates** (hit 2026-08-11): with
+`max-age=86400` the edge keeps serving the old page bodies under the same `?v=` key for up to a day
+— and because a rebuild deletes pages it no longer writes, a colo without the old copies 404s the
+tail and a fresh drain silently truncates. Under the old `max-age=60` a bare rebuild self-healed in
+a minute, which is what the rule above used to lean on. So: any rebuild that changes page
+*layout or contents* (page-size change, orphan sweep, schema tweak) must ride a version bump —
+CMS publishes bump automatically; for an operational rebuild, bump first:
+
+```bash
+node tools/prod-sql.mjs --write "UPDATE app_config SET content_version = content_version + 1 WHERE id = 1"
+```
 
 ## Negative caching: a 404 outlives the upload that fixes it (accepted tradeoff)
 

@@ -68,7 +68,8 @@ ffmpeg -i cover.png -vf scale=512:512 -q:v 3 out/<uuid>.jpg
 - Dimensions exact: static 1080×1920 · live 1024×1824 (w%128==0, h%32==0, inside the 1088×1920 cap)
 - Extension matches mime (mp4→video/mp4, jpg→image/jpeg); size within the caps above
 - Live MP4: faststart (moov before mdat) · **no audio stream** · first frame representative, not black
-  — the feed shows shimmer until the first decoded frame, so a black first frame looks broken
+  — the card holds the `thumbs/` poster until the texture reveals, so a black first frame does not
+  read as "loading", it reads as a good image being replaced by a broken one
 - Loops seamlessly (first ≈ last frame); 5–15 s @30 fps is the practical range (convention, not enforced)
 - Keep the masters somewhere outside the repo. The original South Indian master folder
   (`C:\Anish\content-wallpaper(southindian)`) **no longer exists on disk**; `tools/content-import/`

@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
+import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
@@ -162,6 +163,14 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             DirectShareChannel.CHANNEL,
         ).setMethodCallHandler(DirectShareChannel(this))
+
+        // Direct UPI-intent mandate: paywall picker enumeration + launching the
+        // PhonePe intentUrl aimed at the chosen UPI app. Stateless and
+        // activity-scoped, so it needs no disposal.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            UpiIntentChannel.CHANNEL,
+        ).setMethodCallHandler(UpiIntentChannel(this))
 
         // Ringtone set — WRITE_SETTINGS check/deep-link + MediaStore register +
         // RingtoneManager default-tone set. Ported verbatim from the reference

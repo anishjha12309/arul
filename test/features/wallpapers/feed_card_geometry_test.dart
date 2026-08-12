@@ -7,9 +7,9 @@ import 'package:arul/features/wallpapers/presentation/feed_card_geometry.dart';
 /// actual numbers on actual devices rather than trusting the formula to stay
 /// right by inspection.
 ///
-/// The shape is a product decision (short, wide, generous air — see the class
-/// doc). Anything that moves these numbers is either a deliberate re-decision or
-/// a regression; there is no third case.
+/// The shape is a product decision (tall, tight gutters, filling the reel — see
+/// the class doc). Anything that moves these numbers is either a deliberate
+/// re-decision or a regression; there is no third case.
 void main() {
   /// Arul's top chrome: header 48 + chips 34 + chipsGap 10 + divider 1 +
   /// reelTopGap 14. Modelled here as the reel height the LayoutBuilder hands in,
@@ -30,28 +30,48 @@ void main() {
     );
     final geo = FeedCardGeometry.solve(screen: screen, reelHeight: reel);
 
-    test('the card is 353 x 656, at 1:1.86', () {
-      expect(geo.size.width, closeTo(352.7, 0.5));
-      expect(geo.size.height, closeTo(656, 1));
-      expect(geo.size.height / geo.size.width, closeTo(1.86, 0.01));
+    test('the card is 369 x 672, at ~1:1.82', () {
+      expect(geo.size.width, closeTo(368.7, 0.5));
+      expect(geo.size.height, closeTo(671.7, 1));
+      // NOT cardAspect: the card asks for 1.86 and the reel cannot grant it, so
+      // the realised shape is a touch squarer. See the height clamp below.
+      expect(geo.size.height / geo.size.width, closeTo(1.82, 0.01));
     });
 
-    test('gutters are 20 and there is no vertical margin', () {
-      expect(geo.margin.left, 20);
-      expect(geo.margin.right, 20);
+    test('gutters are 12 and there is no vertical margin', () {
+      expect(geo.margin.left, 12);
+      expect(geo.margin.right, 12);
       // The gap belongs to the page, not the card.
       expect(geo.margin.top, 0);
       expect(geo.margin.bottom, 0);
     });
 
-    test('the card eats the reel: peek clamps down, floor is zero', () {
+    test('the card eats the reel: peek pinned at minPeek, floor is zero', () {
       // targetPeek is 168, but the card leaves nowhere near that. The clamp
       // giving the space back to the peek — not to a floor — is the whole
       // reason this shape reads as full-bleed rather than framed.
+      //
+      // The peek is now pinned at its FLOOR on an ordinary phone, which means
+      // the card is height-clamped too: it is already taking every dp the reel
+      // has. Anyone widening the card further only flattens its aspect.
       expect(geo.peek, lessThan(FeedCardGeometry.targetPeek));
-      expect(geo.peek, closeTo(56, 1.5));
-      expect(geo.peek, greaterThan(FeedCardGeometry.minPeek));
+      expect(geo.peek, FeedCardGeometry.minPeek);
       expect(geo.floor, closeTo(0, 0.01));
+    });
+
+    test('the card is height-clamped, not aspect-driven, on this phone', () {
+      // Stated as its own case because it is the property that makes `gutter`
+      // a width-only knob: `width * cardAspect` does not fit, so the solver
+      // hands back whatever is left after the gap and the minimum peek.
+      expect(
+        geo.size.width * FeedCardGeometry.cardAspect,
+        greaterThan(geo.size.height),
+        reason: 'if this stops being true, gutter starts buying height again',
+      );
+      expect(
+        geo.size.height,
+        closeTo(reel - FeedCardGeometry.gap - FeedCardGeometry.minPeek, 0.01),
+      );
     });
 
     test('card + gap + peek + floor exactly fills the reel', () {
@@ -80,12 +100,27 @@ void main() {
   group('the crop is understood, not accidental', () {
     const source = 16 / 9; // 1.778
 
-    test('a 1:1.86 card trims ~4.4% off the SIDES, nothing off the top', () {
+    test('the REALISED card trims ~2.4% off the SIDES, nothing off the top', () {
       // Taller than the source: cover matches HEIGHT and overflows width, so the
       // loss is horizontal — the cheap direction. Crowns and feet survive.
+      //
+      // Measured off the solved card, not off cardAspect: widening the card is
+      // what moves this number, and the constant no longer tracks it.
+      const screen = Size(392.7, 872.7);
+      final geo = FeedCardGeometry.solve(
+        screen: screen,
+        reelHeight: screen.height - 24 - 16 - 107,
+      );
+      final aspect = geo.size.height / geo.size.width;
+      expect(aspect, greaterThan(source));
+      expect(1 - source / aspect, closeTo(0.024, 0.005));
+    });
+
+    test('the card still ASKS for a taller-than-source shape', () {
+      // The clamp may squeeze it, but the request has to stay on the safe side
+      // of the boundary — a cardAspect below 1.78 would crop top/bottom on every
+      // screen tall enough to grant it.
       expect(FeedCardGeometry.cardAspect, greaterThan(source));
-      const crop = 1 - source / FeedCardGeometry.cardAspect;
-      expect(crop, closeTo(0.044, 0.005));
     });
 
     test('1.78 is the boundary the crop flips at', () {
@@ -130,7 +165,7 @@ void main() {
 
     test('a small screen ends up SQUARER than 9:16 — which is why the '
         'upward crop bias is kept', () {
-      // The card cannot hold 1.86 in a 493dp reel, so it shortens to ~1.36 and
+      // The card cannot hold 1.86 in a 493dp reel, so it shortens to ~1.31 and
       // the crop flips to top/bottom. ViewerMedia.cropAlignment's y-bias is
       // dormant on a normal phone but live here, and removing it as "unused"
       // would silently start taking crowns off on exactly the budget devices
@@ -138,7 +173,7 @@ void main() {
       final geo = FeedCardGeometry.solve(screen: small, reelHeight: smallReel);
       final aspect = geo.size.height / geo.size.width;
       expect(aspect, lessThan(16 / 9));
-      expect(aspect, closeTo(1.36, 0.05));
+      expect(aspect, closeTo(1.31, 0.05));
     });
   });
 

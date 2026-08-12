@@ -19,6 +19,7 @@ Future<T?> showArulSheet<T>(
   bool gradient = false,
   bool isDismissible = true,
   bool topHairline = true,
+  Color? surfaceColor,
 }) {
   return showModalBottomSheet<T>(
     context: context,
@@ -40,6 +41,7 @@ Future<T?> showArulSheet<T>(
     builder: (context) => ArulSheet(
       gradient: gradient,
       topHairline: topHairline,
+      surfaceColor: surfaceColor,
       child: builder(context),
     ),
   );
@@ -54,6 +56,7 @@ class ArulSheet extends StatefulWidget {
     required this.child,
     this.gradient = false,
     this.topHairline = true,
+    this.surfaceColor,
   });
 
   final Widget child;
@@ -64,6 +67,9 @@ class ArulSheet extends StatefulWidget {
   /// The 1px gold-35% top hairline (dark only). Off for sheets where it reads
   /// as a stray line rather than an edge — e.g. the theme picker.
   final bool topHairline;
+
+  /// Optional explicit sheet surface. Null preserves the themed default.
+  final Color? surfaceColor;
 
   @override
   State<ArulSheet> createState() => _ArulSheetState();
@@ -94,7 +100,9 @@ class _ArulSheetState extends State<ArulSheet>
 
     final surface = DecoratedBox(
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.darkSheetSurface : ArulTokens.cardBgLight,
+        color:
+            widget.surfaceColor ??
+            (isDark ? ArulTokens.darkSheetSurface : ArulTokens.cardBgLight),
         gradient: widget.gradient && isDark
             ? ArulTokens.sheetGradientDark
             : null,

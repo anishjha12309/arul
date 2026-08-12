@@ -19,12 +19,28 @@ PhonePe docs, several of which are wrong. Running on **PRODUCTION** credentials.
    and the credential set — v2 onboarding issues v2 `client_id`/`client_secret`/`client_version`,
    which you POST to that v1 endpoint for a token sent as `Authorization: O-Bearer <token>`. There is
    no v2 token endpoint to move to.
-5. **Webhook** — `Authorization: SHA256(username:password)`, deduped by orderId in KV (30 d TTL).
+5. **Webhook** — `Authorization: SHA256(username:password)`, deduped by (event, orderId) in KV (30 d
+   TTL). **Intent-flow setups emit `subscription.setup.order.completed/failed`, NOT
+   `checkout.order.*`** — handled as aliases of the same branches; the Business-dashboard webhook
+   must have the `subscription.setup.order.*` events SELECTED or PhonePe never sends them (grant
+   then waits for the app's status poll / paywall self-heal).
    Order-id prefix is `DKS_`, which is how the shared merchant's streams stay distinguishable from
    Pakiza's `PKZ_`. The registered URL is `https://api.hsrutility.com/payments/webhook` — the hsr-cms
    dispatcher, which forwards `DKS_` orders to arul-api.
 
 ## Mandate setup
+
+**Direct UPI-intent flow (the frictionless path):** `POST /subscriptions/v2/setup` with
+`paymentFlow.type: "SUBSCRIPTION_SETUP"` (NOT the checkout variant's `SUBSCRIPTION_CHECKOUT_SETUP`),
+`paymentMode: {type:"UPI_INTENT", targetApp:"<android package>"}` + `deviceContext.deviceOS` returns
+`{orderId, state, intentUrl}` — the app fires intentUrl at the chosen UPI app and the user lands
+straight on its AutoPay sheet. Proved on prod 2026-08-11 through the deployed worker. Sandbox
+returns a `ppesim://` link (PhonePe simulator app), prod `upi://mandate`. No SDK, so the PR004/web-
+token trap class cannot occur here; order status is the same `/subscriptions/v2/order/{id}/status`
+family. Initiate takes `targetApp` (opt-in, package-shape validated) and MUST fall back to the SDK
+page inside the SAME request on any intent failure — a second initiate bounces off its own claim
+window. Picker apps are a fixed allowlist (PhonePe's mandate-capable list), never an open `upi://`
+resolver query: a pay-only wallet accepts the intent and then fails the mandate.
 
 `trial_end` NULL → **PENNY_DROP** (₹2, 1-day trial). NOT NULL → `authWorkflowType: TRANSACTION` with a
 real ₹199 first debit (`amount: 19900`) → straight to `active`. `maxAmount: 19900`,
@@ -33,7 +49,39 @@ real ₹199 first debit (`amount: 19900`) → straight to `active`. `maxAmount: 
 `POST /payments/initiate` returns **409 `setup_in_progress`** when a setup is already in flight, kept
 deliberately distinct from **409 `already_subscribed`** — the app treats `already_subscribed` as
 success and must not do the same for an in-flight setup. Initiate is serialized on the user row;
-superseded mandates are revoked rather than orphaned.
+superseded mandates are revoked rather than orphaned. The claim is released by the app calling
+**`POST /payments/abandon`** the moment the SDK returns non-success (a user backing out then
+re-tapping must retry INSTANTLY, not wait out a window — the 90s version of this lockout shipped and
+users read it as "payments broken"); the 4s claim window is only the backstop for attempts that died
+without abandoning (app killed at the sheet). The app rides out 409 `setup_in_progress` silently
+(`_initiateWithRetry`, 2×2s) — a rapid re-tap racing its own abandon surfaced "please wait" to a
+human twice (device, 2026-08-12). The pairing is load-bearing: sum(client retry delays) ≥ window, so
+a stale claim has always lapsed by the last retry and the message is unreachable for a solo user;
+only a genuinely concurrent attempt still refuses. Change either side only with the other.
+
+**A failed setup RESTORES, never just expires.** A resubscribe claims the user's ONE subscriptions
+row, so the claim rides over whatever entitlement the row still carried — and flipping every failed
+setup to `expired` stripped a cancelled-but-live trial when the user backed out at the UPI app
+(device, 2026-08-12). All three failure paths (abandon, the status FAILED/EXPIRED reconcile, the
+`*.order.failed` webhook) now write `CASE WHEN current_period_end > now() THEN 'cancelled' ELSE
+'expired' END`; the setup-completed resurrect matches `('expired','cancelled')` for the same reason
+— a paid approval racing the restore must still grant. `pending` with a live period keeps premium
+(entitlement.ts), so the entitlement never even flickers while the sheet is open.
+
+**Unpause must REARM the debit clock.** The cron's park nulls `next_debit_at`, so a status-only
+unpause left a row neither cron pass could ever select: "Active" forever, never billed, premium
+silently dead at period end (the zombie, 2026-08-13). The `subscription.unpaused` webhook writes
+`next_debit_at = COALESCE(next_debit_at, current_period_end)` + `notified_at = NULL`, and is scoped
+`AND status='paused'` so a stray event can never resurrect a cancelled/expired row. `/payments/status`
+heals BOTH lost webhooks: mandate PAUSED while row trialing/active → park; mandate ACTIVE while row
+paused → restore + rearm. Abandon checks the live order state first and
+answers `settled:true` instead of expiring when PhonePe says COMPLETED — expiring there would strand
+a paid mandate the webhook can no longer grant (its UPDATE is scoped `AND status='pending'`).
+
+Revoking a mandate the user never authorized answers **400 `SUBSCRIPTION_NOT_FOUND` from BOTH the
+cancel and the status endpoint** — that is success (nothing exists, nothing can debit), not a live
+orphan. `revokeMandateTolerant` must treat it so, or every abandoned setup logs a false "manual
+revoke required" and buries the one alarm that matters (seen live 2026-08-11).
 
 ## Traps that return 200 while being broken
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/haptics/arul_haptics.dart';
+import '../../features/ringtones/providers/ringtone_catalog_providers.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
@@ -60,6 +61,23 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
+  @override
+  void initState() {
+    super.initState();
+    // Warm the ringtone catalog once the first frame is up, so the Ringtones
+    // tab opens onto a ready list instead of paying its CDN drain on first
+    // tap (measured ~5 s cold). Post-frame keeps it off the launch-critical
+    // path; the shell only mounts after auth, and the drain is a few KB of
+    // edge-cached JSON. Read-only: the provider is keepAlive, its own
+    // offline-recheck ladder owns every failure mode, and the tab's normal
+    // loading/error states still cover a drain that is slow or still failing
+    // when the user arrives.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(ringtoneCatalogProvider);
+    });
+  }
+
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);

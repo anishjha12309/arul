@@ -25,8 +25,10 @@ final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
 ///
 /// No disk snapshot (unlike the wallpaper catalog): the list is a handful of
 /// tiny JSON pages and the tab is not the launch surface, so a network drain
-/// per session is fine. An empty catalog is DATA, not an error — the screen
-/// shows the designed empty state instead of a spinner or a retry wall.
+/// per session is fine — but it is warmed post-first-frame by [AppShell], so
+/// the drain has usually finished before the user ever reaches the tab. An
+/// empty catalog is DATA, not an error — the screen shows the designed empty
+/// state instead of a spinner or a retry wall.
 final ringtoneCatalogProvider =
     AsyncNotifierProvider<RingtoneCatalogNotifier, List<Ringtone>>(
       RingtoneCatalogNotifier.new,
@@ -35,6 +37,10 @@ final ringtoneCatalogProvider =
 class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
   /// Guards a stale refresh() overwriting a newer one with older data.
   int _fetchSeq = 0;
+
+  /// Bounded fan-out for the page drain — same discipline (and value) as the
+  /// wallpaper [CatalogNotifier], so a big catalog never floods the radio.
+  static const _maxConcurrentPages = 4;
 
   /// Delays between automatic re-checks while the list is parked on a network
   /// error with nothing to show, after Riverpod's own exponential-backoff
@@ -132,23 +138,45 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
     }
   }
 
-  /// Sequential page drain. The repository maps a CDN miss on page 1 to an
-  /// empty page, so an absent catalog resolves to an empty LIST (the designed
-  /// empty state), while a genuine connectivity failure throws
-  /// [NetworkException] out of the client and lands in AsyncError → retry.
+  /// Drains the full catalog: page 1 (which carries `total_pages`), then any
+  /// remaining pages with at most [_maxConcurrentPages] in flight, reassembled
+  /// in page order — the wallpaper [CatalogNotifier]'s pool, ported after the
+  /// original sequential drain was measured at ~5 s on the tab's first open
+  /// (8 pages × one CDN round trip each, serially). The repository maps a CDN
+  /// miss to an EMPTY page, so an absent catalog resolves to an empty LIST
+  /// (the designed empty state), while a genuine connectivity failure throws
+  /// [NetworkException] out of the client and lands in AsyncError → retry. An
+  /// empty later page means end-of-pages or a transient miss — everything
+  /// before it is served, matching the old drain's `break`.
   Future<List<Ringtone>> _fetchCatalog() async {
     final repo = ref.read(ringtoneRepositoryProvider);
-    final all = <Ringtone>[];
-    CatalogPage<Ringtone> page = await repo.getRingtones();
-    all.addAll(page.items);
-    // Defensive guard against a malformed catalog stuck on has_more.
-    var guard = 0;
-    while (page.hasMore && guard < 500) {
-      page = await repo.getRingtones(page: page.page + 1);
-      if (page.items.isEmpty) break;
-      all.addAll(page.items);
-      guard++;
+
+    final first = await repo.getRingtones();
+    final all = [...first.items];
+    // Defensive cap against a malformed catalog advertising absurd page counts.
+    final totalPages = first.totalPages.clamp(0, 500);
+    if (first.hasMore && totalPages > 1) {
+      // Worker pool over pages 2..totalPages; results land slotted by page so
+      // ordering is deterministic regardless of completion order.
+      final slots = List<CatalogPage<Ringtone>?>.filled(totalPages - 1, null);
+      var next = 2;
+      Future<void> worker() async {
+        while (true) {
+          final page = next++;
+          if (page > totalPages) return;
+          slots[page - 2] = await repo.getRingtones(page: page);
+        }
+      }
+
+      final workers = (totalPages - 1).clamp(1, _maxConcurrentPages);
+      await Future.wait([for (var i = 0; i < workers; i++) worker()]);
+
+      for (final page in slots) {
+        if (page == null || page.items.isEmpty) break;
+        all.addAll(page.items);
+      }
     }
+
     all.sort((a, b) {
       final c = a.sortOrder.compareTo(b.sortOrder);
       return c != 0 ? c : a.title.compareTo(b.title);

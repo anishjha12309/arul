@@ -51,6 +51,7 @@ const ALLOW_DUPES = process.argv.includes("--allow-duplicate-titles");
 const FOLDER_CATEGORY = {
   amman: "amman",
   ayyappan: "ayyappan",
+  ayyappa: "ayyappan",
   murugan: "murugan",
   muruga: "murugan",
   perumal: "perumal",
@@ -117,6 +118,14 @@ const CATEGORY_BY_TITLE = {
   "Vinayaga Arul": "others", // Ganesha — not Shiva
 };
 
+/// Source title → the title actually shipped. Only for a genuine clash with a
+/// row that is ALREADY LIVE under the same name but is a different recording;
+/// two identically-titled rows are indistinguishable in the list, and the live
+/// one cannot be renamed without breaking a user's existing set.
+const TITLE_OVERRIDE = {
+  "Muruga Muruga": "Muruga Muruga II", // 2026-08-11 drop; ≠ the 2026-08-06 track of that name
+};
+
 // The order categories are drawn from when interleaving. Largest first so the
 // round-robin never leaves a long tail of one category at the end of the feed.
 const INTERLEAVE = ["perumal", "murugan", "sivan", "amman", "others", "ayyappan"];
@@ -133,9 +142,10 @@ const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 /** "Amme Narayana-30s.mp3" → "Amme Narayana". A cut length is a production
  *  detail; it must never reach a title the user reads. */
 function titleFrom(file) {
-  return basename(file, extname(file))
+  const t = basename(file, extname(file))
     .replace(/-\d+s$/i, "")
     .trim();
+  return TITLE_OVERRIDE[t] ?? t;
 }
 
 const isAudio = (f) => /\.(mp3|m4a|aac)$/i.test(f);
@@ -152,6 +162,16 @@ function collectSources() {
       out.push({ path: join(SRC, d, f), title: titleFrom(f), category, folder: d });
     }
   }
+  // The two layouts are ALTERNATIVES, not additive. A newly-foldered drop
+  // normally sits next to the loose files of an earlier drop that already
+  // landed, so reading both would re-offer imported tracks and abort the run on
+  // title collisions. Folders holding audio ⇒ the folders are the drop.
+  if (out.length) {
+    const loose = entries.filter(isAudio).length;
+    if (loose) console.log(`FOLDERED layout — ignoring ${loose} loose file(s) at the top of ${SRC}`);
+    return out;
+  }
+
   for (const f of entries.filter(isAudio)) {
     const title = titleFrom(f);
     out.push({ path: join(SRC, f), title, category: CATEGORY_BY_TITLE[title], folder: null });

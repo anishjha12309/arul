@@ -10,17 +10,18 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../domain/entitlement.dart';
 
-/// Premium entitlement — a LIVE read of the user's subscription row from the
-/// Worker (`/me/subscription`), never a cached claim and never a JWT claim, so
-/// a purchase, expiry or refund takes effect on the very next gated tap
-/// (CLAUDE.md §5). `ref.invalidate(entitlementProvider)` after a purchase /
-/// cancel re-reads it.
+/// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a
+/// cached claim and never a JWT claim, so a purchase, expiry or refund takes
+/// effect on the very next gated tap (CLAUDE.md §5).
+/// `ref.invalidate(entitlementDetailProvider)` after a purchase / cancel
+/// re-reads it.
 ///
-/// isPremium = status ∈ {trialing, active, cancelled} AND
-/// current_period_end > now (see [Entitlement.fromSubscription]); the server
-/// additionally ORs in `reward_premium_until`. Without a backend (or signed
-/// out) nobody is premium — the gate fails closed, which is the correct
-/// default; the Worker's `/media/signed-url` stays the authoritative gate.
+/// `isPremium` is the SERVER's `premium` flag, computed by the one rule in
+/// workers/src/lib/entitlement.ts (statuses + debit grace + referral reward
+/// pool) — the client never re-derives it from the row (see [Entitlement] for
+/// the drift that ban exists to prevent). Without a backend (or signed out)
+/// nobody is premium — the gate fails closed, which is the correct default;
+/// the Worker's `/media/signed-url` stays the authoritative gate.
 /// The FULL entitlement — the derived `isPremium` flag AND the subscription row
 /// it came from. The Manage screen needs the row itself (status, renewal date,
 /// trial end) to say anything true about the plan, so the fetch is modelled here
@@ -42,10 +43,9 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
   final authState = ref.read(authServiceProvider).currentState;
   if (!authState.isAuthenticated) return const Entitlement.none();
 
-  final sub = await ref
+  return ref
       .watch(subscriptionRepositoryProvider)
-      .getSubscription(authState.userId!);
-  return Entitlement.fromSubscription(sub);
+      .getEntitlement(authState.userId!);
 });
 
 /// The gate's view of [entitlementDetailProvider]: just "may this user act?".

@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+29
+version: 1.0.0+30
 
 environment:
   sdk: ^3.12.0
@@ -109,6 +109,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/premium/
     # The splash / sign-in background clip. Bundled, not streamed: the first
     # screen must never wait on the network, and it is the same lotus clip the
     # entire brand palette was extracted from — 4.3 MB, 1024x1824 (w%128==0,
@@ -123,6 +124,39 @@ flutter:
     - family: Marcellus
       fonts:
         - asset: assets/fonts/Marcellus-Regular.ttf
+
+    # ── Premium paywall only (design_handoff_arul_premium). BUNDLED, never
+    # fetched — google_fonts stays out for the reasons at the top of this file.
+    # All six cuts are instanced from the upstream VARIABLE fonts and subset to
+    # Latin + punctuation + the currency block by tools/build-fonts.py; that
+    # script is the record of how to regenerate them. Licenses: assets/fonts/
+    # OFL-*.txt. The paywall is English-by-decision (CLAUDE.md §5 / the handoff),
+    # so a Latin-only subset can never meet a script it does not cover.
+    - family: Cinzel
+      fonts:
+        - asset: assets/fonts/Cinzel-Medium.ttf
+          weight: 500
+    - family: Lora
+      fonts:
+        - asset: assets/fonts/Lora-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Lora-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/Lora-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Lora-SemiBold.ttf
+          weight: 600
+    # The price numerals. The handoff asks for Georgia, which Android does not
+    # ship; Gelasio is Georgia's metric-compatible open twin and keeps the
+    # old-style figures the design renders with (1/2 at x-height, 3/5/7/9
+    # descending). It is also the ONLY serif here that carries U+20B9 ₹ —
+    # Cinzel, Lora and Marcellus all lack it — so it doubles as the fallback
+    # that keeps a rupee sign inside Lora body copy from landing in Roboto.
+    - family: Gelasio
+      fonts:
+        - asset: assets/fonts/Gelasio-Regular.ttf
+          weight: 400
 
 # Regenerating (`flutter_native_splash:create`) REWRITES values/colors.xml and
 # values/styles.xml, so these values must stay equal to what is checked in there

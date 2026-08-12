@@ -316,17 +316,31 @@ abstract final class ArulTokens {
     stops: [0.0, 0.35, 0.55, 1.0],
   );
 
-  /// Sign-in scrim. Spec > Sign-in: 3-stop `.28 → 0 (38–62%) → .72`.
+  /// Sign-in scrim. Re-cut from Spec > Sign-in's 3-stop `.28 → 0 (38–62%) →
+  /// .72`, which assumed the sign-in block hung off the BOTTOM edge and so put
+  /// its darkness at 100%.
+  ///
+  /// Nothing sits at the bottom now. The only free-floating chrome is the
+  /// wordmark up top; everything else lives on the silk panel, which carries
+  /// its own ground ([mediaFillStrong]) and needs no help. So this ramp does
+  /// exactly two jobs and then gets out of the way: a ceiling dark enough for
+  /// the wordmark, and a floor that keeps the nav bar from floating — with the
+  /// middle left near-clear on purpose, because that band is the artwork the
+  /// user is being asked to sign in for.
+  ///
+  /// Do NOT strengthen the middle to "help" the panel. That trade was measured
+  /// the other way: the panel is opaque enough alone, and darkening the centre
+  /// only costs the wallpaper.
   static const LinearGradient signInScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [
-      Color.fromRGBO(20, 9, 12, 0.28),
-      _scrim0,
-      _scrim0,
-      Color.fromRGBO(20, 9, 12, 0.72),
+      Color.fromRGBO(20, 9, 12, 0.42), // 0%   — wordmark
+      Color.fromRGBO(20, 9, 12, 0.06), // 34%  — the anti-banding tail
+      Color.fromRGBO(20, 9, 12, 0.10), // 66%  — artwork, near-clear
+      Color.fromRGBO(20, 9, 12, 0.46), // 100% — grounds the nav bar
     ],
-    stops: [0.0, 0.38, 0.62, 1.0],
+    stops: [0.0, 0.34, 0.66, 1.0],
   );
 
   /// Bottom-sheet barrier overlay. spec range `.55–.62`; chosen `.58`.
@@ -379,6 +393,20 @@ abstract final class ArulTokens {
   static const Color skeletonBase = darkSurface; // #14090C
   static const Color skeletonHighlight = Color(0xFF2A1218);
 
+  /// Fill for chrome that sits on media with NO scrim under it to help.
+  /// [darkSurface] at 80%.
+  ///
+  /// The scrims are tuned for chrome at the screen's EDGES, where a ramp can
+  /// reach full strength. A panel floating mid-screen has no such luxury — the
+  /// scrim is at its weakest there by design, because that band is the artwork
+  /// the user came for. So the panel carries its own ground: this under
+  /// [silkDark] holds ivory text at ~10:1 over the worst case an image can
+  /// present, a pure white frame, which is the bar `ArulScrims` sets.
+  ///
+  /// Same value as the legacy `ArulColors.mediaFillStrong` — one role, one
+  /// number, so the two ladders cannot drift.
+  static const Color mediaFillStrong = Color(0xCC14090C);
+
   // ─────────────────────────── Text over media ────────────────────────────
 
   /// Shadow for text/icons sitting directly on media. Spec > Spacing/misc:
@@ -398,6 +426,37 @@ abstract final class ArulTokens {
     Shadow(blurRadius: 3, color: Color(0xE6000000)),
     Shadow(offset: Offset(0, 1), blurRadius: 10, color: Color(0xB3000000)),
   ];
+
+  /// **The over-media glass recipe** — ivory held as glass: a translucent fill
+  /// under a hairline of the same ivory at higher alpha.
+  ///
+  /// This is the app's language for a control that sits directly on someone's
+  /// wallpaper and must not compete with it (the feed's Share circle, the live
+  /// mark). Both read these two tokens rather than spelling the rgba twice —
+  /// they are the SAME object at two sizes, and a drift between them would
+  /// read as two different design systems on one card.
+  static const Color overMediaGlassFill = Color.fromRGBO(250, 245, 236, 0.18);
+  static const Color overMediaGlassBorder = Color.fromRGBO(250, 245, 236, 0.45);
+
+  /// **Smoked** glass — the fill for chrome sitting on RAW artwork, with no
+  /// scrim underneath to supply contrast.
+  ///
+  /// [overMediaGlassFill] cannot do this job, and no amount of tuning makes it:
+  /// it is ivory, ivory is near-white, and a near-white fill over a white
+  /// marble temple is invisible at ANY alpha — raising it makes the disc whiter,
+  /// not clearer. Chrome with an unknown background behind it has to be the
+  /// DARK half of the pair, with the ivory kept for the glyph and the rim.
+  ///
+  /// [darkSurface] at `.55`, the alpha the legacy ladder's `mediaFillStrong`
+  /// was measured at: dense enough to clear 3:1 for an ivory glyph over the
+  /// brightest wallpaper in the catalog, translucent enough that the artwork
+  /// still reads through it — a lens, never a chip. On dark artwork it all but
+  /// vanishes and the rim carries the shape, which is exactly right: the mark
+  /// should be quiet where it is already legible.
+  ///
+  /// Not a shadow. A shadow bleeds OUTSIDE its object onto the wallpaper (which
+  /// is why the live mark's was removed); this is contained by the disc.
+  static const Color overMediaInkFill = Color.fromRGBO(20, 9, 12, 0.55);
 
   // ────────────────────────────── Typography ──────────────────────────────
   // Spec > Typography. UI = system stack (fontFamily null). Serif =
@@ -601,14 +660,6 @@ abstract final class ArulTokens {
     fontWeight: FontWeight.w600,
   );
 
-  /// LIVE badge. 10.5px w700, ls `.14em` (10.5 × .14 = 1.47), on [darkSurface].
-  static const TextStyle liveBadge = TextStyle(
-    fontSize: 10.5,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 1.47,
-    color: darkSurface,
-  );
-
   // ─────────────────────────────── Radii ──────────────────────────────────
   // Spec > Spacing / radii / misc.
 
@@ -626,9 +677,6 @@ abstract final class ArulTokens {
 
   /// Chips / buttons / pills. 999 (fully rounded).
   static const double pillRadius = 999;
-
-  /// LIVE badge corner. 4.
-  static const double liveBadgeRadius = 4;
 
   /// Icon-chip corner. 12.
   static const double iconChipRadius = 12;
@@ -796,9 +844,6 @@ abstract final class ArulTokens {
   /// Dialog entrance (translateY(24)+fade), ease. 250ms.
   static const Duration dialogEnter = Duration(milliseconds: 250);
 
-  /// Premium-nudge auto-dismiss. 2600ms.
-  static const Duration nudgeAutoDismiss = Duration(milliseconds: 2600);
-
   /// Skeleton sliding-gradient loop. 1800ms linear.
   static const Duration skeletonLoop = Duration(milliseconds: 1800);
 
@@ -827,4 +872,914 @@ abstract final class ArulTokens {
 
   static const double hairlineWidth = 120;
   static const double hairlineHeight = 2;
+
+  // ════════════════════ Premium paywall ("holy authenticity") ═════════════
+  //
+  // design_handoff_arul_premium — a SELF-CONTAINED visual system for the one
+  // route that sells the product, and the reason every token below carries the
+  // `paywall` prefix instead of joining the ladders above.
+  //
+  // It does not reuse the app palette and must not be "harmonised" into it:
+  // its maroon is #7A1F23, a different ink from [maroon] (#7A1E33), and its
+  // creams sit warmer than [ivory]. Two paywall screens (monthly / free trial)
+  // share one shell, so a value changed here moves both — which is the point.
+  //
+  // The route is pinned LIGHT (router.dart) and English-only (CLAUDE.md §5), so
+  // these are absolute colours with no dark counterpart, by design.
+
+  /// Paywall maroon — headline ink, corner brackets, the trial badge. `#7A1F23`.
+  static const Color paywallMaroon = Color(0xFF7A1F23);
+
+  /// CTA gradient, top → bottom. `#8A2427 → #6B191C`.
+  static const LinearGradient paywallCtaFill = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF8A2427), Color(0xFF6B191C)],
+  );
+
+  /// CTA rim. Gold 500 `#E8B34B`.
+  static const Color paywallGold500 = Color(0xFFE8B34B);
+
+  /// Hairlines, dividers, medallion rims. Gold 600 `#D9A544`.
+  static const Color paywallGold600 = Color(0xFFD9A544);
+
+  /// Shrine-panel frame and the rules flanking "PREMIUM". Gold 700 `#C8933A`.
+  static const Color paywallGold700 = Color(0xFFC8933A);
+
+  /// The "PREMIUM" eyebrow. Gold deep `#B07F2E`.
+  static const Color paywallGoldDeep = Color(0xFFB07F2E);
+
+  /// The shrine panel's inner 1px rule. Gold soft `#E0C58A`.
+  static const Color paywallGoldSoft = Color(0xFFE0C58A);
+
+  /// Header block ground. `#FAF5E9` — a half-step warmer than [paywallCream],
+  /// which is what separates the brand block from the page without a rule.
+  static const Color paywallHeaderBg = Color(0xFFFAF5E9);
+
+  /// Page ground, and the 4px ring inside the shrine frame. `#FDF8EC`.
+  static const Color paywallCream = Color(0xFFFDF8EC);
+
+  /// Shrine-panel fill, top → bottom. `#FFFDF6 → #FBF4E2`.
+  static const LinearGradient paywallPanelFill = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFFFDF6), Color(0xFFFBF4E2)],
+  );
+
+  /// Feature-medallion fill. `#FBF1DA`.
+  static const Color paywallMedallionFill = Color(0xFFFBF1DA);
+
+  /// Body ink — nav title, feature labels. `#4A3524`.
+  static const Color paywallInk = Color(0xFF4A3524);
+
+  /// Secondary ink — social-proof pill, trial lead line, "Selected UPI App".
+  /// `#6B5A41`.
+  static const Color paywallInkSecondary = Color(0xFF6B5A41);
+
+  /// Muted ink — the fine print under the price, and the UPI caret. `#8B7355`.
+  static const Color paywallInkMuted = Color(0xFF8B7355);
+
+  /// Faint ink — the struck-through price and the reassurance line. `#A3926F`.
+  static const Color paywallInkFaint = Color(0xFFA3926F);
+
+  /// Gold label ink — "PER MONTH", the tagline. `#A3814A`.
+  static const Color paywallInkGold = Color(0xFFA3814A);
+
+  /// The UPI app's own name in the selector chip. `#2C2418`.
+  static const Color paywallInkUpi = Color(0xFF2C2418);
+
+  /// CTA label. `#FBF3DE`.
+  static const Color paywallOnCta = Color(0xFFFBF3DE);
+
+  /// The trial badge's label on [paywallMaroon]. `#F6E7C8`.
+  static const Color paywallOnBadge = Color(0xFFF6E7C8);
+
+  /// Screen rim / back-button rim / UPI chip rim. `#E6D9BD`, `#D9C9A5`.
+  static const Color paywallBorderSoft = Color(0xFFE6D9BD);
+  static const Color paywallBorderControl = Color(0xFFD9C9A5);
+
+  /// Social-proof pill rim. `#E0D4B4`.
+  static const Color paywallBorderPill = Color(0xFFE0D4B4);
+
+  /// The 1px rules flanking "PREMIUM" — gold at the end nearest the word,
+  /// fading outward. The right-hand rule is this one mirrored.
+  static const LinearGradient paywallBrandRule = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0x00C8933A), paywallGold700],
+  );
+
+  /// The hairline closing the header block: transparent → gold → transparent.
+  static const LinearGradient paywallHeaderHairline = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0x00D9A544), paywallGold600, Color(0x00D9A544)],
+  );
+
+  /// The vertical hairlines between feature columns — gold at 40%, fading out
+  /// top and bottom.
+  static const LinearGradient paywallFeatureDivider = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0x00D9A544), Color(0x66D9A544), Color(0x00D9A544)],
+  );
+
+  /// CTA lift. `0 6px 18px rgba(107,25,28,.35)`.
+  static const List<BoxShadow> paywallCtaShadow = [
+    BoxShadow(
+      offset: Offset(0, 6),
+      blurRadius: 18,
+      color: Color.fromRGBO(107, 25, 28, 0.35),
+    ),
+  ];
+
+  // ───────────────────── Premium paywall — typography ─────────────────────
+  // Three BUNDLED families, paywall-only (pubspec.yaml): Cinzel for display,
+  // Lora for everything else, Gelasio for the price numerals. Tracking is
+  // quoted in `em` by the handoff and pre-multiplied here, as everywhere above.
+  //
+  // Every Lora style carries Gelasio in [paywallSerifFallback]: Lora has no
+  // U+20B9, and "₹199" in the fine print would otherwise pull a Roboto rupee
+  // into a serif sentence.
+
+  /// The display family — "SUBSCRIPTION", "PREMIUM", "ARUL". Weight 500 only.
+  static const String paywallDisplayFamily = 'Cinzel';
+
+  /// The text family — everything that is not display or numeral.
+  static const String paywallTextFamily = 'Lora';
+
+  /// The numeral family: Georgia's metric-compatible twin, and the only
+  /// bundled serif carrying ₹. See pubspec.yaml.
+  static const String paywallNumeralFamily = 'Gelasio';
+
+  /// Per-glyph fallback for the text family — supplies ₹ and nothing else.
+  static const List<String> paywallSerifFallback = [paywallNumeralFamily];
+
+  /// Nav title "SUBSCRIPTION". Cinzel 500 15px, ls `.18em` (15 × .18 = 2.7).
+  /// Apply over an already-uppercased string.
+  static const TextStyle paywallNavTitle = TextStyle(
+    fontFamily: paywallDisplayFamily,
+    fontWeight: FontWeight.w500,
+    fontSize: 15,
+    height: 1.2,
+    letterSpacing: 2.7,
+    color: paywallInk,
+  );
+
+  /// The "PREMIUM" eyebrow. Cinzel 500 13px, ls `.42em` (13 × .42 = 5.46).
+  ///
+  /// The tracking is trailing as well as leading, so the word sits ~5px right
+  /// of true centre unless the trailing space is trimmed — see the eyebrow's
+  /// padding in the paywall view.
+  static const TextStyle paywallEyebrow = TextStyle(
+    fontFamily: paywallDisplayFamily,
+    fontWeight: FontWeight.w500,
+    fontSize: 13,
+    height: 1.2,
+    letterSpacing: 5.46,
+    color: paywallGoldDeep,
+  );
+
+  /// The wordmark "ARUL". Cinzel 500 46px / 1.15.
+  static const TextStyle paywallWordmark = TextStyle(
+    fontFamily: paywallDisplayFamily,
+    fontWeight: FontWeight.w500,
+    fontSize: 46,
+    height: 1.15,
+    color: paywallMaroon,
+  );
+
+  /// "Divine grace, every day". Lora italic 400 14px, ls `.06em` (= 0.84).
+  static const TextStyle paywallTagline = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontStyle: FontStyle.italic,
+    fontSize: 14,
+    height: 1.3,
+    letterSpacing: 0.84,
+    color: paywallInkGold,
+  );
+
+  /// The social-proof pill. Lora 400 13px.
+  static const TextStyle paywallPill = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 13,
+    height: 1.3,
+    color: paywallInkSecondary,
+  );
+
+  /// "PER MONTH". Lora 500 14px, ls `.28em` (14 × .28 = 3.92). Uppercased at
+  /// the call site; the trailing track is trimmed the same way as the eyebrow.
+  static const TextStyle paywallPriceCaption = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+    height: 1.2,
+    letterSpacing: 3.92,
+    color: paywallInkGold,
+  );
+
+  /// The trial lead line, "Start your 1-day FREE trial for ₹199".
+  /// Lora 500 14px.
+  static const TextStyle paywallLead = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+    height: 1.4,
+    color: paywallInkSecondary,
+  );
+
+  /// "REFUNDED INSTANTLY". Lora 600 11.5px, ls `.2em` (11.5 × .2 = 2.3).
+  static const TextStyle paywallBadge = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 11.5,
+    height: 1.2,
+    letterSpacing: 2.3,
+    color: paywallOnBadge,
+  );
+
+  /// The fine print under the gold divider. Lora 400 12.5px.
+  ///
+  /// Both strings it carries are contractually fixed (the handoff) — they state
+  /// what the mandate charges, so they ship verbatim.
+  static const TextStyle paywallFinePrint = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 12.5,
+    height: 1.4,
+    color: paywallInkMuted,
+  );
+
+  /// A feature column's label. Lora 600 13px / 1.35.
+  static const TextStyle paywallFeatureLabel = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 13,
+    height: 1.35,
+    color: paywallInk,
+  );
+
+  /// "Selected UPI App". Lora 500 14px.
+  static const TextStyle paywallUpiLabel = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w500,
+    fontSize: 14,
+    height: 1.2,
+    color: paywallInkSecondary,
+  );
+
+  /// The chosen UPI app's name. Lora 600 14px.
+  static const TextStyle paywallUpiName = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 14,
+    height: 1.2,
+    color: paywallInkUpi,
+  );
+
+  /// The CTA label. Lora 600 16px, ls `.04em` (16 × .04 = 0.64).
+  static const TextStyle paywallCtaLabel = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 16,
+    height: 1.2,
+    letterSpacing: 0.64,
+    color: paywallOnCta,
+  );
+
+  /// The line under the CTA. Lora 400 12px.
+  static const TextStyle paywallReassurance = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 12,
+    height: 1.35,
+    color: paywallInkFaint,
+  );
+
+  // ─────────────────── Premium paywall — price lockup ─────────────────────
+
+  /// The rupee sign, set optically smaller than the amount. 40px.
+  static const double paywallRupeeSize = 40;
+
+  /// The amount. 56px.
+  static const double paywallAmountSize = 56;
+
+  /// Gap between the two. 4.
+  static const double paywallPriceGap = 4;
+
+  // ───────────────────── Premium paywall — geometry ───────────────────────
+
+  /// Back button: a 34px ring with a 17px glyph.
+  static const double paywallBackSize = 34;
+
+  /// The rules flanking "PREMIUM": 56 × 1, 12px either side of the word.
+  static const double paywallBrandRuleWidth = 56;
+  static const double paywallBrandRuleGap = 12;
+
+  /// The header hairline's inset from each edge. 32.
+  static const double paywallHairlineInset = 32;
+
+  /// Shrine panel: 28 from the screen edge, 26 below the header.
+  static const double paywallPanelInset = 28;
+  static const double paywallPanelTopGap = 26;
+
+  /// The cream ring inside the shrine frame (4) and the gold rule inside that
+  /// (1) — the handoff's two inset box-shadows, drawn as nested borders.
+  static const double paywallPanelRingWidth = 4;
+
+  /// Corner brackets: 14 × 14 at 2px, hung 6px OUTSIDE each corner.
+  static const double paywallBracketSize = 14;
+  static const double paywallBracketStroke = 2;
+  static const double paywallBracketOffset = 6;
+
+  /// The gold rule under the price block. 44 × 2.
+  static const double paywallPriceDividerWidth = 44;
+  static const double paywallPriceDividerHeight = 2;
+
+  /// Feature medallion: a 48px ring at 1.5px around a 20px line icon drawn at
+  /// 1.8px — the handoff's own SVG stroke, kept because a Material glyph at
+  /// this size reads heavier than the frame around it.
+  static const double paywallMedallionSize = 48;
+  static const double paywallMedallionBorder = 1.5;
+  static const double paywallFeatureIconSize = 20;
+  static const double paywallFeatureIconStroke = 1.8;
+
+  /// CTA: a full-width pill of 16px padding — 52 tall at a 16/1.2 label.
+  static const double paywallCtaPadding = 16;
+
+  /// Press feedback: 0.98 for 120ms, ease-out (the handoff's own figures).
+  static const double paywallPressScale = 0.98;
+  static const Duration paywallPress = Duration(milliseconds: 120);
+
+  /// Opacity for the full-bleed temple illustration behind the paywall.
+  static const double paywallOrnamentAlpha = 0.10;
+
+  /// Shared one-pixel stroke for the new ornamental rules.
+  static const double paywallOrnamentRuleThickness = 1;
+
+  /// Soft gold used by dotted ornamental leaders and feature dividers.
+  static const Color paywallDottedGold = Color(0x99D9A544);
+
+  /// Width of each short rule flanking the navigation title.
+  static const double paywallNavOrnamentRuleWidth = 20;
+
+  /// Display size of each navigation-title floret.
+  static const double paywallNavFloretSize = 8;
+
+  /// Gap between a navigation floret and its trailing rule.
+  static const double paywallNavOrnamentGap = 4;
+
+  /// Gap between each navigation ornament and the title.
+  static const double paywallNavTitleOrnamentGap = 8;
+
+  /// Horizontal inset for the temple divider below social proof.
+  static const double paywallTempleDividerInset = 32;
+
+  /// Display size of the gopuram at the temple divider's centre.
+  static const double paywallTempleDividerGopuramSize = 34;
+
+  /// Display size of the florets terminating the temple divider.
+  static const double paywallTempleDividerFloretSize = 8;
+
+  /// Gap between each temple-divider illustration and its rule.
+  static const double paywallTempleDividerGap = 8;
+
+  /// Space above the temple divider when social proof is visible.
+  static const double paywallTempleDividerTopGap = 20;
+
+  /// Space between the temple divider and the brand lockup.
+  static const double paywallTempleDividerBottomGap = 28;
+
+  /// Width of the rule portion of each PREMIUM ornament wing.
+  static const double paywallBrandOrnamentRuleWidth = 36;
+
+  /// Display size of the florets beside PREMIUM.
+  static const double paywallBrandFloretSize = 9;
+
+  /// Gap between a PREMIUM floret and its rule.
+  static const double paywallBrandFloretGap = 5;
+
+  /// Display size of the lotus glyphs flanking the tagline.
+  static const double paywallTaglineLotusSize = 15;
+
+  /// Gap between the tagline and its lotus glyphs.
+  static const double paywallTaglineOrnamentGap = 8;
+
+  /// Diagonal depth of each chamfer on the shrine panel.
+  static const double paywallPanelChamfer = 14;
+
+  /// Inset between the outer and inner shrine-panel rules.
+  static const double paywallPanelInnerInset = 5;
+
+  /// Diagonal depth of the shrine panel's inner chamfer.
+  static const double paywallPanelInnerChamfer = 10;
+
+  /// Stroke width of both code-drawn shrine-panel rules.
+  static const double paywallPanelFrameStroke = 1;
+
+  /// Horizontal content inset that preserves the existing panel geometry.
+  static const double paywallPanelContentInset = 21;
+
+  /// Bottom content inset that keeps fine print clear of the lower frame.
+  static const double paywallPanelContentBottom = 17;
+
+  /// Display size of the lotus crowning the shrine panel.
+  static const double paywallPanelCrownSize = 34;
+
+  /// Distance the shrine-panel crown rises above the frame.
+  static const double paywallPanelCrownRise = 13;
+
+  /// Horizontal inset for the shrine-panel crown's dotted leaders.
+  static const double paywallPanelCrownInset = 42;
+
+  /// Gap between the shrine-panel lotus and each dotted leader.
+  static const double paywallPanelCrownGap = 7;
+
+  /// Cream backing around the shrine-panel lotus where it breaks the frame.
+  static const double paywallPanelCrownBackdrop = 5;
+
+  /// Length of each dash in dotted ornamental rules.
+  static const double paywallDottedDash = 2;
+
+  /// Gap between dashes in dotted ornamental rules.
+  static const double paywallDottedGap = 4;
+
+  /// Display width of the ornamental price divider.
+  static const double paywallPriceOrnamentWidth = 48;
+
+  /// Width of each short rule flanking PER MONTH.
+  static const double paywallPriceCaptionRuleWidth = 28;
+
+  /// Gap between PER MONTH and its flanking rules.
+  static const double paywallPriceCaptionRuleGap = 8;
+
+  /// Display size of the generated illustration inside each medallion.
+  static const double paywallFeatureArtSize = 32;
+
+  /// Display size of the florets inset into the CTA.
+  static const double paywallCtaFloretSize = 20;
+
+  /// Horizontal inset of the CTA's floret ornaments.
+  static const double paywallCtaOrnamentInset = 16;
+
+  /// Display size of the lotus crowning the CTA.
+  static const double paywallCtaLotusSize = 32;
+
+  /// Distance the CTA lotus rises above the button edge.
+  static const double paywallCtaLotusRise = 16;
+
+  /// Display size of the lotus glyphs flanking reassurance copy.
+  static const double paywallFooterLotusSize = 10;
+
+  /// Gap between reassurance copy and its lotus glyphs.
+  static const double paywallFooterLotusGap = 4;
+
+  /// Display width of the ornamental footer closing rule.
+  static const double paywallFooterRuleWidth = 128;
+
+  /// Gap above the ornamental footer closing rule.
+  static const double paywallFooterRuleGap = 6;
+
+  /// Bottom padding after the footer rule, preserving the footer's total height.
+  static const double paywallFooterBottomPadding = 8;
+
+  /// Gap between the ARUL wordmark and its lotus-framed tagline.
+  static const double paywallBrandTaglineGap = 24;
+
+  /// Bottom padding between the brand lockup and its closing hairline.
+  static const double paywallBrandBottomPadding = 13;
+
+  /// Gap between the trial lead sentence and its ₹2 price lockup.
+  static const double paywallTrialLeadGap = 2;
+
+  /// Gap between the ₹2 price lockup and the refund badge.
+  static const double paywallTrialPriceGap = 4;
+
+  /// Vertical inset inside the trial refund badge.
+  static const double paywallTrialBadgeVerticalPadding = 3;
+
+  /// Space above the compact price-divider ornament.
+  static const double paywallPriceDividerTopGap = 10;
+
+  /// Space below the price divider before the panel's fine print.
+  static const double paywallPriceDividerBottomGap = 4;
+
+  // ───────────────── Premium member page — typography ────────────────────
+
+  /// Member-page navigation title in the paywall display serif.
+  static const TextStyle premiumMemberNavTitle = TextStyle(
+    fontFamily: paywallDisplayFamily,
+    fontWeight: FontWeight.w500,
+    fontSize: 25,
+    height: 1.15,
+    color: paywallMaroon,
+  );
+
+  /// Member-page hero headline in the paywall display serif.
+  static const TextStyle premiumMemberHeadline = TextStyle(
+    fontFamily: paywallDisplayFamily,
+    fontWeight: FontWeight.w500,
+    fontSize: 25,
+    height: 1.18,
+    color: paywallMaroon,
+  );
+
+  /// Member-page supporting copy in the paywall text serif.
+  static const TextStyle premiumMemberBody = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 15,
+    height: 1.5,
+    color: paywallInkSecondary,
+  );
+
+  /// Member-page billing labels in the paywall text serif.
+  static const TextStyle premiumMemberBillingLabel = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 15,
+    height: 1.3,
+    color: paywallInkSecondary,
+  );
+
+  /// Member-page billing values in maroon serif.
+  static const TextStyle premiumMemberBillingValue = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 15,
+    height: 1.3,
+    color: paywallMaroon,
+  );
+
+  /// Member-page centred renewal reminder.
+  static const TextStyle premiumMemberReminder = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 12.5,
+    height: 1.35,
+    color: paywallInkSecondary,
+  );
+
+  /// Member-page outlined cancel-action label.
+  static const TextStyle premiumMemberCancelLabel = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 15,
+    height: 1.2,
+    color: paywallMaroon,
+  );
+
+  /// Member-page billing footnote.
+  static const TextStyle premiumMemberFootnote = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 12,
+    height: 1.5,
+    color: paywallInkMuted,
+  );
+
+  /// Member-page positive status-chip label.
+  static const TextStyle premiumMemberStatus = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    height: 1.2,
+    letterSpacing: 0.5,
+    color: ctaGreen,
+  );
+
+  // ─────────────────── Premium member page — geometry ────────────────────
+
+  /// Horizontal page inset for the member surface.
+  static const double premiumMemberPageInset = 20;
+
+  /// Top inset above the member navigation row.
+  static const double premiumMemberNavTop = 12;
+
+  /// Bottom inset below the member navigation row.
+  static const double premiumMemberNavBottom = 10;
+
+  /// Gap from the back ring to the member navigation title.
+  static const double premiumMemberNavGap = 10;
+
+  /// Diameter of the visible ring inside the 44px back hit target.
+  static const double premiumMemberBackRingSize = 34;
+
+  /// Stroke width of the member back ring and quiet controls.
+  static const double premiumMemberControlStroke = 1;
+
+  /// Member back-arrow glyph size.
+  static const double premiumMemberBackIconSize = 21;
+
+  /// Bottom padding of the member page's scrolling content.
+  static const double premiumMemberScrollBottom = 24;
+
+  /// Corner radius shared by the member hero and billing card.
+  static const double premiumMemberCardRadius = 20;
+
+  /// Horizontal content inset inside the member hero.
+  static const double premiumMemberHeroHorizontal = 16;
+
+  /// Vertical content inset inside the member hero.
+  static const double premiumMemberHeroVertical = 18;
+
+  /// Display size of the detailed hero gopuram.
+  static const double premiumMemberHeroGopuramSize = 64;
+
+  /// Width of each fading rule beside the hero gopuram.
+  static const double premiumMemberHeroRuleWidth = 34;
+
+  /// Display size of each floret beside the hero gopuram.
+  static const double premiumMemberHeroFloretSize = 8;
+
+  /// Gap within and below the hero's gopuram divider.
+  static const double premiumMemberHeroOrnamentGap = 8;
+
+  /// Gap from the gopuram divider to the hero headline.
+  static const double premiumMemberHeadlineGap = 10;
+
+  /// Gap from the headline to supporting copy.
+  static const double premiumMemberSublineGap = 7;
+
+  /// Gap from supporting copy to the positive status chip.
+  static const double premiumMemberStatusGap = 14;
+
+  /// Horizontal inset inside the status chip.
+  static const double premiumMemberStatusHorizontal = 13;
+
+  /// Vertical inset inside the status chip.
+  static const double premiumMemberStatusVertical = 6;
+
+  /// Fill opacity of the positive member status chip.
+  static const double premiumMemberStatusFillAlpha = 0.14;
+
+  /// Border opacity of the positive member status chip.
+  static const double premiumMemberStatusBorderAlpha = 0.45;
+
+  /// Gap between the hero and billing card.
+  static const double premiumMemberSectionGap = 14;
+
+  /// Horizontal inset inside a billing row.
+  static const double premiumMemberRowHorizontal = 16;
+
+  /// Vertical inset inside a billing row.
+  static const double premiumMemberRowVertical = 14;
+
+  /// Display size of the gold floret leading a billing label.
+  static const double premiumMemberRowFloretSize = 8;
+
+  /// Gap between a billing floret and its label.
+  static const double premiumMemberRowLabelGap = 11;
+
+  /// Space between the billing card and its reminder.
+  static const double premiumMemberReminderTop = 14;
+
+  /// Display size of each lotus flanking the reminder.
+  static const double premiumMemberReminderLotusSize = 15;
+
+  /// Gap between reminder copy and its lotus ornaments.
+  static const double premiumMemberReminderGap = 8;
+
+  /// Vertical space between the reminder and cancel action.
+  static const double premiumMemberCancelTop = 18;
+
+  /// Height of the outlined member cancel action.
+  static const double premiumMemberCancelHeight = 52;
+
+  /// Display size of florets inside the cancel action.
+  static const double premiumMemberCancelFloretSize = 20;
+
+  /// Horizontal inset of cancel-action florets.
+  static const double premiumMemberCancelFloretInset = 16;
+
+  /// Resting fill opacity of the outlined cancel action.
+  static const double premiumMemberCancelFillAlpha = 0.045;
+
+  /// Pressed fill opacity of the outlined cancel action.
+  static const double premiumMemberCancelPressedAlpha = 0.10;
+
+  /// Border opacity of the outlined cancel action.
+  static const double premiumMemberCancelBorderAlpha = 0.75;
+
+  /// Disabled opacity of the outlined cancel action.
+  static const double premiumMemberDisabledAlpha = 0.6;
+
+  /// Size of the cancel action's busy indicator.
+  static const double premiumMemberProgressSize = 20;
+
+  /// Stroke width of the cancel action's busy indicator.
+  static const double premiumMemberProgressStroke = 2;
+
+  /// Gap from the cancel action to its billing footnote.
+  static const double premiumMemberFootnoteTop = 14;
+
+  /// Horizontal inset around the billing footnote.
+  static const double premiumMemberFootnoteInset = 18;
+
+  /// Gap from the billing footnote to the closing temple divider.
+  static const double premiumMemberFooterTop = 16;
+
+  /// Width of each closing footer rule.
+  static const double premiumMemberFooterRuleWidth = 72;
+
+  /// Display size of the closing footer gopuram.
+  static const double premiumMemberFooterGopuramSize = 34;
+
+  /// Display size of the florets in the closing footer divider.
+  static const double premiumMemberFooterFloretSize = 8;
+
+  /// Gap between pieces of the closing footer divider.
+  static const double premiumMemberFooterGap = 7;
+
+  // ─────────────── Premium resubscribe page — typography ─────────────────
+
+  /// Warning status label on the cancelled premium hero.
+  static const TextStyle premiumResubscribeStatus = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 12,
+    height: 1.2,
+    letterSpacing: 0.7,
+    color: paywallGoldDeep,
+  );
+
+  /// Label above the selected UPI application.
+  static const TextStyle premiumResubscribePayUsing = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w500,
+    fontSize: 15,
+    height: 1.3,
+    color: paywallInk,
+  );
+
+  /// Selected UPI application name.
+  static const TextStyle premiumResubscribeUpiName = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 15,
+    height: 1.25,
+    color: paywallInkUpi,
+  );
+
+  /// Change affordance on the selected UPI application.
+  static const TextStyle premiumResubscribeChange = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontWeight: FontWeight.w600,
+    fontSize: 13,
+    height: 1.2,
+    color: paywallMaroon,
+  );
+
+  /// Price disclosure below the resubscribe CTA.
+  static const TextStyle premiumResubscribeFootnote = TextStyle(
+    fontFamily: paywallTextFamily,
+    fontFamilyFallback: paywallSerifFallback,
+    fontSize: 12.5,
+    height: 1.5,
+    color: paywallInkMuted,
+  );
+
+  // ───────────────── Premium resubscribe page — geometry ─────────────────
+
+  /// Fill opacity of the cancelled-state warning chip.
+  static const double premiumResubscribeStatusFillAlpha = 0.06;
+
+  /// Display size of florets outside the warning chip.
+  static const double premiumResubscribeStatusFloretSize = 12;
+
+  /// Gap between each warning-chip floret and the pill.
+  static const double premiumResubscribeStatusFloretGap = 10;
+
+  /// Gap above the Pay using section.
+  static const double premiumResubscribePayUsingTop = 18;
+
+  /// Gap from Pay using to the UPI selector.
+  static const double premiumResubscribePayUsingGap = 8;
+
+  /// Horizontal inset inside the UPI selector.
+  static const double premiumResubscribeUpiHorizontal = 14;
+
+  /// Vertical inset inside the UPI selector.
+  static const double premiumResubscribeUpiVertical = 11;
+
+  /// Corner radius of the UPI selector.
+  static const double premiumResubscribeUpiRadius = 16;
+
+  /// Display size of the selected UPI application icon.
+  static const double premiumResubscribeUpiIconSize = 32;
+
+  /// Corner radius of the selected UPI application icon.
+  static const double premiumResubscribeUpiIconRadius = 8;
+
+  /// Gap after the selected UPI application icon.
+  static const double premiumResubscribeUpiIconGap = 12;
+
+  /// Gap between Change and its chevron.
+  static const double premiumResubscribeChangeGap = 3;
+
+  /// Size of the Change chevron.
+  static const double premiumResubscribeChevronSize = 20;
+
+  /// Gap from the selected UPI application to the CTA.
+  static const double premiumResubscribeCtaTop = 18;
+
+  /// Clearance below the CTA's bottom-edge lotus.
+  static const double premiumResubscribeCtaLotusClearance = 13;
+
+  /// Gap from the CTA ornament to the disclosure footnote.
+  static const double premiumResubscribeFootnoteTop = 12;
+
+  /// Horizontal inset around the disclosure footnote.
+  static const double premiumResubscribeFootnoteInset = 18;
+
+  // ─────────────── Premium celebration sheet — typography ────────────────
+
+  /// Localized celebration title on the system font stack.
+  static const TextStyle premiumCelebrateTitle = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+    color: paywallMaroon,
+  );
+
+  /// Localized celebration body on the system font stack.
+  static const TextStyle premiumCelebrateBody = TextStyle(
+    fontSize: 14,
+    height: 1.5,
+    color: paywallInkSecondary,
+  );
+
+  /// Localized shrine CTA label on the system font stack.
+  static const TextStyle premiumCelebrateCta = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+    color: paywallOnCta,
+  );
+
+  /// Localized quiet dismissal label on the system font stack.
+  static const TextStyle premiumCelebrateDismiss = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    height: 1.2,
+    color: paywallMaroon,
+  );
+
+  // ──────────────── Premium celebration sheet — geometry ────────────────
+
+  /// Horizontal content inset of the premium celebration sheet.
+  static const double premiumCelebrateHorizontal = 20;
+
+  /// Top content inset below the sheet grabber.
+  static const double premiumCelebrateTop = 2;
+
+  /// Bottom content inset of the premium celebration sheet.
+  static const double premiumCelebrateBottom = 18;
+
+  /// Display size of the celebration gopuram.
+  static const double premiumCelebrateGopuramSize = 42;
+
+  /// Width of rules flanking the celebration gopuram.
+  static const double premiumCelebrateRuleWidth = 28;
+
+  /// Display size of celebration florets.
+  static const double premiumCelebrateFloretSize = 8;
+
+  /// Gap between celebration ornament pieces.
+  static const double premiumCelebrateOrnamentGap = 7;
+
+  /// Gap from the ornament lockup to the localized title.
+  static const double premiumCelebrateTitleTop = 10;
+
+  /// Gap from the localized title to the localized body.
+  static const double premiumCelebrateBodyTop = 8;
+
+  /// Gap from the localized body to the gold hairline.
+  static const double premiumCelebrateRuleTop = 14;
+
+  /// Width of the celebration gold hairline.
+  static const double premiumCelebrateRuleWidthFull = 96;
+
+  /// Gap from the gold hairline to the shrine CTA.
+  static const double premiumCelebrateCtaTop = 14;
+
+  /// Clearance below the celebration CTA's lotus.
+  static const double premiumCelebrateLotusClearance = 12;
+
+  /// Gap above the quiet dismissal action.
+  static const double premiumCelebrateDismissTop = 6;
 }

@@ -17,6 +17,14 @@
  *     - MP3 / ADTS-AAC magic, or an MP4 (m4a) container whose tracks include
  *       audio and NO video (a renamed video can't ship as a ringtone)
  *
+ * There is no "ringtone cover" role. Ringtone row art is GENERATED ON THE
+ * CLIENT — the Arul app draws a procedural kolam medallion from the row's id +
+ * category (`ringtone_medallion.dart`: "the catalog ships no cover art for
+ * ringtones"), and Pakiza does the same — so no cover object is ever uploaded,
+ * stored or served, and there is nothing here to verify. The role and its
+ * 512×512 rule were removed 2026-08-10 once the CMS stopped authoring covers;
+ * nothing in any of the three repos called them.
+ *
  * Every check also enforces the real object size against MAX_BYTES_BY_MIME —
  * the presign endpoints only validate the CLAIMED size, so this is the first
  * place the actual byte count is checked.
@@ -53,15 +61,9 @@ export const WALLPAPER_IMAGE = {
   maxSide: 8192,
 } as const;
 
-/** Arul ringtone cover art — the authoring UI promises exactly 512×512 JPG. */
-export const RINGTONE_COVER = {
-  width: 512,
-  height: 512,
-} as const;
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export type MediaRole = "wallpaper" | "ringtone" | "ringtone_cover";
+export type MediaRole = "wallpaper" | "ringtone";
 
 export interface VerifyOk {
   ok: true;
@@ -125,10 +127,6 @@ export async function verifyMediaObject(
     if (ct === "video/mp4") return verifyLiveWallpaper(reader, ct);
     if (ct.startsWith("image/")) return verifyWallpaperImage(reader, ct);
     return fail("bad_type", `A wallpaper must be a JPEG/PNG/WebP image or an MP4 video (got "${ct}")`);
-  }
-  if (role === "ringtone_cover") {
-    if (ct !== "image/jpeg") return fail("bad_type", `A ringtone cover must be a JPEG (got "${ct}")`);
-    return verifyRingtoneCover(reader, ct);
   }
   // ringtone
   if (!ct.startsWith("audio/")) {
@@ -312,19 +310,6 @@ async function verifyWallpaperImage(reader: R2Reader, ct: string): Promise<Verif
     );
   }
   return { ok: true, contentType: ct, width, height };
-}
-
-async function verifyRingtoneCover(reader: R2Reader, ct: string): Promise<VerifyResult> {
-  const dims = await readImageDims(reader, ct);
-  if (dims === "mismatch") return fail("bad_type", "The file's contents are not a valid JPEG image");
-  if (!dims) return fail("corrupt", "Could not read the cover's dimensions — the file may be corrupt");
-  if (dims.width !== RINGTONE_COVER.width || dims.height !== RINGTONE_COVER.height) {
-    return fail(
-      "bad_dimensions",
-      `Cover is ${dims.width}×${dims.height} — covers must be exactly ${RINGTONE_COVER.width}×${RINGTONE_COVER.height}`,
-    );
-  }
-  return { ok: true, contentType: ct, width: dims.width, height: dims.height };
 }
 
 // ── MP4 (ISO-BMFF) parsing ────────────────────────────────────────────────────

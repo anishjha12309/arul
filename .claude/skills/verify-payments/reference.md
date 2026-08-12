@@ -13,6 +13,21 @@ Lookup tables for a run already in progress. The procedure is in [SKILL.md](SKIL
 | `FAILED` | `retry_count` +1 and `notified_at` cleared so Pass A re-notifies; at `MAX_RETRIES` (5) `status='expired'` and the row stops being picked up |
 | `PENDING` | nothing changes — an unsettled debit must never grant premium |
 
+A single word drives redeem AND order-status together. Token form drives endpoints separately —
+needed wherever one shared answer can't express the scenario:
+
+```
+redeem:PENDING order:COMPLETED      # Pass C: redeem stuck, order actually settled
+mandate:CANCELLED                   # user revoked at their PSP — status-poll detect
+cancel:FAIL mandate:ACTIVE          # DELETE /me must 502-abort, user survives
+```
+
+Tokens: `redeem`/`order` (COMPLETED|FAILED|PENDING) · `mandate` (ACTIVE|CANCELLED|PAUSED…) ·
+`cancel` (OK|FAIL). Unlisted tokens keep defaults (redeem/order COMPLETED, mandate ACTIVE,
+cancel OK). The stub also answers `/order/{id}/status` and `/{id}/cancel` now — proven against the
+2026-08-12 full-matrix run (27/27, including a REAL settle observed via Pass C on a
+simulator-backed mandate).
+
 ## The idle marker blocks repeat runs
 
 After a successful debit the cron caches `autopay:next_work_at` in KV and short-circuits every later
@@ -38,6 +53,12 @@ The reward lives on `users.reward_premium_until`, decoupled from the subscriptio
 cancellation does not claw it back.
 
 ## On-device mandate — only when you need a real UPI instrument
+
+Sign-in answering "Google token is invalid or expired" = `GOOGLE_WEB_CLIENT_ID` in
+`workers/.dev.vars` drifted from `env/dev.json`'s (the token's `aud` is the app's define; the local
+worker must expect the same id — prod already does). Fixed 2026-08-12; if it recurs, copy the value
+from `env/dev.json`. A debug build cannot install over the Play build (signature + versionCode) —
+`adb uninstall com.hsrutility.arul` first, reinstall from Play after.
 
 A mandate created by `/payments/initiate` alone is `ACTIVE` but has no payer behind it, so its
 redemption falls back to a `UPI_QR` nobody pays. To authorize one properly:

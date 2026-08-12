@@ -15,7 +15,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class DirectShareService {
   const DirectShareService([this._channel = _defaultChannel]);
 
-  static const _defaultChannel = MethodChannel('com.hsrutility.arul/direct_share');
+  static const _defaultChannel = MethodChannel(
+    'com.hsrutility.arul/direct_share',
+  );
 
   final MethodChannel _channel;
 

@@ -28,9 +28,6 @@ abstract final class Motion {
   static const settle = Duration(milliseconds: 250);
   static const settleCurve = Curves.easeOut;
 
-  /// Premium-nudge auto-dismiss. The spec: ~2.6s.
-  static const nudgeAutoDismiss = Duration(milliseconds: 2600);
-
   /// The skeleton sliding-gradient loop. The spec: 1.8s linear.
   static const skeletonSweep = Duration(milliseconds: 1800);
 

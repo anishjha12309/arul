@@ -89,6 +89,99 @@ describe("POST /auth/login", () => {
     expect(body.user.email).toBe("aisha@example.com");
     expect(body.user.referralCode).toBe("ABCD2345");
   });
+
+  // ── Trial-tombstone pre-seed on re-signup ──────────────────────────────────
+  //
+  // The one part of the delete→re-signup chain that CANNOT be exercised by the
+  // verify-payments harness: it needs a real Google idToken. The harness proves
+  // the tombstone lands with the exact HMAC this branch recomputes; these two
+  // tests prove the branch acts on it. A routed mock is required — the flow is
+  // 4 sequential queries and a same-rows-for-everything mock can't express
+  // "users miss, tombstone hit".
+  function routedSql(routes: Array<{ match: RegExp; rows: unknown[] }>) {
+    const calls: Array<{ text: string; values: unknown[] }> = [];
+    const fn = vi.fn((...args: unknown[]) => {
+      const text = Array.isArray(args[0])
+        ? (args[0] as string[]).join("¤")
+        : String(args[0]);
+      calls.push({ text, values: args.slice(1) });
+      const r = routes.find((rt) => rt.match.test(text));
+      return Promise.resolve(r ? r.rows : []);
+    });
+    const sql = Object.assign(fn, { end: vi.fn().mockResolvedValue(undefined) });
+    return { sql, calls };
+  }
+
+  const TOMB_SECRET = "test-tombstone-secret";
+  const TRIAL_END = new Date("2026-08-01T00:00:00.000Z");
+
+  it("new user WITH a tombstone → pre-seeds a consumed-trial 'expired' row", async () => {
+    vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+      sub: "google-sub-returning",
+      email: "back@example.com",
+      email_verified: true,
+      name: "Back Again",
+    });
+    const { sql, calls } = routedSql([
+      { match: /SELECT[^]*FROM users[^]*google_sub/, rows: [] }, // no account
+      {
+        match: /INSERT INTO users/,
+        rows: [{ id: USER_ID, display_name: "Back Again", referral_code: "NEWCODE1" }],
+      },
+      { match: /trial_tombstones/, rows: [{ trial_end: TRIAL_END }] },
+      { match: /INSERT INTO subscriptions/, rows: [] },
+    ]);
+    const env = makeEnv({ TRIAL_TOMBSTONE_SECRET: TOMB_SECRET });
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(200);
+
+    // The tombstone lookup must use the SAME HMAC DELETE /me wrote — recompute
+    // it independently here (WebCrypto, like lib/tombstone.ts).
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw", enc.encode(TOMB_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, enc.encode("google-sub-returning"));
+    const expectedHash = [...new Uint8Array(sig)]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+    const tombLookup = calls.find((c) => /trial_tombstones/.test(c.text));
+    expect(tombLookup?.values).toContain(expectedHash);
+
+    // The pre-seed itself: status 'expired' is in the SQL text; user id and the
+    // tombstone's trial_end ride as parameters. That row is what makes the next
+    // /payments/initiate a ₹199 TRANSACTION instead of a second free trial.
+    const preSeed = calls.find((c) => /INSERT INTO subscriptions/.test(c.text));
+    expect(preSeed).toBeDefined();
+    expect(preSeed!.text).toContain("'expired'");
+    expect(preSeed!.values).toContain(USER_ID);
+    expect(preSeed!.values).toContain(TRIAL_END);
+  });
+
+  it("new user WITHOUT a tombstone → no subscriptions pre-seed at all", async () => {
+    vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+      sub: "google-sub-fresh",
+      email: "fresh@example.com",
+      email_verified: true,
+      name: "Fresh",
+    });
+    const { sql, calls } = routedSql([
+      { match: /SELECT[^]*FROM users[^]*google_sub/, rows: [] },
+      {
+        match: /INSERT INTO users/,
+        rows: [{ id: USER_ID, display_name: "Fresh", referral_code: "NEWCODE2" }],
+      },
+      { match: /trial_tombstones/, rows: [] }, // never trialed before deleting
+    ]);
+    const env = makeEnv({ TRIAL_TOMBSTONE_SECRET: TOMB_SECRET });
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(200);
+    expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
+  });
 });
 
 // ── POST /auth/refresh ──────────────────────────────────────────────────────--

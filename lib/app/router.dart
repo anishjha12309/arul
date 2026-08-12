@@ -1,9 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/notifications/presentation/notification_settings_screen.dart';
-import '../features/premium/presentation/manage_subscription_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/referral/presentation/refer_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
@@ -11,6 +11,7 @@ import '../features/settings/presentation/settings_screen.dart';
 import '../features/upload/presentation/upload_screen.dart';
 import '../features/wallpapers/presentation/feed_screen.dart';
 import 'shell/app_shell.dart';
+import 'theme/theme.dart';
 
 /// Routes.
 ///
@@ -73,19 +74,23 @@ final router = GoRouter(
     GoRoute(path: '/upload', builder: (_, _) => const UploadScreen()),
     GoRoute(
       path: '/premium',
+      // THE premium route — paywall AND plan home in one screen; it renders
+      // whatever the user's real subscription state calls for (the old
+      // /premium/manage two-hop was folded in on 2026-08-11).
       // `source` is the blocked verb that sent the user here (apply / share /
       // ringtone_set / feed / settings). Tracking happens at the GATE, not
       // here: `ensurePremium` fires `${source}_blocked_premium` before it
       // pushes this route. PremiumScreen only displays/attributes it.
-      builder: (_, state) => PremiumScreen(
-        source: state.uri.queryParameters['source'] ?? 'unknown',
+      // Pinned LIGHT at the ROUTE level, not inside the screen: sheets and
+      // dialogs capture inherited themes from the screen's own context, which
+      // sits ABOVE anything the screen's build wraps — a Theme inside the
+      // screen left the UPI picker sheet dark over the light page.
+      builder: (_, state) => Theme(
+        data: ArulTheme.light(),
+        child: PremiumScreen(
+          source: state.uri.queryParameters['source'] ?? 'unknown',
+        ),
       ),
-    ),
-    // Settings → Arul Premium. Distinct from /premium (the paywall): this is the
-    // account's plan home and the ONLY route that can cancel a subscription.
-    GoRoute(
-      path: '/premium/manage',
-      builder: (_, _) => const ManageSubscriptionScreen(),
     ),
   ],
 );

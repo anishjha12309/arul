@@ -117,6 +117,7 @@ describe("GET /me", () => {
         sub_trial_end: null,
         sub_current_period_end: null,
         sub_updated_at: null,
+        premium: false,
       },
     ]);
     const { ctx } = makeCtx({ token, sql });
@@ -125,11 +126,71 @@ describe("GET /me", () => {
     const body = (await res.json()) as {
       user: Record<string, unknown>;
       subscription: unknown;
+      premium: unknown;
     };
     expect(body.user.id).toBe(USER_ID);
     expect(body.user.displayName).toBe("Aisha");
     expect(body.user.referralCode).toBe("ABCD2345");
     expect(body.subscription).toBeNull();
+    expect(body.premium).toBe(false);
+  });
+
+  it("premium: true with subscription: null — a reward-only referrer", async () => {
+    // THE regression this field exists to prevent: the client used to derive
+    // premium from the subscription row alone, so a referrer holding only
+    // reward_premium_until credit (predicate true, no subscription row) was
+    // bounced to the paywall. The server flag must carry that case through.
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql } = makeMockSql([
+      {
+        id: USER_ID,
+        display_name: "Aisha",
+        email: null,
+        referral_code: "ABCD2345",
+        sub_id: null,
+        sub_user_id: null,
+        sub_status: null,
+        sub_plan: null,
+        sub_phonepe_subscription_id: null,
+        sub_merchant_subscription_id: null,
+        sub_trial_end: null,
+        sub_current_period_end: null,
+        sub_updated_at: null,
+        premium: true,
+      },
+    ]);
+    const { ctx } = makeCtx({ token, sql });
+    const res = await handleMe(ctx);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { subscription: unknown; premium: unknown };
+    expect(body.subscription).toBeNull();
+    expect(body.premium).toBe(true);
+  });
+
+  it("premium fails CLOSED when the flag is missing/odd in the row", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql } = makeMockSql([
+      {
+        id: USER_ID,
+        display_name: "Aisha",
+        email: null,
+        referral_code: "ABCD2345",
+        sub_id: null,
+        sub_user_id: null,
+        sub_status: null,
+        sub_plan: null,
+        sub_phonepe_subscription_id: null,
+        sub_merchant_subscription_id: null,
+        sub_trial_end: null,
+        sub_current_period_end: null,
+        sub_updated_at: null,
+        // no `premium` key at all
+      },
+    ]);
+    const { ctx } = makeCtx({ token, sql });
+    const res = await handleMe(ctx);
+    const body = (await res.json()) as { premium: unknown };
+    expect(body.premium).toBe(false);
   });
 
   it("returns subscription matching handleMeSubscription's shape when a row exists", async () => {
@@ -150,6 +211,7 @@ describe("GET /me", () => {
         sub_trial_end: null,
         sub_current_period_end: periodEnd,
         sub_updated_at: periodEnd,
+        premium: true,
       },
     ]);
     const { ctx } = makeCtx({ token, sql });
@@ -158,7 +220,9 @@ describe("GET /me", () => {
     const body = (await res.json()) as {
       user: Record<string, unknown>;
       subscription: Record<string, unknown>;
+      premium: unknown;
     };
+    expect(body.premium).toBe(true);
     expect(body.user.id).toBe(USER_ID);
     expect(body.subscription.id).toBe("sub-1");
     expect(body.subscription.user_id).toBe(USER_ID);

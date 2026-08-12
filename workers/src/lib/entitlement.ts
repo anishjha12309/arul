@@ -5,6 +5,8 @@
  *   A) they hold a live paid subscription:
  *        status IN ('trialing', 'active', 'cancelled')
  *        AND current_period_end IS NOT NULL AND current_period_end > now()
+ *      — where 'trialing'/'active' rows get a DEBIT_GRACE window past
+ *        current_period_end (see below)
  *   B) they hold unexpired referral-reward credit:
  *        users.reward_premium_until IS NOT NULL AND reward_premium_until > now()
  *
@@ -13,6 +15,16 @@
  * keep premium until current_period_end — only the auto-renewal stops. Access
  * then lapses naturally when the period ends. 'paused' and 'expired' get NO
  * access.
+ *
+ * DEBIT_GRACE (6 h) exists because the renewal debit rides the HOURLY autopay
+ * cron: current_period_end and next_debit_at are the same instant, so even a
+ * flawlessly-paying user sits past period end for up to an hour (cron tick)
+ * plus UPI settle time before the extension lands — and a strict `> now()`
+ * cutoff closed the gate on the MAINLINE path at every single period boundary.
+ * Grace applies ONLY to 'trialing'/'active' (a renewal is genuinely in flight;
+ * it also absorbs a brief bank-retry). 'cancelled' is deliberately excluded —
+ * no debit is coming, so period end IS the end — and a dunning failure flips
+ * the row to 'expired', which ends the grace instantly.
  *
  * The reward pool (B) is granted by grantReferralReward() when a referred friend
  * makes their first paid debit. It is intentionally decoupled from the
@@ -72,9 +84,22 @@ export function premiumPredicate(
             SELECT 1
             FROM subscriptions s
             WHERE s.user_id = u.id
-              AND s.status IN ('trialing', 'active', 'cancelled')
               AND s.current_period_end IS NOT NULL
-              AND s.current_period_end > now()
+              AND (
+                -- The pending status belongs here: a resubscribe claims the
+                -- user's ONE row, so mid-attempt a still-paid row reads as
+                -- pending — the days already paid for must keep working while
+                -- the sheet is open. First-time setups have a NULL period, so
+                -- they gain nothing from this.
+                (s.status IN ('trialing', 'active', 'cancelled', 'pending')
+                  AND s.current_period_end > now())
+                OR
+                -- DEBIT_GRACE: the renewal debit rides the hourly cron, so a
+                -- paying user is past period end for up to ~1 h every cycle.
+                -- Never the cancelled status here: no debit is coming for it.
+                (s.status IN ('trialing', 'active')
+                  AND s.current_period_end > now() - interval '6 hours')
+              )
           )
         )
     )

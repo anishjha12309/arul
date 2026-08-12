@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,11 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/perf/boot_trace.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../../wallpapers/providers/wallpaper_prefetch_provider.dart';
+import '../domain/auth_service.dart';
 import '../providers/auth_providers.dart';
 import 'widgets/video_background.dart';
 
@@ -36,7 +40,7 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const _tagline = 'SOUTH INDIAN WALLPAPERS';
+  static const _tagline = 'DEVOTIONAL WALLPAPERS & RINGTONES';
   static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
 
   /// How many leading feed thumbnails to warm once the catalog lands. Mirrors
@@ -118,6 +122,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// bounced returning users to sign-in ("session didn't persist"); awaiting
   /// [AuthService.initialized] (bounded) fixes that while keeping the beat.
   Future<void> _decideRoute() async {
+    BootTrace.mark('splash: _decideRoute start');
     const minBeat = Duration(milliseconds: 1800);
     final beat = Future<void>.delayed(minBeat);
     if (AppConfig.hasBackend) {
@@ -126,12 +131,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .read(authServiceProvider)
           .initialized
           .timeout(const Duration(seconds: 6), onTimeout: () {});
+      BootTrace.mark('splash: auth seed settled');
+
+      // No stored session — ask Google NOW rather than at the sign-in screen's
+      // first frame, which is a further beat + route away.
+      //
+      // This is the whole latency fix: measured on device the account picker
+      // landed 2.9s after launch, against a competitor's 1.25s, and nearly all
+      // of the difference was this call waiting its turn. The picker is a
+      // system Activity that covers us, so the brand beat below still plays
+      // out underneath it, untouched — it just stops being on the critical
+      // path. If sign-in completes before the beat does, the routing decision
+      // below sees `isAuthenticated` and goes straight to the feed.
+      //
+      // NOT fired before the seed resolves: until the stored-session check
+      // comes back, an already-signed-in user might be behind it, and showing
+      // THEM an account picker is a worse bug than being a second slower.
+      if (AppConfig.googleAuthConfigured &&
+          !ref.read(authServiceProvider).currentState.isAuthenticated) {
+        BootTrace.mark('splash: no session → auto sign-in from splash');
+        unawaited(
+          ref
+                  .read(authControllerProvider.notifier)
+                  .autoSignIn(AuthProvider.google) ??
+              Future<void>.value(),
+        );
+      }
     }
     await beat;
+    BootTrace.mark('splash: brand beat (1800ms) elapsed');
     if (!mounted) return;
     final authed =
         AppConfig.hasBackend &&
         ref.read(authServiceProvider).currentState.isAuthenticated;
+    BootTrace.mark('splash: routing to ${authed ? '/browse' : '/sign-in'}');
     context.go(authed ? '/browse' : '/sign-in');
   }
 
@@ -177,7 +210,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 children: [
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
-                  const Text(_tagline, style: ArulTokens.tagline),
+                  // Shrinks, never wraps — see the twin in sign_in_screen.dart.
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _tagline,
+                        maxLines: 1,
+                        style: ArulTokens.tagline,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   _buildHairlineLoader(),
                 ],
