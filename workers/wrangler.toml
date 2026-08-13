@@ -53,9 +53,18 @@ GA4_FIREBASE_APP_ID = "1:1083884444243:android:7fd6427950254fe7ea44a6"
 # so an upload-key-only value verifies on a local release APK and fails silently
 # on every Play install (links just open the browser, nothing logs). List both,
 # comma-separated, so sideloaded release builds verify too.
-#   1st = Play App Signing cert (every install that came from Play)
-#   2nd = upload cert (locally-built release APKs, on-device testing)
-ANDROID_CERT_SHA256 = "EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
+# GROUND TRUTH IS THE DEVICE, NOT THE PLAY CONSOLE PAGE. Verified 2026-08-14 on a
+# real Play install: `adb shell pm get-app-links com.hsrutility.arul` reported
+# `Signatures: [AB:38:0E:...]` and a verification state of 1024
+# (STATE_FIRST_VERIFIER_DEFINED = failed), because the file listed only the two
+# fingerprints read off the console — neither of which is what Play actually
+# signed this app with. Nothing logs that failure; links simply open a browser.
+# If verification ever fails again, read the fingerprint off the device first.
+#
+#   1st = the cert Play ACTUALLY signs with (every Play install)
+#   2nd/3rd = console-reported app-signing + upload certs, kept so other install
+#             paths and locally-built release APKs still verify
+ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:61:7A:50:84:9E:B6:53:75:CA:E2:1A:D2:5F,EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Refresh-token jti denylist · PhonePe webhook idempotency ("txn:<orderId>") ·
