@@ -114,6 +114,98 @@ describe("POST /media/signed-url", () => {
     );
   });
 
+  // ── Popularity counter (db/schema/06_popularity.sql) ──────────────────────
+  // This route is the ONLY source of the counts that order the All feed, so
+  // what it does and does not increment is a product contract, not plumbing.
+  describe("popularity counter", () => {
+    /**
+     * Everything this request handed the sql tag, as one searchable blob.
+     *
+     * Flattened rather than read per-statement because dynamic identifiers go
+     * through `sql(table)` / `sql(col)`, which the mock records as their OWN
+     * calls — so the column being incremented never appears inside the template
+     * strings of the UPDATE itself.
+     */
+    const sqlText = (capturedArgs: unknown[][]) =>
+      capturedArgs
+        .flat()
+        .map((a) => (Array.isArray(a) ? (a as string[]).join("?") : String(a)))
+        .join(" | ");
+
+    it("increments apply_count for an APPLY", async () => {
+      const { env, capturedArgs } = envWithSql([
+        { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
+      ]);
+      await handleSignedUrl(
+        makeCtx({
+          env,
+          token: await token(),
+          jsonBody: { id: "w1", kind: "wallpaper", action: "apply" },
+        }),
+      );
+      const text = sqlText(capturedArgs);
+      expect(text).toContain("UPDATE");
+      expect(text).toContain("apply_count");
+    });
+
+    it("does NOT increment for a SHARE", async () => {
+      // The same route serves apply and share. Counting a share would rank a
+      // wallpaper nobody kept to the top of the All feed.
+      const { env, capturedArgs } = envWithSql([
+        { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
+      ]);
+      await handleSignedUrl(
+        makeCtx({
+          env,
+          token: await token(),
+          jsonBody: { id: "w1", kind: "wallpaper", action: "share" },
+        }),
+      );
+      expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+    });
+
+    it("does NOT increment when the request carries no action", async () => {
+      // Builds shipped before the action field send none. Counting those would
+      // fold every share into apply_count for as long as they stay installed.
+      const { env, capturedArgs } = envWithSql([
+        { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
+      ]);
+      await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "w1", kind: "wallpaper" } }),
+      );
+      expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+    });
+
+    it("increments set_count for a ringtone with no action — set is its only gate", async () => {
+      const { env, capturedArgs } = envWithSql([
+        { private_key: "ringtones/murugan/abc.mp3", is_premium: true },
+      ]);
+      await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }),
+      );
+      const text = sqlText(capturedArgs);
+      expect(text).toContain("UPDATE");
+      expect(text).toContain("set_count");
+    });
+
+    it("does NOT increment when entitlement refuses the grant", async () => {
+      // The count means "a premium user was handed this file". Incrementing on a
+      // 403 would let a signed-out crowd rank the feed.
+      const { env, capturedArgs } = envWithSql([
+        { private_key: "wallpapers/murugan/live.mp4", is_premium: false },
+      ]);
+      const res = await handleSignedUrl(
+        makeCtx({
+          env,
+          token: await token(),
+          jsonBody: { id: "w1", kind: "wallpaper", action: "apply" },
+        }),
+      );
+      expect(res.status).toBe(403);
+      expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+    });
+  });
+
   it("resolves kind=ringtone via audio_key and returns a signed URL for a premium user", async () => {
     // Same combined-row shape as the wallpaper success path: the ringtones
     // lookup surfaces audio_key AS private_key next to the live entitlement.

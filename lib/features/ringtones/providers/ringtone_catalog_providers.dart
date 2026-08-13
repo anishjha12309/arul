@@ -8,6 +8,7 @@ import '../../../data/models/catalog_page.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../wallpapers/providers/catalog_providers.dart' show orderedByUse;
 import '../data/cdn_ringtone_repository.dart';
 import '../domain/ringtone_repository.dart';
 
@@ -236,13 +237,18 @@ class SelectedRingtoneCategory extends Notifier<String> {
 }
 
 /// The list the screen renders: catalog filtered by the selected category.
+///
+/// All is most-SET first, newest within equal counts; a category chip keeps
+/// plain catalog order (newest-first). Identical rule to the wallpaper feed, and
+/// it runs through the same [orderedByUse] so the two tabs cannot drift — see
+/// `_orderedForAll` in catalog_providers.dart for why the tiebreaker matters.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {
   final slug = ref.watch(selectedRingtoneCategoryProvider);
   return ref
       .watch(ringtoneCatalogProvider)
       .whenData(
         (all) => slug == WallpaperCategory.allSlug
-            ? all
+            ? orderedByUse(all, (r) => r.setCount)
             : all.where((r) => r.category == slug).toList(growable: false),
       );
 });

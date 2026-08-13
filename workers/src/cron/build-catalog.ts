@@ -475,6 +475,89 @@ function pgTextArrayToList(v: unknown): string[] {
   return out.map((x) => x.trim()).filter((x) => x.length > 0);
 }
 
+// ── Daily popularity refresh ──────────────────────────────────────────────────
+
+/** KV key holding the total use count as of the last popularity-driven bump. */
+const POPULARITY_TOTAL_KEY = "popularity_total";
+
+/**
+ * Publish the day's accumulated apply/set counts to the feed.
+ *
+ * Applies land in Neon continuously (routes/media.ts) but the browse feed NEVER
+ * reads the DB — it reads edge-cached catalog JSON keyed by `?v=content_version`
+ * (CLAUDE.md §2). So a counter that moves changes nothing users see until
+ * something mints a new version. This is that something: bump content_version
+ * and the next hourly build republishes with the new order, through the exact
+ * path a CMS publish already uses. Nothing else needs to know popularity exists.
+ *
+ * Runs on the DAILY cron, not the hourly one. Popularity is a sort key, not
+ * news; refreshing it hourly would re-download the whole catalog on every
+ * client 24× a day to reorder a list nobody watched change.
+ *
+ * Guarded on a KV-stored total so a quiet day is a no-op rather than a forced
+ * re-download for every install — during open testing most days move no counter
+ * at all. The total only ever grows (counters are increment-only), so a
+ * difference is real; an unreadable KV falls through to bumping, which is the
+ * safe direction (a needless rebuild, never a permanently stale order).
+ */
+export async function refreshPopularityOrder(env: Env): Promise<
+  { bumped: false; reason: string } | { bumped: true; total: number }
+> {
+  const sql = getDb(env);
+  try {
+    const rows = await sql`
+      SELECT
+        (SELECT COALESCE(SUM(apply_count), 0) FROM wallpapers) +
+        (SELECT COALESCE(SUM(set_count),   0) FROM ringtones)  AS total
+    `;
+    const total = pgBigintToNumber(rows[0]?.["total"]);
+
+    let last: string | null = null;
+    try {
+      last = await env.KV.get(POPULARITY_TOTAL_KEY);
+    } catch (err) {
+      console.warn("[popularity] KV read failed — bumping anyway:", err);
+    }
+    if (last !== null && Number(last) === total) {
+      return { bumped: false, reason: `no new uses (total ${total})` };
+    }
+
+    // Same column and the same +1 the CMS uses on a content write, so the
+    // change-detection gate above and every client's ?v= move together.
+    await sql`UPDATE app_config SET content_version = content_version + 1 WHERE id = 1`;
+    await env.KV.put(POPULARITY_TOTAL_KEY, String(total));
+    return { bumped: true, total };
+  } finally {
+    // See buildCatalogLocked: end() can itself reject on a connection Neon
+    // already dropped, and inside a finally that would replace the return value.
+    await sql.end().catch(() => {});
+  }
+}
+
+// ── Postgres bigint normalization ─────────────────────────────────────────────
+/**
+ * Coerce a Postgres `bigint` column to a JS number.
+ *
+ * postgres.js with fetch_types:false (required for Hyperdrive) hands bigint back
+ * as a STRING — the same trap `content_version` above documents. Shipping it
+ * unconverted would put `"apply_count": "5"` in the catalog JSON, and the Dart
+ * models cast that field to int, so every catalog page would fail to parse and
+ * the feed would fall back to its disk cache forever.
+ *
+ * Number() is exact here: these are use counters, nowhere near 2^53.
+ * Null/absent (a row written before the column existed) normalizes to 0 so the
+ * app never has to reason about a missing count.
+ */
+function pgBigintToNumber(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof v === "bigint") return Number(v);
+  return 0;
+}
+
 // ── Per-scope builder ─────────────────────────────────────────────────────────
 
 async function buildScope(
@@ -562,11 +645,15 @@ async function buildScope(
   //               preview/stream + cover rendering; mime stays — used to infer
   //               the file extension on set-as-ringtone; created_at STAYS.)
   //   `category` (the browse axis — feed chips filter on it) is always emitted.
-  //   `feed_rank` (wallpapers only, usually null) is always emitted too: it IS
-  //   the curated head of the app's All feed, so it has to ride inside the
-  //   catalog JSON for a CMS save to reach users the way a publish does
-  //   (version bump → rebuild → purge). Ordering here is unchanged — the app
-  //   applies the rank in feedOrder().
+  //   `apply_count` / `set_count` are always emitted: they ARE the order of the
+  //   app's All chip, so they have to ride inside the catalog JSON the same way
+  //   feed_rank used to (version bump → rebuild → purge). Ordering HERE stays
+  //   newest-first because the CATEGORY chips need it; the app applies the
+  //   popularity sort in feedOrder() over the downloaded catalog.
+  //   `feed_rank` is dropped — hand-curation was retired in favour of the
+  //   popularity order, and the CMS page that wrote it is gone. The column still
+  //   exists in Neon (dropping it buys nothing), so it must be dropped HERE or it
+  //   would ship a dead field to every client on every page.
   const publicRows = validRows.map((row) => {
     const r = { ...row } as Record<string, unknown>;
     // Normalize text[] columns: postgres.js (fetch_types:false, required for
@@ -575,15 +662,25 @@ async function buildScope(
     if ("tags" in r) r["tags"] = pgTextArrayToList(r["tags"]);
 
     if (scope === "wallpapers") {
-      // `category` (the browse axis) and `feed_rank` (the curated All head) are
+      // `category` (the browse axis) and `apply_count` (the All order) are
       // emitted as-is; neither may ever be added to the drop list below.
-      for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes"]) {
+      r["apply_count"] = pgBigintToNumber(r["apply_count"]);
+      for (const k of [
+        "audio_key",
+        "mime",
+        "duration_ms",
+        "width",
+        "height",
+        "bytes",
+        "feed_rank",
+      ]) {
         delete r[k];
       }
       return r;
     }
     // ringtones — the only other scope. Keeps id, title, category, tags,
-    // audio_key, cover_key, mime, is_published, sort_order, created_at.
+    // audio_key, cover_key, mime, is_published, sort_order, created_at, set_count.
+    r["set_count"] = pgBigintToNumber(r["set_count"]);
     for (const k of ["full_key", "duration_ms", "bytes"]) {
       delete r[k];
     }

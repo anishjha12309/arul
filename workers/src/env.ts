@@ -127,4 +127,23 @@ export interface Env {
    * browser client is ever pointed at this API.
    */
   ALLOWED_ORIGINS: string;
+
+  /**
+   * Comma-separated SHA-256 certificate fingerprints served in
+   * /.well-known/assetlinks.json, which is what lets Android verify the App Link
+   * on arul.hsrutility.com and open `/w/<id>` in the app instead of a browser.
+   *
+   * NOT a secret — the file is public by design; set in wrangler.toml [vars].
+   *
+   * Must include the **Play App Signing** certificate (Play Console → Setup →
+   * App integrity → App signing key certificate), NOT just the upload key. Play
+   * re-signs every AAB with the app signing key, so an upload-key-only file
+   * verifies fine on a locally-built release APK and fails on every install that
+   * actually came from Play — the failure mode is silent (links just open the
+   * browser). List both so sideloaded release builds verify too.
+   *
+   * Absent → the route 503s rather than serving an empty file, so a missing
+   * config is visible in a curl instead of looking like a working, unverified app.
+   */
+  ANDROID_CERT_SHA256?: string;
 }

@@ -14,6 +14,10 @@
  *     is checked live from Neon on every request here — never from the token. This
  *     is a SOFT gate: the public CDN keys mean a determined user could still fetch
  *     raw URLs; acceptable for v1. (The per-row is_premium flag was removed 2026-07-01.)
+ *   - This route is also the app's popularity meter: every granted apply/set
+ *     increments the row's counter (db/schema/06_popularity.sql), which is what
+ *     orders the All chip. It is the only 100%, unsampled, server-side record of
+ *     a real use — analytics is a sink, never the source for a sort key.
  */
 
 import type { Context } from "hono";
@@ -26,12 +30,33 @@ import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 import { verifyMediaObject } from "../lib/media-verify.js";
 
-// Maps kind → { table, privateKeyCol }
+// Maps kind → { table, privateKeyCol, popularity counter column }
 // Wallpaper full_key is intentionally included (it's the apply gate key).
-const KIND_TABLE: Record<string, { table: string; keyCol: string }> = {
-  wallpaper: { table: "wallpapers", keyCol: "full_key" },
-  ringtone: { table: "ringtones", keyCol: "audio_key" },
+const KIND_TABLE: Record<
+  string,
+  { table: string; keyCol: string; countCol: string }
+> = {
+  wallpaper: { table: "wallpapers", keyCol: "full_key", countCol: "apply_count" },
+  ringtone: { table: "ringtones", keyCol: "audio_key", countCol: "set_count" },
 };
+
+/**
+ * Whether this grant counts toward the row's popularity score (db/schema/06_popularity.sql).
+ *
+ * A wallpaper reaches this route for BOTH apply and share, so only an explicit
+ * `action: 'apply'` counts — otherwise every share would inflate a column named
+ * apply_count. A ringtone has no share path (set is its only gated action), so
+ * every ringtone grant is a set.
+ *
+ * A request with NO `action` counts for neither. Builds shipped before this
+ * change send none, so they cannot pollute the number while they age out; the
+ * install base is small enough that starting the count from the next release
+ * loses nothing real.
+ */
+function countsAsUse(kind: string, action: unknown): boolean {
+  if (kind === "ringtone") return true;
+  return action === "apply";
+}
 
 // ── POST /media/signed-url ───────────────────────────────────────────────────
 
@@ -48,14 +73,14 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     return tooManyRequests();
   }
 
-  let body: { id?: string; kind?: string };
+  let body: { id?: string; kind?: string; action?: string };
   try {
     body = await c.req.json();
   } catch {
     return errorResponse(400, "invalid_body", "Request body must be valid JSON");
   }
 
-  const { id, kind } = body;
+  const { id, kind, action } = body;
   if (!id || typeof id !== "string" || !id.trim()) {
     return errorResponse(400, "missing_field", "id is required");
   }
@@ -67,8 +92,17 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     );
   }
 
-  const { table, keyCol } = KIND_TABLE[kind];
+  const { table, keyCol, countCol } = KIND_TABLE[kind];
   const sql = getDb(env);
+
+  // Background work this request must finish before the connection closes, but
+  // that the CALLER must never wait on. This is the app's most latency-sensitive
+  // route (the comment below describes collapsing two round-trips into one for
+  // exactly that reason), so the popularity increment rides here instead of on
+  // the response path. Chaining sql.end() off this in the `finally` is what
+  // stops the connection being torn down mid-UPDATE — scheduling both as
+  // independent waitUntil() calls leaves their order undefined.
+  let tail: Promise<unknown> = Promise.resolve();
 
   try {
     // Content key + entitlement in ONE round-trip.
@@ -104,13 +138,29 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
       return errorResponse(403, "premium_required", "Premium subscription required");
     }
 
+    // Popularity counter — AFTER the entitlement check, so the number only ever
+    // reflects grants we actually made. Fired without await: it runs alongside
+    // presignGet and is drained by the `finally` below. A failed increment is
+    // logged and swallowed — a sort key must never cost someone their wallpaper.
+    if (countsAsUse(kind, action)) {
+      tail = sql`
+        UPDATE ${sql(table)}
+        SET ${sql(countCol)} = ${sql(countCol)} + 1
+        WHERE id = ${id}
+      `.catch((err: unknown) => {
+        console.error(`[media/signed-url] ${countCol} increment failed:`, err);
+      });
+    }
+
     const url = await presignGet(env, privateKey, 300);
     return c.json({ url, expiresIn: 300 });
   } catch (err) {
     console.error("[media/signed-url] error:", err);
     return errorResponse(500, "server_error", "Internal server error");
   } finally {
-    c.executionCtx.waitUntil(sql.end());
+    // `tail` never rejects (the increment catches its own error), so this always
+    // reaches sql.end().
+    c.executionCtx.waitUntil(tail.then(() => sql.end()));
   }
 }
 

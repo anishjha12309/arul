@@ -175,7 +175,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
         // keep re-applying anything already on disk, indefinitely — the cache
         // silently became a permanent licence.
         try {
-          await service.downloadUrl(wallpaper);
+          await service.downloadUrl(wallpaper, action: MediaUseAction.apply);
         } on WallpaperApplyException catch (e) {
           // A real 403 is the gate doing its job — surface it so the screen
           // routes to the paywall. Any other API failure on bytes we already
@@ -193,7 +193,10 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       if (file == null) {
         // The GATED download URL: Worker signed-url (live entitlement check)
         // when the backend exists, public CDN before then.
-        final url = await service.downloadUrl(wallpaper);
+        final url = await service.downloadUrl(
+          wallpaper,
+          action: MediaUseAction.apply,
+        );
 
         state = const WallpaperApplyLoading(
           stage: WallpaperApplyStage.downloading,

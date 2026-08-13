@@ -305,19 +305,8 @@ class SelectedCategory extends Notifier<String> {
 /// emits `sort_order ASC, created_at DESC, id ASC` and filtering preserves
 /// relative order.
 ///
-/// All is a curated block followed by a stable shuffle of everything else.
-///
-/// The shuffled tail is the older half of the contract, and catalog order is
-/// what it exists to fix: an import is a single transaction, so a 30-wallpaper
-/// Sivan batch shares `sort_order` AND `created_at` and those 30 tie on every
-/// key but `id` — they land as 30 CONSECUTIVE slots at the head of the default
-/// feed, and one import owns the whole first screenful.
-///
-/// The curated block in front of it is [Wallpaper.feedRank], set by hand in the
-/// CMS: All is the landing view, and a hash gives filler the same odds of the
-/// first screen as a hero wallpaper. Only ranked rows join it. An uncurated
-/// import therefore lands in the TAIL, deliberately — putting new rows on top
-/// instead would re-create the consecutive-block defect above.
+/// All is **most-applied first, newest within equal counts** — see
+/// [_orderedForAll].
 ///
 /// [apply_restore] resolves its saved page index through this too. That index is
 /// a position in the list the feed SERVES, so it must be validated against the
@@ -327,64 +316,49 @@ List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) =>
     ? _orderedForAll(all)
     : all.where((w) => w.category == slug).toList(growable: false);
 
-/// Curated head (`feedRank` ascending) + [_shuffledForAll] of the remainder.
+/// All, ordered by [Wallpaper.applyCount] descending, ties in catalog order.
 ///
-/// Ranks are sparse and hand-assigned, so a tie is possible (two saves racing,
-/// a hand-edited row); `id` breaks it to keep the order TOTAL, exactly as the
-/// shuffle does. With no ranks set — the shipped state — this is byte-identical
-/// to the plain shuffle.
-List<Wallpaper> _orderedForAll(List<Wallpaper> all) {
-  final curated = <Wallpaper>[];
-  final rest = <Wallpaper>[];
-  for (final w in all) {
-    (w.feedRank == null ? rest : curated).add(w);
-  }
-  if (curated.isEmpty) return _shuffledForAll(rest);
-  curated.sort((a, b) {
-    final byRank = a.feedRank!.compareTo(b.feedRank!);
-    return byRank != 0 ? byRank : a.id.compareTo(b.id);
-  });
-  return List<Wallpaper>.unmodifiable([...curated, ..._shuffledForAll(rest)]);
-}
+/// Catalog order is already `sort_order ASC, created_at DESC, id ASC`, so "ties
+/// in catalog order" IS "newest first" — which is why nothing here reads a
+/// timestamp and the model carries none. It also makes the zero state exactly
+/// right: before anyone has applied anything every count is 0, every comparison
+/// falls through to the index, and All is plain newest-first. That is the
+/// intended default, not a fallback.
+///
+/// The index tiebreaker is load-bearing and must not be replaced by a bare sort
+/// on the count: Dart's `List.sort` is NOT stable, so equal counts — most of the
+/// catalog, most of the time — would come out in an order free to change between
+/// runs. The feed compares served lists by ORDERED IDS (`_syncFeed`), so that
+/// would re-point the pager and the video pool under a scrolling user on every
+/// cold start, revalidate and pull-refresh. Decorating with the index keeps the
+/// order TOTAL and a pure function of the catalog's contents.
+///
+/// Replaced (2026-08-13) a hand-curated `feed_rank` head from the CMS followed
+/// by an FNV-1a shuffle. The shuffle existed because a bulk import is one
+/// transaction — 30 wallpapers sharing `sort_order` AND `created_at` land as 30
+/// consecutive slots — so newest-first lets a single import own the whole first
+/// screenful. That is accepted now rather than fixed: popularity outranks
+/// recency the moment any applies exist, so a fresh import's run at the top is
+/// bounded by how long real users take to apply something.
+List<Wallpaper> _orderedForAll(List<Wallpaper> all) =>
+    orderedByUse(all, (w) => w.applyCount);
 
-/// Order [all] by a hash of each row's id.
+/// [_orderedForAll] for any catalog list carrying a use counter.
 ///
-/// The hash is the point: this is recomputed on every catalog emission — cold
-/// start, background revalidate, pull-refresh, the hourly cron's rebuild — and
-/// the feed compares served lists by ORDERED IDS (`_syncFeed`). A per-call
-/// random order would therefore look like new content on every one of those and
-/// re-point the pager and the video pool under a scrolling user. Hashing the id
-/// makes the order a pure function of the catalog's contents: the All feed reads
-/// the same on every launch, and publishing a wallpaper inserts it at its own
-/// position instead of shifting everything below it.
-List<Wallpaper> _shuffledForAll(List<Wallpaper> all) {
-  // Decorate-sort-undecorate: hash each id ONCE (n hashes) instead of twice per
-  // comparison (~2n·log n) — this runs on the chip tap that returns to All.
-  final keyed = [for (final w in all) (_fnv1a(w.id), w)];
+/// Shared with the Ringtones tab, whose model and provider are separate but
+/// whose All chip follows the identical rule (CLAUDE.md §5b) — written once so
+/// the two lists cannot drift apart.
+List<T> orderedByUse<T>(List<T> all, int Function(T) useCount) {
+  // Decorate-sort-undecorate: read the count ONCE per row rather than twice per
+  // comparison — this runs on the chip tap that returns to All.
+  final keyed = [
+    for (var i = 0; i < all.length; i++) (useCount(all[i]), i, all[i]),
+  ];
   keyed.sort((a, b) {
-    final byHash = a.$1.compareTo(b.$1);
-    // Two ids can collide in 32 bits. Falling back to the id keeps the order
-    // TOTAL, so it never depends on the order the rows arrived in.
-    return byHash != 0 ? byHash : a.$2.id.compareTo(b.$2.id);
+    final byCount = b.$1.compareTo(a.$1); // descending — most used first
+    return byCount != 0 ? byCount : a.$2.compareTo(b.$2); // then catalog order
   });
-  return List<Wallpaper>.unmodifiable([for (final e in keyed) e.$2]);
-}
-
-/// FNV-1a, 32-bit, over the string's UTF-16 code units (low byte then high, so
-/// a non-ASCII id can't silently collide with its ASCII truncation).
-///
-/// Hand-rolled deliberately: `String.hashCode` is not contractually stable
-/// across Dart releases, and this order has to survive app upgrades. Relies on
-/// 64-bit ints to hold the intermediate product exactly — true on the Dart VM,
-/// which is the only target Arul ships (Android-only in v1).
-int _fnv1a(String s) {
-  var hash = 0x811c9dc5;
-  for (var i = 0; i < s.length; i++) {
-    final unit = s.codeUnitAt(i);
-    hash = ((hash ^ (unit & 0xff)) * 0x01000193) & 0xffffffff;
-    hash = ((hash ^ (unit >> 8)) * 0x01000193) & 0xffffffff;
-  }
-  return hash;
+  return List<T>.unmodifiable([for (final e in keyed) e.$3]);
 }
 
 /// The feed: catalog filtered by the selected CATEGORY, in [feedOrder]. Never

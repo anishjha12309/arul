@@ -64,6 +64,16 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
+            <!-- Hand an incoming VIEW intent's PATH to the Flutter router as the
+                 initial route. Without this the App Link below still opens the
+                 app, but lands it on `/` with the wallpaper id nowhere — so a
+                 tap on a shared wallpaper would open the plain feed and look
+                 like the deep link simply doesn't work.
+                 Scoped by the intent-filters on this activity, so it cannot
+                 affect the arul:// PhonePe return (that carries no path). -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="true"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -76,6 +86,36 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="arul"/>
+            </intent-filter>
+            <!-- Android App Link for wallpaper shares and ad creatives:
+                 https://arul.hsrutility.com/w/<wallpaper-id>.
+
+                 autoVerify="true" is what makes an INSTALLED app intercept the
+                 link ahead of the browser. Android verifies it by fetching
+                 https://arul.hsrutility.com/.well-known/assetlinks.json (served
+                 by the Arul Worker) and matching this package against the
+                 SHA-256 fingerprints there. Three things must agree or the link
+                 silently opens a browser with nothing logged: the host below,
+                 the wrangler.toml custom domain, and ANDROID_CERT_SHA256 — and
+                 the fingerprint must be the PLAY APP SIGNING cert, not just the
+                 upload key, or verification fails on every Play install while
+                 working perfectly on a locally-built APK.
+
+                 android:host is duplicated in kDeepLinkHost (Dart), which is
+                 what actually builds the outgoing links.
+
+                 Kept SEPARATE from the arul:// filter above: they cannot merge.
+                 An intent-filter matches the cross product of its schemes and
+                 hosts, so folding https in would also register arul://arul.hsrutility.com
+                 and — worse — put the PhonePe return scheme under autoVerify. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:pathPrefix="/w/"/>
             </intent-filter>
         </activity>
 

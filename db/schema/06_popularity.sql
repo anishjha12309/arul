@@ -1,0 +1,30 @@
+-- Arul — Neon Postgres schema (popularity counters). Apply after 05_feed_rank.sql.
+--
+-- These two columns are the ONLY ordering input for the **All** chip in each tab
+-- (CLAUDE.md §5b): All serves `count DESC, created_at DESC, id ASC`. Category
+-- chips ignore them entirely and stay newest-first, so build-catalog's ORDER BY
+-- is unchanged — the app applies the popularity sort in feedOrder(), exactly the
+-- way it used to apply feed_rank.
+--
+-- `not null default 0` is load-bearing: at zero data every row ties and the sort
+-- collapses to pure newest-first, which IS the intended default behaviour. A
+-- nullable column would need NULLS LAST handling in two languages to get there.
+--
+-- What the number MEANS, precisely — it is not "successful applies":
+--   · Incremented in /media/signed-url AFTER the live entitlement check passes,
+--     so only PREMIUM users move it. A blocked free user never reaches the route
+--     (403); that intent shows up as apply_blocked_premium in analytics instead.
+--   · It counts the moment a URL is GRANTED, not a confirmed apply. The OS
+--     wallpaper chooser can still be cancelled (CLAUDE.md §0) and we deliberately
+--     do not round-trip a confirmation — a second endpoint on the app's most
+--     latency-sensitive path is not worth the accuracy for a sort key.
+--   · Wallpaper SHARES are excluded: the request carries an `action` field and
+--     only 'apply' counts. Ringtones have no share, so every ringtone grant is a
+--     set. Requests with no `action` (builds shipped before this change) count
+--     for neither, so old clients cannot pollute the number.
+--
+-- No index, on purpose. Nothing ever filters or sorts on these in SQL:
+-- build-catalog full-scans the published rows regardless, and the ordering
+-- happens client-side over the already-downloaded catalog.
+alter table wallpapers add column if not exists apply_count bigint not null default 0;
+alter table ringtones  add column if not exists set_count   bigint not null default 0;

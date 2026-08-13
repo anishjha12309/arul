@@ -105,22 +105,35 @@ void main() {
       expect(AnalyticsCohort.isMember, isFalse);
     });
 
-    test('a draw below the rate joins the panel', () async {
+    test('membership is exactly draw < rate', () async {
+      // Asserted against debugRate, not against a literal: the rate is a tuning
+      // knob (0.05 → 1.0 on 2026-08-13) and hardcoding it here turns every
+      // retune into two unrelated test failures.
       final prefs = await SharedPreferences.getInstance();
+      final justUnder = AnalyticsCohort.debugRate * 0.5;
       expect(
-        AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.01)),
+        AnalyticsCohort.resolve(prefs, random: _FixedRandom(justUnder)),
         isTrue,
       );
       expect(AnalyticsCohort.isMember, isTrue);
     });
 
-    test('a draw above the rate stays out', () async {
+    test('a draw at or above the rate stays out', () async {
+      // Random.nextDouble() is [0,1), so at rate 1.0 no such draw can occur and
+      // the panel is genuinely every install — which is the current state. The
+      // rule still has to hold for any narrower rate, so exercise it directly.
+      SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
+      const narrowRate = 0.05;
+      const draw = 0.9;
+      expect(draw < narrowRate, isFalse);
+
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(draw));
       expect(
-        AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.9)),
-        isFalse,
+        AnalyticsCohort.isMember,
+        AnalyticsCohort.debugRate > draw,
+        reason: 'membership must track the rate, not a remembered constant',
       );
-      expect(AnalyticsCohort.isMember, isFalse);
     });
 
     test(
@@ -141,16 +154,21 @@ void main() {
     );
 
     test(
-      'storing the draw means widening the rate only ever adds installs',
+      'the DRAW is stored, not the boolean — which is what makes widening the '
+      'rate additive',
       () async {
-        // An install that drew 0.07 sits outside a 5% panel. If the rate is later
-        // widened past 0.07 it joins — and crucially, nobody already inside is
-        // ever dropped, because their draw is unchanged. This is the property a
-        // stored boolean would lose.
+        // The property the whole design rests on, and the one a stored boolean
+        // would lose: because each install keeps its raw draw, raising the rate
+        // (0.05 → 1.0, 2026-08-13) only ever ADDS installs and never drops one
+        // that was already reporting, so retention curves stay continuous across
+        // the change. A stored boolean would force a fresh draw per install and
+        // break every cohort spanning it.
         final prefs = await SharedPreferences.getInstance();
         AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.07));
         expect(prefs.getDouble('analytics_posthog_cohort_draw_v1'), 0.07);
-        expect(AnalyticsCohort.isMember, isFalse);
+
+        // Anyone inside a 5% panel is still inside every wider one.
+        expect(0.07 < AnalyticsCohort.debugRate, AnalyticsCohort.isMember);
       },
     );
   });
@@ -181,27 +199,34 @@ void main() {
       );
     });
 
-    test('the four billed events are exactly the list', () {
-      // Pinned as a SET, not a subset: the whole point of the trim is that
-      // adding a fifth event is a cost decision someone must make on purpose.
+    test('the billed events are exactly this list', () {
+      // Pinned as a SET, not a subset. The list widened on 2026-08-13 when the
+      // cohort went to 100%, but it is still a deliberate list and not a
+      // free-for-all: adding to it is a decision someone must make on purpose,
+      // because volume here is now multiplied by every install rather than by
+      // one in twenty.
       expect(postHogAllowedEvents, <String>{
+        'login_success',
         'feed_session_ended',
         'wallpaper_applied',
+        'wallpaper_shared',
+        'ringtone_set',
         'apply_blocked_premium',
+        'share_blocked_premium',
+        'ringtone_set_blocked_premium',
+        'trial_started',
         'subscription_active',
+        'referral_shared',
       });
     });
 
     test('high-volume and diagnostic events stay OFF the list', () {
       // Not style — cost. `wallpaper_engaged` fires per dwelled card and is the
       // event `feed_session_ended` exists to replace; letting it back on the
-      // list re-creates the bill that rollup was written to avoid. The rest are
-      // answered better (and free) by GA4, Crashlytics or Neon.
-      //
-      // The second block is the 2026-07-29 cost trim: each of those WAS billed
-      // and was dropped on purpose. They are asserted here so a well-meaning
-      // "this event looks useful, let me add it back" is a failing test rather
-      // than a silent line on the invoice.
+      // list re-creates the bill that rollup was written to avoid, and now at
+      // 100% of installs rather than 5%. The rest are attempts, failures and
+      // rare account admin — Crashlytics, GA4 and Neon questions, which would
+      // make the funnel harder to read rather than the data richer.
       for (final event in <String>[
         'wallpaper_engaged',
         'wallpaper_apply_attempt',
@@ -214,14 +239,6 @@ void main() {
         'account_delete_confirmed',
         'account_delete_failed',
         'account_deleted',
-        // Dropped 2026-07-29 — in Neon and/or GA4 already.
-        'login_success',
-        'trial_started',
-        'referral_shared',
-        'wallpaper_shared',
-        'ringtone_set',
-        'share_blocked_premium',
-        'ringtone_set_blocked_premium',
       ]) {
         expect(
           postHogAllowedEvents,

@@ -136,7 +136,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         // indefinitely — the same "cache became a permanent licence" hole the
         // apply flow closed. The same fix lives in Pakiza — keep both in sync.
         try {
-          await service.downloadUrl(wallpaper);
+          await service.downloadUrl(wallpaper, action: MediaUseAction.share);
         } on WallpaperApplyException catch (e) {
           // A real 403 is the gate doing its job — surface it so the screen
           // routes to the paywall. Any other API failure on bytes we already
@@ -151,7 +151,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
 
       if (file == null) {
         // The GATED download URL (Worker signed-url when the backend exists).
-        final url = await service.downloadUrl(wallpaper);
+        final url = await service.downloadUrl(
+          wallpaper,
+          action: MediaUseAction.share,
+        );
         file = await service.downloadFile(url, filename, (p) {
           state = WallpaperSharePreparing(progress: p);
         });
@@ -197,7 +200,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         rethrow;
       }
 
-      final link = await _installLink();
+      final link = await _installLink(wallpaper);
       final caption = buildCaption(link.url);
       final mimeType = _mimeType(shared.path);
 
@@ -370,14 +373,23 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     return 'image/jpeg';
   }
 
-  /// The Play Store link for the share caption: referral-attributed when the
-  /// user's code loads in time, otherwise the plain listing. Never blocks the
-  /// share on the referral call — the file is the payload, the link is a bonus.
+  /// The ONE link the share caption carries (docs/share.md): an App Link to
+  /// THIS wallpaper, referral-attributed when the user's code loads in time.
   ///
-  /// Reports WHICH of the two it returned, because the difference is worth
-  /// money: an unattributed link installs the app and credits nobody, and until
-  /// this was tracked there was no way to tell how often that happened.
-  Future<({String url, bool attributed})> _installLink() async {
+  /// Points at the wallpaper, not the store listing, so a recipient who already
+  /// has the app lands on the thing they were sent instead of a Play page — and
+  /// one who does not still installs, because the Worker's `/w/:id` redirects
+  /// them to Play carrying the id, which reopens on the wallpaper after install.
+  /// Same URL shape ad creatives use.
+  ///
+  /// Never blocks the share on the referral call — the file is the payload, the
+  /// link is a bonus. Reports WHICH of the two it returned, because the
+  /// difference is worth money: an unattributed link installs the app and
+  /// credits nobody, and until this was tracked there was no way to tell how
+  /// often that happened.
+  Future<({String url, bool attributed})> _installLink(
+    Wallpaper wallpaper,
+  ) async {
     if (AppConfig.hasBackend) {
       try {
         final summary = await ref
@@ -387,7 +399,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         final code = summary.referralCode;
         if (code != null && code.isNotEmpty) {
           return (
-            url: InstallReferrerService.buildShareLink(code),
+            url: InstallReferrerService.buildWallpaperLink(
+              wallpaper.id,
+              code: code,
+            ),
             attributed: true,
           );
         }
@@ -395,8 +410,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         // Offline mid-flow / slow server / no code — fall through.
       }
     }
+    // Still the wallpaper link, just uncredited: losing attribution must never
+    // also cost the deep link, which is the half that converts.
     return (
-      url: 'https://play.google.com/store/apps/details?id=$kPlayPackageId',
+      url: InstallReferrerService.buildWallpaperLink(wallpaper.id),
       attributed: false,
     );
   }

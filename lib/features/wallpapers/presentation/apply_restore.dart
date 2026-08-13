@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../referral/data/install_referrer_service.dart';
 import '../providers/catalog_providers.dart';
 import '../providers/wallpaper_apply_provider.dart';
 
@@ -30,6 +32,7 @@ import '../providers/wallpaper_apply_provider.dart';
 /// wallpaper", so claiming "applied" would be a lie half the time.
 mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   bool _restoreChecked = false;
+  bool _deepLinkChecked = false;
 
   /// Implemented by the feed: switch to [category] and jump the pager to
   /// [index] within that filtered list. [wasLive] is false for a static apply,
@@ -39,6 +42,14 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     required String category,
     required bool wasLive,
   });
+
+  /// Implemented by the feed: jump the pager to [index] in the list it is
+  /// currently serving, with no toast.
+  ///
+  /// Separate from [restoreFeedTo] rather than a flag on it: that method's
+  /// toast confirms a completed APPLY, and firing it for a deep link would tell
+  /// someone who just tapped a shared link that their wallpaper was set.
+  void jumpFeedTo({required int index});
 
   /// Call once the catalog has data — the restore needs the item list to
   /// validate the saved index against the filtered list.
@@ -78,6 +89,47 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       // user actually left, not on "All".
       ref.read(selectedCategoryProvider.notifier).select(category);
       restoreFeedTo(index: index, category: category, wasLive: wasLive);
+    });
+  }
+
+  /// Open the wallpaper a share or ad link asked for, if any.
+  ///
+  /// Call alongside [maybeRestoreAfterApply], once the catalog has data — this
+  /// needs the item list to turn an id into the page index the pager takes.
+  ///
+  /// Always lands on **All**, never the wallpaper's own category: All is the
+  /// only chip guaranteed to contain every row, and dropping someone into a
+  /// filtered feed they never chose would hide everything else the link was
+  /// meant to introduce them to.
+  ///
+  /// A miss is silent and normal, not an error — the link may point at a
+  /// wallpaper that has since been unpublished, or at a catalog this build has
+  /// not drained yet. The user simply gets the ordinary feed.
+  void maybeOpenDeepLink(List<Wallpaper> allItems) {
+    if (_deepLinkChecked || allItems.isEmpty) return;
+    _deepLinkChecked = true;
+
+    final wallpaperId = ArulDeepLink.consume();
+    if (wallpaperId == null) return;
+
+    // Clear the deferred copy too. ArulDeepLink and the pref are seeded together
+    // (main.dart) precisely because either can win the startup race; consuming
+    // one without the other would re-open this wallpaper on the next launch.
+    unawaited(
+      InstallReferrerService(
+        ref.read(sharedPreferencesProvider),
+      ).clearPendingWallpaper(),
+    );
+
+    const all = WallpaperCategory.allSlug;
+    final list = feedOrder(all, allItems);
+    final index = list.indexWhere((w) => w.id == wallpaperId);
+    if (index < 0) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(selectedCategoryProvider.notifier).select(all);
+      jumpFeedTo(index: index);
     });
   }
 }

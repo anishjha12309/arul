@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/deeplink/deep_link_target.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/legal/presentation/policy_screen.dart';
@@ -33,6 +34,20 @@ final router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
     GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
+    // Wallpaper deep link — the App Link half of `arul.hsrutility.com/w/<id>`
+    // (docs/share.md). Renders NOTHING and always redirects to `/`: the target
+    // is the feed, and the feed can only be reached through the splash's auth
+    // decision, so short-circuiting to /browse here would show the shell to a
+    // signed-out user. The id is parked in ArulDeepLink and consumed by the feed
+    // once the catalog lands — the same place the deferred install-referrer path
+    // delivers it, so both links open the same way.
+    GoRoute(
+      path: '/w/:id',
+      redirect: (_, state) {
+        ArulDeepLink.request(state.pathParameters['id'] ?? '');
+        return '/';
+      },
+    ),
     StatefulShellRoute(
       // Not .indexedStack: the branches go through ArulBranchCrossfade so a tab
       // switch dissolves instead of cutting.

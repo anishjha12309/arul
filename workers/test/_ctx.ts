@@ -93,23 +93,34 @@ export function makeCtx(opts: {
   jsonBody?: unknown;
   invalidJson?: boolean;
   /** Request URL. Handlers that derive an origin from it (e.g. the PhonePe
-   *  redirectUrl in /payments/initiate) throw on undefined, so default it. */
+   *  redirectUrl in /payments/initiate) throw on undefined, so default it.
+   *  `c.req.query()` reads its search params, so pass the real URL for routes
+   *  that take query arguments. */
   url?: string;
+  /** Path parameters, as Hono would have matched them (e.g. `/w/:id`). */
+  params?: Record<string, string>;
 }): Context<{ Bindings: Env }> {
+  const url = opts.url ?? "https://arul-api.hsrutility.com/test";
   return {
     env: opts.env,
     req: {
-      url: opts.url ?? "https://arul-api.hsrutility.com/test",
+      url,
       header: (name: string) =>
         name.toLowerCase() === "authorization" && opts.token != null
           ? `${opts.scheme ?? "Bearer"} ${opts.token}`
           : undefined,
+      param: (name: string) => opts.params?.[name],
+      query: (name: string) => new URL(url).searchParams.get(name) ?? undefined,
       json: () =>
         opts.invalidJson
           ? Promise.reject(new Error("bad json"))
           : Promise.resolve(opts.jsonBody),
     },
-    json: (body: unknown, status = 200) => Response.json(body, { status }),
+    // Third arg mirrors Hono's: extra response headers.
+    json: (body: unknown, status = 200, headers?: Record<string, string>) =>
+      Response.json(body, headers ? { status, headers } : { status }),
+    redirect: (location: string, status = 302) =>
+      new Response(null, { status, headers: { location } }),
     executionCtx: { waitUntil: (_p: Promise<unknown>) => {} },
   } as unknown as Context<{ Bindings: Env }>;
 }

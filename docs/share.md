@@ -1,7 +1,7 @@
 # Share & outbound reach
 
 Read this when changing anything the app sends OUT of itself — a wallpaper share, a referral, or the copy
-on either. Summarised in [edge-cases.md](edge-cases.md) §Share; the properties are in
+on either. The link itself (App Links, ad creatives, deferred install) is [deep-links.md](deep-links.md). Summarised in [edge-cases.md](edge-cases.md) §Share; the properties are in
 [analytics-events.md](analytics-events.md).
 
 Every outbound message exists to do two things: deliver the thing, and bring someone back. The rules
@@ -39,8 +39,9 @@ below are the ones that were paid for by getting the second half wrong.
       an untraced copy: silently degrading there made the trace code worthless exactly where it works.
       Statics are watermarked on EVERY Android version — that path never touches Media3.
 - [ ] Resolving the link never blocks the share (2s timeout, cached summary): the file is the payload,
-      the attribution is a bonus. Never invert that.
-- [ ] `link_attributed` tells the truth — never report true for a link with no `referrer=`.
+      the attribution is a bonus. Never invert that. Losing the code must NOT also lose the deep link —
+      an uncredited `/w/<id>` still converts; a store listing does not.
+- [ ] `link_attributed` tells the truth — never report true for a link with no `ref=`.
 
 ## Copy rules
 

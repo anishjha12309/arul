@@ -45,6 +45,18 @@ preview_urls = false
 [vars]
 GA4_FIREBASE_APP_ID = "1:1083884444243:android:7fd6427950254fe7ea44a6"
 
+# SHA-256 cert fingerprints served in /.well-known/assetlinks.json. Public by
+# definition (anyone can curl the file), so [vars] and not a secret.
+#
+# MUST be the **Play App Signing** certificate — Play Console → Setup → App
+# integrity → App signing key certificate. Play re-signs every AAB with that key,
+# so an upload-key-only value verifies on a local release APK and fails silently
+# on every Play install (links just open the browser, nothing logs). List both,
+# comma-separated, so sideloaded release builds verify too.
+#   1st = Play App Signing cert (every install that came from Play)
+#   2nd = upload cert (locally-built release APKs, on-device testing)
+ANDROID_CERT_SHA256 = "EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
+
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Refresh-token jti denylist · PhonePe webhook idempotency ("txn:<orderId>") ·
 # PhonePe OAuth cache ("phonepe:oauth") · catalog_version:<scope> gate.
@@ -124,6 +136,25 @@ crons = ["0 * * * *", "30 21 * * *"]
 
 [[routes]]
 pattern = "arul-api.hsrutility.com"
+custom_domain = true
+
+# ─── Custom domain (deep links) ──────────────────────────────────────────────
+# The host that ships inside every wallpaper share and ad creative:
+# https://arul.hsrutility.com/w/<wallpaper-id>
+#
+# A SECOND hostname rather than a path on arul-api: Android verifies App Links
+# per HOST, and the verified host is what users and advertisers see in a link.
+# "arul-api.hsrutility.com/w/…" reads as an API endpoint in a WhatsApp preview.
+#
+# Everything routes to this same Worker, so /w/:id and assetlinks.json answer on
+# both hostnames and every other path 404s here — that is fine and deliberate;
+# only the app talks to arul-api, only browsers talk to arul.
+#
+# Wrangler owns this hostname the same way it owns arul-api: `custom_domain =
+# true` creates the Cloudflare custom domain and its DNS record on deploy. Free
+# (a subdomain of a zone we already own) and nothing to click in the dashboard.
+[[routes]]
+pattern = "arul.hsrutility.com"
 custom_domain = true
 
 # MEDIA (arul-cdn.hsrutility.com) is NOT here: it attaches to the R2 BUCKET, not

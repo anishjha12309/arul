@@ -23,6 +23,7 @@ The unconditional backstop for whatever the on-change hourly sweep missed.
    is why the bucket can never be shared with another app.
 4. **sweep-submissions** — reclaim orphaned `user/…/submissions/` R2 objects and expire 30-day-old
    pending rows. "Expire" is a status flip to `rejected` with a reason, **not** a delete.
+- **Popularity refresh** — bumps `app_config.content_version` when `SUM(apply_count) + SUM(set_count)` has moved since the last bump (tracked in KV `popularity_total`). It does NOT rebuild: the next hourly run sees the new version and republishes through the normal path. This is the ONLY thing that publishes accumulated applies — the browse feed never reads the DB, so a counter that moves changes nothing users see until a new `?v=` is minted. Daily, not hourly: popularity is a sort key, and refreshing it hourly would re-download the whole catalog on every client 24x a day. A quiet day is a no-op rather than a forced re-download.
 
 ## Sweep failsafe — do not weaken
 

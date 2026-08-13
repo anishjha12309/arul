@@ -32,6 +32,12 @@ abstract class Ringtone with _$Ringtone {
     String? mime,
     @Default(0) int sortOrder,
     DateTime? createdAt,
+
+    /// How many times a premium user has SET this as their ringtone — the order
+    /// of the Ringtones tab's All chip, mirroring [Wallpaper.applyCount].
+    /// Counted server-side in `/media/signed-url`; a ringtone has no share path,
+    /// so every grant is a set. Category chips ignore it (newest-first).
+    @Default(0) int setCount,
   }) = _Ringtone;
 
   factory Ringtone.fromJson(Map<String, dynamic> json) =>

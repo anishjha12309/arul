@@ -38,11 +38,27 @@ class AnalyticsCohort {
   /// per install and break every cohort that spans the change.
   static const _drawKey = 'analytics_posthog_cohort_draw_v1';
 
-  /// Share of installs in the panel. At 800k MAU this is a ~40,000-user panel
-  /// producing well under the 1M free-tier ceiling — larger than the sample most
-  /// product-analytics setups ever run on, with headroom to roughly 4M MAU
-  /// before this needs revisiting.
-  static const _rate = 0.05;
+  /// Share of installs in the panel.
+  ///
+  /// **1.0 — every install reports** (2026-08-13). The 0.05 this replaced was
+  /// sized for 800k MAU (a ~40,000-user panel). At the app's actual scale that
+  /// arithmetic inverted: a few dozen installs × 5% is a panel of roughly ONE
+  /// device, so PostHog went days at a time with no events at all and answered
+  /// no question worth asking. Sampling is a cost control, and there is no cost
+  /// to control until the install base is large enough to produce one.
+  ///
+  /// Widening is safe BY CONSTRUCTION here and that is the whole reason the draw
+  /// is persisted (see [_drawKey]): raising the rate only ever ADDS installs, so
+  /// no retention curve breaks at the change. Narrowing later is the one that
+  /// hurts — installs whose stored draw exceeds the new rate drop out, and any
+  /// cohort spanning that date is discontinuous. Revisit around 30k MAU, where
+  /// ~25 events/user/month starts approaching the 1M/month free tier.
+  static const _rate = 1.0;
+
+  /// Test seam — the panel share, so tests assert the RULE (`draw < rate`)
+  /// rather than a literal that changes whenever the rate is retuned.
+  @visibleForTesting
+  static const double debugRate = _rate;
 
   /// Whether this install reports to PostHog.
   ///

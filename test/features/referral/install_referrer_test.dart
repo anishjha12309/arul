@@ -59,4 +59,87 @@ void main() {
       expect(InstallReferrerService.parseReferralCode(referrer), 'ABCD1234');
     });
   });
+
+  // The deferred half of the deep link: an ad/share tap by someone WITHOUT the
+  // app. The Worker's /w/:id sends them to Play with `ref=<code>&w=<id>`, Play
+  // replays it on first launch, and these turn it back into a wallpaper.
+  group('InstallReferrerService.parseWallpaperTarget', () {
+    const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+
+    test('extracts w= from the payload the Worker builds', () {
+      expect(
+        InstallReferrerService.parseWallpaperTarget('ref=ABCD1234&w=$id'),
+        id,
+      );
+    });
+
+    test('finds w among utm params Play may append', () {
+      expect(
+        InstallReferrerService.parseWallpaperTarget(
+          'utm_source=fb&w=$id&utm_medium=cpc',
+        ),
+        id,
+      );
+    });
+
+    test('is independent of the referral code — either half can be absent', () {
+      // An ad click carries no referral code; a plain Refer & Earn share carries
+      // no wallpaper. Neither may discard the other.
+      expect(InstallReferrerService.parseWallpaperTarget('w=$id'), id);
+      expect(InstallReferrerService.parseReferralCode('w=$id'), isNull);
+      expect(
+        InstallReferrerService.parseWallpaperTarget('ref=ABCD1234'),
+        isNull,
+      );
+      expect(
+        InstallReferrerService.parseReferralCode('ref=ABCD1234'),
+        'ABCD1234',
+      );
+    });
+
+    test('rejects anything that is not a uuid', () {
+      // This string comes from outside the app and is about to select a row.
+      for (final raw in [
+        null,
+        '',
+        'w=',
+        'w=not-a-uuid',
+        'w=../../etc/passwd',
+        'organic',
+        'utm_source=google-play&utm_medium=organic',
+      ]) {
+        expect(
+          InstallReferrerService.parseWallpaperTarget(raw),
+          isNull,
+          reason: 'must not accept "$raw"',
+        );
+      }
+    });
+
+    test('buildWallpaperLink is an App Link on the verified host', () {
+      final link = InstallReferrerService.buildWallpaperLink(
+        id,
+        code: 'ABCD1234',
+      );
+      // https on OUR host is what lets Android intercept it for an installed
+      // user; a Play URL or an arul:// scheme cannot do that from an ad.
+      expect(link, 'https://$kDeepLinkHost/w/$id?ref=ABCD1234');
+    });
+
+    test('buildWallpaperLink still deep-links when there is no code', () {
+      // Losing attribution must never also cost the deep link — that is the half
+      // that converts.
+      expect(
+        InstallReferrerService.buildWallpaperLink(id),
+        'https://$kDeepLinkHost/w/$id',
+      );
+    });
+
+    test('the host matches the one the app builds links for', () {
+      // Three places must agree or verification fails silently and every link
+      // opens a browser: this constant, AndroidManifest's android:host, and the
+      // wrangler.toml custom domain.
+      expect(kDeepLinkHost, 'arul.hsrutility.com');
+    });
+  });
 }

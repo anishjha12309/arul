@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/wallpapers/presentation/apply_restore.dart';
@@ -50,6 +51,7 @@ class _Host extends ConsumerStatefulWidget {
 
 class _HostState extends ConsumerState<_Host> with ApplyRestore<_Host> {
   final restoreCalls = <({int index, String category, bool wasLive})>[];
+  final jumpCalls = <int>[];
 
   @override
   void restoreFeedTo({
@@ -59,6 +61,9 @@ class _HostState extends ConsumerState<_Host> with ApplyRestore<_Host> {
   }) {
     restoreCalls.add((index: index, category: category, wasLive: wasLive));
   }
+
+  @override
+  void jumpFeedTo({required int index}) => jumpCalls.add(index);
 
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();
@@ -163,14 +168,16 @@ void main() {
   );
 
   testWidgets(
-    'an All index resolves through the CURATED order: index 0 is the curated '
-    'head, not the first item of the shuffle',
+    'an All index resolves through the POPULARITY order: index 0 is the '
+    'most-applied wallpaper, not the newest one',
     (tester) async {
-      // temple0 sits mid-shuffle uncurated; a rank moves it to slot 0, which is
-      // the slot the saved index refers to.
-      final curated = [
+      // temple0 sits last in catalog order; applies move it to slot 0, which is
+      // the slot the saved index refers to. This is the whole reason
+      // apply_restore has to go through feedOrder(): a restart landing on the
+      // wrong wallpaper is the bug it exists to prevent.
+      final applied = [
         for (final w in _catalog)
-          w.id == 'id-temple0' ? w.copyWith(feedRank: 10) : w,
+          w.id == 'id-temple0' ? w.copyWith(applyCount: 12) : w,
       ];
       final all = WallpaperCategory.allSlug;
       final h = await pumpHost(tester, {
@@ -180,19 +187,19 @@ void main() {
         pendingApplyIsLiveKey: false,
       });
 
-      h.host.maybeRestoreAfterApply(curated);
+      h.host.maybeRestoreAfterApply(applied);
       await tester.pump();
 
       expect(h.host.restoreCalls, [(index: 0, category: all, wasLive: false)]);
       expect(
-        feedOrder(all, curated).first.id,
+        feedOrder(all, applied).first.id,
         'id-temple0',
-        reason: 'the index the restore accepted must address the curated list',
+        reason: 'the index the restore accepted must address the served list',
       );
       expect(
         feedOrder(all, _catalog).first.id,
         isNot('id-temple0'),
-        reason: '…and that is only meaningful because curation moved it',
+        reason: '…and that is only meaningful because the applies moved it',
       );
     },
   );
@@ -233,5 +240,95 @@ void main() {
     await tester.pump();
 
     expect(h.host.restoreCalls, hasLength(1));
+  });
+
+  // ── Deep link ──────────────────────────────────────────────────────────────
+  // The other thing that turns a saved reference into a page index. Shares the
+  // feedOrder() contract above: an id resolved against the raw catalog would
+  // open a DIFFERENT wallpaper than the one the link named.
+  group('deep link', () {
+    setUp(ArulDeepLink.reset);
+    tearDown(ArulDeepLink.reset);
+
+    testWidgets('opens the requested wallpaper on All, at its served index', (
+      tester,
+    ) async {
+      // Give temple0 the applies so All's popularity order puts it first — the
+      // index handed to the pager must be its position in THAT list, not its
+      // position in the catalog (where it is last).
+      final catalog = [
+        for (final w in _catalog)
+          w.id == 'id-temple0' ? w.copyWith(applyCount: 9) : w,
+      ];
+      ArulDeepLink.request('id-temple0');
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, [0]);
+      expect(
+        h.container.read(selectedCategoryProvider),
+        WallpaperCategory.allSlug,
+        reason: 'a link must never drop the user into a filtered chip',
+      );
+      expect(
+        feedOrder(WallpaperCategory.allSlug, catalog).first.id,
+        'id-temple0',
+      );
+    });
+
+    testWidgets('an unknown id is silently ignored, not an error', (
+      tester,
+    ) async {
+      // The wallpaper may have been unpublished since the link was shared.
+      ArulDeepLink.request('id-that-was-deleted');
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, isEmpty);
+    });
+
+    testWidgets('the target is consumed exactly once', (tester) async {
+      // A catalog revalidate calls this again with fresh data. A target left
+      // behind would drag the user back to the same wallpaper every time.
+      ArulDeepLink.request('id-temple0');
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, hasLength(1));
+      expect(ArulDeepLink.consume(), isNull);
+    });
+
+    testWidgets('consuming clears the deferred copy so it cannot re-fire on '
+        'the next launch', (tester) async {
+      // main.dart seeds ArulDeepLink AND leaves the pref in place, because
+      // either can win the startup race. Consuming one without the other would
+      // re-open this wallpaper next launch.
+      ArulDeepLink.request('id-temple0');
+      final h = await pumpHost(tester, {
+        'pending_deeplink_wallpaper': 'id-temple0',
+      });
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.prefs.getString('pending_deeplink_wallpaper'), isNull);
+    });
+
+    testWidgets('does nothing when no link asked for anything', (tester) async {
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, isEmpty);
+    });
   });
 }

@@ -298,9 +298,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     required String category,
     required bool wasLive,
   }) {
-    // The category was already selected by the mixin; its list recompute drives
-    // _syncFeed, which will land on this index.
-    setState(() => _pendingRestoreIndex = index);
+    jumpFeedTo(index: index);
     if (!wasLive) {
       showArulToast(
         context,
@@ -308,6 +306,13 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         kind: ToastKind.success,
       );
     }
+  }
+
+  @override
+  void jumpFeedTo({required int index}) {
+    // The category was already selected by the mixin; its list recompute drives
+    // _syncFeed, which will land on this index.
+    setState(() => _pendingRestoreIndex = index);
   }
 
   /// Pull-to-refresh: an authoritative network reload. `refresh()` re-reads
@@ -487,9 +492,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Restore after an apply-driven cold restart, once the full catalog is in.
+    // Restore after an apply-driven cold restart, and open any wallpaper a share
+    // or ad link asked for — both once the full catalog is in, since both turn a
+    // saved reference into a page index in the list this feed serves.
     if (ref.watch(catalogProvider) case AsyncData(:final value)) {
       maybeRestoreAfterApply(value);
+      maybeOpenDeepLink(value);
     }
 
     final feed = ref.watch(feedProvider);

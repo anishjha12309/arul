@@ -30,44 +30,66 @@ part 'analytics_provider.g.dart';
 /// axis and Pakiza has none. Public (Pakiza keeps its copy private) so
 /// `test/core/analytics_gating_test.dart` can assert against the REAL list
 /// instead of a duplicate literal.
-/// TRIMMED to four events on 2026-07-29 (was eleven) as an explicit cost
-/// decision. The filter is NOT "is it interesting" — it is "can nothing cheaper
-/// answer it":
-///   * GA4 receives EVERY event at 100% for free, so anything wanted purely as a
-///     record belongs there, not here.
-///   * Neon is authoritative for users, trials, subscriptions and referrals —
-///     revenue truth is NEVER PostHog. Mirroring those here buys a second,
-///     sampled, less accurate copy of a number already owned.
-/// What survives is the behavioural sequence Neon cannot reconstruct: how much
-/// someone browsed, whether they got value, whether the paywall stopped them,
-/// and whether they then paid.
+/// WIDENED to the full journey on 2026-08-13 (was four, trimmed there from
+/// eleven on 2026-07-29). The 2026-07-29 trim was correct arithmetic against the
+/// wrong scale: paired with a 5% cohort it left PostHog with roughly one
+/// reporting device, which answers nothing. With the cohort at 100%
+/// ([AnalyticsCohort]) the constraint that matters is the 1M/month free tier,
+/// and this list plus SDK lifecycle events sits far inside it until ~30k MAU.
 ///
-/// Dropped deliberately — do NOT re-add without naming the question it answers:
-/// `login_success`, `trial_started`, `referral_shared` (all in Neon and GA4);
-/// `wallpaper_shared`, `ringtone_set` (secondary value moments, in GA4);
-/// `share_blocked_premium`, `ringtone_set_blocked_premium` (the apply gate
-/// carries the volume and the funnel shape is identical).
+/// The bar is now what a product analytics tool is FOR — reconstructing a user's
+/// path — not "can nothing cheaper answer it". Two rules still hold and are not
+/// cost decisions:
+///   * Revenue truth is Neon, never PostHog. `subscription_active` is here so
+///     the funnel has an endpoint, not so anyone counts money with it.
+///   * Per-CARD events stay out. `wallpaper_engaged` fires once per dwelled card
+///     and is the single genuine volume risk in the app; `feed_session_ended`
+///     already carries its counts, and GA4 takes the per-card copy at 100% free.
+///
+/// Still deliberately absent — attempts, failures and rare account admin
+/// (`*_attempt`, `login_failed`, `share_watermark_failed`, `account_delete_*`).
+/// Those are Crashlytics and GA4 questions; putting them here would make the
+/// funnel harder to read, not the data richer.
 const postHogAllowedEvents = <String>{
-  // Feed engagement. ONE summary per feed session, not one per card — see
-  // `_flushFeedSession` in feed_screen.dart. PostHog bills per event and not per
-  // property, so a single event carrying counts answers scroll-depth and
-  // live/static-mix questions at a fraction of the volume. The per-card
-  // `wallpaper_engaged` that feeds these counters is deliberately NOT here: it
-  // survives for GA4 only, which takes it at 100% for free. This is also the
-  // highest-volume survivor, so it is the first place to look if the bill moves.
+  // ── Acquisition ────────────────────────────────────────────────────────────
+  // Where a cohort starts. Also in Neon and GA4, but a funnel needs its own
+  // first step to be resolvable per-person inside the same tool.
+  'login_success',
+
+  // ── Engagement ─────────────────────────────────────────────────────────────
+  // ONE summary per feed session, not one per card — see `_flushFeedSession` in
+  // feed_screen.dart. PostHog bills per event and not per property, so a single
+  // event carrying counts answers scroll-depth and live/static-mix questions at
+  // a fraction of the volume. Still the highest-volume event here, so it is the
+  // first place to look if the bill ever moves.
   'feed_session_ended',
 
-  // The value moment — numerator of the only funnel that matters.
+  // ── Value moments ──────────────────────────────────────────────────────────
+  // What people came for. `wallpaper_applied` is also what orders the All feed
+  // (via the server-side counter, NOT via this event — analytics is never a
+  // ranking source), so its rate is worth watching directly.
   'wallpaper_applied',
+  'wallpaper_shared',
+  'ringtone_set',
 
-  // The paywall trigger: the moment that produces revenue. Pairs with
-  // `wallpaper_applied` above and `subscription_active` below to give
-  // browsed → blocked → paid with no sampling skew inside the panel.
+  // ── Paywall ────────────────────────────────────────────────────────────────
+  // The moments that produce revenue. Apply carries most of the volume; share
+  // and ringtone are kept now so the three gated actions can be compared against
+  // each other rather than assumed to behave alike.
   'apply_blocked_premium',
+  'share_blocked_premium',
+  'ringtone_set_blocked_premium',
 
-  // Conversion. Kept ONLY so the funnel has an endpoint inside PostHog; the
-  // authoritative revenue number is always the Neon subscriptions row.
+  // ── Conversion ─────────────────────────────────────────────────────────────
+  // The funnel's endpoint. The authoritative revenue number is always the Neon
+  // subscriptions row — never count money here.
+  'trial_started',
   'subscription_active',
+
+  // ── Referral loop ──────────────────────────────────────────────────────────
+  // The outbound half of growth. Pairs with `login_success` on the receiving
+  // install to make an invite → install → pay chain visible in one place.
+  'referral_shared',
 };
 
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys

@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
+import 'core/deeplink/deep_link_target.dart';
 import 'core/api/api_client.dart';
 import 'core/config/app_config.dart';
 import 'core/perf/boot_trace.dart';
@@ -131,13 +132,15 @@ Future<void> _startApp() async {
   // panel (AnalyticsCohort). Session replay OFF and surveys OFF, and we never
   // install PosthogObserver/PostHogWidget, so there is no element-autocapture.
   //
-  // captureApplicationLifecycleEvents is OFF deliberately. It emits
+  // captureApplicationLifecycleEvents is ON (2026-08-13). It emits
   // `Application Opened`/`Backgrounded`/`Installed`/`Updated` from inside the
-  // native SDK, which never pass through AnalyticsService and so cannot be
-  // filtered by AllowlistedAnalyticsService — at a few sessions a day per user
-  // they were the single largest source of billed PostHog volume in the app.
-  // GA4's auto-collected first_open/session_start already give us DAU and
-  // retention across 100% of installs for free, so this was a paid duplicate.
+  // native SDK — these never pass through AnalyticsService, so they cannot be
+  // filtered by AllowlistedAnalyticsService and the ONLY control over them is
+  // this flag. It was off while PostHog was a cost-trimmed 5% panel; with the
+  // panel at 100% these are what make sessions, DAU and retention resolvable
+  // inside PostHog rather than only in GA4, and every funnel here is read
+  // against them. Re-check at ~30k MAU: at a few sessions a day per user they
+  // are the largest single source of billed volume in the app.
   //
   // The cohort check gates setup() itself rather than individual captures: a
   // non-panel install then does zero PostHog native init, network and battery
@@ -149,7 +152,7 @@ Future<void> _startApp() async {
   if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
-      ..captureApplicationLifecycleEvents = false
+      ..captureApplicationLifecycleEvents = true
       ..sessionReplay = false
       ..surveys = false
       ..debug = kDebugMode;
@@ -162,10 +165,23 @@ Future<void> _startApp() async {
     unawaited(Posthog().setup(config));
   }
 
-  // Referral attribution: read the Play Install Referrer once per install and
-  // stash any referral code for the first sign-in. Fire-and-forget — off the
-  // critical path and a no-op without Play Services.
-  unawaited(InstallReferrerService(prefs).captureOnce());
+  // Referral attribution + deferred deep link: read the Play Install Referrer
+  // once per install. It carries the referral code for the first sign-in AND,
+  // for an ad/share tap that happened before this install existed, the wallpaper
+  // to open. Fire-and-forget — off the critical path and a no-op without Play
+  // Services.
+  //
+  // The deep-link half is seeded from BOTH ends on purpose. captureOnce needs an
+  // async Play Services round-trip, so on the very first launch after an ad
+  // install it can land either side of the feed draining its first catalog.
+  // Seeding the already-persisted value here (before any UI exists) covers the
+  // race it loses; captureOnce seeds ArulDeepLink itself for the race it wins.
+  // The persisted copy is cleared by whoever actually consumes it, so a target
+  // is delivered exactly once however the timing falls.
+  final referrer = InstallReferrerService(prefs);
+  final deferredWallpaper = referrer.pendingWallpaperId;
+  if (deferredWallpaper != null) ArulDeepLink.request(deferredWallpaper);
+  unawaited(referrer.captureOnce());
 
   // google_sign_in v7: initialize the singleton once at startup. Both env files
   // carry a real client id, so this runs in every real build; the guard only

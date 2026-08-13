@@ -35,8 +35,15 @@ class _FakeApplyService implements WallpaperApplyService {
       'https://cdn.example.com/${w.key}';
 
   @override
-  Future<String> downloadUrl(Wallpaper w) async =>
-      'https://cdn.example.com/${w.key}';
+  Future<String> downloadUrl(Wallpaper w, {required MediaUseAction action}) {
+    downloadActions.add(action);
+    return Future.value('https://cdn.example.com/${w.key}');
+  }
+
+  /// Every action the share path asked a signed URL for. The share must never
+  /// request `apply` — that would count a share toward `apply_count` and rank
+  /// wallpapers nobody kept to the top of All.
+  final downloadActions = <MediaUseAction>[];
 
   @override
   Future<File> downloadFile(
@@ -306,13 +313,7 @@ void main() {
       expect(file.mimeType, 'image/jpeg');
       expect(params.fileNameOverrides, ['arul-murugan-vel.jpg']);
       expect(params.text, contains('More devotional wallpapers on Arul'));
-      expect(
-        params.text,
-        contains(
-          'https://play.google.com/store/apps/details'
-          '?id=com.hsrutility.arul',
-        ),
-      );
+      expect(params.text, contains('https://arul.hsrutility.com/w/w1'));
 
       expect(analytics.events, contains('wallpaper_shared'));
       expect(analytics.events, isNot(contains('share_watermark_failed')));
@@ -351,6 +352,8 @@ void main() {
         hasLength(1),
         reason: 'a second URL splits the tap and loses the attribution',
       );
+      // …and the one link is the wallpaper deep link, not the store listing.
+      expect(text, contains('arul.hsrutility.com/w/'));
       // And it is the LAST thing in the message — messengers preview a trailing
       // link and bury an inline one.
       expect(text.trimRight().split('\n').last, startsWith('https://'));
@@ -380,11 +383,30 @@ void main() {
       expect(direct.calls, hasLength(1));
       expect(direct.calls.single.filePath, endsWith('-wm-AR-TESTXY.jpg'));
       expect(direct.calls.single.mimeType, 'image/jpeg');
-      expect(direct.calls.single.text, contains('play.google.com'));
+      expect(direct.calls.single.text, contains('arul.hsrutility.com/w/w1'));
 
       expect(sheetCalls, isEmpty);
       expect(analytics.props['wallpaper_shared']?['channel'], 'whatsapp');
       expect(c.read(wallpaperShareProvider), isA<WallpaperShareIdle>());
+    });
+
+    test('a share asks for a SHARE grant, never an apply one', () async {
+      // The signed-url route counts only `apply` toward apply_count, so this is
+      // what keeps the All feed ordered by wallpapers people actually kept
+      // rather than ones they merely forwarded.
+      final service = _FakeApplyService(tmpDir);
+      final c = _container(
+        service: service,
+        watermark: _FakeWatermarkService(),
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      expect(service.downloadActions, isNotEmpty);
+      expect(service.downloadActions, everyElement(MediaUseAction.share));
     });
 
     test('an unattributed link is REPORTED as unattributed', () async {

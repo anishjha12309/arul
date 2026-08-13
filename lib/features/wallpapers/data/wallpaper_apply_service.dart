@@ -39,6 +39,25 @@ class WallpaperApplyException implements Exception {
   String toString() => message;
 }
 
+// ─── Gated action ────────────────────────────────────────────────────────────
+
+/// Which gated action a `/media/signed-url` grant is for.
+///
+/// The Worker uses it for ONE thing: deciding whether the grant counts toward
+/// the row's popularity score. Both values are still fully gated — this never
+/// widens or narrows the premium check.
+enum MediaUseAction {
+  /// Applying the wallpaper to the device. Counts toward `apply_count`.
+  apply,
+
+  /// Sharing the file to another app. Deliberately does NOT count — a share is
+  /// reach, not use, and folding it in would rank a wallpaper nobody kept.
+  share;
+
+  /// Wire value sent as the request's `action` field.
+  String get wire => name;
+}
+
 // ─── Interface ───────────────────────────────────────────────────────────────
 
 abstract class WallpaperApplyService {
@@ -51,7 +70,14 @@ abstract class WallpaperApplyService {
   /// `POST /media/signed-url` — the REAL premium gate: a live entitlement read
   /// returning a short-lived signed URL. Only a define-less local run (no
   /// backend) degrades to the public CDN object.
-  Future<String> downloadUrl(Wallpaper w);
+  ///
+  /// [action] tells the Worker which gated action this grant is for. It is NOT
+  /// cosmetic: only `apply` increments `wallpapers.apply_count`, which is the
+  /// order of the All feed. Passing `apply` on the share path would make every
+  /// share look like an apply and rank shared-but-unapplied wallpapers to the
+  /// top. Callers must pass their real action; the Worker counts neither when it
+  /// is absent.
+  Future<String> downloadUrl(Wallpaper w, {required MediaUseAction action});
 
   /// Downloads [url] to a temp file named [filename]. [onProgress] gets 0.0→1.0.
   Future<File> downloadFile(
@@ -97,7 +123,10 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
   Future<String> resolveUrl(Wallpaper w) async => w.url(AppConfig.cdnBaseUrl);
 
   @override
-  Future<String> downloadUrl(Wallpaper w) async {
+  Future<String> downloadUrl(
+    Wallpaper w, {
+    required MediaUseAction action,
+  }) async {
     final api = _api;
     if (api == null || !AppConfig.hasBackend) {
       // Defensive: unreachable in shipped builds (API_BASE_URL is always set).
@@ -108,7 +137,7 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     try {
       final data = await api.post(
         '/media/signed-url',
-        body: {'id': w.id, 'kind': 'wallpaper'},
+        body: {'id': w.id, 'kind': 'wallpaper', 'action': action.wire},
       );
       final url = data['url'] as String?;
       if (url == null || url.isEmpty) {

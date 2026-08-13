@@ -42,13 +42,19 @@ abstract class Wallpaper with _$Wallpaper {
     int? width,
     int? height,
 
-    /// Curated position in the All feed, set by drag-and-drop in the CMS.
-    /// Non-null puts the item in the curated block at the head of All (ascending,
-    /// sparse: 10, 20, 30 …); null — the usual case — leaves it in the stable
-    /// shuffle behind that block. Category chips ignore it entirely. Absent from
-    /// an older cached catalog parses as null, which is exactly "uncurated".
-    /// The ordering itself lives in `feedOrder()`.
-    int? feedRank,
+    /// How many times a premium user has APPLIED this wallpaper — the order of
+    /// the All chip, and the only thing that orders it (`feedOrder()`).
+    ///
+    /// Counted server-side in `/media/signed-url`, never from analytics: the
+    /// route sees 100% of real applies while PostHog is sampled and GA4 is a
+    /// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
+    /// for exactly what the number does and does not mean.
+    ///
+    /// Category chips ignore it entirely (they stay newest-first). Absent from
+    /// an older cached catalog parses as 0, which sorts as "never applied" —
+    /// correct, and it degrades that whole cached feed to plain newest-first
+    /// rather than to something arbitrary.
+    @Default(0) int applyCount,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>

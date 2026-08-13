@@ -169,7 +169,7 @@ final class AuthControllerProvider
   AuthController create() => AuthController();
 }
 
-String _$authControllerHash() => r'9bdadd0fda1cf890ba2dde29cbf3e9ed8cf5edcb';
+String _$authControllerHash() => r'6b4b46bbfa607a1a50b739822dab57817c9cd379';
 
 /// Exposes sign-in / sign-out actions. Consumers read state from
 /// [authStateStreamProvider] and call methods on this notifier.

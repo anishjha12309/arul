@@ -8,6 +8,8 @@
  * See: https://hono.dev/docs/getting-started/cloudflare-workers
  *
  * Routes:
+ *   GET  /.well-known/assetlinks.json — App Links verification (public)
+ *   GET  /w/:id                 — wallpaper share/ad link → Play + referrer (public)
  *   POST /auth/login
  *   POST /auth/refresh
  *   POST /auth/logout
@@ -52,6 +54,7 @@ import {
   handleUploadUrl,
   handleConfirmUpload,
 } from "./routes/media.js";
+import { handleAssetLinks, handleWallpaperLink } from "./routes/deeplink.js";
 import {
   handleInitiate,
   handleWebhook,
@@ -75,7 +78,7 @@ import {
   handleRunRedemptions,
   handleRefund,
 } from "./routes/internal.js";
-import { buildCatalog } from "./cron/build-catalog.js";
+import { buildCatalog, refreshPopularityOrder } from "./cron/build-catalog.js";
 import { sweepSubmissions } from "./cron/sweep-submissions.js";
 import { sweepCanonical } from "./cron/sweep-canonical.js";
 import { runAutopayNotify } from "./cron/autopay-notify.js";
@@ -101,6 +104,13 @@ app.use("/*", async (c, next) => {
   });
   return corsMiddleware(c, next);
 });
+
+// ── Deep-link routes (PUBLIC — browsers, not the app) ─────────────────────────
+// Served on arul.hsrutility.com, the host that ships in shares and ad creatives.
+// Both are unauthenticated on purpose: assetlinks.json is fetched by Android's
+// verifier, and /w/:id by whoever tapped the link. See routes/deeplink.ts.
+app.get("/.well-known/assetlinks.json", handleAssetLinks);
+app.get("/w/:id", handleWallpaperLink);
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);
@@ -238,6 +248,18 @@ const worker: WorkerType = {
           console.log("[cron] Submission sweep complete:", JSON.stringify(result));
         }).catch((err: unknown) => {
           console.error("[cron] Submission sweep failed:", err);
+        }),
+      );
+
+      // Publish the day's apply/set counts by bumping content_version. The
+      // rebuild itself is left to the next hourly run 30 minutes later — it
+      // already holds the build lock and the change-detection gate, so doing it
+      // here would just be a second builder racing the first.
+      ctx.waitUntil(
+        refreshPopularityOrder(env).then((result) => {
+          console.log("[cron] Popularity refresh:", JSON.stringify(result));
+        }).catch((err: unknown) => {
+          console.error("[cron] Popularity refresh failed:", err);
         }),
       );
     }

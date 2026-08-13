@@ -25,7 +25,7 @@ import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
 Map<String, dynamic> _item(
   String stem, {
   String category = 'murugan',
-  int? feedRank,
+  int? applyCount,
 }) => {
   'id': 'id-$stem',
   'title': stem,
@@ -34,15 +34,15 @@ Map<String, dynamic> _item(
   'full_key': 'wallpapers/$category/$stem.jpg',
   'width': 1080,
   'height': 1920,
-  // Omitted entirely when uncurated — the shape of a real uncurated row AND of
-  // a catalog cached by a build that predates the column.
-  'feed_rank': ?feedRank,
+  // Omitted entirely when never applied — the shape of a freshly published row
+  // AND of a catalog cached by a build that predates the column.
+  'apply_count': ?applyCount,
 };
 
-/// The golden-pin catalog: ten ids whose FNV-1a permutation is pinned in
-/// [_pinOrder]. Shared by the pin test and the curation tests, so the latter can
-/// assert that curating two items leaves the other eight exactly where they were.
-const _pinStems = [
+/// Ten ids in catalog order (= newest first, as build-catalog emits them).
+/// Shared by the ordering tests so they can assert that promoting two items
+/// leaves the other eight in exactly the relative order they arrived in.
+const _stems = [
   'sivan0',
   'sivan1',
   'sivan2',
@@ -53,20 +53,6 @@ const _pinStems = [
   'murugan1',
   'perumal0',
   'temple0',
-];
-
-/// The All order [_pinStems] must produce while nothing is curated.
-const _pinOrder = [
-  'id-murugan0',
-  'id-murugan1',
-  'id-temple0',
-  'id-sivan2',
-  'id-perumal0',
-  'id-sivan3',
-  'id-amman1',
-  'id-sivan0',
-  'id-amman0',
-  'id-sivan1',
 ];
 
 http.Response _pageResponse(int page, int totalPages, List<String> stems) =>
@@ -333,29 +319,39 @@ void main() {
       return c.read(feedProvider).requireValue;
     }
 
+    test('All is a permutation of the catalog — reordering never drops or '
+        'duplicates a row', () async {
+      serveClumpedCatalog();
+      final container = makeContainer();
+
+      final all = await feedFor(container, WallpaperCategory.allSlug);
+
+      expect(all, hasLength(60));
+      expect(
+        all.map((w) => w.id).toSet(),
+        container.read(catalogProvider).requireValue.map((w) => w.id).toSet(),
+      );
+    });
+
     test(
-      'All breaks a bulk import up instead of letting it own the top',
+      'with nothing applied yet, All IS catalog order — so a bulk import does '
+      'own the top, deliberately',
       () async {
+        // The accepted cost of "default behaviour is newest only" (2026-08-13).
+        // This replaced an FNV-1a shuffle whose whole job was to stop exactly
+        // this. Pinned as a REQUIREMENT rather than left untested, because the
+        // next person to see 30 Sivan wallpapers in a row will read it as a bug
+        // and re-introduce a shuffle that fights the popularity order.
         serveClumpedCatalog();
-        final container = makeContainer();
 
-        final all = await feedFor(container, WallpaperCategory.allSlug);
+        final all = await feedFor(makeContainer(), WallpaperCategory.allSlug);
 
-        // A permutation of the catalog: reordering must never drop or duplicate.
-        expect(all, hasLength(60));
         expect(
-          all.map((w) => w.id).toSet(),
-          container.read(catalogProvider).requireValue.map((w) => w.id).toSet(),
-        );
-        // The defect: all 30 of one import sitting in the first 30 slots.
-        expect(
-          all.take(30).where((w) => w.category == 'sivan').length,
-          lessThan(25),
-        );
-        expect(
-          all.take(10).map((w) => w.category).toSet(),
-          hasLength(greaterThan(1)),
-          reason: 'the first screenful is not one category',
+          all.take(30).every((w) => w.category == 'sivan'),
+          isTrue,
+          reason:
+              'zero applies everywhere → every comparison falls through to '
+              'catalog order, which is newest-first',
         );
       },
     );
@@ -374,84 +370,73 @@ void main() {
       },
     );
 
-    test('golden pin: with nothing curated, All is this exact permutation for '
-        'these ids, regardless of arrival order', () {
-      // The stability tests above prove same-runtime determinism, but they
-      // would still pass if _fnv1a were swapped for String.hashCode — the
-      // exact regression the hand-rolled hash exists to prevent (its output
-      // is not contractually stable across Dart releases). Pinning the
-      // literal permutation guards the other half of the contract: if this
-      // fails, the hash changed, and the All feed silently re-orders under
-      // every existing install on the next app upgrade.
-      //
-      // Since none of these items carries a feed_rank, this ALSO pins the
-      // curated head's shipped state: no curation must mean no change at all.
-      final all = [for (final s in _pinStems) Wallpaper.fromJson(_item(s))];
-      expect(all.every((w) => w.feedRank == null), isTrue);
+    test('with no applies anywhere, All is exactly catalog order — the '
+        '"newest only" default', () {
+      final all = [for (final s in _stems) Wallpaper.fromJson(_item(s))];
+      expect(all.every((w) => w.applyCount == 0), isTrue);
 
-      final ordered = feedOrder(WallpaperCategory.allSlug, all);
-
-      expect(ordered.map((w) => w.id).toList(), _pinOrder);
-
-      // Pure function of catalog CONTENT: the rows arriving in a different
-      // order must not change the served order.
-      final fromReversed = feedOrder(
-        WallpaperCategory.allSlug,
-        all.reversed.toList(growable: false),
+      expect(
+        feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title),
+        _stems,
       );
-      expect(fromReversed.map((w) => w.id), ordered.map((w) => w.id));
     });
 
-    test('a curated block leads All in feed_rank order, and the uncurated '
-        'tail keeps the exact order it had before curation', () {
-      // Two heroes pinned out of the ten. The ranks are sparse (the CMS writes
-      // 10, 20, 30 …) and deliberately opposite to both id order and the
-      // shuffle's — only feed_rank can produce this head.
-      const ranks = {'sivan1': 10, 'amman0': 20};
+    test('applied wallpapers lead All by count, and everything else keeps the '
+        'exact relative order it arrived in', () {
+      // Two rows promoted out of the ten, with counts deliberately opposite to
+      // catalog order — only apply_count can produce this head.
+      const applied = {'temple0': 5, 'amman1': 12};
       final all = [
-        for (final s in _pinStems)
-          Wallpaper.fromJson(_item(s, feedRank: ranks[s])),
+        for (final s in _stems)
+          Wallpaper.fromJson(_item(s, applyCount: applied[s])),
       ];
 
       final ordered = feedOrder(WallpaperCategory.allSlug, all);
 
-      expect(ordered.take(2).map((w) => w.id), ['id-sivan1', 'id-amman0']);
+      expect(ordered.take(2).map((w) => w.id), ['id-amman1', 'id-temple0']);
       expect(
-        ordered.skip(2).map((w) => w.id),
-        _pinOrder.where((id) => !const {'id-sivan1', 'id-amman0'}.contains(id)),
-        reason: 'curating two items must never re-point the rest of the feed',
+        ordered.skip(2).map((w) => w.title),
+        _stems.where((s) => !applied.containsKey(s)),
+        reason: 'promoting two rows must never re-point the rest of the feed',
       );
-      expect(ordered, hasLength(_pinStems.length));
+      expect(ordered, hasLength(_stems.length));
     });
 
-    test('a feed_rank tie falls back to id, so the curated head stays a '
-        'TOTAL order however the rows arrived', () {
+    test('an apply_count tie falls back to catalog position, so All stays a '
+        'TOTAL order', () {
+      // Dart's List.sort is not stable, so ties MUST be broken explicitly or
+      // this order is free to change between runs — which would re-point the
+      // pager and the video pool under a scrolling user on every revalidate.
       final all = [
-        Wallpaper.fromJson(_item('sivan0', feedRank: 10)),
-        Wallpaper.fromJson(_item('amman0', feedRank: 10)),
+        Wallpaper.fromJson(_item('sivan0', applyCount: 7)),
+        Wallpaper.fromJson(_item('amman0', applyCount: 7)),
         Wallpaper.fromJson(_item('murugan0')),
       ];
-      const expected = ['id-amman0', 'id-sivan0', 'id-murugan0'];
 
-      expect(
-        feedOrder(WallpaperCategory.allSlug, all).map((w) => w.id),
-        expected,
-      );
+      expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+        'sivan0',
+        'amman0',
+        'murugan0',
+      ]);
+      // Reversing the INPUT reverses the tie, because catalog position is the
+      // tiebreaker — the order is a pure function of the list it is given.
       expect(
         feedOrder(
           WallpaperCategory.allSlug,
           all.reversed.toList(growable: false),
-        ).map((w) => w.id),
-        expected,
+        ).map((w) => w.title),
+        ['amman0', 'sivan0', 'murugan0'],
       );
     });
 
     test(
-      'a category chip ignores feed_rank entirely — it stays catalog order',
+      'a category chip ignores apply_count entirely — it stays catalog order',
       () {
         final all = [
           Wallpaper.fromJson(_item('sivan0', category: 'sivan')),
-          Wallpaper.fromJson(_item('sivan1', category: 'sivan', feedRank: 10)),
+          Wallpaper.fromJson(
+            _item('sivan1', category: 'sivan', applyCount: 99),
+          ),
           Wallpaper.fromJson(_item('sivan2', category: 'sivan')),
         ];
 
@@ -463,12 +448,12 @@ void main() {
       },
     );
 
-    test('feed_rank survives the disk-cache round-trip', () {
-      // The cache is written as toJson() and read back as fromJson(), so a
-      // rank that does not round-trip would silently un-curate every warm
-      // start until the background revalidate landed.
-      final curated = Wallpaper.fromJson(_item('sivan0', feedRank: 30));
-      expect(Wallpaper.fromJson(curated.toJson()).feedRank, 30);
+    test('apply_count survives the disk-cache round-trip', () {
+      // The cache is written as toJson() and read back as fromJson(), so a count
+      // that does not round-trip would silently flatten every warm start back to
+      // newest-first until the background revalidate landed.
+      final applied = Wallpaper.fromJson(_item('sivan0', applyCount: 30));
+      expect(Wallpaper.fromJson(applied.toJson()).applyCount, 30);
     });
 
     test('a category chip keeps catalog order — newest first', () async {
