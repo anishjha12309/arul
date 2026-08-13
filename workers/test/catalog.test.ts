@@ -13,7 +13,11 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { writeAppConfig, deleteOrphanedPages } from "../src/cron/build-catalog.js";
+import {
+  writeAppConfig,
+  deleteOrphanedPages,
+  interleaveByCategory,
+} from "../src/cron/build-catalog.js";
 
 // ── Mock R2 bucket that supports list() + delete() for orphan-cleanup tests ───
 function makeListableR2(keys: string[]): {
@@ -205,5 +209,78 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
     expect(body.feature_flags).toEqual({});
     // A string column stays a string (not wrapped in an object).
     expect(body.support_email).toBe("support@hsrutility.com");
+  });
+});
+
+// ── interleaveByCategory ─────────────────────────────────────────────────────
+// This decides what the app's All chip opens with, so its contract is a product
+// contract. Guarded here because the failure is invisible in code review: the
+// build succeeds, the catalog is valid, and the feed is simply wrong.
+describe("interleaveByCategory", () => {
+  const rows = (spec: Record<string, number>) =>
+    Object.entries(spec).flatMap(([cat, n]) =>
+      Array.from({ length: n }, (_, i) => ({ id: `${cat}${i}`, category: cat })),
+    );
+
+  it("deals one per category, so a bulk import cannot own the first screen", () => {
+    // The 2026-08-14 production shape: one import block, then another.
+    const out = interleaveByCategory(rows({ perumal: 20, sivan: 10, amman: 5 }));
+
+    expect(out.slice(0, 6).map((r) => r.category)).toEqual([
+      "perumal", "sivan", "amman",
+      "perumal", "sivan", "amman",
+    ]);
+  });
+
+  it("never reorders two rows of the SAME category", () => {
+    // Category chips filter this one page set, so this is what keeps a chip
+    // reading newest-first after the interleave.
+    const out = interleaveByCategory(rows({ sivan: 4, amman: 4 }));
+
+    expect(out.filter((r) => r.category === "sivan").map((r) => r.id)).toEqual([
+      "sivan0", "sivan1", "sivan2", "sivan3",
+    ]);
+  });
+
+  it("is idempotent — a rebuild never churns the feed", () => {
+    const once = interleaveByCategory(rows({ a: 7, b: 5, c: 3 }));
+    const twice = interleaveByCategory(once);
+    expect(twice.map((r) => r.id)).toEqual(once.map((r) => r.id));
+  });
+
+  it("is a permutation — never drops or duplicates a row", () => {
+    const input = rows({ a: 9, b: 4, c: 1, d: 6 });
+    const out = interleaveByCategory(input);
+    expect(out).toHaveLength(input.length);
+    expect(new Set(out.map((r) => r.id))).toEqual(
+      new Set(input.map((r) => r.id)),
+    );
+  });
+
+  it("drains an exhausted category instead of stalling", () => {
+    // Unequal counts are the normal case; the largest category tails alone.
+    const out = interleaveByCategory(rows({ big: 5, small: 1 }));
+    expect(out.map((r) => r.category)).toEqual([
+      "big", "small", "big", "big", "big", "big",
+    ]);
+  });
+
+  it("leaves a single-category catalog in plain catalog order", () => {
+    const input = rows({ only: 4 });
+    expect(interleaveByCategory(input).map((r) => r.id)).toEqual(
+      input.map((r) => r.id),
+    );
+  });
+
+  it("does not depend on Map iteration luck when sizes tie", () => {
+    // Equal-sized categories break on name, so the cycle is reproducible.
+    const a = interleaveByCategory(rows({ zebra: 3, alpha: 3 }));
+    const b = interleaveByCategory(rows({ alpha: 3, zebra: 3 }));
+    expect(a.map((r) => r.category)).toEqual(b.map((r) => r.category));
+    expect(a[0].category).toBe("alpha");
+  });
+
+  it("handles an empty catalog", () => {
+    expect(interleaveByCategory([])).toEqual([]);
   });
 });

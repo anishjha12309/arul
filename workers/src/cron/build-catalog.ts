@@ -534,6 +534,77 @@ export async function refreshPopularityOrder(env: Env): Promise<
   }
 }
 
+// ── Category interleave ───────────────────────────────────────────────────────
+
+/**
+ * Deal rows out ONE PER CATEGORY, preserving each category's own order.
+ *
+ * WHY THIS IS HERE AND NOT IN THE DATABASE. An import is one transaction, so its
+ * rows share `created_at` and default to `sort_order = 0` — they arrive as a
+ * solid block at the head of the feed. On 2026-08-14 that put 20 Perumal
+ * wallpapers in slots 1-20 and 10 Sivan in 21-30, with four categories missing
+ * from the opening screens entirely. Sorting cannot fix it (those rows genuinely
+ * ARE the newest); only interleaving can.
+ *
+ * The first fix wrote the interleaved order into `sort_order` from a script. It
+ * worked, but every future import re-created the defect until someone remembered
+ * to re-run it — a manual step is a step that eventually doesn't happen, usually
+ * right after an import when everyone is looking. Computing it HERE makes it
+ * unforgettable: publish is the only trigger, there is no stored state to go
+ * stale, and a hand-inserted row or a brand-new category is handled for free.
+ *
+ * The division of labour this creates:
+ *   `sort_order` / `created_at` → order WITHIN a category (the SQL ORDER BY)
+ *   this function               → order ACROSS categories
+ *
+ * Category chips are unaffected. The app filters this one page set by category,
+ * and interleaving never reorders two rows of the SAME category relative to each
+ * other — so a chip still reads newest-first (CLAUDE.md §5b).
+ *
+ * The All chip is unaffected too, for rows anyone has actually used: the app
+ * serves `apply_count DESC, ties in catalog order`, so this only ever decides
+ * the order of the rows that TIE — which at zero data is all of them.
+ *
+ * Biggest category leads each round. With unequal counts the largest category
+ * inevitably tails the feed alone; leading with it keeps that tail shortest.
+ * Idempotent and a pure function of the row list: re-running it on its own
+ * output returns that output unchanged, so a rebuild never churns the feed.
+ */
+export function interleaveByCategory<T extends Record<string, unknown>>(
+  rows: T[],
+): T[] {
+  const queues = new Map<string, T[]>();
+  for (const r of rows) {
+    const key = String(r["category"] ?? "");
+    const q = queues.get(key);
+    if (q) q.push(r);
+    else queues.set(key, [r]);
+  }
+  // One category (or none) — interleaving is a no-op. Returning early also keeps
+  // a single-category catalog byte-identical to plain catalog order.
+  if (queues.size < 2) return rows;
+
+  const cycle = [...queues.keys()].sort((a, b) => {
+    const bySize = queues.get(b)!.length - queues.get(a)!.length;
+    // Tie on size → name, so the cycle never depends on Map iteration luck.
+    return bySize !== 0 ? bySize : a.localeCompare(b);
+  });
+
+  const cursor = new Map<string, number>(cycle.map((c) => [c, 0]));
+  const out: T[] = [];
+  // Every full pass emits at least one row while any queue has rows left.
+  while (out.length < rows.length) {
+    for (const c of cycle) {
+      const q = queues.get(c)!;
+      const i = cursor.get(c)!;
+      if (i >= q.length) continue;
+      out.push(q[i]);
+      cursor.set(c, i + 1);
+    }
+  }
+  return out;
+}
+
 // ── Postgres bigint normalization ─────────────────────────────────────────────
 /**
  * Coerce a Postgres `bigint` column to a JS number.
@@ -687,6 +758,11 @@ async function buildScope(
     return r;
   });
 
+  // ── Interleave categories ──────────────────────────────────────────────────
+  // Runs AFTER validation so a skipped row cannot leave a hole in the cycle, and
+  // before pagination so pages are cut from the order users actually get.
+  const orderedRows = interleaveByCategory(publicRows);
+
   // ── Write paginated "all" catalog ──────────────────────────────────────────
   // Track every key this build writes so we can delete pages this build no longer
   // produces (empty tags, shrunk page counts). build-catalog is otherwise write-
@@ -697,9 +773,9 @@ async function buildScope(
   // Math.max(1, …) guarantees a zero-row scope still writes an explicit empty
   // all_1.json ({ total: 0, total_pages: 1, has_more: false, items: [] }) —
   // the app's first-page fetch must get valid JSON, never an ambiguous 404.
-  const totalPages = Math.max(1, Math.ceil(publicRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(orderedRows.length / PAGE_SIZE));
   for (let page = 1; page <= totalPages; page++) {
-    const pageItems = publicRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const pageItems = orderedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
     const key = `catalog/${scope}/all_${page}.json`;
     await putPublicJson(
       r2Bucket,
@@ -707,7 +783,7 @@ async function buildScope(
       {
         page,
         per_page: PAGE_SIZE,
-        total: publicRows.length,
+        total: orderedRows.length,
         total_pages: totalPages,
         has_more: page < totalPages,
         items: pageItems,
@@ -727,7 +803,7 @@ async function buildScope(
   // (a removed tag, or a higher page number from when the scope was larger).
   const deleted = await deleteOrphanedPages(r2Bucket, scope, writtenKeys);
 
-  return { pages: totalPages, items: publicRows.length, skipped, deleted };
+  return { pages: totalPages, items: orderedRows.length, skipped, deleted };
 }
 
 /**
