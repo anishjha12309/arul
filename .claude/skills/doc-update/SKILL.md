@@ -7,6 +7,8 @@ description: Write the doc update after the doc-sync hook names a file, or when 
 
 The `[doc-sync]` reminder already named the file. Open that file and edit it. Do not scan `docs/` to work out which doc covers the change — that is what the table exists to prevent.
 
+Suspect an *existing* line is stale rather than missing? That is the read path — run `/doc-audit <doc>` (adversarial prover/denier check against code, Neon, and wrangler) instead of editing from memory.
+
 ## The route table
 
 `.claude/hooks/doc-sync-reminder.js` → the `ROUTES` array at the top. Code path globs → doc names, first match wins.
