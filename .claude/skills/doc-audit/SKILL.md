@@ -23,11 +23,13 @@ Args name docs (`phonepe` → `docs/phonepe.md`); no args = full sweep: every `d
 | --- | --- | --- |
 | DESCRIPTIVE | Doc describes reality | Fix the doc, working tree only |
 | NORMATIVE | Doc IS the contract (owner calls, "never", deliberate deltas, security invariants) | Flag the CODE/infra to the user — never edit the doc side |
-| EXTERNAL | Vendor/on-device history the repo can't re-derive | Usually UNVERIFIED — leave the doc alone |
+| EXTERNAL | Vendor behaviour / on-device history | Settle against CURRENT vendor docs, fetched live — never from model memory (stale for 2026) |
 
 UNVERIFIED is never treated as stale. The paid-for traps (PhonePe quirks, decoder limits)
 are the docs' whole value; the audit protects them from contradiction, it does not shred
-them for lacking lab proof.
+them for lacking lab proof. Vendor docs contradicting an on-device trap → CONTESTED (the
+trap often exists because reality diverges from the docs); vendor docs refute outright only
+the vendor's own API surface — endpoint names, params, deprecations, documented limits.
 
 ## Read-only allowlist (goes verbatim into both agents' task prompts)
 
@@ -38,6 +40,10 @@ them for lacking lab proof.
   `npx wrangler r2 bucket list`
 - `curl -s`/`curl -sI` GET/HEAD against `https://arul-api.hsrutility.com/...` and
   `https://arul-cdn.hsrutility.com/...` (e.g. `catalog/version.json`)
+- Vendor docs, EXTERNAL claims only: WebSearch to find the page, then
+  `trafilatura -u "<URL>" --markdown | head -150` via Bash (WebFetch is denied globally).
+  Official portals only: developer.phonepe.com, developers.google.com,
+  firebase.google.com/docs, posthog.com/docs, developers.cloudflare.com, pub.dev.
 
 Forbidden always: `wrangler deploy`, `secret put|bulk`, `kv key put|delete`, any R2 write,
 cache purge, `POST /internal/build-catalog`, any HTTP POST/PUT/DELETE, any SQL that mutates.

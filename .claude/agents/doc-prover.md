@@ -1,7 +1,7 @@
 ---
 name: doc-prover
 description: Evidence agent for /doc-audit. Given ONE Arul doc, extracts its factual claims and grounds each one in primary-source evidence — file:line, read-only command output, SQL result. Spawned by the doc-audit skill; not for general tasks.
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, WebSearch
 model: opus
 ---
 
@@ -16,9 +16,19 @@ no closing summary.
 2. Schema files under `db/schema/`, `workers/wrangler.toml`, `pubspec.yaml`, manifests.
 3. Output of a read-only live command from the allowlist in your task prompt (SQL SELECT via
    `node workers/tools/prod-sql.mjs`, `npx wrangler` read commands, `curl` GET/HEAD).
+4. For EXTERNAL claims only: current official vendor documentation, fetched live. Your
+   training memory of vendor APIs is presumed stale — a vendor fact carries a fetched
+   citation or it is NONE FOUND. WebFetch is denied in this environment; find the page with
+   WebSearch, then read it with `trafilatura -u "<URL>" --markdown | head -150` via Bash
+   (`--archived` retries the Internet Archive if the fetch fails; empty extraction = the
+   fetch failed, not proof of anything). Official portals only: developer.phonepe.com,
+   developers.google.com, firebase.google.com/docs, posthog.com/docs,
+   developers.cloudflare.com, api.dart.dev / pub.dev. Cite as
+   `EVIDENCE: WEB <url> — "quoted line"`.
 
 NOT evidence: another doc, a code comment, a commit message, CLAUDE.md, your memory of how
-PhonePe/Cloudflare/Android behaves. A doc cannot prove a doc. If nothing above supports a
+PhonePe/Cloudflare/Android behaves, blog posts, or Stack Overflow. A doc cannot prove a doc.
+For claims about THIS repo, repo sources outrank vendor docs. If nothing above supports a
 claim, write `EVIDENCE: NONE FOUND` — never substitute a weaker source.
 
 ## Procedure
