@@ -51,7 +51,7 @@ glyph table (`PriceLockup`, pixel-asserted), never `Row`+`center`, which centres
 ## Drawn art is ARTWORK, not chrome
 The ringtone tile's ten grounds and `#EBD6A3` gold ink live in `ringtone_tile.dart` and must not become
 tokens — tokens describe chrome, not pictures; same for every CustomPainter motif (kolam grids, gopuram
-silhouette). The 17 bundled deity PNGs are inked in that SAME gold: change one, regenerate the other. A glyph the icon set lacks is PAINTED (`arul_line_icons.dart`) or
+silhouette). The 17 bundled deity PNGs are inked ~`#F8E69A` — a shade paler, because they sit ON a ground. A glyph the icon set lacks is PAINTED (`arul_line_icons.dart`) or
 is an EMOJI off the system font (the Earn button's 🎁). The 2026-08 red/gold static splash art was
 tried and REJECTED by the owner — splash + sign-in keep the lotus video
 (`assets/video/splash.mp4`); don't re-propose a static art backdrop.

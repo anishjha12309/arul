@@ -993,6 +993,17 @@ abstract final class ArulTokens {
     ),
   ];
 
+  /// The CTA's top lip — the handoff's `inset 0 1px 0 rgba(255,255,255,.15)`,
+  /// drawn as a foreground gradient because Flutter has no inset box-shadow.
+  /// White fading out by 4% of the pill's height; it is what stops the CTA
+  /// reading as flat, so the stops are as load-bearing as the colour.
+  static const LinearGradient paywallCtaTopLip = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0x26FFFFFF), Color(0x00FFFFFF)],
+    stops: [0.0, 0.04],
+  );
+
   // ───────────────────── Premium paywall — typography ─────────────────────
   // Three BUNDLED families, paywall-only (pubspec.yaml): Cinzel for display,
   // Lora for everything else, Gelasio for the price numerals. Tracking is

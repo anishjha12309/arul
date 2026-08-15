@@ -2,8 +2,8 @@
 /// ground, with an oil-lamp diya raised over it while the track previews.
 ///
 /// Three layers, bottom to top:
-///   1. a gradient ground with a hairline rim, and a ring of kolam pulli dots
-///      framing the tile — both drawn, both hashed per track ([RingtoneTileSpec])
+///   1. a gradient ground with a hairline rim — drawn, hashed per track
+///      ([RingtoneTileSpec])
 ///   2. the deity PNG ([deityAsset]) — the only fetched-from-disk part
 ///   3. only while previewing, a scrim + diya whose flame sways
 ///
@@ -15,13 +15,14 @@
 /// whether they were to Venkateswara, Krishna, Rama or Narasimha. The art is
 /// now keyed by `deity`, which the drawn approach had no way to express.
 ///
-/// The ground and the kolam ring survived on purpose: they are what stops 35
-/// Murugan tracks — one deity, one PNG — from being 35 identical tiles. Ten
-/// grounds and three dot counts, hashed off the track id, still make each row
-/// look like itself. The ring moved out from radius 15 to 21 so it frames the
-/// figure instead of being drawn underneath it, and the dashed circle that used
-/// to be woven through it is gone: at the new radius it sat a hair inside the
-/// rim and read as a mis-drawn border rather than a kolam.
+/// The GROUND survived on purpose: ten jewel tones hashed off the track id are
+/// what stop 35 Murugan tracks — one deity, one PNG — from being 35 identical
+/// tiles. The kolam ring did NOT survive. It framed a small centred emblem;
+/// the deity figures fill the tile edge to edge, so the dots landed on top of
+/// them and read as clutter rather than a frame. Every parameter that only
+/// existed to vary that ring (dot count, start rotation) went with it. If a
+/// ring is ever wanted back, it needs a smaller figure first — the two cannot
+/// both own the outer band.
 ///
 /// ── COLOUR NOTE ────────────────────────────────────────────────────────────
 /// The ten gradient grounds, the `#EBD6A3` gold ink, the scrim and the diya's
@@ -50,41 +51,24 @@ import 'deity_art.dart';
 /// the track, not a hashed decoration, and it comes from the catalog.
 @immutable
 class RingtoneTileSpec {
-  const RingtoneTileSpec({
-    required this.groundIndex,
-    required this.dotCount,
-    required this.rotationDegrees,
-  });
+  const RingtoneTileSpec({required this.groundIndex});
 
-  /// Index into the ten jewel-tone grounds.
+  /// Index into the ten jewel-tone grounds — now the ONLY thing that varies
+  /// between two tracks of the same deity.
   final int groundIndex;
-
-  /// Pulli dots on the kolam ring — 8, 12 or 16.
-  final int dotCount;
-
-  /// Where the first pulli dot sits, in degrees.
-  final double rotationDegrees;
 
   /// How many grounds exist; also the modulus [groundIndex] is reduced by.
   static const int groundCount = 10;
 
-  /// The dot counts the handoff allows.
-  static const List<int> dotCounts = [8, 12, 16];
-
   /// The deterministic derivation. Same id → same spec, always.
   ///
-  /// Each parameter is hashed from its OWN salted string rather than from
-  /// different bit-slices of one hash. Catalog ids are short and share long
-  /// prefixes ("rt-amman-01", "rt-amman-02"); slicing one FNV hash left whole
-  /// fields nearly constant across such a set, and a screen of tiles that all
-  /// chose the same dot count is exactly the sameness this ground exists to
-  /// avoid. Three hashes of a short string per tile is nothing.
+  /// The hash is salted with `:ground` rather than taken over the bare id. It
+  /// reads as pointless with one field left, and it is not: catalog ids are
+  /// short and share long prefixes ("rt-amman-01", "rt-amman-02"), and the salt
+  /// is what the avalanche below has to chew on to keep near-identical inputs
+  /// off the same ground. Dropping it re-opens the clustering it was added for.
   factory RingtoneTileSpec.forRingtone({required String id}) {
-    return RingtoneTileSpec(
-      groundIndex: _hash('$id:ground') % groundCount,
-      dotCount: dotCounts[_hash('$id:dots') % dotCounts.length],
-      rotationDegrees: (_hash('$id:rotation') % 360).toDouble(),
-    );
+    return RingtoneTileSpec(groundIndex: _hash('$id:ground') % groundCount);
   }
 
   /// FNV-1a with a Murmur3 `fmix32` avalanche on the way out, 32-bit.
@@ -115,18 +99,13 @@ class RingtoneTileSpec {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RingtoneTileSpec &&
-          other.groundIndex == groundIndex &&
-          other.dotCount == dotCount &&
-          other.rotationDegrees == rotationDegrees;
+      other is RingtoneTileSpec && other.groundIndex == groundIndex;
 
   @override
-  int get hashCode => Object.hash(groundIndex, dotCount, rotationDegrees);
+  int get hashCode => groundIndex.hashCode;
 
   @override
-  String toString() =>
-      'RingtoneTileSpec(ground: $groundIndex, dots: $dotCount, '
-      'rot: $rotationDegrees)';
+  String toString() => 'RingtoneTileSpec(ground: $groundIndex)';
 }
 
 /// One row's artwork. Pass [playing] to raise the scrim + diya over it.
@@ -153,9 +132,12 @@ class RingtoneTile extends StatefulWidget {
   final bool playing;
   final double size;
 
-  /// The row's art size. Grew from 46 with the second text line: a one-line row
-  /// balanced at 46, a title-over-subtitle stack does not.
-  static const double defaultSize = 52;
+  /// The row's art size. Grew from 46 with the second text line (a one-line row
+  /// balanced at 46, a title-over-subtitle stack does not), then again to 56
+  /// when the art became a detailed figure rather than a centred emblem —
+  /// crowns, mudras and attributes are what tell two standing gods apart, and
+  /// they were the first thing to dissolve at 52.
+  static const double defaultSize = 56;
 
   @override
   State<RingtoneTile> createState() => _RingtoneTileState();
@@ -275,11 +257,6 @@ class RingtoneTileGroundPainter extends CustomPainter {
   /// The authoring viewBox: every coordinate below is in 46-unit space and is
   /// scaled to the real tile size, which is [RingtoneTile.defaultSize].
   static const double _vb = 46;
-  static const Offset _centre = Offset(23, 23);
-
-  /// Where the pulli dots sit. 21 of 23 puts them just inside the rim, framing
-  /// the figure; at the old 15 they were underneath it.
-  static const double _ringRadius = 21;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -314,18 +291,6 @@ class RingtoneTileGroundPainter extends CustomPainter {
         ..strokeWidth = 0.7
         ..color = _ink.withValues(alpha: 0.18),
     );
-
-    final dot = Paint()..color = _ink.withValues(alpha: 0.5);
-    final step = 2 * math.pi / spec.dotCount;
-    final start = spec.rotationDegrees * math.pi / 180;
-    for (var i = 0; i < spec.dotCount; i++) {
-      final a = start + i * step;
-      canvas.drawCircle(
-        _centre + Offset(math.cos(a), math.sin(a)) * _ringRadius,
-        1.05,
-        dot,
-      );
-    }
 
     canvas.restore();
   }

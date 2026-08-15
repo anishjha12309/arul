@@ -29,14 +29,26 @@ const path = require("node:path");
 const ROOT = process.cwd();
 const PENDING = path.join(ROOT, ".claude", "release-commit-reminder.pending.json");
 const AAB = path.join(ROOT, "build", "app", "outputs", "bundle", "release", "app-release.aab");
-const APK = path.join(ROOT, "build", "app", "outputs", "flutter-apk", "app-release.apk");
 
-// `flutter build appbundle` defaults to release. `flutter build apk` does NOT —
-// only an explicit --release APK is a release artifact worth reminding about.
+// EVERY name a release APK can land under. The repo's own rule is
+// `--split-per-abi --target-platform android-arm64` (release-build/SKILL.md §1),
+// which writes app-arm64-v8a-release.apk and NEVER app-release.apk — so watching
+// only the fat name meant the APK reminder could not fire at all. Watch the fat
+// name too, for the emulator/x64 rebuild the same doc calls for.
+const APKS = [
+  "app-release.apk",
+  "app-arm64-v8a-release.apk",
+  "app-armeabi-v7a-release.apk",
+  "app-x86_64-release.apk",
+].map((n) => path.join(ROOT, "build", "app", "outputs", "flutter-apk", n));
+
+// BOTH `flutter build appbundle` and `flutter build apk` default to release, so
+// the absence of --debug/--profile is what marks a release artifact — requiring an
+// explicit --release let a bare `flutter build apk` ship unreminded.
 function watchedArtifacts(cmd) {
   if (/--(debug|profile)\b/.test(cmd)) return [];
   if (/flutter\s+build\s+appbundle\b/.test(cmd)) return [AAB];
-  if (/flutter\s+build\s+apk\b/.test(cmd) && /--release\b/.test(cmd)) return [APK];
+  if (/flutter\s+build\s+apk\b/.test(cmd)) return APKS;
   return [];
 }
 

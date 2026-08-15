@@ -26,12 +26,49 @@ function isReleaseAabBuild(cmd) {
   return /flutter\s+build\s+appbundle\b/.test(cmd) && !/--(debug|profile)\b/.test(cmd);
 }
 
-// Strip // line comments and /* */ block comments so a FLAG_SECURE that only
-// survives inside a comment can't satisfy the check.
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "");
+// Drop comments AND string/char literals in ONE left-to-right pass, so the check
+// can only ever be satisfied by a call that actually compiles. Two things hide a
+// dead FLAG_SECURE from a naive regex: a comment (the usual case — someone disables
+// it for tester screenshots and forgets), and a string, e.g. a log line or a doc
+// snippet that merely quotes `setFlags(FLAG_SECURE, FLAG_SECURE)`.
+//
+// The single pass is what makes it correct: regex-stripping comments first turns
+// "https://host" into "https:, and a "//" living inside a string would swallow the
+// real code after it. Scanning in order means a delimiter is only honoured when it
+// is not already inside something else.
+//
+// Anything unterminated runs to end-of-input and is dropped, which can only REMOVE
+// text — so the worst case is a false deny, never a false pass. That is the right
+// direction to fail for the one artifact Play ships.
+function stripCommentsAndStrings(src) {
+  let out = "";
+  let i = 0;
+  while (i < src.length) {
+    if (src.startsWith("/*", i)) {
+      const end = src.indexOf("*/", i + 2);
+      i = end === -1 ? src.length : end + 2;
+    } else if (src.startsWith("//", i)) {
+      const end = src.indexOf("\n", i + 2);
+      i = end === -1 ? src.length : end;
+    } else if (src.startsWith('"""', i)) {
+      // Raw string: no escapes, ends at the next triple quote.
+      const end = src.indexOf('"""', i + 3);
+      i = end === -1 ? src.length : end + 3;
+    } else if (src[i] === '"' || src[i] === "'") {
+      const quote = src[i];
+      i += 1;
+      while (i < src.length && src[i] !== quote) {
+        if (src[i] === "\\") i += 1; // an escape consumes the char after it
+        if (src[i] === "\n") break; // unterminated — stop at the line end
+        i += 1;
+      }
+      i += 1;
+    } else {
+      out += src[i];
+      i += 1;
+    }
+  }
+  return out;
 }
 
 // An active window flag: setFlags(...FLAG_SECURE...) or addFlags(...FLAG_SECURE...),
@@ -77,7 +114,7 @@ process.stdin.on("end", () => {
     return;
   }
 
-  if (!hasActiveFlagSecure(stripComments(src))) {
+  if (!hasActiveFlagSecure(stripCommentsAndStrings(src))) {
     deny(
       `.aab build blocked: FLAG_SECURE is not enabled in MainActivity.onCreate. ` +
         `The published .aab must block screenshots + screen recording (anti-piracy). ` +

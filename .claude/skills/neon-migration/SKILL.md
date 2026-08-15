@@ -37,11 +37,11 @@ look for is a version pointer that stops moving, never a loud failure.
 
    There is **no `db/migrations/` diary** — it was retired because it only ever held byte-copies of
    schema files: the schema files ARE the source of truth. Never recreate the directory. Every
-   statement is idempotent **except one**: `01_identity.sql:60`'s `create trigger` (Postgres has no
-   `IF NOT EXISTS` for triggers). Prod already has that trigger, and `sql.unsafe()` runs the file as
-   a single simple query, so re-applying `01` fails at the trigger and **rolls back the whole file —
-   nothing is applied**. Until it becomes `create or replace trigger`, apply changes to `01` as the
-   individual statement, not the file.
+   statement in `db/schema/` is now idempotent and every file re-applies whole. Keep it that way:
+   Postgres has no `IF NOT EXISTS` for triggers, so a bare `create trigger` fails on a live DB, and
+   because `sql.unsafe()` sends a file as ONE simple query — Postgres runs that in a single implicit
+   transaction — the failure **rolls back every other statement in the file**. Use `create or replace
+   trigger` (PG 14+; `01_identity.sql:60`).
 2. **Get explicit user approval before running anything destructive (DROP / DELETE / ALTER-narrowing)
    on prod.**
 3. Apply with `workers/tools/prod-sql.mjs`. It reads the connection string out of git-ignored

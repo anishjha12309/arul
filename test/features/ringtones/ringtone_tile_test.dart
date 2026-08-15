@@ -21,35 +21,31 @@ void main() {
       );
     });
 
-    test('stays inside its ranges', () {
+    test('stays inside its range', () {
       for (var i = 0; i < 500; i++) {
         final s = RingtoneTileSpec.forRingtone(id: 'rt-$i');
         expect(
           s.groundIndex,
           inInclusiveRange(0, RingtoneTileSpec.groundCount - 1),
         );
-        expect(RingtoneTileSpec.dotCounts, contains(s.dotCount));
-        expect(s.rotationDegrees, inInclusiveRange(0, 359));
       }
     });
 
     test('spreads grounds across ids that share a long prefix', () {
       // This is the regression the fmix32 avalanche exists for: catalog ids are
       // short and near-identical, and plain FNV-1a put most of them on the same
-      // ground. With one PNG per deity the ground is now the ONLY thing telling
-      // 35 Murugan rows apart, so a collapse here is far more visible than it
-      // was when each tile also had its own drawn motif.
+      // ground. Since the kolam ring was dropped the ground is the ONLY thing
+      // telling 35 Murugan rows apart, so a collapse here is now fully visible
+      // rather than one varying parameter among three.
       final grounds = <int>{};
-      final dots = <int>{};
       for (var i = 1; i <= 35; i++) {
-        final s = RingtoneTileSpec.forRingtone(
-          id: 'rt-murugan-${i.toString().padLeft(2, '0')}',
+        grounds.add(
+          RingtoneTileSpec.forRingtone(
+            id: 'rt-murugan-${i.toString().padLeft(2, '0')}',
+          ).groundIndex,
         );
-        grounds.add(s.groundIndex);
-        dots.add(s.dotCount);
       }
       expect(grounds.length, greaterThanOrEqualTo(8));
-      expect(dots.length, RingtoneTileSpec.dotCounts.length);
     });
   });
 }

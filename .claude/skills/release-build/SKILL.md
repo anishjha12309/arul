@@ -41,8 +41,9 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      flutter build apk --debug   --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/dev.json
      ```
      The ONLY output is `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~27 MB, vs ~64 MB
-     fat). No `app-release.apk` is written — anything pointing at that path must be updated, and
-     `release-commit-reminder.js:32` still does, so its reminder never fires for a split build.
+     fat). **No `app-release.apk` is written**, so anything pointing at that path is pointing at a
+     file this repo never produces — `release-commit-reminder.js` now watches all four release APK
+     names, having watched only the fat one and therefore never fired for a split build.
      Two consequences, both fine because they touch sideloading only and never Play (the AAB still
      ships all three ABIs, so no real user is affected):
      · a 32-bit-only phone cannot install it — irrelevant, arm64 has been universal since ~2017;

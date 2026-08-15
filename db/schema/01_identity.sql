@@ -57,5 +57,10 @@ create index if not exists subscriptions_phonepe_id_idx    on subscriptions (pho
 create index if not exists subscriptions_merchant_id_idx   on subscriptions (merchant_subscription_id);
 create index if not exists idx_subscriptions_next_debit_at on subscriptions (next_debit_at) where status in ('trialing','active');
 create index if not exists idx_subscriptions_notified_at   on subscriptions (notified_at)   where notified_at is not null;
-create trigger subscriptions_set_updated_at before update on subscriptions
+-- `or replace`, not a bare create: this file is re-applied WHOLE (the migration
+-- workflow puts the END STATE here), prod already holds the trigger, and
+-- sql.unsafe() sends the file as ONE simple query, which Postgres runs in a
+-- single implicit transaction — so a bare create aborts every other statement in
+-- the file with it. PG 14+; this schema declares 16+.
+create or replace trigger subscriptions_set_updated_at before update on subscriptions
   for each row execute function set_updated_at();

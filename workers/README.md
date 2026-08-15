@@ -1,11 +1,10 @@
 # Arul Workers
 
-Cloudflare Worker = API + crons. Base **`https://arul-api.hsrutility.com`** — declared in
-`wrangler.toml` as a `custom_domain` route, so `wrangler deploy` owns both the hostname and its DNS
-record. `arul-api.twilight-smoke-d495.workers.dev` still serves in parallel (`workers_dev = true`)
-because pre-rename installed builds point at it; **keep that line while any such install exists** —
-declaring any `routes` entry makes wrangler default workers.dev to false and would silently kill
-every one of them.
+Cloudflare Worker = API + crons. Base **`https://arul-api.hsrutility.com`** — a `custom_domain` route
+in `wrangler.toml`, so `wrangler deploy` owns both the hostname and its DNS record.
+`arul-api.twilight-smoke-d495.workers.dev` still serves in parallel (`workers_dev = true`) because
+pre-rename installed builds point at it; **keep that line while any such install exists** — declaring
+any `routes` entry makes wrangler default workers.dev to false and would silently kill every one.
 
 Neon via Hyperdrive · R2 `south-indian-wallpapers` behind `https://arul-cdn.hsrutility.com`
 (presign via aws4fetch) · KV (jti denylist, webhook dedupe, OAuth cache) · PhonePe v2 Autopay on
@@ -35,9 +34,8 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 Errors: `{ "error": { "code", "message" } }` with 4xx/5xx.
 
 Rate limiters (`RL_PAYMENTS` 15/min, `RL_AUTH` 20/min per identity, `RL_MEDIA` 60/min) are abuse
-dampeners, not quotas — counters are per-location and eventually consistent. Limits sit well above
-real user behaviour on purpose: blocking someone who is trying to pay is the worst false positive
-in the app.
+dampeners, not quotas — counters are per-location and eventually consistent. Limits sit far above real
+behaviour on purpose: blocking someone who is trying to pay is the worst false positive in the app.
 
 ## Authoring — the unified CMS (NOT in this repo)
 All authoring for Arul AND Pakiza lives in the standalone **`hsr-cms`** worker:

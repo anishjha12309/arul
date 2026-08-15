@@ -1030,14 +1030,7 @@ class _ShrineCtaState extends State<ShrineCta> {
                   ),
                   foregroundDecoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-                    // `inset 0 1px 0 rgba(255,255,255,.15)` — a one-pixel lip along
-                    // the top edge, which is what stops the pill reading as flat.
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0x26FFFFFF), Color(0x00FFFFFF)],
-                      stops: [0.0, 0.04],
-                    ),
+                    gradient: ArulTokens.paywallCtaTopLip,
                   ),
                   child: widget.busy
                       ? const SizedBox.square(

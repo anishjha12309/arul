@@ -76,6 +76,9 @@ const FOLDER_CATEGORY = {
 // SPECIFIC deity, which is what was actually established — the category is a
 // coarser bucket laid over it. This is the record of truth for these titles;
 // do not re-derive it from the file names.
+//
+// Those trailing deities are now a real column, and `backfill-deity.sql` is that
+// same mapping written as SQL — keep the two in step when either changes.
 const CATEGORY_BY_TITLE = {
   // perumal — Vishnu and his avatars
   "Anantha Padmanabha": "perumal", // Vishnu, Thiruvananthapuram
@@ -272,7 +275,11 @@ for (const src of sources) {
     category: src.category,
     tags: [],
     audio_key: `ringtones/${src.category}/${id}.mp3`,
-    cover_key: null, // the app draws its procedural kolam medallion — no cover art exists
+    // Row art is a BUNDLED PNG resolved from `deity` (deity_art.dart), so no cover
+    // object is ever uploaded and this stays null. Note this plan writes no `deity`
+    // either — the INSERT has no such column, so a drop lands null and renders the
+    // category's default until a follow-up UPDATE sets it. See RINGTONES.md.
+    cover_key: null,
     mime: "audio/mpeg",
     duration_ms: p.durationMs,
     bytes,

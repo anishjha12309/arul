@@ -26,12 +26,24 @@ const ROUTES = [
     docs: ["docs/architecture.md §Security", "docs/edge-cases.md §Auth"],
   },
   {
-    when: ["workers/src/routes/media.ts", "workers/src/lib/r2.ts", "workers/src/lib/media-constraints.ts"],
+    when: ["workers/src/routes/media.ts", "workers/src/lib/r2.ts", "workers/src/lib/media-constraints.ts", "workers/src/lib/media-verify.ts"],
     docs: ["docs/caching.md §Cache-Control written by this repo", "docs/media-conventions.md"],
   },
   {
     when: ["workers/src/routes/internal.ts", "lib/features/upload/**"],
     docs: ["docs/architecture.md §Uploads", "docs/edge-cases.md §Upload"],
+  },
+  // Must outrank the referral route below: the install-referrer service is one of
+  // the THREE delivery paths for a wallpaper target (App Link, Play referrer,
+  // Google Ads DDL) and they share one persisted one-shot, so a change to any of
+  // them is a change to that contract. docs/deep-links.md had no route at all.
+  {
+    when: [
+      "lib/core/deeplink/**",
+      "lib/features/referral/data/install_referrer_service.dart",
+      "lib/features/wallpapers/presentation/apply_restore.dart",
+    ],
+    docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
   },
   {
     when: ["workers/src/lib/referral.ts", "lib/features/referral/**"],
@@ -54,7 +66,7 @@ const ROUTES = [
     docs: ["docs/notifications.md"],
   },
   {
-    when: ["lib/core/analytics/**"],
+    when: ["lib/core/analytics/**", "workers/src/lib/ga4.ts"],
     docs: ["docs/analytics-events.md", "docs/analytics-ops.md"],
   },
   {
@@ -63,7 +75,7 @@ const ROUTES = [
   },
   {
     when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/wallpaper/**", "android/**/share/**"],
-    docs: ["docs/edge-cases.md §Wallpaper apply", "docs/known-issues.md §Traps already paid for", "docs/share.md"],
+    docs: ["docs/edge-cases.md §Wallpaper apply", "docs/known-issues.md §Traps already paid for", "docs/share.md", "docs/deep-links.md §Google Ads DDL"],
   },
   {
     when: ["lib/features/wallpapers/**/*share*"],
@@ -80,6 +92,21 @@ const ROUTES = [
   {
     when: ["lib/features/ringtones/**"],
     docs: ["docs/edge-cases.md §Ringtones", "docs/architecture.md §API"],
+  },
+  // The hooks are CODE, not prose — CLAUDE.md §11 and release-build/SKILL.md both
+  // make claims about what they enforce, so changing one can silently contradict them.
+  {
+    when: [".claude/hooks/**"],
+    docs: ["CLAUDE.md §11 Definition of Done & Git", ".claude/skills/release-build/SKILL.md"],
+  },
+  // LAST, and it must stay last — it is a catch-all, and first-match-wins means
+  // anything above it wins. Seven of the twelve files in workers/src/lib were named
+  // individually and the other five (db, ga4, media-verify, ratelimit, tombstone)
+  // matched nothing at all, so editing a file two docs explicitly describe produced
+  // no reminder. A general rule cannot rot as files are added; a list of names does.
+  {
+    when: ["workers/src/lib/**"],
+    docs: ["docs/architecture.md", "workers/README.md"],
   },
 ];
 
@@ -156,7 +183,11 @@ process.stdin.on("end", () => {
     rel = rel.split(path.sep).join("/").replace(/^\.\//, "");
     // Outside the repo, or a doc edit (the doc IS the update) — say nothing.
     if (rel.startsWith("..")) return;
-    if (/^(docs\/|CLAUDE\.md$|README\.md$|\.claude\/)/i.test(rel)) return;
+    // Prose only: docs/, the two root READMEs, and the skill/agent definitions.
+    // .claude/hooks/ is deliberately NOT here — it is executable code that CLAUDE.md
+    // §11 makes claims about, and suppressing the whole .claude/ tree is exactly how
+    // the hooks drifted from the docs describing what they enforce.
+    if (/^(docs\/|CLAUDE\.md$|README\.md$|\.claude\/(skills|agents)\/)/i.test(rel)) return;
 
     const relLower = rel.toLowerCase();
     for (const route of ROUTES) {
