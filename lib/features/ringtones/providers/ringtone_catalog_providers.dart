@@ -236,19 +236,24 @@ class SelectedRingtoneCategory extends Notifier<String> {
   void select(String slug) => state = slug;
 }
 
-/// The list the screen renders: catalog filtered by the selected category.
+/// The list the screen renders: catalog filtered by the selected category, in
+/// the three-tier order — admin pin, then most-SET, then catalog position.
 ///
-/// All is most-SET first, newest within equal counts; a category chip keeps
-/// plain catalog order (newest-first). Identical rule to the wallpaper feed, and
-/// it runs through the same [orderedByUse] so the two tabs cannot drift — see
-/// `_orderedForAll` in catalog_providers.dart for why the tiebreaker matters.
+/// Identical rule to the wallpaper feed, through the same [orderedByUse], so the
+/// two tabs cannot drift — see it in catalog_providers.dart for why the pin is
+/// nulls-last and why the position tiebreaker is load-bearing. Every chip gets
+/// the comparator, All included: a category is All restricted to that category.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {
   final slug = ref.watch(selectedRingtoneCategoryProvider);
   return ref
       .watch(ringtoneCatalogProvider)
       .whenData(
-        (all) => slug == WallpaperCategory.allSlug
-            ? orderedByUse(all, (r) => r.setCount)
-            : all.where((r) => r.category == slug).toList(growable: false),
+        (all) => orderedByUse(
+          slug == WallpaperCategory.allSlug
+              ? all
+              : all.where((r) => r.category == slug).toList(growable: false),
+          (r) => r.setCount,
+          rank: (r) => r.feedRank,
+        ),
       );
 });

@@ -1,18 +1,21 @@
--- Arul — Neon Postgres schema (curated All-feed head). Apply after
--- 04_ringtones.sql.
+-- Arul — Neon Postgres schema (curated feed head). Apply after 04_ringtones.sql.
 --
--- feed_rank is the CURATED head of the All feed only, managed by drag-and-drop
--- in the CMS. Rows with a non-null rank sort first by feed_rank ASC (tie → id);
--- everything still null follows in the app's existing stable FNV-1a shuffle
--- (CLAUDE.md §5b, feedOrder() in catalog_providers.dart).
+-- feed_rank is TIER 1 of the feed order, on EVERY chip (CLAUDE.md §5b):
+--   feed_rank ASC NULLS LAST → apply_count DESC → catalog position ASC
+-- Managed by drag-and-drop in the CMS, which writes the rank and bumps
+-- content_version in one transaction. 08_ringtone_feed_rank.sql gives ringtones
+-- the identical column so one comparator serves both tabs.
 --
--- Deliberately NOT sort_order: that column drives CATEGORY-chip order
--- (build-catalog emits sort_order ASC, created_at DESC, id ASC) and 341 of the
--- 614 live rows carry distinct non-zero values from their import manifests —
--- reusing it would reorder every chip, and this change is scoped to All.
+-- Deliberately NOT sort_order: that column drives order WITHIN a category
+-- (build-catalog emits sort_order ASC, created_at DESC, id ASC) and imports own
+-- it, so curation stored there died on every import — that coupling is exactly
+-- what retired the first version of this feature. Keep the two axes separate.
 --
--- Nullable with no default and no index, both on purpose: NULL everywhere means
--- the All feed is byte-identical to today until an admin curates, and a curated
--- head of a few dozen rows out of 614 is not worth an index. Ranks are written
--- sparsely (10, 20, 30 …) so a future drag renumbers without cascading.
+-- Nullable with no default and no index, all three on purpose. NULL means
+-- UNPINNED and is the ordinary state of ~every row, so the feed is unchanged
+-- until an admin curates; an import writes no rank, which is what makes a bulk
+-- drop unable to displace the curated head; and a head of a few dozen rows out
+-- of ~700 is not worth an index — nothing sorts on it in SQL. Never backfill it
+-- and never fold NULL to 0: 0 is a valid top-most pin. Ranks are written
+-- sparsely (10, 20, 30 …) so a drag renumbers without cascading.
 alter table wallpapers add column if not exists feed_rank integer;

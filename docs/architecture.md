@@ -47,8 +47,10 @@ or the hourly cron (no-op if the version is unchanged). Output per scope (`wallp
 `catalog/<scope>/all_{page}.json` — ONE page set each, no per-category files — plus the shared
 `catalog/version.json` + `catalog/app_config.json`. Rows ordered `sort_order ASC, created_at DESC,
 id ASC` WITHIN a category (ringtones add `NULLS LAST`; `created_at` is NOT NULL so they match), then
-`interleaveByCategory` deals the cross-category order before paging — deterministic both ways. Chips
-and `feedOrder()` are client-side. **A zero-row scope still writes a valid empty `all_1.json`** —
+`composeFeedOrder` hoists `feed_rank` pins to the head and `interleaveByCategory` deals the
+cross-category order over the remainder, before paging — deterministic both ways. Hoist server-side
+as well as client-side because it is the only channel that reaches installs that never update. Chips
+and the other two order tiers are client-side (`feedOrder()`). **A zero-row scope still writes a valid empty `all_1.json`** —
 a 404 there means "the build failed", never "no content". Orphaned page files are deleted each
 rebuild. The backend is never conditional on the front end. Cache headers: [caching.md](caching.md).
 

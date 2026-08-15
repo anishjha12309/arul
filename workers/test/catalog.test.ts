@@ -17,6 +17,7 @@ import {
   writeAppConfig,
   deleteOrphanedPages,
   interleaveByCategory,
+  composeFeedOrder,
 } from "../src/cron/build-catalog.js";
 
 // ── Mock R2 bucket that supports list() + delete() for orphan-cleanup tests ───
@@ -282,5 +283,124 @@ describe("interleaveByCategory", () => {
 
   it("handles an empty catalog", () => {
     expect(interleaveByCategory([])).toEqual([]);
+  });
+});
+
+// ── composeFeedOrder ─────────────────────────────────────────────────────────
+// Tier 1 of the three-tier feed order (CLAUDE.md §5b). Same reasoning as above:
+// a wrong answer here builds cleanly and ships a valid catalog that is simply in
+// the wrong order. The import-safety case is the one that killed the first
+// attempt at this feature, so it is pinned as a requirement, not an example.
+describe("composeFeedOrder", () => {
+  const rows = (spec: Record<string, number>) =>
+    Object.entries(spec).flatMap(([cat, n]) =>
+      Array.from({ length: n }, (_, i) => ({ id: `${cat}${i}`, category: cat })),
+    );
+  /** Pin `id` at `rank`, leaving every other row unpinned. */
+  const pin = <T extends { id: string }>(
+    list: T[],
+    ranks: Record<string, number>,
+  ) => list.map((r) => ({ ...r, feed_rank: ranks[r.id] ?? null }));
+
+  it("hoists pinned rows to the head in rank order, across categories", () => {
+    const out = composeFeedOrder(
+      pin(rows({ perumal: 3, sivan: 3, amman: 3 }), {
+        amman2: 10,
+        perumal1: 20,
+        sivan0: 30,
+      }),
+    );
+
+    expect(out.slice(0, 3).map((r) => r.id)).toEqual([
+      "amman2", "perumal1", "sivan0",
+    ]);
+  });
+
+  it("falls through: unpinned rows keep the category interleave", () => {
+    // The whole point of pins-WITH-fallthrough — ranking three rows must not
+    // turn the other six into an arbitrary list.
+    const out = composeFeedOrder(
+      pin(rows({ perumal: 3, sivan: 3, amman: 3 }), {
+        amman2: 10, perumal1: 20, sivan0: 30,
+      }),
+    );
+
+    expect(out.slice(3).map((r) => r.id)).toEqual([
+      "amman0", "perumal0", "sivan1",
+      "amman1", "perumal2", "sivan2",
+    ]);
+  });
+
+  it("a bulk import cannot displace a pin — the trap that retired v1", () => {
+    // 30 fresh rows arrive with feed_rank NULL (an import writes no rank). They
+    // must land BEHIND the curated head, not on top of it.
+    const curated = pin(rows({ amman: 2 }), { amman0: 10, amman1: 20 });
+    const imported = pin(rows({ sivan: 30 }), {});
+
+    const out = composeFeedOrder([...imported, ...curated]);
+
+    expect(out.slice(0, 2).map((r) => r.id)).toEqual(["amman0", "amman1"]);
+    expect(out).toHaveLength(32);
+  });
+
+  it("treats null and a missing column alike — both are unpinned", () => {
+    // Ringtones built before 08_ringtone_feed_rank.sql applied carry no such key
+    // at all; that must read as unpinned, never as rank 0.
+    const withNull = composeFeedOrder(pin(rows({ a: 2, b: 2 }), {}));
+    const withoutKey = composeFeedOrder(rows({ a: 2, b: 2 }));
+    expect(withNull.map((r) => r.id)).toEqual(withoutKey.map((r) => r.id));
+  });
+
+  it("rank 0 is a real pin, not an absent one", () => {
+    const out = composeFeedOrder(pin(rows({ a: 3 }), { a2: 0 }));
+    expect(out[0].id).toBe("a2");
+  });
+
+  it("breaks a duplicate rank on catalog position, so the order is TOTAL", () => {
+    const input = pin(rows({ a: 2, b: 2 }), { a0: 10, a1: 10, b0: 10 });
+    // Incoming order is a0, a1, b0 — a duplicated rank must not let the sort
+    // pick its own winner.
+    expect(composeFeedOrder(input).slice(0, 3).map((r) => r.id)).toEqual([
+      "a0", "a1", "b0",
+    ]);
+  });
+
+  it("is idempotent — a rebuild never churns the feed", () => {
+    const once = composeFeedOrder(
+      pin(rows({ a: 7, b: 5, c: 3 }), { b1: 10, c0: 20, a4: 30 }),
+    );
+    const twice = composeFeedOrder(once);
+    expect(twice.map((r) => r.id)).toEqual(once.map((r) => r.id));
+  });
+
+  it("is a permutation — never drops or duplicates a row", () => {
+    const input = pin(rows({ a: 9, b: 4, c: 1, d: 6 }), { a3: 10, d0: 20 });
+    const out = composeFeedOrder(input);
+    expect(out).toHaveLength(input.length);
+    expect(new Set(out.map((r) => r.id))).toEqual(
+      new Set(input.map((r) => r.id)),
+    );
+  });
+
+  it("with nothing pinned it IS interleaveByCategory", () => {
+    // The live shape for ringtones on day one, and for wallpapers if the admin
+    // unpins everything. No pins must mean no behaviour change at all.
+    const input = rows({ perumal: 20, sivan: 10, amman: 5 });
+    expect(composeFeedOrder(pin(input, {})).map((r) => r.id)).toEqual(
+      interleaveByCategory(input).map((r) => r.id),
+    );
+  });
+
+  it("survives a rank that is not a number", () => {
+    // Defensive: a bad rank costs one row its pin, it never corrupts the rest.
+    const input = [
+      { id: "a0", category: "a", feed_rank: "not-a-rank" as unknown as number },
+      { id: "a1", category: "a", feed_rank: 10 },
+    ];
+    expect(composeFeedOrder(input).map((r) => r.id)).toEqual(["a1", "a0"]);
+  });
+
+  it("handles an empty catalog", () => {
+    expect(composeFeedOrder([])).toEqual([]);
   });
 });

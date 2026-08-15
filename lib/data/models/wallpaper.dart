@@ -50,11 +50,27 @@ abstract class Wallpaper with _$Wallpaper {
     /// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
     /// for exactly what the number does and does not mean.
     ///
-    /// Category chips ignore it entirely (they stay newest-first). Absent from
-    /// an older cached catalog parses as 0, which sorts as "never applied" —
-    /// correct, and it degrades that whole cached feed to plain newest-first
-    /// rather than to something arbitrary.
+    /// Absent from an older cached catalog parses as 0, which sorts as "never
+    /// applied" — correct, and it degrades that whole cached feed to plain
+    /// newest-first rather than to something arbitrary.
     @Default(0) int applyCount,
+
+    /// The admin's pin — tier 1 of [feedOrder], ahead of [applyCount].
+    ///
+    /// Written by hand in the CMS and sparse by convention (10, 20, 30 …) so a
+    /// later drag renumbers one row instead of cascading the list. Ascending:
+    /// the smallest rank leads the feed.
+    ///
+    /// **Null is the ordinary state, not a missing value** — ~all rows are
+    /// unpinned, and they sort behind every pin on [applyCount] instead. That
+    /// nullability is the feature's safety property: an import writes no rank, so
+    /// a bulk drop can never displace the curated head. The first version of this
+    /// column stored curation in `sort_order`, which every import reset.
+    ///
+    /// Nullable also means an older cached catalog — built before the field was
+    /// emitted — parses as "nothing pinned" and simply falls back to the
+    /// popularity order, rather than failing to parse.
+    int? feedRank,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>

@@ -28,11 +28,25 @@ mixin _$Wallpaper {
 /// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
 /// for exactly what the number does and does not mean.
 ///
-/// Category chips ignore it entirely (they stay newest-first). Absent from
-/// an older cached catalog parses as 0, which sorts as "never applied" —
-/// correct, and it degrades that whole cached feed to plain newest-first
-/// rather than to something arbitrary.
- int get applyCount;
+/// Absent from an older cached catalog parses as 0, which sorts as "never
+/// applied" — correct, and it degrades that whole cached feed to plain
+/// newest-first rather than to something arbitrary.
+ int get applyCount;/// The admin's pin — tier 1 of [feedOrder], ahead of [applyCount].
+///
+/// Written by hand in the CMS and sparse by convention (10, 20, 30 …) so a
+/// later drag renumbers one row instead of cascading the list. Ascending:
+/// the smallest rank leads the feed.
+///
+/// **Null is the ordinary state, not a missing value** — ~all rows are
+/// unpinned, and they sort behind every pin on [applyCount] instead. That
+/// nullability is the feature's safety property: an import writes no rank, so
+/// a bulk drop can never displace the curated head. The first version of this
+/// column stored curation in `sort_order`, which every import reset.
+///
+/// Nullable also means an older cached catalog — built before the field was
+/// emitted — parses as "nothing pinned" and simply falls back to the
+/// popularity order, rather than failing to parse.
+ int? get feedRank;
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -45,16 +59,16 @@ $WallpaperCopyWith<Wallpaper> get copyWith => _$WallpaperCopyWithImpl<Wallpaper>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount);
+int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank);
 
 @override
 String toString() {
-  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount)';
+  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank)';
 }
 
 
@@ -65,7 +79,7 @@ abstract mixin class $WallpaperCopyWith<$Res>  {
   factory $WallpaperCopyWith(Wallpaper value, $Res Function(Wallpaper) _then) = _$WallpaperCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount
+ String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank
 });
 
 
@@ -82,7 +96,7 @@ class _$WallpaperCopyWithImpl<$Res>
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -92,7 +106,8 @@ as WallpaperKind,key: null == key ? _self.key : key // ignore: cast_nullable_to_
 as String,width: freezed == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
 as int?,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
 as int?,applyCount: null == applyCount ? _self.applyCount : applyCount // ignore: cast_nullable_to_non_nullable
-as int,
+as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 
@@ -177,10 +192,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Wallpaper() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank);case _:
   return orElse();
 
 }
@@ -198,10 +213,10 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank)  $default,) {final _that = this;
 switch (_that) {
 case _Wallpaper():
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -218,10 +233,10 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank)?  $default,) {final _that = this;
 switch (_that) {
 case _Wallpaper() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank);case _:
   return null;
 
 }
@@ -233,7 +248,7 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class _Wallpaper extends Wallpaper {
-  const _Wallpaper({required this.id, required this.title, this.category = 'other', @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) required this.kind, @JsonKey(name: 'full_key') required this.key, this.width, this.height, this.applyCount = 0}): super._();
+  const _Wallpaper({required this.id, required this.title, this.category = 'other', @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) required this.kind, @JsonKey(name: 'full_key') required this.key, this.width, this.height, this.applyCount = 0, this.feedRank}): super._();
   factory _Wallpaper.fromJson(Map<String, dynamic> json) => _$WallpaperFromJson(json);
 
 @override final  String id;
@@ -256,11 +271,26 @@ class _Wallpaper extends Wallpaper {
 /// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
 /// for exactly what the number does and does not mean.
 ///
-/// Category chips ignore it entirely (they stay newest-first). Absent from
-/// an older cached catalog parses as 0, which sorts as "never applied" —
-/// correct, and it degrades that whole cached feed to plain newest-first
-/// rather than to something arbitrary.
+/// Absent from an older cached catalog parses as 0, which sorts as "never
+/// applied" — correct, and it degrades that whole cached feed to plain
+/// newest-first rather than to something arbitrary.
 @override@JsonKey() final  int applyCount;
+/// The admin's pin — tier 1 of [feedOrder], ahead of [applyCount].
+///
+/// Written by hand in the CMS and sparse by convention (10, 20, 30 …) so a
+/// later drag renumbers one row instead of cascading the list. Ascending:
+/// the smallest rank leads the feed.
+///
+/// **Null is the ordinary state, not a missing value** — ~all rows are
+/// unpinned, and they sort behind every pin on [applyCount] instead. That
+/// nullability is the feature's safety property: an import writes no rank, so
+/// a bulk drop can never displace the curated head. The first version of this
+/// column stored curation in `sort_order`, which every import reset.
+///
+/// Nullable also means an older cached catalog — built before the field was
+/// emitted — parses as "nothing pinned" and simply falls back to the
+/// popularity order, rather than failing to parse.
+@override final  int? feedRank;
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
@@ -275,16 +305,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount);
+int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank);
 
 @override
 String toString() {
-  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount)';
+  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank)';
 }
 
 
@@ -295,7 +325,7 @@ abstract mixin class _$WallpaperCopyWith<$Res> implements $WallpaperCopyWith<$Re
   factory _$WallpaperCopyWith(_Wallpaper value, $Res Function(_Wallpaper) _then) = __$WallpaperCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount
+ String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank
 });
 
 
@@ -312,7 +342,7 @@ class __$WallpaperCopyWithImpl<$Res>
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,}) {
   return _then(_Wallpaper(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -322,7 +352,8 @@ as WallpaperKind,key: null == key ? _self.key : key // ignore: cast_nullable_to_
 as String,width: freezed == width ? _self.width : width // ignore: cast_nullable_to_non_nullable
 as int?,height: freezed == height ? _self.height : height // ignore: cast_nullable_to_non_nullable
 as int?,applyCount: null == applyCount ? _self.applyCount : applyCount // ignore: cast_nullable_to_non_nullable
-as int,
+as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 

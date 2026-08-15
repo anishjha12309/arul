@@ -45,11 +45,16 @@ abstract class Ringtone with _$Ringtone {
     @Default(0) int sortOrder,
     DateTime? createdAt,
 
-    /// How many times a premium user has SET this as their ringtone — the order
-    /// of the Ringtones tab's All chip, mirroring [Wallpaper.applyCount].
-    /// Counted server-side in `/media/signed-url`; a ringtone has no share path,
-    /// so every grant is a set. Category chips ignore it (newest-first).
+    /// How many times a premium user has SET this as their ringtone — tier 2 of
+    /// the list's order, mirroring [Wallpaper.applyCount]. Counted server-side
+    /// in `/media/signed-url`; a ringtone has no share path, so every grant is a
+    /// set.
     @Default(0) int setCount,
+
+    /// The admin's pin — tier 1, ahead of [setCount]. Same column, same
+    /// semantics and the same null-means-unpinned contract as
+    /// [Wallpaper.feedRank]; both tabs order through the one `orderedByUse`.
+    int? feedRank,
   }) = _Ringtone;
 
   factory Ringtone.fromJson(Map<String, dynamic> json) =>

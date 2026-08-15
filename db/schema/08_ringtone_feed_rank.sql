@@ -1,0 +1,22 @@
+-- Arul — Neon Postgres schema (ringtone admin pins). Apply after 07_ringtone_deity.sql.
+--
+-- Gives ringtones the same curation column wallpapers got in 05_feed_rank.sql, so
+-- ONE comparator can serve both tabs (CLAUDE.md §5b). Identical shape on purpose —
+-- integer, nullable, no default, no index: the app's order is
+--   feed_rank ASC NULLS LAST → set_count DESC → catalog position ASC
+-- and a rank that is NULL everywhere leaves that order byte-identical to what
+-- shipped before this column existed.
+--
+-- Nullable is the whole safety property, not a convenience. An import writes no
+-- rank, so imported rows land in tier 2/3 and CANNOT displace a pin. That is the
+-- fix for the trap that retired the first attempt: hand-written order lived in
+-- `sort_order`, every bulk import reset it, and the curation silently died.
+--
+-- Not `sort_order`: that column is the order WITHIN a category (build-catalog's
+-- ORDER BY) and imports own it. Pins are a separate, sparser axis — the CMS writes
+-- 10, 20, 30 … so a later drag renumbers one row instead of cascading the list.
+--
+-- No index: the curated head is a few dozen rows out of a few hundred, and nothing
+-- sorts on it in SQL — build-catalog full-scans published rows anyway and the app
+-- orders the downloaded catalog client-side.
+alter table ringtones add column if not exists feed_rank integer;

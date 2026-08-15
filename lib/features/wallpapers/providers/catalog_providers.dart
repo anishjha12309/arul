@@ -301,64 +301,82 @@ class SelectedCategory extends Notifier<String> {
 
 /// The list the feed serves for [slug] — the ONE definition of feed order.
 ///
-/// A category chip keeps catalog order, which is newest-first: build-catalog
-/// emits `sort_order ASC, created_at DESC, id ASC` and filtering preserves
-/// relative order.
-///
-/// All is **most-applied first, newest within equal counts** — see
-/// [_orderedForAll].
+/// Every chip runs the SAME comparator ([orderedByUse]); a category chip is just
+/// All restricted to one category. That is the invariant: a filtered view can
+/// never contradict All. It holds because the comparator is a total order and
+/// its last tier is catalog POSITION — position within the filtered list is
+/// monotonic in position within the full one, so restricting the set cannot
+/// reverse any pair.
 ///
 /// [apply_restore] resolves its saved page index through this too. That index is
 /// a position in the list the feed SERVES, so it must be validated against the
 /// same ordering or a post-apply restart restores to a different wallpaper.
-List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) =>
-    slug == WallpaperCategory.allSlug
-    ? _orderedForAll(all)
-    : all.where((w) => w.category == slug).toList(growable: false);
+List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) => orderedByUse(
+  slug == WallpaperCategory.allSlug
+      ? all
+      : all.where((w) => w.category == slug).toList(growable: false),
+  (w) => w.applyCount,
+  rank: (w) => w.feedRank,
+);
 
-/// All, ordered by [Wallpaper.applyCount] descending, ties in catalog order.
+/// The three-tier feed order (CLAUDE.md §5b), for any catalog list carrying a
+/// pin and a use counter:
 ///
-/// Catalog order is already `sort_order ASC, created_at DESC, id ASC`, so "ties
-/// in catalog order" IS "newest first" — which is why nothing here reads a
-/// timestamp and the model carries none. It also makes the zero state exactly
-/// right: before anyone has applied anything every count is 0, every comparison
-/// falls through to the index, and All is plain newest-first. That is the
-/// intended default, not a fallback.
-///
-/// The index tiebreaker is load-bearing and must not be replaced by a bare sort
-/// on the count: Dart's `List.sort` is NOT stable, so equal counts — most of the
-/// catalog, most of the time — would come out in an order free to change between
-/// runs. The feed compares served lists by ORDERED IDS (`_syncFeed`), so that
-/// would re-point the pager and the video pool under a scrolling user on every
-/// cold start, revalidate and pull-refresh. Decorating with the index keeps the
-/// order TOTAL and a pure function of the catalog's contents.
-///
-/// Replaced (2026-08-13) a hand-curated `feed_rank` head from the CMS followed
-/// by an FNV-1a shuffle. The shuffle existed because a bulk import is one
-/// transaction — 30 wallpapers sharing `sort_order` AND `created_at` land as 30
-/// consecutive slots — so newest-first lets a single import own the whole first
-/// screenful. That is accepted now rather than fixed: popularity outranks
-/// recency the moment any applies exist, so a fresh import's run at the top is
-/// bounded by how long real users take to apply something.
-List<Wallpaper> _orderedForAll(List<Wallpaper> all) =>
-    orderedByUse(all, (w) => w.applyCount);
-
-/// [_orderedForAll] for any catalog list carrying a use counter.
+///   1. [rank] ascending, **nulls last** — the admin's pins.
+///   2. [useCount] descending — popularity.
+///   3. catalog position ascending — newest-first within a category,
+///      interleaved across them by the Worker.
 ///
 /// Shared with the Ringtones tab, whose model and provider are separate but
-/// whose All chip follows the identical rule (CLAUDE.md §5b) — written once so
-/// the two lists cannot drift apart.
-List<T> orderedByUse<T>(List<T> all, int Function(T) useCount) {
-  // Decorate-sort-undecorate: read the count ONCE per row rather than twice per
+/// whose rule is identical — written once so the two lists cannot drift apart.
+///
+/// Tier 1 is sparse by design: a null rank is the ordinary state, so most of the
+/// catalog falls straight through to tier 2. This is what lets an import land
+/// safely — new rows arrive unranked and cannot displace the curated head.
+///
+/// Tier 3 is load-bearing and must not be dropped for a bare sort on the earlier
+/// keys: Dart's `List.sort` is NOT stable, so ties — most of the catalog, most
+/// of the time, since an uncurated row with no applies ties on both tiers above —
+/// would come out in an order free to change between runs. The feed compares
+/// served lists by ORDERED IDS (`_syncFeed`), so that would re-point the pager
+/// and the video pool under a scrolling user on every cold start, revalidate and
+/// pull-refresh. Decorating with the index keeps the order TOTAL and a pure
+/// function of the list it is given.
+///
+/// The zero state is exactly right and is not a fallback: with nothing pinned
+/// and nothing applied, every comparison falls through to the index and the feed
+/// is plain catalog order — newest-first, interleaved.
+List<T> orderedByUse<T>(
+  List<T> all,
+  int Function(T) useCount, {
+  required int? Function(T) rank,
+}) {
+  // Decorate-sort-undecorate: read each key ONCE per row rather than twice per
   // comparison — this runs on the chip tap that returns to All.
   final keyed = [
-    for (var i = 0; i < all.length; i++) (useCount(all[i]), i, all[i]),
+    for (var i = 0; i < all.length; i++)
+      (rank: rank(all[i]), count: useCount(all[i]), i: i, row: all[i]),
   ];
   keyed.sort((a, b) {
-    final byCount = b.$1.compareTo(a.$1); // descending — most used first
-    return byCount != 0 ? byCount : a.$2.compareTo(b.$2); // then catalog order
+    final byRank = _compareRank(a.rank, b.rank);
+    if (byRank != 0) return byRank;
+    final byCount = b.count.compareTo(a.count); // descending — most used first
+    return byCount != 0 ? byCount : a.i.compareTo(b.i); // then catalog order
   });
-  return List<T>.unmodifiable([for (final e in keyed) e.$3]);
+  return List<T>.unmodifiable([for (final e in keyed) e.row]);
+}
+
+/// `feed_rank` ASC, NULLS LAST.
+///
+/// Nulls last is the whole contract — an unpinned row must sink BELOW every pin
+/// and be decided by popularity instead. Treating null as a number would do the
+/// opposite of the feature: as 0 it would pin the entire uncurated catalog above
+/// the curated head, and as a large value it would still make the pins a total
+/// order over rows the admin never touched.
+int _compareRank(int? a, int? b) {
+  if (a == null) return b == null ? 0 : 1;
+  if (b == null) return -1;
+  return a.compareTo(b);
 }
 
 /// The feed: catalog filtered by the selected CATEGORY, in [feedOrder]. Never

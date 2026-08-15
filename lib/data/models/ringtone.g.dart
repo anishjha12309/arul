@@ -22,6 +22,7 @@ _Ringtone _$RingtoneFromJson(Map<String, dynamic> json) => _Ringtone(
       ? null
       : DateTime.parse(json['created_at'] as String),
   setCount: (json['set_count'] as num?)?.toInt() ?? 0,
+  feedRank: (json['feed_rank'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$RingtoneToJson(_Ringtone instance) => <String, dynamic>{
@@ -36,4 +37,5 @@ Map<String, dynamic> _$RingtoneToJson(_Ringtone instance) => <String, dynamic>{
   'sort_order': instance.sortOrder,
   'created_at': instance.createdAt?.toIso8601String(),
   'set_count': instance.setCount,
+  'feed_rank': instance.feedRank,
 };

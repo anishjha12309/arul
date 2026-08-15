@@ -534,7 +534,7 @@ export async function refreshPopularityOrder(env: Env): Promise<
   }
 }
 
-// ── Category interleave ───────────────────────────────────────────────────────
+// ── Feed composition (admin pins, then category interleave) ───────────────────
 
 /**
  * Deal rows out ONE PER CATEGORY, preserving each category's own order.
@@ -605,6 +605,64 @@ export function interleaveByCategory<T extends Record<string, unknown>>(
   return out;
 }
 
+/**
+ * Page order: admin pins first (`feed_rank` ASC), then everything else
+ * interleaved by category.
+ *
+ * Tier 1 of the three-tier order (CLAUDE.md §5b). The other two tiers —
+ * use-count DESC, then catalog position — are applied client-side over the
+ * downloaded catalog, because counts change far more often than a rebuild and
+ * the app already holds every row.
+ *
+ * PINS WITH FALLTHROUGH. The admin ranks any subset; a null rank is not
+ * "unranked pending curation", it is the ordinary state of ~all rows. Hoisting
+ * only the non-null ones is what makes curation survive an import: a bulk drop
+ * writes no rank, so its rows land in the interleaved remainder and CANNOT
+ * displace a pin. The first attempt at this feature stored the curated order in
+ * `sort_order`, which every import reset — the curation died silently and the
+ * feature was retired. This shape has no such coupling.
+ *
+ * Why hoist here and not leave all three tiers to the app: an install that never
+ * updates still gets the pinned order in its CATEGORY chips, because those chips
+ * filter this page set and filtering preserves relative order. Old clients don't
+ * re-sort, so this is the ONLY channel that reaches them.
+ *
+ * Pinned rows are pulled OUT of the interleave pool rather than sorted within
+ * it — a pin is a deliberate override of the round-robin, and leaving them in
+ * would let the cycle push a pinned row behind an unpinned one.
+ *
+ * Idempotent, like [interleaveByCategory]: re-running on its own output
+ * re-partitions to the same two sets, sorts the pins to the same order, and
+ * interleaves an already-interleaved remainder into itself. A rebuild never
+ * churns the feed.
+ */
+export function composeFeedOrder<T extends Record<string, unknown>>(
+  rows: T[],
+): T[] {
+  const pinned: { rank: number; i: number; row: T }[] = [];
+  const unpinned: T[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const rank = rows[i]["feed_rank"];
+    // Only a real number pins. null/undefined (the common case) and anything
+    // non-numeric that survived normalization fall through to the remainder,
+    // which is always the safe direction — a bad rank costs a row its pin, it
+    // never corrupts the order of the other 600.
+    if (typeof rank === "number" && Number.isFinite(rank)) {
+      pinned.push({ rank, i, row: rows[i] });
+    } else {
+      unpinned.push(rows[i]);
+    }
+  }
+  if (pinned.length === 0) return interleaveByCategory(unpinned);
+
+  // Ties on rank break on incoming catalog position, decorated explicitly rather
+  // than leaning on Array.sort's stability — the same total-order discipline the
+  // SQL ORDER BY and the app's comparator keep, so all three agree on a duplicate
+  // rank instead of each picking its own winner.
+  pinned.sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.i - b.i));
+  return [...pinned.map((p) => p.row), ...interleaveByCategory(unpinned)];
+}
+
 // ── Postgres bigint normalization ─────────────────────────────────────────────
 /**
  * Coerce a Postgres `bigint` column to a JS number.
@@ -627,6 +685,36 @@ function pgBigintToNumber(v: unknown): number {
   }
   if (typeof v === "bigint") return Number(v);
   return 0;
+}
+
+/**
+ * Coerce a NULLABLE Postgres integer to a JS number, preserving null.
+ *
+ * Deliberately NOT [pgBigintToNumber]: that one folds null to 0, which is right
+ * for a counter and catastrophic for `feed_rank`, where null means "unpinned"
+ * and 0 is a valid, top-most pin. Folding would pin all ~660 unranked rows ahead
+ * of the 40 real ones.
+ *
+ * The string branch is defensive rather than observed — int4 arrives as a number
+ * today, and only int8 comes back as a string under fetch_types:false. It costs
+ * nothing and the failure it guards is severe: the Dart model casts this field to
+ * `int?`, and a string there throws inside catalog parsing, which drops the app to
+ * its disk cache for every user until a rebuild fixes it.
+ *
+ * Anything unparseable normalizes to null — the row loses its pin and still
+ * renders, rather than taking the catalog down with it.
+ */
+function pgIntOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 // ── Per-scope builder ─────────────────────────────────────────────────────────
@@ -716,15 +804,15 @@ async function buildScope(
   //               preview/stream + cover rendering; mime stays — used to infer
   //               the file extension on set-as-ringtone; created_at STAYS.)
   //   `category` (the browse axis — feed chips filter on it) is always emitted.
-  //   `apply_count` / `set_count` are always emitted: they ARE the order of the
-  //   app's All chip, so they have to ride inside the catalog JSON the same way
-  //   feed_rank used to (version bump → rebuild → purge). Ordering HERE stays
-  //   newest-first because the CATEGORY chips need it; the app applies the
-  //   popularity sort in feedOrder() over the downloaded catalog.
-  //   `feed_rank` is dropped — hand-curation was retired in favour of the
-  //   popularity order, and the CMS page that wrote it is gone. The column still
-  //   exists in Neon (dropping it buys nothing), so it must be dropped HERE or it
-  //   would ship a dead field to every client on every page.
+  //   `apply_count` / `set_count` are always emitted: they are tier 2 of the
+  //   app's order, so they have to ride inside the catalog JSON (version bump →
+  //   rebuild; `?v=` does the purging).
+  //   `feed_rank` is emitted for BOTH scopes — tier 1, the admin's pins. It rides
+  //   the catalog for the same reason the counts do, and it is also applied to
+  //   the page order here by composeFeedOrder so installs that never update still
+  //   see pins in their category chips. Normalized through pgIntOrNull, which
+  //   keeps null as null: the Dart models parse it as `int?` and null IS the
+  //   value that means unpinned.
   const publicRows = validRows.map((row) => {
     const r = { ...row } as Record<string, unknown>;
     // Normalize text[] columns: postgres.js (fetch_types:false, required for
@@ -732,9 +820,13 @@ async function buildScope(
     // The Flutter models cast `tags` to List<dynamic>, so emit a real JSON array.
     if ("tags" in r) r["tags"] = pgTextArrayToList(r["tags"]);
 
+    // `feed_rank` is the same column, the same meaning and the same nullability
+    // in both scopes, so it normalizes once here rather than twice below.
+    r["feed_rank"] = pgIntOrNull(r["feed_rank"]);
+
     if (scope === "wallpapers") {
-      // `category` (the browse axis) and `apply_count` (the All order) are
-      // emitted as-is; neither may ever be added to the drop list below.
+      // `category` (the browse axis), `apply_count` (tier 2) and `feed_rank`
+      // (tier 1) are emitted as-is; none may ever be added to the drop list.
       r["apply_count"] = pgBigintToNumber(r["apply_count"]);
       for (const k of [
         "audio_key",
@@ -743,14 +835,14 @@ async function buildScope(
         "width",
         "height",
         "bytes",
-        "feed_rank",
       ]) {
         delete r[k];
       }
       return r;
     }
     // ringtones — the only other scope. Keeps id, title, category, tags,
-    // audio_key, cover_key, mime, is_published, sort_order, created_at, set_count.
+    // audio_key, cover_key, mime, is_published, sort_order, created_at,
+    // set_count, feed_rank.
     r["set_count"] = pgBigintToNumber(r["set_count"]);
     for (const k of ["full_key", "duration_ms", "bytes"]) {
       delete r[k];
@@ -758,10 +850,11 @@ async function buildScope(
     return r;
   });
 
-  // ── Interleave categories ──────────────────────────────────────────────────
-  // Runs AFTER validation so a skipped row cannot leave a hole in the cycle, and
-  // before pagination so pages are cut from the order users actually get.
-  const orderedRows = interleaveByCategory(publicRows);
+  // ── Compose the feed order ─────────────────────────────────────────────────
+  // Pins first, then the category interleave. Runs AFTER validation so a skipped
+  // row cannot leave a hole in the cycle, and before pagination so pages are cut
+  // from the order users actually get.
+  const orderedRows = composeFeedOrder(publicRows);
 
   // ── Write paginated "all" catalog ──────────────────────────────────────────
   // Track every key this build writes so we can delete pages this build no longer

@@ -26,6 +26,7 @@ Map<String, dynamic> _item(
   String stem, {
   String category = 'murugan',
   int? applyCount,
+  int? feedRank,
 }) => {
   'id': 'id-$stem',
   'title': stem,
@@ -37,6 +38,8 @@ Map<String, dynamic> _item(
   // Omitted entirely when never applied — the shape of a freshly published row
   // AND of a catalog cached by a build that predates the column.
   'apply_count': ?applyCount,
+  // Same: omitted when the admin has not pinned the row, which is ~every row.
+  'feed_rank': ?feedRank,
 };
 
 /// Ten ids in catalog order (= newest first, as build-catalog emits them).
@@ -429,24 +432,30 @@ void main() {
       );
     });
 
-    test(
-      'a category chip ignores apply_count entirely — it stays catalog order',
-      () {
-        final all = [
-          Wallpaper.fromJson(_item('sivan0', category: 'sivan')),
+    test('a category chip runs the SAME comparator as All — a filtered view '
+        'can never contradict All', () {
+      // THE invariant of the three-tier order. Every chip sorts; a category is
+      // All restricted to that category, never a differently-ordered list.
+      final all = [
+        for (final s in _stems)
           Wallpaper.fromJson(
-            _item('sivan1', category: 'sivan', applyCount: 99),
+            _item(
+              s,
+              category: s.startsWith('sivan') ? 'sivan' : 'other',
+              applyCount: {'sivan2': 99}[s],
+              feedRank: {'sivan3': 10}[s],
+            ),
           ),
-          Wallpaper.fromJson(_item('sivan2', category: 'sivan')),
-        ];
+      ];
 
-        expect(feedOrder('sivan', all).map((w) => w.title), [
-          'sivan0',
-          'sivan1',
-          'sivan2',
-        ]);
-      },
-    );
+      final fromAll = feedOrder(
+        WallpaperCategory.allSlug,
+        all,
+      ).where((w) => w.category == 'sivan').map((w) => w.title);
+
+      expect(feedOrder('sivan', all).map((w) => w.title), fromAll);
+      expect(fromAll, ['sivan3', 'sivan2', 'sivan0', 'sivan1']);
+    });
 
     test('apply_count survives the disk-cache round-trip', () {
       // The cache is written as toJson() and read back as fromJson(), so a count
@@ -456,7 +465,129 @@ void main() {
       expect(Wallpaper.fromJson(applied.toJson()).applyCount, 30);
     });
 
-    test('a category chip keeps catalog order — newest first', () async {
+    test(
+      'feed_rank survives the disk-cache round-trip, and a null stays null',
+      () {
+        // Same trap as the count above: a pin that does not round-trip would drop
+        // every warm start back to the popularity order until the revalidate
+        // landed. And a null must NOT come back as 0 — 0 is a valid top pin.
+        final pinned = Wallpaper.fromJson(_item('sivan0', feedRank: 20));
+        expect(Wallpaper.fromJson(pinned.toJson()).feedRank, 20);
+
+        final unpinned = Wallpaper.fromJson(_item('sivan1'));
+        expect(unpinned.feedRank, isNull);
+        expect(Wallpaper.fromJson(unpinned.toJson()).feedRank, isNull);
+      },
+    );
+
+    test('a pin leads the feed, ahead of a far more popular row', () {
+      // Tier 1 beats tier 2 — that is the entire point of reviving the column.
+      final all = [
+        Wallpaper.fromJson(_item('sivan0', applyCount: 500)),
+        Wallpaper.fromJson(_item('amman0', feedRank: 10)),
+        Wallpaper.fromJson(_item('murugan0', applyCount: 200)),
+      ];
+
+      expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+        'amman0',
+        'sivan0',
+        'murugan0',
+      ]);
+    });
+
+    test('pins order among themselves by rank ascending', () {
+      final all = [
+        Wallpaper.fromJson(_item('a', feedRank: 30)),
+        Wallpaper.fromJson(_item('b', feedRank: 10)),
+        Wallpaper.fromJson(_item('c', feedRank: 20)),
+      ];
+
+      expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+        'b',
+        'c',
+        'a',
+      ]);
+    });
+
+    test(
+      'an unpinned row sinks below every pin — nulls LAST, never rank 0',
+      () {
+        // Treating null as 0 would pin the whole uncurated catalog above the
+        // curated head, i.e. exactly invert the feature.
+        final all = [
+          Wallpaper.fromJson(_item('unpinned0', applyCount: 99)),
+          Wallpaper.fromJson(_item('pinned', feedRank: 400)),
+          Wallpaper.fromJson(_item('unpinned1')),
+        ];
+
+        expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+          'pinned',
+          'unpinned0',
+          'unpinned1',
+        ]);
+      },
+    );
+
+    test('rank 0 is a real pin, not an absent one', () {
+      final all = [
+        Wallpaper.fromJson(_item('popular', applyCount: 99)),
+        Wallpaper.fromJson(_item('zero', feedRank: 0)),
+      ];
+
+      expect(feedOrder(WallpaperCategory.allSlug, all).first.title, 'zero');
+    });
+
+    test('a duplicate rank falls back to catalog position, so the order stays '
+        'TOTAL', () {
+      // Same non-stable-sort hazard as the apply_count tie above: the CMS writes
+      // sparse ranks, but nothing in the DB stops two rows sharing one.
+      final all = [
+        Wallpaper.fromJson(_item('first', feedRank: 10)),
+        Wallpaper.fromJson(_item('second', feedRank: 10)),
+        Wallpaper.fromJson(_item('third')),
+      ];
+
+      expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+        'first',
+        'second',
+        'third',
+      ]);
+      expect(
+        feedOrder(
+          WallpaperCategory.allSlug,
+          all.reversed.toList(growable: false),
+        ).map((w) => w.title),
+        ['second', 'first', 'third'],
+      );
+    });
+
+    test('an unrelated bulk import leaves the pins untouched', () {
+      // The property that retired v1: curation lived in sort_order and every
+      // import reset it. Imported rows arrive with NO rank, so they land behind
+      // the curated head no matter how new they are.
+      final curated = [
+        Wallpaper.fromJson(_item('pin0', category: 'amman', feedRank: 10)),
+        Wallpaper.fromJson(_item('pin1', category: 'amman', feedRank: 20)),
+      ];
+      final imported = [
+        for (var i = 0; i < 30; i++)
+          Wallpaper.fromJson(_item('fresh$i', category: 'sivan')),
+      ];
+
+      // Imported rows lead the CATALOG (newest first) yet trail the pins.
+      final ordered = feedOrder(WallpaperCategory.allSlug, [
+        ...imported,
+        ...curated,
+      ]);
+
+      expect(ordered.take(2).map((w) => w.title), ['pin0', 'pin1']);
+      expect(ordered, hasLength(32));
+    });
+
+    test('an uncurated, never-applied category chip is plain catalog order — '
+        'newest first', () async {
+      // The live shape today: sorting a chip only changes it once something is
+      // pinned or applied, so the zero state must stay exactly newest-first.
       serveClumpedCatalog();
 
       final sivan = await feedFor(makeContainer(), 'sivan');
@@ -465,7 +596,7 @@ void main() {
       expect(
         sivan.map((w) => w.title),
         [for (var i = 0; i < 30; i++) 'sivan$i'],
-        reason: 'catalog order, untouched by the All shuffle',
+        reason: 'both order tiers above catalog position are empty here',
       );
     });
   });
