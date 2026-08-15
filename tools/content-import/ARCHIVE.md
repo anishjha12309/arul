@@ -6,7 +6,7 @@
 The ROOT accumulates masters: every drop is copied into `drive/` and backed up to
 `masters-<category>/`, so it grew to ~250 MB of `.mp4` that R2 already holds.
 `archive-index.json` (in **this** folder, so it is version-controlled) is the durable
-stand-in — ~40 KB for 164 clips, about 200 bytes each.
+stand-in — ~40 KB for 164 clips, about 250 bytes each.
 
 | Script | Role |
 |--------|------|
@@ -37,7 +37,9 @@ stand-in — ~40 KB for 164 clips, about 200 bytes each.
 
 ## Clips kept back
 
-Nine clips are **not** in the library and are the only copies, so the prune keeps them:
-five perumal and one amman that were staged but never imported, and three Ayyappan tigers
-(9 · 10 · 14) that shipped and then had their rows deleted. Re-importing one of those is a
-decision, not a re-run.
+Nine clips are **not** in the library, and their `live=0` records are now the only trace of
+them — the bytes are gone from ROOT along with everything else: five perumal and one amman
+staged but never imported, and three Ayyappan tigers (9 · 10 · 14) that shipped and then had
+their rows deleted. Stage 0 catches a re-drop byte-exactly by sha, but only within
+`archive-check.mjs`'s default Hamming `T = 8` perceptually. Re-importing one is a decision,
+not a re-run.

@@ -1,9 +1,10 @@
 -- Arul — Neon Postgres schema (ringtones). Apply after 03_referral_config.sql.
 --   · `category` is first-class (CLAUDE.md §5b — the browse axis, same as
 --     wallpapers; never All/New tabs).
---   · `cover_key` nullable — every live row ships null (row art is the app's
---     drawn kolam medallion); a missing cover must degrade to fallback art,
---     never a broken cell.
+--   · `cover_key` nullable and UNUSED — every live row ships null and nothing
+--     has ever been written under `ringtones/covers/`. Row art is a PNG bundled
+--     in the app, picked by `deity` (07_ringtone_deity.sql); art that ships with
+--     the binary cannot 404, so the list has no image failure state at all.
 --   · `sort_order` matches wallpapers ordering (sort_order ASC, created_at DESC).
 --   · No is_premium column: ALL content is premium-gated in the Worker
 --     (/media/signed-url with kind='ringtone'), never on the row.

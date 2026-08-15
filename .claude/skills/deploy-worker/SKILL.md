@@ -9,8 +9,13 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    real. One that isn't means the resource was never created; STOP and name which.
 1. Check: `cd workers && npx tsc --noEmit && npx vitest run` — both green or STOP.
 2. Account: `npx wrangler whoami` must show **admin@hsrutility.com** (account
-   `ba8dd87179e2ffd378a50292ca8e69e0`). Wrong/no account → tell the user to `wrangler login` as admin
-   (error 10000 = wrong account).
+   `ba8dd87179e2ffd378a50292ca8e69e0`, pinned by `account_id` in wrangler.toml — wrangler will not
+   fall back to another one). Wrong/no account → tell the user to `wrangler login` as admin.
+   **`[code: 7003] Could not route to /client/v4/accounts/<id>/…` usually means the login cannot
+   reach the pinned account** — re-login as admin, never "fix" it by editing `account_id`
+   ([vendor](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/) reads it the
+   other way round, as a wrong `account_id`; for this repo the pin is correct and the login is not).
+   A `10000 Authentication error` (403) is a token/permission problem, NOT a wrong account.
 3. Deploy: `npx wrangler deploy`. Record the version id — report it.
 4. Confirm it answers live. Both hostnames are the same deploy and both must keep working:
    `arul-api.hsrutility.com` is the `custom_domain` route wrangler owns, and
@@ -26,8 +31,9 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    curl -s https://arul-cdn.hsrutility.com/catalog/version.json
    ```
 5. Secrets changed? `npx wrangler secret bulk <file.json>` — **never a shell pipe**: a trailing
-   newline in `PHONEPE_ENV` routes production credentials to the sandbox host and the resulting 401
-   is indistinguishable from bad credentials. Full list: workers/README.md. Never echo a value.
+   newline in `PHONEPE_ENV` once routed production credentials to the sandbox host, and the 401 was
+   indistinguishable from bad credentials. That one now trims and throws (`phonepe.ts:94-98`); every
+   OTHER secret is still compared untrimmed. Full list: workers/README.md. Never echo a value.
    `OPS_SECRET` gates the money-moving internal routes (`run-redemptions`, `refund`) and fails closed
    when unset — that is the safe state, so leave it unset unless an operator run needs it.
 6. Deploying does not restart anything on the app side, but it DOES ship cron changes: both triggers

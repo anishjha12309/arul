@@ -8,8 +8,9 @@ PhonePe docs, several of which are wrong. Running on **PRODUCTION** credentials.
 
 1. **Mobile SDK setup token** = `POST /checkout/v2/sdk/order`, read the **top-level `token`**. NOT the
    web `/checkout/v2/pay` `redirectUrl` token.
-2. **Cancel** — the documented `/checkout/v2/subscriptions/{id}/cancel` 401s. The WORKING path is
-   `/subscriptions/v2/{id}/cancel` (try it first; documented path kept as fallback).
+2. **Cancel** — `/subscriptions/v2/{id}/cancel` first; `/checkout/v2/subscriptions/{id}/cancel` kept
+   as fallback. The checkout-variant 401'd on device back when it was the only path PhonePe
+   documented; their docs now list both (2026-08-14) — keep the order above regardless.
 3. **Recurring** — `POST /subscriptions/v2/notify` → `POST /subscriptions/v2/redeem`; status at
    `/subscriptions/v2/{id}/status?details=true`.
 4. **OAuth token is `/v1/oauth/token`, and that is CORRECT on the v2 flow — do not "upgrade" it.**
@@ -82,6 +83,14 @@ Revoking a mandate the user never authorized answers **400 `SUBSCRIPTION_NOT_FOU
 cancel and the status endpoint** — that is success (nothing exists, nothing can debit), not a live
 orphan. `revokeMandateTolerant` must treat it so, or every abandoned setup logs a false "manual
 revoke required" and buries the one alarm that matters (seen live 2026-08-11).
+
+A setup abandoned AT the sheet differs: the mandate reached `ACTIVATION_IN_PROGRESS`, so cancel
+answers **400 `INVALID_SUBSCRIPTION_STATE`** and the checkout-variant fallback 401s, and
+`revokeMandateTolerant` reads that state as still-live. The abandon-path revoke discards that
+result, so the false "manual revoke required" `console.error` fires on the user's NEXT initiate
+(the supersede revoke), not at the abandon itself. Do not chase it: no PIN was entered so nothing
+can debit, and PhonePe expires it itself (`EXPIRED` is terminal; we send no `expireAt`, so their
+default applies). Only the severity is wrong (device, 2026-08-14).
 
 ## Traps that return 200 while being broken
 

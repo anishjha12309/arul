@@ -17,7 +17,17 @@ mixin _$Ringtone {
 
  String get id; String get title;/// Browse axis, same contract as [Wallpaper.category] — free text; an
 /// unknown/missing category must never crash the list, it falls into All.
- String get category; List<String> get tags; String get audioKey;/// Optional cover art R2 key. Null → the screen renders a decorated
+ String get category;/// Which god the track is to, finer-grained than [category] and DISPLAY
+/// ONLY — the row's subtitle and its artwork. Never a browse axis: no chip
+/// filters on it and nothing orders by it (CLAUDE.md §5b keeps that job on
+/// `category`). It exists because one category spans several gods —
+/// `perumal` alone holds Venkateswara, Krishna, Rama and Narasimha — so
+/// category-level art would put Lakshmi's figure on a Chamundeshwari chant.
+///
+/// Nullable, and a null is ordinary rather than exceptional: a row authored
+/// before the field existed, or in the CMS without it, resolves through
+/// `deityAsset()` to its category's art and shows no subtitle.
+ String? get deity; List<String> get tags; String get audioKey;/// Optional cover art R2 key. Null → the screen renders a decorated
 /// fallback tile (gold ♪ on a maroon/darkSurface gradient), never a broken
 /// image.
  String? get coverKey; String? get mime; int get sortOrder; DateTime? get createdAt;/// How many times a premium user has SET this as their ringtone — the order
@@ -37,16 +47,16 @@ $RingtoneCopyWith<Ringtone> get copyWith => _$RingtoneCopyWithImpl<Ringtone>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,const DeepCollectionEquality().hash(tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount);
+int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount);
 
 @override
 String toString() {
-  return 'Ringtone(id: $id, title: $title, category: $category, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount)';
+  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount)';
 }
 
 
@@ -57,7 +67,7 @@ abstract mixin class $RingtoneCopyWith<$Res>  {
   factory $RingtoneCopyWith(Ringtone value, $Res Function(Ringtone) _then) = _$RingtoneCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, String category, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount
+ String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount
 });
 
 
@@ -74,12 +84,13 @@ class _$RingtoneCopyWithImpl<$Res>
 
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
-as String,tags: null == tags ? _self.tags : tags // ignore: cast_nullable_to_non_nullable
+as String,deity: freezed == deity ? _self.deity : deity // ignore: cast_nullable_to_non_nullable
+as String?,tags: null == tags ? _self.tags : tags // ignore: cast_nullable_to_non_nullable
 as List<String>,audioKey: null == audioKey ? _self.audioKey : audioKey // ignore: cast_nullable_to_non_nullable
 as String,coverKey: freezed == coverKey ? _self.coverKey : coverKey // ignore: cast_nullable_to_non_nullable
 as String?,mime: freezed == mime ? _self.mime : mime // ignore: cast_nullable_to_non_nullable
@@ -171,10 +182,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Ringtone() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
   return orElse();
 
 }
@@ -192,10 +203,10 @@ return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)  $default,) {final _that = this;
 switch (_that) {
 case _Ringtone():
-return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -212,10 +223,10 @@ return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount)?  $default,) {final _that = this;
 switch (_that) {
 case _Ringtone() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount);case _:
   return null;
 
 }
@@ -227,7 +238,7 @@ return $default(_that.id,_that.title,_that.category,_that.tags,_that.audioKey,_t
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class _Ringtone extends Ringtone {
-  const _Ringtone({required this.id, required this.title, this.category = 'other', final  List<String> tags = const <String>[], required this.audioKey, this.coverKey, this.mime, this.sortOrder = 0, this.createdAt, this.setCount = 0}): _tags = tags,super._();
+  const _Ringtone({required this.id, required this.title, this.category = 'other', this.deity, final  List<String> tags = const <String>[], required this.audioKey, this.coverKey, this.mime, this.sortOrder = 0, this.createdAt, this.setCount = 0}): _tags = tags,super._();
   factory _Ringtone.fromJson(Map<String, dynamic> json) => _$RingtoneFromJson(json);
 
 @override final  String id;
@@ -235,6 +246,17 @@ class _Ringtone extends Ringtone {
 /// Browse axis, same contract as [Wallpaper.category] — free text; an
 /// unknown/missing category must never crash the list, it falls into All.
 @override@JsonKey() final  String category;
+/// Which god the track is to, finer-grained than [category] and DISPLAY
+/// ONLY — the row's subtitle and its artwork. Never a browse axis: no chip
+/// filters on it and nothing orders by it (CLAUDE.md §5b keeps that job on
+/// `category`). It exists because one category spans several gods —
+/// `perumal` alone holds Venkateswara, Krishna, Rama and Narasimha — so
+/// category-level art would put Lakshmi's figure on a Chamundeshwari chant.
+///
+/// Nullable, and a null is ordinary rather than exceptional: a row authored
+/// before the field existed, or in the CMS without it, resolves through
+/// `deityAsset()` to its category's art and shows no subtitle.
+@override final  String? deity;
  final  List<String> _tags;
 @override@JsonKey() List<String> get tags {
   if (_tags is EqualUnmodifiableListView) return _tags;
@@ -269,16 +291,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,const DeepCollectionEquality().hash(_tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount);
+int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(_tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount);
 
 @override
 String toString() {
-  return 'Ringtone(id: $id, title: $title, category: $category, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount)';
+  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount)';
 }
 
 
@@ -289,7 +311,7 @@ abstract mixin class _$RingtoneCopyWith<$Res> implements $RingtoneCopyWith<$Res>
   factory _$RingtoneCopyWith(_Ringtone value, $Res Function(_Ringtone) _then) = __$RingtoneCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, String category, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount
+ String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount
 });
 
 
@@ -306,12 +328,13 @@ class __$RingtoneCopyWithImpl<$Res>
 
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,}) {
   return _then(_Ringtone(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
-as String,tags: null == tags ? _self._tags : tags // ignore: cast_nullable_to_non_nullable
+as String,deity: freezed == deity ? _self.deity : deity // ignore: cast_nullable_to_non_nullable
+as String?,tags: null == tags ? _self._tags : tags // ignore: cast_nullable_to_non_nullable
 as List<String>,audioKey: null == audioKey ? _self.audioKey : audioKey // ignore: cast_nullable_to_non_nullable
 as String,coverKey: freezed == coverKey ? _self.coverKey : coverKey // ignore: cast_nullable_to_non_nullable
 as String?,mime: freezed == mime ? _self.mime : mime // ignore: cast_nullable_to_non_nullable

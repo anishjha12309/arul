@@ -45,7 +45,7 @@ Sources come from more than one generator and the removers are **not interchange
    - Then still **VIEW** the bottom-right corner of the outputs (`crop=420:260:604:1564`). The numbers are calibrated, not infallible, and `none` verdicts are a fail-safe that only the eye closes.
 7. **Plan:** `node ROOT/plan-batch.mjs <category> <Cat> <startN> ["excludeSrc,…"]` → `import-plan.json` (UUID keys, numbered titles).
 8. **QC gate:** `cd tools/content-import && node verify.mjs` — must show 0 failures.
-9. **Import:** `node ROOT/import.mjs` — R2 PUT (media + thumbs) → one Neon txn (rows + `content_version` bump) → build-catalog. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
+9. **Import:** `cp c:/Anish/Arul/tools/content-import/import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node import.mjs` — R2 PUT (media + thumbs, stamped `public, max-age=31536000, immutable`) → one Neon txn (rows + `content_version` bump) → build-catalog. **Never run the copy already sitting at ROOT** — it predates `ea72bbc` and ships objects with no `Cache-Control` (the 2026-07-31 batch proves it ran anyway). It must be copied rather than run in place: `aws4fetch`/`postgres` resolve only from ROOT's `node_modules`, so running it from `tools/content-import/` throws `ERR_MODULE_NOT_FOUND` before touching R2. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
 10. **Verify:** `node ROOT/e2e-verify.mjs`. Its "titles 1..N" line false-fails for offset batches — confirm titles via a DB query instead; all other checks must pass.
 
 11. **Archive + prune:** `node archive-index.mjs` records the new masters (merges, never
@@ -55,7 +55,7 @@ Sources come from more than one generator and the removers are **not interchange
 **Report:** count imported, title range, DB + catalog totals, which remover each file was routed to, and any excluded / dedup-flagged files.
 
 ## Adding a new generator's watermark
-1. Collect a folder of that generator's clips. Average many frames across many of them (`ROOT/wm-survey.py` pattern) — artwork cancels, anything burned in at a fixed position survives, which both locates the glyph and proves whether any *other* static overlay exists.
+1. Collect a folder of that generator's clips. Average many frames across many of them (`ROOT/build-veo-model.py:18-29` is the worked example: accumulate frames into one mean, then high-pass it) — artwork cancels, anything burned in at a fixed position survives, which both locates the glyph and proves whether any *other* static overlay exists.
 2. Build a shape template (`ROOT/build-veo-model.py` is the worked example) and add it to `wm-probe.py`.
 3. Calibrate against a known group of every other generator, both directions, and record the numbers in `wm-probe-calibration.md`. Keep the asymmetry: destructive removers must win by a clear margin.
 4. Prefer cropping over inpainting where the glyph sits near an edge — nothing is invented, so there is no smudge to judge.

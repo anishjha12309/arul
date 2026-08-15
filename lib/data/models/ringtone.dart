@@ -22,6 +22,18 @@ abstract class Ringtone with _$Ringtone {
     /// Browse axis, same contract as [Wallpaper.category] — free text; an
     /// unknown/missing category must never crash the list, it falls into All.
     @Default('other') String category,
+
+    /// Which god the track is to, finer-grained than [category] and DISPLAY
+    /// ONLY — the row's subtitle and its artwork. Never a browse axis: no chip
+    /// filters on it and nothing orders by it (CLAUDE.md §5b keeps that job on
+    /// `category`). It exists because one category spans several gods —
+    /// `perumal` alone holds Venkateswara, Krishna, Rama and Narasimha — so
+    /// category-level art would put Lakshmi's figure on a Chamundeshwari chant.
+    ///
+    /// Nullable, and a null is ordinary rather than exceptional: a row authored
+    /// before the field existed, or in the CMS without it, resolves through
+    /// `deityAsset()` to its category's art and shows no subtitle.
+    String? deity,
     @Default(<String>[]) List<String> tags,
     required String audioKey,
 
@@ -48,6 +60,20 @@ abstract class Ringtone with _$Ringtone {
   String get categoryLabel => category.isEmpty
       ? category
       : category[0].toUpperCase() + category.substring(1);
+
+  /// The row's subtitle, or null when the track carries no deity.
+  ///
+  /// Derived by capitalising the slug, exactly like [categoryLabel] — the
+  /// catalog ships no display label, and every slug in the set is a single
+  /// Latin-transliterated word that capitalises correctly. NOT localized: this
+  /// is server-authored content, not UI chrome (CLAUDE.md §6), and a deity's
+  /// name is a proper noun the six locales all render in their own script only
+  /// if the catalog ever carries them that way.
+  String? get deityLabel {
+    final d = deity;
+    if (d == null || d.isEmpty) return null;
+    return d[0].toUpperCase() + d.substring(1);
+  }
 
   /// Public CDN URL for the preview stream.
   String audioUrl(String cdnBase) => '$cdnBase/$audioKey';

@@ -14,8 +14,8 @@ no closing summary.
 
 1. Code and config in this repo: a `file:line` plus the quoted line.
 2. Schema files under `db/schema/`, `workers/wrangler.toml`, `pubspec.yaml`, manifests.
-3. Output of a read-only live command from the allowlist in your task prompt (SQL SELECT via
-   `node workers/tools/prod-sql.mjs`, `npx wrangler` read commands, `curl` GET/HEAD).
+3. Output of a read-only live command (see the read-only rules in your task prompt): SQL SELECT
+   via `node workers/tools/prod-query.mjs`, `npx wrangler` read commands, `curl` GET/HEAD.
 4. For EXTERNAL claims only: current official vendor documentation, fetched live. Your
    training memory of vendor APIs is presumed stale — a vendor fact carries a fetched
    citation or it is NONE FOUND. WebFetch is denied in this environment; find the page with
@@ -58,14 +58,15 @@ ECHOES: CLAUDE.md §5, docs/architecture.md:40
 NOTE: one sentence, only when the evidence needs interpretation
 ```
 
-For command evidence: `EVIDENCE: CMD node workers/tools/prod-sql.mjs "SELECT ..." → key
+For command evidence: `EVIDENCE: CMD node workers/tools/prod-query.mjs "SELECT ..." → key
 output lines`. Trim output to the lines that carry the claim.
 
 ## Constraints
 
 - Read-only, always: no deploy, no purge, no `secret put`, no KV/R2 writes, SQL is SELECT
-  only, HTTP is GET/HEAD only. A denied command means the answer is NONE FOUND, not a retry
-  with a different mutation.
+  only (via `prod-query.mjs` — `prod-sql.mjs` CAN WRITE and is forbidden outright), HTTP is
+  GET/HEAD only. A command the PERMISSION SYSTEM denies means NONE FOUND; a read-only command
+  merely absent from the list does not — run it.
 - Scope: evidence for the assigned doc only. Do not audit other docs, propose edits, fix
   code, or grade your own claims — verdicts belong to the denier.
 - On a rebuttal round you receive the denier's challenge list: answer only those claim ids,

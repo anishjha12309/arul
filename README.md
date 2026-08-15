@@ -34,10 +34,10 @@ flutter run --dart-define-from-file=env/dev.json   # env/ is git-ignored — cop
 ## Map
 ```
 CLAUDE.md          session contract (read first)
-docs/              constraints only: edge cases · architecture · data model · media · caching · cron · phonepe · analytics · share · notifications · UI
-lib/               app/{theme,widgets,shell,l10n} · core/{config,api,error,analytics} · data/* · features/*
+docs/              constraints only: edge cases · architecture · data model · media · caching · cron · phonepe · analytics · share · deep links · notifications · UI
+lib/               theme/arul_tokens.dart (THE colour source) · app/{theme,widgets,shell,l10n} · core/* · data/* · features/*
 android/           edge-to-edge + predictive back + adaptive/themed icon + R8 + release signing
-.claude/           hooks (doc-sync, format, secret guard, .aab guards) + project skills
+.claude/           hooks (doc-sync, format, secret guard, .aab guards, version auto-commit) + project skills
 db/schema/         Neon schema — apply *.sql in filename order, then seed.sql
 workers/           Worker API + crons (src/, wrangler.toml)
 tools/             content-import — bulk wallpaper + ringtone import pipeline

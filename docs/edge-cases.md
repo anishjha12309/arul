@@ -25,10 +25,10 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 - [ ] EXACTLY ONE account picker per sign-in. `attemptLightweightAuthentication()` as a warm-up ahead of `authenticate()` is REVERTED (measured 2026-08-11): its "minimal UI" is a real Credential Manager bottom sheet on Android, so the user got a drawer that appeared, hung, then vanished before the real picker — and a stall-guard timeout on it added 2.5s of dead air. It saves ~230ms of Credential Manager cold start and costs a second visible sheet; do not retry it
 - [ ] `google_sign_in` v7: `instance` → `initialize()` → `authenticate()`; idToken `aud` = WEB client id, verified in the Worker
 - [ ] Sign-in bg video: shared ref-counted player with 2s dispose grace (screen swaps must not kill it)
-- [ ] Auth failures surface a localized message + retry, never a stuck spinner
+- [ ] Auth failures surface a message + retry, never a stuck spinner — the strings are authored English today, not ARB-backed ("localized-enough"); an auth surface exception to the all-6-locales rule
 
 ## Premium / payments (server is source of truth)
-- [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user ← `premium_gate.dart`
+- [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user ← `entitlement_provider.dart`
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
 - [ ] `cancelled` keeps premium until period end (NO grace); `trialing`/`active` get a 6 h debit-grace past period end — the renewal debit rides the hourly cron, so a strict cutoff gated every payer at every boundary; `pending` with a live period keeps premium (a resubscribe claims the ONE row; paid days survive the attempt); `paused`/`expired` none; `reward_premium_until` ORed in ← `premiumPredicate`, the rule's ONE home
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while `current_period_end > now()`, never `expired` — expiring it stripped a cancelled-but-live trial on a backed-out resubscribe (device 2026-08-12); the setup-completed resurrect matches `('expired','cancelled')` so a paid approval racing the restore still grants ← `payments.ts` (all three failure paths)
@@ -57,7 +57,7 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 ## Notifications (local only — there is no push channel)
 Full contracts + traps: **[notifications.md](notifications.md)**. Hardest-biting: festival dates are DATA — a table
 that runs out means **skip**, never extrapolate; `keep.xml` stops R8 stripping icons (breaks release builds ONLY);
-QA tools gate on `isPlayInstall`, NOT `kDebugMode`.
+QA tools gate on `kDebugMode` OR not `isPlayInstall` — so a sideloaded release build keeps them.
 
 ## Ringtones (5 deities + `others`, no `temples`)
 - [ ] The tab renders nothing until the WHOLE catalog is drained (category filtering is client-side), so every extra page is user-visible latency: build-catalog cuts ringtones at 200/page (one page for any realistic catalog), the notifier drains pages in a 4-wide pool (never serially — serial × 8 pages measured ~5 s), and `AppShell` warms the provider post-first-frame so the first tap lands on a ready list
@@ -66,7 +66,7 @@ QA tools gate on `isPlayInstall`, NOT `kDebugMode`.
 - [ ] Picker name = the CATALOG TITLE threaded through the channel, never the downloaded filename; `mime` rides along (some OEM scanners re-derive type from the extension and misindex a disagreeing row)
 - [ ] Stale-row cleanup must NEVER abort the set — pre-reinstall rows throw `RecoverableSecurityException`; skip them and let MediaStore uniquify, or re-setting any pre-reinstall tone breaks permanently
 - [ ] ONE shared `just_audio` player for ALL previews — starting a track stops the previous; only one decoder held (the feed's video pool shares the device) ← `ringtone_preview_provider.dart`
-- [ ] Row art is DRAWN, never fetched: kolam medallion hashed from the ringtone **id** (motif from **category**) so a tile never re-rolls ← `ringtone_medallion.dart`; `cover_key` stays nullable. Every tile draws the SAME skeleton — parameters permute, never a structural coin-flip
+- [ ] Row art is BUNDLED, never fetched: a PNG per **deity** over a ground still hashed from the ringtone **id**, so a tile never re-rolls ← `ringtone_tile.dart` + `deity_art.dart`; `cover_key` stays nullable and unused. The ground is what keeps 35 one-deity tracks from being 35 identical tiles, so it must stay hashed and must stay ≥8 distinct grounds across a category — every tile draws the SAME skeleton, parameters permute, never a structural coin-flip
 - [ ] Every now-playing affordance derives from the ONE `currentId`; clearing it stops the audio, never just dims the row
 - [ ] Preview is FREE (public `audio_key` from CDN); only **Set** gates, via `/media/signed-url` kind `ringtone` ← `workers/src/routes/media.ts`
 - [ ] Set has a re-entrancy guard (same as apply/share) — a double tap must not run two set flows ← `ringtone_set_provider.dart`
@@ -82,14 +82,14 @@ by the caption; WhatsApp-first uses a DIFFERENT mechanism per path (the text-onl
 file); the live watermark needs **API 31** — below it the share ships clean rather than crashing ([known-issues.md](known-issues.md)).
 
 ## Catalog / storage
-- [ ] `version.json` edge-cacheable (`public, max-age=30, stale-while-revalidate=300`), pages max-age=60 + `?v=`; stale content = rebuild, NEVER cache-purge ← docs/caching.md
+- [ ] `version.json` edge-cacheable (`public, max-age=30, stale-while-revalidate=300`), pages max-age=86400 + `?v=`; stale content = rebuild, NEVER cache-purge ← docs/caching.md
 - [ ] Orphaned pages deleted each rebuild; hourly sweep-canonical runs only after a fully-successful rebuild and refuses an empty referenced-keys set; the daily 21:30 UTC sweep is the unconditional backstop ← `cron/sweep-canonical.ts`
 - [ ] Hyperdrive query caching OFF (caused ~60s staleness once)
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing with another app = mutual media deletion. R2 objects public BY DESIGN (soft gate); never add a "private" object
 
 ## App-wide
 - [ ] Privacy / Terms open the IN-APP reader (`/policy/:doc`, `PolicyDoc.route`) — never `launchUrl`. Reviewer's call 2026-08-12: leaving for Chrome is a rejection. It fences navigation to the policy host (everything else, incl. `mailto:`, goes out to the OS), hides the site's own navbar/footer, and holds the page back until it has — reveal early and the nav flashes. The document stays REMOTE (shared with Pakiza, one page to keep current), so this surface needs a real offline state
-- [ ] Loading / empty / error state on every async surface, localized (all 6 locales)
+- [ ] Loading / empty / error state on every async surface, localized (all 6 locales) — EXCEPT the paywall (English-only, owner's call 2026-08-11) and the purchase/auth error strings (authored English)
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ events mirror to GA4 `login`/`purchase` + Meta
 - [ ] `allowBackup=false` + data-extraction rules + HTTPS-only network config

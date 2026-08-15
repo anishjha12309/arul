@@ -6,7 +6,7 @@ Where to watch events land. Event semantics: [analytics-events.md](analytics-eve
 
 ```bash
 adb shell setprop debug.firebase.analytics.app com.hsrutility.arul   # on
-adb shell setprop debug.firebase.analytics.app .none                 # off
+adb shell setprop debug.firebase.analytics.app .none.                # off (the trailing dot is the sentinel)
 ```
 Then Firebase → Analytics → **DebugView**. The flag is per-device and SURVIVES reinstalls — turn it
 off when done or that device's data stays out of the normal reports indefinitely.
@@ -28,10 +28,14 @@ should target). **`purchase` is reported from BOTH sides, split by settle locati
 third reporter: the client logs it only for the app-open flow (repeat subscriber, ₹199 at setup),
 and the Worker reports app-closed settles (trial→paid, renewals) via the GA4 Measurement Protocol
 (`workers/src/lib/ga4.ts`, keyed on the `app_instance_id` uploaded at login/initiate; both sides
-carry the PhonePe order id as `transaction_id`, so overlap dedupes). Server reporting is silently
-OFF until the `GA4_API_SECRET` worker secret is set (GA4 Admin → Data streams → Android stream →
-Measurement Protocol API secrets); `/mp/collect` answers 204 even for payloads it DROPS — wiring is
-only provable via `node workers/tools/ga4-mp-validate.mjs <app_instance_id>`. Users on builds that
+carry a PhonePe order id as `transaction_id`, but **that dedupes nothing** — GA4's `transaction_id`
+dedupe is web-stream only and this is an app stream, and the two sides send different ids anyway. The
+split plus the Worker's KV mark is the whole protection). Server reporting is silently OFF until the
+`GA4_API_SECRET` worker secret is set (GA4 Admin → Data streams → Android stream → Measurement
+Protocol API secrets); `/mp/collect` answers 2xx even for payloads it DROPS. `node
+workers/tools/ga4-mp-validate.mjs <app_instance_id>` checks payload SHAPE only — it reads the local
+`.dev.vars`, and GA4's debug endpoint validates neither `api_secret` nor `firebase_app_id`, so it
+cannot prove the deployed wiring. Users on builds that
 never uploaded an id stay unreported — **Neon remains revenue truth** (CLAUDE.md §Analytics).
 
 The privacy policy (`https://hsrutility.com/privacy/` — SHARED with Pakiza, a change lands in both

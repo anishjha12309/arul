@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/deeplink/deep_link_target.dart';
+import 'core/deeplink/google_ads_deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/config/app_config.dart';
 import 'core/perf/boot_trace.dart';
@@ -182,6 +183,14 @@ Future<void> _startApp() async {
   final deferredWallpaper = referrer.pendingWallpaperId;
   if (deferredWallpaper != null) ArulDeepLink.request(deferredWallpaper);
   unawaited(referrer.captureOnce());
+
+  // Eligible Google App Campaigns deliver their post-install App URL through
+  // Google Analytics for Firebase rather than Play Install Referrer. Native
+  // Android buffers that URL across the Flutter-engine startup race; this feeds
+  // it into the SAME persisted one-shot target used above. Fire-and-forget so a
+  // network-delivered ad target can never delay the first frame.
+  final googleAdsDeferredLinks = GoogleAdsDeferredLinkService(referrer);
+  unawaited(googleAdsDeferredLinks.start());
 
   // google_sign_in v7: initialize the singleton once at startup. Both env files
   // carry a real client id, so this runs in every real build; the guard only

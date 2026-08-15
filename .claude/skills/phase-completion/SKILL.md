@@ -9,10 +9,13 @@ Run at the end of every phase.
 
 ## 1. Checks — all must pass
 ```bash
-flutter analyze && flutter test
+dart run build_runner build --delete-conflicting-outputs   # generated files are TRACKED — stale
+flutter analyze && flutter test                            # codegen commits clean and green
 cd workers && npx tsc --noEmit && npx vitest run   # if workers/ touched
 npx wrangler deploy                                 # if workers/ touched — deploy IS part of done
 ```
+`gen_l10n` runs inside the flutter tool (`pubspec.yaml generate: true`), so ARBs need no separate
+step — but `*.g.dart`/`*.freezed.dart` do, and nothing below catches them being stale.
 
 ## 2. Definition of Done
 - [ ] `flutter analyze` clean; `dart format .` applied
@@ -29,11 +32,13 @@ npx wrangler deploy                                 # if workers/ touched — de
 3. Only after explicit approval:
 ```bash
 git add -A
-git commit -m "Phase <N>: <summary>"
+git commit -m "<one line, plain phrasing, no attribution trailers>"
 git push
 ```
 Standing exception: a pubspec version bump auto-commits via `.claude/hooks/version-commit.js` — it
-needs no approval and is not the phase commit. After a release build,
+needs no approval and is not the phase commit. It runs `git add -A`, so it sweeps the WHOLE tree into
+that `build <version>` commit, not just the pubspec (`bc559fa` carried 6 files / 561 insertions).
+Land the phase commit first, then bump. After a release build,
 `release-commit-reminder.js` fires because an artifact is only reproducible if its source is in git;
 that reminder still does not authorize committing without approval.
 

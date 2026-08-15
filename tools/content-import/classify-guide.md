@@ -17,8 +17,9 @@ You classify South Indian Hindu devotional wallpapers into EXACTLY ONE of six ca
 - **Hanuman**: use **perumal** (Rama/Vaishnava context), confidence "low", note "Hanuman".
 - Any other deity not covered (e.g. Navagraha, generic): pick the closest of the six, confidence "low", and name what you see in the reason.
 - A `hintDup` field on an item means it perceptually matched an existing item in that category — treat as a weak prior, but classify by what you actually SEE.
+- If you omit `category`, misspell it, or return anything outside the six, nothing asks you again — the merge step silently files the item under its `hintDup` category if it has one, otherwise under `temples`, and it KEEPS whatever `confidence` you sent, so a wrong-but-confident answer sinks to the bottom of the review page instead of the top.
 
 ## What to output per item
-For each item in your batch, produce: `category` (one of the six, lowercase), `confidence` ("high" | "med" | "low"), `reason` (ONE short phrase naming the iconography you saw, e.g. "blue Vishnu with conch and chakra"), and `title` (a specific recognizable name if you're confident — e.g. "Lord Venkateswara", "Meenakshi Amman", "Nataraja"; otherwise omit and it defaults).
+For each item in your batch, produce: `category` (one of the six, lowercase), `confidence` ("high" | "med" | "low"), `reason` (ONE short phrase naming the iconography you saw, e.g. "blue Vishnu with conch and chakra"), and `title` (a specific recognizable name if you're confident; otherwise omit and it defaults). Match the shipped conventions exactly — `Lord <X>` for a male deity ("Lord Venkateswara", "Lord Nataraja"), `Goddess <X>` for amman ("Goddess Meenakshi"), `<Place> Temple` for temples ("Madurai Meenakshi Temple", which is also the building-dominates rule in action). A title in any other shape matches nothing in the library.
 
 Be decisive. Use "high" only when the iconography is unambiguous. Use "low" for genuine uncertainty or the edge cases above.

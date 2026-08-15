@@ -24,8 +24,9 @@ import '../data/ringtone_set_service.dart';
 import '../providers/ringtone_catalog_providers.dart';
 import '../providers/ringtone_preview_provider.dart';
 import '../providers/ringtone_set_provider.dart';
-import 'ringtone_medallion.dart';
+import 'deity_art.dart';
 import 'ringtone_states.dart';
+import 'ringtone_tile.dart';
 
 /// The Ringtones tab: a category-chip browse over a list of ringtone rows —
 /// preview free (streamed from the public CDN), "Set" premium-gated via the
@@ -37,9 +38,11 @@ import 'ringtone_states.dart';
 ///     colour, button fill/glyph and the cover-art diya all read the same
 ///     `currentId` from [ringtonePreviewProvider]. There is no per-row playing
 ///     flag to fall out of sync, and clearing it stops the audio.
-///   * **The cover art is drawn, not fetched** ([RingtoneMedallion]) — the
-///     catalog carries no ringtone cover art, and a row of identical fallback
-///     tiles would make the list look broken rather than sparse.
+///   * **The art is bundled, not fetched** ([RingtoneTile] over [deityAsset]) —
+///     the catalog carries no cover images, only a `deity` slug the app maps to
+///     one of 17 bundled PNGs. Nothing here can 404, so the list has no image
+///     loading state at all, and its ground is still drawn per track so one
+///     deity's 35 tracks are not 35 identical tiles.
 ///
 /// Category is THE browse axis (CLAUDE.md §5b) — there are no All/New tabs.
 class RingtonesScreen extends ConsumerStatefulWidget {
@@ -474,8 +477,8 @@ class _SetProgress extends StatelessWidget {
 
 // ─── Ringtone row ─────────────────────────────────────────────────────────────
 
-/// One ringtone: procedural medallion, title, a circular play/pause, and the
-/// outlined "Set" pill.
+/// One ringtone: deity art, title over deity name, a circular play/pause, and
+/// the outlined "Set" pill.
 ///
 /// Public so the widget tests can find rows by type rather than by string.
 class RingtoneRow extends ConsumerWidget {
@@ -484,8 +487,10 @@ class RingtoneRow extends ConsumerWidget {
   final Ringtone ringtone;
   final VoidCallback onSet;
 
-  /// Handoff geometry. The row is `46 + 2×9 = 64` tall.
-  static const double coverSize = RingtoneMedallion.defaultSize;
+  /// Handoff geometry, restated for the two-line row: `52 + 2×9 = 70` tall.
+  /// The art drives the height — title + subtitle stack to ~38 — so a track
+  /// with no deity makes a shorter text column, never a shorter row.
+  static const double coverSize = RingtoneTile.defaultSize;
   static const double _padH = 12;
   static const double _padV = 9;
 
@@ -534,9 +539,10 @@ class RingtoneRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          RingtoneMedallion(
-            spec: RingtoneMedallionSpec.forRingtone(
-              id: ringtone.id,
+          RingtoneTile(
+            spec: RingtoneTileSpec.forRingtone(id: ringtone.id),
+            assetPath: deityAsset(
+              deity: ringtone.deity,
               category: ringtone.category,
             ),
             playing: lit,
@@ -544,17 +550,44 @@ class RingtoneRow extends ConsumerWidget {
           ),
           const SizedBox(width: _gap),
           Expanded(
-            child: Text(
-              ringtone.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: ArulTokens.rowTitleTracked.copyWith(
-                color: lit
-                    ? (isDark
-                          ? ArulTokens.gold
-                          : ArulTokens.nowPlayingTitleLight)
-                    : (isDark ? ArulTokens.ivory : ArulTokens.lightText),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ringtone.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: ArulTokens.rowTitleTracked.copyWith(
+                    color: lit
+                        ? (isDark
+                              ? ArulTokens.gold
+                              : ArulTokens.nowPlayingTitleLight)
+                        : (isDark ? ArulTokens.ivory : ArulTokens.lightText),
+                  ),
+                ),
+                // The deity name, and the only place in the app that names the
+                // god a track is to. Absent rather than blank when the catalog
+                // carries no deity, so the title simply centres itself.
+                //
+                // Deliberately NOT tinted with the now-playing state: the title
+                // going gold is the signal, and a second gold line under it
+                // made the playing row read as selected-and-disabled.
+                if (ringtone.deityLabel case final label?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: ArulTokens.caption.copyWith(
+                        color: isDark
+                            ? ArulTokens.darkMuted
+                            : ArulTokens.lightSecondary,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           SizedBox(width: _gap - playSlack),

@@ -177,7 +177,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String referShareMessage(String link) {
-    return 'అందమైన దక్షిణ భారత వాల్‌పేపర్‌లు — నాకు Arul చాలా ఇష్టం. నా లింక్‌తో ఇన్‌స్టాల్ చేయండి, నాకు ఉచిత ప్రీమియం వస్తుంది: $link';
+    return 'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నాను — అమ్మన్, మురుగన్, పెరుమాళ్, శివన్, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందని అనిపించింది.\n\n$link';
   }
 
   @override

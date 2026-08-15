@@ -76,3 +76,10 @@ cms-shots/
 .claude/skills/verify-payments/scripts/pgdata/
 .claude/skills/verify-payments/scripts/package*.json
 .claude/skills/verify-payments/scripts/mode.txt
+
+# Art-pipeline scratch (same rule as tools/content-import/ARCHIVE.md: masters and
+# intermediates stay out of git, only the shipped copy lands). /tmp holds the keyed
+# source art a generator reads, /output what it writes — the survivors are committed
+# under assets/. Anchored to the repo root so a nested tmp/ or output/ is unaffected.
+/tmp/
+/output/

@@ -4,8 +4,8 @@ Read this before changing a Cache Rule, a `Cache-Control` header, or before conc
 "the CDN isn't caching". Every fact here was paid for once already.
 
 Media egress is the whole cost model (CLAUDE.md §2), so an edge miss is not just latency — each one
-costs an R2 **Class B operation**, the one part of R2 that is not free, on the highest-volume thing
-this app serves.
+costs an R2 **Class B operation** — the billed part of serving reads (egress itself is free) — on
+the highest-volume thing this app serves.
 
 ## The two zone Cache Rules on `arul-cdn.hsrutility.com`
 
@@ -40,8 +40,9 @@ metadata rewrite is needed for anything already in the bucket.
   yet) idled just as long behind 32 pages (fixed 2026-08-11: 200 rows/page for both scopes plus a
   parallel drain in the app).
 - Media uploaded by `tools/content-import/import.mjs` — `public, max-age=31536000, immutable`
-  (keys are content UUIDs and never change). The ~614 objects imported before that stamp carry only
-  a `content-type` and rely on the media Cache Rule instead.
+  (keys are content UUIDs and never change). Objects predating that stamp carry only a `content-type`
+  — and so does everything the CMS uploads, at any date, because its presign signs `Content-Type`
+  alone. All of it rides the media Cache Rule instead ([known-issues.md](known-issues.md)).
 
 The zone rewrites `max-age` downstream (Browser Cache TTL 4 h), so a header read off the CDN is not
 what the Worker wrote. The edge still honours the origin TTL, and the app's `package:http`
@@ -51,8 +52,8 @@ implements no HTTP cache, so freshness is unaffected.
 
 **`curl -I` (HEAD) does not populate Cloudflare's cache, and reports `DYNAMIC` for assets that cache
 perfectly well over GET.** An afternoon went into "fixing" a Cache Rule that was correct from the
-start, because every measurement used HEAD. A warm host with real traffic answers HEAD with `HIT`; a
-brand-new host with none answers `DYNAMIC` — which reads exactly like a broken rule.
+start, because every measurement used HEAD. HEAD answers `DYNAMIC` even on this host's warmest keys
+— ones a GET serves as `HIT` at six-figure `Age` — which reads exactly like a broken rule.
 
 Measure with GET:
 
@@ -83,8 +84,9 @@ node tools/prod-sql.mjs --write "UPDATE app_config SET content_version = content
 
 ## Negative caching: a 404 outlives the upload that fixes it (accepted tradeoff)
 
-The media Cache Rule caches 404s briefly too, so probing a key on the CDN **before** uploading it
-(observed 2026-08-01 with backfilled `thumbs/`) leaves that edge serving 404 for a few minutes after
-the object lands. Accepted: it self-heals, and every `thumbs/` consumer falls back (the app to the
-native first-frame still, the CMS panel to the static original). Check existence against the
-S3 API or with a `?v=` cache-buster, not the bare CDN URL.
+The media Cache Rule caches 404s under its long TTL too, so probing a key on the CDN **before**
+uploading it (observed 2026-08-01 with backfilled `thumbs/`) leaves that edge serving 404 long after
+the object lands — measured in hours, not the 3-minute zone default. Accepted because every
+`thumbs/` consumer falls back (the app to the native first-frame still, the CMS panel to a glyph
+tile with hover-preview on the original). Check existence against the S3 API or with a `?v=`
+cache-buster, not the bare CDN URL.

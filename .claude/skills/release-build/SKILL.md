@@ -40,8 +40,9 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/prod.json
      flutter build apk --debug   --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/dev.json
      ```
-     The ONLY output is `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~26 MB, vs 61 MB
-     fat). No `app-release.apk` is written — anything pointing at that path must be updated.
+     The ONLY output is `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` (~27 MB, vs ~64 MB
+     fat). No `app-release.apk` is written — anything pointing at that path must be updated, and
+     `release-commit-reminder.js:32` still does, so its reminder never fires for a split build.
      Two consequences, both fine because they touch sideloading only and never Play (the AAB still
      ships all three ABIs, so no real user is affected):
      · a 32-bit-only phone cannot install it — irrelevant, arm64 has been universal since ~2017;
@@ -56,14 +57,18 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
      ```bash
      jarsigner -verify -certs -verbose build/app/outputs/bundle/release/app-release.aab | grep "CN="
      ```
-   - **APK** — Flutter signs these **v2-only, with no v1 block**, so `jarsigner` and
-     `keytool -printcert -jarfile` print NOTHING and read as a broken build. Use apksigner:
+   - **APK** — Flutter signs these **v2-only, with no v1 block**, so `jarsigner` reports
+     `jar is unsigned` and `keytool -printcert -jarfile` says `Not a signed jar file` — both read as
+     a broken build, and the `| grep "CN="` pipe above just comes back empty. Use apksigner:
      ```bash
      "$LOCALAPPDATA/Android/Sdk/build-tools/36.0.0/apksigner.bat" verify --print-certs \
        build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
      ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
-3. Sanity: check dart-defines took effect via `aapt dump badging` on an APK if in doubt.
+3. Sanity: only `META_APP_ID`/`META_CLIENT_TOKEN` reach the manifest (as `manifestPlaceholders`), so
+   they are the only defines an APK can be checked for — and `badging` never prints `<meta-data>`:
+   use `aapt dump xmltree <apk> AndroidManifest.xml`. Every other define compiles into `libapp.so`
+   and is invisible to either.
 4. Play upload = user task (Play App Signing ON) — the `com.hsrutility.arul` listing on the business
    account; the pre-rename listing is retired.
    SHA-1/256 of BOTH the app-signing and upload certs are REGISTERED in the Google Cloud OAuth

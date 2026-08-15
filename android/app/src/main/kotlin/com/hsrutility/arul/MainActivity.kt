@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
@@ -42,12 +43,27 @@ class MainActivity : FlutterFragmentActivity() {
         // Exposes isPlayInstall() to Dart — see that function, and the QA-tools
         // gate in the reminders screen.
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
+
+        // Google Analytics for Firebase's documented deferred-deep-link storage.
+        // The SDK may write this before OR after Flutter attaches, so onCreate
+        // buffers it and the MethodChannel supports both an initial pull and a
+        // later push. See docs/deep-links.md.
+        private const val GOOGLE_DDL_PREFS = "google.analytics.deferred.deeplink.prefs"
+        private const val GOOGLE_DDL_KEY = "deeplink"
+        private const val GOOGLE_DDL_STATE_PREFS = "arul.google_ads_deferred_link"
+        private const val GOOGLE_DDL_HANDLED_TOKEN_KEY = "handled_token"
+        private const val GOOGLE_DDL_CHANNEL = "com.hsrutility.arul/google_ads_deferred_link"
+        private const val DEEP_LINK_HOST = "arul.hsrutility.com"
     }
 
     private var wallpaperApplyChannel: WallpaperApplyChannel? = null
     private var feedVideoPlugin: FeedVideoPlugin? = null
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
+    private var googleDeferredLinkChannel: MethodChannel? = null
+    private var googleDeferredPrefs: SharedPreferences? = null
+    private var googleDeferredListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private var pendingGoogleDeferredLink: Map<String, Any>? = null
 
     // A setRingtone call parked while the pre-Q WRITE_EXTERNAL_STORAGE prompt is
     // shown; resumed (or failed) in onRequestPermissionsResult. Only one is ever
@@ -60,6 +76,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        registerGoogleDeferredLinkListener()
         // Anti-piracy FLAG_SECURE (blocks screenshots + screen recording, blanks the
         // recents thumbnail) applies ONLY to the Play-delivered build. An AAB reaches
         // a device solely through Google Play, so "installed by com.android.vending"
@@ -105,6 +122,37 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Google Ads / Firebase deferred deep link. `getDeferredDeepLink` covers
+        // a value Firebase wrote before the engine attached; `onDeferredDeepLink`
+        // covers one written later. Flutter ACKs only after it has durably saved
+        // the wallpaper id, so an Activity/process death cannot lose the target.
+        googleDeferredLinkChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            GOOGLE_DDL_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getDeferredDeepLink" -> result.success(pendingGoogleDeferredLink)
+                    "ackDeferredDeepLink" -> {
+                        val token = call.argument<String>("token")
+                        val pendingToken = pendingGoogleDeferredLink?.get("token") as? String
+                        if (token == null || token != pendingToken) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        getSharedPreferences(GOOGLE_DDL_STATE_PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(GOOGLE_DDL_HANDLED_TOKEN_KEY, token)
+                            .apply()
+                        pendingGoogleDeferredLink = null
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        pushPendingGoogleDeferredLink()
 
         // In-feed live previews — native Media3 ExoPlayer texture pool. The Dart
         // VideoPreloadController drives a small reuse pool of these players, each
@@ -247,7 +295,86 @@ class MainActivity : FlutterFragmentActivity() {
         videoThumbnailChannel = null
         shareWatermarkChannel?.dispose()
         shareWatermarkChannel = null
+        googleDeferredLinkChannel?.setMethodCallHandler(null)
+        googleDeferredLinkChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onDestroy() {
+        googleDeferredListener?.let { listener ->
+            googleDeferredPrefs?.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+        googleDeferredListener = null
+        googleDeferredPrefs = null
+        super.onDestroy()
+    }
+
+    /**
+     * Starts listening before Flutter attaches and immediately reads the current
+     * value. Firebase documents both paths as necessary: registering late can
+     * miss the preference-change callback, while only reading once can miss a
+     * network response that arrives later in startup.
+     */
+    private fun registerGoogleDeferredLinkListener() {
+        val prefs = getSharedPreferences(GOOGLE_DDL_PREFS, MODE_PRIVATE)
+        googleDeferredPrefs = prefs
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { changed, key ->
+            if (key == GOOGLE_DDL_KEY) captureGoogleDeferredLink(changed)
+        }
+        googleDeferredListener = listener
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        captureGoogleDeferredLink(prefs)
+    }
+
+    /** Accepts only this app's verified wallpaper URLs before crossing to Dart. */
+    private fun captureGoogleDeferredLink(prefs: SharedPreferences) {
+        val raw = prefs.getString(GOOGLE_DDL_KEY, null)?.trim().orEmpty()
+        if (raw.isEmpty()) return
+        if (!isValidWallpaperDeepLink(raw)) {
+            // Loud on purpose. An ad group whose App URL is anything other than
+            // https://arul.hsrutility.com/w/<uuid> fails COMPLETELY silently
+            // otherwise, and the shipped build is FLAG_SECURE, so logcat is the
+            // only window on it. See docs/deep-links.md §Google Ads DDL.
+            Log.w(TAG, "Deferred deep link ignored: not a /w/<uuid> App Link")
+            return
+        }
+
+        // The URL alone is the delivery identity — NOT url+timestamp. GA4F writes
+        // its `deeplink` and `timestamp` keys independently, so a composite token
+        // reads "0:<url>" on the launch that captures the link and "<bits>:<url>"
+        // once the timestamp lands: the handled marker stops matching and an
+        // already-consumed wallpaper re-opens on some later launch. DDL is
+        // install-scoped anyway (new users only, 24h window), so re-delivering the
+        // same URL is never something to honour.
+        val handled = getSharedPreferences(GOOGLE_DDL_STATE_PREFS, MODE_PRIVATE)
+            .getString(GOOGLE_DDL_HANDLED_TOKEN_KEY, null)
+        if (raw == handled) return
+
+        pendingGoogleDeferredLink = mapOf("url" to raw, "token" to raw)
+        pushPendingGoogleDeferredLink()
+    }
+
+    private fun isValidWallpaperDeepLink(raw: String): Boolean {
+        return try {
+            val uri = Uri.parse(raw)
+            val parts = uri.pathSegments
+            uri.scheme.equals("https", ignoreCase = true) &&
+                uri.host.equals(DEEP_LINK_HOST, ignoreCase = true) &&
+                parts.size == 2 &&
+                parts[0] == "w" &&
+                Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                    .matches(parts[1])
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun pushPendingGoogleDeferredLink() {
+        val payload = pendingGoogleDeferredLink ?: return
+        val channel = googleDeferredLinkChannel ?: return
+        runOnUiThread {
+            channel.invokeMethod("onDeferredDeepLink", payload)
+        }
     }
 
     /**

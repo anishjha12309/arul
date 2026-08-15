@@ -7,8 +7,9 @@ Never call SDKs from widgets — always `AnalyticsService`. `CompositeAnalyticsS
 
 ★ = `login_success` (GA4 `login`) · `trial_started` (Meta StartTrial; deliberately **no** GA4
 `purchase` — mapping it booked phantom revenue and double-counted the later subscriber) ·
-`subscription_active` (Meta Subscribe + GA4 `purchase`), carrying `plan`, `order_id` (PhonePe merchant
-order id) and `value` (INR from `app_config.prices.monthly`) for ROAS and dedupe.
+`subscription_active` (Meta Subscribe + GA4 `purchase`). The two PURCHASE events carry `plan`,
+`order_id` (PhonePe merchant order id) and `value` (INR from `app_config.prices.monthly`) for ROAS and
+for matching the Worker's copy; `login_success` carries only `provider`.
 The event LIST is the `track()` call sites — no table here to drift. The PostHog allow-list is pinned
 as an exact set by `test/core/analytics_gating_test.dart`, so adding one is a deliberate act.
 Consoles + DebugView: [analytics-ops.md](analytics-ops.md). Pakiza runs the identical mechanism with
@@ -22,20 +23,24 @@ for 800k MAU and, at the app's real scale, meant a panel of roughly ONE device t
 an event. Both gates stay in place because they are the knobs; only their settings changed.
 
 - **`AnalyticsCohort` (`_rate = 1.0`)** — a persisted per-install draw gates `Posthog().setup()` itself in `main.dart`, so a non-panel install would do zero PostHog init/network/battery work. **Widening is safe by construction; narrowing is not.** The stored value is the **draw, not a boolean**, so raising the rate only ever *adds* installs — but lowering it drops every install whose draw exceeds the new rate, and any cohort spanning that date is discontinuous. Revisit around **30k MAU** (~25 events/user/month against the 1M tier). If it ever must narrow again, prefer user-level over event-level: event-level sampling silently corrupts funnels (a 10% numerator over a 100% denominator is meaningless).
-- **`captureApplicationLifecycleEvents = true`** — the SDK's native lifecycle events bypass `AnalyticsService` entirely, so this flag is the ONLY control over them. They are what make sessions/DAU/retention resolvable inside PostHog rather than only in GA4, and every funnel here is read against them. Also the largest single source of billed volume — re-check at 30k MAU. `sessionReplay`, `surveys` and element autocapture (no `PosthogObserver`) stay off; `screen()` is dropped by the allow-list and GA4 auto `screen_view` covers screens.
+- **`captureApplicationLifecycleEvents = true`** — the SDK's native lifecycle events bypass `AnalyticsService` entirely, so this flag is the ONLY control over them. They are what make sessions/DAU/retention resolvable inside PostHog rather than only in GA4, and every funnel here is read against them. Also the largest single source of billed volume — re-check at 30k MAU. `sessionReplay` and `surveys` stay off, and no `PosthogObserver` is installed, so PostHog records no `$screen` at all; `screen()` is dropped by the allow-list and GA4 auto `screen_view` covers screens.
 - **`Posthog().setup()` is not awaited** — native init must not sit on the critical path to first frame.
-- **`feed_session_ended`** — ONE summary per feed session instead of an event per card (PostHog bills per event, not per property), flushed on app-background (the feed lives in an `indexedStack` and rarely disposes). The highest-volume billed event; look there first if the invoice moves.
+- **`feed_session_ended`** — ONE summary per feed session instead of an event per card (PostHog bills per event, not per property), flushed on app-background (every shell branch stays mounted behind `ArulBranchCrossfade` — deliberately NOT an `indexedStack` — so the feed rarely disposes). The highest-volume event ON THE ALLOW-LIST; look there first if the invoice moves.
 - **Per-CARD events stay off the list.** `wallpaper_engaged` fires once per dwelled card and is the one genuine volume risk — now multiplied by every install rather than one in twenty. `feed_session_ended` already carries its counts and GA4 takes the per-card copy at 100% free.
 - Attempts, failures and rare account admin (`*_attempt`, `login_failed`, `share_watermark_failed`, `account_delete_*`) stay off too — Crashlytics/GA4/Neon questions, which would make the funnel harder to read rather than the data richer. Default-**deny**: a new `track()` call site costs nothing until added to `postHogAllowedEvents` in `analytics_provider.dart`.
 - **Analytics is never a ranking source.** The All feed is ordered by `apply_count`/`set_count` counted server-side in `/media/signed-url` (CLAUDE.md §5b) — not by `wallpaper_applied`. A sampled, client-reported event cannot order a feed, and reading one back out of PostHog to do it would be a pipeline with no owner.
 
 ## Property convention
 
-Wallpaper events carry **`wallpaper_id` + `category`**; ringtone events **`ringtone_id` +
+Wallpaper FUNNEL events carry **`wallpaper_id` + `category`**; ringtone events **`ringtone_id` +
 `category`** — `category` is the browse axis, so "which collections convert" is answerable off the
-events alone. Static-vs-live rides along as **`type`** (`image`/`live`), spelled identically on all
+events alone. Two holes to know before slicing: `ringtone_set_blocked_premium` sends NO properties, so
+the ringtone paywall funnel cannot be split by category, and the `share_watermark_*` diagnostics carry
+`wallpaper_id` + `type` only. Static-vs-live rides along as **`type`**, spelled identically on all
 four wallpaper funnel events so the funnel joins on it — a rendering hint, never a browse axis
-(CLAUDE.md §5b); do not group by it the way `category` is grouped.
+(CLAUDE.md §5b); do not group by it the way `category` is grouped. Its analytics values are
+`image`/`live` while the catalog/Neon wire values are `static`/`live`, so an event↔Neon join on `type`
+silently matches nothing.
 
 ## Reading the data — rules that prevent wrong conclusions
 
@@ -43,27 +48,34 @@ four wallpaper funnel events so the funnel joins on it — a rendering hint, nev
   OS chooser, whose final "Set" tap is unobservable — live fires `confirmed=false` on chooser-open
   (as Pakiza does). Filter `confirmed=true` for a strict completion count; **never quote the
   unfiltered number as a completion rate.**
-- `link_attributed=false` (both share events) = the outgoing link carried no `referrer=` — that
-  install can never be credited to the sender. A `source` that is always unattributed has its
+- `link_attributed=false` = the outgoing link carried no referral code, and the two share events
+  degrade differently: a WALLPAPER share still ships the App Link `/w/<id>`, only without `?ref=`
+  (the Worker's Play redirect is what turns a code into `referrer=`), while a REFERRAL share falls
+  back to a plain store listing. Either way that install can never be credited to the sender. A `source` that is always unattributed has its
   referral warm-up in the wrong place; it is not a surface users dislike.
 - `result` is always `unavailable` on the `whatsapp` channel — the target app owns the outcome and
   never reports back. Not a failure. `channel` (`whatsapp`|`sheet`) says whether skipping the chooser
   earns its keep.
-- `*_blocked_premium` fires from the client gate AND, for ringtones, from the server-refusal handler
-  (lapsed subscription, stale client snapshot) — one session can emit it twice. Read as "block
+- `*_blocked_premium` fires from the client gate AND from the server-refusal handler — on ALL three
+  gated verbs, not just ringtones (lapsed subscription, stale client snapshot) — so one session can
+  emit it twice. Read as "block
   encountered", never "distinct blocks". Tracking happens at the gate; `/premium?source=` is
   display-only.
 - **Revenue truth is Neon**, never a sampled analytics tool. GA4 `purchase` has TWO reporters split
   by settle location (client = app-open setup; Worker MP = app-closed trial→paid/renewals) — keep
-  the split or purchases double-count ([analytics-ops.md](analytics-ops.md)).
+  the split or purchases double-count. Nothing downstream catches an overlap: GA4's `transaction_id`
+  dedupe covers WEB streams only, and Arul's Worker report is an app stream
+  ([analytics-ops.md](analytics-ops.md)).
 
 ## Deltas vs Pakiza — do not unify
 
 - Gated-action keys are **`apply`/`share`**, not Pakiza's `wallpaper_apply`/`wallpaper_share` — the
   `PremiumGateAction` enum name supplies the `?source=` route param, so the short name is load-bearing.
-- **`category` replaces Pakiza's `type`** as the second property — every saved dashboard in both
-  projects is built on its own app's key.
-- `wallpaper_applied.confirmed` has no Pakiza equivalent (Pakiza's in-place live swap is observable).
+- **`category` is ADDED alongside `type`, not a swap for it** — Arul events carry both, Pakiza carries
+  `type` only, and its values (`staticWallpaper`/`live`) differ from Arul's, so never join the two
+  apps' events on it. Every saved dashboard in both projects is built on its own app's key.
+- `wallpaper_applied.confirmed` has no Pakiza equivalent — Pakiza's event carries `is_live` instead.
+  Both apps' live apply goes through the same unobservable OS chooser.
 - Notifications and upload are untracked in BOTH apps on purpose — each would be a per-user event
   stream for a feature with no revenue path. Add events only if a product decision rides on one, and
   keep them GA4-only.

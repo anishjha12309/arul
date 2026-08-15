@@ -15,14 +15,16 @@ step**, and a **full media-convention QC gate**. ("The CMS" = the unified CMS wo
 - **sharp** — borrowed from the unified CMS repo's `node_modules` (`c:/Anish/Unified CMS/`) via
   `createRequire` (no separate install). **Requires that sibling repo to be checked out** — the
   in-repo `cms/` this used to borrow from was deleted 2026-07-20.
-- **aws4fetch + postgres** — `npm i aws4fetch postgres` inside the staging ROOT (only needed for `import.mjs` / `fix.mjs`).
+- **aws4fetch + postgres** — `npm i aws4fetch postgres` inside the staging ROOT: `import.mjs` needs both,
+  `fix.mjs` only aws4fetch, `ringtones-import.mjs` only postgres — which is why it runs FROM ROOT, not from here.
 - Secrets read at runtime from `workers/.dev.vars` (`R2_*`, `DATABASE_URL`, `CATALOG_BUILD_SECRET`) — never hardcoded.
 
 ## Staging ROOT
 
 Scripts assume a scratch working dir **outside the repo** (default `c:/Anish/arul-import/`)
 holding `drive/` (the raw input) and where all intermediates + `node_modules` live. Media
-is never committed. Adjust the `ROOT` const at the top of each script for a new location.
+is never committed. Moving ROOT is not one edit: most scripts carry a `ROOT` const, but `probe.mjs` and
+`refhash.mjs` hardcode the path inline, `ringtones-*.mjs` read `process.env.ROOT`, `archive-*.mjs` take `--root`.
 
 ## Media conventions enforced (docs/media-conventions.md)
 
@@ -34,26 +36,28 @@ is never committed. Adjust the `ROOT` const at the top of each script for a new 
 
 | # | Script | Role |
 |---|--------|------|
-| 0 | `archive-check.mjs` | check the drop against `archive-index.json` **before** any ffmpeg time — catches clips already staged once, including ones imported and later deleted |
+| 0 | `archive-check.mjs` | check the drop against `archive-index.json` before the transcode (it still extracts one frame per clip) — catches clips already staged once, including ones imported and later deleted |
 | 1 | `probe.mjs` | ffprobe every input; collapse byte-exact dupes → `inventory.json` |
-| 2 | `refhash.mjs` | perceptual-hash (dHash) all existing R2 objects → `refhashes.json` |
-| 3 | `normalize.mjs` | transcode to spec (statics→JPG, videos→mp4 + first-frame thumb) → `normalized/`, `normalized-manifest.json` |
+| 2 | `refhash.mjs` | perceptual-hash (dHash) every item in the LIVE published catalog — statics from `full_key`, live clips from their `thumbs/` poster → `refhashes.json`. Unpublished rows and orphaned objects are invisible to it; that gap is what step 0 covers |
+| 3 | `normalize.mjs` | transcode to spec (statics→JPG, videos→mp4 + a thumb seeked at 1 s, 640 wide — NOT frame 0, which is the frame `verify.mjs` luma-checks) → `normalized/`, `normalized-manifest.json` |
 | 4 | `dedup.mjs` | dHash new items vs existing + intra-batch; flag likely dups → `dedup-manifest.json` |
 | 5 | `chunk.mjs` | split into batches for the vision classifiers → `classify-batches/` |
-| — | *(vision agents)* | each batch classified into 6 categories using `classify-guide.md` → `classify-batches/out-N.json` |
+| — | *(vision agents)* | classify each `classify-batches/batch-N.json` per `classify-guide.md`, returning `{category, confidence, reason, title}` per item. **Merge the six results BY HAND into one `classifications.json` keyed by `base`** — `merge.mjs` reads that file and never globs the batches. A missing or out-of-vocab answer silently falls back to the dup's category, else `temples`; `unclassified (fallback used)` is the only signal |
 | 6 | `merge.mjs` | combine dedup + classifications → `review-data.json` |
 | 7 | `buildreview.mjs` | self-contained local `review.html` — thumbnails + category dropdowns + "copy corrections" |
 | — | *(human review)* | open `review.html`, correct categories / SKIP items, paste JSON → `corrections.json` |
 | 8 | `buildplan.mjs` | apply corrections; assign fresh UUID keys (video thumb key = clip key stem) → `import-plan.json` |
 | 9 | `import.mjs` | **live write:** PUT to R2 → one Neon txn (rows + `content_version` bump) → `build-catalog` → verify. Records `import-result.json` (ids + keys) for rollback |
-| 10 | `verify.mjs` | QC every imported file against all conventions (dims, codec, pix_fmt, faststart, audio, size, frame-0) |
-| 11 | `fix.mjs` | re-encode any non-conformant live video (e.g. full-range yuvj420p → yuv420p) and overwrite the same R2 key in place |
+| 10 | `verify.mjs` | QC the plan's LOCAL `normalized/` files against all conventions (dims, codec, pix_fmt, faststart, audio, size, frame-0). It never reads R2, so run it as the GATE before step 9 — after the import it only re-checks what you already shipped |
+| 11 | `fix.mjs` | re-encode live clips whose `pix_fmt` is not `yuv420p` (full-range `yuvj420p` → `yuv420p`) and overwrite the same R2 key. `pix_fmt` is its ONLY test — a dims/audio/faststart/size failure is invisible to it — and the re-PUT drops the year-long `cache-control` `import.mjs` stamped |
 
 ## Ringtones — a separate, much shorter pipeline
 
-The eight wallpaper stages exist because images arrive unlabelled, mis-sized and
-duplicated. Ringtone drops are not like that: they arrive cut to length and **named after
-the deity**, so classification is a title map and QC is one ffprobe. Two scripts:
+The twelve wallpaper stages exist because images arrive unlabelled, mis-sized and duplicated.
+Ringtone drops are not like that: they arrive already cut to length, and either **foldered by
+deity** (`FOLDER_CATEGORY`) or flat with a **hand-maintained per-title map derived from the
+lyrics** (`CATEGORY_BY_TITLE`) — so classification is a lookup, not a pipeline, and QC is one
+ffprobe. Two scripts:
 
 | # | Script | Role |
 |---|--------|------|
@@ -67,8 +71,9 @@ cp ringtones-import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node
 
 - **Two source layouts, auto-detected.** Subfolders → category from `FOLDER_CATEGORY`
   (how the drive drops arrive: `Govinda/`, `Murugan/`, `Shiv ji/`); a flat folder →
-  category from `CATEGORY_BY_TITLE`. An unmapped folder or title **aborts** rather than
-  guessing — category drives the app's medallion motif, so it is not cosmetic.
+  category from `CATEGORY_BY_TITLE`. The two are alternatives, not additive — subfolders
+  holding audio win and loose files at the top of `SRC` are then ignored. An unmapped folder
+  or title **aborts** rather than guessing — category drives the app's medallion motif.
 - **Drops are incremental.** Stage 1 reads the live catalog to dedup on normalised title
   and to continue `sort_order` past its high-water mark, so existing users' first screen
   does not re-shuffle. A title collision aborts; override with `--allow-duplicate-titles`
@@ -79,16 +84,21 @@ cp ringtones-import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node
 - QC: codec and size **abort**; length only **warns** — media-conventions.md says "≤40 s
   recommended", and one over-long track should not block a drop.
 - `cover_key` is always null: the app DRAWS its kolam medallion. No cover art is uploaded.
-- Objects go up via `wrangler r2 object put --remote`, not the S3 API — the R2 S3 keys are
-  not on disk anywhere, and wrangler is already authenticated against the account. Invoke
-  wrangler's JS entrypoint with `node`, never `npx` through a shell: a shell re-splits every
-  argument on whitespace and both the filenames and the cache-control value contain spaces.
+- Ringtone objects go up via `wrangler r2 object put --remote` because wrangler is already
+  authenticated; the wallpaper importer instead signs S3 requests with the `R2_*` keys in
+  `workers/.dev.vars`. Invoke wrangler's JS entrypoint with `node`, never `npx` through a shell:
+  a shell re-splits every argument on whitespace and both the filenames and the cache-control
+  value contain spaces.
 
 ## The staging archive
 
-ROOT masters are pruned once the library confirms them; `archive-index.json` is the ~40 KB
-record replacing them, and what step 0 checks a drop against. **Read [ARCHIVE.md](ARCHIVE.md)
-when de-duplicating a drop, or when ROOT fills up.**
+ROOT masters are pruned once the library confirms them; `archive-index.json` is the ~40 KB record
+replacing them, and what step 0 checks a drop against. `archive-index.mjs` builds and merges it,
+`archive-prune.mjs` deletes confirmed masters (dry run unless `--apply`) — index first, prune second,
+or the prune has nothing to check against. **Read [ARCHIVE.md](ARCHIVE.md) when de-duplicating a drop,
+or when ROOT fills up.** Uploading by hand through the CMS skips every gate above (`verify-folder.mjs`
+is the stand-in QC, `cms-watch.mjs` tails both workers): **read [MANUAL-UPLOAD.md](MANUAL-UPLOAD.md)
+first** — the presigned PUT goes browser→R2 and appears in no Worker log, so tail silence proves nothing.
 
 ## Notes
 

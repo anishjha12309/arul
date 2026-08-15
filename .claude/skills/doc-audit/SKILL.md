@@ -9,7 +9,9 @@ Docs must match the code, Neon, and Cloudflare — not the other way around — 
 doc encodes an owner decision, in which case reality must match the doc. The audit runs one
 adversarial pair per doc: `doc-prover` grounds every claim in primary sources, `doc-denier`
 default-denies and refutes with counter-evidence. Nothing here is speculative review — every
-verdict carries a citation.
+verdict but UNVERIFIED carries a citation: REFUTED and CONTESTED cite the denier's
+counter-source, CONFIRMED countersigns the prover's — or the denier's own, when hunting
+turned it up.
 
 ## Scope
 
@@ -23,7 +25,7 @@ Args name docs (`phonepe` → `docs/phonepe.md`); no args = full sweep: every `d
 | --- | --- | --- |
 | DESCRIPTIVE | Doc describes reality | Fix the doc, working tree only |
 | NORMATIVE | Doc IS the contract (owner calls, "never", deliberate deltas, security invariants) | Flag the CODE/infra to the user — never edit the doc side |
-| EXTERNAL | Vendor behaviour / on-device history | Settle against CURRENT vendor docs, fetched live — never from model memory (stale for 2026) |
+| EXTERNAL | Vendor behaviour / on-device history | Settle against CURRENT vendor docs, fetched live — never from model memory; on REFUTED see step 4 (API surface only) |
 
 UNVERIFIED is never treated as stale. The paid-for traps (PhonePe quirks, decoder limits)
 are the docs' whole value; the audit protects them from contradiction, it does not shred
@@ -31,29 +33,35 @@ them for lacking lab proof. Vendor docs contradicting an on-device trap → CONT
 trap often exists because reality diverges from the docs); vendor docs refute outright only
 the vendor's own API surface — endpoint names, params, deprecations, documented limits.
 
-## Read-only allowlist (goes verbatim into both agents' task prompts)
+## Read-only rules (go verbatim into both agents' task prompts)
 
-- `node workers/tools/prod-sql.mjs "SELECT ..."` — SELECT only, never INSERT/UPDATE/DELETE/DDL
-- `node workers/tools/prod-query.mjs ...` — read paths only
-- In `workers/`: `npx wrangler deployments list` · `npx wrangler secret list` (names only) ·
-  `npx wrangler kv namespace list` · `npx wrangler kv key list --namespace-id <id>` ·
-  `npx wrangler r2 bucket list`
-- `curl -s`/`curl -sI` GET/HEAD against `https://arul-api.hsrutility.com/...` and
-  `https://arul-cdn.hsrutility.com/...` (e.g. `catalog/version.json`)
-- Vendor docs, EXTERNAL claims only: WebSearch to find the page, then
-  `trafilatura -u "<URL>" --markdown | head -150` via Bash (WebFetch is denied globally).
-  Official portals only: developer.phonepe.com, developers.google.com,
+Any command that cannot mutate is in scope — the list below is the tools you will need, not the
+boundary. The boundary is the Forbidden list plus the categories: SELECT-only SQL, GET/HEAD-only
+HTTP, wrangler read subcommands (`list`/`get`/`view`/`whoami`/`--help`, never `deploy`/`put`/
+`delete`/`create`/`rollback`/`triggers`/`versions upload`), and plain repo reads (`ls`, `wc -l`,
+`git ls-files|log|show`, `grep`). A read-only command missing from the list is fine to run and is
+NEVER a reason to write NONE FOUND.
+
+- `node workers/tools/prod-query.mjs "SELECT ..."` — the ONLY Neon tool an audit may run; it refuses
+  non-SELECT, multi-statement and write keywords (guard at `workers/tools/prod-query.mjs:32-44`)
+- In `workers/`: `npx wrangler deployments list` · `secret list` (names only) · `kv namespace list` ·
+  `kv key list --namespace-id <id>` · `r2 bucket list`
+- `curl -s`/`curl -sI` GET/HEAD against `arul-api.hsrutility.com` and `arul-cdn.hsrutility.com`
+- Vendor docs, EXTERNAL claims only: WebSearch, then `trafilatura -u "<URL>" --markdown | head -150`
+  (WebFetch is denied globally). Official portals only: developer.phonepe.com, developers.google.com,
   firebase.google.com/docs, posthog.com/docs, developers.cloudflare.com, pub.dev.
 
-Forbidden always: `wrangler deploy`, `secret put|bulk`, `kv key put|delete`, any R2 write,
-cache purge, `POST /internal/build-catalog`, any HTTP POST/PUT/DELETE, any SQL that mutates.
+Forbidden always: **`node workers/tools/prod-sql.mjs` — flag or no flag** (its name advertises a
+read, but it CAN WRITE and one `--write` makes it one) · `wrangler deploy`, `secret put|bulk`,
+`kv key put|delete`, any R2 write, cache purge, `POST /internal/build-catalog`, any HTTP
+POST/PUT/DELETE, any SQL that mutates.
 
 ## Procedure
 
 1. Resolve targets. For each doc spawn `doc-prover` (Agent tool, background, ≤4 in flight):
-   task = doc path + the allowlist above + "return the dossier format from your definition".
+   task = doc path + the read-only rules above + "return the dossier format from your definition".
 2. When a prover's dossier arrives, spawn `doc-denier` for that doc with the full dossier
-   pasted in, plus the allowlist.
+   pasted in, plus the read-only rules.
 3. If the denier returns `CHALLENGES`, SendMessage the SAME prover agent with only the
    challenged claim ids and the denier's counter-evidence; then SendMessage the SAME denier
    with the rebuttal for final verdicts. Exactly one round — after it, verdicts are final.
@@ -63,6 +71,12 @@ cache purge, `POST /internal/build-catalog`, any HTTP POST/PUT/DELETE, any SQL t
      the wrong fact with the evidenced one; keep the WHY if it survives.
    - `REFUTED` + NORMATIVE → report entry: contract, violating file:line, denier's evidence.
      No edit on either side without the user.
+   - `REFUTED` + EXTERNAL → the vendor's own documented API surface won. Fix the doc now,
+     working tree only, and carry the fetched URL into the line so the next audit does not
+     re-derive it. Correct ONLY the API-surface half: if the line welds a vendor fact to an
+     on-device trap, split it — the trap stays, untouched and unshortened. Never edit
+     code/infra on an EXTERNAL refutation; a vendor doc is evidence about the vendor, not
+     about this repo.
    - `CONTESTED` → report entry with both citations. No edit.
    - `UNVERIFIED` → report appendix line. No edit.
    - `ECHO-FINDINGS` → when echoes disagree, the one matching source evidence wins; fix the

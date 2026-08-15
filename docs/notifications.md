@@ -11,23 +11,26 @@ no screen may promise a push channel. Contracts: [edge-cases.md](edge-cases.md) 
   computes to a standard worth putting in front of a devotee. Table runs out → `nextOccurrenceAfter`
   returns null and the festival is **skipped**: degrades to "no reminders", never a reminder on a
   wrong day. Never "fix" by adding 365 days — that puts a lunisolar festival up to a fortnight out.
-- Reminders fire `kFestivalLeadDays` (3) ahead and never name a date, so a ±1-day disagreement
-  between almanacs is invisible.
+- Reminders fire `kFestivalLeadDays` (3) ahead and the reminder copy never names a date, so a ±1-day
+  disagreement between almanacs is invisible (the Settings "Coming up" card does print it).
 - **Scheduling is inexact** (`inexactAllowWhileIdle`) on purpose: exact alarms are special-access and
   show on the Play listing.
-- QA tools gate on `qaToolsEnabled` → native `isPlayInstall()` (same source as FLAG_SECURE),
-  deliberately NOT `kDebugMode` — every failure worth catching reproduces only in a release build.
+- QA tools gate on `qaToolsEnabled` = `kDebugMode` **OR** not `isPlayInstall()` (same native source as
+  FLAG_SECURE). The second half is the point: a sideloaded RELEASE build keeps the tools, because every
+  failure worth catching reproduces only in a release build.
 
 `festivalEvents` (`domain/devotional_event.dart`) is hand-authored and VERIFIED against a published
-Tamil panchangam. When EXTENDING coverage (`devotional_event_test.dart` fails from 2030, so the
-refresh is a chore, not an outage), verify the new rows the same way — solar entries follow fixed
-rules, every tithi/nakshatra date must be checked. A festival count short of expected in the QA
-card = the table ran out, silent otherwise.
+Tamil panchangam. When EXTENDING coverage, verify the new rows the same way — solar entries follow
+fixed rules, every tithi/nakshatra date must be checked. **Nothing warns you when it runs out**:
+`devotional_event_test.dart` asserts a fixed floor (every festival authored past 2030-01-01) and never
+reads the clock, so it keeps passing while festivals stop arming. A festival count short of expected
+in the QA card is the only signal; it is silent otherwise.
 
 ## Traps already paid for
 
 - **`keep.xml` is not optional.** `ic_notification{,_large}` are resolved by NAME, R8 strips them, and
-  ONLY release builds throw `invalid_icon`. Verify:
+  ONLY release builds throw — `invalid_icon` for the small one, `invalid_large_icon` for the large.
+  Verify:
   `aapt2 dump resources <release.apk> | grep ic_notification` → must list both.
 - **Festival alarms are one-shot** — the root-widget watch of `notificationBootstrapProvider` re-arms
   on every launch, and `RECEIVE_BOOT_COMPLETED` + `ScheduledNotificationBootReceiver` cover reboots;

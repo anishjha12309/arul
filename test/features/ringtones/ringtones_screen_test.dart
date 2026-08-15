@@ -31,7 +31,7 @@ import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/ringtones/data/ringtone_set_service.dart';
-import 'package:arul/features/ringtones/presentation/ringtone_medallion.dart';
+import 'package:arul/features/ringtones/presentation/ringtone_tile.dart';
 import 'package:arul/features/ringtones/presentation/ringtones_screen.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
@@ -178,10 +178,10 @@ void main() {
   List<String> playingRows(WidgetTester tester) => [
     for (final row in tester.widgetList<RingtoneRow>(find.byType(RingtoneRow)))
       if (tester
-          .widget<RingtoneMedallion>(
+          .widget<RingtoneTile>(
             find.descendant(
               of: find.byWidget(row),
-              matching: find.byType(RingtoneMedallion),
+              matching: find.byType(RingtoneTile),
             ),
           )
           .playing)

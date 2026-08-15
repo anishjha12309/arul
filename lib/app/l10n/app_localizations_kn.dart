@@ -176,7 +176,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String referShareMessage(String link) {
-    return 'ಸುಂದರ ದಕ್ಷಿಣ ಭಾರತೀಯ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ನನಗೆ Arul ತುಂಬಾ ಇಷ್ಟ. ನನ್ನ ಲಿಂಕ್‌ನಿಂದ ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ, ನನಗೆ ಉಚಿತ ಪ್ರೀಮಿಯಂ ಸಿಗುತ್ತದೆ: $link';
+    return 'ದಕ್ಷಿಣ ಭಾರತೀಯ ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗಾಗಿ ನಾನು Arul ಬಳಸುತ್ತಿದ್ದೇನೆ — ಅಮ್ಮನ್, ಮುರುಗನ್, ಪೆರುಮಾಳ್, ಶಿವನ್, ಚಲಿಸುವ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳೂ ಇವೆ. ನಿಮಗೂ ಇಷ್ಟವಾಗುತ್ತದೆ ಅನಿಸಿತು.\n\n$link';
   }
 
   @override

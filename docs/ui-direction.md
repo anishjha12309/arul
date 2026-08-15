@@ -40,18 +40,18 @@ Light + dark themes are both required, and persisted.
 ## Type
 Base: Roboto (system). Display/wordmark: **Marcellus**, BUNDLED at `assets/fonts/Marcellus-Regular.ttf`,
 wired in `lib/app/theme/typography.dart` — never `google_fonts`, a banned dependency (§Perf). Every
-locale string must render in Tamil/Telugu/Kannada/Malayalam, so the serif applies ONLY to the
-display/headline tiers + Latin wordmark; all UI text uses the base stack (Noto fallbacks).
-**`/premium` is the ONE screen off this stack**: Cinzel/Lora/Gelasio, bundled, `ArulTokens.paywall*` only, instanced+subset by `tools/build-fonts.py`
+locale string must render in Tamil/Telugu/Kannada/Malayalam, so `typography.dart` confines the serif to display/headline + Latin wordmark.
+It reaches ONE localized string — `ArulScreenHeader`'s title — safely, not luckily: Marcellus has no Indic glyphs, so those titles resolve per-glyph through Noto at the same size and tracking. Do not add a second header style to "fix" it; watch for ascender clipping instead.
+**`/premium` is the ONE screen off this stack**: Cinzel/Lora/Gelasio, bundled, instanced+subset by `tools/build-fonts.py`, styled from `ArulTokens.paywall*` (its member/resubscribe states from `premiumMember*`/`premiumResubscribe*`)
 — safe only because that page is English-by-decision. **No bundled serif has U+20B9 ₹** (Marcellus/Cinzel/Lora all lack it), so a bare ₹ drops to
 Roboto mid-sentence; Gelasio carries it and every paywall Lora style names it in `fontFamilyFallback`. Gelasio is Georgia's metric twin, so the price
-gets OLD-STYLE figures (3/5/7/9 fall below the baseline) and an amount's ink centre MOVES with its digits — centring the ₹ is a per-price calc off the
+gets OLD-STYLE figures (3/4/5/7/9 fall below the baseline) and an amount's ink centre MOVES with its digits — centring the ₹ is a per-price calc off the
 glyph table (`PriceLockup`, pixel-asserted), never `Row`+`center`, which centres BOXES and leaves the rupee ~8px high, as the handoff's HTML does.
 
 ## Drawn art is ARTWORK, not chrome
-The ringtone kolam medallion's ten grounds and `#EBD6A3` gold ink live in `ringtone_medallion.dart`
-and must not become tokens — tokens describe chrome, not pictures; same for every CustomPainter motif
-(kolam grids, gopuram silhouette). A glyph the icon set lacks is PAINTED (`arul_line_icons.dart`) or
+The ringtone tile's ten grounds and `#EBD6A3` gold ink live in `ringtone_tile.dart` and must not become
+tokens — tokens describe chrome, not pictures; same for every CustomPainter motif (kolam grids, gopuram
+silhouette). The 17 bundled deity PNGs are inked in that SAME gold: change one, regenerate the other. A glyph the icon set lacks is PAINTED (`arul_line_icons.dart`) or
 is an EMOJI off the system font (the Earn button's 🎁). The 2026-08 red/gold static splash art was
 tried and REJECTED by the owner — splash + sign-in keep the lotus video
 (`assets/video/splash.mp4`); don't re-propose a static art backdrop.
@@ -59,13 +59,13 @@ tried and REJECTED by the owner — splash + sign-in keep the lotus video
 ## Dock — `ArulNavDock` / `AppShell` (`lib/app/shell/app_shell.dart`)
 - Geometry and colour come from `ArulTokens.dock*`, no literals. No blur (§Perf) and no glow on the
   active cell — a 20px gold halo fogged the cell's edge on a real panel; fill plus rim is enough.
-- Every scrollable AND every empty/loading/error state owes `AppShell.dockClearance(context)` of
-  bottom clearance. It returns **0 when no `AppShell` sits above the caller**, which is what makes it
-  safe to call unconditionally — a flat 120 left a screen of dead space under Settings when pushed as
-  a route.
+- A scrollable under the dock owes `AppShell.dockClearance(context)` of bottom clearance. It returns
+  **0 when no `AppShell` sits above the caller**, which is what makes it safe to call unconditionally
+  — a flat 120 left dead space under Settings when pushed as a route. Applied on the Ringtones and
+  Settings branches; Wallpapers' `FeedEmpty`/`FeedError` pad horizontally only and run under the dock.
 - The scrim behind the capsule fades to the surface's own alpha-0, **never `Colors.transparent`** —
   that is transparent BLACK, and lerping through it smears grey on the ivory theme.
-- Labels shrink, never clip: the app's only text-scale clamp (1.1) + `FittedBox(scaleDown)`, because
+- Labels shrink, never clip: a 1.1 text-scale clamp (`PaywallGround`'s 1.3 is the only other) + `FittedBox(scaleDown)`, because
   "വാൾപേപ്പറുകൾ" at 2× bursts the fixed 58/78 cells. Keep the theme's own tracking — at 0 the labels
   read as a different typeface.
 - Branch switches: leaving Wallpapers → `releaseDecoders()`, returning → `reclaimDecoders()`; leaving
@@ -76,8 +76,8 @@ tried and REJECTED by the owner — splash + sign-in keep the lotus video
 ## Perf rules that SHAPE the design (not optional polish)
 - **No glassmorphism — and none on the nav dock either**, the one place a handoff asked for it.
   `BackdropFilter` costs ~6–9ms raster/frame on mid-tier Android and would eat the budget the video
-  decoder needs. Chrome legibility comes from gradient scrims (`ArulScrims.top/bottom`), ordinary
-  paints; this is why the feed looks the way it does.
+  decoder needs. Chrome legibility comes from gradient scrims, ordinary paints — the SHIPPED pair is
+  `ArulTokens.feedTopScrim`/`feedBottomScrim`, two-stop on purpose (`ArulScrims.top/bottom` is dead).
 - **No `shimmer` package / no `ShaderMask`** — a mask forces `saveLayer()`, an offscreen pass per frame.
   Slide a gradient FILL instead (`skeleton.dart`): same look, zero cost. Note the Earn button's "shimmer"
   is not animated at all — a static vertical sheen (`earnFillLight`) plus `controlLift`. Reach for a
@@ -88,8 +88,8 @@ tried and REJECTED by the owner — splash + sign-in keep the lotus video
 - Feed pages get no keep-alive and no extra RepaintBoundary (PageView.builder adds one already). Images
   decode at display size (`memCacheWidth` × devicePixelRatio) and the image cache is capped in
   `main.dart` — a 1080×1920 wallpaper is ~8.3 MB of RGBA regardless of file size.
-- **Material 3 Expressive is NOT in Flutter stable** (Material frozen at 3.44; M3E deferred to a
-  `material_ui` package still at v0.0.1). Do not chase it. Premium here = the brand system above +
+- **Material 3 Expressive is NOT in Flutter stable** (Material frozen at 3.44; M3E deferred to the
+  decoupled `material_ui` package, 1.0.0 as of 2026-08). Do not chase it. Premium here = the brand system above +
   Material's real motion tokens (`Easing`, `Durations`) + one spring on the CTA.
 
 ## Launcher icon

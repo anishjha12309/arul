@@ -175,7 +175,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String referShareMessage(String link) {
-    return 'सुंदर दक्षिण भारतीय वॉलपेपर — मुझे Arul बहुत पसंद है। मेरी लिंक से इंस्टॉल करें और मुझे मुफ़्त प्रीमियम मिलेगा: $link';
+    return 'दक्षिण भारतीय भक्ति वॉलपेपर के लिए मुझे Arul बहुत पसंद है — अम्मन, मुरुगन, पेरुमाल, शिवन, और चलने वाले लाइव वॉलपेपर भी। सोचा आपको भी पसंद आएगा।\n\n$link';
   }
 
   @override

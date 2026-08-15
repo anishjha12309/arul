@@ -145,12 +145,7 @@ class InstallReferrerService {
       }
       final wallpaperId = parseWallpaperTarget(raw);
       if (wallpaperId != null) {
-        // Persist AND hand over live. This call races the feed's first catalog
-        // drain: the live handover wins when Play answers quickly, the persisted
-        // copy covers the next launch when it doesn't. Whoever consumes it
-        // clears the pref, so the user is taken there exactly once.
-        await _prefs.setString(_kPendingWallpaper, wallpaperId);
-        ArulDeepLink.request(wallpaperId);
+        await queueWallpaperTarget(wallpaperId);
         debugPrint('[InstallReferrer] captured deep-link wallpaper');
       }
     } catch (e) {
@@ -158,6 +153,21 @@ class InstallReferrerService {
       debugPrint('[InstallReferrer] unavailable (non-fatal): $e');
     }
     await _prefs.setBool(_kChecked, true);
+  }
+
+  /// Durably queue a validated wallpaper id and hand it to the live feed.
+  ///
+  /// Shared by Play Install Referrer and Google Ads' GA4F deferred-link bridge.
+  /// Persisting before the live request is load-bearing: if the process dies or
+  /// the async result loses the feed's first-catalog race, startup re-seeds it.
+  Future<void> queueWallpaperTarget(String wallpaperId) async {
+    final normalized = wallpaperId.trim().toLowerCase();
+    final valid = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    ).hasMatch(normalized);
+    if (!valid) return;
+    await _prefs.setString(_kPendingWallpaper, normalized);
+    ArulDeepLink.request(normalized);
   }
 
   /// The wallpaper an ad/share click asked for before this install existed, or

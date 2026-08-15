@@ -306,6 +306,29 @@ void main() {
       expect(ArulDeepLink.consume(), isNull);
     });
 
+    testWidgets('a target parked AFTER the first catalog still opens', (
+      tester,
+    ) async {
+      // Two links land here late by design: an App Link tapped while the app is
+      // already warm, and a Google Ads deferred link, which GA4F fetches over
+      // the network at startup and can deliver at any point in it. A
+      // once-per-mount flag swallowed both for the whole session.
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+      expect(h.host.jumpCalls, isEmpty);
+
+      ArulDeepLink.request('id-temple0');
+      h.host.maybeOpenDeepLink(_catalog);
+      // The feed calls this from build(), so its post-frame callback always has
+      // a frame to ride; here nothing is dirty, so schedule one by hand.
+      tester.element(find.byType(_Host)).markNeedsBuild();
+      await tester.pump();
+
+      expect(h.host.jumpCalls, hasLength(1));
+    });
+
     testWidgets('consuming clears the deferred copy so it cannot re-fire on '
         'the next launch', (tester) async {
       // main.dart seeds ArulDeepLink AND leaves the pref in place, because

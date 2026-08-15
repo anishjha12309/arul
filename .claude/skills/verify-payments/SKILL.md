@@ -7,9 +7,11 @@ description: Verify the PhonePe Autopay billing path end-to-end without spending
 
 Exercising billing normally means real ₹199 debits on the live gateway. **PhonePe UAT accepts the
 whole protocol** — OAuth, setup, status, `notify`, `redeem` all work against `api-preprod.phonepe.com`
-with the Test credentials, and mandates auto-activate — but **UAT will not settle a redemption**: it
-holds them `PENDING` with no way to force a terminal state, so `COMPLETED` and `FAILED`, the only
-branches that change entitlement, need a local stub. Report which half proved what; "verified"
+with the Test credentials. UAT *can* settle a redemption, but only behind a simulator-backed mandate
+and only along whichever Test-Case Template the merchant is configured for (2026-08-12: a real settle
+observed via Pass C); a mandate created by `/payments/initiate` alone has no payer, so its redemption
+never terminates. Forcing `COMPLETED` and `FAILED` on demand — the two redemption outcomes that
+change entitlement — is what the local stub is for. Report which half proved what; "verified"
 without that split is worthless. Stub modes, referral check, device walkthrough, the idle marker —
 all in [reference.md](reference.md).
 
@@ -20,12 +22,17 @@ all in [reference.md](reference.md).
   host matching `neon.tech`.
 - **Check `workers/.dev.vars` before every run** (back it up before editing). It must hold
   `PHONEPE_ENV=SANDBOX` and the **Test** client id — the merchant-name form `AUTOGRAMAPPSONLINE_…`
-  (Arul shares the HSR merchant with Pakiza; the `DKS_` prefix keeps the order streams distinct). The
-  **Live** id is the `SU…` form, lives only in `wrangler secret`, and seeing it here means stop.
+  (Arul shares the HSR merchant with Pakiza; the `DKS_` prefix keeps the order streams distinct).
+  **Anything that is not that form is not the Test id: stop.** (The live id lives only in
+  `wrangler secret`; observed as an `SU…` form, unverifiable from here.)
 - **`PHONEPE_BASE_URL_OVERRIDE` is ignored when `PHONEPE_ENV=PRODUCTION`** — `getPgBase` returns the
   production host before reading it; `workers/test/phonepe-base.test.ts` pins that behaviour.
-- **Never call `POST /internal/run-redemptions` against prod.** `force:true` charges every due
-  subscriber ₹199 immediately. It takes `OPS_SECRET`, not `CATALOG_BUILD_SECRET`; local only.
+- **Never call `POST /internal/run-redemptions` against prod with `force:true` or without
+  `merchantSubscriptionId`.** Unscoped `force` drops the due filter and charges every
+  `trialing`/`active` subscriber ₹199, `LIMIT 50`. Scoped to one `merchantSubscriptionId` you own, it
+  is the same one-row operation the harness does locally — still a real debit, never a dry run. It
+  takes `OPS_SECRET`, not `CATALOG_BUILD_SECRET`. This is discipline, not enforcement: the route is
+  deployed and `OPS_SECRET` is set in prod, so only that string stands between a curl and a debit.
 
 ## Run — every `node *.mjs` from `.claude/skills/verify-payments/scripts`
 
@@ -76,9 +83,12 @@ node sbx.mjs subs
 ```
 
 Against UAT this proves notify and redeem **for real**: `Notified … state=NOTIFICATION_IN_PROGRESS`,
-`Execute … state=PENDING`, and the redemption order carries `amount: 19900`. A KV marker
-(`autopay:next_work_at`) then short-circuits every later run — clear it between scenarios exactly as
-reference.md shows.
+`Execute … state=PENDING`, and the redemption order carries `amount: 19900`. A PENDING redeem is NOT
+the end — the row keeps `notified_at`, so every later `/__scheduled` re-executes it and logs
+`Execute PENDING … waiting for STANDARD retry` (Pass C reconciles once it is 2 h overdue). Only a
+**settled** debit writes the KV idle marker `autopay:next_work_at` (`notified_at` cleared,
+`next_debit_at` +1 month), and that marker then short-circuits later runs with `Nothing due before
+<date> — skipping DB` for up to an hour. Clear it between scenarios exactly as reference.md shows.
 
 ### 5. Terminal states via the stub
 

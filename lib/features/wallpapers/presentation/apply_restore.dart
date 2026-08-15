@@ -32,7 +32,6 @@ import '../providers/wallpaper_apply_provider.dart';
 /// wallpaper", so claiming "applied" would be a lie half the time.
 mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   bool _restoreChecked = false;
-  bool _deepLinkChecked = false;
 
   /// Implemented by the feed: switch to [category] and jump the pager to
   /// [index] within that filtered list. [wasLive] is false for a static apply,
@@ -105,9 +104,15 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   /// A miss is silent and normal, not an error — the link may point at a
   /// wallpaper that has since been unpublished, or at a catalog this build has
   /// not drained yet. The user simply gets the ordinary feed.
+  ///
+  /// Re-checked on EVERY build with a catalog, unlike [maybeRestoreAfterApply]'s
+  /// one-shot: a target can be parked here long after the feed's first catalog —
+  /// an App Link tapped while the app is already warm, or a Google Ads deferred
+  /// link, which GA4F fetches over the network at startup and may deliver at any
+  /// point in it. A once-per-mount flag dropped both on the floor for the whole
+  /// session. Nothing repeats, because [ArulDeepLink.consume] is read-and-clear.
   void maybeOpenDeepLink(List<Wallpaper> allItems) {
-    if (_deepLinkChecked || allItems.isEmpty) return;
-    _deepLinkChecked = true;
+    if (allItems.isEmpty) return;
 
     final wallpaperId = ArulDeepLink.consume();
     if (wallpaperId == null) return;

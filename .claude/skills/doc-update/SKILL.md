@@ -41,7 +41,8 @@ layouts, positions, copy, feature descriptions, what-was-done-when — does not 
 
 ## 100-line rule
 
-**No doc file over 100 lines** (top-level `README.md` exempt). Past 100, split the tail into a focused `docs/<topic>.md` and leave a one-line pointer saying when to read it:
+**No doc file over 100 lines** — every tracked markdown file in the repo, `.claude/skills/**` and
+`tools/**` included; top-level `README.md` exempt, untracked scratch out of scope. Past 100, split the tail into a focused `docs/<topic>.md` and leave a one-line pointer saying when to read it:
 
 ```
 Cache headers, the two zone rules, and the measurement trap: [caching.md](caching.md) — read before changing any Cache-Control.
@@ -58,10 +59,10 @@ Arul and Pakiza are peers with near-identical backends. Worker routes, entitleme
 When the change touches shared logic:
 
 1. Update this repo's doc.
-2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `phonepe.md`, `analytics-events.md`, `architecture.md`, `data-model.md`, `media-conventions.md` and `known-issues.md` share a name. `analytics-ops.md` has **no Pakiza twin** — Pakiza carries that material in `workers/README.md` + CLAUDE.md, so fold the fact in there rather than creating a new file. Infrastructure facts get no doc of their own in either repo: the binding lives beside its comment in `workers/wrangler.toml`, the secret in `workers/README.md §Secrets`, the console step in the skill that needs it. A standalone inventory only duplicates them and then rots.
+2. Update the sibling's equivalent doc (`c:\Anish\Pakiza\docs\`). The names differ — `cron.md` + `caching.md` here are `catalog-and-cron.md` there; `edge-cases.md` here is `platform-gotchas.md` there; `phonepe.md`, `analytics-events.md`, `architecture.md`, `data-model.md`, `media-conventions.md` and `known-issues.md` share a name. `analytics-ops.md` has **no Pakiza twin** — Pakiza never split it, so its ops material lives inside `docs/analytics-events.md` (§Google Ads conversion setup, §Where to see events). Fold the fact in there, not into `workers/README.md`: Pakiza has no `lib/ga4.ts` and no worker-side analytics secret, so its worker README says nothing about analytics at all. Infrastructure facts get no doc of their own in either repo: the binding lives beside its comment in `workers/wrangler.toml`, the secret in `workers/README.md §Secrets`, the console step in the skill that needs it. A standalone inventory only duplicates them and then rots.
 3. Can't do (2) this session? Add a one-line entry under `## Open` in `c:\Anish\Pakiza\docs\known-issues.md` naming the fact and the doc that needs it.
 
-App-layer UI, theming, localization, and the category browse axis are **not** shared — that axis is a deliberate delta from Pakiza's type-based browse. Don't cross-post those.
+App-layer UI, theming, localization, and the category browse axis are **not** shared — that axis is a deliberate delta from Pakiza's All/New recency tabs (type-based browse is Pakiza's retired axis, not its live one). Don't cross-post those.
 
 ## Skip it when
 

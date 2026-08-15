@@ -1,11 +1,13 @@
 # Backend Architecture
 
-Browse = CDN-only ($0 egress). Writes = Workers → Neon. Neon holds per-user state only; the app never
-touches it. API `https://arul-api.hsrutility.com` · CDN `https://arul-cdn.hsrutility.com` (R2
-`south-indian-wallpapers`) — both custom domains on the `hsrutility.com` zone; the legacy
+Browse = CDN-only ($0 egress). Writes = Workers → Neon. At request time Neon serves per-user state
+only — content rows (wallpapers/ringtones/app_config) are build-time input for the catalog; the app
+never touches the DB. API `https://arul-api.hsrutility.com` · CDN `https://arul-cdn.hsrutility.com`
+(R2 `south-indian-wallpapers`) — custom domains on the `hsrutility.com` zone, plus
+`arul.hsrutility.com` for share landings + assetlinks ([deep-links.md](deep-links.md)); the legacy
 `*.workers.dev` API host still answers for already-installed builds, never disable it.
 Crons: hourly (catalog + on-change canonical sweep ∥ autopay notify/execute) and daily 21:30 UTC
-(unconditional canonical + submission sweeps) — [cron.md](cron.md).
+(unconditional canonical + submission sweeps + the popularity version bump) — [cron.md](cron.md).
 
 ## API
 JSON; errors `{error:{code,message}}`; gated routes `Authorization: Bearer <accessJWT>`. THE route
@@ -43,9 +45,10 @@ Orphans reclaimed by sweep-submissions; pending rows expire after 30 d as a stat
 Source: `app_config.content_version` (Neon). Trigger: CMS mutation, `POST /internal/build-catalog`,
 or the hourly cron (no-op if the version is unchanged). Output per scope (`wallpapers`, `ringtones`):
 `catalog/<scope>/all_{page}.json` — ONE page set each, no per-category files — plus the shared
-`catalog/version.json` + `catalog/app_config.json`. Rows ordered `sort_order ASC, created_at DESC
-NULLS LAST, id ASC` so paging is deterministic; chips and `feedOrder()` are client-side, so curation
-never touches the build's row order. **A zero-row scope still writes a valid empty `all_1.json`** —
+`catalog/version.json` + `catalog/app_config.json`. Rows ordered `sort_order ASC, created_at DESC,
+id ASC` WITHIN a category (ringtones add `NULLS LAST`; `created_at` is NOT NULL so they match), then
+`interleaveByCategory` deals the cross-category order before paging — deterministic both ways. Chips
+and `feedOrder()` are client-side. **A zero-row scope still writes a valid empty `all_1.json`** —
 a 404 there means "the build failed", never "no content". Orphaned page files are deleted each
 rebuild. The backend is never conditional on the front end. Cache headers: [caching.md](caching.md).
 
@@ -53,8 +56,9 @@ Exposed keys are public by design (soft gate): wallpaper `full_key`, ringtone `a
 `cover_key`. `catalog/catalog.json` in the bucket is the one-time import manifest, not read by the app.
 
 CMS: **separate worker + repo** (`hsr-cms`, `c:\Anish\Unified CMS`) serving Arul + Pakiza from one
-login at `api.hsrutility.com/admin`. Mutation = bytes + row + version bump + rebuild + purge,
-atomically, reaching this worker via the `ARUL_API` service binding → `/internal/build-catalog`.
+login at `api.hsrutility.com/admin`. Mutation = bytes + row + version bump in ONE transaction; the
+rebuild fires async via the `ARUL_API` service binding → `/internal/build-catalog` and self-heals on
+the hourly cron if it fails. No purge step — `?v=` cache-busting does that job.
 This worker exposes no `/admin` of its own.
 
 ## Schema (Neon) — [data-model.md](data-model.md), DDL in `db/schema/`
@@ -64,4 +68,5 @@ app_config (singleton). No RLS — the Worker scopes every parameterized query t
 ## Security
 JWT HS256: access **60 m**, refresh 60 d rotating (jti denylisted in KV). idToken verified against
 Google JWKS. PhonePe v2 OAuth (`O-Bearer`); webhook `Authorization: SHA256(user:pass)`, deduped by
-orderId in KV. Secrets live in the Worker only — the app holds none.
+(event, orderId) in KV — the event MUST be in the key ([phonepe.md](phonepe.md)). Secrets live in
+the Worker only — the app holds none.

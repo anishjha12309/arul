@@ -23,7 +23,7 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 | POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET (apply/share gate); kind ∈ {wallpaper, ringtone}; one DB round-trip |
 | POST | /media/upload-url | Bearer | Presigned PUT, `user/<sub>/submissions/…` only |
 | POST | /media/confirm-upload | Bearer | Record submission — kind = `wallpaper` only, HEAD-verified, ≤10 pending/user, upsert on unique file_key |
-| POST | /payments/{initiate,status,cancel} | Bearer | Autopay mandate lifecycle; initiate 409s `setup_in_progress` vs `already_subscribed` |
+| POST | /payments/{initiate,status,cancel,abandon} | Bearer | Autopay mandate lifecycle; initiate 409s `setup_in_progress` vs `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback; idempotent via KV orderId dedupe |
 | GET | /payments/callback | — | Post-mandate browser redirect |
 | GET | /me | Bearer | Identity **+ the subscription row in one query** (LEFT JOIN) — one cold-start round-trip |
@@ -49,11 +49,11 @@ It reaches this worker through the **`ARUL_API` service binding** and
 `*.workers.dev` host is blocked by Cloudflare — the service binding is required.
 
 `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` / `ADMIN_SESSION_SECRET` are not read here and have been
-deleted from this worker. The R2 CORS rule for browser uploads allows origin
-`https://api.hsrutility.com` (the CMS), not an `arul-*` host.
+deleted from this worker. The R2 CORS rule for browser uploads allows TWO origins —
+`https://api.hsrutility.com` (the CMS) and `https://cdn.hsrutility.com`, no `arul-*` host. Write both back or you drop one.
 
 ## Catalog outputs (build-catalog)
-`catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (20/page; no per-tag
+`catalog/wallpapers/all_{page}.json` + `catalog/ringtones/all_{page}.json` (200/page; no per-tag
 pages; orphaned pages deleted each rebuild; a zero-row scope still writes a valid empty `all_1.json`,
 so a 404 there means the scope FAILED to build, not that it is empty) · `catalog/app_config.json`
 (public subset) · `catalog/version.json` (edge-cached pointer). Scope queries end in `id ASC`, so
@@ -73,14 +73,14 @@ OPS_SECRET(money-moving internal routes; unset = they refuse, which is the safe 
 GA4_API_SECRET(GA4 Admin → Data streams → Android stream → MP API secrets; unset = server-side
   purchase reporting silently skips — its pair GA4_FIREBASE_APP_ID is plain config in wrangler.toml [vars])
 ```
-Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` routes production
-credentials to the sandbox host and the 401 looks exactly like bad credentials. `CF_ZONE_ID` /
-`CF_PURGE_TOKEN` moved to `hsr-cms` with purge-on-publish — no longer in `env.ts`, never set here.
+Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` once routed production
+credentials to the sandbox host. `isProduction()` now trims and throws; every OTHER secret is still
+compared untrimmed. `CF_ZONE_ID`/`CF_PURGE_TOKEN` are gone from `env.ts` and set nowhere — there is no purge step anywhere, hsr-cms included; `?v=` does that job.
 
 ## Dev / deploy
 ```bash
 npm install
-npm run dev      # wrangler dev — needs .dev.vars (incl DATABASE_URL) + Hyperdrive localConnectionString
+npm run dev      # wrangler dev — needs .dev.vars (DATABASE_URL + WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE)
 npm run build && npm test
 npx wrangler deploy   # deploy IS part of "done" (CF login admin@hsrutility.com; see deploy-worker skill)
 ```

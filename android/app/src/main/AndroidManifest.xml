@@ -44,6 +44,14 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true">
+        <!-- Google Ads App Campaign deferred deep links. For a user who installs
+             from an eligible ad, Firebase Analytics writes the ad group's App URL
+             into google.analytics.deferred.deeplink.prefs. MainActivity listens
+             for that value and hands it to the same one-shot Flutter wallpaper
+             target used by App Links and Play Install Referrer. -->
+        <meta-data
+            android:name="google_analytics_deferred_deep_link_enabled"
+            android:value="true"/>
         <!-- enableOnBackInvokedCallback = predictive back. The manifest default is
              FALSE on Android 13-15, so WITHOUT this the gesture is dead across most
              of the install base. Flutter 3.38+ then supplies the page transition. -->

@@ -10,6 +10,7 @@ _Ringtone _$RingtoneFromJson(Map<String, dynamic> json) => _Ringtone(
   id: json['id'] as String,
   title: json['title'] as String,
   category: json['category'] as String? ?? 'other',
+  deity: json['deity'] as String?,
   tags:
       (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ??
       const <String>[],
@@ -27,6 +28,7 @@ Map<String, dynamic> _$RingtoneToJson(_Ringtone instance) => <String, dynamic>{
   'id': instance.id,
   'title': instance.title,
   'category': instance.category,
+  'deity': instance.deity,
   'tags': instance.tags,
   'audio_key': instance.audioKey,
   'cover_key': instance.coverKey,
