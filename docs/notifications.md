@@ -37,8 +37,10 @@ in the QA card is the only signal; it is silent otherwise.
   lose either and reminders silently end.
 - **Core library desugaring is required** by the plugin — without it the build fails at
   `checkDebugAarMetadata`, not at runtime.
-- **The small icon cannot be the launcher icon** — Android flattens and tints it to a white square;
-  `ic_notification.xml` is a monochrome gopuram, the coloured mark is the large icon.
+- **The small icon cannot be the launcher icon** — Android keeps only its ALPHA and tints the result,
+  so a coloured icon renders as a white square. `drawable-*/ic_notification.png` is a white-on-clear
+  gopuram silhouette (5 buckets, 24dp); the gold you see around it is `_accent` on the notification,
+  not the file. The coloured mark is the LARGE icon, and that one IS the launcher art.
 - **Android suppresses notifications for the foreground app** — minimise before judging a QA send.
 
 ## Adding the chime (sound not yet in repo; device default plays meanwhile)

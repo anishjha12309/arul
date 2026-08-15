@@ -38,19 +38,20 @@ enum PaywallOrnament {
 
 extension on PaywallOrnament {
   String get assetPath => switch (this) {
-    PaywallOrnament.floret => 'assets/premium/ornament_floret.png',
-    PaywallOrnament.floretGold => 'assets/premium/ornament_floret_gold.png',
-    PaywallOrnament.lotus => 'assets/premium/ornament_lotus.png',
-    PaywallOrnament.gopuram => 'assets/premium/ornament_gopuram.png',
-    PaywallOrnament.priceDivider => 'assets/premium/ornament_price_divider.png',
-    PaywallOrnament.footerRule => 'assets/premium/ornament_footer_rule.png',
-    PaywallOrnament.wallpapers => 'assets/premium/medallion_wallpapers.png',
-    PaywallOrnament.ringtones => 'assets/premium/medallion_ringtones.png',
-    PaywallOrnament.daily => 'assets/premium/medallion_daily.png',
+    PaywallOrnament.floret => 'assets/premium/ornament_floret.webp',
+    PaywallOrnament.floretGold => 'assets/premium/ornament_floret_gold.webp',
+    PaywallOrnament.lotus => 'assets/premium/ornament_lotus.webp',
+    PaywallOrnament.gopuram => 'assets/premium/ornament_gopuram.webp',
+    PaywallOrnament.priceDivider =>
+      'assets/premium/ornament_price_divider.webp',
+    PaywallOrnament.footerRule => 'assets/premium/ornament_footer_rule.webp',
+    PaywallOrnament.wallpapers => 'assets/premium/medallion_wallpapers.webp',
+    PaywallOrnament.ringtones => 'assets/premium/medallion_ringtones.webp',
+    PaywallOrnament.daily => 'assets/premium/medallion_daily.webp',
   };
 }
 
-/// A decorative PNG that never enters the semantics tree.
+/// A decorative WebP that never enters the semantics tree.
 class PaywallOrnamentImage extends StatelessWidget {
   const PaywallOrnamentImage({
     super.key,
@@ -102,7 +103,7 @@ class PaywallBackgroundPlate extends StatelessWidget {
             child: Opacity(
               opacity: ArulTokens.paywallOrnamentAlpha,
               child: Image.asset(
-                'assets/premium/bg_plate.png',
+                'assets/premium/bg_plate.webp',
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
                 cacheWidth: cacheWidth,

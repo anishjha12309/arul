@@ -9,7 +9,7 @@
 /// goddesses. Category-level art put one emblem on all of them.
 ///
 /// ── THE RESOLUTION CHAIN ───────────────────────────────────────────────────
-/// deity's own asset → the CATEGORY's default asset → `fallback.png`.
+/// deity's own asset → the CATEGORY's default asset → `fallback.webp`.
 ///
 /// The middle link is the load-bearing one. `deity` is nullable and free text:
 /// rows authored before the column existed carry null, the CMS can save one
@@ -19,16 +19,16 @@
 /// list of Murugan tracks. With it, the worst case for a known category is the
 /// right *family* of god, and only a genuinely new category reaches the
 /// fallback. That is what keeps a new deity an insert plus an app release for
-/// its PNG, never a migration.
+/// its WebP, never a migration.
 library;
 
 const String _base = 'assets/ringtones';
 
 /// The neutral tile: a three-tier gopuram. Not a deity — what an unrecognised
 /// category gets, and the only art that may stand for nothing in particular.
-const String kFallbackDeityAsset = '$_base/fallback.png';
+const String kFallbackDeityAsset = '$_base/fallback.webp';
 
-/// Every deity slug that ships a PNG in this release.
+/// Every deity slug that ships a WebP in this release.
 ///
 /// A slug missing from here is not a bug — it is a catalog that moved ahead of
 /// the app, which the chain above is built to survive. Adding one means adding
@@ -82,11 +82,11 @@ const Map<String, String> _defaultDeityByCategory = {
 /// must not silently fall through to the gopuram.
 String deityAsset({String? deity, String? category}) {
   final d = deity?.trim().toLowerCase();
-  if (d != null && kDeityArtSlugs.contains(d)) return '$_base/$d.png';
+  if (d != null && kDeityArtSlugs.contains(d)) return '$_base/$d.webp';
 
   final c = category?.trim().toLowerCase();
   final fallbackSlug = c == null ? null : _defaultDeityByCategory[c];
-  if (fallbackSlug != null) return '$_base/$fallbackSlug.png';
+  if (fallbackSlug != null) return '$_base/$fallbackSlug.webp';
 
   return kFallbackDeityAsset;
 }
@@ -95,7 +95,7 @@ String deityAsset({String? deity, String? category}) {
 /// list to precache against if the tab ever needs it.
 Iterable<String> get allDeityAssets sync* {
   for (final slug in kDeityArtSlugs) {
-    yield '$_base/$slug.png';
+    yield '$_base/$slug.webp';
   }
   yield kFallbackDeityAsset;
 }

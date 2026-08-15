@@ -8,11 +8,11 @@ void main() {
     test('a known deity gets its own art', () {
       expect(
         deityAsset(deity: 'ganesha', category: 'others'),
-        'assets/ringtones/ganesha.png',
+        'assets/ringtones/ganesha.webp',
       );
       expect(
         deityAsset(deity: 'venkateswara', category: 'perumal'),
-        'assets/ringtones/venkateswara.png',
+        'assets/ringtones/venkateswara.webp',
       );
     });
 
@@ -22,32 +22,32 @@ void main() {
       // its art — which is the whole reason the column exists.
       expect(
         deityAsset(deity: 'rama', category: 'perumal'),
-        'assets/ringtones/rama.png',
+        'assets/ringtones/rama.webp',
       );
     });
 
     test('a null deity falls back to the category default', () {
       expect(
         deityAsset(deity: null, category: 'murugan'),
-        'assets/ringtones/murugan.png',
+        'assets/ringtones/murugan.webp',
       );
       expect(
         deityAsset(deity: null, category: 'perumal'),
-        'assets/ringtones/vishnu.png',
+        'assets/ringtones/vishnu.webp',
       );
       expect(
         deityAsset(deity: null, category: 'amman'),
-        'assets/ringtones/devi.png',
+        'assets/ringtones/devi.webp',
       );
     });
 
     test('a deity this release has never heard of falls to its category', () {
       // The catalog can move ahead of the app: a bulk import can invent a slug
-      // months before the PNG ships. That row must still look like the right
+      // months before the WebP ships. That row must still look like the right
       // family of god, not like a temple.
       expect(
         deityAsset(deity: 'kartikeya', category: 'murugan'),
-        'assets/ringtones/murugan.png',
+        'assets/ringtones/murugan.webp',
       );
     });
 
@@ -72,22 +72,22 @@ void main() {
       // CMS must not silently drop the row to the gopuram.
       expect(
         deityAsset(deity: 'Ganesha', category: 'others'),
-        'assets/ringtones/ganesha.png',
+        'assets/ringtones/ganesha.webp',
       );
       expect(
         deityAsset(deity: '  hanuman  ', category: 'others'),
-        'assets/ringtones/hanuman.png',
+        'assets/ringtones/hanuman.webp',
       );
       expect(
         deityAsset(deity: null, category: ' PERUMAL '),
-        'assets/ringtones/vishnu.png',
+        'assets/ringtones/vishnu.webp',
       );
     });
   });
 
   group('bundled assets', () {
     // The failure this guards is invisible in CI and fatal on a device: a slug
-    // in the set with no PNG behind it throws mid-paint, and only on the row
+    // in the set with no WebP behind it throws mid-paint, and only on the row
     // that happens to use it.
     test('every declared slug has a file on disk', () {
       for (final path in allDeityAssets) {
@@ -99,18 +99,18 @@ void main() {
       }
     });
 
-    test('every bundled png is declared', () {
+    test('every bundled webp is declared', () {
       final onDisk = Directory('assets/ringtones')
           .listSync()
           .whereType<File>()
           .map((f) => f.path.replaceAll(r'\', '/'))
-          .where((p) => p.endsWith('.png'))
+          .where((p) => p.endsWith('.webp'))
           .toSet();
       expect(onDisk, isNotEmpty);
       expect(
         onDisk.difference(allDeityAssets.toSet()),
         isEmpty,
-        reason: 'an unreferenced png is dead weight in the AAB',
+        reason: 'an unreferenced webp is dead weight in the AAB',
       );
     });
 
@@ -119,7 +119,7 @@ void main() {
       // so they must exist AND must not be a named form.
       for (final slug in ['vishnu', 'devi']) {
         expect(kDeityArtSlugs, contains(slug));
-        expect(File('assets/ringtones/$slug.png').existsSync(), isTrue);
+        expect(File('assets/ringtones/$slug.webp').existsSync(), isTrue);
       }
     });
   });

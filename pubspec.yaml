@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+33
+version: 1.0.0+34
 
 environment:
   sdk: ^3.12.0
@@ -116,7 +116,8 @@ flutter:
     - assets/premium/
     # Ringtone row art: one transparent gold figure per deity, composited over
     # the hashed jewel-tone ground the app still draws. Bundled, not streamed —
-    # 17 files / ~1.5 MB total, and the list would otherwise fire 130+ tiny
+    # 17 files / ~1.0 MB total (lossless WebP — pixel-identical to the PNG
+    # masters, ~35% smaller), and the list would otherwise fire 130+ tiny
     # image requests on a tab that must feel instant. Authored at 1254² and
     # stored at 384²: the figures are fine line art, so they need well above the
     # ~200px they paint at, but 1254² would put 7 MB in the AAB for nothing. Adding a deity means an
