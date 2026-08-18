@@ -291,10 +291,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNeedHelpSub => 'Contact support';
 
   @override
-  String get settingsUpload => 'Upload your wallpaper';
+  String get settingsUpload => 'Upload your content';
 
   @override
-  String get settingsUploadSub => 'Share your own image or video';
+  String get settingsUploadSub => 'Share a wallpaper or ringtone';
 
   @override
   String get settingsLogout => 'Logout';
@@ -551,6 +551,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'Please choose an MP4 video.';
+
+  @override
+  String get uploadRejectAudio =>
+      'Please choose an MP3, AAC or M4A audio file.';
+
+  @override
+  String get uploadKindLabel => 'What are you sharing?';
+
+  @override
+  String get uploadKindWallpaper => 'Wallpaper';
+
+  @override
+  String get uploadKindRingtone => 'Ringtone';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'Choose an audio file';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC or M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'e.g. Kanda Sasti Kavasam';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'Approved ringtones appear in the Ringtones tab with your name';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'We\'ll review your ringtone shortly. While you wait — know someone who would enjoy Arul?';
 
   @override
   String uploadTooLarge(String max) {

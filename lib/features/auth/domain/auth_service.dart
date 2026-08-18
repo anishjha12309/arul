@@ -94,6 +94,15 @@ abstract interface class AuthService {
   /// Attempt sign-in via the given provider.
   Future<AuthResult> signInWith(AuthProvider provider);
 
+  /// Declares every sign-in attempt started so far ABANDONED. If an abandoned
+  /// attempt's `authenticate()` ever resolves after this (Credential Manager
+  /// can sit on its callback for minutes — observed 13 min, device
+  /// 2026-08-18), its result is discarded before any side effect: no token
+  /// exchange, no session emit, no analytics. Called by the controller's
+  /// stall guard right before it frees the UI for a fresh attempt, so a
+  /// revived zombie can never race the attempt that replaced it.
+  void abandonPendingSignIn();
+
   /// Update the current user's display name. The trimmed [name] is sent to the
   /// Worker; on success the new name is reflected in [authStateChanges].
   /// Throws on failure (e.g. network / validation) so the caller can surface it.

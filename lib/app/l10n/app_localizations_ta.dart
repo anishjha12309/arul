@@ -296,10 +296,10 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsNeedHelpSub => 'சப்போர்ட்டைத் தொடர்பு கொள்ளவும்';
 
   @override
-  String get settingsUpload => 'உங்கள் வால்பேப்பரைப் பதிவேற்றவும்';
+  String get settingsUpload => 'உங்கள் உள்ளடக்கத்தைப் பதிவேற்றவும்';
 
   @override
-  String get settingsUploadSub => 'உங்கள் படம் அல்லது வீடியோவைப் பகிரவும்';
+  String get settingsUploadSub => 'வால்பேப்பர் அல்லது ரிங்டோனைப் பகிரவும்';
 
   @override
   String get settingsLogout => 'வெளியேறு';
@@ -561,6 +561,36 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'MP4 வீடியோவைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get uploadRejectAudio =>
+      'MP3, AAC அல்லது M4A ஒலிக் கோப்பைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get uploadKindLabel => 'எதைப் பகிர்கிறீர்கள்?';
+
+  @override
+  String get uploadKindWallpaper => 'வால்பேப்பர்';
+
+  @override
+  String get uploadKindRingtone => 'ரிங்டோன்';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'ஒலிக் கோப்பைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC அல்லது M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'எ.கா. கந்த சஷ்டி கவசம்';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'அனுமதிக்கப்பட்ட ரிங்டோன்கள் உங்கள் பெயருடன் ரிங்டோன்கள் தாவலில் தோன்றும்';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'உங்கள் ரிங்டோனை விரைவில் பரிசீலிக்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் ஒருவர் தெரிகிறாரா?';
 
   @override
   String uploadTooLarge(String max) {

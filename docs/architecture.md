@@ -37,8 +37,10 @@ to `active`. Delete-account writes an HMAC tombstone so re-signup pre-seeds a co
 trial farming). Endpoint facts: [phonepe.md](phonepe.md).
 
 ## Uploads (submissions)
-upload-url presigns PUT to `user/<sub>/submissions/…` only. confirm-upload: kind = `wallpaper` (only),
-HEAD-verifies the object, max 10 pending/user, upserts on unique file_key (idempotent retries).
+upload-url presigns PUT to `user/<sub>/submissions/…` only. confirm-upload: kind = `wallpaper` or
+`ringtone`, byte-QC'd against THAT kind's role (a fixed role rejects every ringtone), max 10
+pending/user, upserts on unique file_key (idempotent retries). Approval needs a category for both
+kinds — the two draw from DIFFERENT sets (ringtones: no `temples`, plus `others`).
 Orphans reclaimed by sweep-submissions; pending rows expire after 30 d as a status flip, not a delete.
 
 ## Catalog generation

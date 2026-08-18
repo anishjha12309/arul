@@ -35,8 +35,11 @@ create index if not exists wallpapers_type_idx           on wallpapers (type);
 create index if not exists wallpapers_category_idx       on wallpapers (category);
 create index if not exists wallpapers_pub_cat_sort_idx   on wallpapers (is_published, category, sort_order);
 
--- content_submissions — user uploads awaiting moderation (kind = 'wallpaper' only
--- in Arul; the Worker validates).
+-- content_submissions — user uploads awaiting moderation. `kind` is 'wallpaper'
+-- or 'ringtone' (the Worker validates; no CHECK here, so adding a kind stays a
+-- code change rather than a migration). `category` is required for BOTH kinds on
+-- approval — it is the R2 key partition and the browse axis — but the two kinds
+-- draw from DIFFERENT category sets (ringtones drop 'temples', add 'others').
 create table if not exists content_submissions (
   id               uuid        primary key default gen_random_uuid(),
   user_id          uuid        not null references users(id) on delete cascade,

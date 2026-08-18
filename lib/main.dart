@@ -74,6 +74,30 @@ Future<void> main() async {
   );
 }
 
+/// Starts the PostHog SDK, then emits the one autocaptured event worth keeping.
+///
+/// `Application Installed` is captured by hand because disabling
+/// `captureApplicationLifecycleEvents` also unregisters the SDK integration that
+/// owns it (`PostHogAppInstallIntegration` is only added when the flag is on),
+/// and the flag cannot be narrowed to a single event. The SDK's own event NAME
+/// is reused so existing PostHog insights keep resolving across the change, and
+/// the native SDK stamps `$app_version`/`$app_build` onto every event anyway, so
+/// nothing about the event is poorer than the autocaptured one.
+///
+/// Captured on the SDK directly, NOT through AnalyticsService: it belongs to the
+/// PostHog bootstrap rather than to a `track()` call site (the allow-list only
+/// governs those), GA4 already auto-collects `first_open` for the same moment,
+/// and a name with a space is not a legal GA4 event name.
+///
+/// Awaits setup() before capturing — setup is fire-and-forget from the caller's
+/// side, and capturing into an SDK that has not finished native init drops the
+/// event.
+Future<void> _startPostHog(PostHogConfig config) async {
+  await Posthog().setup(config);
+  if (!AnalyticsCohort.isFreshInstall) return;
+  await Posthog().capture(eventName: 'Application Installed');
+}
+
 /// Configures the app (system UI, image cache, PostHog, Meta, Google Sign-In,
 /// referral capture) and runs it inside a Riverpod scope. Shared by the
 /// Firebase and non-Firebase entry paths above.
@@ -129,19 +153,24 @@ Future<void> _startApp() async {
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');
 
-  // PostHog — lean config: manual events only, and only for the ~5% analytics
-  // panel (AnalyticsCohort). Session replay OFF and surveys OFF, and we never
-  // install PosthogObserver/PostHogWidget, so there is no element-autocapture.
+  // PostHog — lean config: manual events only, and only for the analytics panel
+  // (AnalyticsCohort, currently every install). Session replay OFF and surveys
+  // OFF, and we never install PosthogObserver/PostHogWidget, so there is no
+  // element-autocapture and PostHog records no `$screen` at all.
   //
-  // captureApplicationLifecycleEvents is ON (2026-08-13). It emits
-  // `Application Opened`/`Backgrounded`/`Installed`/`Updated` from inside the
-  // native SDK — these never pass through AnalyticsService, so they cannot be
-  // filtered by AllowlistedAnalyticsService and the ONLY control over them is
-  // this flag. It was off while PostHog was a cost-trimmed 5% panel; with the
-  // panel at 100% these are what make sessions, DAU and retention resolvable
-  // inside PostHog rather than only in GA4, and every funnel here is read
-  // against them. Re-check at ~30k MAU: at a few sessions a day per user they
-  // are the largest single source of billed volume in the app.
+  // captureApplicationLifecycleEvents is OFF (owner's call, 2026-08-18: PostHog
+  // shows the journey and nothing else). The flag is all-or-nothing and its
+  // events never pass through AnalyticsService, so it is the ONLY control over
+  // them — leaving it on to keep `Application Installed` also buys
+  // `Application Opened`/`Backgrounded` on every launch and every backgrounding,
+  // which was most of the event stream and none of the funnel. So it is off and
+  // the install event is re-emitted by hand below.
+  //
+  // Two things this does NOT cost, both verified against posthog-android 3.58.3
+  // rather than assumed: sessions still work (the lifecycle observer that
+  // starts/ends them is registered either way — only the two captures inside it
+  // are gated), and GA4 still auto-collects first_open/session_start/screen_view
+  // at 100%, which is where open-the-app DAU and retention are read.
   //
   // The cohort check gates setup() itself rather than individual captures: a
   // non-panel install then does zero PostHog native init, network and battery
@@ -153,7 +182,7 @@ Future<void> _startApp() async {
   if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
-      ..captureApplicationLifecycleEvents = true
+      ..captureApplicationLifecycleEvents = false
       ..sessionReplay = false
       ..surveys = false
       ..debug = kDebugMode;
@@ -163,7 +192,7 @@ Future<void> _startApp() async {
     // the first user action anyway (lifecycle autocapture is off above), and
     // this matches the fire-and-forget contract every other PostHog call in the
     // app already uses (PostHogAnalyticsService).
-    unawaited(Posthog().setup(config));
+    unawaited(_startPostHog(config));
   }
 
   // Referral attribution + deferred deep link: read the Play Install Referrer

@@ -83,3 +83,4 @@ cms-shots/
 # under assets/. Anchored to the repo root so a nested tmp/ or output/ is unaffected.
 /tmp/
 /output/
+ph/

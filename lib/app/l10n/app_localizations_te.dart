@@ -294,10 +294,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsNeedHelpSub => 'సపోర్ట్‌ను సంప్రదించండి';
 
   @override
-  String get settingsUpload => 'మీ వాల్‌పేపర్‌ను అప్‌లోడ్ చేయండి';
+  String get settingsUpload => 'మీ కంటెంట్‌ను అప్‌లోడ్ చేయండి';
 
   @override
-  String get settingsUploadSub => 'మీ ఫోటో లేదా వీడియో పంచుకోండి';
+  String get settingsUploadSub => 'వాల్‌పేపర్ లేదా రింగ్‌టోన్ పంచుకోండి';
 
   @override
   String get settingsLogout => 'లాగ్ అవుట్';
@@ -555,6 +555,35 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'MP4 వీడియోను ఎంచుకోండి.';
+
+  @override
+  String get uploadRejectAudio => 'MP3, AAC లేదా M4A ఆడియో ఫైల్‌ను ఎంచుకోండి.';
+
+  @override
+  String get uploadKindLabel => 'మీరు దేన్ని పంచుకుంటున్నారు?';
+
+  @override
+  String get uploadKindWallpaper => 'వాల్‌పేపర్';
+
+  @override
+  String get uploadKindRingtone => 'రింగ్‌టోన్';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'ఆడియో ఫైల్‌ను ఎంచుకోండి';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC లేదా M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'ఉదా. కంద షష్ఠి కవచం';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'ఆమోదించిన రింగ్‌టోన్లు మీ పేరుతో రింగ్‌టోన్ల ట్యాబ్‌లో కనిపిస్తాయి';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'మీ రింగ్‌టోన్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?';
 
   @override
   String uploadTooLarge(String max) {

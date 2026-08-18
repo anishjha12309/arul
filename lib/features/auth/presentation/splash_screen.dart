@@ -49,7 +49,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// warmed as images instead of MP4 bytes. Thumbs beyond the in-memory cache's
   /// LRU still land in the DISK image cache, so a later scroll re-decodes
   /// locally instead of re-downloading.
+  ///
+  /// AUTHED SESSIONS ONLY. A signed-out session gets [_preAuthThumbWarmCount]
+  /// and NO MP4 bytes: the full warm (up to 16 clips × 2–5 MB, 3 concurrent)
+  /// used to start the moment the catalog landed and then fight the sign-in's
+  /// own network calls — Google's token mint, Firebase, POST /auth/login —
+  /// for the same pipe, which is where the 7–8 s first login came from
+  /// (device 2026-08-18). Post-login the feed's own VideoPreloadController
+  /// re-runs `prefetchAround` on mount, so nothing is lost — only deferred
+  /// past the moment the user is watching a spinner.
   static const _thumbWarmCount = 16;
+
+  /// The signed-out slice of the warm: the first screenful of posters, so the
+  /// feed the user lands on after sign-in shows real wallpapers instantly
+  /// (owner's call, 2026-08-18: "3–4 should be there"), at a bandwidth cost —
+  /// a few hundred KB — that cannot crowd the auth calls.
+  static const _preAuthThumbWarmCount = 4;
 
   /// The warm-up runs once per splash, on the first catalog data to land
   /// (immediately from the disk snapshot on a warm start, or when the network
@@ -71,7 +86,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // prefetch, relocated to the splash it describes).
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
-        _warmFeedMedia(value);
+        unawaited(_warmFeedMedia(value));
       }
     });
     _decideRoute();
@@ -79,26 +94,49 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   /// Warm the caches the reel will read first, while the brand beat plays:
   ///
-  ///  • LIVE bytes: `prefetchAround(items, 0)` on the app-scoped
-  ///    [WallpaperPrefetchService] — the same instance the feed's video
-  ///    controller pumps, so the two share one in-flight queue and never
+  ///  • LIVE bytes (authed sessions only): `prefetchAround(items, 0)` on the
+  ///    app-scoped [WallpaperPrefetchService] — the same instance the feed's
+  ///    video controller pumps, so the two share one in-flight queue and never
   ///    double-download. Bytes only; NO player, NO decoder is touched here.
-  ///  • Thumbnails: decode the first [_thumbWarmCount] posters into the shared
-  ///    image cache at the SAME decode width the tiles/posters use
-  ///    ([WallpaperTile.decodeWidthFor] — memCacheWidth is part of the cache
-  ///    key), so the feed's first paint is a repaint, not a refetch.
-  void _warmFeedMedia(List<Wallpaper> items) {
+  ///  • Thumbnails: decode the first [_thumbWarmCount] posters (signed-out:
+  ///    [_preAuthThumbWarmCount]) into the shared image cache at the SAME
+  ///    decode width the tiles/posters use ([WallpaperTile.decodeWidthFor] —
+  ///    memCacheWidth is part of the cache key), so the feed's first paint is
+  ///    a repaint, not a refetch.
+  ///
+  /// Awaits the auth seed first: the catalog can land (disk snapshot) before
+  /// the stored-session verdict, and deciding off the not-yet-seeded state
+  /// would give every RETURNING user the narrow signed-out warm.
+  Future<void> _warmFeedMedia(List<Wallpaper> items) async {
     if (_mediaWarmed) return;
     _mediaWarmed = true;
 
-    ref.read(wallpaperPrefetchServiceProvider).prefetchAround(items, 0);
+    if (AppConfig.hasBackend) {
+      await ref
+          .read(authServiceProvider)
+          .initialized
+          .timeout(const Duration(seconds: 6), onTimeout: () {});
+    }
+    // Routed away already (seed slower than the beat): skip. The authed path
+    // re-warms via the feed's own controller; the signed-out path loads its
+    // posters when the feed builds them — a slow catalog was the bottleneck
+    // anyway.
+    if (!mounted) return;
+
+    final authed =
+        !AppConfig.hasBackend ||
+        ref.read(authServiceProvider).currentState.isAuthenticated;
+    if (authed) {
+      ref.read(wallpaperPrefetchServiceProvider).prefetchAround(items, 0);
+    }
+    final thumbCount = authed ? _thumbWarmCount : _preAuthThumbWarmCount;
 
     // Post-frame: the listener can fire synchronously inside initState (a
     // warm keepAlive catalog), where the MediaQuery lookup below is illegal.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final decodeWidth = WallpaperTile.decodeWidthFor(context);
-      for (final w in items.take(_thumbWarmCount)) {
+      for (final w in items.take(thumbCount)) {
         precacheImage(
           // resizeIfNeeded is exactly what CachedNetworkImage does with
           // memCacheWidth, so this warms the entry the reel actually renders.

@@ -296,10 +296,10 @@ class AppLocalizationsMl extends AppLocalizations {
   String get settingsNeedHelpSub => 'സപ്പോർട്ടിനെ ബന്ധപ്പെടുക';
 
   @override
-  String get settingsUpload => 'നിങ്ങളുടെ വാൾപേപ്പർ അപ്‌ലോഡ് ചെയ്യുക';
+  String get settingsUpload => 'നിങ്ങളുടെ ഉള്ളടക്കം അപ്‌ലോഡ് ചെയ്യുക';
 
   @override
-  String get settingsUploadSub => 'നിങ്ങളുടെ ചിത്രമോ വീഡിയോയോ പങ്കിടുക';
+  String get settingsUploadSub => 'വാൾപേപ്പറോ റിംഗ്ടോണോ പങ്കിടുക';
 
   @override
   String get settingsLogout => 'ലോഗ് ഔട്ട്';
@@ -560,6 +560,36 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'MP4 വീഡിയോ തിരഞ്ഞെടുക്കുക.';
+
+  @override
+  String get uploadRejectAudio =>
+      'MP3, AAC അല്ലെങ്കിൽ M4A ഓഡിയോ ഫയൽ തിരഞ്ഞെടുക്കുക.';
+
+  @override
+  String get uploadKindLabel => 'നിങ്ങൾ എന്താണ് പങ്കിടുന്നത്?';
+
+  @override
+  String get uploadKindWallpaper => 'വാൾപേപ്പർ';
+
+  @override
+  String get uploadKindRingtone => 'റിംഗ്ടോൺ';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'ഓഡിയോ ഫയൽ തിരഞ്ഞെടുക്കുക';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC അല്ലെങ്കിൽ M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'ഉദാ. കന്ദ ഷഷ്ടി കവചം';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'അനുവദിച്ച റിംഗ്ടോണുകൾ നിങ്ങളുടെ പേരോടെ റിംഗ്ടോൺ ടാബിൽ വരും';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'നിങ്ങളുടെ റിംഗ്ടോൺ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?';
 
   @override
   String uploadTooLarge(String max) {

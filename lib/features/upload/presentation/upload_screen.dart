@@ -15,21 +15,25 @@ import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
 import '../providers/upload_provider.dart';
 
-/// Upload-your-content. WALLPAPERS ONLY: user submissions are wallpaper-only by
-/// design — the ringtone catalog is curated, never user-submitted — so there is
-/// no kind picker; the Worker validates `kind == 'wallpaper'` regardless.
+/// Upload-your-content — WALLPAPERS **and** RINGTONES.
 ///
-/// Layout: dashed pick zone, optional title field, EXACTLY the 6 fixed
-/// categories (no "All"),
-/// rights checkbox, single submit. The pick zone is live — [_pickFile] runs the
-/// real [FilePicker] and validates MIME type + size against [UploadConstraints]
+/// Layout: kind picker (Wallpaper / Ringtone), dashed pick zone, optional title
+/// field, the fixed categories for the CHOSEN kind (no "All"), rights checkbox,
+/// single submit. The pick zone is live — [_pickFile] runs the real
+/// [FilePicker] and validates MIME type + size against [UploadConstraints]
 /// before accepting a file — and submit stays disabled until a validated file,
 /// a category and the rights checkbox are all present.
 ///
-/// Upload categories are deliberately the fixed 6 consts below, decoupled from
+/// Upload categories are deliberately the fixed consts below, decoupled from
 /// the browse catalog's `categoriesProvider`: submissions must land in a
 /// moderator-known slug, so this list is not driven by whatever the catalog
-/// currently happens to contain.
+/// currently happens to contain. The two kinds do NOT share a list — ringtones
+/// drop `Temples` and add `Others` (CLAUDE.md §5b) — and the CMS re-checks the
+/// slug against the matching set at approve time.
+///
+/// A ringtone's `deity` (row art + subtitle) is NEVER collected here: it must be
+/// classified from LYRICS, and a submitted filename is not that. The row lands
+/// with a null deity and degrades to its category's default art.
 class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
 
@@ -38,7 +42,7 @@ class UploadScreen extends ConsumerStatefulWidget {
 }
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
-  static const _categories = [
+  static const _wallpaperCategories = [
     'Amman',
     'Ayyappan',
     'Murugan',
@@ -47,6 +51,19 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     'Temples',
   ];
 
+  /// NOT the wallpaper list: no `Temples`, plus `Others` for tracks belonging to
+  /// none of the five deities (Hanuman, Ganesha, gurus).
+  static const _ringtoneCategories = [
+    'Amman',
+    'Ayyappan',
+    'Murugan',
+    'Others',
+    'Perumal',
+    'Sivan',
+  ];
+
+  /// 'wallpaper' | 'ringtone' — the submitted `kind`.
+  String _kind = 'wallpaper';
   String? _category;
   bool _rightsAccepted = false;
 
@@ -58,6 +75,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   final _titleController = TextEditingController();
 
+  bool get _isRingtone => _kind == 'ringtone';
+
+  List<String> get _categories =>
+      _isRingtone ? _ringtoneCategories : _wallpaperCategories;
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -67,11 +89,32 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   bool get _canSubmit =>
       _filePath != null && _category != null && _rightsAccepted;
 
-  /// Picks an image or MP4 and validates its MIME type + size against
+  /// Switches kind, dropping the picked file AND the category. Both are
+  /// kind-scoped: the file would fail the other kind's MIME allow-list, and
+  /// `Temples`/`Others` exist in only one of the two category sets — carrying
+  /// either across would submit a value the CMS then refuses at approve.
+  void _selectKind(String kind) {
+    if (_kind == kind) return;
+    setState(() {
+      _kind = kind;
+      _category = null;
+      _filePath = null;
+      _fileName = null;
+      _mimeType = null;
+      _fileSize = 0;
+    });
+  }
+
+  /// Picks media for the current kind and validates its MIME type + size against
   /// [UploadConstraints] — rejects with a toast if it doesn't fit.
   Future<void> _pickFile() async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.pickFiles(type: FileType.media);
+    // FileType.audio for a ringtone so the picker cannot offer images/video in
+    // the first place; the allow-list below is still the enforcing check (the
+    // OS picker honours the filter loosely on some OEM builds).
+    final result = await FilePicker.pickFiles(
+      type: _isRingtone ? FileType.audio : FileType.media,
+    );
     final file = result?.files.singleOrNull;
     if (file?.path == null || !mounted) return;
 
@@ -79,13 +122,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final mime = UploadConstraints.mimeFromName(name);
     final wallpaperType = mime.startsWith('video/') ? 'live' : 'static';
 
-    if (!UploadConstraints.allowedTypes(wallpaperType).contains(mime)) {
+    if (!UploadConstraints.allowedTypes(_kind, wallpaperType).contains(mime)) {
       showArulToast(
         context,
         // The allowed-type wording is spelled out per branch rather than
-        // interpolating UploadConstraints.typeLabel — that label is English-only
-        // and would sit untranslated in the middle of a translated sentence.
-        wallpaperType == 'live'
+        // interpolating a label constant — such a label is English-only and
+        // would sit untranslated in the middle of a translated sentence.
+        _isRingtone
+            ? l10n.uploadRejectAudio
+            : wallpaperType == 'live'
             ? l10n.uploadRejectLive
             : l10n.uploadRejectStatic,
         kind: ToastKind.error,
@@ -94,10 +139,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     }
 
     final size = File(file.path!).lengthSync();
-    if (size > UploadConstraints.maxBytes(wallpaperType)) {
+    if (size > UploadConstraints.maxBytes(_kind, wallpaperType)) {
       showArulToast(
         context,
-        l10n.uploadTooLarge(UploadConstraints.maxLabel(wallpaperType)),
+        l10n.uploadTooLarge(UploadConstraints.maxLabel(_kind, wallpaperType)),
         kind: ToastKind.error,
       );
       return;
@@ -122,14 +167,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     await ref
         .read(uploadProvider.notifier)
         .submit(
-          kind: 'wallpaper',
+          kind: _kind,
           filePath: _filePath!,
           fileName: _fileName!,
           mimeType: _mimeType!,
           fileSize: _fileSize,
           title: _titleController.text,
           // The Worker + moderation flow key on the lowercase slug
-          // (`wallpapers/<category>/…` on approval).
+          // (`wallpapers/<category>/…` or `ringtones/<category>/…` on approval).
           category: _category!.toLowerCase(),
         );
     if (!mounted) return;
@@ -147,7 +192,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         await ShareMomentSheet.show(
           context,
           title: l10n.uploadShareMomentTitle,
-          body: l10n.uploadShareMomentBody,
+          body: _isRingtone
+              ? l10n.uploadShareMomentBodyRingtone
+              : l10n.uploadShareMomentBody,
           source: 'upload_success',
         );
         if (!mounted) return;
@@ -208,7 +255,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    l10n.uploadScreenTitle,
+                    // Kind-neutral: this screen now takes both wallpapers and
+                    // ringtones, so the title can't name one of them.
+                    l10n.uploadTitle,
                     style: ArulTokens.screenTitle.copyWith(color: textPrimary),
                   ),
                 ],
@@ -218,6 +267,39 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
+                  // Kind picker — the same ArulChip the categories use, so the
+                  // two rows read as one control stack rather than a borrowed
+                  // widget. Changing kind resets file + category (_selectKind).
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.uploadKindLabel,
+                        style: ArulTokens.rowSub.copyWith(color: labelColor),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ArulChip(
+                            label: l10n.uploadKindWallpaper,
+                            selected: !_isRingtone,
+                            variant: ArulChipVariant.surface,
+                            onTap: () => _selectKind('wallpaper'),
+                          ),
+                          ArulChip(
+                            label: l10n.uploadKindRingtone,
+                            selected: _isRingtone,
+                            variant: ArulChipVariant.surface,
+                            onTap: () => _selectKind('ringtone'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
                   // Pick zone.
                   GestureDetector(
                     onTapDown: (_) => ArulHaptics.tap(),
@@ -242,13 +324,18 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                         child: Column(
                           children: [
                             Icon(
-                              Icons.add_photo_alternate,
+                              _isRingtone
+                                  ? Icons.library_music
+                                  : Icons.add_photo_alternate,
                               size: 32,
                               color: accent,
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _fileName ?? l10n.uploadPickZoneTitle,
+                              _fileName ??
+                                  (_isRingtone
+                                      ? l10n.uploadPickZoneTitleAudio
+                                      : l10n.uploadPickZoneTitle),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
@@ -258,7 +345,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              l10n.uploadPickZoneSub,
+                              _isRingtone
+                                  ? l10n.uploadPickZoneSubAudio
+                                  : l10n.uploadPickZoneSub,
                               textAlign: TextAlign.center,
                               style: ArulTokens.rowSub.copyWith(
                                 color: pickSubLabel,
@@ -305,7 +394,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           decoration: InputDecoration(
                             isCollapsed: true,
                             border: InputBorder.none,
-                            hintText: l10n.uploadTitleHint,
+                            hintText: _isRingtone
+                                ? l10n.uploadTitleHintRingtone
+                                : l10n.uploadTitleHint,
                             hintStyle: TextStyle(
                               fontSize: 14.5,
                               color: placeholderColor,
@@ -399,7 +490,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    l10n.uploadFootnote,
+                    _isRingtone
+                        ? l10n.uploadFootnoteRingtone
+                        : l10n.uploadFootnote,
                     textAlign: TextAlign.center,
                     style: ArulTokens.caption.copyWith(color: footnoteColor),
                   ),

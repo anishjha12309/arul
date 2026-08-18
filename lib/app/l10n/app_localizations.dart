@@ -643,13 +643,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsUpload.
   ///
   /// In en, this message translates to:
-  /// **'Upload your wallpaper'**
+  /// **'Upload your content'**
   String get settingsUpload;
 
   /// No description provided for @settingsUploadSub.
   ///
   /// In en, this message translates to:
-  /// **'Share your own image or video'**
+  /// **'Share a wallpaper or ringtone'**
   String get settingsUploadSub;
 
   /// No description provided for @settingsLogout.
@@ -1119,6 +1119,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please choose an MP4 video.'**
   String get uploadRejectLive;
+
+  /// No description provided for @uploadRejectAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Please choose an MP3, AAC or M4A audio file.'**
+  String get uploadRejectAudio;
+
+  /// No description provided for @uploadKindLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What are you sharing?'**
+  String get uploadKindLabel;
+
+  /// No description provided for @uploadKindWallpaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper'**
+  String get uploadKindWallpaper;
+
+  /// No description provided for @uploadKindRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtone'**
+  String get uploadKindRingtone;
+
+  /// No description provided for @uploadPickZoneTitleAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an audio file'**
+  String get uploadPickZoneTitleAudio;
+
+  /// No description provided for @uploadPickZoneSubAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'MP3, AAC or M4A'**
+  String get uploadPickZoneSubAudio;
+
+  /// No description provided for @uploadTitleHintRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Kanda Sasti Kavasam'**
+  String get uploadTitleHintRingtone;
+
+  /// No description provided for @uploadFootnoteRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved ringtones appear in the Ringtones tab with your name'**
+  String get uploadFootnoteRingtone;
+
+  /// No description provided for @uploadShareMomentBodyRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll review your ringtone shortly. While you wait — know someone who would enjoy Arul?'**
+  String get uploadShareMomentBodyRingtone;
 
   /// Rejection toast when the picked file exceeds the per-type cap. {max} is already a formatted size ("10MB" / "50MB") from UploadConstraints.maxLabel.
   ///

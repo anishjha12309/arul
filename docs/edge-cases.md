@@ -21,11 +21,11 @@ a release; boxes stay unticked on purpose (unticked = "not re-checked for the re
 - [ ] OEM live-wallpaper restrictions caught → localized error, never a crash
 
 ## Auth
-- [ ] Sign-in auto-launches FULL `authenticate()` on first frame — NON-NEGOTIABLE, never lightweight/silent
+- [ ] Sign-in auto-launches FULL `authenticate()` on first frame — NON-NEGOTIABLE, never lightweight/silent (`google_sign_in` v7: `instance` → `initialize()` → `authenticate()`; idToken `aud` = WEB client id, verified in the Worker)
 - [ ] EXACTLY ONE account picker per sign-in. `attemptLightweightAuthentication()` as a warm-up ahead of `authenticate()` is REVERTED (measured 2026-08-11): its "minimal UI" is a real Credential Manager bottom sheet on Android, so the user got a drawer that appeared, hung, then vanished before the real picker — and a stall-guard timeout on it added 2.5s of dead air. It saves ~230ms of Credential Manager cold start and costs a second visible sheet; do not retry it
-- [ ] `google_sign_in` v7: `instance` → `initialize()` → `authenticate()`; idToken `aud` = WEB client id, verified in the Worker
 - [ ] Sign-in bg video: shared ref-counted player with 2s dispose grace (screen swaps must not kill it)
-- [ ] Auth failures surface a message + retry, never a stuck spinner — the strings are authored English today, not ARB-backed ("localized-enough"); an auth surface exception to the all-6-locales rule
+- [ ] Auth failures surface a message + retry — never a stuck spinner AND never a silent bounce. `GoogleSignInException` classified by typed `code` only: `canceled` is the one quiet outcome (tracked `login_cancelled`); every other code toasts + tracks `login_failed` with `gis_code` — the old string-sniff for "cancel" swallowed real failures (an LTE token-mint death read as a cancel, device 2026-08-18). The spinner side: Credential Manager can DROP its callback outright (one attempt still pending 13 min later, same day) and the busy pill ignores taps, so a 30s FOREGROUND stall abandons the attempt (`abandonPendingSignIn` — the zombie's late result is discarded before any side effect) and re-arms the pill; inactive/paused/hidden (the sheet itself, or backgrounding) EXTENDS, never abandons — a user reading the account list is not a stall ← `auth_providers.dart` `_guard`. Strings stay authored-English ("localized-enough"), an auth-surface exception to the all-6-locales rule
+- [ ] Splash media warm is AUTH-GATED: a signed-out session warms 4 posters and ZERO live MP4 bytes — the full 16-item warm fighting the sign-in's own network calls (Google token mint, Firebase id, `POST /auth/login`) for one pipe WAS the 7–8s first login (device 2026-08-18). Nothing is lost: the feed's `VideoPreloadController` re-runs the full `prefetchAround` on mount, and authed sessions still get the full splash warm ← `splash_screen.dart` `_warmFeedMedia`
 
 ## Premium / payments (server is source of truth)
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user ← `entitlement_provider.dart`
@@ -72,9 +72,10 @@ QA tools gate on `kDebugMode` OR not `isPlayInstall` — so a sideloaded release
 - [ ] Preview is FREE (public `audio_key` from CDN); only **Set** gates, via `/media/signed-url` kind `ringtone` ← `workers/src/routes/media.ts`
 - [ ] Set has a re-entrancy guard (same as apply/share) — a double tap must not run two set flows ← `ringtone_set_provider.dart`
 
-## Upload (wallpaper-only in Arul)
-- [ ] confirm-upload accepts kind `wallpaper` ONLY; idempotent via unique `file_key` upsert; keys forced under `user/<sub>/`
-- [ ] Upload form requires a category; approval copies to `wallpapers/<category>/…` and carries it onto the row
+## Upload (wallpaper + ringtone)
+- [ ] confirm-upload accepts kind `wallpaper` or `ringtone` ONLY, and QCs the bytes against THAT kind's role — a constant role would reject every ringtone as "not an image or MP4". Idempotent via unique `file_key` upsert; keys forced under `user/<sub>/`
+- [ ] A category is required for BOTH kinds; approval copies to `wallpapers/<category>/…` or `ringtones/<category>/…` and carries it onto the row. `ringtones.category` is NOT NULL, so the CMS must vet it BEFORE copying or the bytes are stranded
+- [ ] The kinds do NOT share a category list (ringtones drop `temples`, add `others`) — the wrong set files a row under a chip that tab never renders. A submitted ringtone's `deity` stays NULL: art is classified from LYRICS, never a filename, and null degrades to the category default
 - [ ] Moderation approve NEVER ships a dimension-violating video as-is (bytes copy verbatim) — re-encode or reject
 
 ## Share

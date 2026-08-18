@@ -1,7 +1,7 @@
 # Arul — South Indian Wallpapers
 
 Android-only Flutter app: Shorts-style wallpaper feed (static + live video), category browse,
-ringtones, upload-your-content (wallpaper-only), premium via PhonePe UPI Autopay. Backend:
+ringtones, upload-your-content (wallpapers + ringtones), premium via PhonePe UPI Autopay. Backend:
 Cloudflare Workers + Neon + R2. UI/UX is Arul's own design. Shares most of its backend and logic
 with its sibling app Pakiza (`c:\Anish\Pakiza`) — fixes flow both ways; see CLAUDE.md §0.
 

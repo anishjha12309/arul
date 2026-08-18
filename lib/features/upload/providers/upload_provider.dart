@@ -9,11 +9,17 @@ import '../data/api_content_submission_repository.dart';
 
 // ── Constraints (single source of truth for client + server) ─────────────────
 
-/// Single source of truth for upload size/type limits (mirrored server-side).
-/// Arul is wallpaper-only — the ringtone limits are NOT ported.
+/// Single source of truth for upload size/type limits, mirrored server-side in
+/// `workers/src/lib/media-constraints.ts` (and a third copy in the CMS) — keep
+/// all three in step.
+///
+/// The limits are keyed on `kind` ('wallpaper' | 'ringtone'); `wallpaperType`
+/// ('static' | 'live') only narrows the wallpaper branch and is ignored for a
+/// ringtone.
 abstract final class UploadConstraints {
   static const int maxStaticWallpaper = 10 * 1024 * 1024; // 10 MB
   static const int maxLiveWallpaper = 50 * 1024 * 1024; // 50 MB
+  static const int maxRingtone = 15 * 1024 * 1024; // 15 MB
 
   static const Set<String> staticWallpaperTypes = {
     'image/jpeg',
@@ -21,23 +27,36 @@ abstract final class UploadConstraints {
     'image/webp',
   };
   static const Set<String> liveWallpaperTypes = {'video/mp4'};
+  static const Set<String> ringtoneTypes = {
+    'audio/mpeg',
+    'audio/aac',
+    'audio/mp4',
+    'audio/x-m4a',
+  };
 
-  static int maxBytes(String wallpaperType) =>
-      wallpaperType == 'live' ? maxLiveWallpaper : maxStaticWallpaper;
+  static int maxBytes(String kind, String wallpaperType) {
+    if (kind == 'ringtone') return maxRingtone;
+    return wallpaperType == 'live' ? maxLiveWallpaper : maxStaticWallpaper;
+  }
 
-  static Set<String> allowedTypes(String wallpaperType) =>
-      wallpaperType == 'live' ? liveWallpaperTypes : staticWallpaperTypes;
+  static Set<String> allowedTypes(String kind, String wallpaperType) {
+    if (kind == 'ringtone') return ringtoneTypes;
+    return wallpaperType == 'live' ? liveWallpaperTypes : staticWallpaperTypes;
+  }
 
-  static String typeLabel(String wallpaperType) =>
-      wallpaperType == 'live' ? 'MP4 video' : 'JPEG, PNG or WebP image';
-
-  static String maxLabel(String wallpaperType) {
-    final mb = maxBytes(wallpaperType) ~/ (1024 * 1024);
+  static String maxLabel(String kind, String wallpaperType) {
+    final mb = maxBytes(kind, wallpaperType) ~/ (1024 * 1024);
     return '${mb}MB';
   }
 
   /// Best-effort MIME type derived from a filename extension. Unsupported types
   /// resolve to a value the allow-list ([allowedTypes]) rejects with a clear error.
+  ///
+  /// `m4a` maps to `audio/mp4` — the server's allow-list carries BOTH that and
+  /// `audio/x-m4a`, but the presigned PUT stores whatever is sent here, and the
+  /// byte-level QC re-derives the real container from the bytes either way.
+  /// `ogg`/`wav`/`flac` are named so a user who picks one gets the authored
+  /// "choose an MP3/AAC/M4A" rejection instead of the generic octet-stream path.
   static String mimeFromName(String name) {
     final ext = name.split('.').last.toLowerCase();
     return switch (ext) {
@@ -46,6 +65,12 @@ abstract final class UploadConstraints {
       'webp' => 'image/webp',
       'gif' => 'image/gif',
       'mp4' => 'video/mp4',
+      'mp3' => 'audio/mpeg',
+      'aac' => 'audio/aac',
+      'm4a' => 'audio/mp4',
+      'ogg' => 'audio/ogg',
+      'wav' => 'audio/wav',
+      'flac' => 'audio/flac',
       _ => 'application/octet-stream',
     };
   }
@@ -90,8 +115,10 @@ class UploadNotifier extends Notifier<UploadState> {
 
   /// Three-step upload: fetch a presigned R2 PUT URL from the Worker, PUT the
   /// file bytes straight to R2, then record the submission for moderation.
-  /// Arul: [kind] is always `'wallpaper'` and [category] is REQUIRED by the
-  /// form (approval copies the file to `wallpapers/<category>/…`).
+  /// [kind] is `'wallpaper'` or `'ringtone'`, and [category] is REQUIRED by the
+  /// form for BOTH — approval copies the file to `wallpapers/<category>/…` or
+  /// `ringtones/<category>/…`, and `ringtones.category` is NOT NULL. The two
+  /// kinds do NOT share a category list (ringtones drop `temples`, add `others`).
   Future<void> submit({
     required String kind,
     required String filePath,

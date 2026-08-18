@@ -290,10 +290,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsNeedHelpSub => 'सपोर्ट से संपर्क करें';
 
   @override
-  String get settingsUpload => 'अपना वॉलपेपर अपलोड करें';
+  String get settingsUpload => 'अपनी सामग्री अपलोड करें';
 
   @override
-  String get settingsUploadSub => 'अपनी तस्वीर या वीडियो साझा करें';
+  String get settingsUploadSub => 'वॉलपेपर या रिंगटोन साझा करें';
 
   @override
   String get settingsLogout => 'लॉग आउट';
@@ -547,6 +547,35 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'MP4 वीडियो चुनें।';
+
+  @override
+  String get uploadRejectAudio => 'MP3, AAC या M4A ऑडियो फ़ाइल चुनें।';
+
+  @override
+  String get uploadKindLabel => 'आप क्या साझा कर रहे हैं?';
+
+  @override
+  String get uploadKindWallpaper => 'वॉलपेपर';
+
+  @override
+  String get uploadKindRingtone => 'रिंगटोन';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'ऑडियो फ़ाइल चुनें';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC या M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'जैसे, कंद षष्ठी कवचम';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'मंज़ूर रिंगटोन आपके नाम के साथ रिंगटोन टैब में दिखेंगे';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'हम आपका रिंगटोन जल्द देखेंगे। तब तक — किसी को Arul पसंद आएगा?';
 
   @override
   String uploadTooLarge(String max) {

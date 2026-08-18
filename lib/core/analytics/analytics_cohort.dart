@@ -69,6 +69,23 @@ class AnalyticsCohort {
   static bool get isMember => _isMember;
   static bool _isMember = false;
 
+  /// Whether [resolve] had to CREATE this install's draw — i.e. no launch ever
+  /// wrote one before, which makes this launch the install itself.
+  ///
+  /// `main()` uses it to emit `Application Installed` by hand, because the SDK's
+  /// lifecycle autocapture is off (it is all-or-nothing and also fires
+  /// `Application Opened`/`Backgrounded` every launch). The persisted draw is
+  /// already this app's one durable first-launch marker, so it answers the
+  /// question directly; a second prefs key for the same fact could only drift
+  /// away from it. Same failure mode as the SDK's own integration — a prefs
+  /// write that never lands re-draws next launch and re-fires.
+  ///
+  /// False until [resolve] runs, and false for every install that launched
+  /// before this flag existed (their draw is already on disk), so shipping it
+  /// cannot back-date an install event onto the existing base.
+  static bool get isFreshInstall => _isFreshInstall;
+  static bool _isFreshInstall = false;
+
   /// Draws once per install and caches the answer for the process lifetime.
   ///
   /// MUST run before `Posthog().setup()`. The gate is deliberately placed ABOVE
@@ -82,6 +99,7 @@ class AnalyticsCohort {
   /// this app targets.
   static bool resolve(SharedPreferences prefs, {Random? random}) {
     var draw = prefs.getDouble(_drawKey);
+    _isFreshInstall = draw == null;
     if (draw == null) {
       draw = (random ?? Random()).nextDouble();
       // Fire-and-forget: a failed write just means this install re-draws next
@@ -94,5 +112,8 @@ class AnalyticsCohort {
 
   /// Test seam — clears the process-level cache between tests.
   @visibleForTesting
-  static void debugReset() => _isMember = false;
+  static void debugReset() {
+    _isMember = false;
+    _isFreshInstall = false;
+  }
 }

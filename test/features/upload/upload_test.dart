@@ -22,29 +22,48 @@ import 'package:arul/features/upload/providers/upload_provider.dart';
 // ─── UploadConstraints (pure) ─────────────────────────────────────────────────
 
 void main() {
-  group('UploadConstraints (wallpaper-only in Arul)', () {
-    test('maxBytes by wallpaper type', () {
-      expect(UploadConstraints.maxBytes('static'), 10 * 1024 * 1024);
-      expect(UploadConstraints.maxBytes('live'), 50 * 1024 * 1024);
+  group('UploadConstraints (wallpaper + ringtone)', () {
+    test('maxBytes by kind and wallpaper type', () {
+      expect(
+        UploadConstraints.maxBytes('wallpaper', 'static'),
+        10 * 1024 * 1024,
+      );
+      expect(UploadConstraints.maxBytes('wallpaper', 'live'), 50 * 1024 * 1024);
+      // wallpaperType is ignored for a ringtone — the audio cap either way.
+      expect(
+        UploadConstraints.maxBytes('ringtone', 'static'),
+        15 * 1024 * 1024,
+      );
+      expect(UploadConstraints.maxBytes('ringtone', 'live'), 15 * 1024 * 1024);
     });
 
-    test('allowedTypes by wallpaper type', () {
-      expect(UploadConstraints.allowedTypes('static'), {
+    test('allowedTypes by kind and wallpaper type', () {
+      expect(UploadConstraints.allowedTypes('wallpaper', 'static'), {
         'image/jpeg',
         'image/png',
         'image/webp',
       });
-      expect(UploadConstraints.allowedTypes('live'), {'video/mp4'});
+      expect(UploadConstraints.allowedTypes('wallpaper', 'live'), {
+        'video/mp4',
+      });
+      expect(UploadConstraints.allowedTypes('ringtone', 'static'), {
+        'audio/mpeg',
+        'audio/aac',
+        'audio/mp4',
+        'audio/x-m4a',
+      });
+    });
+
+    test('a ringtone never accepts image or video types', () {
+      final audio = UploadConstraints.allowedTypes('ringtone', 'static');
+      expect(audio.contains('video/mp4'), isFalse);
+      expect(audio.contains('image/jpeg'), isFalse);
     });
 
     test('maxLabel renders the megabyte ceiling', () {
-      expect(UploadConstraints.maxLabel('static'), '10MB');
-      expect(UploadConstraints.maxLabel('live'), '50MB');
-    });
-
-    test('typeLabel describes the accepted formats', () {
-      expect(UploadConstraints.typeLabel('static'), contains('image'));
-      expect(UploadConstraints.typeLabel('live'), contains('MP4'));
+      expect(UploadConstraints.maxLabel('wallpaper', 'static'), '10MB');
+      expect(UploadConstraints.maxLabel('wallpaper', 'live'), '50MB');
+      expect(UploadConstraints.maxLabel('ringtone', 'static'), '15MB');
     });
 
     test('mimeFromName maps wallpaper extensions (incl. mp4)', () {
@@ -56,6 +75,25 @@ void main() {
         'application/octet-stream',
       );
     });
+
+    test('mimeFromName maps the audio extensions the server allow-lists', () {
+      expect(UploadConstraints.mimeFromName('a.mp3'), 'audio/mpeg');
+      expect(UploadConstraints.mimeFromName('a.AAC'), 'audio/aac');
+      expect(UploadConstraints.mimeFromName('a.m4a'), 'audio/mp4');
+    });
+
+    test(
+      'unsupported audio resolves to a type the ringtone allow-list rejects',
+      () {
+        // ogg/wav/flac are named so the user gets the authored "choose an
+        // MP3/AAC/M4A" toast rather than the generic octet-stream path — but they
+        // must still FAIL the allow-list, not sneak through it.
+        final audio = UploadConstraints.allowedTypes('ringtone', 'static');
+        for (final name in ['a.ogg', 'a.wav', 'a.flac']) {
+          expect(audio.contains(UploadConstraints.mimeFromName(name)), isFalse);
+        }
+      },
+    );
   });
 
   // ─── UploadNotifier (reachable branches) ─────────────────────────────────────
@@ -180,6 +218,44 @@ void main() {
         expect(sentKey, endsWith('_pic.jpg'));
       },
     );
+
+    test(
+      'a ringtone submit sends kind=ringtone with the audio content-type',
+      () async {
+        Map<String, dynamic>? sent;
+        final c = await container(
+          auth: AuthUserState.authenticated(userId: 'u1'),
+          mock: MockClient((req) async {
+            sent = jsonDecode(req.body) as Map<String, dynamic>;
+            // No uploadUrl → stop before the (un-mockable) R2 PUT.
+            return http.Response(
+              '{}',
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }),
+        );
+        addTearDown(c.dispose);
+
+        await c
+            .read(uploadProvider.notifier)
+            .submit(
+              kind: 'ringtone',
+              filePath: '/does/not/matter',
+              fileName: 'kavasam.mp3',
+              mimeType: 'audio/mpeg',
+              fileSize: 4321,
+              category: 'murugan',
+            );
+
+        // The presign request is what carries the kind — the Worker sizes the
+        // allow-list off contentType and QCs the object against `kind` at confirm.
+        expect(sent?['kind'], 'ringtone');
+        expect(sent?['contentType'], 'audio/mpeg');
+        expect(sent?['key'], startsWith('user/u1/submissions/'));
+        expect(sent?['key'], endsWith('_kavasam.mp3'));
+      },
+    );
   });
 }
 
@@ -200,6 +276,9 @@ class _FakeAuth implements AuthService {
   @override
   Future<AuthResult> signInWith(AuthProvider provider) =>
       throw UnimplementedError();
+
+  @override
+  void abandonPendingSignIn() {}
 
   @override
   Future<void> updateDisplayName(String name) async {}

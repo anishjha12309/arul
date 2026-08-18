@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
@@ -39,11 +42,35 @@ class AuthController extends _$AuthController {
   @override
   FutureOr<void> build() {}
 
-  /// The sign-in currently in flight, if any. Google's account picker is a
-  /// system Activity, so two overlapping `signInWith` calls put TWO sheets on
+  /// The sign-in currently in flight, if any — already wrapped by [_guard],
+  /// so every joiner shares ONE guarded future (identity matters: the tests
+  /// pin `identical(join, first)`). Google's account picker is a system
+  /// Activity, so two overlapping `signInWith` calls put TWO sheets on
   /// screen — one of which appears, hangs and vanishes. That shipped once
   /// (2026-08-11) and must not again: every caller goes through here.
   Future<AuthResult>? _inFlight;
+
+  /// How long a sign-in may sit unresolved with OUR OWN UI foregrounded
+  /// before the guard abandons it. Generous on purpose: it exists for the
+  /// lost-callback pathology only, and must never clip a slow-but-alive
+  /// flow. While the app is inactive/paused/hidden — the sheet itself, or a
+  /// backgrounding — the clock effectively pauses ([_guard] extends instead
+  /// of abandoning), so a user reading the account list can take all day.
+  /// NOT the reverted 2026-08-11 stall-guard-on-a-warm-up: this adds zero
+  /// dead air — it only ever fires when nothing is happening at all.
+  @visibleForTesting
+  Duration stallLimit = const Duration(seconds: 30);
+
+  /// Re-check cadence once [stallLimit] has elapsed while the app is not
+  /// resumed (sheet up / backgrounded): wait this much more, then look again.
+  @visibleForTesting
+  Duration stallRecheck = const Duration(seconds: 5);
+
+  /// Seam for the lifecycle read — tests stub it instead of poking the
+  /// binding's @protected lifecycle plumbing.
+  @visibleForTesting
+  AppLifecycleState? Function() lifecycleProbe = () =>
+      WidgetsBinding.instance.lifecycleState;
 
   /// Whether the ONE automatic sign-in of the CURRENT signed-out stretch has
   /// been spent. Re-armed by [signOut] / [deleteAccount] — scoping this to the
@@ -62,12 +89,65 @@ class AuthController extends _$AuthController {
   Future<AuthResult> signIn(AuthProvider provider) {
     final existing = _inFlight;
     if (existing != null) return existing;
-    final future = ref
-        .read(authServiceProvider)
-        .signInWith(provider)
-        .whenComplete(() => _inFlight = null);
-    _inFlight = future;
-    return future;
+    final raw = ref.read(authServiceProvider).signInWith(provider);
+    final started = DateTime.now();
+    late final Future<AuthResult> guarded;
+    guarded = _guard(raw, started).whenComplete(() {
+      // Identity-checked: an abandoned attempt's cleanup must never null out
+      // the fresh attempt that replaced it.
+      if (identical(_inFlight, guarded)) _inFlight = null;
+    });
+    _inFlight = guarded;
+    return guarded;
+  }
+
+  /// Wraps one sign-in attempt with the lost-callback stall guard.
+  ///
+  /// `authenticate()` has no timeout of its own and Credential Manager can
+  /// drop its callback outright (observed: an attempt still pending 13 min
+  /// later, device 2026-08-18) — which froze the pill's spinner forever and,
+  /// since the busy pill ignores taps, bricked sign-in for the whole process.
+  /// The guard frees the UI, but only when THREE things are true: the stall
+  /// budget is spent, the app is RESUMED (a sheet on top or a backgrounding
+  /// makes us inactive/paused/hidden — the user may be mid-flow, so extend,
+  /// never abandon), and the attempt is still the current one. Abandoning
+  /// tells the service to discard the zombie's eventual result, tracks the
+  /// stall, and surfaces the standard failure toast + retry pill.
+  Future<AuthResult> _guard(Future<AuthResult> raw, DateTime started) async {
+    while (true) {
+      final budget = stallLimit - DateTime.now().difference(started);
+      if (budget > Duration.zero) {
+        try {
+          return await raw.timeout(budget);
+        } on TimeoutException {
+          // Budget spent — evaluate below.
+        }
+      }
+      final lifecycle = lifecycleProbe();
+      final maybeMidFlow =
+          lifecycle == AppLifecycleState.inactive ||
+          lifecycle == AppLifecycleState.paused ||
+          lifecycle == AppLifecycleState.hidden;
+      if (maybeMidFlow) {
+        try {
+          return await raw.timeout(stallRecheck);
+        } on TimeoutException {
+          continue;
+        }
+      }
+      // Foreground, spinner up, nothing happening: the callback is lost.
+      ref.read(authServiceProvider).abandonPendingSignIn();
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            'login_failed',
+            properties: {'provider': 'google', 'kind': 'stalled'},
+          );
+      return const AuthFailure(
+        message: 'Sign-in is taking too long. Please try again.',
+        kind: AuthFailureKind.networkError,
+      );
+    }
   }
 
   /// The automatic sign-in, fired ONCE per process by whichever screen gets

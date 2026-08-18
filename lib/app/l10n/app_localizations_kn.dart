@@ -293,10 +293,10 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsNeedHelpSub => 'ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ';
 
   @override
-  String get settingsUpload => 'ನಿಮ್ಮ ವಾಲ್‌ಪೇಪರ್ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ';
+  String get settingsUpload => 'ನಿಮ್ಮ ವಿಷಯವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ';
 
   @override
-  String get settingsUploadSub => 'ನಿಮ್ಮ ಚಿತ್ರ ಅಥವಾ ವೀಡಿಯೊ ಹಂಚಿಕೊಳ್ಳಿ';
+  String get settingsUploadSub => 'ವಾಲ್‌ಪೇಪರ್ ಅಥವಾ ರಿಂಗ್‌ಟೋನ್ ಹಂಚಿಕೊಳ್ಳಿ';
 
   @override
   String get settingsLogout => 'ಲಾಗ್ ಔಟ್';
@@ -554,6 +554,35 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get uploadRejectLive => 'MP4 ವೀಡಿಯೊ ಆಯ್ಕೆಮಾಡಿ.';
+
+  @override
+  String get uploadRejectAudio => 'MP3, AAC ಅಥವಾ M4A ಆಡಿಯೋ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.';
+
+  @override
+  String get uploadKindLabel => 'ನೀವು ಏನನ್ನು ಹಂಚಿಕೊಳ್ಳುತ್ತಿದ್ದೀರಿ?';
+
+  @override
+  String get uploadKindWallpaper => 'ವಾಲ್‌ಪೇಪರ್';
+
+  @override
+  String get uploadKindRingtone => 'ರಿಂಗ್‌ಟೋನ್';
+
+  @override
+  String get uploadPickZoneTitleAudio => 'ಆಡಿಯೋ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ';
+
+  @override
+  String get uploadPickZoneSubAudio => 'MP3, AAC ಅಥವಾ M4A';
+
+  @override
+  String get uploadTitleHintRingtone => 'ಉದಾ. ಕಂದ ಷಷ್ಠಿ ಕವಚಂ';
+
+  @override
+  String get uploadFootnoteRingtone =>
+      'ಅನುಮೋದಿತ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ರಿಂಗ್‌ಟೋನ್‌ಗಳ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ';
+
+  @override
+  String get uploadShareMomentBodyRingtone =>
+      'ನಿಮ್ಮ ರಿಂಗ್‌ಟೋನ್ ಅನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ?';
 
   @override
   String uploadTooLarge(String max) {

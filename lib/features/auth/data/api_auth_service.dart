@@ -212,7 +212,20 @@ class ApiAuthService implements AuthService {
 
   // ─── Google ────────────────────────────────────────────────────────────────
 
+  /// Monotonic attempt counter backing [abandonPendingSignIn]. Captured at
+  /// launch, re-checked the moment `authenticate()` returns: a mismatch means
+  /// the controller's stall guard gave up on this attempt while Credential
+  /// Manager sat on its callback, so the revived result must be dropped
+  /// before tokens, session state or analytics are touched.
+  int _attemptSeq = 0;
+
+  @override
+  void abandonPendingSignIn() {
+    _attemptSeq++;
+  }
+
   Future<AuthResult> _signInWithGoogle() async {
+    final attempt = ++_attemptSeq;
     try {
       // EXACTLY ONE account picker, always.
       //
@@ -233,9 +246,23 @@ class ApiAuthService implements AuthService {
         );
       }
 
+      // GA4 join key for server-side purchase reporting (app_instance_id.dart).
+      // Sent every login: the id changes on reinstall, and reinstall forces a
+      // fresh sign-in — so login is exactly where it stays current. STARTED
+      // before `authenticate()` so the Firebase Installations round-trip
+      // (~0.4s cold, measured 2026-08-18) overlaps Google's own sheet time
+      // instead of extending the post-picker wait; never throws (own catch).
+      BootTrace.mark('signIn: fetchAppInstanceId() start (concurrent)');
+      final appInstanceIdFuture = fetchAppInstanceId();
+
       BootTrace.mark('signIn: authenticate() called');
       final account = await GoogleSignIn.instance.authenticate();
       BootTrace.mark('signIn: authenticate() returned');
+
+      // Abandoned by the stall guard while Credential Manager sat on its
+      // callback — a newer attempt (or none) owns the session now. Quietly
+      // drop the zombie before any side effect.
+      if (attempt != _attemptSeq) return const AuthCancelled();
 
       // v7: idToken is a synchronous property on GoogleSignInAuthentication.
       final idToken = account.authentication.idToken;
@@ -251,11 +278,7 @@ class ApiAuthService implements AuthService {
       // on later logins is harmless. Cleared after a successful exchange below.
       final referralCode = _referral?.pendingCode;
 
-      // GA4 join key for server-side purchase reporting (app_instance_id.dart).
-      // Sent every login: the id changes on reinstall, and reinstall forces a
-      // fresh sign-in — so login is exactly where it stays current.
-      BootTrace.mark('signIn: fetchAppInstanceId() start');
-      final appInstanceId = await fetchAppInstanceId();
+      final appInstanceId = await appInstanceIdFuture;
       BootTrace.mark('signIn: fetchAppInstanceId() done');
 
       // Exchange Google ID token for our own Worker-issued JWT pair.
@@ -325,6 +348,38 @@ class ApiAuthService implements AuthService {
       _analytics.track('login_success', properties: {'provider': 'google'});
 
       return AuthSuccess(userId: userId);
+    } on GoogleSignInException catch (e) {
+      // Typed classification, never string-sniffing. The old fallback matched
+      // any message containing "cancel" — and Credential Manager phrases REAL
+      // failures that way (a token mint dying on a fresh LTE link surfaced as
+      // a "cancel", device 2026-08-18), so infra failures became silent
+      // pill-bounces with zero telemetry while the funnel bled.
+      debugPrint(
+        '[ApiAuthService] GoogleSignInException ${e.code.name}: ${e.description}',
+      );
+      final result = mapGoogleSignInException(e);
+      switch (result) {
+        case AuthCancelled():
+          // The one genuinely-quiet outcome — the user closed the sheet.
+          // Tracked (GA4-only; PostHog allowlist unaffected) so cancels are
+          // countable against login_success instead of invisible.
+          _analytics.track(
+            'login_cancelled',
+            properties: {'provider': 'google'},
+          );
+        case AuthFailure(:final kind):
+          _analytics.track(
+            'login_failed',
+            properties: {
+              'provider': 'google',
+              'gis_code': e.code.name,
+              'kind': kind.name,
+            },
+          );
+        case AuthSuccess():
+          break; // unreachable: the mapper never returns success
+      }
+      return result;
     } on PlatformException catch (e) {
       return _mapPlatformException(e);
     } on ApiException catch (e) {
@@ -338,8 +393,11 @@ class ApiAuthService implements AuthService {
       );
       return AuthFailure(message: e.message, kind: AuthFailureKind.serverError);
     } catch (e) {
+      // Last-resort fallback for non-GIS, non-platform exceptions only —
+      // GoogleSignInException above owns the plugin's outcomes now.
       final msg = e.toString().toLowerCase();
       if (msg.contains('cancel') || msg.contains('user_cancelled')) {
+        _analytics.track('login_cancelled', properties: {'provider': 'google'});
         return const AuthCancelled();
       }
       debugPrint('[ApiAuthService] unexpected error: $e');
@@ -355,6 +413,40 @@ class ApiAuthService implements AuthService {
         message: 'Sign-in failed. Please try again.',
         kind: AuthFailureKind.unknown,
       );
+    }
+  }
+
+  /// Pure classification of a v7 [GoogleSignInException] — kept static and
+  /// side-effect-free so tests can pin every code's mapping. The enum is
+  /// documented as non-exhaustive ("adding new values will not be considered
+  /// a breaking change"), so unknown codes MUST fall through to a generic
+  /// failure, never crash and never go quiet.
+  @visibleForTesting
+  static AuthResult mapGoogleSignInException(GoogleSignInException e) {
+    switch (e.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return const AuthCancelled();
+      case GoogleSignInExceptionCode.interrupted:
+        // "Interrupted for a reason other than being intentionally canceled"
+        // — in practice a network/GMS hiccup mid-flow. Retryable.
+        return const AuthFailure(
+          message:
+              'Sign-in was interrupted. Please check your connection and try again.',
+          kind: AuthFailureKind.networkError,
+        );
+      case GoogleSignInExceptionCode.providerConfigurationError:
+        return const AuthFailure(
+          message:
+              'Google Play Services is unavailable. Please update or reinstall.',
+          kind: AuthFailureKind.noPlayServices,
+        );
+      default:
+        // clientConfigurationError, uiUnavailable, userMismatch, unknownError
+        // and any code a future plugin version adds: visible + retryable.
+        return const AuthFailure(
+          message: 'Sign-in failed. Please try again.',
+          kind: AuthFailureKind.unknown,
+        );
     }
   }
 

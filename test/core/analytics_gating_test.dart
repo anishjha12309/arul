@@ -173,62 +173,99 @@ void main() {
     );
   });
 
+  group('AnalyticsCohort.isFreshInstall', () {
+    // Drives the hand-emitted `Application Installed` in main.dart, which is the
+    // ONLY thing PostHog now receives outside postHogAllowedEvents. Wrong in
+    // either direction is silent: never true = no installs in PostHog at all,
+    // true twice = an install count that quietly overstates.
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      AnalyticsCohort.debugReset();
+    });
+
+    test('false until resolve() runs', () {
+      expect(AnalyticsCohort.isFreshInstall, isFalse);
+    });
+
+    test('true on the launch that creates the draw', () async {
+      final prefs = await SharedPreferences.getInstance();
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.5));
+      expect(AnalyticsCohort.isFreshInstall, isTrue);
+    });
+
+    test('false on every launch after that — install fires ONCE', () async {
+      final prefs = await SharedPreferences.getInstance();
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.5));
+      AnalyticsCohort.debugReset();
+
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.5));
+      expect(AnalyticsCohort.isFreshInstall, isFalse);
+    });
+
+    test('false for an install that predates the flag', () async {
+      // Its draw is already on disk from an earlier release, so shipping this
+      // cannot back-date an "install" onto the existing base.
+      SharedPreferences.setMockInitialValues({
+        'analytics_posthog_cohort_draw_v1': 0.42,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.5));
+      expect(AnalyticsCohort.isFreshInstall, isFalse);
+    });
+  });
+
   // The two gates above are correct in isolation; these assert how they are
   // WIRED, which is where the money and the missing-event bugs actually live.
   group('postHogAllowedEvents (the real list)', () {
-    test('the APPLY gate is the one blocked-premium event billed', () {
-      // Only the apply gate is allow-listed (cost decision, 2026-07-29): it
-      // carries the volume, and share/ringtone blocks describe the same funnel
-      // shape. So the invariant is no longer "every gate is listed" — it is
-      // "apply is listed, and the others are deliberately not".
+    test('no paywall-block event is billed', () {
+      // Inverted on 2026-08-18: the blocked-premium events left the list with
+      // the rest of the non-journey noise (owner's call — PostHog shows the
+      // journey only; GA4 still has all three at 100%).
       //
-      // What this still guards: `PremiumGateAction.apply.source` is the string
-      // the feed actually concatenates into the event name. If that enum value
-      // is ever renamed, the event silently changes name, keeps flowing to GA4,
-      // and vanishes from PostHog with nothing failing anywhere.
-      final apply = PremiumGateAction.values.firstWhere(
-        (a) => a.name == 'apply',
-      );
-      expect(
-        postHogAllowedEvents,
-        contains('${apply.source}_blocked_premium'),
-        reason:
-            'PremiumGateAction.apply fires "${apply.source}_blocked_premium", '
-            'which is not allow-listed — the paywall funnel would lose its '
-            'trigger. Fix the list or update docs/analytics-events.md.',
-      );
+      // Still asserted through the ENUM rather than as literals, because that is
+      // what the feed actually concatenates into the event name: if a
+      // `PremiumGateAction` is renamed AND someone re-adds its old event string
+      // here, the list would grow an event that nothing can ever fire.
+      for (final action in PremiumGateAction.values) {
+        expect(
+          postHogAllowedEvents,
+          isNot(contains('${action.source}_blocked_premium')),
+          reason:
+              '${action.source}_blocked_premium is deliberately GA4-only. '
+              'Adding it back is a decision, not a cleanup — update '
+              'docs/analytics-events.md with it.',
+        );
+      }
     });
 
     test('the billed events are exactly this list', () {
-      // Pinned as a SET, not a subset. The list widened on 2026-08-13 when the
-      // cohort went to 100%, but it is still a deliberate list and not a
-      // free-for-all: adding to it is a decision someone must make on purpose,
-      // because volume here is now multiplied by every install rather than by
-      // one in twenty.
+      // Pinned as a SET, not a subset. Trimmed from eleven to five on
+      // 2026-08-18 (owner's call): PostHog carries the journey — install →
+      // login → trial → apply/share → ringtone set — and nothing else. The
+      // install half is `Application Installed`, captured in main.dart and so
+      // deliberately absent from this list.
       expect(postHogAllowedEvents, <String>{
         'login_success',
-        'feed_session_ended',
         'wallpaper_applied',
         'wallpaper_shared',
         'ringtone_set',
-        'apply_blocked_premium',
-        'share_blocked_premium',
-        'ringtone_set_blocked_premium',
         'trial_started',
-        'subscription_active',
-        'referral_shared',
       });
     });
 
     test('high-volume and diagnostic events stay OFF the list', () {
-      // Not style — cost. `wallpaper_engaged` fires per dwelled card and is the
-      // event `feed_session_ended` exists to replace; letting it back on the
-      // list re-creates the bill that rollup was written to avoid, and now at
-      // 100% of installs rather than 5%. The rest are attempts, failures and
-      // rare account admin — Crashlytics, GA4 and Neon questions, which would
-      // make the funnel harder to read rather than the data richer.
+      // `wallpaper_engaged` fires per dwelled card and is the one genuine volume
+      // risk in the app — cost, not style. `feed_session_ended` (its rollup),
+      // `subscription_active` and `referral_shared` came off on 2026-08-18 for a
+      // different reason: PostHog is the journey view now, and revenue truth was
+      // always Neon. The rest are attempts, failures and rare account admin —
+      // Crashlytics, GA4 and Neon questions, which would make the funnel harder
+      // to read rather than the data richer.
       for (final event in <String>[
         'wallpaper_engaged',
+        'feed_session_ended',
+        'subscription_active',
+        'referral_shared',
         'wallpaper_apply_attempt',
         'ringtone_preview',
         'ringtone_set_attempt',
