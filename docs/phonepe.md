@@ -113,8 +113,9 @@ default applies). Only the severity is wrong (device, 2026-08-14).
 - **A lost SDK callback does not lose the payment.** `POST /payments/status` reconciles the row
   against PhonePe. A real device run ended with PhonePe's webview stuck on "confirming payment"
   while the mandate was `COMPLETED` at their end; status-reconcile is what saved it. Do not remove it.
-- **Stuck-`PENDING` debits converge** — autopay Pass C reconciles via `getOrderStatus` once a debit is
-  more than 2 h overdue.
+- **Recurring debits have their own doc** — [autopay-debits.md](autopay-debits.md). Read it before
+  touching `cron/autopay-notify.ts`: redeem error codes, order states, and why order status (never
+  the redeem response) decides whether money moved.
 - **`phonepe_subscription_id` may stay NULL** when the webhook is lost and only status-reconcile runs.
   Harmless: the cron addresses PhonePe by *our* `merchant_subscription_id`.
 - Dunning: retries 1–4 stay alive, the subscription **expires at retry 5** and is then ignored.

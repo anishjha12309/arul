@@ -52,7 +52,9 @@
  *
  *   Order status (setup and redemption orders)
  *     GET {base}/subscriptions/v2/order/{merchantOrderId}/status?details=true
- *     Response: state (COMPLETED | FAILED | PENDING), orderId, amount, paymentFlow, paymentDetails
+ *     Response: state (COMPLETED | FAILED | PENDING | NOTIFIED), orderId, amount, paymentFlow,
+ *       paymentDetails. NOTIFIED appears on redemption orders that were announced but never
+ *       executed — observed live 2026-08-18 on mandates the user had revoked.
  *
  *   Refund
  *     https://developer.phonepe.com/payment-gateway/autopay/api-integration/api-reference/refund
@@ -739,7 +741,12 @@ export async function getSubscriptionStatus(
 // ── Order status (setup orders + redemption orders) ───────────────────────────
 
 export interface OrderStatusResult {
-  /** COMPLETED | FAILED | PENDING */
+  /**
+   * COMPLETED | FAILED | PENDING | NOTIFIED. NOTIFIED is a redemption-only
+   * state — the debit was announced but never executed — and it is observed on
+   * live orders, so treat this list as open and anything unrecognised as
+   * non-terminal.
+   */
   state: string;
   orderId: string;
   merchantOrderId: string;

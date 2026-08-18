@@ -316,6 +316,75 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         break;
       }
 
+      const outcomeRow = {
+        id: row.id as string,
+        userId: row.user_id as string,
+        retryCount: row.retry_count as number,
+        merchantSubId,
+        redemptionOrderId,
+      };
+      const dueAt = toDate(row.next_debit_at);
+      const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
+      let settled = false;
+
+      // ── Pass C first: the order's status is the only authority ───────────────
+      //
+      // `redeem` is a TRIGGER, not an answer. A UPI debit settles seconds after
+      // PhonePe accepts the call, so the redeem response is routinely
+      // non-terminal even when the money is about to move — and once it has
+      // moved, redeeming the same order again is a 4xx.
+      //
+      // Reconciling AFTER the redeem attempt (which is where this used to live,
+      // inside the try, below the throwing call) means the throw skips it
+      // forever: the row keeps notified_at + redemption_order_id, Pass A won't
+      // re-select it (notified_at IS NULL), and the user sits in `trialing` past
+      // their period end having already PAID. Two live subscribers were stranded
+      // that way for two days (prod 2026-08-16 and 08-17, ₹199 each, PhonePe
+      // orders COMPLETED, Neon untouched). So: ask before acting, and never let
+      // the answer depend on the redeem call succeeding.
+      if (overdueMs > RECONCILE_STUCK_AFTER_MS && budgetLeft(1)) {
+        phonePeCalls += 1;
+        const r = await reconcileFromOrder(env, sql, outcomeRow, overdueMs);
+        settled = r.settled;
+
+        // Order outlived its window and never settled — redeeming it again can
+        // only 4xx. Drop it so Pass A mints a fresh one instead of looping.
+        if (r.dead) {
+          await recycleRedemption(sql, outcomeRow.id);
+          console.warn(
+            `[autopay-notify] Order ${redemptionOrderId} for sub ${merchantSubId} ` +
+            `expired unsettled — cleared for re-notify, debit still owed`,
+          );
+          continue;
+        }
+
+        // PENDING means a redemption attempt is ALREADY in flight and PhonePe
+        // has taken over the retry: redeeming again answers 400
+        // DUPLICATE_TXN_REQUEST ("not allowed for PHONEPE_CONTROLLED retry
+        // strategy"). Skipping is not just a saved call — the pointless attempt
+        // logged an ERROR every hour for a debit that was perfectly healthy, and
+        // a log where routine noise looks like failure is how the last stranding
+        // went unnoticed for two days. Only NOTIFIED (announced, never
+        // triggered) still needs the trigger.
+        if (r.state === "PENDING") {
+          console.log(
+            `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
+            `(order PENDING) — PhonePe owns the retry, not re-redeeming`,
+          );
+          continue;
+        }
+      }
+
+      if (settled) continue;
+
+      if (!budgetLeft(1)) {
+        console.warn(
+          `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
+          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+        );
+        break;
+      }
+
       try {
         phonePeCalls += 1;
         const execResult = await executeRedemption(env, redemptionOrderId);
@@ -324,49 +393,67 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Execute sub=${merchantSubId} state=${execResult.state} txn=${execResult.transactionId}`,
         );
 
-        let settled = await applyDebitOutcome(env, sql, execResult.state, {
-          id: row.id as string,
-          userId: row.user_id as string,
-          retryCount: row.retry_count as number,
-          merchantSubId,
-          redemptionOrderId,
-        });
+        settled = await applyDebitOutcome(env, sql, execResult.state, outcomeRow);
 
-        // ── Pass C: reconcile a debit that redeem never settles ──────────────
-        //
-        // `redeem` answering PENDING only means "not terminal yet". If the row
-        // has been past due long enough that PhonePe should have settled it, ask
-        // for the order's actual state — otherwise a webhook that never arrived
-        // strands the user past-period with no entitlement, forever.
         if (!settled) {
-          const dueAt = toDate(row.next_debit_at);
-          const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
+          console.log(
+            `[autopay-notify] Execute ${execResult.state} for sub ${merchantSubId} — ` +
+            `settles asynchronously; next run reconciles from order status`,
+          );
+        }
+      } catch (err) {
+        // A throw is NOT evidence the debit failed. The commonest cause is the
+        // opposite: the order already settled and PhonePe refuses a second
+        // redeem. Reconciling here is what recovers the money we already took.
+        //
+        // DUPLICATE_TXN_REQUEST specifically means "an attempt is already in
+        // flight" — a HEALTHY debit. The reconcile-first branch above normally
+        // catches those before we get here; this is the belt-and-braces path for
+        // a row still inside the reconcile window. Log it as information, never
+        // as an error: a log where normal traffic reads as failure is what let
+        // the last stranding hide in plain sight for two days.
+        const inFlight =
+          err instanceof PhonePeApiError && err.body.includes("DUPLICATE_TXN_REQUEST");
 
-          if (overdueMs > RECONCILE_STUCK_AFTER_MS && budgetLeft(1)) {
-            phonePeCalls += 1;
-            const order = await getOrderStatus(env, redemptionOrderId);
-            console.log(
-              `[autopay-notify] Pass C reconcile sub=${merchantSubId} ` +
-              `order=${redemptionOrderId} state=${order.state} ` +
-              `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
-            );
-            settled = await applyDebitOutcome(env, sql, order.state, {
-              id: row.id as string,
-              userId: row.user_id as string,
-              retryCount: row.retry_count as number,
-              merchantSubId,
-              redemptionOrderId,
-            });
-          } else {
-            console.log(
-              `[autopay-notify] Execute PENDING for sub ${merchantSubId} — waiting for STANDARD retry`,
+        if (inFlight) {
+          console.log(
+            `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
+            `— PhonePe owns the retry`,
+          );
+        } else {
+          console.error(`[autopay-notify] Execute failed for sub ${merchantSubId}:`, err);
+        }
+
+        if (budgetLeft(1)) {
+          phonePeCalls += 1;
+          settled = (await reconcileFromOrder(env, sql, outcomeRow, overdueMs)).settled;
+        }
+
+        // Still open after a FINAL rejection: the mandate itself is usually gone
+        // (revoked by the user at their bank), and Pass A cannot park it because
+        // it only selects rows with notified_at IS NULL. Park it here or it
+        // retries hourly forever against a mandate that will never debit.
+        //
+        // `inFlight` is excluded: a duplicate proves the mandate is working, so
+        // asking after its state would burn a call to learn nothing.
+        if (!settled && !inFlight && err instanceof PhonePeApiError && err.isPermanent && budgetLeft(1)) {
+          phonePeCalls += 1;
+          try {
+            const subStatus = await getSubscriptionStatus(env, merchantSubId);
+            if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
+              await parkMandate(sql, outcomeRow.id, "cancelled");
+              console.warn(
+                `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
+                `marked cancelled, debit abandoned (access kept to current_period_end)`,
+              );
+            }
+          } catch (statusErr) {
+            console.error(
+              `[autopay-notify] Mandate status check failed for ${merchantSubId}:`,
+              statusErr,
             );
           }
         }
-
-      } catch (err) {
-        console.error(`[autopay-notify] Execute failed for sub ${merchantSubId}:`, err);
-        // Leave state; will be retried next hour
       }
     }
 
@@ -385,6 +472,79 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     // promise the caller reports as an error.
     await sql.end().catch(() => {});
   }
+}
+
+/**
+ * Ask PhonePe for a redemption order's real state and apply it.
+ *
+ * `settled` — the state was terminal and the row was updated.
+ * `dead`    — the read SUCCEEDED, the state is non-terminal, and the order is
+ *             past its own `expireAt`. PhonePe stops retrying such an order, so
+ *             nothing will ever settle it and the row needs a fresh one.
+ *             Only ever true off a successful read: a failed status call leaves
+ *             both flags false, so a network blip can never be mistaken for a
+ *             dead order and trigger a second charge.
+ * `state`   — the observed order state, or null when the read failed. Callers
+ *             use it to decide whether a redeem is still worth attempting; null
+ *             must therefore never be read as "safe to skip".
+ *
+ * Deliberately swallows its own errors: this runs on the recovery path, and a
+ * status read that fails must never mask the debit outcome or abort the scan.
+ * Reading order status does not interfere with PhonePe's own STANDARD retries.
+ */
+async function reconcileFromOrder(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+  row: {
+    id: string;
+    userId: string;
+    retryCount: number;
+    merchantSubId: string;
+    redemptionOrderId: string;
+  },
+  overdueMs: number,
+): Promise<{ settled: boolean; dead: boolean; state: string | null }> {
+  try {
+    const order = await getOrderStatus(env, row.redemptionOrderId);
+    console.log(
+      `[autopay-notify] Reconcile sub=${row.merchantSubId} ` +
+      `order=${row.redemptionOrderId} state=${order.state} ` +
+      `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
+    );
+    const settled = await applyDebitOutcome(env, sql, order.state, row);
+    const dead =
+      !settled &&
+      typeof order.expireAt === "number" &&
+      order.expireAt > 0 &&
+      Date.now() > order.expireAt;
+    return { settled, dead, state: order.state };
+  } catch (err) {
+    console.error(
+      `[autopay-notify] Reconcile failed for order ${row.redemptionOrderId}:`,
+      err,
+    );
+    return { settled: false, dead: false, state: null };
+  }
+}
+
+/**
+ * Drop a dead redemption order so Pass A can issue a fresh one.
+ *
+ * Clearing `notified_at` is what puts the row back in Pass A's window (it
+ * selects on `notified_at IS NULL`), which re-notifies and mints a new order id.
+ * `next_debit_at` is left alone — the debit is still owed.
+ */
+async function recycleRedemption(
+  sql: ReturnType<typeof getDb>,
+  subscriptionId: string,
+): Promise<void> {
+  await sql`
+    UPDATE subscriptions
+    SET notified_at         = NULL,
+        redemption_order_id = NULL,
+        updated_at          = now()
+    WHERE id = ${subscriptionId}
+  `;
 }
 
 /**
