@@ -359,20 +359,7 @@ describe("POST /media/confirm-upload", () => {
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_key");
   });
 
-  it("invalid_kind for kind=ringtone (user submissions stay wallpaper-only in Arul)", async () => {
-    const { env } = envWithSql([]);
-    const res = await handleConfirmUpload(
-      makeCtx({
-        env,
-        token: await token(),
-        jsonBody: { kind: "ringtone", fileKey: `user/${USER_ID}/submissions/x.mp3` },
-      }),
-    );
-    expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("invalid_kind");
-  });
-
-  it("invalid_kind when kind is not wallpaper", async () => {
+  it("invalid_kind when kind is neither wallpaper nor ringtone", async () => {
     const { env } = envWithSql([]);
     const res = await handleConfirmUpload(
       makeCtx({
@@ -587,7 +574,7 @@ describe("POST /media/confirm-upload", () => {
     }
   });
 
-  it("auto-rejects audio bytes submitted as a wallpaper (Arul is wallpaper-only)", async () => {
+  it("auto-rejects audio bytes submitted as a WALLPAPER (the role is per-kind, not global)", async () => {
     const key = `user/${USER_ID}/submissions/x.mp3`;
     const { bucket, deletes } = makeQcR2({
       [key]: { bytes: mp3Fixture(), contentType: "audio/mpeg" },
@@ -595,6 +582,67 @@ describe("POST /media/confirm-upload", () => {
     const { env } = envWithSql([], { R2: bucket });
     const res = await handleConfirmUpload(
       makeCtx({ env, token: await token(), jsonBody: { kind: "wallpaper", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");
+    expect(deletes).toContain(key);
+  });
+
+  // ── kind=ringtone (user ringtone submissions) ───────────────────────────────
+
+  it("accepts a ringtone submission and QCs it against the AUDIO rules", async () => {
+    const key = `user/${USER_ID}/submissions/kavasam.mp3`;
+    const { bucket } = makeQcR2({
+      [key]: { bytes: mp3Fixture(), contentType: "audio/mpeg" },
+    });
+    const { env } = envWithSql([{ id: "sm-r1", status: "pending" }], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({
+        env,
+        token: await token(),
+        jsonBody: {
+          kind: "ringtone",
+          fileKey: key,
+          title: "Kanda Sasti Kavasam",
+          category: "murugan",
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { id: string; status: string };
+    expect(body.id).toBe("sm-r1");
+    expect(body.status).toBe("pending");
+  });
+
+  it("auto-rejects a VIDEO renamed as a ringtone (m4a container carrying a video track)", async () => {
+    // The one abuse the audio branch exists to catch: an .m4a-labelled MP4 whose
+    // tracks include video would otherwise be published as a "ringtone".
+    const key = `user/${USER_ID}/submissions/clip.m4a`;
+    const { bucket, deletes } = makeQcR2({
+      // withAudio: a real renamed video carries BOTH tracks, so it clears the
+      // "has an audio track" check and must be caught by the video-track rule.
+      [key]: { bytes: mp4Fixture({ withAudio: true }), contentType: "audio/mp4" },
+    });
+    const { env, capturedArgs } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "ringtone", fileKey: key } }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("bad_type");
+    expect(body.error.message).toContain("audio only");
+    expect(deletes).toContain(key);
+    expect(capturedArgs).toHaveLength(0); // nothing pinned, no row written
+  });
+
+  it("auto-rejects a live-wallpaper mp4 submitted as a ringtone", async () => {
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const { bucket, deletes } = makeQcR2({
+      [key]: { bytes: mp4Fixture(), contentType: "video/mp4" },
+    });
+    const { env } = envWithSql([], { R2: bucket });
+    const res = await handleConfirmUpload(
+      makeCtx({ env, token: await token(), jsonBody: { kind: "ringtone", fileKey: key } }),
     );
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");

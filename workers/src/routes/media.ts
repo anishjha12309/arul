@@ -255,8 +255,9 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
   const { kind, fileKey, title, category } = body;
   // Only kinds the moderation queue can actually publish — anything else would
   // sit pending forever (approve rejects unknown kinds) while pinning its bytes.
-  if (kind !== "wallpaper") {
-    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper");
+  // Both kinds require the CMS's `userUploadKinds` for arul to list them.
+  if (kind !== "wallpaper" && kind !== "ringtone") {
+    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone");
   }
   if (!fileKey || typeof fileKey !== "string") {
     return errorResponse(400, "missing_field", "fileKey is required");
@@ -271,10 +272,13 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
 
   // The upload must have actually landed AND pass byte-level QC (magic bytes
   // match the signed content-type, image dimensions in range, live-wallpaper
-  // mp4s in the hw-decoder-safe geometry / H.264). A failing object is
-  // auto-rejected: it is deleted immediately, no submission row is created,
-  // and the response carries the reason for the app to show the user.
-  const qc = await verifyMediaObject(env.R2, fileKey, "wallpaper");
+  // mp4s in the hw-decoder-safe geometry / H.264, ringtones real audio with no
+  // video track). A failing object is auto-rejected: it is deleted immediately,
+  // no submission row is created, and the response carries the reason for the
+  // app to show the user. The role is the SUBMITTED kind — passing a constant
+  // here would QC an audio upload against the wallpaper rules and reject every
+  // ringtone as "not a JPEG/PNG/WebP image or MP4".
+  const qc = await verifyMediaObject(env.R2, fileKey, kind);
   if (!qc.ok) {
     if (qc.code === "not_found") {
       return errorResponse(400, "not_uploaded", "Upload not found — complete the upload first");
