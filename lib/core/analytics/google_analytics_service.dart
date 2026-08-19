@@ -113,6 +113,15 @@ class GoogleAnalyticsService implements AnalyticsService {
   /// bools to 1/0, keep String/num, and stringify anything else so a stray
   /// value type can't cause the whole event to be rejected. Returns null for an
   /// empty/absent map.
+  ///
+  /// GA4 DISCARDS `value` unless `currency` rides with it: the event still
+  /// records, but the amount is stripped and replaced with `_err=19` /
+  /// `_ev=currency`, so a valued event reaches Google Ads with no revenue on
+  /// it. Measured on device 2026-08-19 — `trial_started` arrived carrying
+  /// `plan` + `order_id` and no `value`. India-only, so pair every surviving
+  /// `value` with INR HERE rather than at each call site; that covers
+  /// `trial_started`, `subscription_active` and anything valued added later.
+  /// An explicit `currency` in [props] always wins.
   Map<String, Object>? _clean(Map<String, Object?>? props) {
     if (props == null) return null;
     final out = <String, Object>{};
@@ -124,6 +133,7 @@ class GoogleAnalyticsService implements AnalyticsService {
         _ => value.toString(),
       };
     });
+    if (out.containsKey('value')) out.putIfAbsent('currency', () => _currency);
     return out.isEmpty ? null : out;
   }
 }

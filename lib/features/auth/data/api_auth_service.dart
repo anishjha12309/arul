@@ -224,6 +224,30 @@ class ApiAuthService implements AuthService {
     _attemptSeq++;
   }
 
+  /// Tracks a Google sign-in failure and returns it. EVERY failure return in
+  /// [_signInWithGoogle] goes through here. The typed classification fixed
+  /// which outcomes are QUIET; this fixes which are COUNTED — six returns
+  /// showed the user an error and told analytics nothing, so those sign-ins
+  /// left the install→login funnel with no trace of why.
+  AuthFailure _googleFailure(
+    AuthFailureKind kind,
+    String message, {
+    String? error,
+    String? gisCode,
+  }) {
+    _analytics.track(
+      'login_failed',
+      properties: {
+        'provider': 'google',
+        'kind': kind.name,
+        // Null-aware elements: dropped entirely when absent.
+        'error': ?error,
+        'gis_code': ?gisCode,
+      },
+    );
+    return AuthFailure(message: message, kind: kind);
+  }
+
   Future<AuthResult> _signInWithGoogle() async {
     final attempt = ++_attemptSeq;
     try {
@@ -239,10 +263,9 @@ class ApiAuthService implements AuthService {
       //
       // v7: use the singleton; initialize() was already called in main().
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
-        return const AuthFailure(
-          message:
-              'Google one-tap is not supported on this device. Please update Google Play Services.',
-          kind: AuthFailureKind.noPlayServices,
+        return _googleFailure(
+          AuthFailureKind.noPlayServices,
+          'Google one-tap is not supported on this device. Please update Google Play Services.',
         );
       }
 
@@ -267,9 +290,9 @@ class ApiAuthService implements AuthService {
       // v7: idToken is a synchronous property on GoogleSignInAuthentication.
       final idToken = account.authentication.idToken;
       if (idToken == null) {
-        return const AuthFailure(
-          message: 'Failed to retrieve authentication token. Please try again.',
-          kind: AuthFailureKind.tokenExchangeFailed,
+        return _googleFailure(
+          AuthFailureKind.tokenExchangeFailed,
+          'Failed to retrieve authentication token. Please try again.',
         );
       }
 
@@ -300,17 +323,19 @@ class ApiAuthService implements AuthService {
       final user = data['user'] as Map<String, dynamic>?;
 
       if (accessToken == null || refreshToken == null || user == null) {
-        return const AuthFailure(
-          message: 'Sign-in failed. Please try again.',
-          kind: AuthFailureKind.serverError,
+        return _googleFailure(
+          AuthFailureKind.serverError,
+          'Sign-in failed. Please try again.',
+          error: 'incomplete_login_payload',
         );
       }
 
       final userId = user['id'] as String?;
       if (userId == null) {
-        return const AuthFailure(
-          message: 'Sign-in failed. Please try again.',
-          kind: AuthFailureKind.serverError,
+        return _googleFailure(
+          AuthFailureKind.serverError,
+          'Sign-in failed. Please try again.',
+          error: 'login_payload_missing_user_id',
         );
       }
 
@@ -367,15 +392,8 @@ class ApiAuthService implements AuthService {
             'login_cancelled',
             properties: {'provider': 'google'},
           );
-        case AuthFailure(:final kind):
-          _analytics.track(
-            'login_failed',
-            properties: {
-              'provider': 'google',
-              'gis_code': e.code.name,
-              'kind': kind.name,
-            },
-          );
+        case AuthFailure(:final kind, :final message):
+          _googleFailure(kind, message, gisCode: e.code.name);
         case AuthSuccess():
           break; // unreachable: the mapper never returns success
       }
@@ -383,15 +401,11 @@ class ApiAuthService implements AuthService {
     } on PlatformException catch (e) {
       return _mapPlatformException(e);
     } on ApiException catch (e) {
-      _analytics.track(
-        'login_failed',
-        properties: {
-          'provider': 'google',
-          'error': e.message,
-          'kind': AuthFailureKind.serverError.name,
-        },
+      return _googleFailure(
+        AuthFailureKind.serverError,
+        e.message,
+        error: e.message,
       );
-      return AuthFailure(message: e.message, kind: AuthFailureKind.serverError);
     } catch (e) {
       // Last-resort fallback for non-GIS, non-platform exceptions only —
       // GoogleSignInException above owns the plugin's outcomes now.
@@ -401,17 +415,10 @@ class ApiAuthService implements AuthService {
         return const AuthCancelled();
       }
       debugPrint('[ApiAuthService] unexpected error: $e');
-      _analytics.track(
-        'login_failed',
-        properties: {
-          'provider': 'google',
-          'error': e.toString(),
-          'kind': AuthFailureKind.unknown.name,
-        },
-      );
-      return AuthFailure(
-        message: 'Sign-in failed. Please try again.',
-        kind: AuthFailureKind.unknown,
+      return _googleFailure(
+        AuthFailureKind.unknown,
+        'Sign-in failed. Please try again.',
+        error: e.toString(),
       );
     }
   }
@@ -450,50 +457,41 @@ class ApiAuthService implements AuthService {
     }
   }
 
+  /// Fallback for a raw platform error. With v7 the plugin's own outcomes all
+  /// arrive as [GoogleSignInException], so this now only catches what escapes
+  /// it — which is why the "cancel" string match survives HERE and nowhere
+  /// else: it is no longer the classifier for a real sign-in. Every branch
+  /// tracks, so no outcome leaves the app unaccounted for.
   AuthFailure _mapPlatformException(PlatformException e) {
     debugPrint('[ApiAuthService] PlatformException ${e.code}: ${e.message}');
     final code = e.code.toLowerCase();
     final message = e.message?.toLowerCase() ?? '';
 
     if (code.contains('cancel') || message.contains('cancel')) {
+      _analytics.track('login_cancelled', properties: {'provider': 'google'});
       return const AuthFailure(
         message: 'Sign-in was cancelled.',
         kind: AuthFailureKind.unknown,
       );
     }
     if (code == 'network_error' || message.contains('network')) {
-      _analytics.track(
-        'login_failed',
-        properties: {
-          'provider': 'google',
-          'kind': AuthFailureKind.networkError.name,
-        },
-      );
-      return const AuthFailure(
-        message: 'Network error. Please check your connection and try again.',
-        kind: AuthFailureKind.networkError,
+      return _googleFailure(
+        AuthFailureKind.networkError,
+        'Network error. Please check your connection and try again.',
       );
     }
     if (message.contains('play services') ||
         code.contains('play_services') ||
         code == '7') {
-      return const AuthFailure(
-        message:
-            'Google Play Services is unavailable. Please update or reinstall.',
-        kind: AuthFailureKind.noPlayServices,
+      return _googleFailure(
+        AuthFailureKind.noPlayServices,
+        'Google Play Services is unavailable. Please update or reinstall.',
       );
     }
-    _analytics.track(
-      'login_failed',
-      properties: {
-        'provider': 'google',
-        'error': e.message,
-        'kind': AuthFailureKind.unknown.name,
-      },
-    );
-    return AuthFailure(
-      message: e.message ?? 'Sign-in failed. Please try again.',
-      kind: AuthFailureKind.unknown,
+    return _googleFailure(
+      AuthFailureKind.unknown,
+      e.message ?? 'Sign-in failed. Please try again.',
+      error: e.message,
     );
   }
 }
