@@ -22,9 +22,9 @@ A successful upload logs the batch and a `204`.
 ## Google Ads
 
 Conversions live in the SHARED Ads account `750-756-8746`, which also carries Pakiza's — a campaign
-must pick its own app's conversion action. Arul imports BOTH GA4 conversions: **`purchase`**
-(Primary — the ROAS signal, real money) and **`trial_started`** (the volume signal Smart Bidding
-should target). **`purchase` is reported from BOTH sides, split by settle location** — never add a
+must pick its own app's conversion action. Arul imports BOTH GA4 conversions: **`trial_started`**
+(Primary — what App-campaign bidding targets) and **`purchase`** (Secondary — observe-only, so it
+never enters the Conversions column or bidding). **`purchase` is reported from BOTH sides, split by settle location** — never add a
 third reporter: the client logs it only for the app-open flow (repeat subscriber, ₹199 at setup),
 and the Worker reports app-closed settles (trial→paid, renewals) via the GA4 Measurement Protocol
 (`workers/src/lib/ga4.ts`, keyed on the `app_instance_id` uploaded at login/initiate; both sides
@@ -37,6 +37,10 @@ workers/tools/ga4-mp-validate.mjs <app_instance_id>` checks payload SHAPE only �
 `.dev.vars`, and GA4's debug endpoint validates neither `api_secret` nor `firebase_app_id`, so it
 cannot prove the deployed wiring. Users on builds that
 never uploaded an id stay unreported — **Neon remains revenue truth** (CLAUDE.md §Analytics).
+
+Linkage + attribution traps — why an App campaign has no conversion goals, why Ads legitimately shows
+zero while GA4 holds the events, and which console lies how:
+[google-ads.md](google-ads.md) — read before diagnosing a missing conversion.
 
 The privacy policy (`https://hsrutility.com/privacy/` — SHARED with Pakiza, a change lands in both
 apps) must disclose Meta, Google/Firebase and advertiser-ID collection.

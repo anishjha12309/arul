@@ -12,6 +12,19 @@
  * overdue on the next hourly tick, so a row still unsettled well past that is
  * either stuck or being retried by PhonePe — both worth a human look.
  *
+ * EXCEPT while its order is inside PhonePe's mandatory 24h notify window. A
+ * redemption order carries `validAfter` = notify + 24h and CANNOT debit before
+ * then, so a row whose order was (re)notified less than 24h ago is waiting by
+ * rule, not stuck. Recycling a dead order restarts that clock, which is how a
+ * row can read 50h+ overdue while being perfectly healthy — exactly what
+ * DKS_S_9B4B53B0_MSVEODQ0 did on 2026-08-19. Reporting that as STUCK is the
+ * false positive that teaches everyone to ignore this tool, so it is split out
+ * as WAITING and deliberately does NOT affect the exit code.
+ *
+ * `validAfter` is DERIVED from `notified_at` rather than read back from PhonePe
+ * so this stays Neon-only and needs no credentials. Checked against the live
+ * order on 2026-08-19: PhonePe's validAfter was notifiedAt + 24h to the second.
+ *
  *   cd workers && node tools/verify-debits.mjs          # default 4h tolerance
  *   cd workers && node tools/verify-debits.mjs 12       # 12h tolerance
  *
@@ -47,12 +60,32 @@ try {
       redemption_order_id,
       to_char(next_debit_at, 'YYYY-MM-DD HH24:MI') AS due_utc,
       round(EXTRACT(EPOCH FROM (now() - next_debit_at)) / 3600)::int AS overdue_h,
-      (current_period_end > now()) AS entitled
+      (current_period_end > now()) AS period_live
     FROM subscriptions
     WHERE status IN ('trialing', 'active')
       AND next_debit_at IS NOT NULL
       AND next_debit_at < now() - ${`${TOLERANCE_HOURS} hours`}::interval
+      -- Inside the 24h notify window the debit is not permitted to run yet, so
+      -- being overdue proves nothing. Those rows come out as WAITING instead.
+      AND (notified_at IS NULL OR notified_at <= now() - interval '24 hours')
     ORDER BY next_debit_at
+  `;
+
+  // Overdue, but the order physically cannot debit yet: healthy by rule.
+  const waiting = await sql`
+    SELECT
+      merchant_subscription_id,
+      status,
+      round(EXTRACT(EPOCH FROM (now() - next_debit_at)) / 3600)::int AS overdue_h,
+      to_char(notified_at + interval '24 hours', 'YYYY-MM-DD HH24:MI') AS debits_after,
+      to_char(notified_at + interval '72 hours', 'YYYY-MM-DD HH24:MI') AS order_expires
+    FROM subscriptions
+    WHERE status IN ('trialing', 'active')
+      AND next_debit_at IS NOT NULL
+      AND next_debit_at < now() - ${`${TOLERANCE_HOURS} hours`}::interval
+      AND notified_at IS NOT NULL
+      AND notified_at > now() - interval '24 hours'
+    ORDER BY notified_at
   `;
 
   const upcoming = await sql`
@@ -80,6 +113,20 @@ try {
       `${r.notified ? "  (notified)" : ""}`);
   }
 
+  if (waiting.length > 0) {
+    console.log(
+      `
+WAITING — ${waiting.length} overdue but inside PhonePe's 24h notify ` +
+      `window, so not yet chargeable (NOT stuck):`,
+    );
+    for (const r of waiting) {
+      console.log(
+        `  ${r.merchant_subscription_id}  ${r.status}  overdue ${r.overdue_h}h  ` +
+        `debits after ${r.debits_after}Z  order expires ${r.order_expires}Z`,
+      );
+    }
+  }
+
   if (stuck.length === 0) {
     console.log(`\nOK — nothing overdue by more than ${TOLERANCE_HOURS}h.`);
     process.exit(0);
@@ -89,7 +136,7 @@ try {
   for (const r of stuck) {
     console.log(
       `  ${r.merchant_subscription_id}  ${r.status}  due ${r.due_utc}Z  ` +
-      `overdue ${r.overdue_h}h  entitled=${r.entitled}  order=${r.redemption_order_id ?? "none"}`,
+      `overdue ${r.overdue_h}h  period_live=${r.period_live}  order=${r.redemption_order_id ?? "none"}`,
     );
   }
   console.log(

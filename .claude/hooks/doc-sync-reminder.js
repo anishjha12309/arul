@@ -67,7 +67,7 @@ const ROUTES = [
   },
   {
     when: ["lib/core/analytics/**", "workers/src/lib/ga4.ts"],
-    docs: ["docs/analytics-events.md", "docs/analytics-ops.md"],
+    docs: ["docs/analytics-events.md", "docs/analytics-ops.md", "docs/google-ads.md"],
   },
   {
     when: ["android/**/feedvideo/**", "lib/features/wallpapers/data/**"],
