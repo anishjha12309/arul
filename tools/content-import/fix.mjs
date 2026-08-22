@@ -47,9 +47,16 @@ console.log(`non-conformant live videos: ${bad.length}`);
 for (const p of bad) {
   const src = join(ROOT, "drive", srcOf.get(p.base));
   const out = join(ROOT, p.localMedia);
+  // MUST stay in lockstep with normalize.mjs `videoArgs` — a repaired clip that
+  // was encoded to different settings than its batch-mates is invisible drift.
+  const srcW = ((ffprobe(src).streams || []).find((s) => s.codec_type === "video") || {}).width ?? 0;
+  const upscaling = srcW < 1024;
   execFileSync("ffmpeg", ["-y", "-i", src,
-    "-vf", "scale=1024:1824:force_original_aspect_ratio=increase:out_range=tv,crop=1024:1824,setsar=1,format=yuv420p",
-    "-c:v", "libx264", "-profile:v", "high", "-crf", "24", "-preset", "medium",
+    "-vf", "scale=1024:1824:force_original_aspect_ratio=increase:flags=lanczos:out_range=tv," +
+      "crop=1024:1824," + (upscaling ? "unsharp=5:5:0.6:3:3:0.3" : "unsharp=3:3:0.3:3:3:0.0") +
+      ",setsar=1,format=yuv420p",
+    "-c:v", "libx264", "-profile:v", "high", "-preset", "slow",
+    "-crf", upscaling ? "21" : "20", "-x264-params", "aq-mode=3",
     "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", out], { stdio: ["ignore", "ignore", "ignore"] });
 }
 console.log(`re-encoded ${bad.length} videos`);
@@ -67,7 +74,7 @@ for (const p of bad) {
   if (v?.width !== 1024 || v?.height !== 1824) errs.push(`dims=${v?.width}x${v?.height}`);
   if (audio) errs.push("has-audio");
   if (!faststart(f)) errs.push("not-faststart");
-  if (bytes > 50 << 20) errs.push("oversize");
+  if (bytes > 15 << 20) errs.push("oversize");
   if (errs.length) stillBad.push({ base: p.base, errs });
 }
 if (stillBad.length) { console.log("RE-VERIFY FAILED, aborting upload:", JSON.stringify(stillBad, null, 2)); process.exit(1); }

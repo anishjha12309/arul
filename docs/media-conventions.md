@@ -19,7 +19,7 @@ category folder.
 | Type | R2 key | Input | Output | Max |
 |------|--------|-------|--------|-----|
 | Wallpaper (static) | wallpapers/&lt;category&gt;/{uuid}.jpg | JPG/PNG/WEBP | 1080×1920 JPG | 10 MB |
-| Wallpaper (live) | wallpapers/&lt;category&gt;/{uuid}.mp4 | MP4/MOV | **1024×1824** H.264 MP4 faststart, no audio | 50 MB |
+| Wallpaper (live) | wallpapers/&lt;category&gt;/{uuid}.mp4 | MP4/MOV | **1024×1824** H.264 MP4 faststart, no audio, **≤10 s** | **15 MB** |
 | Ringtone (audio) | ringtones/&lt;category&gt;/{uuid}.mp3 | MP3/M4A/AAC | MP3 (libmp3lame), ≤40 s recommended | 15 MB |
 
 **There is no ringtone cover role** — row art is drawn in-app, so the role was removed 2026-08-10 and
@@ -42,20 +42,33 @@ through a video decoder, so do not "align" them.
 
 ## ffmpeg recipes
 
-**Static wallpaper:**
+**Sources arrive at 720×1280, so most clips are UPSCALED 1.42× to 1024 wide** — and upscaling cannot
+add detail, so `lanczos` + a light `unsharp` + a CRF below the old 24 (which was tuned for
+native-res masters and laid mush on an already-soft frame). Measured 2026-08-21: sharpness 35 → 57 at
+the same resolution, ~2× the bytes. A source ≥ target is DOWNSCALING — token sharpen only, more just
+adds halos. **The geometry never changed and cannot stretch:** `scale(…increase)` + `crop` is a COVER
+fit — on a 9:16 source it trims 2 px of width and no height. Stretched output? Suspect the renderer.
+
+**Static wallpaper** (`upscale` chain shown; drop `unsharp` when the source is ≥1080 wide):
 ```bash
-ffmpeg -i input.jpg -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -q:v 4 output/{uuid}.jpg
+ffmpeg -i input.jpg -vf "scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920,unsharp=5:5:0.5:3:3:0.0" -q:v 2 output/{uuid}.jpg
 ```
 
-**Live wallpaper** (H.264 faststart, 128/32-aligned):
+**Live wallpaper** (H.264 faststart, 128/32-aligned). Upscaled → `unsharp=5:5:0.6:3:3:0.3` + `-crf 21`; native/downscaled → `unsharp=3:3:0.3:3:3:0.0` + `-crf 20`:
 ```bash
-ffmpeg -i input.mov -vf "scale=1024:1824:force_original_aspect_ratio=increase:out_range=tv,crop=1024:1824,setsar=1,format=yuv420p" \
-  -c:v libx264 -profile:v high -preset medium -crf 24 -an -movflags +faststart output/{uuid}.mp4
+ffmpeg -i input.mov -t 10 -vf "scale=1024:1824:force_original_aspect_ratio=increase:flags=lanczos:out_range=tv,crop=1024:1824,unsharp=5:5:0.6:3:3:0.3,setsar=1,format=yuv420p" \
+  -c:v libx264 -profile:v high -preset slow -crf 21 -x264-params aq-mode=3 -an -movflags +faststart output/{uuid}.mp4
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height,pix_fmt output/{uuid}.mp4  # MUST print 1024 / 1824 / yuv420p
 ```
 `out_range=tv` + `format=yuv420p` are load-bearing: without them ffmpeg emits full-range `yuvj420p`,
-which `verify.mjs` rejects — repairing that batch is what `tools/content-import/fix.mjs` exists for.
-`setsar=1` stops a non-square SAR surviving the crop.
+which `verify.mjs` rejects — repairing that batch is what `tools/content-import/fix.mjs` exists for
+(its encoder MUST stay in lockstep with `normalize.mjs`). `setsar=1` stops a non-square SAR surviving
+the crop. `aq-mode=3` spends bits on flat gradients, which is where smoke and sky band.
+
+**15 MB is a hard ceiling, quality-first underneath it** (owner, 2026-08-21): `normalize.mjs` re-encodes
+ONLY an overshooting clip, with a `-maxrate` sized from its own duration, so one heavy clip is capped
+instead of every clip being pre-emptively starved. Bulk statics go through `sharp` (lanczos3 +
+sharpen when upscaling, quality 92) — tuned to match this recipe, not byte-identical to it.
 
 **Ringtone audio:**
 ```bash
@@ -73,8 +86,12 @@ ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3
 - Live MP4: faststart (moov before mdat) · **no audio stream** · first frame representative, not black
   — the card holds the `thumbs/` poster until the texture reveals, so a black first frame does not
   read as "loading", it reads as a good image being replaced by a broken one
-- Loops seamlessly (first ≈ last frame). The shipped library sits at ~4–10 s @24 fps; only
-  `normalize.mjs` enforces anything here, and it merely flags clips over 20 s
+- **≤10 s, and `normalize.mjs` auto-trims to the first 10 s** (owner, 2026-08-21 — a drop arrived
+  with 44.8 s and 30.5 s clips). The cut is BLIND: it takes the leading window, so it can land
+  mid-motion and will not respect a loop point. It flags `trimmed:<n>s` — review those before
+  publishing. `verify.mjs` fails anything still over 10 s
+- Loops seamlessly (first ≈ last frame). Nothing enforces this; generator drops usually do NOT loop,
+  so a visible jump every cycle is a content decision, not an encoder bug
 - Keep the masters somewhere outside the repo. The original South Indian master folder
   (`C:\Anish\content-wallpaper(southindian)`) **no longer exists on disk**; `tools/content-import/`
   stages under `c:/Anish/arul-import/` instead. Pakiza's catalogue once had to be fully re-encoded, and

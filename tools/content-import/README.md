@@ -30,7 +30,9 @@ is never committed. Moving ROOT is not one edit: most scripts carry a `ROOT` con
 
 - **Static** → 1080×1920 JPEG, ≤10 MB.
 - **Live** → 1024×1824 H.264 **yuv420p** (limited range), faststart (moov<mdat), **no audio**,
-  ≤50 MB, `w%128==0 && h%32==0`, fits the 1088×1920 hw-decoder cap, non-black first frame.
+  **≤15 MB**, **≤10 s** (normalize auto-trims; the cut is blind, so review anything it flags
+  `trimmed:<n>s`), `w%128==0 && h%32==0`, fits the 1088×1920 hw-decoder cap, non-black first frame.
+  Encoder settings and WHY they differ for upscaled vs native sources: [../../docs/media-conventions.md](../../docs/media-conventions.md).
 
 ## Pipeline order
 

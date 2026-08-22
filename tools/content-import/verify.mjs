@@ -1,6 +1,7 @@
 // QC — verify every imported file against docs/media-conventions.md.
 // Static: mjpeg 1080x1920, <=10MB. Live: h264 yuv420p 1024x1824, no-audio,
-// faststart (moov<mdat), <=50MB, w%128==0 h%32==0, fits 1088x1920, non-black frame0.
+// faststart (moov<mdat), <=15MB, <=10s, w%128==0 h%32==0, fits 1088x1920,
+// non-black frame0.
 import { readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
@@ -63,7 +64,9 @@ for (const p of plan) {
     if (v && (v.width > 1088 || v.height > 1920)) errs.push(`exceeds 1088x1920 cap`);
     if (hasAudio) errs.push(`HAS AUDIO stream`);
     if (!faststart(f)) errs.push(`NOT faststart (moov after mdat)`);
-    if (bytes > 50 << 20) errs.push(`${(bytes / 1048576).toFixed(1)}MB > 50MB`);
+    if (bytes > 15 << 20) errs.push(`${(bytes / 1048576).toFixed(1)}MB > 15MB`);
+    const secs = Number(meta.format?.duration ?? v?.duration ?? 0);
+    if (secs > 10.5) errs.push(`${secs.toFixed(1)}s > 10s (normalize.mjs trims; this was not)`);
     const luma = await frame0Luma(f);
     if (luma < 16) errs.push(`frame0 near-black (luma=${luma})`);
     if (!errs.length) vOk++;

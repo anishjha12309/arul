@@ -5,10 +5,10 @@
 // through the CMS by hand. It enforces both gates a manual upload must clear:
 //
 //   docs/media-conventions.md  — h264 / yuv420p / 1024x1824 / no audio / faststart
-//                                / <=50MB / non-black first frame
+//                                / <=15MB / <=10s / non-black first frame
 //   the CMS's own server gate  — hsr-cms media-verify.ts verifyLiveWallpaper():
 //                                stsd fourcc in {avc1, avc3}, width%128==0,
-//                                height%32==0, within 1088x1920, <=50MB
+//                                height%32==0, within 1088x1920, <=15MB, <=10s
 //
 // The CMS gate matters more than it looks: it runs per file on batch create and
 // ONE failure rejects the WHOLE batch — no rows inserted and every already-
@@ -28,7 +28,10 @@ const DIRS = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 if (!DIRS.length) { console.error("usage: verify-folder.mjs <dir> [<dir>...]"); process.exit(2); }
 const tmp = mkdtempSync(join(tmpdir(), "qcf-"));
 
-const MAX_BYTES = 50 * 1024 * 1024;          // MAX_BYTES_BY_MIME["video/mp4"]
+// Authoring ceiling (owner, 2026-08-21), NOT the server's — the Worker still
+// accepts up to MAX_BYTES_BY_MIME["video/mp4"] = 50 MB so a user submission from
+// a phone is not rejected. This is what OUR pipeline is allowed to produce.
+const MAX_BYTES = 15 * 1024 * 1024;
 const CMS_CODECS = ["avc1", "avc3"];          // WALLPAPER_VIDEO.allowedCodecs
 
 const ffprobe = (f) => JSON.parse(execFileSync("ffprobe",
@@ -83,14 +86,15 @@ for (const dir of DIRS) {
     if (hasAudio) errs.push("HAS AUDIO stream");
     if (!fs2.ftyp) errs.push("no ftyp box (CMS: not a valid MP4)");
     if (!fs2.ok) errs.push("NOT faststart (moov after mdat)");
-    if (bytes > MAX_BYTES) errs.push(`${(bytes / 1048576).toFixed(1)}MB > 50MB`);
+    if (bytes > MAX_BYTES) errs.push(`${(bytes / 1048576).toFixed(1)}MB > 15MB`);
     const luma = await frame0Luma(path);
     if (luma < 16) errs.push(`frame0 near-black (luma=${luma})`);
 
-    // Not failures — upscales look soft on a 1080p phone, and the doc's practical
-    // range is 5-15s, so both are worth the operator's eye rather than a block.
+    // Not failures — upscales look soft on a 1080p phone, so this is worth the
+    // operator's eye rather than a block. Duration IS a failure: normalize.mjs
+    // trims to 10 s, so anything longer skipped the pipeline.
     const dur = Number(meta.format?.duration ?? 0);
-    if (dur > 20) notes.push(`${f}: ${dur.toFixed(0)}s (>20s; practical range is 5-15s)`);
+    if (dur > 10.5) errs.push(`${dur.toFixed(1)}s > 10s (normalize.mjs trims; this was not)`);
     if (bytes > 10 * 1024 * 1024) notes.push(`${f}: ${(bytes / 1048576).toFixed(1)}MB`);
 
     if (errs.length) fails.push({ f, errs });
