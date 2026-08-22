@@ -697,6 +697,10 @@ class VideoPreloadController extends ChangeNotifier
     // a poster that never reveals.
     _armReveal(pooled, index, token);
 
+    // Cold start: the data window is held narrow until the card the user is
+    // looking at has actually painted (see WallpaperPrefetchService._aheadCold).
+    _armPrefetchWiden(pooled, index);
+
     await _setupAndOpen(pooled, index, token, playWhenReady: playWhenReady);
     return pooled;
   }
@@ -732,6 +736,31 @@ class VideoPreloadController extends ChangeNotifier
       }
       if (painted) pooled.handle.forceFirstFrame();
     });
+  }
+
+  /// One-shot: when the CURRENT card paints its first frame, restore the
+  /// prefetch service's full look-ahead depth and re-issue the pass.
+  ///
+  /// On a cold sign-in the look-ahead is ~40 MB of MP4 that nothing has cached,
+  /// and starting it the instant the feed mounts makes it compete with the very
+  /// clip on screen. Waiting for this signal costs nothing — by the time it
+  /// fires the user is watching moving video and the pipe is theirs to fill.
+  /// Only armed while staging is live, and only for the current index; the
+  /// service's own fallback timer covers a first card that is static (no frame
+  /// to wait for) or a first-frame event that never lands.
+  void _armPrefetchWiden(_PooledPlayer pooled, int index) {
+    if (_prefetch.windowWidened || index != _currentIndex) return;
+    final painted = pooled.handle.firstFrame;
+    void onPainted() {
+      if (!painted.value) return;
+      painted.removeListener(onPainted);
+      if (_disposed || _prefetch.windowWidened) return;
+      _prefetch.widenWindow();
+      _prefetch.prefetchAround(_wallpapers, _currentIndex);
+    }
+
+    painted.addListener(onPainted);
+    onPainted(); // may already be true on a reused, already-painted player
   }
 
   Future<void> _setupAndOpen(

@@ -15,7 +15,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get appTagline => 'ദക്ഷിണേന്ത്യൻ വാൾപേപ്പറുകൾ';
 
   @override
-  String get categoryAll => 'എല്ലാം';
+  String get categoryAll => 'All';
 
   @override
   String get feedLiveBadge => 'ലൈവ്';
@@ -33,7 +33,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get feedErrorBody => 'കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.';
 
   @override
-  String get retry => 'വീണ്ടും ശ്രമിക്കുക';
+  String get retry => 'Retry';
 
   @override
   String get errorGeneric => 'എന്തോ കുഴപ്പം സംഭവിച്ചു.';
@@ -108,7 +108,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get settingsContent => 'ഉള്ളടക്കം';
 
   @override
-  String get settingsAbout => 'കുറിച്ച്';
+  String get settingsAbout => 'ആപ്പിനെക്കുറിച്ച്';
 
   @override
   String get settingsSupport => 'സഹായം വേണം';
@@ -120,7 +120,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get settingsVersion => 'പതിപ്പ്';
 
   @override
-  String get uploadTitle => 'നിങ്ങളുടെ ഉള്ളടക്കം അപ്‌ലോഡ് ചെയ്യുക';
+  String get uploadTitle => 'Upload your content';
 
   @override
   String get uploadBody =>
@@ -184,13 +184,13 @@ class AppLocalizationsMl extends AppLocalizations {
   String get tabWallpapers => 'വാൾപേപ്പറുകൾ';
 
   @override
-  String get tabRingtones => 'റിംഗ്ടോണുകൾ';
+  String get tabRingtones => 'Ringtones';
 
   @override
-  String get earn => 'നേടുക';
+  String get earn => 'Earn';
 
   @override
-  String get ringtoneSet => 'സെറ്റ് ചെയ്യുക';
+  String get ringtoneSet => 'Set';
 
   @override
   String get ringtonePreviewSemantic => 'പ്രിവ്യൂ';
@@ -217,19 +217,6 @@ class AppLocalizationsMl extends AppLocalizations {
       'റിംഗ്ടോൺ സെറ്റ് ചെയ്യാനായില്ല. വീണ്ടും ശ്രമിക്കുക.';
 
   @override
-  String get ringtonePermissionTitle => 'അനുമതി ആവശ്യമാണ്';
-
-  @override
-  String get ringtonePermissionBody =>
-      'റിംഗ്ടോൺ സെറ്റ് ചെയ്യാൻ, സിസ്റ്റം ക്രമീകരണങ്ങൾ മാറ്റാൻ Arul-ന് അനുമതി നൽകുക.';
-
-  @override
-  String get ringtonePermissionCta => 'ക്രമീകരണങ്ങൾ തുറക്കുക';
-
-  @override
-  String get ringtonePermissionCancel => 'ഇപ്പോൾ വേണ്ട';
-
-  @override
   String get ringtoneSetPreparing => 'തയ്യാറാകുന്നു…';
 
   @override
@@ -249,10 +236,10 @@ class AppLocalizationsMl extends AppLocalizations {
       'എന്തോ കുഴപ്പം സംഭവിച്ചു. വീണ്ടും ശ്രമിക്കുക.';
 
   @override
-  String get settingsFallbackName => 'നിങ്ങളുടെ അക്കൗണ്ട്';
+  String get settingsFallbackName => 'Your account';
 
   @override
-  String get settingsFallbackEmail => 'Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു';
+  String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
   String get settingsPremiumSubLocked =>
@@ -312,10 +299,10 @@ class AppLocalizationsMl extends AppLocalizations {
       'എപ്പോൾ വേണമെങ്കിലും Google ഉപയോഗിച്ച് വീണ്ടും സൈൻ ഇൻ ചെയ്യാം.';
 
   @override
-  String get settingsDeleteAccount => 'അക്കൗണ്ട് ഡിലീറ്റ് ചെയ്യുക';
+  String get settingsDeleteAccount => 'അക്കൗണ്ട് ഇല്ലാതാക്കുക';
 
   @override
-  String get settingsDeleteConfirmTitle => 'അക്കൗണ്ട് ഡിലീറ്റ് ചെയ്യണോ?';
+  String get settingsDeleteConfirmTitle => 'അക്കൗണ്ട് ഇല്ലാതാക്കണോ?';
 
   @override
   String get settingsDeleteConfirmBody =>
@@ -323,10 +310,13 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'ഇത് നിങ്ങളുടെ അക്കൗണ്ട്, പ്രിയപ്പെട്ടവ, റിവാർഡുകൾ എന്നിവ എന്നന്നേക്കുമായി നീക്കും.\n\nനിങ്ങളുടെ Arul Premium സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാകും, ബാക്കിയുള്ള കാലാവധി നഷ്ടമാകും — റീഫണ്ട് ഇല്ല. വീണ്ടും സൈൻ അപ്പ് ചെയ്താലും അത് തിരികെ വരില്ല, മറ്റൊരു സൗജന്യ ട്രയലും ലഭിക്കില്ല.';
+      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
 
   @override
   String get settingsTerms => 'നിബന്ധനകളും വ്യവസ്ഥകളും';
+
+  @override
+  String get settingsRefund => 'റീഫണ്ട് നയം';
 
   @override
   String get settingsSupportEmailPrompt =>
@@ -345,8 +335,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get settingsEditNameTitle => 'നിങ്ങളുടെ പേര്';
 
   @override
-  String get settingsEditNameSub =>
-      'നിങ്ങൾ അപ്‌ലോഡ് ചെയ്യുന്ന വാൾപേപ്പറുകളിൽ കാണിക്കും';
+  String get settingsEditNameSub => 'Shown on wallpapers you upload';
 
   @override
   String get themeSystemDefault => 'സിസ്റ്റം ഡിഫോൾട്ട്';
@@ -361,7 +350,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get themeDarkSub => 'വിളക്കുവെളിച്ചത്തിലെ മെറൂൺ';
 
   @override
-  String get remindersTitle => 'റിമൈൻഡറുകൾ';
+  String get remindersTitle => 'Reminders';
 
   @override
   String get remindersToggleTitle => 'ഭക്തി റിമൈൻഡറുകൾ';
@@ -478,7 +467,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get premiumKeepBrowsing => 'സൗജന്യമായി ബ്രൗസ് ചെയ്യൂ';
 
   @override
-  String get referTitle => 'റഫർ ചെയ്ത് നേടൂ';
+  String get referTitle => 'Refer & Earn';
 
   @override
   String get referHeroTitle => 'സുഹൃത്തിന് സമ്മാനം, നിങ്ങൾക്ക് ഒരു മാസം';
@@ -488,7 +477,7 @@ class AppLocalizationsMl extends AppLocalizations {
       'നിങ്ങളുടെ ലിങ്ക് വഴി സബ്‌സ്‌ക്രൈബ് ചെയ്യുന്ന ഓരോ സുഹൃത്തിനും 30 ദിവസം സൗജന്യ പ്രീമിയം';
 
   @override
-  String get referShareWhatsapp => 'WhatsApp വഴി പങ്കിടുക';
+  String get referShareWhatsapp => 'Share via WhatsApp';
 
   @override
   String get referRewardsLabel => 'നേടിയ റിവാർഡുകൾ';
@@ -499,7 +488,7 @@ class AppLocalizationsMl extends AppLocalizations {
   }
 
   @override
-  String get referHowItWorks => 'ഇത് എങ്ങനെ പ്രവർത്തിക്കുന്നു';
+  String get referHowItWorks => 'How it works';
 
   @override
   String get referStep1 =>
@@ -526,7 +515,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get uploadScreenTitle => 'വാൾപേപ്പർ അപ്‌ലോഡ്';
 
   @override
-  String get uploadPickZoneTitle => 'ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക';
+  String get uploadPickZoneTitle => 'Choose an image or video';
 
   @override
   String get uploadPickZoneSub => 'പോർട്രെയ്റ്റ്, 1080×2400 അല്ലെങ്കിൽ വലുത്';
@@ -538,7 +527,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get uploadTitleOptional => '(നിർബന്ധമല്ല)';
 
   @override
-  String get uploadTitleHint => 'ഉദാ. സന്ധ്യയിൽ മീനാക്ഷി';
+  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
 
   @override
   String get uploadCategoryLabel => 'വിഭാഗം';
@@ -548,7 +537,7 @@ class AppLocalizationsMl extends AppLocalizations {
       'ഈ ഉള്ളടക്കത്തിന്റെ അവകാശം എനിക്കാണ്, അല്ലെങ്കിൽ പങ്കിടാൻ അനുമതിയുണ്ട്';
 
   @override
-  String get uploadSubmitCta => 'പരിശോധനയ്ക്ക് അയക്കുക';
+  String get uploadSubmitCta => 'Submit for review';
 
   @override
   String get uploadFootnote =>
@@ -581,7 +570,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get uploadPickZoneSubAudio => 'MP3, AAC അല്ലെങ്കിൽ M4A';
 
   @override
-  String get uploadTitleHintRingtone => 'ഉദാ. കന്ദ ഷഷ്ടി കവചം';
+  String get uploadTitleHintRingtone => 'ഉദാ. കന്ദ ഷഷ്ഠി കവചം';
 
   @override
   String get uploadFootnoteRingtone =>

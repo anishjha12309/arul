@@ -1,0 +1,1397 @@
+{
+  "referHowItWorks": {
+    "english": "How it works",
+    "translations": {
+      "ta": "இது எப்படி வேலை செய்கிறது",
+      "te": "ఇది ఎలా పనిచేస్తుంది",
+      "kn": "ಇದು ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ",
+      "ml": "ഇത് എങ്ങനെ പ്രവർത്തിക്കുന്നു",
+      "hi": "यह कैसे काम करता है"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "refer.screen",
+        "config": "320x569@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 19 pixels on the right."
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "referShareWhatsapp": {
+    "english": "Share via WhatsApp",
+    "translations": {
+      "ta": "WhatsApp மூலம் பகிர்",
+      "te": "WhatsAppలో పంచుకో",
+      "kn": "WhatsApp ಮೂಲಕ ಹಂಚಿಕೊಳ್ಳಿ",
+      "ml": "WhatsApp വഴി പങ്കിടുക",
+      "hi": "WhatsApp पर साझा करें"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "refer.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "WhatsApp மூலம் பகிர்"
+      },
+      {
+        "locale": "kn",
+        "screen": "refer.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "WhatsApp ಮೂಲಕ ಹಂಚಿಕೊಳ್ಳಿ"
+      },
+      {
+        "locale": "kn",
+        "screen": "refer.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "WhatsApp ಮೂಲಕ ಹಂಚಿಕೊಳ್ಳಿ"
+      },
+      {
+        "locale": "ml",
+        "screen": "refer.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "WhatsApp വഴി പങ്കിടുക"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "referTitle": {
+    "english": "Refer & Earn",
+    "translations": {
+      "ta": "பரிந்துரைத்து சம்பாதி",
+      "te": "రిఫర్ చేసి సంపాదించు",
+      "kn": "ರೆಫರ್ ಮಾಡಿ ಗಳಿಸಿ",
+      "ml": "റഫർ ചെയ്ത് നേടൂ",
+      "hi": "रेफ़र करें और कमाएँ"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "refer.screen",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 96 pixels on the right."
+      },
+      {
+        "locale": "ta",
+        "screen": "refer.screen",
+        "config": "360x640@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 56 pixels on the right."
+      },
+      {
+        "locale": "te",
+        "screen": "refer.screen",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 7.8 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "refer.screen",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 29 pixels on the right."
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "remindersTitle": {
+    "english": "Reminders",
+    "translations": {
+      "ta": "நினைவூட்டல்கள்",
+      "te": "రిమైండర్లు",
+      "kn": "ರಿಮೈಂಡರ್‌ಗಳು",
+      "ml": "റിമൈൻഡറുകൾ",
+      "hi": "रिमाइंडर"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "notifications.screen",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 6.2 pixels on the right."
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "retry": {
+    "english": "Retry",
+    "translations": {
+      "ta": "மீண்டும் முயற்சி",
+      "te": "మళ్లీ ప్రయత్నించు",
+      "kn": "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+      "ml": "വീണ്ടും ശ്രമിക്കുക",
+      "hi": "फिर कोशिश करें"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "feed.error",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "மீண்டும் முயற்சி"
+      },
+      {
+        "locale": "ml",
+        "screen": "feed.error",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "വീണ്ടും ശ്രമിക്കുക"
+      },
+      {
+        "locale": "ta",
+        "screen": "feed.offline",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "மீண்டும் முயற்சி"
+      },
+      {
+        "locale": "ml",
+        "screen": "feed.offline",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "വീണ്ടും ശ്രമിക്കുക"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.error",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "மீண்டும் முயற்சி"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.error",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "വീണ്ടും ശ്രമിക്കുക"
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "ringtoneSet": {
+    "english": "Set",
+    "translations": {
+      "ta": "அமை",
+      "te": "సెట్ చేయి",
+      "kn": "ಹೊಂದಿಸಿ",
+      "ml": "സെറ്റ് ചെയ്യുക",
+      "hi": "सेट करें"
+    },
+    "evidence": [
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 15.92,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 45.75,
+        "text": "സെറ്റ് ചെയ്യുക"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "settingsDeleteConfirmBodyPremium": {
+    "english": "This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.",
+    "translations": {
+      "ta": "இது உங்கள் கணக்கு, விருப்பங்கள் மற்றும் வெகுமதிகளை நிரந்தரமாக நீக்கும்.\n\nஉங்கள் Arul Premium சந்தா ரத்து செய்யப்படும், மீதமுள்ள காலம் இழக்கப்படும் — பணம் திரும்பக் கிடைக்காது. மீண்டும் பதிவு செய்தாலும் அது திரும்பாது, இன்னொரு இலவச சோதனையும் கிடைக்காது.",
+      "te": "ఇది మీ ఖాతా, ఇష్టమైనవి, రివార్డులను శాశ్వతంగా తొలగిస్తుంది.\n\nమీ Arul Premium సబ్‌స్క్రిప్షన్ రద్దు అవుతుంది, మిగిలిన కాలం పోతుంది — రీఫండ్ ఉండదు. మళ్లీ సైన్ అప్ చేసినా అది తిరిగి రాదు, మరో ఉచిత ట్రయల్ కూడా రాదు.",
+      "kn": "ಇದು ನಿಮ್ಮ ಖಾತೆ, ಮೆಚ್ಚಿನವು ಮತ್ತು ರಿವಾರ್ಡ್‌ಗಳನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸುತ್ತದೆ.\n\nನಿಮ್ಮ Arul Premium ಚಂದಾ ರದ್ದಾಗುತ್ತದೆ, ಉಳಿದ ಅವಧಿ ಕಳೆದುಹೋಗುತ್ತದೆ — ಹಣ ಹಿಂತಿರುಗುವುದಿಲ್ಲ. ಮತ್ತೆ ಸೈನ್ ಅಪ್ ಮಾಡಿದರೂ ಅದು ಮರಳುವುದಿಲ್ಲ, ಇನ್ನೊಂದು ಉಚಿತ ಟ್ರಯಲ್ ಸಿಗುವುದಿಲ್ಲ.",
+      "ml": "ഇത് നിങ്ങളുടെ അക്കൗണ്ട്, പ്രിയപ്പെട്ടവ, റിവാർഡുകൾ എന്നിവ എന്നന്നേക്കുമായി നീക്കും.\n\nനിങ്ങളുടെ Arul Premium സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാകും, ബാക്കിയുള്ള കാലാവധി നഷ്ടമാകും — റീഫണ്ട് ഇല്ല. വീണ്ടും സൈൻ അപ്പ് ചെയ്താലും അത് തിരികെ വരില്ല, മറ്റൊരു സൗജന്യ ട്രയലും ലഭിക്കില്ല.",
+      "hi": "इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।\n\nआपकी Arul Premium सदस्यता रद्द हो जाएगी और बची हुई अवधि खत्म हो जाएगी — कोई रिफ़ंड नहीं। दोबारा साइन अप करने पर वह वापस नहीं मिलेगी, और दूसरा मुफ़्त ट्रायल भी नहीं मिलेगा।"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "settings.confirm_delete_premium",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 5.0 pixels on the bottom."
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.confirm_delete_premium",
+        "config": "320x569@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 5.0 pixels on the bottom."
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "settingsEditNameSub": {
+    "english": "Shown on wallpapers you upload",
+    "translations": {
+      "ta": "நீங்கள் பதிவேற்றும் வால்பேப்பர்களில் காட்டப்படும்",
+      "te": "మీరు అప్‌లోడ్ చేసే వాల్‌పేపర్లపై కనిపిస్తుంది",
+      "kn": "ನೀವು ಅಪ್‌ಲೋಡ್ ಮಾಡುವ ವಾಲ್‌ಪೇಪರ್‌ಗಳಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ",
+      "ml": "നിങ്ങൾ അപ്‌ലോഡ് ചെയ്യുന്ന വാൾപേപ്പറുകളിൽ കാണിക്കും",
+      "hi": "आपके अपलोड किए वॉलपेपर पर दिखेगा"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "settings.edit_name_sheet",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 5.0 pixels on the bottom."
+      },
+      {
+        "locale": "kn",
+        "screen": "settings.edit_name_sheet",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 5.0 pixels on the bottom."
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.edit_name_sheet",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 5.0 pixels on the bottom."
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "settingsFallbackEmail": {
+    "english": "Signed in with Google",
+    "translations": {
+      "ta": "Google மூலம் உள்நுழைந்துள்ளீர்கள்",
+      "te": "Googleతో సైన్ ఇన్ చేశారు",
+      "kn": "Google ಮೂಲಕ ಸೈನ್ ಇನ್ ಆಗಿದ್ದೀರಿ",
+      "ml": "Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു",
+      "hi": "Google से साइन इन किया है"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "settings.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 85.57,
+        "text": "Google மூலம் உள்நுழைந்துள்ளீர்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "settings.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 45.57,
+        "text": "Google மூலம் உள்நுழைந்துள்ளீர்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "settings.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 117.52,
+        "text": "Google மூலம் உள்நுழைந்துள்ளீர்கள்"
+      },
+      {
+        "locale": "kn",
+        "screen": "settings.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 33.57,
+        "text": "Google ಮೂಲಕ ಸೈನ್ ಇನ್ ಆಗಿದ್ದೀರಿ"
+      },
+      {
+        "locale": "kn",
+        "screen": "settings.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 49.76,
+        "text": "Google ಮೂಲಕ ಸೈನ್ ಇನ್ ಆಗಿದ್ದೀರಿ"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 103.87,
+        "text": "Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 63.87,
+        "text": "Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 140.78,
+        "text": "Google ഉപയോഗിച്ച് സൈൻ ഇൻ ചെയ്തു"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "settingsFallbackName": {
+    "english": "Your account",
+    "translations": {
+      "ta": "உங்கள் கணக்கு",
+      "te": "మీ ఖాతా",
+      "kn": "ನಿಮ್ಮ ಖಾತೆ",
+      "ml": "നിങ്ങളുടെ അക്കൗണ്ട്",
+      "hi": "आपका खाता"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "settings.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 31.35,
+        "text": "உங்கள் கணக்கு"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 22.39,
+        "text": "നിങ്ങളുടെ അക്കൗണ്ട്"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 76.14,
+        "text": "നിങ്ങളുടെ അക്കൗണ്ട്"
+      },
+      {
+        "locale": "ml",
+        "screen": "settings.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 36.14,
+        "text": "നിങ്ങളുടെ അക്കൗണ്ട്"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "tabRingtones": {
+    "english": "Ringtones",
+    "translations": {
+      "ta": "ரிங்டோன்கள்",
+      "te": "రింగ్‌టోన్లు",
+      "kn": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು",
+      "ml": "റിംഗ്ടോണുകൾ",
+      "hi": "रिंगटोन"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 25.0,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 100.96,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 60.96,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "kn",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 58.01,
+        "text": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು"
+      },
+      {
+        "locale": "kn",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 18.01,
+        "text": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 35.41,
+        "text": "റിംഗ്ടോണുകൾ"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 113.61,
+        "text": "റിംഗ്ടോണുകൾ"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 73.61,
+        "text": "റിംഗ്ടോണുകൾ"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 25.0,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 100.96,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 60.96,
+        "text": "ரிங்டோன்கள்"
+      },
+      {
+        "locale": "kn",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 58.01,
+        "text": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು"
+      },
+      {
+        "locale": "kn",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 18.01,
+        "text": "ರಿಂಗ್‌ಟೋನ್‌ಗಳು"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 35.41,
+        "text": "റിംഗ്ടോണുകൾ"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 113.61,
+        "text": "റിംഗ്ടോണുകൾ"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 73.61,
+        "text": "റിംഗ്ടോണുകൾ"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "uploadPickZoneTitle": {
+    "english": "Choose an image or video",
+    "translations": {
+      "ta": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்",
+      "te": "ఫోటో లేదా వీడియో ఎంచుకోండి",
+      "kn": "ಚಿತ್ರ ಅಥವಾ ವೀಡಿಯೊ ಆಯ್ಕೆಮಾಡಿ",
+      "ml": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക",
+      "hi": "तस्वीर या वीडियो चुनें"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 123.59,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 232.9,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 83.59,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 192.9,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "truncated",
+        "px": 123.59,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "truncated",
+        "px": 192.9,
+        "text": "படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்"
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 28.74,
+        "text": "ಚಿತ್ರ ಅಥವಾ ವೀಡಿಯೊ ಆಯ್ಕೆಮಾಡಿ"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 74.01,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 168.44,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.0",
+        "kind": "truncated",
+        "px": 34.01,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 128.44,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "truncated",
+        "px": 74.01,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "truncated",
+        "px": 128.44,
+        "text": "ചിത്രമോ വീഡിയോയോ തിരഞ്ഞെടുക്കുക"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "uploadSubmitCta": {
+    "english": "Submit for review",
+    "translations": {
+      "ta": "பரிசீலனைக்கு அனுப்பு",
+      "te": "సమీక్షకు పంపు",
+      "kn": "ಪರಿಶೀಲನೆಗೆ ಕಳುಹಿಸಿ",
+      "ml": "പരിശോധനയ്ക്ക് അയക്കുക",
+      "hi": "समीक्षा के लिए भेजें"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "பரிசீலனைக்கு அனுப்பு"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "പരിശോധനയ്ക്ക് അയക്കുക"
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 0.0,
+        "text": "പരിശോധനയ്ക്ക് അയക്കുക"
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "uploadTitle": {
+    "english": "Upload your content",
+    "translations": {
+      "ta": "உங்கள் உள்ளடக்கத்தைப் பதிவேற்றவும்",
+      "te": "మీ కంటెంట్‌ను అప్‌లోడ్ చేయండి",
+      "kn": "ನಿಮ್ಮ ವಿಷಯವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ",
+      "ml": "നിങ്ങളുടെ ഉള്ളടക്കം അപ്‌ലോഡ് ചെയ്യുക",
+      "hi": "अपनी सामग्री अपलोड करें"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 221 pixels on the right."
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 181 pixels on the right."
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 320 pixels on the right."
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 221 pixels on the right."
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 320 pixels on the right."
+      },
+      {
+        "locale": "te",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 35 pixels on the right."
+      },
+      {
+        "locale": "te",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 78 pixels on the right."
+      },
+      {
+        "locale": "te",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 35 pixels on the right."
+      },
+      {
+        "locale": "te",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 78 pixels on the right."
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 96 pixels on the right."
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "360x640@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 56 pixels on the right."
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 157 pixels on the right."
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 96 pixels on the right."
+      },
+      {
+        "locale": "kn",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 157 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 206 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.0",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 166 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 300 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 206 pixels on the right."
+      },
+      {
+        "locale": "ml",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "overflow",
+        "px": 0.0,
+        "blamed_via": "largest growth vs en",
+        "text": "A RenderFlex overflowed by 300 pixels on the right."
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "uploadTitleHint": {
+    "english": "e.g. Meenakshi at dusk",
+    "translations": {
+      "ta": "எ.கா. அந்தி வேளையில் மீனாக்ஷி",
+      "te": "ఉదా. సంధ్యలో మీనాక్షి",
+      "kn": "ಉದಾ. ಮುಸ್ಸಂಜೆಯಲ್ಲಿ ಮೀನಾಕ್ಷಿ",
+      "ml": "ഉദാ. സന്ധ്യയിൽ മീനാക്ഷി",
+      "hi": "जैसे, संध्या में मीनाक्षी"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0",
+        "kind": "truncated",
+        "px": 12.71,
+        "text": "எ.கா. அந்தி வேளையில் மீனாக்ஷி"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 89.13,
+        "text": "எ.கா. அந்தி வேளையில் மீனாக்ஷி"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3",
+        "kind": "truncated",
+        "px": 49.13,
+        "text": "எ.கா. அந்தி வேளையில் மீனாக்ஷி"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "320x569@1.0+ime",
+        "kind": "truncated",
+        "px": 12.71,
+        "text": "எ.கா. அந்தி வேளையில் மீனாக்ஷி"
+      },
+      {
+        "locale": "ta",
+        "screen": "upload.screen",
+        "config": "360x640@1.3+ime",
+        "kind": "truncated",
+        "px": 49.13,
+        "text": "எ.கா. அந்தி வேளையில் மீனாக்ஷி"
+      }
+    ],
+    "only_failed_at_1_3": false
+  },
+  "categoryAll": {
+    "english": "All",
+    "translations": {
+      "ta": "அனைத்தும்",
+      "te": "అన్నీ",
+      "kn": "ಎಲ್ಲಾ",
+      "ml": "എല്ലാം",
+      "hi": "सभी"
+    },
+    "evidence": [
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 12.42,
+        "text": "Ringtones"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.19,
+        "text": "Ringtones"
+      },
+      {
+        "locale": "ta",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 12.42,
+        "text": "Ringtones"
+      },
+      {
+        "locale": "ml",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 0.19,
+        "text": "Ringtones"
+      }
+    ],
+    "only_failed_at_1_3": true
+  },
+  "earn": {
+    "english": "Earn",
+    "translations": {
+      "ta": "சம்பாதி",
+      "te": "సంపాదించు",
+      "kn": "ಗಳಿಸಿ",
+      "ml": "നേടുക",
+      "hi": "कमाएँ"
+    },
+    "evidence": [
+      {
+        "locale": "te",
+        "screen": "ringtones.screen",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 21.79,
+        "text": "Ringtones"
+      },
+      {
+        "locale": "te",
+        "screen": "ringtones.screen.locked",
+        "config": "320x569@1.3",
+        "kind": "truncated",
+        "px": 21.79,
+        "text": "Ringtones"
+      }
+    ],
+    "only_failed_at_1_3": true
+  }
+}

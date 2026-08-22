@@ -70,15 +70,16 @@ class ViewerMedia extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Poster. Same URL AND the same decode width as the grid tile, which
-          // makes this a cache HIT rather than a second decode: memCacheWidth is
-          // part of the cache key, so decoding the same thumbnail at a different
-          // width would store a second copy of every wallpaper the user opens.
+          // 1. Poster. Same URL ([Wallpaper.posterUrl]) AND the same decode width
+          // as the grid tile, which makes this a cache HIT rather than a second
+          // decode: memCacheWidth is part of the cache key, so decoding the same
+          // poster at a different width would store a second copy of every
+          // wallpaper the user opens.
           // The tile the user tapped is already decoded — this just repaints it.
           // It is briefly upscaled to full-bleed, which is fine: it is a poster
           // that lives for ~180ms until the real media fades in over it.
           CachedNetworkImage(
-            imageUrl: wallpaper.thumbUrl(AppConfig.cdnBaseUrl),
+            imageUrl: wallpaper.posterUrl(AppConfig.cdnBaseUrl),
             fit: BoxFit.cover,
             alignment: cropAlignment,
             memCacheWidth: WallpaperTile.decodeWidthFor(context),

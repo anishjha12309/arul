@@ -76,7 +76,8 @@ description: Build and verify the signed Arul release AAB/APK for Play. Use for 
    Android client + Firebase. Re-register only if the upload key rotates or Play re-signs — the
    symptom of a missing registration is Google Sign-In failing for testers. No rebuild needed.
 5. Before the app goes PUBLIC: privacy policy live ✓
-   (`https://hsrutility.com/privacy/` — the shared company page), PhonePe PROD webhook registered ✓, real analytics
+   (`https://hsrutility.com/arul/privacy-policy/` — Arul's own page; the Play listing field must name
+   the same URL), PhonePe PROD webhook registered ✓, real analytics
    creds in env/prod.json ✓, FLAG_SECURE ✓ (Play-install-gated, guard-enforced).
 6. **Ringtones SHIP**, so `WRITE_SETTINGS` must be an ACTIVE
    line in the manifest — a commented one now breaks Set on every device:

@@ -5,10 +5,12 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.SurfaceHolder
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.hsrutility.arul.BuildConfig
 import java.io.File
@@ -38,7 +40,19 @@ import java.io.File
  *
  * 4. Loop = REPEAT_MODE_ALL (seamless). Audio = volume 0/1 (muted by default for
  *    a wallpaper; never removed from the pipeline).
+ *
+ * 5. Scaling = SCALE_TO_FIT_WITH_CROPPING, set once per player. Our sources are
+ *    ~9:16 (1024x1824) and every modern screen is taller (9:19.5-9:20+), so the
+ *    default SCALE_TO_FIT filled the engine surface NON-uniformly: on a 1080x2392
+ *    panel that is x1.055 across and x1.311 down, a ~24% vertical stretch on the
+ *    applied wallpaper AND in the OS chooser preview (which previews this very
+ *    service). SCALE_TO_FIT_WITH_CROPPING scales uniformly and centre-crops the
+ *    overflow instead - aspect-true, full-bleed, matching the in-app feed's
+ *    BoxFit.cover. It is applied by the native window at composite time from
+ *    whatever surface the engine hands us, so it needs no display metrics, holds
+ *    on every device and aspect, and re-derives itself on rotation/resize.
  */
+@UnstableApi
 class VideoRenderer(private val context: Context) {
 
     companion object {
@@ -96,6 +110,10 @@ class VideoRenderer(private val context: Context) {
         try {
             player = ExoPlayer.Builder(context).build().apply {
                 setVideoSurfaceHolder(surfaceHolder)
+                // Aspect-true full-bleed - see point 5 in the class doc. Set on the
+                // player (not per-item), so swapVideo, which reuses this instance,
+                // keeps it; a re-created player passes through here again.
+                setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                 volume = if (audioEnabled) 1.0f else 0.0f
                 repeatMode = if (loopEnabled) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                 playWhenReady = true

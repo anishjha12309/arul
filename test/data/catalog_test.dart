@@ -78,6 +78,31 @@ void main() {
       );
     });
 
+    test('posterUrl asks for thumbs/ ONLY for live; a static goes to full_key', () {
+      // Only live items get a thumbs/ object (buildplan.mjs sets thumb_key for
+      // video only), so a static asking for one is a guaranteed 404 before the
+      // fallback fetches the full JPG it was always going to fetch.
+      final live = Wallpaper.fromJson(_item());
+      expect(
+        live.posterUrl('https://cdn.test'),
+        live.thumbUrl('https://cdn.test'),
+      );
+
+      final static_ = Wallpaper.fromJson(
+        _item(type: 'static', fullKey: 'wallpapers/murugan/95b5276e.jpg'),
+      );
+      expect(
+        static_.posterUrl('https://cdn.test'),
+        static_.url('https://cdn.test'),
+      );
+      expect(
+        static_.posterUrl('https://cdn.test').contains('/thumbs/'),
+        isFalse,
+        reason:
+            'a static must never issue a request for a poster that cannot exist',
+      );
+    });
+
     test('toJson round-trips through fromJson (disk-cache contract)', () {
       final w = Wallpaper.fromJson(_item(type: 'static'));
       final again = Wallpaper.fromJson(w.toJson());

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../../data/models/wallpaper.dart';
@@ -37,6 +38,24 @@ class WallpaperPrefetchService {
   /// of the user; it never delays the nearest item. The cap on real perf cost
   /// is [_maxConcurrent], not this number.
   static const _ahead = 15;
+
+  /// The ahead-window the FIRST pass of a process uses, until [_widened].
+  ///
+  /// On a cold sign-in nothing is cached, so the full [_ahead] window enqueued
+  /// ~40 MB of look-ahead the instant the feed mounted — three of it downloading
+  /// at once, against the one clip the user is actually staring at. That clip
+  /// waits its turn for bandwidth and its first frame arrives late, which reads
+  /// as "the app opened on a still image". Four ahead keeps the pipe busy for
+  /// the next swipe or two without crowding the current card; the full depth
+  /// arrives a moment later via [widenWindow], by which point the current card
+  /// has already painted.
+  static const _aheadCold = 4;
+
+  /// Safety net for [widenWindow]: the widen signal is the current card's first
+  /// painted frame, and a feed whose first item is STATIC never produces one.
+  /// Rather than special-case that, the first pass simply widens on its own
+  /// shortly after — the window is a bandwidth-priority hint, not a contract.
+  static const _widenFallback = Duration(seconds: 3);
 
   /// A small BEHIND window so an immediate back-swipe also opens from cache.
   static const _behind = 1;
@@ -77,6 +96,38 @@ class WallpaperPrefetchService {
 
   int _active = 0;
   bool _disposed = false;
+
+  /// False until the first card has painted (or [_widenFallback] elapsed), while
+  /// which [prefetchAround] uses the narrow [_aheadCold] window. One-way: once
+  /// the process is past its cold start there is nothing to stage again.
+  bool _widened = false;
+  Timer? _widenTimer;
+
+  /// Last window [prefetchAround] was asked for, so the [_widenFallback] timer
+  /// re-issues around where the user IS when it fires, not where they were when
+  /// it was armed.
+  List<Wallpaper> _lastItems = const [];
+  int _lastIndex = 0;
+
+  /// Whether the full [_ahead] depth is in effect. Read by the feed controller
+  /// so it only arms its one-shot first-frame listener while staging is live.
+  bool get windowWidened => _widened;
+
+  /// Restores the full [_ahead] look-ahead and is a no-op afterwards. Called by
+  /// `VideoPreloadController` when the current card renders its first frame —
+  /// the moment the user has something to look at and the pipe is free again.
+  /// Does NOT re-run [prefetchAround] itself: the caller owns the current index
+  /// and re-issues the pass with it.
+  void widenWindow() {
+    if (_widened) return;
+    _widened = true;
+    _widenTimer?.cancel();
+    _widenTimer = null;
+    debugPrint(
+      'FeedVideo: prefetch look-ahead widened to $_ahead '
+      '(cold-start staging over)',
+    );
+  }
 
   /// The public CDN URL for a live item — the single source of truth for both
   /// the cache key and the player's network fallback.
@@ -124,6 +175,24 @@ class WallpaperPrefetchService {
   void prefetchAround(List<Wallpaper> items, int currentIndex) {
     if (_disposed || items.isEmpty) return;
 
+    // Cold start: hold the window narrow until the current card has painted
+    // (see [_aheadCold]), and arm the fallback that widens it regardless.
+    if (!_widened) {
+      _lastItems = items;
+      _lastIndex = currentIndex;
+      if (_widenTimer == null) {
+        debugPrint(
+          'FeedVideo: prefetch look-ahead staged at $_aheadCold for cold start',
+        );
+        _widenTimer = Timer(_widenFallback, () {
+          if (_disposed || _widened) return;
+          widenWindow();
+          prefetchAround(_lastItems, _lastIndex);
+        });
+      }
+    }
+    final ahead = _widened ? _ahead : _aheadCold;
+
     // Drop stale QUEUED urls (in-flight downloads continue) and rebuild the
     // queue for the new window so priority always tracks the current index.
     for (final url in _queue) {
@@ -132,7 +201,7 @@ class WallpaperPrefetchService {
     _queue.clear();
 
     final start = (currentIndex - _behind).clamp(0, items.length - 1);
-    final end = (currentIndex + _ahead).clamp(0, items.length - 1);
+    final end = (currentIndex + ahead).clamp(0, items.length - 1);
 
     final candidates = <int>[];
     for (var i = start; i <= end; i++) {
@@ -183,6 +252,9 @@ class WallpaperPrefetchService {
   /// their own; the disk cache persists for the next controller instance.
   void dispose() {
     _disposed = true;
+    _widenTimer?.cancel();
+    _widenTimer = null;
+    _lastItems = const [];
     _queue.clear();
     _tracked.clear();
   }

@@ -15,7 +15,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get appTagline => 'దక్షిణ భారత వాల్‌పేపర్లు';
 
   @override
-  String get categoryAll => 'అన్నీ';
+  String get categoryAll => 'All';
 
   @override
   String get feedLiveBadge => 'లైవ్';
@@ -33,7 +33,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get feedErrorBody => 'మీ కనెక్షన్ చూసి మళ్లీ ప్రయత్నించండి.';
 
   @override
-  String get retry => 'మళ్లీ ప్రయత్నించు';
+  String get retry => 'Retry';
 
   @override
   String get errorGeneric => 'ఏదో తప్పు జరిగింది.';
@@ -43,7 +43,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get signInBody =>
-      'వర్తింపజేయడానికి, పంచుకోవడానికి మీ సేకరణను ఉంచడానికి సైన్ ఇన్ చేయండి.';
+      'వర్తింపజేయడానికి, పంచుకోవడానికి, మీ సేకరణను ఉంచడానికి సైన్ ఇన్ చేయండి.';
 
   @override
   String get signInGoogle => 'Googleతో కొనసాగించండి';
@@ -119,7 +119,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsVersion => 'వెర్షన్';
 
   @override
-  String get uploadTitle => 'మీ కంటెంట్‌ను అప్‌లోడ్ చేయండి';
+  String get uploadTitle => 'Upload your content';
 
   @override
   String get uploadBody =>
@@ -168,7 +168,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get offlineFeedBody =>
-      'వాల్‌పేపర్‌లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.';
+      'వాల్‌పేపర్లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.';
 
   @override
   String wallpaperShareCaption(String link) {
@@ -184,13 +184,13 @@ class AppLocalizationsTe extends AppLocalizations {
   String get tabWallpapers => 'వాల్‌పేపర్లు';
 
   @override
-  String get tabRingtones => 'రింగ్‌టోన్లు';
+  String get tabRingtones => 'Ringtones';
 
   @override
-  String get earn => 'సంపాదించు';
+  String get earn => 'Earn';
 
   @override
-  String get ringtoneSet => 'సెట్ చేయి';
+  String get ringtoneSet => 'Set';
 
   @override
   String get ringtonePreviewSemantic => 'ప్రివ్యూ';
@@ -217,19 +217,6 @@ class AppLocalizationsTe extends AppLocalizations {
       'రింగ్‌టోన్ సెట్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.';
 
   @override
-  String get ringtonePermissionTitle => 'అనుమతి అవసరం';
-
-  @override
-  String get ringtonePermissionBody =>
-      'రింగ్‌టోన్ సెట్ చేయడానికి, సిస్టమ్ సెట్టింగ్‌లను మార్చేందుకు Arulకు అనుమతి ఇవ్వండి.';
-
-  @override
-  String get ringtonePermissionCta => 'సెట్టింగ్‌లు తెరవండి';
-
-  @override
-  String get ringtonePermissionCancel => 'ఇప్పుడు కాదు';
-
-  @override
   String get ringtoneSetPreparing => 'సిద్ధమవుతోంది…';
 
   @override
@@ -248,10 +235,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get errorGenericRetry => 'ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.';
 
   @override
-  String get settingsFallbackName => 'మీ ఖాతా';
+  String get settingsFallbackName => 'Your account';
 
   @override
-  String get settingsFallbackEmail => 'Googleతో సైన్ ఇన్ చేశారు';
+  String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
   String get settingsPremiumSubLocked => 'వర్తించడం, పంచుకోవడం అన్‌లాక్ చేయండి';
@@ -321,10 +308,13 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'ఇది మీ ఖాతా, ఇష్టమైనవి, రివార్డులను శాశ్వతంగా తొలగిస్తుంది.\n\nమీ Arul Premium సబ్‌స్క్రిప్షన్ రద్దు అవుతుంది, మిగిలిన కాలం పోతుంది — రీఫండ్ ఉండదు. మళ్లీ సైన్ అప్ చేసినా అది తిరిగి రాదు, మరో ఉచిత ట్రయల్ కూడా రాదు.';
+      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
 
   @override
   String get settingsTerms => 'నిబంధనలు & షరతులు';
+
+  @override
+  String get settingsRefund => 'రీఫండ్ విధానం';
 
   @override
   String get settingsSupportEmailPrompt =>
@@ -343,8 +333,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsEditNameTitle => 'మీ పేరు';
 
   @override
-  String get settingsEditNameSub =>
-      'మీరు అప్‌లోడ్ చేసే వాల్‌పేపర్లపై కనిపిస్తుంది';
+  String get settingsEditNameSub => 'Shown on wallpapers you upload';
 
   @override
   String get themeSystemDefault => 'సిస్టమ్ డిఫాల్ట్';
@@ -359,7 +348,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get themeDarkSub => 'దీపకాంతి మెరూన్';
 
   @override
-  String get remindersTitle => 'రిమైండర్లు';
+  String get remindersTitle => 'Reminders';
 
   @override
   String get remindersToggleTitle => 'భక్తి రిమైండర్లు';
@@ -373,7 +362,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get remindersPermissionToast =>
-      'Arul కు నోటిఫికేషన్లు ఆఫ్‌లో ఉన్నాయి. రిమైండర్లు రావాలంటే ఫోన్ సెట్టింగ్‌లలో ఆన్ చేయండి.';
+      'Arulకు నోటిఫికేషన్లు ఆఫ్‌లో ఉన్నాయి. రిమైండర్లు రావాలంటే ఫోన్ సెట్టింగ్‌లలో ఆన్ చేయండి.';
 
   @override
   String get remindersTimeLabel => 'రిమైండర్ సమయం';
@@ -476,7 +465,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumKeepBrowsing => 'ఉచితంగా బ్రౌజ్ చేస్తూ ఉండండి';
 
   @override
-  String get referTitle => 'రిఫర్ చేసి సంపాదించు';
+  String get referTitle => 'Refer & Earn';
 
   @override
   String get referHeroTitle => 'స్నేహితుడికి బహుమతి, మీకు ఒక నెల';
@@ -486,7 +475,7 @@ class AppLocalizationsTe extends AppLocalizations {
       'మీ లింక్‌తో సబ్‌స్క్రైబ్ చేసే ప్రతి స్నేహితుడికీ 30 రోజుల ఉచిత ప్రీమియం';
 
   @override
-  String get referShareWhatsapp => 'WhatsAppలో పంచుకో';
+  String get referShareWhatsapp => 'Share via WhatsApp';
 
   @override
   String get referRewardsLabel => 'సంపాదించిన రివార్డులు';
@@ -497,7 +486,7 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
-  String get referHowItWorks => 'ఇది ఎలా పనిచేస్తుంది';
+  String get referHowItWorks => 'How it works';
 
   @override
   String get referStep1 => 'మీ లింక్‌ను స్నేహితులు, కుటుంబంతో పంచుకోండి';
@@ -522,7 +511,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get uploadScreenTitle => 'వాల్‌పేపర్ అప్‌లోడ్';
 
   @override
-  String get uploadPickZoneTitle => 'ఫోటో లేదా వీడియో ఎంచుకోండి';
+  String get uploadPickZoneTitle => 'Choose an image or video';
 
   @override
   String get uploadPickZoneSub => 'పోర్ట్రెయిట్, 1080×2400 లేదా పెద్దది';
@@ -534,7 +523,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get uploadTitleOptional => '(ఐచ్ఛికం)';
 
   @override
-  String get uploadTitleHint => 'ఉదా. సంధ్యలో మీనాక్షి';
+  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
 
   @override
   String get uploadCategoryLabel => 'విభాగం';
@@ -544,7 +533,7 @@ class AppLocalizationsTe extends AppLocalizations {
       'ఈ కంటెంట్‌పై హక్కులు నాకే ఉన్నాయి, లేదా పంచుకోవడానికి అనుమతి ఉంది';
 
   @override
-  String get uploadSubmitCta => 'సమీక్షకు పంపు';
+  String get uploadSubmitCta => 'Submit for review';
 
   @override
   String get uploadFootnote =>

@@ -15,7 +15,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get appTagline => 'தென்னிந்திய வால்பேப்பர்கள்';
 
   @override
-  String get categoryAll => 'அனைத்தும்';
+  String get categoryAll => 'All';
 
   @override
   String get feedLiveBadge => 'லைவ்';
@@ -33,7 +33,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get feedErrorBody => 'இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
 
   @override
-  String get retry => 'மீண்டும் முயற்சி';
+  String get retry => 'Retry';
 
   @override
   String get errorGeneric => 'ஏதோ தவறு நடந்தது.';
@@ -119,7 +119,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsVersion => 'பதிப்பு';
 
   @override
-  String get uploadTitle => 'உங்கள் உள்ளடக்கத்தைப் பதிவேற்றவும்';
+  String get uploadTitle => 'Upload your content';
 
   @override
   String get uploadBody =>
@@ -183,13 +183,13 @@ class AppLocalizationsTa extends AppLocalizations {
   String get tabWallpapers => 'வால்பேப்பர்கள்';
 
   @override
-  String get tabRingtones => 'ரிங்டோன்கள்';
+  String get tabRingtones => 'Ringtones';
 
   @override
-  String get earn => 'சம்பாதி';
+  String get earn => 'Earn';
 
   @override
-  String get ringtoneSet => 'அமை';
+  String get ringtoneSet => 'Set';
 
   @override
   String get ringtonePreviewSemantic => 'முன்னோட்டம்';
@@ -209,24 +209,11 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get ringtoneSetSuccess =>
-      'ரிங்டோன் அமைக்கப்பட்டது. தெரியவில்லை என்றால், உங்கள் போனை மறுதொடக்கம் செய்யுங்கள்.';
+      'ரிங்டோன் அமைக்கப்பட்டது. தெரியவில்லை என்றால், உங்கள் ஃபோனை மறுதொடக்கம் செய்யுங்கள்.';
 
   @override
   String get ringtoneSetFailed =>
       'ரிங்டோனை அமைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
-
-  @override
-  String get ringtonePermissionTitle => 'அனுமதி தேவை';
-
-  @override
-  String get ringtonePermissionBody =>
-      'ரிங்டோனை அமைக்க, சாதன அமைப்புகளை மாற்ற Arul-க்கு அனுமதி வழங்குங்கள்.';
-
-  @override
-  String get ringtonePermissionCta => 'அமைப்புகளைத் திற';
-
-  @override
-  String get ringtonePermissionCancel => 'இப்போது வேண்டாம்';
 
   @override
   String get ringtoneSetPreparing => 'தயாராகிறது…';
@@ -247,10 +234,10 @@ class AppLocalizationsTa extends AppLocalizations {
   String get errorGenericRetry => 'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.';
 
   @override
-  String get settingsFallbackName => 'உங்கள் கணக்கு';
+  String get settingsFallbackName => 'Your account';
 
   @override
-  String get settingsFallbackEmail => 'Google மூலம் உள்நுழைந்துள்ளீர்கள்';
+  String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
   String get settingsPremiumSubLocked => 'பயன்படுத்தவும், பகிரவும் திறக்க';
@@ -260,7 +247,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get settingsPremiumSubCancelled =>
-      'ஆட்டோ ரெனிவல் ஆஃப் · அணுகல் தொடரும்';
+      'தானியங்கு புதுப்பித்தல் அணைக்கப்பட்டுள்ளது · அணுகல் தொடரும்';
 
   @override
   String get settingsPremiumSubActive => 'நீங்கள் உறுப்பினர்';
@@ -323,10 +310,13 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'இது உங்கள் கணக்கு, விருப்பங்கள் மற்றும் வெகுமதிகளை நிரந்தரமாக நீக்கும்.\n\nஉங்கள் Arul Premium சந்தா ரத்து செய்யப்படும், மீதமுள்ள காலம் இழக்கப்படும் — பணம் திரும்பக் கிடைக்காது. மீண்டும் பதிவு செய்தாலும் அது திரும்பாது, இன்னொரு இலவச சோதனையும் கிடைக்காது.';
+      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
 
   @override
   String get settingsTerms => 'விதிமுறைகள் & நிபந்தனைகள்';
+
+  @override
+  String get settingsRefund => 'பணத்திரும்பக் கொள்கை';
 
   @override
   String get settingsSupportEmailPrompt =>
@@ -345,8 +335,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsEditNameTitle => 'உங்கள் பெயர்';
 
   @override
-  String get settingsEditNameSub =>
-      'நீங்கள் பதிவேற்றும் வால்பேப்பர்களில் காட்டப்படும்';
+  String get settingsEditNameSub => 'Shown on wallpapers you upload';
 
   @override
   String get themeSystemDefault => 'சிஸ்டம் இயல்புநிலை';
@@ -361,7 +350,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get themeDarkSub => 'விளக்கொளி மெரூன்';
 
   @override
-  String get remindersTitle => 'நினைவூட்டல்கள்';
+  String get remindersTitle => 'Reminders';
 
   @override
   String get remindersToggleTitle => 'பக்தி நினைவூட்டல்கள்';
@@ -480,7 +469,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get premiumKeepBrowsing => 'இலவசமாக உலாவுங்கள்';
 
   @override
-  String get referTitle => 'பரிந்துரைத்து சம்பாதி';
+  String get referTitle => 'Refer & Earn';
 
   @override
   String get referHeroTitle => 'நண்பருக்குப் பரிசு, உங்களுக்கு ஒரு மாதம்';
@@ -490,7 +479,7 @@ class AppLocalizationsTa extends AppLocalizations {
       'உங்கள் இணைப்பு மூலம் சந்தா செய்யும் ஒவ்வொரு நண்பருக்கும் 30 நாள் இலவச பிரீமியம்';
 
   @override
-  String get referShareWhatsapp => 'WhatsApp மூலம் பகிர்';
+  String get referShareWhatsapp => 'Share via WhatsApp';
 
   @override
   String get referRewardsLabel => 'சம்பாதித்த வெகுமதிகள்';
@@ -501,7 +490,7 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
-  String get referHowItWorks => 'இது எப்படி வேலை செய்கிறது';
+  String get referHowItWorks => 'How it works';
 
   @override
   String get referStep1 => 'உங்கள் இணைப்பை நண்பர்கள், குடும்பத்துடன் பகிரவும்';
@@ -527,7 +516,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get uploadScreenTitle => 'வால்பேப்பர் பதிவேற்றம்';
 
   @override
-  String get uploadPickZoneTitle => 'படம் அல்லது வீடியோவைத் தேர்ந்தெடுக்கவும்';
+  String get uploadPickZoneTitle => 'Choose an image or video';
 
   @override
   String get uploadPickZoneSub => 'போர்ட்ரெயிட், 1080×2400 அல்லது பெரியது';
@@ -539,7 +528,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get uploadTitleOptional => '(விருப்பம்)';
 
   @override
-  String get uploadTitleHint => 'எ.கா. அந்தி வேளையில் மீனாக்ஷி';
+  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
 
   @override
   String get uploadCategoryLabel => 'பிரிவு';
@@ -549,7 +538,7 @@ class AppLocalizationsTa extends AppLocalizations {
       'இந்த உள்ளடக்கத்தின் உரிமை என்னுடையது, அல்லது பகிர அனுமதி உள்ளது';
 
   @override
-  String get uploadSubmitCta => 'பரிசீலனைக்கு அனுப்பு';
+  String get uploadSubmitCta => 'Submit for review';
 
   @override
   String get uploadFootnote =>

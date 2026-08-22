@@ -71,11 +71,14 @@ class WallpaperTile extends ConsumerWidget {
 
 /// The tile's image, with its fallback ladder.
 ///
-/// 1. The pre-generated 720px thumbnail (`thumbs/…`) — small, and the same bytes
-///    the viewer will reuse as its instant poster.
-/// 2. If that 404s (a wallpaper published before the thumbnail job ran):
+/// 1. [Wallpaper.posterUrl] — the pre-generated 720px thumbnail (`thumbs/…`) for
+///    a LIVE clip, and the full image itself for a static, which has no thumb
+///    object to ask for. Either way these are the same bytes the viewer reuses
+///    as its instant poster.
+/// 2. If that 404s (a live clip published before the thumbnail job ran):
 ///    - live  → the clip's first frame, pulled natively over a ranged read.
-///    - static → the full image, decoded down to tile size.
+///    - static → the full image, decoded down to tile size (same URL as step 1;
+///      reached only when that genuinely failed, so it is a plain retry).
 /// So a missing thumbnail degrades a tile's *cost*, never its correctness. It is
 /// never a hole.
 class _TileImage extends ConsumerWidget {
@@ -87,7 +90,7 @@ class _TileImage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return CachedNetworkImage(
-      imageUrl: wallpaper.thumbUrl(AppConfig.cdnBaseUrl),
+      imageUrl: wallpaper.posterUrl(AppConfig.cdnBaseUrl),
       fit: BoxFit.cover,
       memCacheWidth: decodeWidth,
       fadeInDuration: const Duration(milliseconds: 180),

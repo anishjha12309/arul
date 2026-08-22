@@ -81,6 +81,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: ArulTokens.hairlineLoop,
     )..repeat();
 
+    // Open the connection to the API host now, so POST /auth/login — which is
+    // moments away — doesn't pay DNS + TLS + Worker cold start itself. Never
+    // awaited, never retried, never able to fail anything (ApiClient.warmUp).
+    BootTrace.mark('splash: API warm-up fired');
+    unawaited(
+      ref
+          .read(apiClientProvider)
+          .warmUp()
+          .then((_) => BootTrace.mark('splash: API warm-up settled')),
+    );
+
     // Warm the catalog while the wordmark is on screen, and — the moment it
     // resolves — the first screenful of feed media (reference app.dart's warm
     // prefetch, relocated to the splash it describes).
@@ -98,7 +109,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   ///    app-scoped [WallpaperPrefetchService] — the same instance the feed's
   ///    video controller pumps, so the two share one in-flight queue and never
   ///    double-download. Bytes only; NO player, NO decoder is touched here.
-  ///  • Thumbnails: decode the first [_thumbWarmCount] posters (signed-out:
+  ///  • Posters: decode the first [_thumbWarmCount] posters (signed-out:
   ///    [_preAuthThumbWarmCount]) into the shared image cache at the SAME
   ///    decode width the tiles/posters use ([WallpaperTile.decodeWidthFor] —
   ///    memCacheWidth is part of the cache key), so the feed's first paint is
@@ -143,7 +154,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           ResizeImage.resizeIfNeeded(
             decodeWidth,
             null,
-            CachedNetworkImageProvider(w.thumbUrl(AppConfig.cdnBaseUrl)),
+            CachedNetworkImageProvider(w.posterUrl(AppConfig.cdnBaseUrl)),
           ),
           context,
           // Never throws into the framework; the tile keeps its own fallback

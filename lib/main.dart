@@ -60,8 +60,18 @@ Future<void> main() async {
       await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
       BootTrace.mark('firebase init done');
 
-      FlutterError.onError =
-          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      // WRAP, don't replace. Assigning `recordFlutterFatalError` straight to
+      // `FlutterError.onError` swallows the default presenter, so a layout
+      // error paints its yellow-and-black banner on screen and emits ZERO
+      // logcat output — no "A RenderFlex overflowed by N pixels", no widget
+      // tree naming the culprit. A logcat-based overflow sweep then reports a
+      // clean run on visibly broken screens. presentError first restores the
+      // console dump; Crashlytics still gets every error, so nothing is traded
+      // away for it. Same line in Pakiza (fixed there 2026-08-21).
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      };
       WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
         FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
         return true;

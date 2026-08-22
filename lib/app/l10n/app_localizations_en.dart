@@ -215,19 +215,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Couldn\'t set the ringtone. Please try again.';
 
   @override
-  String get ringtonePermissionTitle => 'Permission needed';
-
-  @override
-  String get ringtonePermissionBody =>
-      'To set a ringtone, allow Arul to change system settings.';
-
-  @override
-  String get ringtonePermissionCta => 'Open settings';
-
-  @override
-  String get ringtonePermissionCancel => 'Not now';
-
-  @override
   String get ringtoneSetPreparing => 'Preparing…';
 
   @override
@@ -322,6 +309,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTerms => 'Terms & Conditions';
+
+  @override
+  String get settingsRefund => 'Refund policy';
 
   @override
   String get settingsSupportEmailPrompt =>

@@ -14,7 +14,7 @@ import '../data/ringtone_set_service.dart';
 enum RingtoneSetStage { checkingPermission, fetchingUrl, downloading, setting }
 
 /// State machine for setting a ringtone: idle → loading (per [RingtoneSetStage])
-/// → needs-permission | success | error. Ported from the reference.
+/// → success | error. Ported from the reference.
 sealed class RingtoneSetState {
   const RingtoneSetState();
 }
@@ -37,12 +37,6 @@ final class RingtoneSetLoading extends RingtoneSetState {
 
   /// Download progress 0.0–1.0; null for non-download stages.
   final double? progress;
-}
-
-/// Emitted when `WRITE_SETTINGS` is not granted. The screen shows an
-/// explanation sheet with an "Open settings" CTA.
-final class RingtoneSetNeedsPermission extends RingtoneSetState {
-  const RingtoneSetNeedsPermission();
 }
 
 final class RingtoneSetSuccess extends RingtoneSetState {
@@ -104,7 +98,11 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
       );
       final canWrite = await service.canWriteSettings();
       if (!canWrite) {
-        state = const RingtoneSetNeedsPermission();
+        // Straight to Android's "Modify system settings" grant screen — no
+        // in-app explainer in front of it (owner, 2026-08-21). The user grants
+        // it there, comes back and taps Set again; nothing is parked here.
+        await service.openWriteSettings();
+        state = const RingtoneSetIdle();
         return;
       }
 
@@ -179,13 +177,6 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
   }
 
   void reset() => state = const RingtoneSetIdle();
-
-  /// Open system settings for WRITE_SETTINGS and reset state so the user can
-  /// retry after granting the permission.
-  Future<void> openWriteSettings() async {
-    await ref.read(ringtoneSetServiceProvider).openWriteSettings();
-    reset();
-  }
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────

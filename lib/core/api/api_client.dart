@@ -129,6 +129,34 @@ class ApiClient {
     }
   }
 
+  /// The route [warmUp] pokes: an EXISTING public one (Digital Asset Links)
+  /// that reads no DB, needs no JWT and answers from `c.env`. Deliberately not a
+  /// new `/health` endpoint — the cheapest warm is one that costs the Worker
+  /// nothing it isn't already built to do.
+  static const _warmPath = '/.well-known/assetlinks.json';
+
+  /// Opens DNS + TLS to the API host (and wakes a cold Worker) while the splash
+  /// beat is still playing.
+  ///
+  /// Until this existed, `POST /auth/login` was the FIRST request of the
+  /// process, so it paid the resolve, the handshake and the Worker cold start
+  /// with the user watching a spinner. This runs on the SAME [http.Client], so
+  /// the socket it leaves in the keep-alive pool is the one login reuses.
+  ///
+  /// Fire-and-forget by contract: no auth, no retry, no parsing, its own short
+  /// timeout, every failure swallowed — a 404 or a 503 warms the path just as
+  /// well as a 200. It must never delay or fail anything.
+  Future<void> warmUp() async {
+    if (!AppConfig.hasBackend) return;
+    try {
+      await _http.get(_uri(_warmPath)).timeout(_warmTimeout);
+    } catch (_) {
+      // Pure upside: a failed warm just means login pays what it used to.
+    }
+  }
+
+  static const Duration _warmTimeout = Duration(seconds: 5);
+
   Future<String?> readAccessToken() => _storage.read(key: _kAccessTokenKey);
   Future<String?> readRefreshToken() => _storage.read(key: _kRefreshTokenKey);
 

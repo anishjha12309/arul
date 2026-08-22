@@ -97,6 +97,26 @@ abstract class Wallpaper with _$Wallpaper {
     final stem = dot == -1 ? name : name.substring(0, dot);
     return '$cdnBase/thumbs/$category/$stem.jpg';
   }
+
+  /// The image every surface should ASK FOR first — tile, viewer poster, splash
+  /// warm.
+  ///
+  /// **Only LIVE items have a `thumbs/` object.** The import writes `thumb_key`
+  /// for video and nothing else (`tools/content-import/buildplan.mjs`), so a
+  /// static asking for [thumbUrl] spends a guaranteed 404 round trip before its
+  /// own fallback ladder fetches the full JPG it was always going to fetch. A
+  /// static therefore goes STRAIGHT to [url]; it costs no extra bytes (the full
+  /// image was the outcome either way) and saves the wasted request on every
+  /// static card in the feed and in the splash warm window.
+  ///
+  /// Keep every caller on this one getter: the tile and the viewer's poster
+  /// share a decode width, so they share a cache entry, and a caller that picked
+  /// a different URL for the same item would decode it twice.
+  ///
+  /// Live is untouched — the poster-under-texture contract depends on it.
+  /// (Backfilling real static thumbs is a content-pipeline job, not this.)
+  String posterUrl(String cdnBase) =>
+      kind == WallpaperKind.live ? thumbUrl(cdnBase) : url(cdnBase);
 }
 
 /// A browse chip. `all` is chrome (localised); the rest come from the catalog.

@@ -490,30 +490,6 @@ abstract class AppLocalizations {
   /// **'Couldn\'t set the ringtone. Please try again.'**
   String get ringtoneSetFailed;
 
-  /// No description provided for @ringtonePermissionTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Permission needed'**
-  String get ringtonePermissionTitle;
-
-  /// No description provided for @ringtonePermissionBody.
-  ///
-  /// In en, this message translates to:
-  /// **'To set a ringtone, allow Arul to change system settings.'**
-  String get ringtonePermissionBody;
-
-  /// No description provided for @ringtonePermissionCta.
-  ///
-  /// In en, this message translates to:
-  /// **'Open settings'**
-  String get ringtonePermissionCta;
-
-  /// No description provided for @ringtonePermissionCancel.
-  ///
-  /// In en, this message translates to:
-  /// **'Not now'**
-  String get ringtonePermissionCancel;
-
   /// No description provided for @ringtoneSetPreparing.
   ///
   /// In en, this message translates to:
@@ -699,6 +675,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Terms & Conditions'**
   String get settingsTerms;
+
+  /// No description provided for @settingsRefund.
+  ///
+  /// In en, this message translates to:
+  /// **'Refund policy'**
+  String get settingsRefund;
 
   /// No description provided for @settingsSupportEmailPrompt.
   ///

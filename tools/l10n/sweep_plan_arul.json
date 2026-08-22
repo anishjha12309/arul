@@ -1,0 +1,112 @@
+{
+  "_readme": [
+    "Route map for tools/l10n/device_sweep.py. Every hop names an ARB KEY, not a",
+    "coordinate: the driver resolves the key to the active locale's string, finds",
+    "that node in Flutter's semantics tree and taps whatever bounds the phone",
+    "reports. So this one file replays across all six locales and every density.",
+    "",
+    "Deliberately NOT visited: settingsTellFriend and settingsNeedHelp leave the",
+    "app (system share sheet / mailto), and settingsLogout + settingsDeleteAccount",
+    "would end the session mid-sweep. The apply and share flows are premium-gated",
+    "actions with real side effects on the device, so they are left to the widget",
+    "matrix, which renders their sheets without performing them.",
+    "",
+    "language_path/language_names drive the IN-APP picker. Android's per-app locale is ignored by this app (LocaleNotifier reads a persisted preference and defaults to English, never the platform locale), so the sweep must change the language the way a user does.",
+    "edit_name is NOT swept: the pencil that opens it is an icon with no text label, so there is no ARB key to aim at. The widget matrix covers settings.edit_name_sheet instead."
+  ],
+  "template": "en",
+  "locales": [
+    "en",
+    "ta",
+    "te",
+    "kn",
+    "ml",
+    "hi"
+  ],
+  "launch_settle": 7,
+  "screens": [
+    {
+      "name": "wallpapers",
+      "path": [
+        "tabWallpapers"
+      ],
+      "back": 0
+    },
+    {
+      "name": "ringtones",
+      "path": [
+        "tabRingtones"
+      ],
+      "back": 0
+    },
+    {
+      "name": "settings",
+      "path": [
+        "settingsTitle"
+      ],
+      "back": 0
+    },
+    {
+      "name": "premium",
+      "path": [
+        "settingsTitle",
+        "settingsPremiumSubActive"
+      ],
+      "back": 1
+    },
+    {
+      "name": "refer",
+      "path": [
+        "settingsTitle",
+        "settingsReferSub"
+      ],
+      "back": 1
+    },
+    {
+      "name": "reminders",
+      "path": [
+        "settingsTitle",
+        "settingsRemindersSubOff"
+      ],
+      "back": 1
+    },
+    {
+      "name": "language_sheet",
+      "path": [
+        "settingsTitle",
+        "settingsLanguage"
+      ],
+      "back": 1
+    },
+    {
+      "name": "theme_sheet",
+      "path": [
+        "settingsTitle",
+        "settingsTheme"
+      ],
+      "back": 1
+    },
+    {
+      "name": "upload",
+      "path": [
+        "settingsTitle",
+        "settingsUpload"
+      ],
+      "back": 1
+    }
+  ],
+  "language_path": [
+    "settingsTitle",
+    "settingsLanguage"
+  ],
+  "language_names": {
+    "en": "English",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "kn": "Kannada",
+    "ml": "Malayalam",
+    "hi": "Hindi"
+  },
+  "verify_key": "settingsTitle",
+  "anchor_key": "tabWallpapers"
+}

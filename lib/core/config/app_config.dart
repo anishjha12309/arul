@@ -43,26 +43,40 @@ abstract final class AppConfig {
     defaultValue: 'support@hsrutility.com',
   );
 
-  /// Privacy policy. The SHARED HSR page — titled "Privacy Policy — Pakiza &
-  /// Arul", so it covers this app by name.
+  /// Privacy policy — Arul's OWN page, not a shared one.
   ///
-  /// Was a per-app page on the retired old company domain. Both policies now
-  /// point at the one company domain so there is a single document to keep
-  /// current instead of one per app drifting apart.
+  /// Until 2026-08-20 both apps pointed at hsrutility.com/privacy/, one document
+  /// titled "Privacy Policy — Pakiza & Arul". The site now gives each app a
+  /// self-contained sub-site, and these point into Arul's. The shared page still
+  /// resolves — it redirects to the website's own policy — so an older installed
+  /// build does not 404, but it no longer describes this app and must not be
+  /// pointed at again.
+  ///
+  /// The trailing slash is required. Astro serves these as directories and 308s
+  /// the slash-less form; without it the WebView shows a redirect it did not ask
+  /// for on the way to a policy screen.
   ///
   /// NOTE: the Play listing carries its own privacy-policy URL — changing this
-  /// constant does NOT change that, and the two must not disagree.
+  /// constant does NOT change that, and the two must not disagree. Update the
+  /// listing in the same pass.
   static const privacyUrl = String.fromEnvironment(
     'PRIVACY_URL',
-    defaultValue: 'https://hsrutility.com/privacy/',
+    defaultValue: 'https://hsrutility.com/arul/privacy-policy/',
   );
 
   /// Terms & Conditions, linked from the Settings footer beside [privacyUrl].
-  /// The exact URL Pakiza serves from its `app_config.policy_urls`; the
-  /// published page is titled "Terms of Service — Pakiza & Arul".
+  /// Arul's own, published at the same time and under the same rules as above.
   static const termsUrl = String.fromEnvironment(
     'TERMS_URL',
-    defaultValue: 'https://hsrutility.com/terms/',
+    defaultValue: 'https://hsrutility.com/arul/terms/',
+  );
+
+  /// Refund & Cancellation Policy, the third entry in the Settings footer.
+  /// Read in-app by `PolicyScreen` exactly like the other two, and subject to the
+  /// same trailing-slash rule.
+  static const refundUrl = String.fromEnvironment(
+    'REFUND_URL',
+    defaultValue: 'https://hsrutility.com/arul/refund-policy/',
   );
 
   /// Always true in real builds — the Worker has been live since 2026-07-14 and

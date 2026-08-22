@@ -10,9 +10,7 @@ import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_earn_button.dart';
-import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/cta_button.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -126,11 +124,11 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
       }
     });
 
-    // Set pipeline reactions: permission sheet / success toast / error toast.
+    // Set pipeline reactions: success toast / error toast. A missing
+    // WRITE_SETTINGS opens the system grant screen from the notifier and comes
+    // back to idle — there is nothing for the screen to show.
     ref.listen(ringtoneSetProvider, (prev, next) {
       switch (next) {
-        case RingtoneSetNeedsPermission():
-          _showPermissionSheet(context);
         case RingtoneSetSuccess():
           ref.read(ringtoneSetProvider.notifier).reset();
           showArulToast(
@@ -263,72 +261,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, i) =>
           RingtoneRow(ringtone: items[i], onSet: () => _onSetTapped(items[i])),
-    );
-  }
-
-  /// WRITE_SETTINGS explainer — restyled as an Arul sheet (dark #1A0B0F
-  /// surface, gold hairline, grabber).
-  void _showPermissionSheet(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    showArulSheet<void>(
-      context,
-      builder: (ctx) {
-        final sheetDark = Theme.of(ctx).brightness == Brightness.dark;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(
-            ArulTokens.cardPadding20,
-            4,
-            ArulTokens.cardPadding20,
-            ArulTokens.cardPadding20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.ringtonePermissionTitle,
-                style: ArulTokens.sheetTitle.copyWith(
-                  color: sheetDark ? ArulTokens.ivory : ArulTokens.lightText,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l10n.ringtonePermissionBody,
-                style: ArulTokens.body.copyWith(
-                  color: sheetDark
-                      ? ArulTokens.darkBodyWarm
-                      : ArulTokens.lightBody,
-                ),
-              ),
-              const SizedBox(height: 20),
-              CtaButton(
-                label: l10n.ringtonePermissionCta,
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  ref.read(ringtoneSetProvider.notifier).openWriteSettings();
-                },
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    ref.read(ringtoneSetProvider.notifier).reset();
-                  },
-                  child: Text(
-                    l10n.ringtonePermissionCancel,
-                    style: ArulTokens.button.copyWith(
-                      color: sheetDark
-                          ? ArulTokens.darkTextSecondary
-                          : ArulTokens.lightSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

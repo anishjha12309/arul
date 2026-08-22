@@ -15,7 +15,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get appTagline => 'दक्षिण भारतीय वॉलपेपर';
 
   @override
-  String get categoryAll => 'सभी';
+  String get categoryAll => 'All';
 
   @override
   String get feedLiveBadge => 'लाइव';
@@ -33,7 +33,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get feedErrorBody => 'अपना कनेक्शन जाँचें और फिर कोशिश करें।';
 
   @override
-  String get retry => 'फिर कोशिश करें';
+  String get retry => 'Retry';
 
   @override
   String get errorGeneric => 'कुछ गड़बड़ हो गई।';
@@ -118,7 +118,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsVersion => 'संस्करण';
 
   @override
-  String get uploadTitle => 'अपनी सामग्री अपलोड करें';
+  String get uploadTitle => 'Upload your content';
 
   @override
   String get uploadBody =>
@@ -182,13 +182,13 @@ class AppLocalizationsHi extends AppLocalizations {
   String get tabWallpapers => 'वॉलपेपर';
 
   @override
-  String get tabRingtones => 'रिंगटोन';
+  String get tabRingtones => 'Ringtones';
 
   @override
-  String get earn => 'कमाएँ';
+  String get earn => 'Earn';
 
   @override
-  String get ringtoneSet => 'सेट करें';
+  String get ringtoneSet => 'Set';
 
   @override
   String get ringtonePreviewSemantic => 'प्रीव्यू';
@@ -214,19 +214,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get ringtoneSetFailed => 'रिंगटोन सेट नहीं हो सका। फिर से कोशिश करें।';
 
   @override
-  String get ringtonePermissionTitle => 'अनुमति चाहिए';
-
-  @override
-  String get ringtonePermissionBody =>
-      'रिंगटोन सेट करने के लिए, Arul को सिस्टम सेटिंग्स बदलने की अनुमति दें।';
-
-  @override
-  String get ringtonePermissionCta => 'सेटिंग्स खोलें';
-
-  @override
-  String get ringtonePermissionCancel => 'अभी नहीं';
-
-  @override
   String get ringtoneSetPreparing => 'तैयार हो रहा है…';
 
   @override
@@ -245,10 +232,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get errorGenericRetry => 'कुछ गड़बड़ हो गई। फिर कोशिश करें।';
 
   @override
-  String get settingsFallbackName => 'आपका खाता';
+  String get settingsFallbackName => 'Your account';
 
   @override
-  String get settingsFallbackEmail => 'Google से साइन इन किया है';
+  String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
   String get settingsPremiumSubLocked => 'लगाना और साझा करना अनलॉक करें';
@@ -317,17 +304,20 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।\n\nआपकी Arul Premium सदस्यता रद्द हो जाएगी और बची हुई अवधि खत्म हो जाएगी — कोई रिफ़ंड नहीं। दोबारा साइन अप करने पर वह वापस नहीं मिलेगी, और दूसरा मुफ़्त ट्रायल भी नहीं मिलेगा।';
+      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
 
   @override
   String get settingsTerms => 'नियम और शर्तें';
+
+  @override
+  String get settingsRefund => 'रिफ़ंड नीति';
 
   @override
   String get settingsSupportEmailPrompt => 'कृपया अपनी समस्या या सुझाव लिखें:';
 
   @override
   String get settingsSupportEmailDetails =>
-      'नीचे दी गई जानकारी आपकी शिकायत जल्दी हल करने में मदद करती है:';
+      'नीचे दी गई जानकारी आपका अनुरोध जल्दी हल करने में मदद करती है:';
 
   @override
   String settingsNoEmailApp(String email) {
@@ -338,7 +328,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsEditNameTitle => 'आपका नाम';
 
   @override
-  String get settingsEditNameSub => 'आपके अपलोड किए वॉलपेपर पर दिखेगा';
+  String get settingsEditNameSub => 'Shown on wallpapers you upload';
 
   @override
   String get themeSystemDefault => 'सिस्टम डिफ़ॉल्ट';
@@ -353,7 +343,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get themeDarkSub => 'दीप-प्रकाश मैरून';
 
   @override
-  String get remindersTitle => 'रिमाइंडर';
+  String get remindersTitle => 'Reminders';
 
   @override
   String get remindersToggleTitle => 'भक्ति रिमाइंडर';
@@ -469,7 +459,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumKeepBrowsing => 'मुफ़्त में देखते रहें';
 
   @override
-  String get referTitle => 'रेफ़र करें और कमाएँ';
+  String get referTitle => 'Refer & Earn';
 
   @override
   String get referHeroTitle => 'दोस्त को तोहफ़ा, आपको एक महीना';
@@ -479,7 +469,7 @@ class AppLocalizationsHi extends AppLocalizations {
       'आपकी लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम';
 
   @override
-  String get referShareWhatsapp => 'WhatsApp पर साझा करें';
+  String get referShareWhatsapp => 'Share via WhatsApp';
 
   @override
   String get referRewardsLabel => 'कमाए रिवॉर्ड';
@@ -490,7 +480,7 @@ class AppLocalizationsHi extends AppLocalizations {
   }
 
   @override
-  String get referHowItWorks => 'यह कैसे काम करता है';
+  String get referHowItWorks => 'How it works';
 
   @override
   String get referStep1 => 'अपनी लिंक दोस्तों और परिवार के साथ साझा करें';
@@ -514,7 +504,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get uploadScreenTitle => 'वॉलपेपर अपलोड';
 
   @override
-  String get uploadPickZoneTitle => 'तस्वीर या वीडियो चुनें';
+  String get uploadPickZoneTitle => 'Choose an image or video';
 
   @override
   String get uploadPickZoneSub => 'पोर्ट्रेट, 1080×2400 या बड़ा';
@@ -526,7 +516,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get uploadTitleOptional => '(वैकल्पिक)';
 
   @override
-  String get uploadTitleHint => 'जैसे, संध्या में मीनाक्षी';
+  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
 
   @override
   String get uploadCategoryLabel => 'श्रेणी';
@@ -536,7 +526,7 @@ class AppLocalizationsHi extends AppLocalizations {
       'इस सामग्री के अधिकार मेरे हैं, या मुझे इसे साझा करने की अनुमति है';
 
   @override
-  String get uploadSubmitCta => 'समीक्षा के लिए भेजें';
+  String get uploadSubmitCta => 'Submit for review';
 
   @override
   String get uploadFootnote =>
@@ -575,7 +565,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get uploadShareMomentBodyRingtone =>
-      'हम आपका रिंगटोन जल्द देखेंगे। तब तक — किसी को Arul पसंद आएगा?';
+      'हम आपके रिंगटोन की जल्द समीक्षा करेंगे। तब तक — किसी को Arul पसंद आएगा?';
 
   @override
   String uploadTooLarge(String max) {
@@ -590,7 +580,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get uploadShareMomentBody =>
-      'हम आपका वॉलपेपर जल्द देखेंगे। तब तक — किसी को Arul पसंद आएगा?';
+      'हम आपके वॉलपेपर की जल्द समीक्षा करेंगे। तब तक — किसी को Arul पसंद आएगा?';
 
   @override
   String get uploadComingSoonToast => 'अपलोड जल्द आ रहा है।';

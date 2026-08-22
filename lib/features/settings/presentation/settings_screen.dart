@@ -718,6 +718,13 @@ class _PolicyFooter extends ConsumerWidget {
               ),
             ),
             _FooterLink(label: l10n.settingsTerms, doc: PolicyDoc.terms),
+            Text(
+              '·',
+              style: ArulTokens.body.copyWith(
+                color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
+              ),
+            ),
+            _FooterLink(label: l10n.settingsRefund, doc: PolicyDoc.refund),
           ],
         ),
         const SizedBox(height: 14),

@@ -57,6 +57,10 @@ desktop.ini
 .wrangler/
 node_modules/
 
+# ─── Python (tools/l10n/) ───
+__pycache__/
+*.py[cod]
+
 # ─── Misc ───
 *.log
 pubspec.lock.bak

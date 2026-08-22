@@ -20,7 +20,14 @@ values (
   0,
   '{ "monthly": { "amount": 19900, "currency": "INR" } }'::jsonb,
   'support@hsrutility.com',
-  '{ "privacy": "https://hsrutility.com/privacy/", "terms": "https://hsrutility.com/terms/" }'::jsonb,
+  -- Arul's own sub-site. These were the shared /privacy/ and /terms/ pages until
+  -- 2026-08-20, when each app got a self-contained set; the shared privacy slug now
+  -- redirects to the website's own policy and no longer describes this app.
+  '{
+     "privacy": "https://hsrutility.com/arul/privacy-policy/",
+     "terms":   "https://hsrutility.com/arul/terms/",
+     "refund":  "https://hsrutility.com/arul/refund-policy/"
+   }'::jsonb,
   '{}'::jsonb,
   '1.0.0'
 )

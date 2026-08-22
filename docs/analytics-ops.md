@@ -42,5 +42,6 @@ Linkage + attribution traps — why an App campaign has no conversion goals, why
 zero while GA4 holds the events, and which console lies how:
 [google-ads.md](google-ads.md) — read before diagnosing a missing conversion.
 
-The privacy policy (`https://hsrutility.com/privacy/` — SHARED with Pakiza, a change lands in both
-apps) must disclose Meta, Google/Firebase and advertiser-ID collection.
+The privacy policy (`https://hsrutility.com/arul/privacy-policy/` — Arul's own since 2026-08-20; it
+is no longer shared with Pakiza, so a change here lands in this app alone) must disclose Meta,
+Google/Firebase and advertiser-ID collection.

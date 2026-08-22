@@ -384,8 +384,10 @@ class MainActivity : FlutterFragmentActivity() {
      * startActivity throws ActivityNotFoundException there — so this walks a
      * fallback chain instead of crashing: per-package grant page → app-list
      * grant page → this app's details page (resolvable everywhere). Never
-     * throws; if every intent fails the tap is a no-op and the permission
-     * sheet stays up for a retry.
+     * throws; the Set tap now opens this screen directly with no explainer in
+     * front of it, so if every intent fails the tap is a silent no-op —
+     * accepted, since a build with no resolvable settings screen has no path
+     * to the grant anyway.
      */
     private fun openWriteSettingsScreen() {
         val candidates = listOf(
@@ -624,5 +626,145 @@ class MainActivity : FlutterFragmentActivity() {
         }
 
         RingtoneManager.setActualDefaultRingtoneUri(this, type, contentUri)
+        if (type == RingtoneManager.TYPE_RINGTONE) applyPerSimRingtones(contentUri)
     }
+
+    /**
+     * Per-SIM ringtone rows that some OEM skins - not AOSP - actually read when a
+     * SIM call comes in.
+     *
+     * [RingtoneManager.setActualDefaultRingtoneUri] writes only the AOSP default
+     * (`Settings.System.RINGTONE`). Dual-SIM skins (OxygenOS/ColorOS, MIUI/
+     * HyperOS, Funtouch, and the AOSP MSIM patch set Nothing OS also carries)
+     * route each SIM's incoming call through its OWN `Settings.System` row and
+     * never consult the AOSP one, so setting a tone here changed WhatsApp's call
+     * ringtone (WhatsApp DOES read the AOSP default) while the phone itself kept
+     * ringing with the old tone - reported on a OnePlus 15, 2026-08-21.
+     *
+     * ONE tone on EVERY slot, never a per-SIM choice: the same URI is written to
+     * the AOSP default and to every ringtone row the device carries, so a call on
+     * SIM 2 rings with what the user just picked (owner's call, 2026-08-21).
+     *
+     * The names are OEM-private and undocumented, so they are DISCOVERED, not
+     * guessed - see [discoverRingtoneKeys]. This list is only the fallback for a
+     * device that refuses to be enumerated, and each entry is (ringtone key, its
+     * `_set` marker): the marker is a second presence probe, never something we
+     * write, because on the attached Nothing device `ringtone_sim2` exists while
+     * holding NULL and only `ringtone_set_sim2` = "1" reveals it. See
+     * [isDeclaredSetting]. A device matching neither route gets nothing written.
+     */
+    private val fallbackPerSimRingtoneKeys =
+        listOf(
+            "ringtone_sim1" to "ringtone_set_sim1",
+            "ringtone_sim2" to "ringtone_set_sim2",
+            "ringtone_2" to "ringtone_set_2",
+            "ringtone2" to "ringtone_set2",
+        )
+
+    /**
+     * Best-effort extra on top of a ringtone set that has ALREADY succeeded.
+     * Every write is individually wrapped: a skin that protects or rejects its
+     * own key must never turn a working ringtone change into a failure the user
+     * sees.
+     */
+    private fun applyPerSimRingtones(contentUri: Uri) {
+        val value = contentUri.toString()
+        val keys = discoverRingtoneKeys().ifEmpty { declaredFallbackRingtoneKeys() }
+        if (keys.isEmpty()) {
+            Log.i(TAG, "No per-SIM ringtone rows on this device; AOSP default only")
+            return
+        }
+        for (key in keys) {
+            try {
+                Settings.System.putString(contentResolver, key, value)
+                Log.i(TAG, "Per-SIM ringtone key updated: $key")
+            } catch (e: Exception) {
+                Log.w(TAG, "Per-SIM ringtone write failed for $key (non-critical)", e)
+            }
+        }
+    }
+
+    /**
+     * Every ringtone-slot row THIS device actually carries, read off the settings
+     * provider instead of guessed.
+     *
+     * Guessing is what the first cut did, and it can only ever cover skins someone
+     * here has held: the reported failure was a OnePlus nobody can query. query()
+     * on `Settings.System.CONTENT_URI` lists the rows by name, so a skin that
+     * calls its second slot something we have never heard of still gets the tone.
+     *
+     * The filter is deliberately loose on the name and strict on the VALUE, since
+     * a name match alone would let a non-ringtone row through:
+     *  - must MENTION "ringtone" (contains, not startsWith, so a vendor-prefixed
+     *    name like `oplus_ringtone_sim2` is caught) but must not BE `ringtone` -
+     *    that one is the AOSP default, already written by
+     *    [RingtoneManager.setActualDefaultRingtoneUri] in its own normalised form,
+     *    and overwriting it with ours would fight the framework;
+     *  - never a `_set` marker (holds "1"), a decoded-path `cache`, or a
+     *    vibrate/volume/silent flag - none of them take a URI;
+     *  - the existing value must be absent or already a URI. A row we cannot read
+     *    (Android 12+ hides `@hide` rows) comes back null and is ACCEPTED, which
+     *    is the case that matters: `ringtone_sim2` reads as null on a device that
+     *    has never had a per-SIM tone set.
+     */
+    private fun discoverRingtoneKeys(): List<String> =
+        try {
+            contentResolver.query(
+                Settings.System.CONTENT_URI,
+                arrayOf(Settings.NameValueTable.NAME, Settings.NameValueTable.VALUE),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                val found = mutableListOf<String>()
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(0) ?: continue
+                    val current = if (cursor.columnCount > 1) cursor.getString(1) else null
+                    if (isRingtoneSlotRow(name, current)) found += name
+                }
+                found
+            } ?: emptyList()
+        } catch (e: Exception) {
+            // Provider not enumerable on this skin - fall back to the known names.
+            Log.w(TAG, "Settings.System enumeration unavailable (non-critical)", e)
+            emptyList()
+        }
+
+    private fun isRingtoneSlotRow(name: String, currentValue: String?): Boolean {
+        val n = name.lowercase()
+        if (!n.contains("ringtone") || n == "ringtone") return false
+        if (n.contains("_set") || n.contains("cache")) return false
+        if (n.contains("vibrat") || n.contains("volume") || n.contains("silent")) return false
+        val v = currentValue?.trim()
+        return v.isNullOrEmpty() || v.startsWith("content://") || v.startsWith("file://")
+    }
+
+    /** Fallback path: probe the names we already know, for an unenumerable skin. */
+    private fun declaredFallbackRingtoneKeys(): List<String> =
+        fallbackPerSimRingtoneKeys
+            .filter { (key, marker) -> isDeclaredSetting(key) || isDeclaredSetting(marker) }
+            .map { it.first }
+
+    /**
+     * Whether THIS device's framework declares [key] as a setting - the guard that
+     * keeps a skin without per-SIM ringtones from gaining junk rows.
+     *
+     * Two ways to be true, and the second is the one that carries the weight.
+     * Android 12+ refuses to let an ordinary app READ a declared-but-`@hide`
+     * setting and throws `SecurityException: Settings key: <x> is not readable`,
+     * while a name the framework does not declare at all is unrestricted and just
+     * reads back null. Confirmed on the attached Nothing device: `ringtone_sim2`
+     * throws (it exists, OEM-private) and `ringtone_sim1` returns null (no such
+     * setting). So the throw IS the presence signal, not a failure - an earlier
+     * version treated it as one and skipped the only key that mattered. Writing
+     * is unaffected by the read restriction; WRITE_SETTINGS still governs it.
+     */
+    private fun isDeclaredSetting(key: String): Boolean =
+        try {
+            Settings.System.getString(contentResolver, key) != null
+        } catch (e: SecurityException) {
+            true
+        } catch (e: Exception) {
+            false
+        }
 }

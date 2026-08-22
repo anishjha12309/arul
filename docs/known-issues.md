@@ -21,7 +21,66 @@ close a line by deleting it.
   but if it is ever removed or narrowed, fix with an S3 CopyObject metadata rewrite
   (`MetadataDirective=REPLACE`, server-side) AND add the header to the presign, or it recurs.
 
+- **Four shipped surfaces are hardcoded English and never read `AppLocalizations`** — a Tamil user
+  sees English on them. `sign_in_screen.dart` and `apply_sheet.dart` contain ZERO `l10n.` references
+  (the first screen of the app: "Continue with Google", "Choose an account to get started", "Terms",
+  "Privacy"; the apply sheet: "Apply wallpaper" and its three targets), and `FeedEmpty`
+  (`feed_states.dart`) hardcodes its title, body and "Browse all". Translations for all of them are
+  already sitting unused in the six ARBs (`signInHeadline`/`signInBody`/`signInGoogle`/`signInTerms`,
+  `applyTarget*`, `feedEmptyTitle`/`feedEmptyBody`); "Browse all" has no key at all. The l10n matrix
+  pins this rather than hiding it: those registry entries carry `unlocalizedEnglish: true`, which
+  ASSERTS the screen attributes keys in `en` and none in the other five — localize a screen and the
+  assertion fails, which is the signal to delete the flag in the same change.
+  The fourth is LATENT, so it carries no flag: the wallpaper feed's All chip is the literal
+  `_kAllLabel = 'All'` in `feed_states.dart` while the ringtones tab's reads `l10n.categoryAll`.
+  The two agree today only because `categoryAll` is demoted (English everywhere); restore its
+  translations and the same chip localizes on one tab and not the other.
+- **Four English-baseline layout defects the l10n matrix records and cannot fix by demotion** (a slot
+  too small for English is too small for every language). All four are inside the gating envelope
+  (320dp/360dp × text scale 1.0/1.3); re-run `flutter test test/l10n/` to see them, and
+  `test/l10n/support/english_baseline.g.dart` is the generated subtraction set that keeps the suite
+  green on them: the sign-in Google pill ellipsizes "Continue with Google" at 320dp even at scale 1.0
+  (needs 149px in 140px) and by 52px at 1.3 · the language sheet overflows the screen bottom at every
+  gating configuration (7.5–28px) AND at 411dp/1.3 by 8px — that last one is a modern phone at
+  accessibility text size, not a narrow one, and it was invisible until an on-device sweep found it
+  and `411x891@1.3-sweep` was added to the envelope · the upload screen overflows 29px to the right at 320dp/1.3 · the
+  Refer CTA truncates "Share via WhatsApp" at 320dp/1.3. The profile row's email ellipsis is designed,
+  not a defect.
+
+- **The portrait lock does not hold on Android 16 — the same leak Pakiza just closed.**
+  `screenOrientation="portrait"` is SILENTLY IGNORED at targetSdk 36: platform_compat
+  `UNIVERSAL_RESIZABLE_BY_DEFAULT` (357141415, `enableSinceTargetSdk=36`) makes every activity
+  resizable and free to rotate. Google documents it as large-screens-only (sw>=600dp); **it is not**
+  — reproduced on a Nothing A001, **sw411dp**, Android 16 (2026-08-22, against Pakiza): auto-rotate
+  off + `adb shell settings put system user_rotation 1` put MainActivity's own window at
+  `Requested w=2392 h=1080`, config `land`. Arul's manifest is in the identical state, so it rotates
+  too — nobody has looked. **Fix, verified on device in Pakiza:** `android:resizeableActivity="false"`
+  on MainActivity AND the `<application>` property `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`
+  = `"true"`. The property is what actually holds; the attributes alone do not, and the platform drops
+  the opt-out at API 37. Reproduce with the adb line above, then port. (Recorded from Pakiza's
+  overnight run; Arul's code untouched — it gets its own session.)
+
 ## Traps already paid for
+
+- **A wallpaper engine surface gets NO aspect handling for free** — FIXED 2026-08-21, both repos
+  ([edge-cases.md](edge-cases.md) §Wallpaper apply). Media3 documents `setVideoScalingMode` as
+  `SurfaceView`-only; on an engine surface it works ANYWAY, and `dumpsys SurfaceFlinger` still shows
+  the pre-fix `x=1.0547 y=1.3114` — only a screenshot correlated against both renders proves it.
+- **Per-SIM ringtone keys must be ENUMERATED, not guessed** — FIXED 2026-08-21, both repos
+  ([edge-cases.md](edge-cases.md) §Ringtones). In the fallback probe: Android 12+ throws on a key the
+  framework declares `@hide` and returns null for one it does not — the throw is the POSITIVE signal.
+- **The static apply path does NOT distort — verified 2026-08-21 on device; stop re-deriving it.** The
+  OEM zoom-crops UNIFORMLY (sx 1.3707–1.3711 vs sy 1.3702–1.3707), past the 1.246 minimum cover.
+- **`FlutterError.onError` must WRAP Crashlytics, never replace it** — FIXED 2026-08-21 in both
+  repos; do not regress it. Assigning `FlutterError.onError = FirebaseCrashlytics.instance
+  .recordFlutterFatalError` directly drops `FlutterError.presentError`, so nothing is printed: a
+  `RenderFlex overflowed by N pixels` still paints its banner on screen but produces ZERO logcat
+  output, and the widget-tree dump that normally names the offending widget is gone too. A device
+  sweep that harvested logcat therefore reported zero overflows across every locale and
+  configuration while the screenshots plainly showed the banner — a false clean bill of health.
+  `main.dart` now calls `presentError(details)` before forwarding; Crashlytics still receives
+  everything. `tools/l10n/scan_overflow_banner.py` reads the pixels regardless, which is what
+  makes it trustworthy when a handler is misconfigured.
 
 - **Media3 ≥ 1.8.0 cannot run Transformer below API 31, and it kills the PROCESS, not the call.**
   `ExoPlayerAssetLoader.Factory` holds unguarded `android.media.metrics.LogSessionId` (API 31)

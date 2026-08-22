@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+38
+version: 1.0.0+39
 
 environment:
   sdk: ^3.12.0
@@ -93,6 +93,13 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # Layer 2 of the l10n overflow audit ONLY (integration_test/). It runs the
+  # same registry as test/l10n/ on a real Android device, where the fonts and
+  # the platform font resolution are the device's own rather than the harness's
+  # — the two layers must agree, and a disagreement is a harness fidelity bug.
+  # Test-only: nothing under lib/ imports it, so it never ships.
+  integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_native_splash: ^2.4.8

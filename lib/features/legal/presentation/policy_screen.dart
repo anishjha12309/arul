@@ -10,28 +10,34 @@ import '../../../app/widgets/state_views.dart';
 import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The two legal documents the app links to, and where each one lives.
+/// The three legal documents the app links to, and where each one lives.
 ///
 /// The URLs stay in [AppConfig] — they are the SAME pages the Play listing
 /// names, and a second copy is how one of them goes stale.
 enum PolicyDoc {
   privacy,
-  terms;
+  terms,
+  refund;
 
   /// Route slug → doc. Anything unrecognised resolves to [privacy] rather than
   /// throwing: a bad deep link must land on a real policy, not a crash.
-  static PolicyDoc fromSlug(String? slug) =>
-      slug == 'terms' ? PolicyDoc.terms : PolicyDoc.privacy;
+  static PolicyDoc fromSlug(String? slug) => switch (slug) {
+    'terms' => PolicyDoc.terms,
+    'refund' => PolicyDoc.refund,
+    _ => PolicyDoc.privacy,
+  };
 
   String get url => switch (this) {
     PolicyDoc.privacy => AppConfig.privacyUrl,
     PolicyDoc.terms => AppConfig.termsUrl,
+    PolicyDoc.refund => AppConfig.refundUrl,
   };
 
   /// The push target. Call sites use this instead of spelling paths.
   String get route => switch (this) {
     PolicyDoc.privacy => '/policy/privacy',
     PolicyDoc.terms => '/policy/terms',
+    PolicyDoc.refund => '/policy/refund',
   };
 
   /// Reuses the Settings row labels — already translated in all 6 locales, and
@@ -39,10 +45,11 @@ enum PolicyDoc {
   String title(AppLocalizations l10n) => switch (this) {
     PolicyDoc.privacy => l10n.settingsPrivacy,
     PolicyDoc.terms => l10n.settingsTerms,
+    PolicyDoc.refund => l10n.settingsRefund,
   };
 }
 
-/// Privacy Policy / Terms & Conditions, read INSIDE the app.
+/// Privacy Policy / Terms & Conditions / Refund Policy, read INSIDE the app.
 ///
 /// These used to open with `LaunchMode.externalApplication`, which threw the
 /// user out into Chrome with no way back except the system back stack. The
@@ -50,10 +57,15 @@ enum PolicyDoc {
 /// app and carry a back button that returns to it — so this is an app screen
 /// with the standard sub-screen header, and the web page is only the body.
 ///
-/// The document stays REMOTE rather than bundled: privacy and terms are shared
-/// with Pakiza and served from one company page, and a copy compiled into the
-/// app would freeze at whatever the last release shipped. The cost is that this
-/// screen needs the network, which is why it has a real offline state.
+/// The document stays REMOTE rather than bundled: a copy compiled into the app
+/// would freeze at whatever the last release shipped, and a legal page that is
+/// months out of date is worse than one that needs a connection. The cost is that
+/// this screen needs the network, which is why it has a real offline state.
+///
+/// Since 2026-08-20 these are this app's OWN pages, not a pair shared with
+/// Pakiza. Each app has a self-contained set on the site — privacy, terms,
+/// refund and account deletion — and they link only to each other, so following a
+/// link in here cannot land the reader on the other app.
 ///
 /// What keeps it from reading as "a website in a box":
 ///  * the site's own navbar, mobile menu and footer are suppressed, so there is
@@ -97,6 +109,7 @@ class _PolicyScreenState extends State<PolicyScreen> {
   static final Set<String> _ownHosts = {
     Uri.parse(AppConfig.privacyUrl).host,
     Uri.parse(AppConfig.termsUrl).host,
+    Uri.parse(AppConfig.refundUrl).host,
   }..removeWhere((h) => h.isEmpty);
 
   @override
