@@ -30,17 +30,21 @@ void main() {
     );
     final geo = FeedCardGeometry.solve(screen: screen, reelHeight: reel);
 
-    test('the card is 369 x 672, at ~1:1.82', () {
-      expect(geo.size.width, closeTo(368.7, 0.5));
-      expect(geo.size.height, closeTo(671.7, 1));
+    test('the card is 373 x 682, at ~1:1.83', () {
+      // By hand: width = 392.7 − 2·10 = 372.7. The reel is 872.7 − 24 − 16 −
+      // 107 = 725.7; the requested 372.7 × 1.86 = 693.2 does not fit even with
+      // the peek squeezed to 30, so height = 725.7 − 14 − 30 = 681.7.
+      expect(geo.size.width, closeTo(372.7, 0.5));
+      expect(geo.size.height, closeTo(681.7, 1));
       // NOT cardAspect: the card asks for 1.86 and the reel cannot grant it, so
-      // the realised shape is a touch squarer. See the height clamp below.
-      expect(geo.size.height / geo.size.width, closeTo(1.82, 0.01));
+      // the realised shape is a touch squarer (681.7 / 372.7 = 1.829). See the
+      // height clamp below.
+      expect(geo.size.height / geo.size.width, closeTo(1.83, 0.01));
     });
 
-    test('gutters are 12 and there is no vertical margin', () {
-      expect(geo.margin.left, 12);
-      expect(geo.margin.right, 12);
+    test('gutters are 10 and there is no vertical margin', () {
+      expect(geo.margin.left, 10);
+      expect(geo.margin.right, 10);
       // The gap belongs to the page, not the card.
       expect(geo.margin.top, 0);
       expect(geo.margin.bottom, 0);
@@ -100,7 +104,7 @@ void main() {
   group('the crop is understood, not accidental', () {
     const source = 16 / 9; // 1.778
 
-    test('the REALISED card trims ~2.4% off the SIDES, nothing off the top', () {
+    test('the REALISED card trims ~2.8% off the SIDES, nothing off the top', () {
       // Taller than the source: cover matches HEIGHT and overflows width, so the
       // loss is horizontal — the cheap direction. Crowns and feet survive.
       //
@@ -113,7 +117,8 @@ void main() {
       );
       final aspect = geo.size.height / geo.size.width;
       expect(aspect, greaterThan(source));
-      expect(1 - source / aspect, closeTo(0.024, 0.005));
+      // By hand: 1 − 1.7778 / 1.829 = 0.028.
+      expect(1 - source / aspect, closeTo(0.028, 0.005));
     });
 
     test('the card still ASKS for a taller-than-source shape', () {
@@ -165,7 +170,8 @@ void main() {
 
     test('a small screen ends up SQUARER than 9:16 — which is why the '
         'upward crop bias is kept', () {
-      // The card cannot hold 1.86 in a 493dp reel, so it shortens to ~1.31 and
+      // The card cannot hold 1.86 in a 493dp reel, so it shortens to ~1.32
+      // (by hand: height 493 − 14 − 30 = 449 over width 360 − 20 = 340) and
       // the crop flips to top/bottom. ViewerMedia.cropAlignment's y-bias is
       // dormant on a normal phone but live here, and removing it as "unused"
       // would silently start taking crowns off on exactly the budget devices
@@ -173,7 +179,7 @@ void main() {
       final geo = FeedCardGeometry.solve(screen: small, reelHeight: smallReel);
       final aspect = geo.size.height / geo.size.width;
       expect(aspect, lessThan(16 / 9));
-      expect(aspect, closeTo(1.31, 0.05));
+      expect(aspect, closeTo(1.32, 0.05));
     });
   });
 

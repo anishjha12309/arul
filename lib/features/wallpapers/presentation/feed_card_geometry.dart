@@ -6,24 +6,24 @@ import 'package:flutter/widgets.dart';
 /// that.
 ///
 /// **A tall card on tight gutters, filling the reel** (owner's call, chosen from
-/// rendered mockups, 2026-07-30; enlarged 2026-08-11): 12dp gutters and a 1:1.86
-/// card, which on a 1080×2400 phone resolves to **369×672** with a 40dp peek and
-/// no floor at all.
+/// rendered mockups, 2026-07-30; enlarged 2026-08-11, and again 2026-08-22): 10dp
+/// gutters and a 1:1.86 card, which on a 1080×2400 phone resolves to
+/// **373×682** with a 30dp peek and no floor at all.
 ///
 /// The whole reel height is spoken for — `card + gap + peek + floor` — so the
 /// card can only grow if one of the other three gives way. At this shape it
 /// consumes everything: the floor is zero and the peek is squeezed all the way
 /// to [minPeek], which is exactly what the clamps in [solve] exist to do. That
 /// also means the card is HEIGHT-CLAMPED on an ordinary phone: [cardAspect] is
-/// the aspect it asks for, and the reel gives it ~1.82 instead. Widening it
+/// the aspect it asks for, and the reel gives it ~1.83 instead. Widening it
 /// further (a smaller [gutter]) therefore buys width only, and each dp of extra
 /// width flattens the realised aspect toward the 1.78 boundary below.
 ///
 /// ## The crop, stated plainly
 ///
-/// The catalog is 9:16 (1024×1824, ratio 1:1.78). At the realised ~1:1.82 the
+/// The catalog is 9:16 (1024×1824, ratio 1:1.78). At the realised ~1:1.83 the
 /// card is still slightly TALLER than the artwork, so `BoxFit.cover` matches the
-/// height and overflows the width: about **2.4% is trimmed off the left and
+/// height and overflows the width: about **2.8% is trimmed off the left and
 /// right edges**, and nothing at all off the top or bottom. That is the cheap
 /// direction — the margins of a devotional composition, never the crown or the
 /// feet.
@@ -90,12 +90,13 @@ class FeedCardGeometry {
   /// Side gutters. Tight — the artwork carries the screen, and the frame is a
   /// hairline of breathing room rather than a mount.
   ///
-  /// **This is the WIDTH knob** (owner's call, 2026-08-11: 20 → 12). Because the
-  /// card is height-clamped by the reel, dropping the gutter is the only way to
-  /// make it bigger, and it flattens the realised aspect as it goes. 12 lands at
-  /// ~1.82, still clear of the 1.78 boundary; below ~8 it crosses it and the crop
-  /// flips to top/bottom, which is the expensive direction.
-  static const gutter = 12.0;
+  /// **This is the WIDTH knob** (owner's call, 2026-08-11: 20 → 12; 2026-08-22:
+  /// 12 → 10, "taller first, wider second"). Because the card is height-clamped
+  /// by the reel, dropping the gutter is the only way to make it wider, and it
+  /// flattens the realised aspect as it goes. 10 lands at ~1.83 (with [minPeek]
+  /// 30), still clear of the 1.78 boundary; below ~8 it crosses it and the crop
+  /// flips to top/bottom, which is the expensive direction. 10 is the floor.
+  static const gutter = 10.0;
 
   /// Card height ÷ width — the aspect the card ASKS for. **The one number that
   /// controls the crop's direction** — see the class doc. 1.78 is exactly
@@ -135,11 +136,12 @@ class FeedCardGeometry {
   /// The peek will be squeezed to here before the CARD gives up any height — a
   /// reel with no peek at all loses its only static cue that it scrolls.
   ///
-  /// **This is the HEIGHT knob** (owner's call, 2026-08-11: 44 → 40). Every dp
-  /// taken off it goes straight into the card on a normal phone, where the peek
-  /// is already pinned here. Do not take it to zero: the sliver of the next
-  /// wallpaper is the whole reason the reel reads as scrollable at rest.
-  static const minPeek = 40.0;
+  /// **This is the HEIGHT knob** (owner's call, 2026-08-11: 44 → 40; 2026-08-22:
+  /// 40 → 30). Every dp taken off it goes straight into the card on a normal
+  /// phone, where the peek is already pinned here. Do not take it to zero: the
+  /// sliver of the next wallpaper is the whole reason the reel reads as
+  /// scrollable at rest.
+  static const minPeek = 30.0;
 
   /// The extent of one page: the card plus the gap that follows it. With
   /// `padEnds: false` this is what the pager's `viewportFraction` resolves to,
