@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
@@ -23,6 +24,10 @@ AuthService authService(Ref ref) => ApiAuthService(
   analytics: ref.watch(analyticsServiceProvider),
   crash: ref.watch(crashReporterProvider),
   installReferrer: ref.watch(installReferrerServiceProvider),
+  // Resolved in main() before runApp, so it is settled by the time this
+  // provider is first read (splash initState). Lets the stored-session seed
+  // skip the fresh-install keystore wait — see _seedInitialState.
+  freshInstall: AnalyticsCohort.isFreshInstall,
 );
 
 // ─── Auth state stream ────────────────────────────────────────────────────────
@@ -108,14 +113,32 @@ class AuthController extends _$AuthController {
   /// later, device 2026-08-18) — which froze the pill's spinner forever and,
   /// since the busy pill ignores taps, bricked sign-in for the whole process.
   /// The guard frees the UI, but only when THREE things are true: the stall
-  /// budget is spent, the app is RESUMED (a sheet on top or a backgrounding
-  /// makes us inactive/paused/hidden — the user may be mid-flow, so extend,
-  /// never abandon), and the attempt is still the current one. Abandoning
-  /// tells the service to discard the zombie's eventual result, tracks the
-  /// stall, and surfaces the standard failure toast + retry pill.
+  /// budget is spent, the app has been RESUMED for a full budget (a sheet on
+  /// top or a backgrounding makes us inactive/paused/hidden — the user may be
+  /// mid-flow, so extend, never abandon), and the attempt is still the
+  /// current one. Abandoning tells the service to discard the zombie's
+  /// eventual result, tracks the stall, and surfaces the standard failure
+  /// toast + retry pill.
+  ///
+  /// The budget clock RESTARTS every time the app comes back to the
+  /// foreground after a mid-flow stretch. Measuring from the attempt's start
+  /// instead lost a real sign-in on device (2026-08-22): the user sat in the
+  /// account sheet past the 30s budget, picked an account, and the 5s
+  /// recheck window expired 20ms before the token exchange finished — now
+  /// resumed, the guard abandoned a HEALTHY attempt whose tokens were
+  /// already being written. The service had passed its zombie check, so the
+  /// session landed (`login_success` fired, relaunch routed to the feed)
+  /// while the screen showed "taking too long" + retry pill — a signed-in
+  /// user stranded on sign-in, one pill tap away from a second picker over
+  /// a live session. Post-sheet exchange is PROGRESS, not a stall; the
+  /// lost-callback pathology this guard exists for is an attempt that sits
+  /// dead through a full budget of CONTINUOUS foreground.
   Future<AuthResult> _guard(Future<AuthResult> raw, DateTime started) async {
+    // Start of the current continuous-foreground stretch.
+    var sinceForeground = started;
+    var wasMidFlow = false;
     while (true) {
-      final budget = stallLimit - DateTime.now().difference(started);
+      final budget = stallLimit - DateTime.now().difference(sinceForeground);
       if (budget > Duration.zero) {
         try {
           return await raw.timeout(budget);
@@ -129,13 +152,23 @@ class AuthController extends _$AuthController {
           lifecycle == AppLifecycleState.paused ||
           lifecycle == AppLifecycleState.hidden;
       if (maybeMidFlow) {
+        wasMidFlow = true;
         try {
           return await raw.timeout(stallRecheck);
         } on TimeoutException {
           continue;
         }
       }
-      // Foreground, spinner up, nothing happening: the callback is lost.
+      if (wasMidFlow) {
+        // Just back from the sheet / background: give the attempt a fresh
+        // foreground budget (see the class doc above — the token exchange
+        // is usually still in flight right here).
+        wasMidFlow = false;
+        sinceForeground = DateTime.now();
+        continue;
+      }
+      // Foreground throughout, spinner up, nothing happening: the callback
+      // is lost.
       ref.read(authServiceProvider).abandonPendingSignIn();
       ref
           .read(analyticsServiceProvider)
@@ -150,6 +183,23 @@ class AuthController extends _$AuthController {
     }
   }
 
+  /// A failure from the auto-launched attempt, held until a screen can show
+  /// it. The splash fires [autoSignIn] fire-and-forget, so an attempt that
+  /// fails FAST — `supportsAuthenticate()` false, Play Services misconfigured
+  /// — settles while the brand beat still holds the splash, and by the time
+  /// the sign-in screen mounts and joins, the attempt is spent and its result
+  /// gone: an error the user never saw, which is exactly the "silent bounce"
+  /// the edge-case contract forbids. The screen collects this on its first
+  /// frame; consumed on read so it can never re-toast.
+  AuthFailure? _pendingAutoFailure;
+
+  /// Returns the not-yet-surfaced auto-attempt failure, if any, and clears it.
+  AuthFailure? takePendingAutoFailure() {
+    final failure = _pendingAutoFailure;
+    _pendingAutoFailure = null;
+    return failure;
+  }
+
   /// The automatic sign-in, fired ONCE per process by whichever screen gets
   /// there first — the splash the moment it knows there is no stored session,
   /// or the sign-in screen's first frame if the splash did not.
@@ -161,7 +211,16 @@ class AuthController extends _$AuthController {
   Future<AuthResult>? autoSignIn(AuthProvider provider) {
     if (_autoLaunched) return _inFlight;
     _autoLaunched = true;
-    return signIn(provider);
+    final attempt = signIn(provider);
+    // Record a failure in case it settles before any screen joins; a screen
+    // that DID join clears it after showing the toast itself. The service
+    // never throws (every path returns a result), so no error continuation.
+    unawaited(
+      attempt.then((result) {
+        if (result is AuthFailure) _pendingAutoFailure = result;
+      }),
+    );
+    return attempt;
   }
 
   Future<void> updateDisplayName(String name) =>

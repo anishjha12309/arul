@@ -18,11 +18,11 @@ import 'widgets/video_background.dart';
 
 /// Sign-in.
 ///
-/// It does NOT block the app. Browse and preview are free, so making a
-/// wallpaper app demand an account before it will show you a single wallpaper
-/// is a good way to be uninstalled. Sign-in exists for the things that
-/// genuinely need identity — entitlement, uploads, a collection that survives
-/// a new phone — and the user reaches it when they reach for one of those.
+/// This IS a wall, deliberately (owner's call, confirmed 2026-08-23): every
+/// signed-out session lands here from the splash and there is no skip
+/// affordance. Browse/preview being free (CLAUDE.md §5) is about the MEDIA
+/// gate — public keys, no entitlement needed — not about reaching the feed
+/// without an account.
 ///
 /// PHASE CONTRACT — do not redesign this away: the real screen AUTO-LAUNCHES
 /// the FULL Google `authenticate()` on its first frame (google_sign_in v7:
@@ -96,8 +96,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final pending = auto
         ? notifier.autoSignIn(AuthProvider.google)
         : notifier.signIn(AuthProvider.google);
-    // Auto-launch already spent: leave the pill as the retry affordance.
-    if (pending == null) return;
+    // Auto-launch already spent. If it failed while still on the splash (a
+    // fast failure settles under the brand beat, with nothing awaiting it),
+    // surface it NOW — the contract is a message + retry, never a silent
+    // bounce. A cancel stays quiet as always; either way the pill remains.
+    if (pending == null) {
+      final missed = notifier.takePendingAutoFailure();
+      if (missed != null && mounted) {
+        showArulToast(context, missed.message, kind: ToastKind.error);
+      }
+      return;
+    }
 
     setState(() => _signingIn = true);
     try {
@@ -112,6 +121,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           // Localized-enough surface + retry (the pill), never a stuck spinner.
           showArulToast(context, message, kind: ToastKind.error);
       }
+      // This screen just handled the result live — drop the recorded copy so
+      // a later mount can't replay a failure the user already saw.
+      notifier.takePendingAutoFailure();
     } finally {
       if (mounted) setState(() => _signingIn = false);
     }

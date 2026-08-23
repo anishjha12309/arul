@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
+import '../perf/boot_trace.dart';
 
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
@@ -122,11 +123,13 @@ class ApiClient {
   /// cache warm: it reads nothing anyone consumes and swallows every failure,
   /// so the worst case is the old timing, never a wrong answer.
   static Future<void> warmSecureStorage() async {
+    BootTrace.mark('secureStorage warm: start');
     try {
       await const FlutterSecureStorage().read(key: _kAccessTokenKey);
     } catch (_) {
       // Keystore unavailable / locked user: the real read will surface it.
     }
+    BootTrace.mark('secureStorage warm: done');
   }
 
   /// The route [warmUp] pokes: an EXISTING public one (Digital Asset Links)

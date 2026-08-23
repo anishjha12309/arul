@@ -87,65 +87,48 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   try {
     // 2. Upsert user row keyed on google_sub
     //    On first login: generate referral code + insert.
-    //    On subsequent logins: update display_name.
-    //    Uses a CTE to handle the "generate referral code" logic cleanly.
+    //    On subsequent logins: sync email/display_name in place.
     let userId: string;
     let displayName: string | null;
     let referralCode: string;
 
-    const existing = await sql`
-      SELECT id, display_name, display_name_custom, referral_code
-      FROM users
+    // Returning user — the common case — is ONE statement, not SELECT-then-
+    // UPDATE: the login round trip sits between the account picker and the
+    // feed, so every sequential Neon query here is user-visible latency
+    // (774 ms client-observed, device 2026-08-22).
+    //
+    // email always syncs from Google. display_name only syncs while the user
+    // hasn't customised it in-app — once they edit, their name wins
+    // permanently (display_name_custom = true); a Google token without a
+    // `name` claim keeps the stored one rather than blanking it.
+    // COALESCE so a build that doesn't send the id can never blank a stored
+    // one. ::text casts — fetch_types:false (Hyperdrive) gives Postgres no
+    // context to infer a bare parameter's type inside COALESCE.
+    const updated = await sql`
+      UPDATE users
+      SET display_name = CASE WHEN display_name_custom
+                              THEN display_name
+                              ELSE COALESCE(${googleClaims.name ?? null}::text, display_name) END,
+          email        = ${googleClaims.email},
+          app_instance_id = COALESCE(${appInstanceId}::text, app_instance_id)
       WHERE google_sub = ${googleClaims.sub}
-      LIMIT 1
+      RETURNING id, display_name, referral_code
     `;
 
-    if (existing.length > 0) {
-      const row = existing[0];
-      const isCustom = row.display_name_custom === true;
-      // email always syncs from Google. display_name only syncs while the user
-      // hasn't customised it in-app — once they edit, their name wins
-      // permanently (display_name_custom = true).
-      // COALESCE so a build that doesn't send the id can never blank a stored
-      // one. ::text casts — fetch_types:false (Hyperdrive) gives Postgres no
-      // context to infer a bare parameter's type inside COALESCE.
-      await sql`
-        UPDATE users
-        SET display_name = CASE WHEN ${isCustom}
-                                THEN display_name
-                                ELSE ${googleClaims.name ?? null} END,
-            email        = ${googleClaims.email},
-            app_instance_id = COALESCE(${appInstanceId}::text, app_instance_id)
-        WHERE id = ${row.id as string}
-      `;
+    if (updated.length > 0) {
+      const row = updated[0];
       userId = row.id as string;
-      displayName = isCustom
-        ? (row.display_name as string | null)
-        : (googleClaims.name ?? (row.display_name as string | null));
+      displayName = row.display_name as string | null;
       referralCode = row.referral_code as string;
     } else {
-      // New user — generate a unique referral code
-      referralCode = generateReferralCode();
-
-      // Attempt insert; on referral_code collision retry once with a new code
-      let inserted;
-      try {
-        inserted = await sql`
-          INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id)
-          VALUES (
-            ${googleClaims.sub},
-            ${googleClaims.email},
-            ${googleClaims.name ?? null},
-            ${referralCode},
-            ${appInstanceId}::text
-          )
-          RETURNING id, display_name, referral_code
-        `;
-      } catch (insertErr: unknown) {
-        // unique_violation on referral_code — retry with a fresh code
-        if (isUniqueViolation(insertErr)) {
-          referralCode = generateReferralCode();
-          inserted = await sql`
+      // New user — generate a unique referral code, then insert; on a
+      // referral_code collision retry once with a fresh code.
+      const insertUser = async (): Promise<
+        Array<Record<string, unknown>>
+      > => {
+        referralCode = generateReferralCode();
+        try {
+          return await sql`
             INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id)
             VALUES (
               ${googleClaims.sub},
@@ -156,15 +139,22 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
             )
             RETURNING id, display_name, referral_code
           `;
-        } else {
-          throw insertErr;
+        } catch (insertErr: unknown) {
+          if (!isUniqueViolation(insertErr)) throw insertErr;
+          referralCode = generateReferralCode();
+          return await sql`
+            INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id)
+            VALUES (
+              ${googleClaims.sub},
+              ${googleClaims.email},
+              ${googleClaims.name ?? null},
+              ${referralCode},
+              ${appInstanceId}::text
+            )
+            RETURNING id, display_name, referral_code
+          `;
         }
-      }
-
-      const row = inserted[0];
-      userId = row.id as string;
-      displayName = row.display_name as string | null;
-      referralCode = row.referral_code as string;
+      };
 
       // One-trial guard across deletions: if this Google account previously
       // deleted an Arul account AFTER consuming its free trial, DELETE /me
@@ -172,15 +162,35 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       // subscriptions row so /payments/initiate routes them to the paid ₹199
       // setup instead of a fresh trial. Deliberately NOT best-effort — a
       // failure here must fail the login, or the guard could be raced.
-      const tombHash = await hashGoogleSub(
-        googleClaims.sub,
-        env.TRIAL_TOMBSTONE_SECRET,
-      );
-      const tomb = await sql`
-        SELECT trial_end FROM trial_tombstones
-        WHERE google_sub_hash = ${tombHash}
-        LIMIT 1
-      `;
+      //
+      // The lookup keys on google_sub alone, so it runs CONCURRENTLY with the
+      // insert instead of after it — this is every genuinely-new user's FIRST
+      // login, the most latency-sensitive request in the funnel, and the two
+      // queries are independent. Promise.all keeps the fail-closed property:
+      // either failing still fails the login.
+      const lookupTombstone = async (): Promise<
+        Array<Record<string, unknown>>
+      > => {
+        const tombHash = await hashGoogleSub(
+          googleClaims.sub,
+          env.TRIAL_TOMBSTONE_SECRET,
+        );
+        return await sql`
+          SELECT trial_end FROM trial_tombstones
+          WHERE google_sub_hash = ${tombHash}
+          LIMIT 1
+        `;
+      };
+
+      const [inserted, tomb] = await Promise.all([
+        insertUser(),
+        lookupTombstone(),
+      ]);
+
+      const row = inserted[0];
+      userId = row.id as string;
+      displayName = row.display_name as string | null;
+      referralCode = row.referral_code as string;
       if (tomb.length > 0) {
         await sql`
           INSERT INTO subscriptions (user_id, status, trial_end)

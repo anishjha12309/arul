@@ -39,6 +39,8 @@ import 'features/referral/data/install_referrer_service.dart';
 Future<void> main() async {
   BootTrace.mark('main() entry');
   if (!AppConfig.firebaseEnabled) {
+    WidgetsFlutterBinding.ensureInitialized();
+    unawaited(ApiClient.warmSecureStorage());
     await _startApp();
     return;
   }
@@ -49,15 +51,29 @@ Future<void> main() async {
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      // Encrypted-storage channel + keystore init, fired BEFORE Firebase so the
+      // two overlap. On a fresh install this is the longest pole on the path to
+      // the account picker (the stored-session check gates `authenticate()`,
+      // and its first read pays the keystore master-key setup); starting it
+      // after Firebase serialised the two costs (boot trace, 2026-08-22).
+      // Fire-and-forget; see ApiClient.warmSecureStorage.
+      unawaited(ApiClient.warmSecureStorage());
       await Firebase.initializeApp();
-      await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
-      await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+      BootTrace.mark('firebase core initialized');
+      // The three collection toggles are independent platform-channel calls —
+      // run them concurrently, not serially.
+      //
       // GA4 analytics — the product-analytics mirror of PostHog AND the
       // conversion source for Google Ads (link the Firebase project ↔ Google
       // Ads account in the console; no code). Events are sent via
-      // GoogleAnalyticsService behind the AnalyticsService seam. Enabling here
-      // (not per-event) also turns on auto-collected first_open/screen_view.
-      await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+      // GoogleAnalyticsService behind the AnalyticsService seam. Enabling
+      // collection (not per-event) also turns on auto-collected
+      // first_open/screen_view.
+      await Future.wait([
+        FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
+        FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
+        FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true),
+      ]);
       BootTrace.mark('firebase init done');
 
       // WRAP, don't replace. Assigning `recordFlutterFatalError` straight to
@@ -153,12 +169,8 @@ Future<void> _startApp() async {
 
   // Resolved before runApp: the wallpaper-apply flow persists its restore flags
   // on the path to a native call that can recreate the Activity, and there is no
-  // room there to await a prefs handle.
-  // Encrypted-storage channel + keystore init, started here so the stored-
-  // session check — which gates how early sign-in can launch — is not paying
-  // for it. Fire-and-forget; see ApiClient.warmSecureStorage.
-  unawaited(ApiClient.warmSecureStorage());
-
+  // room there to await a prefs handle. (The secure-storage warm-up fires even
+  // earlier — top of main(), before Firebase — see the comment there.)
   BootTrace.mark('SharedPreferences start');
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');

@@ -26,6 +26,7 @@ class ApiAuthService implements AuthService {
     required this._analytics,
     required this._crash,
     InstallReferrerService? installReferrer,
+    this._freshInstall = false,
   }) : _api = apiClient,
        _referral = installReferrer {
     // Seed the stream with the current persisted state. `_initialized`
@@ -44,6 +45,10 @@ class ApiAuthService implements AuthService {
   final ApiClient _api;
   final AnalyticsService _analytics;
   final CrashReporter _crash;
+
+  /// True only on the very first launch of this install (the persisted cohort
+  /// draw was created this process — see AnalyticsCohort.isFreshInstall).
+  final bool _freshInstall;
 
   /// Optional — supplies a pending referral code (Play Install Referrer) to
   /// attach to the FIRST login so the Worker can attribute the install.
@@ -72,7 +77,29 @@ class ApiAuthService implements AuthService {
   /// multi-second splash-then-network wait. Browse/preview is public, so it's
   /// safe to show before `/me` confirms; entitlement is always re-checked live.
   Future<void> _seedInitialState() async {
+    // A true first launch cannot have a stored session: tokens live in the
+    // app's own data dir, created and destroyed with it, and allowBackup is
+    // false so no restore can resurrect them into a fresh install. Skipping
+    // the secure-storage read here matters because an install's FIRST read
+    // pays the keystore master-key setup — ~970ms measured (profile build,
+    // fresh install, 2026-08-22) — and after everything else was overlapped
+    // it was the last thing gating the account picker, on exactly the launch
+    // the install→login funnel lives or dies on. The freshness signal is the
+    // persisted cohort draw (AnalyticsCohort.isFreshInstall): the app's one
+    // durable first-launch marker, present on every install that ever
+    // launched, and false in any process that never ran resolve() — which
+    // degrades to the keystore wait below, never to a wrong verdict. The
+    // warm-up fired from main() still initialises the keystore in the
+    // background, so the post-login token WRITE finds it ready.
+    if (_freshInstall) {
+      BootTrace.mark('authSeed: fresh install → unauthenticated');
+      _emit(AuthUserState.unauthenticated());
+      return;
+    }
+
+    BootTrace.mark('authSeed: hasTokens read start');
     final hasToken = await _api.hasTokens();
+    BootTrace.mark('authSeed: hasTokens read done');
     if (!hasToken) {
       _emit(AuthUserState.unauthenticated());
       return;
@@ -338,6 +365,17 @@ class ApiAuthService implements AuthService {
           error: 'login_payload_missing_user_id',
         );
       }
+
+      // Re-checked HERE, not just after authenticate(): the contract is that
+      // an abandoned attempt produces NO side effect, and the exchange above
+      // (the Firebase-id await has no timeout of its own, the POST up to 12s)
+      // can outlive a stall-guard abandon too. Without this, a zombie that
+      // revived mid-exchange stored its tokens and emitted authenticated
+      // AFTER the retry pill was re-armed — and if the user had already
+      // retried with a DIFFERENT account, the stale attempt's tokens would
+      // clobber the fresh session. The minted pair is simply never stored;
+      // it ages out server-side.
+      if (attempt != _attemptSeq) return const AuthCancelled();
 
       await _api.setTokens(
         accessToken: accessToken,

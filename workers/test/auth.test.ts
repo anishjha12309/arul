@@ -96,8 +96,8 @@ describe("POST /auth/login", () => {
   // verify-payments harness: it needs a real Google idToken. The harness proves
   // the tombstone lands with the exact HMAC this branch recomputes; these two
   // tests prove the branch acts on it. A routed mock is required — the flow is
-  // 4 sequential queries and a same-rows-for-everything mock can't express
-  // "users miss, tombstone hit".
+  // several distinct queries (the users UPDATE misses, the tombstone lookup
+  // hits) and a same-rows-for-everything mock can't express that split.
   function routedSql(routes: Array<{ match: RegExp; rows: unknown[] }>) {
     const calls: Array<{ text: string; values: unknown[] }> = [];
     const fn = vi.fn((...args: unknown[]) => {
@@ -123,7 +123,7 @@ describe("POST /auth/login", () => {
       name: "Back Again",
     });
     const { sql, calls } = routedSql([
-      { match: /SELECT[^]*FROM users[^]*google_sub/, rows: [] }, // no account
+      { match: /UPDATE users[^]*google_sub/, rows: [] }, // no account
       {
         match: /INSERT INTO users/,
         rows: [{ id: USER_ID, display_name: "Back Again", referral_code: "NEWCODE1" }],
@@ -168,7 +168,7 @@ describe("POST /auth/login", () => {
       name: "Fresh",
     });
     const { sql, calls } = routedSql([
-      { match: /SELECT[^]*FROM users[^]*google_sub/, rows: [] },
+      { match: /UPDATE users[^]*google_sub/, rows: [] },
       {
         match: /INSERT INTO users/,
         rows: [{ id: USER_ID, display_name: "Fresh", referral_code: "NEWCODE2" }],

@@ -113,6 +113,40 @@ void main() {
       await retry;
     });
 
+    test('a failure that settles with NO joiner is held, and consumed on '
+        'read', () async {
+      // The splash fires the auto attempt fire-and-forget; a fast failure
+      // (e.g. no Play Services) settles before the sign-in screen mounts.
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(
+        const AuthFailure(
+          message: 'Google one-tap is not supported on this device.',
+          kind: AuthFailureKind.noPlayServices,
+        ),
+      );
+      await first;
+
+      final missed = controller.takePendingAutoFailure();
+      expect(missed, isNotNull, reason: 'a pre-route failure must not vanish');
+      expect(missed!.kind, AuthFailureKind.noPlayServices);
+      expect(
+        controller.takePendingAutoFailure(),
+        isNull,
+        reason: 'consumed on read — a later mount must not re-toast it',
+      );
+    });
+
+    test(
+      'a cancelled auto attempt is never held — cancel stays quiet',
+      () async {
+        final first = controller.autoSignIn(AuthProvider.google)!;
+        auth.settleLast(const AuthCancelled());
+        await first;
+
+        expect(controller.takePendingAutoFailure(), isNull);
+      },
+    );
+
     test('signing out RE-ARMS the auto-launch', () async {
       final first = controller.autoSignIn(AuthProvider.google)!;
       auth.settleLast(const AuthSuccess(userId: 'u1'));
@@ -235,6 +269,50 @@ void main() {
       expect(await joined, isA<AuthFailure>());
       expect(auth.abandonCount, 1);
     });
+
+    test('coming back to the foreground RESTARTS the clock — a settle during '
+        'the fresh budget wins, never the abandon', () async {
+      // The 2026-08-22 device race: user sits in the account sheet past the
+      // stall budget, picks an account (app resumes), and the token exchange
+      // is still in flight when the next recheck window expires. Measured
+      // from the attempt's start the guard abandoned that healthy attempt;
+      // measured from the RESUME it must not.
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      // Sheet up well past stallLimit (120ms), then the user picks: resume.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      lifecycle = AppLifecycleState.resumed;
+      // The exchange completes shortly after resume — inside the fresh
+      // budget, but long after the ORIGINAL clock expired.
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+
+      expect(await pending, isA<AuthSuccess>());
+      expect(
+        auth.abandonCount,
+        0,
+        reason: 'post-sheet exchange is progress, not a stall',
+      );
+    });
+
+    test(
+      'an attempt still dead a FULL budget after resuming is abandoned',
+      () async {
+        var lifecycle = AppLifecycleState.paused;
+        controller.lifecycleProbe = () => lifecycle;
+
+        final pending = controller.signIn(AuthProvider.google);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        lifecycle = AppLifecycleState.resumed;
+        // Never settled: the reset buys one fresh budget, not immunity.
+        final result = await pending;
+
+        expect(result, isA<AuthFailure>());
+        expect(auth.abandonCount, 1);
+      },
+    );
 
     test('a settle before the limit never trips the guard', () async {
       final pending = controller.signIn(AuthProvider.google);
