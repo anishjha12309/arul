@@ -1,3 +1,7 @@
+import 'dart:async' show unawaited;
+
+import 'package:flutter/widgets.dart'
+    show AppLifecycleListener, AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
@@ -76,8 +80,16 @@ final ringtoneSetServiceProvider = Provider<RingtoneSetService>((ref) {
 /// LIVE entitlement check — the real premium gate) → download → MediaStore
 /// register + set as the device tone.
 class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
+  /// The set that was interrupted by Android's "Modify system settings" grant
+  /// screen, resumed when the app comes back with the permission held.
+  ({Ringtone ringtone, RingtoneTarget target})? _parkedForGrant;
+  AppLifecycleListener? _grantReturnListener;
+
   @override
-  RingtoneSetState build() => const RingtoneSetIdle();
+  RingtoneSetState build() {
+    ref.onDispose(_dropParkedSet);
+    return const RingtoneSetIdle();
+  }
 
   /// Sets [ringtone] as the [target] tone, walking the permission → fetch →
   /// download → set pipeline (see [RingtoneSetStage]).
@@ -99,8 +111,20 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
       final canWrite = await service.canWriteSettings();
       if (!canWrite) {
         // Straight to Android's "Modify system settings" grant screen — no
-        // in-app explainer in front of it (owner, 2026-08-21). The user grants
-        // it there, comes back and taps Set again; nothing is parked here.
+        // in-app explainer in front of it (owner, 2026-08-21). The request is
+        // PARKED and finishes on its own when the app resumes holding the
+        // permission: the first cut made the user tap Set again, and the
+        // visible result was "I granted it and nothing happened — no 'ringtone
+        // set' popup the first time" (owner's device, 2026-08-22). A resume
+        // without the grant just drops it.
+        _parkedForGrant = (ringtone: ringtone, target: target);
+        _grantReturnListener ??= AppLifecycleListener(
+          onStateChange: (lifecycle) {
+            if (lifecycle == AppLifecycleState.resumed) {
+              unawaited(_resumeParkedSet());
+            }
+          },
+        );
         await service.openWriteSettings();
         state = const RingtoneSetIdle();
         return;
@@ -174,6 +198,27 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         isNetwork: isNetworkError(e),
       );
     }
+  }
+
+  /// Runs the parked set once, on the first resume after the grant screen —
+  /// only if the permission is now held. The lifecycle listener is one-shot:
+  /// whatever the outcome, it is gone before the pipeline starts, so a later
+  /// resume can never replay the request.
+  Future<void> _resumeParkedSet() async {
+    final parked = _parkedForGrant;
+    _dropParkedSet();
+    if (parked == null) return;
+    final canWrite = await ref
+        .read(ringtoneSetServiceProvider)
+        .canWriteSettings();
+    if (!canWrite) return;
+    await setRingtone(parked.ringtone, parked.target);
+  }
+
+  void _dropParkedSet() {
+    _parkedForGrant = null;
+    _grantReturnListener?.dispose();
+    _grantReturnListener = null;
   }
 
   void reset() => state = const RingtoneSetIdle();
