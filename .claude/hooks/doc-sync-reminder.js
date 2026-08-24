@@ -10,6 +10,10 @@
 // First match wins. Order specific -> general.
 const ROUTES = [
   {
+    when: ["lib/main.dart", "android/app/proguard-rules.pro", "lib/core/perf/**"],
+    docs: [".claude/skills/on-device/SKILL.md (release-silence contract)", "docs/perf-measurement.md"],
+  },
+  {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
     docs: ["docs/phonepe.md"],
   },

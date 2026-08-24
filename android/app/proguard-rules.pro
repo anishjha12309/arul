@@ -13,3 +13,16 @@
 # Crashlytics needs line numbers + source file to symbolicate (Phase 4).
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Release hygiene: strip the debug-chatter half of android.util.Log from the
+# Java/Kotlin layer (R8 minify is already on for release). v/d/i are developer
+# narration and must not reach a user's logcat from a Play install.
+#
+# w/e are KEPT deliberately — they are operational error diagnostics (decoder
+# fallbacks, OEM wallpaper refusals, PhonePe failures), the lines that make a
+# field report actionable. Silencing them would buy nothing and cost triage.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

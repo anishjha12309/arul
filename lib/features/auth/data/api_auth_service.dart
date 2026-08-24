@@ -201,6 +201,7 @@ class ApiAuthService implements AuthService {
 
   @override
   Future<void> signOut() async {
+    final sw = Stopwatch()..start();
     final refreshToken = await _api.readRefreshToken();
     if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
@@ -213,6 +214,10 @@ class ApiAuthService implements AuthService {
     await _api.clearTokens();
     _crash.setUserId(null);
     _emit(AuthUserState.unauthenticated());
+    // Timing mark, readable in profile (and in a DIAG release): the baseline
+    // harness reads logout duration — denylist round-trip + token clear — from
+    // this line. Release builds are silent by design, so measure on profile.
+    debugPrint('[ApiAuthService] signed out in ${sw.elapsedMilliseconds}ms');
   }
 
   @override

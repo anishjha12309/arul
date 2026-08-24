@@ -7,7 +7,9 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_driver/driver_extension.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
@@ -37,8 +39,10 @@ import 'features/referral/data/install_referrer_service.dart';
 /// `performanceMonitorProvider` / `analyticsServiceProvider`, so the SDK is
 /// never touched uninitialised.
 Future<void> main() async {
+  _silenceLogsInRelease();
   BootTrace.mark('main() entry');
   if (!AppConfig.firebaseEnabled) {
+    _maybeEnableFlutterDriver();
     WidgetsFlutterBinding.ensureInitialized();
     unawaited(ApiClient.warmSecureStorage());
     await _startApp();
@@ -50,6 +54,7 @@ Future<void> main() async {
   // fatal.
   await runZonedGuarded(
     () async {
+      _maybeEnableFlutterDriver();
       WidgetsFlutterBinding.ensureInitialized();
       // Encrypted-storage channel + keystore init, fired BEFORE Firebase so the
       // two overlap. On a fresh install this is the longest pole on the path to
@@ -100,6 +105,39 @@ Future<void> main() async {
   );
 }
 
+/// Release builds ship SILENT: one assignment routes every `debugPrint` — this
+/// app's and every package's — into a no-op, so nothing a user can read with
+/// `adb logcat` leaks from a Play install. It is the whole Dart half of the
+/// release-hygiene contract; individual call sites stay as they are, which is
+/// what keeps them useful in debug and profile.
+///
+/// Escape hatch for field triage: build a SIDELOADED release APK with
+/// `--dart-define=DIAG=true` and the logs come back. Debug and profile are
+/// untouched — `kReleaseMode` is false there, so the whole guard is dead code
+/// the compiler drops.
+///
+/// Crashlytics is the only diagnostic channel that reaches a Play install;
+/// nothing here changes that.
+void _silenceLogsInRelease() {
+  if (kReleaseMode && !const bool.fromEnvironment('DIAG')) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+}
+
+/// Agent UI automation (Dart MCP server: `dtd` discovery +
+/// `flutter_driver_command`) — workflow in the on-device skill. Opt-in per
+/// run: `flutter run --dart-define=ENABLE_FLUTTER_DRIVER=true` on top of the
+/// usual define file; the const gate compiles the extension out of every
+/// other build. Must run BEFORE ensureInitialized() on both entry paths — the
+/// extension installs its own driver binding and asserts it owns
+/// `WidgetsBinding.instance`, which a normal binding created first would make
+/// fatal.
+void _maybeEnableFlutterDriver() {
+  if (const bool.fromEnvironment('ENABLE_FLUTTER_DRIVER')) {
+    enableFlutterDriverExtension();
+  }
+}
+
 /// Starts the PostHog SDK, then emits the one autocaptured event worth keeping.
 ///
 /// `Application Installed` is captured by hand because disabling
@@ -130,6 +168,17 @@ Future<void> _startPostHog(PostHogConfig config) async {
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
+
+  // Keep the semantics tree built in debug so `uiautomator dump` sees
+  // labelled, tappable nodes (tools/drive.mjs — on-device skill); without a
+  // client Flutter never builds semantics and a dump is one empty
+  // FlutterView. Debug-only on purpose: profile runs measure jank and must
+  // not pay the semantics cost, and release keeps stock behaviour (TalkBack
+  // and friends request it themselves). The returned handle is never
+  // disposed — semantics stays on for the whole run.
+  if (kDebugMode) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
 
   // Edge-to-edge. This is already the default at targetSdk 35+ (and the OS
   // enforces it — the immersive modes are now no-ops), but it is stated here so

@@ -15,7 +15,7 @@ off when done or that device's data stays out of the normal reports indefinitely
 
 ```bash
 adb shell setprop log.tag.FA-SVC VERBOSE   # note the HYPHEN, then restart Google Play services
-adb logcat -s FA-SVC:V FA:V
+adb logcat -s FA-SVC:V FA:V     # FA:V only on debug/profile — release R8-strips the in-app tag
 ```
 A successful upload logs the batch and a `204`.
 

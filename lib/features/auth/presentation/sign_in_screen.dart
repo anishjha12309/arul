@@ -97,8 +97,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ? notifier.autoSignIn(AuthProvider.google)
         : notifier.signIn(AuthProvider.google);
     // Auto-launch already spent. If it failed while still on the splash (a
-    // fast failure settles under the brand beat, with nothing awaiting it),
-    // surface it NOW — the contract is a message + retry, never a silent
+    // fast failure can settle before this screen mounts, with nothing awaiting
+    // it), surface it NOW — the contract is a message + retry, never a silent
     // bounce. A cancel stays quiet as always; either way the pill remains.
     if (pending == null) {
       final missed = notifier.takePendingAutoFailure();

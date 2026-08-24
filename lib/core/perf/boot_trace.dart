@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 /// Answers one question the Firebase Performance traces cannot: on a
 /// from-scratch launch, where do the seconds between tapping the icon and the
 /// Google account sheet actually go? The path crosses four layers (engine →
-/// `main()` → the splash's brand beat → the sign-in route → Credential
+/// `main()` → the splash's auth-seed wait → the sign-in route → Credential
 /// Manager), and only a single monotonic clock spanning all of them shows
 /// which one owns the delay.
 ///

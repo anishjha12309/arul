@@ -359,6 +359,13 @@ class FeedVideoPlayer {
         if (openId != null && openId >= _currentOpenId) {
           _currentOpenId = openId;
           firstFrame.value = true;
+          // Reveal mark, readable in profile (and in a DIAG release): the
+          // moment a live card's texture actually painted. The baseline harness
+          // times cold start → first content from this line, and it answers
+          // "nothing is moving" triage (a missing line = never decoded;
+          // present = decoded and faded in). Release builds are silent by
+          // design — triage this on profile, not on a Play install.
+          debugPrint('FeedVideo: first frame revealed player $playerId');
         }
       case 'videoSize':
         final w = (event['width'] as num?)?.toDouble();

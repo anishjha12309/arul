@@ -186,7 +186,7 @@ class AuthController extends _$AuthController {
   /// A failure from the auto-launched attempt, held until a screen can show
   /// it. The splash fires [autoSignIn] fire-and-forget, so an attempt that
   /// fails FAST — `supportsAuthenticate()` false, Play Services misconfigured
-  /// — settles while the brand beat still holds the splash, and by the time
+  /// — settles before the splash has even routed, and by the time
   /// the sign-in screen mounts and joins, the attempt is spent and its result
   /// gone: an error the user never saw, which is exactly the "silent bounce"
   /// the edge-case contract forbids. The screen collects this on its first

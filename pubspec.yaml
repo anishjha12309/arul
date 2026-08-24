@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+39
+version: 1.0.0+40
 
 environment:
   sdk: ^3.12.0
@@ -90,6 +90,12 @@ dependencies:
   firebase_crashlytics: ^5.2.4
   firebase_performance: ^0.11.4+3
   firebase_analytics: ^12.4.3
+  # Agent UI automation only — enableFlutterDriverExtension() in main.dart,
+  # opt-in per run via --dart-define=ENABLE_FLUTTER_DRIVER=true (a const gate:
+  # compiled out of every other build, release binaries tree-shake it away).
+  # Regular dep, not dev, because main.dart imports it.
+  flutter_driver:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
