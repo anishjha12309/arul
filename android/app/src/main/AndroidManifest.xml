@@ -52,6 +52,28 @@
         <meta-data
             android:name="google_analytics_deferred_deep_link_enabled"
             android:value="true"/>
+        <!-- Consent mode v2 defaults (Google "Set up consent mode for apps",
+             Android). With NO defaults the SDK sends every event without the
+             ad_user_data / ad_personalization signals, and GA4 then drops the
+             session's acquisition attribution: User acquisition showed 100% of
+             trial_started under "(not set)" with the tooltip "data stream sends
+             event data before sending the ad_user_data parameter" (2026-08-25).
+             Manifest defaults apply before first_open fires, which a Dart-side
+             setConsent() cannot. Granted: Arul serves India only, where no
+             consent banner is required; scope these per region if the app ever
+             ships to the EEA. -->
+        <meta-data
+            android:name="google_analytics_default_allow_analytics_storage"
+            android:value="true"/>
+        <meta-data
+            android:name="google_analytics_default_allow_ad_storage"
+            android:value="true"/>
+        <meta-data
+            android:name="google_analytics_default_allow_ad_user_data"
+            android:value="true"/>
+        <meta-data
+            android:name="google_analytics_default_allow_ad_personalization_signals"
+            android:value="true"/>
         <!-- enableOnBackInvokedCallback = predictive back. The manifest default is
              FALSE on Android 13-15, so WITHOUT this the gesture is dead across most
              of the install base. Flutter 3.38+ then supplies the page transition. -->
