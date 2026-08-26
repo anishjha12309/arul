@@ -5,13 +5,12 @@ import 'package:phonepe_payment_sdk/phonepe_payment_sdk.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
-import '../../../core/analytics/app_instance_id.dart';
-import '../../../core/analytics/meta_anon_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 import 'entitlement_provider.dart';
+import 'trial_conversion_catch_up.dart';
 
 part 'premium_purchase_provider.g.dart';
 
@@ -67,9 +66,15 @@ class PremiumPurchase extends _$PremiumPurchase {
   ApiClient get _api => ref.read(apiClientProvider);
 
   /// Tracks a ★ conversion event (`trial_started` / `subscription_active`) with
-  /// the monthly price + order id. Fans out to PostHog + Meta via the composite
-  /// [AnalyticsService]; Meta maps it to StartTrial / Subscribe with the INR
-  /// value for ROAS. Best-effort — a missing price just omits the value.
+  /// the monthly price + order id. Fans out to PostHog + GA4 + Meta via the
+  /// composite [AnalyticsService]; Meta maps trial_started to StartTrial with
+  /// the INR value. Best-effort — a missing price just omits the value.
+  ///
+  /// A `trial_started` is then MARKED as reported for this order — after the
+  /// track (so nothing can precede the event that makes the money) and before
+  /// every caller's `ref.invalidate(entitlementDetailProvider)`, so the refresh
+  /// that follows cannot fire the late copy [TrialConversionCatchUp] keeps for
+  /// trials granted with the app closed.
   void _trackConversion(String event, String merchantOrderId) {
     final price = _monthlyPriceRupees();
     ref
@@ -83,6 +88,9 @@ class PremiumPurchase extends _$PremiumPurchase {
             'value': ?price,
           },
         );
+    if (event == 'trial_started') {
+      ref.read(trialConversionCatchUpProvider).markReported(merchantOrderId);
+    }
   }
 
   /// Fires `checkout_started` the moment the user commits to paying — BEFORE
@@ -158,14 +166,8 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// is paise), or null if the config hasn't loaded — matches the fallback the
   /// premium screen uses for display. Read synchronously from the already-cached
   /// provider (the paywall watched it), so no await on the success path.
-  double? _monthlyPriceRupees() {
-    final prices = ref.read(appConfigProvider).asData?.value?.prices;
-    final monthly = prices?['monthly'];
-    if (monthly is Map && monthly['amount'] is num) {
-      return (monthly['amount'] as num) / 100;
-    }
-    return null;
-  }
+  double? _monthlyPriceRupees() =>
+      monthlyPriceRupees(ref.read(appConfigProvider).asData?.value);
 
   /// Deep-link return scheme registered in AndroidManifest.xml.
   /// PhonePe uses this to bring the app back to the foreground after payment.
@@ -213,18 +215,8 @@ class PremiumPurchase extends _$PremiumPurchase {
 
     try {
       // ── Step 1: Initiate payment on the server ───────────────────────────
-      // appInstanceId: the debits this mandate produces settle app-closed, so
-      // the Worker needs the GA4 join key ON the users row before the first
-      // one — login also uploads it, but not for users who signed in on an
-      // older build (app_instance_id.dart).
-      final appInstanceId = await fetchAppInstanceId();
-      // metaAnonId: same reason for the Meta join key — the first trial→paid
-      // debit settles app-closed and lib/meta.ts device-matches through it.
-      final metaAnonId = await fetchMetaAnonId();
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
-        'appInstanceId': ?appInstanceId,
-        'metaAnonId': ?metaAnonId,
         'targetApp': ?targetApp,
       });
 

@@ -50,14 +50,7 @@ vi.mock("../src/lib/phonepe.js", () => ({
 const referral = vi.hoisted(() => ({ grantReferralReward: vi.fn() }));
 vi.mock("../src/lib/referral.js", () => referral);
 
-const ga4 = vi.hoisted(() => ({ reportServerPurchase: vi.fn() }));
-vi.mock("../src/lib/ga4.js", () => ga4);
 
-const meta = vi.hoisted(() => ({
-  reportMetaFirstConversion: vi.fn(),
-  normalizeMetaAnonId: vi.fn(),
-}));
-vi.mock("../src/lib/meta.js", () => meta);
 
 const posthog = vi.hoisted(() => ({
   reportPostHogFirstConversion: vi.fn(),
@@ -165,15 +158,13 @@ describe("Pass B — a settled debit is always recorded", () => {
 
     const activated = updates(executed).find((u) => u.text.includes("status = 'active'"));
     expect(activated, "a COMPLETED order must activate the row").toBeDefined();
-    // The month the user paid for, and the GA4 purchase Google Ads never saw.
-    expect(ga4.reportServerPurchase).toHaveBeenCalledTimes(1);
     expect(referral.grantReferralReward).toHaveBeenCalledTimes(1);
-    // 'trialing' at settle = FIRST trial→paid conversion → Meta + PostHog too.
-    expect(meta.reportMetaFirstConversion).toHaveBeenCalledTimes(1);
+    // 'trialing' at settle = FIRST trial→paid conversion → PostHog only. GA4
+    // `purchase` and Meta `Subscribe` were removed from this path 2026-08-26.
     expect(posthog.reportPostHogFirstConversion).toHaveBeenCalledTimes(1);
   });
 
-  it("reports a RENEWAL (prior status 'active') to GA4 only — never Meta/PostHog", async () => {
+  it("reports a RENEWAL (prior status 'active') to nothing — never PostHog", async () => {
     const { sql, executed } = makeSql([dueRow(3 * HOUR, "active")]);
     db.getDb.mockReturnValue(sql);
 
@@ -185,8 +176,6 @@ describe("Pass B — a settled debit is always recorded", () => {
     await runAutopayNotify(makeEnv());
 
     expect(updates(executed).some((u) => u.text.includes("status = 'active'"))).toBe(true);
-    expect(ga4.reportServerPurchase).toHaveBeenCalledTimes(1);
-    expect(meta.reportMetaFirstConversion).not.toHaveBeenCalled();
     expect(posthog.reportPostHogFirstConversion).not.toHaveBeenCalled();
   });
 
@@ -232,7 +221,7 @@ describe("Pass B — a settled debit is always recorded", () => {
     await runAutopayNotify(makeEnv());
 
     expect(updates(executed)).toHaveLength(0);
-    expect(ga4.reportServerPurchase).not.toHaveBeenCalled();
+    expect(posthog.reportPostHogFirstConversion).not.toHaveBeenCalled();
   });
 });
 

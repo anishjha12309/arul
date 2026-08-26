@@ -67,8 +67,6 @@ import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
-import { reportServerPurchase, normalizeAppInstanceId } from "../lib/ga4.js";
-import { reportMetaFirstConversion, normalizeMetaAnonId } from "../lib/meta.js";
 import {
   reportPostHogFirstConversion,
   reportPostHogSubscriptionCancel,
@@ -167,7 +165,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string; appInstanceId?: string; metaAnonId?: string; targetApp?: string };
+  let body: { plan?: string; targetApp?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -192,25 +190,8 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       ? body.targetApp
       : null;
 
-  // Firebase app_instance_id, refreshed at the moment it matters most: the
-  // debits this mandate will produce settle app-closed, and lib/ga4.ts can only
-  // attribute them if the id is on the users row. /auth/login also uploads it,
-  // but a user who signed in on an older build reaches here without one.
-  const appInstanceId = normalizeAppInstanceId(body.appInstanceId);
-  // Same refresh, same reason, for the Meta SDK's install GUID: lib/meta.ts can
-  // only device-match an app-closed first conversion if the id is on the row.
-  const metaAnonId = normalizeMetaAnonId(body.metaAnonId);
-
   const sql = getDb(env);
   try {
-    if (appInstanceId || metaAnonId) {
-      await sql`
-        UPDATE users
-        SET app_instance_id = COALESCE(${appInstanceId}::text, app_instance_id),
-            meta_anon_id    = COALESCE(${metaAnonId}::text, meta_anon_id)
-        WHERE id = ${sub}
-      `;
-    }
     // ── One free trial per user ────────────────────────────────────────────
     // trial_end is written exactly once — the first time a mandate setup
     // completes (webhook/reconcile COALESCE it, never overwrite). So a non-null
@@ -810,7 +791,9 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       const nextEnd = addOneMonth(new Date());
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
 
-      const activated = await sql<{ user_id: string; prior_status: string }[]>`
+      const activated = await sql<
+        { user_id: string; prior_status: string; updated_at?: Date | string | null }[]
+      >`
         UPDATE subscriptions AS s
         SET status                  = 'active',
             phonepe_subscription_id = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
@@ -822,7 +805,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         FROM subscriptions AS prior
         WHERE s.merchant_subscription_id = ${merchantSubId}
           AND prior.id = s.id
-        RETURNING s.user_id, prior.status AS prior_status
+        RETURNING s.user_id, prior.status AS prior_status, s.updated_at
       `;
 
       console.log(`[payments/webhook] Active for sub ${merchantSubId}, period_end=${nextEnd.toISOString()}`);
@@ -831,29 +814,25 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // FIRST ever grants (renewals/retries no-op via the status<>'rewarded' guard).
       if (activated.length > 0) {
         await grantReferralReward(sql, activated[0].user_id);
-        // Server-side settle → the app is closed, no client event exists. The
-        // order+transaction event pair and any cron double-settle collapse via
-        // the transaction-id dedupe inside. Fail-open — never blocks the grant.
-        await reportServerPurchase(env, sql, {
-          userId: activated[0].user_id as string,
-          transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
-          amountPaise: typeof pp.amount === "number" ? pp.amount : null,
-        });
-        // FIRST trial→paid conversion only — 'trialing' before this settle.
-        // The order+transaction event pair for one debit both land here, but
-        // only the first sees prior_status='trialing' (this handler just
-        // flipped it), and the per-transaction KV marks inside dedupe against
-        // the cron settling the same debit. Renewals (prior 'active') stay out.
+        // NO ad-platform conversion is reported from the server any more — GA4
+        // `purchase` (MP) and Meta `Subscribe` (CAPI) were BOTH removed here
+        // (owner's call, 2026-08-26). See the same note in
+        // cron/autopay-notify.ts: one conversion action fed by two source types
+        // (app SDK + server) desynchronises attribution. `trial_started` /
+        // StartTrial is the only event campaigns bid on. Neon is revenue truth.
+        //
+        // PostHog stays — product analytics, not an ad-attribution source.
+        // FIRST trial→paid only ('trialing' before this settle). The
+        // order+transaction event pair for one debit both land here, but only
+        // the first sees prior_status='trialing' (this handler just flipped
+        // it), and the per-transaction KV mark inside dedupes against the cron
+        // settling the same debit. Renewals (prior 'active') stay out.
         if (activated[0].prior_status === "trialing") {
-          await reportMetaFirstConversion(env, sql, {
-            userId: activated[0].user_id as string,
-            transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
-            amountPaise: typeof pp.amount === "number" ? pp.amount : null,
-          });
           await reportPostHogFirstConversion(env, {
             userId: activated[0].user_id as string,
             transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
             amountPaise: typeof pp.amount === "number" ? pp.amount : null,
+            occurredAt: activated[0].updated_at ?? null,
           });
         }
       }
@@ -887,14 +866,19 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             updated_at     = now()
         FROM subscriptions AS prior
         WHERE s.merchant_subscription_id = ${merchantSubId} AND prior.id = s.id
-        RETURNING s.user_id, prior.status AS prior_status
-      `) as unknown as { user_id: string; prior_status: string | null }[];
+        RETURNING s.user_id, prior.status AS prior_status, s.updated_at
+      `) as unknown as {
+        user_id: string;
+        prior_status: string | null;
+        updated_at?: Date | string | null;
+      }[];
       if (parked[0]) {
         await reportPostHogSubscriptionCancel(env, {
           userId: parked[0].user_id,
           merchantSubId,
           reason: "webhook_revoked",
           priorStatus: parked[0].prior_status,
+          occurredAt: parked[0].updated_at ?? null,
         });
       }
 
@@ -1116,7 +1100,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         const subStatus = await getSubscriptionStatus(env, merchantSubId);
         phonePeStatus = phonePeStatus ?? { state: subStatus.state };
         if (subStatus.state === "CANCELLED" || subStatus.state === "REVOKED") {
-          await sql`
+          const revoked = (await sql`
             UPDATE subscriptions
             SET status        = 'cancelled',
                 next_debit_at = NULL,
@@ -1124,12 +1108,14 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
                 updated_at    = now()
             WHERE user_id = ${sub}
               AND status IN ('trialing', 'active', 'paused')
-          `;
+            RETURNING updated_at
+          `) as unknown as { updated_at?: Date | string | null }[];
           await reportPostHogSubscriptionCancel(env, {
             userId: sub,
             merchantSubId,
             reason: "revoked_at_phonepe",
             priorStatus: row.status as string,
+            occurredAt: revoked[0]?.updated_at ?? null,
           });
           row.status = "cancelled";
           // Mirror the write so the response can't claim a debit is still coming
@@ -1261,20 +1247,22 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
     }
 
     // Stop future debits locally; keep entitlement until current_period_end.
-    await sql`
+    const cancelled = (await sql`
       UPDATE subscriptions
       SET status        = 'cancelled',
           next_debit_at = NULL,
           notified_at   = NULL,
           updated_at    = now()
       WHERE user_id = ${sub}
-    `;
+      RETURNING updated_at
+    `) as unknown as { updated_at?: Date | string | null }[];
 
     await reportPostHogSubscriptionCancel(env, {
       userId: sub,
       merchantSubId,
       reason: "user_cancel",
       priorStatus: status,
+      occurredAt: cancelled[0]?.updated_at ?? null,
     });
 
     return c.json({ status: "cancelled", cancelled: true });

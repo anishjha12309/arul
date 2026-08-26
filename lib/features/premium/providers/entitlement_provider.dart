@@ -9,6 +9,7 @@ import '../../../core/config/app_config.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../domain/entitlement.dart';
+import 'trial_conversion_catch_up.dart';
 
 /// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a
 /// cached claim and never a JWT claim, so a purchase, expiry or refund takes
@@ -43,9 +44,22 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
   final authState = ref.read(authServiceProvider).currentState;
   if (!authState.isAuthenticated) return const Entitlement.none();
 
-  return ref
+  final entitlement = await ref
       .watch(subscriptionRepositoryProvider)
       .getEntitlement(authState.userId!);
+
+  // Every entitlement read is also the moment a trial granted app-closed can
+  // be reported (TrialConversionCatchUp) — the cold-start /me, the refresh
+  // after a purchase, the Manage screen's reconcile. Idempotent per order, so
+  // running it on every read costs nothing; guarded so analytics can never
+  // fail the entitlement (a missing prefs override in a test is the only
+  // realistic throw).
+  try {
+    ref.read(trialConversionCatchUpProvider).reconcile(entitlement);
+  } catch (e) {
+    debugPrint('[entitlement] trial catch-up skipped: $e');
+  }
+  return entitlement;
 });
 
 /// The gate's view of [entitlementDetailProvider]: just "may this user act?".

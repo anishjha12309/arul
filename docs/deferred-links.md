@@ -24,10 +24,14 @@ from inside this repo without the recipe under each.
 
 The Worker 302s to Play with `referrer=ref=<code>&w=<uuid>&lang=hi` (or `r=<uuid>`); Android replays
 it to `captureOnce` on first launch (Play keeps it 90 days, once per install — the `_kChecked` pref).
-Proving it needs a Play install of THIS build: uninstall, open
-`https://play.google.com/store/apps/details?id=com.hsrutility.arul&referrer=r%3D<uuid>%26lang%3Dta`
-in the Play app, install from the testing track, launch. A sideloaded APK never receives a referrer —
-use the seam instead.
+Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
+`adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`
+— with no app to claim the App Link it lands in Play's listing sheet with the referrer attached;
+install from the testing track, launch, sign in. GA4F logs the referrer Play delivered
+(`V/FA-SVC … InstallReferrer API result: r=<uuid>&lang=ta`, with `log.tag.FA-SVC VERBOSE`), and the
+app's `deep_link_opened source=install_referrer` follows sign-in. A Play build is a release build:
+read its screen per the on-device skill (a11y service on, dump, off). A sideloaded APK never
+receives a referrer — use the seam instead.
 
 ## Google Ads DDL — GA4F fetches the ad group's App URL
 

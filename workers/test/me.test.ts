@@ -208,6 +208,7 @@ describe("GET /me", () => {
         sub_plan: "monthly",
         sub_phonepe_subscription_id: "PP123",
         sub_merchant_subscription_id: "M123",
+        sub_merchant_order_id: "DKS_ORDER_1",
         sub_trial_end: null,
         sub_current_period_end: periodEnd,
         sub_updated_at: periodEnd,
@@ -230,6 +231,8 @@ describe("GET /me", () => {
     expect(body.subscription.plan).toBe("monthly");
     expect(body.subscription.phonepe_subscription_id).toBe("PP123");
     expect(body.subscription.merchant_subscription_id).toBe("M123");
+    // The app's trial_started catch-up keys on this — it must ride along.
+    expect(body.subscription.merchant_order_id).toBe("DKS_ORDER_1");
     expect(body.subscription.trial_end).toBeNull();
     expect(body.subscription.current_period_end).toBe("2026-12-31T00:00:00.000Z");
     expect(body.subscription.updated_at).toBe("2026-12-31T00:00:00.000Z");
@@ -339,6 +342,7 @@ describe("GET /me/subscription", () => {
         plan: "monthly",
         phonepe_subscription_id: "PP123",
         merchant_subscription_id: "M123",
+        merchant_order_id: "DKS_ORDER_1",
         trial_end: null,
         current_period_end: periodEnd,
         updated_at: periodEnd,
@@ -354,6 +358,7 @@ describe("GET /me/subscription", () => {
     expect(body.plan).toBe("monthly");
     expect(body.phonepe_subscription_id).toBe("PP123");
     expect(body.merchant_subscription_id).toBe("M123");
+    expect(body.merchant_order_id).toBe("DKS_ORDER_1");
     expect(body.trial_end).toBeNull();
     expect(body.current_period_end).toBe("2026-12-31T00:00:00.000Z");
     expect(body.updated_at).toBe("2026-12-31T00:00:00.000Z");

@@ -11,9 +11,11 @@ part of 'analytics_provider.dart';
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
-///     in the [AnalyticsCohort] panel; product analytics. Requires a real
-///     `POSTHOG_KEY` AND cohort membership.
+///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
+///     [AnalyticsCohort] panel (currently all of them); product analytics.
+///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
+///     autocapture is OFF, so the only event PostHog receives outside this list
+///     is the hand-emitted `Application Installed` in `main.dart`.
 ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
 ///     conversion events (login/purchase) for Google Ads — when
 ///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
@@ -32,9 +34,11 @@ final analyticsServiceProvider = AnalyticsServiceProvider._();
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
 /// are configured, so call sites never change:
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
-///     in the [AnalyticsCohort] panel; product analytics. Requires a real
-///     `POSTHOG_KEY` AND cohort membership.
+///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
+///     [AnalyticsCohort] panel (currently all of them); product analytics.
+///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
+///     autocapture is OFF, so the only event PostHog receives outside this list
+///     is the hand-emitted `Application Installed` in `main.dart`.
 ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
 ///     conversion events (login/purchase) for Google Ads — when
 ///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
@@ -58,9 +62,11 @@ final class AnalyticsServiceProvider
   /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
   /// are configured, so call sites never change:
   ///
-  ///   * PostHog — [postHogAllowedEvents] only, and only for the ~5% of installs
-  ///     in the [AnalyticsCohort] panel; product analytics. Requires a real
-  ///     `POSTHOG_KEY` AND cohort membership.
+  ///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
+  ///     [AnalyticsCohort] panel (currently all of them); product analytics.
+  ///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
+  ///     autocapture is OFF, so the only event PostHog receives outside this list
+  ///     is the hand-emitted `Application Installed` in `main.dart`.
   ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
   ///     conversion events (login/purchase) for Google Ads — when
   ///     `AppConfig.firebaseEnabled` (every real build with google-services.json +

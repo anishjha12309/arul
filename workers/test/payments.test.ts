@@ -930,9 +930,10 @@ describe("handleCancel — subscription_cancel reporting", () => {
 
   it("reports user_cancel with the row's PRIOR status after revoking at PhonePe", async () => {
     const env = makeEnv();
+    const cancelledAt = new Date("2026-08-26T12:00:00.000Z");
     const { sql, texts } = makeQueueSql([
       [{ merchant_subscription_id: "DKS_S_CANCEL", status: "trialing" }],
-      [], // UPDATE → cancelled
+      [{ updated_at: cancelledAt }], // UPDATE → cancelled RETURNING updated_at
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
@@ -943,11 +944,14 @@ describe("handleCancel — subscription_cancel reporting", () => {
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(env, "DKS_S_CANCEL");
     expect(texts.find((t) => t.includes("'cancelled'"))).toBeDefined();
     expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledTimes(1);
+    // occurredAt is the UPDATE's own RETURNED instant — the stable half of
+    // PostHog's [timestamp, distinct_id, event, uuid] dedup key.
     expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledWith(env, {
       userId: USER_ID,
       merchantSubId: "DKS_S_CANCEL",
       reason: "user_cancel",
       priorStatus: "trialing",
+      occurredAt: cancelledAt,
     });
   });
 

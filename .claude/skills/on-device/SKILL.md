@@ -74,7 +74,7 @@ modify-system-settings grant, the One Tap sheet — app-scoped drivers stop at t
 `dump` prints the screen as `(x,y) [tap] "label"` lines, so the loop is dump → tap with no image
 in context:
 ```bash
-node tools/drive.mjs dump              # in-app labels need a DEBUG build (semantics — main.dart)
+node tools/drive.mjs dump              # labels: DEBUG build, or ANY build with an a11y service on (below)
 node tools/drive.mjs tap "Ringtones"   # substring match on text/content-desc; --index N on ties
 node tools/drive.mjs swipe up          # fling the feed (down|left|right, --dist px, --ms n)
 node tools/drive.mjs open "https://arul.hsrutility.com/w/<id>"   # deep link — skip the tapping
@@ -87,8 +87,8 @@ A missed `tap` prints what IS on screen, so one failure self-corrects.
 **Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
 for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`
 between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: cmd.exe
-cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. Release/profile builds are
-label-less BY DESIGN (empty FlutterView) — drive them by coordinates or not at all.
+cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. A release/profile build shows NO
+labels until an accessibility service is on (Flutter builds semantics only then): `adb shell settings put secure enabled_accessibility_services com.android.systemui.accessibility.accessibilitymenu/com.android.systemui.accessibility.accessibilitymenu.AccessibilityMenuService` + `settings put secure accessibility_enabled 1` → dump → `settings delete secure enabled_accessibility_services` + `accessibility_enabled 0`. A Play install is FLAG_SECURE as well: `shot` is black there, dump is not.
 
 **Automation guard-rails.** dev.json points at the LIVE worker: a signed-in automated run writes
 real rows, and every gated `action=apply` bumps public popularity ranking — keep loops off

@@ -69,6 +69,7 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
              s.plan AS sub_plan,
              s.phonepe_subscription_id AS sub_phonepe_subscription_id,
              s.merchant_subscription_id AS sub_merchant_subscription_id,
+             s.merchant_order_id AS sub_merchant_order_id,
              s.trial_end AS sub_trial_end,
              s.current_period_end AS sub_current_period_end,
              s.updated_at AS sub_updated_at,
@@ -95,6 +96,14 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
               (row.sub_phonepe_subscription_id as string | null) ?? null,
             merchant_subscription_id:
               (row.sub_merchant_subscription_id as string | null) ?? null,
+            // The SETUP order id — the same value the app passed to
+            // `_trackConversion` as `order_id`. It is the key the app's
+            // trial_started catch-up dedupes on: a trial granted app-closed
+            // (webhook resurrect, process killed behind the UPI app) never
+            // fired the event in-session, and this is how the next launch
+            // knows WHICH trial it still owes — one event per order, never a
+            // repeat for one the purchase poll already reported.
+            merchant_order_id: (row.sub_merchant_order_id as string | null) ?? null,
             trial_end: toIso(row.sub_trial_end),
             current_period_end: toIso(row.sub_current_period_end),
             updated_at: toIso(row.sub_updated_at),
@@ -317,7 +326,7 @@ export async function handleMeSubscription(
   try {
     const rows = await sql`
       SELECT id, user_id, status, plan,
-             phonepe_subscription_id, merchant_subscription_id,
+             phonepe_subscription_id, merchant_subscription_id, merchant_order_id,
              trial_end, current_period_end, updated_at
       FROM subscriptions
       WHERE user_id = ${sub}
@@ -337,6 +346,7 @@ export async function handleMeSubscription(
       plan: (row.plan as string | null) ?? null,
       phonepe_subscription_id: (row.phonepe_subscription_id as string | null) ?? null,
       merchant_subscription_id: (row.merchant_subscription_id as string | null) ?? null,
+      merchant_order_id: (row.merchant_order_id as string | null) ?? null,
       trial_end: toIso(row.trial_end),
       current_period_end: toIso(row.current_period_end),
       updated_at: toIso(row.updated_at),

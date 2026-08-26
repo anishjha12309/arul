@@ -5,8 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/analytics/analytics_service.dart';
-import '../../../core/analytics/app_instance_id.dart';
-import '../../../core/analytics/meta_anon_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/perf/boot_trace.dart';
@@ -302,17 +300,6 @@ class ApiAuthService implements AuthService {
         );
       }
 
-      // GA4 join key for server-side purchase reporting (app_instance_id.dart).
-      // Sent every login: the id changes on reinstall, and reinstall forces a
-      // fresh sign-in — so login is exactly where it stays current. STARTED
-      // before `authenticate()` so the Firebase Installations round-trip
-      // (~0.4s cold, measured 2026-08-18) overlaps Google's own sheet time
-      // instead of extending the post-picker wait; never throws (own catch).
-      BootTrace.mark('signIn: fetchAppInstanceId() start (concurrent)');
-      final appInstanceIdFuture = fetchAppInstanceId();
-      // Meta join key, same lifecycle + concurrency rationale (meta_anon_id.dart).
-      final metaAnonIdFuture = fetchMetaAnonId();
-
       BootTrace.mark('signIn: authenticate() called');
       final account = await GoogleSignIn.instance.authenticate();
       BootTrace.mark('signIn: authenticate() returned');
@@ -336,10 +323,6 @@ class ApiAuthService implements AuthService {
       // on later logins is harmless. Cleared after a successful exchange below.
       final referralCode = _referral?.pendingCode;
 
-      final appInstanceId = await appInstanceIdFuture;
-      final metaAnonId = await metaAnonIdFuture;
-      BootTrace.mark('signIn: fetchAppInstanceId() done');
-
       // Exchange Google ID token for our own Worker-issued JWT pair.
       BootTrace.mark('signIn: POST /auth/login start');
       final data = await _api.post(
@@ -348,8 +331,6 @@ class ApiAuthService implements AuthService {
           'idToken': idToken,
           // Null-aware elements: dropped entirely when absent.
           'referralCode': ?referralCode,
-          'appInstanceId': ?appInstanceId,
-          'metaAnonId': ?metaAnonId,
         },
         requiresAuth: false,
       );

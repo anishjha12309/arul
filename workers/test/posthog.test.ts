@@ -65,16 +65,30 @@ describe("reportPostHogFirstConversion", () => {
     });
   });
 
-  it("sends the SAME uuid for the same transaction — dedup under KV eventual consistency", async () => {
+  it("sends the SAME uuid AND timestamp for the same transaction — PostHog dedupes on [timestamp, distinct_id, event, uuid]", async () => {
     const env1 = makeEnv();
     const env2 = makeEnv(); // fresh KV → the second send is not KV-suppressed
+    const settledAt = new Date("2026-08-26T10:00:00.000Z");
 
-    await reportPostHogFirstConversion(env1, CONVERSION);
-    await reportPostHogFirstConversion(env2, CONVERSION);
+    await reportPostHogFirstConversion(env1, { ...CONVERSION, occurredAt: settledAt });
+    await reportPostHogFirstConversion(env2, { ...CONVERSION, occurredAt: settledAt.toISOString() });
 
-    const uuid1 = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string).uuid;
-    const uuid2 = JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string).uuid;
-    expect(uuid1).toBe(uuid2);
+    const first = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    const second = JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string);
+    expect(first.uuid).toBe(second.uuid);
+    expect(first.timestamp).toBe("2026-08-26T10:00:00.000Z");
+    expect(second.timestamp).toBe(first.timestamp);
+  });
+
+  it("falls back to the wall clock when occurredAt is absent or unparsable — never drops the event", async () => {
+    const env = makeEnv();
+    const before = Date.now();
+
+    await reportPostHogFirstConversion(env, { ...CONVERSION, occurredAt: "not a date" });
+
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(Date.parse(body.timestamp)).toBeGreaterThanOrEqual(before - 1000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("marks the transaction in KV on success and skips a repeat report", async () => {
@@ -172,6 +186,16 @@ describe("reportPostHogSubscriptionCancel", () => {
       "1",
       expect.anything(),
     );
+  });
+
+  it("stamps the cancel with the row's own instant when given", async () => {
+    const env = makeEnv();
+    await reportPostHogSubscriptionCancel(env, {
+      ...CANCEL,
+      occurredAt: new Date("2026-08-26T11:30:00.000Z"),
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.timestamp).toBe("2026-08-26T11:30:00.000Z");
   });
 
   it("flags a trial-time cancel as during_trial", async () => {

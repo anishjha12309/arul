@@ -89,7 +89,7 @@ final class AuthServiceProvider
   }
 }
 
-String _$authServiceHash() => r'130fb39ff5de01ec0c15b8f68f1e8570472ce56b';
+String _$authServiceHash() => r'ea4b5960119128f52cad221fc2b239e01bb0a92c';
 
 /// Emits the latest [AuthUserState]. Starts as [AsyncLoading] until the stored-
 /// token check in [ApiAuthService] fires its initial event (almost immediate).
@@ -169,7 +169,7 @@ final class AuthControllerProvider
   AuthController create() => AuthController();
 }
 
-String _$authControllerHash() => r'6b4b46bbfa607a1a50b739822dab57817c9cd379';
+String _$authControllerHash() => r'803880563e6fedc5b9040001fe1d2958fbafa0da';
 
 /// Exposes sign-in / sign-out actions. Consumers read state from
 /// [authStateStreamProvider] and call methods on this notifier.

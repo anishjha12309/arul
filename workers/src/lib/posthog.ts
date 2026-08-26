@@ -20,10 +20,16 @@
  * properties/timestamp optional; answers 200 even for events it drops, so the
  * KV mark is "call accepted", not "event ingested" — the event's presence in
  * PostHog is the real verification. `uuid` is sent deterministically from the
- * transaction id as a second dedup layer under the KV mark.
+ * transaction id as a second dedup layer under the KV mark — BUT PostHog
+ * dedupes on the whole key `[timestamp, distinct_id, event, uuid]`
+ * (posthog.com/docs/cdp/troubleshooting, read 2026-08-26), so the uuid only
+ * bites when the timestamp repeats too. Callers therefore pass `occurredAt` —
+ * the row's `updated_at` from the transition's own RETURNING — and a fresh
+ * `now()` is only the fallback for paths with no stable instant. A resend
+ * stamped with the wall clock would have carried a new key every time.
  *
- * Fail-open EVERYWHERE, mirroring lib/ga4.ts: never throw, never block a
- * billing transition; missing POSTHOG_API_KEY logs and skips.
+ * Fail-open EVERYWHERE (the pattern the deleted lib/ga4.ts set): never throw,
+ * never block a billing transition; missing POSTHOG_API_KEY logs and skips.
  */
 
 import type { Env } from "../env.js";
@@ -36,13 +42,30 @@ interface FirstConversion {
   transactionId: string;
   /** Paise. Falls back to ₹199 when the payload omitted it. */
   amountPaise?: number | null;
+  /** The transition's own instant (the row's `updated_at` as RETURNED by the
+   * UPDATE). Stable across a resend, which is what makes `uuid` dedupe. */
+  occurredAt?: Date | string | null;
 }
 
 const FALLBACK_AMOUNT_PAISE = 19900;
 
-/** Same TTL rationale as ga4.ts: order ids never recur; 30 days outlives every
- * webhook redelivery + cron reconcile window. */
+/** Order ids never recur; 30 days outlives every webhook redelivery + cron
+ * reconcile window. */
 const DEDUPE_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+/** ISO-8601 for the event `timestamp`: the caller's stable instant when it
+ * has one, else now. A string that isn't a date falls through to now too —
+ * a bad timestamp must never cost the event. */
+function eventTimestamp(occurredAt: Date | string | null | undefined): string {
+  if (occurredAt instanceof Date && !Number.isNaN(occurredAt.getTime())) {
+    return occurredAt.toISOString();
+  }
+  if (typeof occurredAt === "string") {
+    const parsed = new Date(occurredAt);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return new Date().toISOString();
+}
 
 /** Deterministic UUID-shaped id from (event, seed), so even a KV-eventual-
  * consistency double-send carries the same uuid into PostHog. */
@@ -97,7 +120,7 @@ export async function reportPostHogFirstConversion(
         event: "subscription_active",
         distinct_id: purchase.userId,
         uuid: await deterministicUuid("subscription_active", purchase.transactionId),
-        timestamp: new Date().toISOString(),
+        timestamp: eventTimestamp(purchase.occurredAt),
         // Property names match the client-side conversion convention
         // (premium_purchase_provider._trackConversion): plan/order_id/value.
         // $lib marks the reporter so server rows are separable in analysis.
@@ -159,6 +182,9 @@ interface SubscriptionCancel {
   reason: SubscriptionCancelReason;
   /** Row status before the write: 'trialing' | 'active' | 'paused' | … */
   priorStatus: string | null;
+  /** The cancel write's own instant (RETURNED `updated_at`) — see
+   * FirstConversion.occurredAt. Optional: account deletion has no row left. */
+  occurredAt?: Date | string | null;
 }
 
 /** Statuses from which a cancel is a real loss of a live subscription. An
@@ -206,7 +232,7 @@ export async function reportPostHogSubscriptionCancel(
         event: "subscription_cancel",
         distinct_id: cancel.userId,
         uuid: await deterministicUuid("subscription_cancel", seed),
-        timestamp: new Date().toISOString(),
+        timestamp: eventTimestamp(cancel.occurredAt),
         properties: {
           plan: "monthly",
           reason: cancel.reason,

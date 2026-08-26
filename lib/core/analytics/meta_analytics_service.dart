@@ -15,7 +15,23 @@ import 'analytics_service.dart';
 ///   login_success        → CompleteRegistration
 ///   checkout_started     → InitiateCheckout (+ INR value when known → ROAS)
 ///   trial_started        → StartTrial      (+ INR value when known → ROAS)
-///   subscription_active  → Subscribe       (+ INR value when known → ROAS)
+///   subscription_active  → (nothing — Subscribe REMOVED, see below)
+///
+/// **NO `Subscribe` EVENT IS SENT ANYWHERE** — removed from this class AND
+/// from the Worker's Conversions API path (owner's call, 2026-08-26). The
+/// server sent it as `action_source: "system_generated"`, which Meta files
+/// under **Website events** (Events Manager offered only a Website tab and
+/// asked us to improve `fbc` coverage — a web click param). So ONE conversion
+/// event was arriving from TWO source types: app SDK for the app-open ₹199
+/// setup, web-shaped server events for trial→paid. That desynchronises
+/// attribution — the dataset's raw counts stayed correct while the campaign
+/// column lagged and undercounted. A conversion event must have ONE source.
+///
+/// **StartTrial is the ONLY event campaigns optimise on** (`start_trial_mobile_app`).
+/// It is app-SDK-sourced and in-session, so it has one source and no
+/// settle-location split. Trial→paid is ~84%, so bidding on it loses no
+/// signal. Accepted cost: Meta gets no revenue/ROAS signal. Neon is revenue
+/// truth. Do NOT re-add Subscribe on either side.
 ///
 /// `checkout_started` is the one NON-terminal event here, and it earns its
 /// place: Meta's standard-event reference defines InitiateCheckout as entering
@@ -78,14 +94,7 @@ class MetaAnalyticsService implements AnalyticsService {
             currency: _currency,
           ),
         );
-      case 'subscription_active':
-        unawaited(
-          _facebook.logSubscribe(
-            orderId: _orderId(properties),
-            price: _value(properties),
-            currency: _currency,
-          ),
-        );
+      // `subscription_active` deliberately emits NOTHING — see the class doc.
       // Every other product event stays PostHog-only — intentionally dropped.
     }
   }

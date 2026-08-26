@@ -2,31 +2,36 @@
 
 Never call SDKs from widgets — always `AnalyticsService`. `CompositeAnalyticsService` fans out to:
 - **PostHog** — **every install**, and **only the journey**: `Application Installed` → `login_success` → `trial_started` → `wallpaper_applied` / `wallpaper_shared` → `ringtone_set`. Nothing else reaches it (owner's call, 2026-08-18). Two gates: `AnalyticsCohort` (is this install in the panel? — currently all of them) and `AllowlistedAnalyticsService` (is this event on the list?). SDK lifecycle autocapture is **off**, so the install event is emitted by hand in `main.dart` — it is the one PostHog event that never passes through `AnalyticsService`.
-- **GA4** (`firebase_analytics`) — **every event at 100%, from every install** (raw name), plus ★ events emitting GA4 *standard* `login`/`purchase` = the Google Ads conversion source. Active when `AppConfig.firebaseEnabled` (real builds with `google-services.json`; `flutter test` skips). **The complete, unsampled record** — anything PostHog drops is still measurable here for free.
+- **GA4** (`firebase_analytics`) — **every event at 100%, from every install** (raw name), plus ★ events emitting GA4 *standard* `login`/`begin_checkout`. **`purchase` is NOT emitted anywhere** (2026-08-26) — `trial_started` is the ONLY Google Ads conversion source. Active when `AppConfig.firebaseEnabled` (real builds with `google-services.json`; `flutter test` skips). **The complete, unsampled record** — anything PostHog drops is still measurable here for free.
 - **Meta App Events** — ONLY ★ events (clean conversion signal); installs/launches auto-logged natively. Active when `AppConfig.metaEnabled`.
 
 ★ = `login_success` (GA4 `login`) · `checkout_started` (GA4 `begin_checkout` + Meta InitiateCheckout) ·
-`trial_started` (Meta StartTrial; deliberately **no** GA4 `purchase` — mapping it booked phantom revenue
-and double-counted the later subscriber) · `subscription_active` (Meta Subscribe + GA4 `purchase`). The
-two PURCHASE events carry `plan`, `order_id` (PhonePe merchant order id) and `value` (INR from
-`app_config.prices.monthly`) for ROAS and for matching the Worker's copy; `login_success` carries only `provider`.
+`trial_started` (Meta StartTrial; **no** GA4 `purchase` — a trial moves no money) · `subscription_active`
+(**emits NOTHING to GA4 or Meta**). `trial_started` carries `plan`, `order_id` (PhonePe merchant order
+id) and `value` (INR); `login_success` only `provider`. **`trial_started` fires from the purchase poll —
+or, for a trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget
+out: 13–15% of real trials vs Neon, 2026-08-26), late from `TrialConversionCatchUp` on the next `GET /me`
+showing `trialing` for a `merchant_order_id` this install never reported (`late: true`, once per order;
+`_trackConversion` marks BEFORE invalidating entitlement; installs predating it grandfather the trial
+they find so an update cannot double-count). Same app SDK, same single source — never a server copy.**
 **`checkout_started` fires at the TAP, before `/payments/initiate`**, so an initiate failure still reads as an abandoned checkout; its `method` (`upi_app`|`phonepe_sdk`) + `target_app` are what make "which UPI app expires the mandate" answerable — the question the paid funnel is actually lost on. **`payment_failed` is GA4-only** (a failure is a diagnostic; an ad optimiser fed one trains on the wrong outcome) and covers EVERY terminal exit of the purchase notifier through a single `_fail()`, so a new error path cannot silently skip it; `reason` is a short stable code, NEVER the user-facing copy — that copy is prose, it changes for wording reasons, and it would fragment the metric.
-**`subscription_active` has TWO reporters split by settle location, like GA4 `purchase`:** the client
-fires it only on an app-open setup settle (repeat subscriber); the app-closed FIRST trial→paid settle is
-the Worker's — Meta CAPI `Subscribe` (`workers/src/lib/meta.ts`, `action_source: system_generated`, Meta's
-term for an auto-pay renewal; `app` was REJECTED live, it needs real device extinfo; `event_id` = merchant
-order id; matched on hashed email + user id + first/last name from Google `display_name`, normalised like
-Meta's capi-param-builder) + PostHog capture (`workers/src/lib/posthog.ts`, `distinct_id` = `users.id`).
-Renewals reach GA4 ONLY — Meta/PostHog get acquisition signal, never renewal volume (owner, 2026-08-24).
-**`subscription_cancel` is server-only too** (`reportPostHogSubscriptionCancel`, owner 2026-08-25): one
-event per mandate from every channel that ends a LIVE row — user cancel, account deletion, PhonePe
-revoke (cron / status poll / webhook), permanent notify rejection — with `reason`, `prior_status`,
-`during_trial`. Restore-to-cancelled writes after a failed re-setup are NOT cancels. Cancellation rate =
-subscription_cancel ÷ trial_started on the same cohort; revenue truth stays Neon.
-The event LIST is the `track()` call sites — no table here to drift. The PostHog allow-list is pinned
-as an exact set by `test/core/analytics_gating_test.dart`, so adding one is a deliberate act.
-Consoles + DebugView: [analytics-ops.md](analytics-ops.md). Pakiza runs the identical mechanism with
-its own event catalogue — keep the MECHANISM in sync, never the lists (§Deltas).
+**NO PAID CONVERSION REACHES ANY AD PLATFORM (owner's call, 2026-08-26).** GA4 `purchase` + Meta
+`Subscribe` are gone from BOTH sides (client mappings, `lib/ga4.ts`/`lib/meta.ts`, the
+`app_instance_id`/`meta_anon_id` uploads, the `GA4_*`/`META_*` secrets). **WHY it must not come back:**
+`purchase` had TWO source types — app SDK for the app-open ₹199 setup, server (GA4 MP / Meta CAPI
+`system_generated`, which Meta files as a WEBSITE event) for the app-closed settle — and one conversion
+with two sources desynchronises attribution: raw counts stayed right while the CAMPAIGN column ran a day
+behind and undercounted. `trial_started`/StartTrial is the ONLY event campaigns bid on — app SDK, ONE
+source; trial→paid is ~84%, so bidding loses nothing. **Accepted cost: no revenue/ROAS signal on either
+platform.** `subscription_active` reaches **PostHog only** (server, first settle, `distinct_id` =
+`users.id`) — product analytics is not an attribution source. Renewals reach nothing.
+**`subscription_cancel` is server-only too** (owner 2026-08-25): one event per mandate from every channel
+that ends a LIVE row — user cancel, account deletion, PhonePe revoke (cron / status poll / webhook),
+permanent notify rejection — with `reason`, `prior_status`, `during_trial`. Restore-to-cancelled writes
+after a failed re-setup are NOT cancels. Cancellation rate = subscription_cancel ÷ trial_started, same cohort.
+The event LIST is the `track()` call sites — no table here to drift. The PostHog allow-list is pinned as
+an exact set by `test/core/analytics_gating_test.dart`. Consoles + DebugView: [analytics-ops.md](analytics-ops.md).
+Pakiza runs the identical mechanism with its own event catalogue — sync the MECHANISM, never the lists.
 
 ## PostHog is the journey view — and the gates that keep it that way
 
@@ -73,14 +78,11 @@ catalog/Neon wire values are `static`/`live` — an event↔Neon join on `type` 
 - `*_blocked_premium` fires from the client gate AND from the server-refusal handler — on ALL three
   gated verbs (lapsed subscription, stale client snapshot) — so one session can emit it twice. Read as
   "block encountered", never "distinct blocks". Tracking is at the gate; `/premium?source=` is display-only.
-- **Revenue truth is Neon**, never a sampled analytics tool. GA4 `purchase` has TWO reporters split
-  by settle location (client = app-open setup; Worker MP = app-closed trial→paid/renewals) — keep
-  the split or purchases double-count. Nothing downstream catches an overlap: GA4's `transaction_id`
-  dedupe covers WEB streams only, and Arul's Worker report is an app stream
-  ([analytics-ops.md](analytics-ops.md)). Delivery proof without console access, all three: the
-  Worker writes `ga4:purchase:<txn>` / `meta:subscribe:<txn>` / `ph:subscription_active:<txn>` to KV
-  **only** on an accepted send. Meta payload-shape check without touching the live dataset:
-  `workers/tools/meta-capi-validate.mjs` (test_event_code → Events Manager's Test Events tab only).
+- **Revenue truth is Neon**, never a sampled analytics tool — and now the ONLY revenue record, since no
+  `purchase`/`Subscribe` reaches GA4 or Meta. Delivery proof without console access: the Worker writes
+  `ph:subscription_active:<txn>` to KV **only** on an accepted send, stamped with the row's RETURNED
+  `updated_at`, not `now()` — PostHog dedupes on `[timestamp, distinct_id, event, uuid]`, so a wall-clock
+  stamp had made the deterministic `uuid` inert.
 
 ## Deltas vs Pakiza — do not unify
 

@@ -103,37 +103,6 @@ export interface Env {
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
-  // ── GA4 Measurement Protocol (server-side `purchase` — lib/ga4.ts) ───────
-  /**
-   * Firebase App ID of the Android app stream (google-services.json
-   * `mobilesdk_app_id`). Ships inside every APK, so NOT a secret — set in
-   * wrangler.toml [vars]. Optional: absent → server-side purchase reporting is
-   * skipped (fail-open), which is also how tests run.
-   */
-  GA4_FIREBASE_APP_ID?: string;
-  /**
-   * Measurement Protocol api_secret — GA4 Admin → Data streams → <Android
-   * stream> → Measurement Protocol API secrets. A real secret (grants event
-   * write into the GA4 property): wrangler secret bulk, never [vars].
-   */
-  GA4_API_SECRET?: string;
-
-  // ── Meta Conversions API (server-side first-conversion `Subscribe` —
-  //    lib/meta.ts) ──────────────────────────────────────────────────────────
-  /**
-   * Events Manager dataset id linked to the Facebook app (Events Manager →
-   * the app's data source → Settings). Not secret (visible in EM URLs) but
-   * set via `wrangler secret bulk` alongside the token so neither lives in
-   * the repo. Optional: absent → Meta reporting is skipped (fail-open).
-   */
-  META_DATASET_ID?: string;
-  /**
-   * Conversions API access token — Events Manager → dataset → Settings →
-   * Conversions API → Generate access token. A REAL secret (grants event
-   * write into the dataset): wrangler secret bulk, never [vars].
-   */
-  META_CAPI_ACCESS_TOKEN?: string;
-
   // ── PostHog capture (server-side first-conversion `subscription_active` —
   //    lib/posthog.ts) ───────────────────────────────────────────────────────
   /**

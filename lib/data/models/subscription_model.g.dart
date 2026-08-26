@@ -14,6 +14,7 @@ _SubscriptionModel _$SubscriptionModelFromJson(Map<String, dynamic> json) =>
       plan: json['plan'] as String?,
       phonepeSubscriptionId: json['phonepe_subscription_id'] as String?,
       merchantSubscriptionId: json['merchant_subscription_id'] as String?,
+      merchantOrderId: json['merchant_order_id'] as String?,
       trialEnd: json['trial_end'] == null
           ? null
           : DateTime.parse(json['trial_end'] as String),
@@ -33,6 +34,7 @@ Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
       'plan': instance.plan,
       'phonepe_subscription_id': instance.phonepeSubscriptionId,
       'merchant_subscription_id': instance.merchantSubscriptionId,
+      'merchant_order_id': instance.merchantOrderId,
       'trial_end': instance.trialEnd?.toIso8601String(),
       'current_period_end': instance.currentPeriodEnd?.toIso8601String(),
       'updated_at': instance.updatedAt?.toIso8601String(),

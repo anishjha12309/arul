@@ -1,6 +1,6 @@
 # Schema (Neon — source of truth: db/schema/, apply *.sql in filename order, then seed.sql)
 
-**users:** id(PK) · google_sub(unique) · email · display_name · display_name_custom (true once user edits — login stops syncing from Google) · referral_code(unique) · referred_by(FK) · reward_premium_until (referral credit; read by isPremium, decoupled from subscriptions) · app_instance_id (GA4 join key for server-side purchase reporting; uploaded at login/initiate, nullable) · created_at
+**users:** id(PK) · google_sub(unique) · email · display_name · display_name_custom (true once user edits — login stops syncing from Google) · referral_code(unique) · referred_by(FK) · reward_premium_until (referral credit; read by isPremium, decoupled from subscriptions) · app_instance_id, meta_anon_id (VESTIGIAL — their only readers were the server GA4/Meta conversion reporters, deleted 2026-08-26; nothing writes or reads them now, columns kept because dropping them is a migration) · created_at
 
 **subscriptions:** id(PK) · user_id(FK, unique — one row per user) · status(pending|trialing|active|paused|cancelled|expired) · plan · phonepe_subscription_id · merchant_subscription_id · merchant_order_id · phonepe_order_id · redemption_order_id · trial_end (**one-trial consumed-marker — written once, never cleared**) · current_period_end · next_debit_at · notified_at · retry_count · updated_at
 

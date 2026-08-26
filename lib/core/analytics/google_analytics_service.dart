@@ -16,25 +16,28 @@ import 'analytics_service.dart';
 ///        login_success       → login          (standard)
 ///        checkout_started    → begin_checkout (standard, value+INR)
 ///        trial_started       → (none — see below)
-///        subscription_active → purchase (standard, value+INR → Google Ads ROAS)
+///        subscription_active → (none — see below)
 ///      (We emit the standard event IN ADDITION to the raw-named event, so the
 ///      console shows both the product event and the conversion.)
 ///
-///      **`purchase` is reserved for money that actually moved.** A trial debits
-///      nothing, so mapping it to `purchase` booked phantom revenue and counted
-///      one subscriber twice — once at trial start, again on conversion. The raw
-///      `trial_started` event (logged above, with `value`/`plan`/`order_id`) is
-///      a GA4 key event IMPORTED into Google Ads alongside `purchase`, so
-///      trial optimisation has a conversion to bid on without polluting ROAS.
+///      **NO `purchase` EVENT IS EMITTED ANYWHERE** — removed entirely, both
+///      here and server-side (owner's call, 2026-08-26). It used to be SPLIT BY
+///      SETTLE LOCATION: this class logged it for the app-OPEN flow (a repeat
+///      subscriber paying ₹199 at setup) while the Worker reported trial→paid
+///      and renewals via the Measurement Protocol, keyed on app_instance_id.
+///      That split is exactly what broke it — ONE conversion action fed by TWO
+///      source types (app SDK + server MP) desynchronises attribution, so the
+///      campaign column lagged and undercounted while the raw event counts
+///      looked correct. A conversion action must have ONE data source.
+///      `purchase` must also stay UNMARKED as a key event in GA4 and OUT of
+///      the Google Ads import — re-adding either side re-opens the same fault.
 ///
-///      SPLIT BY SETTLE LOCATION — this class only logs `purchase` for the
-///      app-OPEN flow (`subscription_active`: a repeat subscriber paying ₹199
-///      at setup). Trial→paid and every renewal settle server-side with the
-///      app closed, and the Worker reports THOSE via the GA4 Measurement
-///      Protocol (workers/src/lib/ga4.ts, keyed on the app_instance_id
-///      uploaded at login/initiate). The split is what prevents double
-///      counting; both sides carry the PhonePe order id as `transaction_id`
-///      so GA4 dedupes any overlap. Neon remains revenue truth.
+///      `trial_started` (logged raw above, with `value`/`plan`/`order_id`) is
+///      the ONLY key event imported into Google Ads. It is app-SDK-sourced and
+///      in-session, so it has exactly one source and no settle-location split.
+///      Trial→paid is ~84%, so bidding on it loses no signal. The cost is real
+///      and accepted: Google Ads has NO revenue/ROAS signal. Neon is revenue
+///      truth — it always was.
 ///
 /// GA4 auto-collects `first_open`, `session_start`, and `screen_view`, so we
 /// don't log app-launch here. [screen] is a no-op for the same reason (PostHog
@@ -80,21 +83,14 @@ class GoogleAnalyticsService implements AnalyticsService {
             value: _value(properties),
           ),
         );
-      // Deliberately NOT mapped to `purchase` — a trial moves no money. The
-      // raw `trial_started` logged above carries value/plan/order_id and is
-      // the event to mark as a key event for trial-optimised Ads bidding.
+      // NEITHER trial nor paid conversion emits a GA4 standard `purchase`.
+      // A trial moves no money, and `purchase` itself was REMOVED (owner's
+      // call, 2026-08-26) — see the class doc. The raw `trial_started` logged
+      // above carries value/plan/order_id and is the ONLY event marked as a
+      // key event for Ads bidding.
       case 'trial_started':
-        break;
       case 'subscription_active':
-        unawaited(
-          _analytics.logPurchase(
-            currency: _currency,
-            value: _value(properties),
-            // PhonePe merchant order id — lets GA4 dedupe this against any
-            // server-side MP report of the same settle (workers ga4.ts).
-            transactionId: properties?['order_id'] as String?,
-          ),
-        );
+        break;
     }
   }
 

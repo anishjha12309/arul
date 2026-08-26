@@ -38,12 +38,6 @@ workers_dev = true
 preview_urls = false
 
 # ─── Plain-text vars ─────────────────────────────────────────────────────────
-# GA4_FIREBASE_APP_ID is the Android app stream id from google-services.json
-# (`mobilesdk_app_id`) — it ships inside every APK, so it is config, not a
-# secret. Its pair GA4_API_SECRET (MP api_secret) IS a secret: wrangler secret
-# bulk only. Both absent → lib/ga4.ts skips reporting, fail-open.
-[vars]
-GA4_FIREBASE_APP_ID = "1:1083884444243:android:7fd6427950254fe7ea44a6"
 
 # PostHog ingestion host for the server-side first-conversion capture
 # (lib/posthog.ts). US Cloud — must match the app's POSTHOG_HOST dart-define.

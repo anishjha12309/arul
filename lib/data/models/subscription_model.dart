@@ -35,6 +35,13 @@ abstract class SubscriptionModel with _$SubscriptionModel {
     String? plan,
     String? phonepeSubscriptionId,
     String? merchantSubscriptionId,
+
+    /// The SETUP order id (`DKS_…`) — the same value the purchase notifier
+    /// passes to `trial_started` as `order_id`. `TrialConversionCatchUp` keys
+    /// on it to fire that event late for a trial that was granted with the
+    /// app closed, exactly once per order. Null on builds of the Worker that
+    /// predate it, which the catch-up treats as "nothing to reconcile".
+    String? merchantOrderId,
     DateTime? trialEnd,
     DateTime? currentPeriodEnd,
     DateTime? updatedAt,

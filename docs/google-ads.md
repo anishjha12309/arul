@@ -77,21 +77,24 @@ reads "Conversion data source is not linked" while still recording installs. App
 goes to the Play account owner. The Play developer account must have exactly **one** Owner or linking
 is unsupported.
 
-## Server-side Measurement Protocol
+## Server-side Measurement Protocol — REMOVED, do not re-add
 
-MP events **are** exported to linked ad products — `session_id` is NOT required for that use case (it
-is required only for User-ID assignment and session attribution, which is what the docs' session
-guidance is about). Requirements: send ≤63 days after that user's latest online event, and if you
-override `timestamp_micros` keep it inside 72h. Don't add `session_id` chasing an Ads gap.
+The Worker no longer sends any GA4 event (`workers/src/lib/ga4.ts` deleted 2026-08-26, owner's call).
+MP events *are* exported to linked ad products and the wiring worked — that was never the problem.
+The problem was having TWO source types on ONE conversion action: the app SDK emitted `purchase` for
+the app-open ₹199 setup, MP emitted it for app-closed trial→paid and renewals. The two reconcile on
+different schedules, so GA4's raw counts stayed correct while the Ads CAMPAIGN column lagged ~a day
+and undercounted. **`trial_started` is now the only imported conversion** — app-SDK, in-session, one
+source. Accepted cost: no revenue/ROAS signal in Ads. Neon is revenue truth.
 
-Confirm delivery without GA4 access: the Worker writes `ga4:purchase:<transactionId>` to KV **only**
-on a 2xx from MP (`workers/src/lib/ga4.ts`), so the key's presence proves the call was made and
-accepted.
+If MP is ever revived: `session_id` is NOT required for ad export (only for User-ID assignment and
+session attribution); send ≤63 days after the user's latest online event; keep any `timestamp_micros`
+override inside 72h. And it must be the ONLY source for whatever event it sends.
 
 ## Deleting a retired Firebase project
 
 Deleting a Firebase project deletes its **GCP project and every OAuth client in it**. Before deleting
 one, confirm no live client id carries its project number — Arul's web + Android client ids,
-`google-services.json` and `GA4_FIREBASE_APP_ID` are all on `1083884444243`. A retired property can
+`google-services.json` are all on `1083884444243` (the `GA4_FIREBASE_APP_ID` var went with MP). A retired property can
 also linger as a registered app conversion data source in Ads under an identical app name; pick data
 sources by property NUMBER, never by app label.

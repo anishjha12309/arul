@@ -39,8 +39,6 @@
 
 import type { Env } from "../env.js";
 import { getDb, toDate } from "../lib/db.js";
-import { reportServerPurchase } from "../lib/ga4.js";
-import { reportMetaFirstConversion } from "../lib/meta.js";
 import {
   reportPostHogFirstConversion,
   reportPostHogSubscriptionCancel,
@@ -141,8 +139,10 @@ const MAX_PHONEPE_CALLS_PER_RUN = 600;
 const EXECUTE_AFTER_NOTIFY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Subrequests a COMPLETED settle spends OUTSIDE the PhonePe calls: the GA4,
- * Meta and PostHog reporters are a fetch plus a KV get + put each (up to 9).
+ * Subrequests a COMPLETED settle spends OUTSIDE the PhonePe calls: PostHog is
+ * a fetch plus a KV get + put (3). It was 9 while GA4 and Meta also reported
+ * from here; both were removed 2026-08-26 (one conversion action must have one
+ * data source — see the settle path below), so the charge drops with them.
  * Uncounted, five settles in one tick blew the then-50-subrequest cap at
  * 04:00Z on 2026-08-25 right after the reporters had fired — every row behind
  * them got "Too many subrequests" instead of a redeem. Workers Paid retired
@@ -150,7 +150,7 @@ const EXECUTE_AFTER_NOTIFY_MS = 24 * 60 * 60 * 1000;
  * they stay charged against the same budget and the run stops cleanly with
  * rows left rather than dying mid-row.
  */
-const SETTLE_REPORTER_SUBREQUESTS = 9;
+const SETTLE_REPORTER_SUBREQUESTS = 3;
 
 /**
  * An order older than PhonePe's 48 h retry window can only still settle
@@ -678,7 +678,7 @@ async function applyDebitOutcome(
 ): Promise<boolean> {
   if (state === "COMPLETED") {
     const nextPeriodEnd = addOneMonth(new Date());
-    await sql`
+    const settled = (await sql`
       UPDATE subscriptions
       SET status             = 'active',
           current_period_end = ${nextPeriodEnd.toISOString()},
@@ -688,33 +688,31 @@ async function applyDebitOutcome(
           retry_count        = 0,
           updated_at         = now()
       WHERE id = ${row.id}
-    `;
+      RETURNING updated_at
+    `) as unknown as { updated_at?: Date | string | null }[];
     // Referral reward on the referred user's first paid debit. Idempotent:
     // the status<>'rewarded' guard means monthly renewals never re-credit.
     await grantReferralReward(sql, row.userId);
-    // App-closed settle → report `purchase` server-side (GA4 MP). Same
-    // transaction id as the webhook path, so whichever lands second dedupes.
-    // Fail-open — never blocks the grant above.
-    await reportServerPurchase(env, sql, {
-      userId: row.userId,
-      transactionId: row.redemptionOrderId,
-      amountPaise: 19900,
-    });
-    // FIRST trial→paid conversion only ('trialing' at settle) → Meta Subscribe
-    // + PostHog subscription_active. Renewals stay out of both on purpose:
-    // they optimise acquisition / end the journey funnel, and a renewal is
-    // neither. Both fail-open and KV-deduped per transaction, so the webhook
-    // settling the same debit can't double-report.
+    // NO ad-platform conversion is reported from the server any more — GA4
+    // `purchase` (MP) and Meta `Subscribe` (CAPI) were BOTH removed here
+    // (owner's call, 2026-08-26). A server-sent conversion is a SECOND source
+    // type for an event the app SDK also emits, and one conversion action fed
+    // by two sources desynchronises attribution: the raw event counts stayed
+    // correct in GA4/Events Manager while the campaign column lagged a day and
+    // undercounted. `trial_started` / StartTrial — app-SDK, in-session, single
+    // source — is the only event campaigns bid on now. Neon is revenue truth.
+    //
+    // PostHog stays: it is product analytics, not an ad-attribution source,
+    // so a server-sent event there costs nothing. FIRST trial→paid only
+    // ('trialing' at settle); renewals end no journey funnel. Fail-open and
+    // KV-deduped per transaction, so the webhook settling the same debit can't
+    // double-report.
     if (row.priorStatus === "trialing") {
-      await reportMetaFirstConversion(env, sql, {
-        userId: row.userId,
-        transactionId: row.redemptionOrderId,
-        amountPaise: 19900,
-      });
       await reportPostHogFirstConversion(env, {
         userId: row.userId,
         transactionId: row.redemptionOrderId,
         amountPaise: 19900,
+        occurredAt: settled[0]?.updated_at ?? null,
       });
     }
     return true;
@@ -833,11 +831,13 @@ async function parkMandate(
         updated_at    = now()
     FROM subscriptions AS prior
     WHERE s.id = ${subscriptionId} AND prior.id = s.id
-    RETURNING s.user_id, s.merchant_subscription_id, prior.status AS prior_status
+    RETURNING s.user_id, s.merchant_subscription_id, prior.status AS prior_status,
+              s.updated_at
   `) as unknown as {
     user_id: string;
     merchant_subscription_id: string | null;
     prior_status: string | null;
+    updated_at?: Date | string | null;
   }[];
   if (status === "cancelled" && rows[0]) {
     await reportPostHogSubscriptionCancel(env, {
@@ -845,6 +845,7 @@ async function parkMandate(
       merchantSubId: rows[0].merchant_subscription_id,
       reason,
       priorStatus: rows[0].prior_status,
+      occurredAt: rows[0].updated_at ?? null,
     });
   }
 }

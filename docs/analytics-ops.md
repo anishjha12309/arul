@@ -22,21 +22,17 @@ A successful upload logs the batch and a `204`.
 ## Google Ads
 
 Conversions live in the SHARED Ads account `750-756-8746`, which also carries Pakiza's — a campaign
-must pick its own app's conversion action. Arul imports BOTH GA4 conversions: **`trial_started`**
-(Primary — what App-campaign bidding targets) and **`purchase`** (Secondary — observe-only, so it
-never enters the Conversions column or bidding). **`purchase` is reported from BOTH sides, split by settle location** — never add a
-third reporter: the client logs it only for the app-open flow (repeat subscriber, ₹199 at setup),
-and the Worker reports app-closed settles (trial→paid, renewals) via the GA4 Measurement Protocol
-(`workers/src/lib/ga4.ts`, keyed on the `app_instance_id` uploaded at login/initiate; both sides
-carry a PhonePe order id as `transaction_id`, but **that dedupes nothing** — GA4's `transaction_id`
-dedupe is web-stream only and this is an app stream, and the two sides send different ids anyway. The
-split plus the Worker's KV mark is the whole protection). Server reporting is silently OFF until the
-`GA4_API_SECRET` worker secret is set (GA4 Admin → Data streams → Android stream → Measurement
-Protocol API secrets); `/mp/collect` answers 2xx even for payloads it DROPS. `node
-workers/tools/ga4-mp-validate.mjs <app_instance_id>` checks payload SHAPE only — it reads the local
-`.dev.vars`, and GA4's debug endpoint validates neither `api_secret` nor `firebase_app_id`, so it
-cannot prove the deployed wiring. Users on builds that
-never uploaded an id stay unreported — **Neon remains revenue truth** (CLAUDE.md §Analytics).
+must pick its own app's conversion action. Arul imports exactly ONE GA4 conversion: **`trial_started`**
+(Primary — what App-campaign bidding targets).
+**`purchase` was REMOVED entirely on 2026-08-26 (owner's call) and must stay out** — unmarked as a GA4
+key event, absent from the Ads import, and emitted by neither the app nor the Worker. It used to be
+reported from BOTH sides split by settle location (client = app-open ₹199 setup; Worker = app-closed
+trial→paid/renewals via the Measurement Protocol, keyed on `app_instance_id`). That split stopped double
+counting but gave ONE conversion action TWO data sources, which desynchronises attribution: GA4's raw
+event counts stayed correct while the CAMPAIGN column ran ~a day behind and undercounted, because the
+two sources reconcile on different schedules. `trial_started` is app-SDK sourced and in-session — one
+source, no split. Trial→paid is ~84%, so bidding loses no signal; the accepted cost is that Ads has NO
+revenue/ROAS signal. **Neon is revenue truth** (CLAUDE.md §Analytics).
 
 Linkage + attribution traps — why an App campaign has no conversion goals, why Ads legitimately shows
 zero while GA4 holds the events, and which console lies how:
@@ -66,20 +62,17 @@ pipe (a full day of diagnosis on 2026-08-24 ended in none of the code being wron
 - **Ads Manager columns count ad-attributed conversions inside the attribution window** — Events
   Manager counts everyone. "—" with a populated dataset is arithmetic (google-ads.md, same trap).
 
-CAPI `Subscribe` is the Worker's (`workers/src/lib/meta.ts`, secrets `META_DATASET_ID` +
-`META_CAPI_ACCESS_TOKEN`); it rides neither the SDK nor the developer account, so it survives both
-outages above. It is sent as **`action_source: system_generated`** (Meta's definition: an auto-pay
-renewal) — NOT `app`: an app event needs an `extinfo` with a real OS version, Meta bounces a blank
-one (error_subcode 2804043, cost the first three real conversions on 2026-08-25), and the server
-has no device to read one from. Sending true app events later needs the client to upload device
-info next to `meta_anon_id`. Shape-check without polluting the dataset: `node workers/tools/meta-capi-validate.mjs
-<test_event_code>` (Test events tab only). The Copy button there can silently copy nothing — read the
-code off the screen.
-
-**EMQ levers are bounded by Play's Data safety form, not by Meta.** Events Manager offers IP (+35%),
-user agent (+35%) and IP-derived city/region/postcode (+15% each) for `Subscribe`; Google's policy
-says an IP "used to determine location" must be declared and ad-measurement use is never
-"ephemeral", so each of those is a new declaration + a privacy-policy edit before it may ship.
+**CAPI `Subscribe` was REMOVED on 2026-08-26 (owner's call) — do not re-add it**, not in the Worker, not
+in `MetaAnalyticsService`, not as a custom conversion. The server could only send
+**`action_source: system_generated`** — `app` needs an `extinfo` with a real OS version and Meta bounces
+a blank one (error_subcode 2804043, cost the first three real conversions on 2026-08-25). Meta files
+`system_generated` under WEBSITE events (the dataset offered only a Website tab and asked for better
+`fbc` coverage, a web click param), so ONE conversion event arrived from TWO source types — app SDK for
+the app-open ₹199 setup, web-shaped server events for trial→paid — and campaign attribution
+desynchronised while the dataset's raw counts stayed correct. **StartTrial (`start_trial_mobile_app`) is
+the only event campaigns optimise on**: app-SDK, in-session, one source. `workers/src/lib/meta.ts` now
+holds only the anon-id validator; the `META_DATASET_ID`/`META_CAPI_ACCESS_TOKEN` secrets and
+`meta-capi-validate.mjs` are gone. Accepted cost: no revenue/ROAS signal on Meta.
 Hashed first/last name from Google `display_name` is the ONE key that adds no data type and no
 recipient (email already goes to the same event) and is the only one sent (owner, 2026-08-25).
 Normalisation copies Meta's capi-param-builder verbatim (`normalizeMetaName`); do not add the

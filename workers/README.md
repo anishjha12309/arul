@@ -68,8 +68,6 @@ PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VE
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
 OPS_SECRET(money-moving internal routes; unset = they refuse, which is the safe default)
-GA4_API_SECRET(GA4 Admin → Data streams → Android stream → MP API secrets; unset = server-side
-  purchase reporting silently skips — its pair GA4_FIREBASE_APP_ID is plain config in wrangler.toml [vars])
 ```
 Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` once routed production
 credentials to the sandbox host. `isProduction()` now trims and throws; every OTHER secret is still
