@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/app_instance_id.dart';
+import '../../../core/analytics/meta_anon_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -84,6 +85,75 @@ class PremiumPurchase extends _$PremiumPurchase {
         );
   }
 
+  /// Fires `checkout_started` the moment the user commits to paying — BEFORE
+  /// /payments/initiate, so a server-side initiate failure still shows up as an
+  /// abandoned checkout rather than vanishing.
+  ///
+  /// This is the funnel's missing middle. Everything between the paywall and
+  /// `trial_started` used to be dark, which is why the UPI-handoff loss had to
+  /// be reconstructed by hand from PhonePe + Neon. GA4 maps it to the standard
+  /// `begin_checkout` and Meta to InitiateCheckout, so both optimisers finally
+  /// see the top of the paid funnel and not just its (much rarer) endpoint.
+  ///
+  /// [method] records which handoff was ATTEMPTED, not which ran: the server
+  /// silently falls back to the SDK shape when an intent setup fails, so this
+  /// is the user's intent. `target_app` is the UPI package — the axis that
+  /// makes "which app expires the mandate" answerable.
+  void _trackCheckoutStarted(String method, String? targetApp) {
+    _checkoutMethod = method;
+    final price = _monthlyPriceRupees();
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          'checkout_started',
+          properties: {
+            'plan': 'monthly',
+            'method': method,
+            'target_app': ?targetApp,
+            'value': ?price,
+          },
+        );
+  }
+
+  /// The ONE terminal-failure event, emitted through [_fail] so no error path
+  /// can be added without one. GA4-only by construction: `payment_failed` is
+  /// not on the PostHog allow-list (default-deny, analytics-events.md) and
+  /// `MetaAnalyticsService` drops anything that isn't a conversion — a failure
+  /// is a diagnostic, and feeding it to an ad optimiser trains the wrong thing.
+  ///
+  /// [reason] is a short STABLE code, never the user-facing copy: that copy is
+  /// prose, it changes for wording reasons, and it would fragment the metric.
+  /// `cancelled` separates a deliberate back-out from a real failure — the same
+  /// split `login_cancelled` keeps against `login_failed`.
+  void _trackPaymentFailed(String reason, {required bool cancelled}) {
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          'payment_failed',
+          properties: {
+            'reason': reason,
+            'cancelled': cancelled,
+            'plan': 'monthly',
+            // Which handoff was in flight when it died — the whole point of
+            // the event. Null only if a failure somehow precedes the tap.
+            'method': ?_checkoutMethod,
+          },
+        );
+  }
+
+  /// Terminal failure: set the error state AND report it, in that order, so
+  /// every one of this notifier's failure exits is counted exactly once.
+  /// Always prefer this over assigning [PurchaseError] directly.
+  void _fail(String reason, PurchaseError error) {
+    state = error;
+    _trackPaymentFailed(reason, cancelled: error.cancelled);
+  }
+
+  /// The checkout handoff currently in flight (`upi_app` / `phonepe_sdk`), set
+  /// by [_trackCheckoutStarted] and read by [_trackPaymentFailed] so a failure
+  /// names the path that died. Survives for the attempt's lifetime.
+  String? _checkoutMethod;
+
   /// Monthly price in rupees from the remote app_config (`prices.monthly.amount`
   /// is paise), or null if the config hasn't loaded — matches the fallback the
   /// premium screen uses for display. Read synchronously from the already-cached
@@ -133,6 +203,13 @@ class PremiumPurchase extends _$PremiumPurchase {
     if (state is PurchaseLoading || state is PurchaseProcessing) return;
 
     state = const PurchaseLoading();
+    // The user has committed to paying — count the checkout BEFORE any network
+    // call, so an initiate failure reads as an abandoned checkout rather than
+    // as nothing having happened at all.
+    _trackCheckoutStarted(
+      targetApp != null ? 'upi_app' : 'phonepe_sdk',
+      targetApp,
+    );
 
     try {
       // ── Step 1: Initiate payment on the server ───────────────────────────
@@ -141,9 +218,13 @@ class PremiumPurchase extends _$PremiumPurchase {
       // one — login also uploads it, but not for users who signed in on an
       // older build (app_instance_id.dart).
       final appInstanceId = await fetchAppInstanceId();
+      // metaAnonId: same reason for the Meta join key — the first trial→paid
+      // debit settles app-closed and lib/meta.ts device-matches through it.
+      final metaAnonId = await fetchMetaAnonId();
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
         'appInstanceId': ?appInstanceId,
+        'metaAnonId': ?metaAnonId,
         'targetApp': ?targetApp,
       });
 
@@ -156,8 +237,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       final intentUrl = initResp['intentUrl'] as String? ?? '';
       if (intentUrl.isNotEmpty && targetApp != null) {
         if (merchantOrderId.isEmpty) {
-          state = const PurchaseError(
-            'Payment initiation failed. Please try again.',
+          _fail(
+            'initiate_incomplete',
+            const PurchaseError('Payment initiation failed. Please try again.'),
           );
           return;
         }
@@ -180,8 +262,9 @@ class PremiumPurchase extends _$PremiumPurchase {
           token.isEmpty ||
           merchantId.isEmpty ||
           environment.isEmpty) {
-        state = const PurchaseError(
-          'Payment initiation failed. Please try again.',
+        _fail(
+          'initiate_incomplete',
+          const PurchaseError('Payment initiation failed. Please try again.'),
         );
         return;
       }
@@ -205,7 +288,10 @@ class PremiumPurchase extends _$PremiumPurchase {
       );
 
       if (sdkInited != true) {
-        state = const PurchaseError('PhonePe SDK failed to initialise.');
+        _fail(
+          'sdk_init_failed',
+          const PurchaseError('PhonePe SDK failed to initialise.'),
+        );
         return;
       }
 
@@ -252,7 +338,10 @@ class PremiumPurchase extends _$PremiumPurchase {
         // setup claim so an immediate re-tap starts a fresh flow instead of
         // bouncing off 409 setup_in_progress.
         await _abandonSetup(merchantOrderId);
-        state = const PurchaseError('Payment cancelled.', cancelled: true);
+        _fail(
+          'user_cancel',
+          const PurchaseError('Payment cancelled.', cancelled: true),
+        );
         return;
       }
 
@@ -274,14 +363,19 @@ class PremiumPurchase extends _$PremiumPurchase {
           return;
         }
         if (sdkError.contains('USER_CANCEL')) {
-          state = const PurchaseError('Payment cancelled.', cancelled: true);
+          _fail(
+            'user_cancel',
+            const PurchaseError('Payment cancelled.', cancelled: true),
+          );
         } else if (sdkStatus == 'INTERRUPTED') {
-          state = const PurchaseError(
-            'Payment was interrupted. Please try again.',
+          _fail(
+            'sdk_interrupted',
+            const PurchaseError('Payment was interrupted. Please try again.'),
           );
         } else {
-          state = const PurchaseError(
-            'Payment was not completed. Please try again.',
+          _fail(
+            'sdk_failed',
+            const PurchaseError('Payment was not completed. Please try again.'),
           );
         }
         return;
@@ -311,21 +405,30 @@ class PremiumPurchase extends _$PremiumPurchase {
       // subscription. Ask them to wait — the in-flight attempt is what will
       // actually settle.
       if (e.code == 'setup_in_progress') {
-        state = const PurchaseError(
-          'A payment setup is already in progress. '
-          'Please wait a few seconds and try again.',
+        _fail(
+          'setup_in_progress',
+          const PurchaseError(
+            'A payment setup is already in progress. '
+            'Please wait a few seconds and try again.',
+          ),
         );
         return;
       }
-      state = PurchaseError(
-        e.message.isNotEmpty
-            ? e.message
-            : 'Something went wrong. Please try again.',
+      _fail(
+        'api_error',
+        PurchaseError(
+          e.message.isNotEmpty
+              ? e.message
+              : 'Something went wrong. Please try again.',
+        ),
       );
     } catch (e) {
       // Never show the raw exception — it can carry SDK/stack detail.
       debugPrint('[PremiumPurchase] unexpected error: $e');
-      state = const PurchaseError('Something went wrong. Please try again.');
+      _fail(
+        'unexpected_error',
+        const PurchaseError('Something went wrong. Please try again.'),
+      );
     }
   }
 
@@ -343,8 +446,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       // Nothing was authorized (the app never opened) — release the claim so
       // the immediate retry (likely via another UPI app) starts clean.
       await _abandonSetup(merchantOrderId);
-      state = const PurchaseError(
-        'Could not open your UPI app. Please try again.',
+      _fail(
+        'upi_launch_failed',
+        const PurchaseError('Could not open your UPI app. Please try again.'),
       );
       return;
     }
@@ -426,7 +530,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       }
       if (serverStatus == 'expired') {
         _pollGeneration++;
-        state = const PurchaseError(_intentFailedCopy);
+        _fail('expired', const PurchaseError(_intentFailedCopy));
         return true;
       }
       return false;
@@ -447,7 +551,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _confirmWithServer(orderId);
       return;
     }
-    state = const PurchaseError(_intentFailedCopy);
+    _fail('intent_abandoned', const PurchaseError(_intentFailedCopy));
   }
 
   /// Steps 4+5: short-backoff poll of /payments/status until the server
@@ -501,16 +605,22 @@ class PremiumPurchase extends _$PremiumPurchase {
         // decides — see _intentFailedCopy); on the SDK flow the user already
         // saw PhonePe's own screens, so a neutral cancelled toast fits.
         if (serverStatus == 'expired') {
-          state = _intentOrderId != null
-              ? const PurchaseError(_intentFailedCopy)
-              : const PurchaseError('Payment cancelled.', cancelled: true);
+          _fail(
+            'expired',
+            _intentOrderId != null
+                ? const PurchaseError(_intentFailedCopy)
+                : const PurchaseError('Payment cancelled.', cancelled: true),
+          );
           return;
         }
 
         // Any other terminal state (cancelled etc.) = failure.
         debugPrint('[PremiumPurchase] terminal server status: $serverStatus');
-        state = const PurchaseError(
-          'We couldn’t activate your subscription. Please contact support.',
+        _fail(
+          'server_terminal',
+          const PurchaseError(
+            'We couldn’t activate your subscription. Please contact support.',
+          ),
         );
         return;
       } on ApiException catch (e) {
@@ -541,9 +651,15 @@ class PremiumPurchase extends _$PremiumPurchase {
     // on its own). Say confirmation is late: the setup webhook still grants
     // server-side and the paywall's pending self-heal picks it up on reopen.
     if (!reachedServer) {
-      state = const PurchaseError(
-        'Payment received but confirmation is delayed. '
-        'Please restart the app — your subscription will activate shortly.',
+      // NOT a known failure: the mandate may well have been approved. Still
+      // counted, because the user's checkout ended without premium — the
+      // `reason` is what separates it from a real declination.
+      _fail(
+        'confirmation_unreachable',
+        const PurchaseError(
+          'Payment received but confirmation is delayed. '
+          'Please restart the app — your subscription will activate shortly.',
+        ),
       );
       return;
     }
@@ -558,9 +674,12 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _autoResolveIntent(intentOrderId);
       return;
     }
-    state = const PurchaseError(
-      'Payment received but confirmation is delayed. '
-      'Please restart the app — your subscription will activate shortly.',
+    _fail(
+      'confirmation_late',
+      const PurchaseError(
+        'Payment received but confirmation is delayed. '
+        'Please restart the app — your subscription will activate shortly.',
+      ),
     );
   }
 

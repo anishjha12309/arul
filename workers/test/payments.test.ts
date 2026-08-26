@@ -40,6 +40,12 @@ vi.mock("../src/lib/referral.js", () => ({
   grantReferralReward: vi.fn().mockResolvedValue(undefined),
 }));
 
+const posthog = vi.hoisted(() => ({
+  reportPostHogFirstConversion: vi.fn().mockResolvedValue(undefined),
+  reportPostHogSubscriptionCancel: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../src/lib/posthog.js", () => posthog);
+
 // Mock setupSubscription + revokeMandateTolerant (the latter so the superseded-
 // mandate revoke in handleInitiate never reaches PhonePe from a test); keep the
 // real ID builders + verifyCallbackAuth.
@@ -72,6 +78,7 @@ import {
   handleWebhook,
   handleAbandon,
   handleStatus,
+  handleCancel,
 } from "../src/routes/payments.js";
 import {
   setupSubscription,
@@ -638,6 +645,87 @@ describe("handleAbandon — releasing a claimed setup", () => {
 
 // ── /payments/webhook — checkout.order.completed ─────────────────────────────
 
+describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under paymentFlow)", () => {
+  // PhonePe webhook-handling reference (read 2026-08-25): for every ORDER event
+  // merchantSubscriptionId + subscriptionId live under payload.paymentFlow, NOT
+  // at the top of payload. The flat fixtures elsewhere in this file are the
+  // state-change shape; reading only that shape acked every real redemption
+  // webhook with "Missing merchantSubscriptionId" (0 txn:* marks in prod).
+  it("grants the month from a redemption.order.completed with ids nested under paymentFlow", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ user_id: USER_ID, status: "trialing" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        type: "SUBSCRIPTION_REDEMPTION_ORDER_COMPLETED",
+        event: "subscription.redemption.order.completed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_R_NEST_1",
+          orderId: "OMO_NEST_1",
+          state: "COMPLETED",
+          amount: 19900,
+          paymentFlow: {
+            type: "SUBSCRIPTION_REDEMPTION",
+            merchantSubscriptionId: "DKS_S_NEST",
+            subscriptionId: "OMS_NEST",
+            amountType: "FIXED",
+            maxAmount: 19900,
+            frequency: "MONTHLY",
+          },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const update = texts.find((t) => t.includes("UPDATE subscriptions"));
+    expect(update).toBeDefined();
+    expect(env.KV.put).toHaveBeenCalledWith(
+      "txn:subscription.redemption.order.completed:OMO_NEST_1",
+      "1",
+      expect.anything(),
+    );
+  });
+
+  it("grants the trial from a setup.order.completed with ids nested under paymentFlow", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ user_id: USER_ID, status: "trialing" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.setup.order.completed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_O_NEST",
+          orderId: "OMO_NEST_2",
+          state: "COMPLETED",
+          amount: 200,
+          paymentFlow: {
+            type: "SUBSCRIPTION_CHECKOUT_SETUP",
+            merchantSubscriptionId: "DKS_S_NEST2",
+            subscriptionId: "OMS_NEST2",
+            authWorkflowType: "PENNY_DROP",
+          },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const update = texts.find((t) => t.includes("UPDATE subscriptions"));
+    expect(update).toBeDefined();
+    // PhonePe's own id must be captured from the nested home too.
+    expect(update).toContain("phonepe_subscription_id");
+  });
+});
+
 describe("handleWebhook checkout.order.completed — one trial per user", () => {
   beforeEach(() => {
     vi.mocked(grantReferralReward).mockClear();
@@ -832,5 +920,63 @@ describe("the RESTORE rule holds on all three release paths", () => {
       texts.find((t) => t.includes("UPDATE subscriptions")),
       "handleAbandon",
     );
+  });
+});
+
+describe("handleCancel — subscription_cancel reporting", () => {
+  beforeEach(() => {
+    posthog.reportPostHogSubscriptionCancel.mockClear();
+  });
+
+  it("reports user_cancel with the row's PRIOR status after revoking at PhonePe", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ merchant_subscription_id: "DKS_S_CANCEL", status: "trialing" }],
+      [], // UPDATE → cancelled
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleCancel(makeInitiateCtx(env, token, {}));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(env, "DKS_S_CANCEL");
+    expect(texts.find((t) => t.includes("'cancelled'"))).toBeDefined();
+    expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledTimes(1);
+    expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledWith(env, {
+      userId: USER_ID,
+      merchantSubId: "DKS_S_CANCEL",
+      reason: "user_cancel",
+      priorStatus: "trialing",
+    });
+  });
+
+  it("does not report when the row was already cancelled (no state change)", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([
+      [{ merchant_subscription_id: "DKS_S_DONE", status: "cancelled" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleCancel(makeInitiateCtx(env, token, {}));
+
+    expect(res.status).toBe(200);
+    expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
+  });
+
+  it("does not report when PhonePe refused the revoke (nothing was cancelled)", async () => {
+    vi.mocked(revokeMandateTolerant).mockResolvedValueOnce(false);
+    const env = makeEnv();
+    const { sql } = makeQueueSql([
+      [{ merchant_subscription_id: "DKS_S_REFUSED", status: "active" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleCancel(makeInitiateCtx(env, token, {}));
+
+    expect(res.status).toBe(502);
+    expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
   });
 });

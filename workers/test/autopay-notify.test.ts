@@ -53,6 +53,18 @@ vi.mock("../src/lib/referral.js", () => referral);
 const ga4 = vi.hoisted(() => ({ reportServerPurchase: vi.fn() }));
 vi.mock("../src/lib/ga4.js", () => ga4);
 
+const meta = vi.hoisted(() => ({
+  reportMetaFirstConversion: vi.fn(),
+  normalizeMetaAnonId: vi.fn(),
+}));
+vi.mock("../src/lib/meta.js", () => meta);
+
+const posthog = vi.hoisted(() => ({
+  reportPostHogFirstConversion: vi.fn(),
+  reportPostHogSubscriptionCancel: vi.fn(),
+}));
+vi.mock("../src/lib/posthog.js", () => posthog);
+
 const db = vi.hoisted(() => ({ getDb: vi.fn() }));
 vi.mock("../src/lib/db.js", () => ({
   getDb: db.getDb,
@@ -104,14 +116,17 @@ function updates(executed: Executed[]): Executed[] {
   return executed.filter((e) => /^UPDATE subscriptions/i.test(e.text));
 }
 
-function dueRow(overdueMs: number) {
+function dueRow(overdueMs: number, status = "trialing", notifiedAgoMs = 25 * HOUR) {
   return {
     id: "row-1",
     user_id: "user-1",
+    status,
     merchant_subscription_id: SUB,
     redemption_order_id: ORDER,
     retry_count: 0,
     next_debit_at: new Date(Date.now() - overdueMs).toISOString(),
+    // Notified 25h ago by default — outside PhonePe's 24h notify→execute window.
+    notified_at: new Date(Date.now() - notifiedAgoMs).toISOString(),
   };
 }
 
@@ -153,6 +168,26 @@ describe("Pass B — a settled debit is always recorded", () => {
     // The month the user paid for, and the GA4 purchase Google Ads never saw.
     expect(ga4.reportServerPurchase).toHaveBeenCalledTimes(1);
     expect(referral.grantReferralReward).toHaveBeenCalledTimes(1);
+    // 'trialing' at settle = FIRST trial→paid conversion → Meta + PostHog too.
+    expect(meta.reportMetaFirstConversion).toHaveBeenCalledTimes(1);
+    expect(posthog.reportPostHogFirstConversion).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a RENEWAL (prior status 'active') to GA4 only — never Meta/PostHog", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR, "active")]);
+    db.getDb.mockReturnValue(sql);
+
+    phonepe.getOrderStatus.mockResolvedValue({
+      state: "COMPLETED",
+      expireAt: Date.now() + 24 * HOUR,
+    });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(updates(executed).some((u) => u.text.includes("status = 'active'"))).toBe(true);
+    expect(ga4.reportServerPurchase).toHaveBeenCalledTimes(1);
+    expect(meta.reportMetaFirstConversion).not.toHaveBeenCalled();
+    expect(posthog.reportPostHogFirstConversion).not.toHaveBeenCalled();
   });
 
   it("asks order status BEFORE re-charging an overdue row", async () => {
@@ -201,6 +236,23 @@ describe("Pass B — a settled debit is always recorded", () => {
   });
 });
 
+describe("Pass B — PhonePe's 24h notify→execute window", () => {
+  it("makes NO PhonePe call for a row re-notified less than 24h ago (recycled order)", async () => {
+    // The production starvation loop: Pass A re-notifies a recycled order and
+    // the same run executes it → 400 SUBSCRIPTION_DEBIT_EXECUTE_INTERVAL_NOT_STARTED,
+    // three wasted subrequests per row per tick, and the fresh rows behind it
+    // never got reached (2026-08-23 → 08-25).
+    const { sql, executed } = makeSql([dueRow(30 * HOUR, "trialing", 2 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+
+    await runAutopayNotify(makeEnv());
+
+    expect(phonepe.getOrderStatus).not.toHaveBeenCalled();
+    expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+    expect(updates(executed)).toHaveLength(0);
+  });
+});
+
 describe("Pass B — no pointless redeem against a PhonePe-controlled retry", () => {
   it("does not re-redeem an order already PENDING", async () => {
     // PhonePe answers 400 DUPLICATE_TXN_REQUEST here, and that error line every
@@ -216,6 +268,65 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
     await runAutopayNotify(makeEnv());
 
     expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+  });
+
+  it("makes NO call for an order older than 48h off the top of the hour", async () => {
+    // ~26 stale PENDING orders were eating 26 of the then-40-call budget on EVERY tick
+    // (2026-08-25). Past PhonePe's retry window they poll hourly only.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T05:30:00Z"));
+    try {
+      const { sql } = makeSql([dueRow(60 * HOUR, "trialing", 60 * HOUR)]);
+      db.getDb.mockReturnValue(sql);
+
+      await runAutopayNotify(makeEnv());
+
+      expect(phonepe.getOrderStatus).not.toHaveBeenCalled();
+      expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still reconciles an order older than 48h on the top-of-hour tick", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T05:00:20Z"));
+    try {
+      const { sql } = makeSql([dueRow(60 * HOUR, "trialing", 60 * HOUR)]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getOrderStatus.mockResolvedValue({
+        state: "PENDING",
+        expireAt: Date.now() + 12 * HOUR,
+      });
+
+      await runAutopayNotify(makeEnv());
+
+      expect(phonepe.getOrderStatus).toHaveBeenCalledTimes(1);
+      expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps executing a RECYCLED row every tick — its fresh order resets notified_at", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T05:30:00Z"));
+    try {
+      // Debit 60h overdue, but Pass A minted a new order 25h ago.
+      const { sql } = makeSql([dueRow(60 * HOUR, "trialing", 25 * HOUR)]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getOrderStatus.mockResolvedValue({
+        state: "NOTIFIED",
+        expireAt: Date.now() + 24 * HOUR,
+      });
+      phonepe.executeRedemption.mockResolvedValue({ state: "PENDING", transactionId: "T1" });
+
+      await runAutopayNotify(makeEnv());
+
+      expect(phonepe.executeRedemption).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("DOES redeem an order still at NOTIFIED — nothing has triggered it yet", async () => {

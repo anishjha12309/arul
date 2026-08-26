@@ -26,6 +26,15 @@ still open → **reconcile again inside the catch**. A throw is never evidence t
 | --- | --- | --- |
 | `INVALID_SUBSCRIPTION_STATE` | Mandate is gone at PhonePe (user revoked it at their bank) | Read mandate status; park the row `cancelled` |
 | `DUPLICATE_TXN_REQUEST` | *"Another redemption request is not allowed for PHONEPE_CONTROLLED retry strategy"* — PhonePe owns the retry now | Do NOT re-redeem. Poll order status and wait |
+| `SUBSCRIPTION_DEBIT_EXECUTE_INTERVAL_NOT_STARTED` | Executed < 24 h after the order's notify — the mandatory pre-debit notice window. Seen on every RECYCLED order (re-notified by Pass A, executed by Pass B in the same run) | Nothing — Pass B now skips rows notified < 24 h ago without a call. Never treat as a failed debit |
+
+**Starvation, 2026-08-23 → 08-25 (zero conversions, 58 due):** the two rules above compound. Each
+recycled row at the head of the oldest-first list burned 3 subrequests per tick on that 400, the run
+hit Cloudflare's then-50-subrequest cap around row 20, and the fresh cohorts behind it were never
+executed — their orders then aged past 72 h, got recycled, and joined the failing head. Fixed by the
+24 h gate + a per-run PhonePe call budget (600, [cron.md](cron.md)) + the quarter-hour trigger. Symptom to recognise:
+`verify-debits.mjs` WAITING list growing while `retry_count` stays 0 and no `Execute … state=` lines
+appear for the youngest due rows.
 
 Both are 4xx, so `PhonePeApiError.isPermanent` is true — but permanent means "this CALL cannot
 succeed", NOT "the debit failed". `DUPLICATE_TXN_REQUEST` in particular fires on debits that are

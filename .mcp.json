@@ -3,6 +3,10 @@
     "dart": {
       "command": "C:\\flutter\\bin\\cache\\dart-sdk\\bin\\dart.exe",
       "args": ["mcp-server"]
+    },
+    "posthog": {
+      "type": "http",
+      "url": "https://mcp.posthog.com/mcp?readonly=true"
     }
   }
 }

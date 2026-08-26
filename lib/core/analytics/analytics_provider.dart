@@ -30,8 +30,12 @@ part 'analytics_provider.g.dart';
 ///     depth and live/static mix are GA4 questions.
 ///   * `*_blocked_premium` (all three gates) — paywall-trigger volume, GA4.
 ///   * `subscription_active` — revenue truth is Neon and always was; PostHog
-///     only ever held it so the funnel had an endpoint. `trial_started` is the
-///     endpoint now.
+///     only ever held it so the funnel had an endpoint. Partially reversed
+///     2026-08-24 (owner): the WORKER now captures it server-side on the first
+///     trial→paid settle (workers/src/lib/posthog.ts), because that settle is
+///     app-closed and could never reach this list anyway. This CLIENT list is
+///     unchanged — the client-observable `subscription_active` (repeat
+///     subscriber paying at setup) stays GA4/Meta-only.
 ///   * `referral_shared` — GA4.
 /// Attempts, failures and rare account admin (`*_attempt`, `login_failed`,
 /// `share_watermark_failed`, `account_delete_*`) were never here — Crashlytics,

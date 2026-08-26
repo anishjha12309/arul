@@ -25,7 +25,12 @@ abstract final class AppConfig {
     'GOOGLE_WEB_CLIENT_ID',
   );
 
-  /// Android OAuth 2.0 client ID (SHA-1 fingerprint registered in GCP).
+  /// Android OAuth 2.0 client ID — a RECORD, never read by the sign-in path:
+  /// google_sign_in resolves the Android client from package name + the
+  /// installed binary's signing SHA-1, so the value here cannot change which
+  /// client a build authorizes through. `env/prod.json` names the PLAY APP
+  /// SIGNING one because Play re-signs the upload — the upload-keystore client
+  /// only ever serves APKs signed locally (see env.example.json).
   static const googleAndroidClientId = String.fromEnvironment(
     'GOOGLE_ANDROID_CLIENT_ID',
   );

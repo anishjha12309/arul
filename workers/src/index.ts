@@ -180,7 +180,9 @@ const worker: WorkerType = {
   fetch: async (req, env, ctx) => app.fetch(req, env, ctx),
 
   async scheduled(event, env, ctx) {
-    // "0 * * * *" — hourly: catalog rebuild + on-change canonical sweep + autopay
+    // "0 * * * *" — hourly: catalog rebuild + on-change canonical sweep
+    // (autopay has its own trigger below — it must not share this invocation's
+    // 15-minute wall clock with the rebuild)
     if (event.cron === "0 * * * *") {
       console.log("[cron] Running hourly catalog rebuild");
       ctx.waitUntil(
@@ -220,8 +222,19 @@ const worker: WorkerType = {
         }),
       );
 
-      // Autopay: notify 24h before each debit, then execute at/after next_debit_at.
-      console.log("[cron] Running autopay notify/execute scan");
+    }
+
+    // "*/15 * * * *" — autopay, in its OWN invocation every quarter hour. One
+    // invocation is capped at ~600 PhonePe calls by the 15-minute cron wall
+    // clock (Workers Paid; sequential calls at ~1 s each), so a due backlog
+    // still drains by cadence as well as by run size. Autopay used to ride the
+    // hourly trigger above, sharing that invocation with the catalog rebuild
+    // (R2 + KV + Neon) — at 04:00Z on 2026-08-25 the two together blew the
+    // then-50-subrequest cap mid-scan. Separate cron expressions get separate
+    // invocations, so minute 0 now runs catalog and autopay side by side, each
+    // with a full budget, and there is still exactly ONE autopay scan per tick.
+    if (event.cron === "*/15 * * * *") {
+      console.log("[cron] Running quarter-hour autopay scan");
       ctx.waitUntil(
         runAutopayNotify(env).catch((err: unknown) => {
           console.error("[cron] Autopay notify failed:", err);

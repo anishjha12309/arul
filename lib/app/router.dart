@@ -11,6 +11,7 @@ import '../features/referral/presentation/refer_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/upload/presentation/upload_screen.dart';
+import 'widgets/english_only.dart';
 import '../features/wallpapers/presentation/feed_screen.dart';
 import 'shell/app_shell.dart';
 import 'theme/theme.dart';
@@ -84,10 +85,15 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/settings/notifications',
-      builder: (_, _) => const NotificationSettingsScreen(),
+      // Whole-screen English (EnglishOnly doc): `remindersTitle` is demoted.
+      builder: (_, _) => const EnglishOnly(child: NotificationSettingsScreen()),
     ),
     GoRoute(path: '/refer', builder: (_, _) => const ReferScreen()),
-    GoRoute(path: '/upload', builder: (_, _) => const UploadScreen()),
+    // Whole-screen English (EnglishOnly doc): four upload keys are demoted.
+    GoRoute(
+      path: '/upload',
+      builder: (_, _) => const EnglishOnly(child: UploadScreen()),
+    ),
     // Privacy / Terms, read in-app. A top-level push OVER the shell like every
     // other sub-screen, so it works the same whether it was opened from the
     // Settings branch or from /sign-in, which sits outside the shell entirely.

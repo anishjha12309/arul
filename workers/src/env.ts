@@ -118,6 +118,36 @@ export interface Env {
    */
   GA4_API_SECRET?: string;
 
+  // ── Meta Conversions API (server-side first-conversion `Subscribe` —
+  //    lib/meta.ts) ──────────────────────────────────────────────────────────
+  /**
+   * Events Manager dataset id linked to the Facebook app (Events Manager →
+   * the app's data source → Settings). Not secret (visible in EM URLs) but
+   * set via `wrangler secret bulk` alongside the token so neither lives in
+   * the repo. Optional: absent → Meta reporting is skipped (fail-open).
+   */
+  META_DATASET_ID?: string;
+  /**
+   * Conversions API access token — Events Manager → dataset → Settings →
+   * Conversions API → Generate access token. A REAL secret (grants event
+   * write into the dataset): wrangler secret bulk, never [vars].
+   */
+  META_CAPI_ACCESS_TOKEN?: string;
+
+  // ── PostHog capture (server-side first-conversion `subscription_active` —
+  //    lib/posthog.ts) ───────────────────────────────────────────────────────
+  /**
+   * PostHog project API key (phc_…). Write-only and shipped inside the APK,
+   * but kept out of the repo: wrangler secret bulk. Optional: absent →
+   * PostHog reporting is skipped (fail-open).
+   */
+  POSTHOG_API_KEY?: string;
+  /**
+   * PostHog ingestion host. Defaults to https://us.i.posthog.com (the app's
+   * POSTHOG_HOST) when unset — set in wrangler.toml [vars], not a secret.
+   */
+  POSTHOG_HOST?: string;
+
   /**
    * Comma-separated CORS allow-list for browser-based origins.
    * e.g. "https://arul.hsrutility.com"

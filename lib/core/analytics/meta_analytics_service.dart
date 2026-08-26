@@ -13,8 +13,17 @@ import 'analytics_service.dart';
 /// `docs/analytics-events.md` onto Meta standard events and drops the rest:
 ///
 ///   login_success        → CompleteRegistration
+///   checkout_started     → InitiateCheckout (+ INR value when known → ROAS)
 ///   trial_started        → StartTrial      (+ INR value when known → ROAS)
 ///   subscription_active  → Subscribe       (+ INR value when known → ROAS)
+///
+/// `checkout_started` is the one NON-terminal event here, and it earns its
+/// place: Meta's standard-event reference defines InitiateCheckout as entering
+/// the checkout flow, and it is the only signal Meta gets at the point where
+/// most of this funnel is actually lost (the UPI Autopay mandate handoff — see
+/// docs/edge-cases.md). Its terminal partner `payment_failed` is deliberately
+/// NOT forwarded: a failure is a diagnostic, not a conversion, and feeding it
+/// to an optimiser trains on the wrong outcome. That one stays GA4-only.
 ///
 /// App install + launch are logged automatically by the native SDK
 /// (`AutoInitEnabled` + `AutoLogAppEventsEnabled` in AndroidManifest.xml), so we
@@ -44,6 +53,21 @@ class MetaAnalyticsService implements AnalyticsService {
         unawaited(
           _facebook.logCompletedRegistration(
             registrationMethod: properties?['provider'] as String?,
+          ),
+        );
+      case 'checkout_started':
+        unawaited(
+          _facebook.logInitiatedCheckout(
+            // valueToSum + currency together are what make this eligible for
+            // ROAS optimisation (plugin doc, logInitiatedCheckout).
+            totalPrice: _value(properties),
+            currency: _currency,
+            contentType: 'subscription',
+            contentId: properties?['plan'] as String?,
+            numItems: 1,
+            // No payment details are collected in-app — PhonePe owns that
+            // screen — so this is honestly false rather than a flattering true.
+            paymentInfoAvailable: false,
           ),
         );
       case 'trial_started':

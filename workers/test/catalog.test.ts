@@ -287,120 +287,144 @@ describe("interleaveByCategory", () => {
 });
 
 // ── composeFeedOrder ─────────────────────────────────────────────────────────
-// Tier 1 of the three-tier feed order (CLAUDE.md §5b). Same reasoning as above:
-// a wrong answer here builds cleanly and ships a valid catalog that is simply in
-// the wrong order. The import-safety case is the one that killed the first
-// attempt at this feature, so it is pinned as a requirement, not an example.
+// THE feed order (CLAUDE.md §5b). Same reasoning as above: a wrong answer here
+// builds cleanly and ships a valid catalog that is simply in the wrong order.
+// The cohort-tie case is the load-bearing one — it is what keeps a bulk import
+// from owning the opening screens as a single-category block.
 describe("composeFeedOrder", () => {
-  const rows = (spec: Record<string, number>) =>
+  const NOW = new Date("2026-09-01T00:00:00Z");
+  const daysAgo = (n: number) =>
+    new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
+
+  /** Rows of a given category, all created `age` days ago with no applies. */
+  const rows = (spec: Record<string, number>, age = 0) =>
     Object.entries(spec).flatMap(([cat, n]) =>
-      Array.from({ length: n }, (_, i) => ({ id: `${cat}${i}`, category: cat })),
+      Array.from({ length: n }, (_, i) => ({
+        id: `${cat}${i}`,
+        category: cat,
+        created_at: daysAgo(age),
+        apply_score: 0,
+        scored_at: null,
+      })),
     );
-  /** Pin `id` at `rank`, leaving every other row unpinned. */
-  const pin = <T extends { id: string }>(
+  /** Give `id` a decayed score, as if last applied `days` ago. */
+  const applied = <T extends { id: string }>(
     list: T[],
-    ranks: Record<string, number>,
-  ) => list.map((r) => ({ ...r, feed_rank: ranks[r.id] ?? null }));
+    spec: Record<string, [number, number]>,
+  ) =>
+    list.map((r) =>
+      spec[r.id]
+        ? { ...r, apply_score: spec[r.id][0], scored_at: daysAgo(spec[r.id][1]) }
+        : r,
+    );
+  const order = (list: Record<string, unknown>[]) =>
+    composeFeedOrder(list, NOW, "apply_score").map((r) => r["id"]);
 
-  it("hoists pinned rows to the head in rank order, across categories", () => {
-    const out = composeFeedOrder(
-      pin(rows({ perumal: 3, sivan: 3, amman: 3 }), {
-        amman2: 10,
-        perumal1: 20,
-        sivan0: 30,
+  it("puts the highest merit score first, across categories", () => {
+    const out = order(
+      applied(rows({ perumal: 3, sivan: 3, amman: 3 }, 90), {
+        amman2: [4, 0],
+        perumal1: [9, 0],
+        sivan0: [1, 0],
       }),
     );
-
-    expect(out.slice(0, 3).map((r) => r.id)).toEqual([
-      "amman2", "perumal1", "sivan0",
-    ]);
+    expect(out.slice(0, 3)).toEqual(["perumal1", "amman2", "sivan0"]);
   });
 
-  it("falls through: unpinned rows keep the category interleave", () => {
-    // The whole point of pins-WITH-fallthrough — ranking three rows must not
-    // turn the other six into an arbitrary list.
-    const out = composeFeedOrder(
-      pin(rows({ perumal: 3, sivan: 3, amman: 3 }), {
-        amman2: 10, perumal1: 20, sivan0: 30,
-      }),
+  it("decays: an older apply loses to a newer one of the same size", () => {
+    // Both rows earned 4 applies. One earned them 90 days ago (three half-lives
+    // → 0.5), the other today. Ordering on the raw count would tie them forever;
+    // that tie is exactly the frozen head this feature exists to break.
+    const out = order(
+      applied(rows({ a: 1, b: 1 }, 90), { a0: [4, 90], b0: [4, 0] }),
     );
+    expect(out).toEqual(["b0", "a0"]);
+  });
 
-    expect(out.slice(3).map((r) => r.id)).toEqual([
-      "amman0", "perumal0", "sivan1",
-      "amman1", "perumal2", "sivan2",
+  it("a stale favourite falls below a modest recent one", () => {
+    // 40 applies, none for a year (≈12 half-lives → ~0.01) vs 2 applies today.
+    const out = order(
+      applied(rows({ a: 1, b: 1 }, 400), { a0: [40, 365], b0: [2, 0] }),
+    );
+    expect(out).toEqual(["b0", "a0"]);
+  });
+
+  it("a brand-new row outranks the never-applied tail", () => {
+    // The newcomer credit IS the catch-up: without it a new row would sit below
+    // everything forever, never seen and so never applied.
+    const old = rows({ a: 5 }, 400);
+    const fresh = rows({ b: 1 }, 0);
+    expect(order([...old, ...fresh])[0]).toBe("b0");
+  });
+
+  it("a fresh import does NOT own the opening screens as one block", () => {
+    // The trap: 20 Perumal + 10 Sivan imported the same day. A credit that varied
+    // continuously with age would order them strictly by created_at and hand the
+    // first 20 slots to one category (the 2026-08-14 defect). Stepping the credit
+    // makes the whole cohort tie, so the interleave governs.
+    const out = order([...rows({ perumal: 20 }, 1), ...rows({ sivan: 10 }, 2)]);
+    expect(out.slice(0, 4)).toEqual(["perumal0", "sivan0", "perumal1", "sivan1"]);
+  });
+
+  it("the credit steps down, so last week's cohort sits below this week's", () => {
+    const out = order([...rows({ a: 2 }, 10), ...rows({ b: 2 }, 1)]);
+    expect(out).toEqual(["b0", "b1", "a0", "a1"]);
+  });
+
+  it("the long tail ties at exactly zero and stays interleaved", () => {
+    // Past CREDIT_FLOOR the credit is zeroed rather than left as a vanishing
+    // fraction — otherwise the whole never-applied tail would order by age.
+    const out = order([...rows({ perumal: 3 }, 300), ...rows({ sivan: 3 }, 400)]);
+    expect(out).toEqual([
+      "perumal0", "sivan0", "perumal1", "sivan1", "perumal2", "sivan2",
     ]);
   });
 
-  it("a bulk import cannot displace a pin — the trap that retired v1", () => {
-    // 30 fresh rows arrive with feed_rank NULL (an import writes no rank). They
-    // must land BEHIND the curated head, not on top of it.
-    const curated = pin(rows({ amman: 2 }), { amman0: 10, amman1: 20 });
-    const imported = pin(rows({ sivan: 30 }), {});
-
-    const out = composeFeedOrder([...imported, ...curated]);
-
-    expect(out.slice(0, 2).map((r) => r.id)).toEqual(["amman0", "amman1"]);
-    expect(out).toHaveLength(32);
-  });
-
-  it("treats null and a missing column alike — both are unpinned", () => {
-    // Ringtones built before 08_ringtone_feed_rank.sql applied carry no such key
-    // at all; that must read as unpinned, never as rank 0.
-    const withNull = composeFeedOrder(pin(rows({ a: 2, b: 2 }), {}));
-    const withoutKey = composeFeedOrder(rows({ a: 2, b: 2 }));
-    expect(withNull.map((r) => r.id)).toEqual(withoutKey.map((r) => r.id));
-  });
-
-  it("rank 0 is a real pin, not an absent one", () => {
-    const out = composeFeedOrder(pin(rows({ a: 3 }), { a2: 0 }));
-    expect(out[0].id).toBe("a2");
-  });
-
-  it("breaks a duplicate rank on catalog position, so the order is TOTAL", () => {
-    const input = pin(rows({ a: 2, b: 2 }), { a0: 10, a1: 10, b0: 10 });
-    // Incoming order is a0, a1, b0 — a duplicated rank must not let the sort
-    // pick its own winner.
-    expect(composeFeedOrder(input).slice(0, 3).map((r) => r.id)).toEqual([
-      "a0", "a1", "b0",
-    ]);
+  it("breaks a tie on interleaved catalog position, so the order is TOTAL", () => {
+    const input = rows({ a: 2, b: 2 }, 400);
+    expect(order(input)).toEqual(order(input));
+    expect(order(input)).toEqual(["a0", "b0", "a1", "b1"]);
   });
 
   it("is idempotent — a rebuild never churns the feed", () => {
-    const once = composeFeedOrder(
-      pin(rows({ a: 7, b: 5, c: 3 }), { b1: 10, c0: 20, a4: 30 }),
-    );
-    const twice = composeFeedOrder(once);
+    const input = applied(rows({ a: 7, b: 5, c: 3 }, 30), {
+      b1: [3, 2], c0: [1, 10], a4: [8, 0],
+    });
+    const once = composeFeedOrder(input, NOW, "apply_score");
+    const twice = composeFeedOrder(once, NOW, "apply_score");
     expect(twice.map((r) => r.id)).toEqual(once.map((r) => r.id));
   });
 
   it("is a permutation — never drops or duplicates a row", () => {
-    const input = pin(rows({ a: 9, b: 4, c: 1, d: 6 }), { a3: 10, d0: 20 });
-    const out = composeFeedOrder(input);
+    const input = applied(rows({ a: 9, b: 4, c: 1, d: 6 }, 5), {
+      a3: [2, 1], d0: [5, 0],
+    });
+    const out = composeFeedOrder(input, NOW, "apply_score");
     expect(out).toHaveLength(input.length);
     expect(new Set(out.map((r) => r.id))).toEqual(
       new Set(input.map((r) => r.id)),
     );
   });
 
-  it("with nothing pinned it IS interleaveByCategory", () => {
-    // The live shape for ringtones on day one, and for wallpapers if the admin
-    // unpins everything. No pins must mean no behaviour change at all.
-    const input = rows({ perumal: 20, sivan: 10, amman: 5 });
-    expect(composeFeedOrder(pin(input, {})).map((r) => r.id)).toEqual(
+  it("with no scores at all it IS interleaveByCategory", () => {
+    // Day one, and the permanent state of the tail. No merit data must mean no
+    // behaviour change from the order that shipped before scoring existed.
+    const input = rows({ perumal: 20, sivan: 10, amman: 5 }, 400);
+    expect(order(input)).toEqual(
       interleaveByCategory(input).map((r) => r.id),
     );
   });
 
-  it("survives a rank that is not a number", () => {
-    // Defensive: a bad rank costs one row its pin, it never corrupts the rest.
+  it("survives junk in the score columns", () => {
+    // Defensive: a bad value costs ONE row its merit, it never corrupts the rest.
     const input = [
-      { id: "a0", category: "a", feed_rank: "not-a-rank" as unknown as number },
-      { id: "a1", category: "a", feed_rank: 10 },
+      { id: "a0", category: "a", created_at: daysAgo(400), apply_score: "nope", scored_at: "also-nope" },
+      { id: "a1", category: "a", created_at: daysAgo(400), apply_score: 5, scored_at: daysAgo(0) },
     ];
-    expect(composeFeedOrder(input).map((r) => r.id)).toEqual(["a1", "a0"]);
+    expect(order(input)).toEqual(["a1", "a0"]);
   });
 
   it("handles an empty catalog", () => {
-    expect(composeFeedOrder([])).toEqual([]);
+    expect(composeFeedOrder([], NOW, "apply_score")).toEqual([]);
   });
 });

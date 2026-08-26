@@ -5,44 +5,44 @@ import 'package:flutter/widgets.dart';
 /// The resting size of one reel card, the peek below it, and the floor below
 /// that.
 ///
-/// **A tall card on tight gutters, filling the reel** (owner's call, chosen from
-/// rendered mockups, 2026-07-30; enlarged 2026-08-11, and again 2026-08-22): 10dp
-/// gutters and a 1:1.86 card, which on a 1080×2400 phone resolves to
-/// **373×682** with a 30dp peek and no floor at all.
+/// **Shubh's tile, on Arul's reel** (owner's call, 2026-08-25 — instructed to
+/// match the Shubh/Noor wallpaper feed tile, measured on a Nothing A001 from
+/// Shubh's own accessibility tree, `C:\prod-hsr-shubh` for the source): 16dp
+/// gutters, 24 radius, and Shubh's `viewportFraction: 0.95` pager with 8dp
+/// vertical padding, which on that phone leaves 16dp between tiles and shows
+/// ~25dp of the next one. Arul does not copy the 0.95 pager — the card is
+/// solved from the reel as before — it copies the NUMBERS that pager produces:
+/// [gutter] 16, [gap] 16, [minPeek] 25. On the A001 both apps land at
+/// 996×~1590 px (379×~605 dp); the reel test pins that frame.
 ///
 /// The whole reel height is spoken for — `card + gap + peek + floor` — so the
-/// card can only grow if one of the other three gives way. At this shape it
-/// consumes everything: the floor is zero and the peek is squeezed all the way
-/// to [minPeek], which is exactly what the clamps in [solve] exist to do. That
-/// also means the card is HEIGHT-CLAMPED on an ordinary phone: [cardAspect] is
-/// the aspect it asks for, and the reel gives it ~1.83 instead. Widening it
-/// further (a smaller [gutter]) therefore buys width only, and each dp of extra
-/// width flattens the realised aspect toward the 1.78 boundary below.
+/// card can only grow if one of the other three gives way. On an ordinary phone
+/// it consumes everything: the floor is zero and the peek is squeezed to
+/// [minPeek], which is exactly what the clamps in [solve] exist to do. That
+/// also means the card is HEIGHT-CLAMPED on a real phone: [cardAspect] is the
+/// aspect it asks for, and the reel gives it less — read the card's own size,
+/// never the constant, when you need the shape actually on screen.
 ///
 /// ## The crop, stated plainly
 ///
-/// The catalog is 9:16 (1024×1824, ratio 1:1.78). At the realised ~1:1.83 the
-/// card is still slightly TALLER than the artwork, so `BoxFit.cover` matches the
-/// height and overflows the width: about **2.8% is trimmed off the left and
-/// right edges**, and nothing at all off the top or bottom. That is the cheap
-/// direction — the margins of a devotional composition, never the crown or the
-/// feet.
+/// The catalog is 9:16 (1024×1824, ratio 1:1.78). Whenever the REALISED aspect
+/// is taller than that, `BoxFit.cover` matches the height and trims the left
+/// and right margins — the cheap direction for devotional art. On a short reel
+/// the realised aspect drops below 1.78 (the A001's 605/379 = 1.60 does), the
+/// crop flips to top/bottom, and [ViewerMedia.cropAlignment]'s upward bias is
+/// what keeps the trim off the crown. Keep the bias — it is correct in both
+/// directions.
 ///
-/// It is worth knowing this flipped. Earlier shapes were *squarer* than 9:16 and
-/// cropped vertically, which is why [ViewerMedia.cropAlignment] carries an
-/// upward bias; at this aspect that bias is dormant (there is no vertical
-/// overflow to bias) and only its centred horizontal component applies. Keep it
-/// — it is correct in both directions, and it comes back the moment the REALISED
-/// aspect drops below 1.78, which on a short screen it already does.
+/// ## History — shapes already rejected, do not revisit
 ///
-/// ## History — four shapes already rejected, do not revisit
-///
-///  * **Full-bleed width** (1:1.71, 16dp gutters) — read as edge-to-edge, no air.
 ///  * **Locked to the DEVICE aspect** (1:2.22) — a sliver that cropped ~20% off
 ///    the sides and crowded the Apply/Share row.
 ///  * **Pakiza's card verbatim** (1:1.63, 18dp gutters) — too tall, too tight.
 ///  * **Short and wide** (1:1.40, 32dp gutters) — cost 21% off the top and
 ///    bottom, which is the expensive direction for devotional art.
+///  * **10dp gutters, 30dp peek** (2026-08-22 → 2026-08-25) — the previous
+///    shape; superseded by the Shubh-parity instruction above, not rejected on
+///    its own merits.
 ///
 /// Extracted from `feed_screen.dart` so it can be unit-tested directly: it has
 /// been rewritten several times, and measuring a card through a full feed render
@@ -90,13 +90,11 @@ class FeedCardGeometry {
   /// Side gutters. Tight — the artwork carries the screen, and the frame is a
   /// hairline of breathing room rather than a mount.
   ///
-  /// **This is the WIDTH knob** (owner's call, 2026-08-11: 20 → 12; 2026-08-22:
-  /// 12 → 10, "taller first, wider second"). Because the card is height-clamped
-  /// by the reel, dropping the gutter is the only way to make it wider, and it
-  /// flattens the realised aspect as it goes. 10 lands at ~1.83 (with [minPeek]
-  /// 30), still clear of the 1.78 boundary; below ~8 it crosses it and the crop
-  /// flips to top/bottom, which is the expensive direction. 10 is the floor.
-  static const gutter = 10.0;
+  /// **This is the WIDTH knob** (2026-08-11: 20 → 12; 2026-08-22: 12 → 10;
+  /// 2026-08-25: 10 → 16, Shubh parity — see the class doc). Because the card
+  /// is height-clamped by the reel, the gutter is the only thing that sets its
+  /// width, and it moves the realised aspect as it goes.
+  static const gutter = 16.0;
 
   /// Card height ÷ width — the aspect the card ASKS for. **The one number that
   /// controls the crop's direction** — see the class doc. 1.78 is exactly
@@ -113,10 +111,10 @@ class FeedCardGeometry {
 
   /// Vertical gap between consecutive cards. It lives on the PAGE, so the page
   /// extent the viewport fraction solves for is card + gap.
-  static const gap = 14.0;
+  static const gap = 16.0;
 
   /// Card corner radius.
-  static const radius = 26.0;
+  static const radius = 24.0;
 
   /// Bottom scrim height, and the band the action row lives in.
   static const scrimHeight = 180.0;
@@ -136,12 +134,13 @@ class FeedCardGeometry {
   /// The peek will be squeezed to here before the CARD gives up any height — a
   /// reel with no peek at all loses its only static cue that it scrolls.
   ///
-  /// **This is the HEIGHT knob** (owner's call, 2026-08-11: 44 → 40; 2026-08-22:
-  /// 40 → 30). Every dp taken off it goes straight into the card on a normal
+  /// **This is the HEIGHT knob** (2026-08-11: 44 → 40; 2026-08-22: 40 → 30;
+  /// 2026-08-25: 30 → 25, what Shubh's 0.95 pager shows of the next tile on
+  /// the A001). Every dp taken off it goes straight into the card on a normal
   /// phone, where the peek is already pinned here. Do not take it to zero: the
   /// sliver of the next wallpaper is the whole reason the reel reads as
   /// scrollable at rest.
-  static const minPeek = 30.0;
+  static const minPeek = 25.0;
 
   /// The extent of one page: the card plus the gap that follows it. With
   /// `padEnds: false` this is what the pager's `viewportFraction` resolves to,

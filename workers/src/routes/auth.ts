@@ -26,6 +26,7 @@ import {
 } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
 import { normalizeAppInstanceId } from "../lib/ga4.js";
+import { normalizeMetaAnonId } from "../lib/meta.js";
 import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
@@ -34,7 +35,12 @@ import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 
 export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
-  let body: { idToken?: string; referralCode?: string; appInstanceId?: string };
+  let body: {
+    idToken?: string;
+    referralCode?: string;
+    appInstanceId?: string;
+    metaAnonId?: string;
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -56,6 +62,10 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   // Re-sent every login on purpose — the id changes on reinstall/clear-data,
   // and login is the one call such a device is guaranteed to make.
   const appInstanceId = normalizeAppInstanceId(body.appInstanceId);
+  // Optional: the Meta SDK's anonymous app device GUID, stored so lib/meta.ts
+  // can device-match the app-closed FIRST trial→paid conversion. Same lifecycle
+  // as appInstanceId: re-sent every login, changes on reinstall/clear-data.
+  const metaAnonId = normalizeMetaAnonId(body.metaAnonId);
 
   // 1. Verify Google idToken
   let googleClaims;
@@ -110,7 +120,8 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
                               THEN display_name
                               ELSE COALESCE(${googleClaims.name ?? null}::text, display_name) END,
           email        = ${googleClaims.email},
-          app_instance_id = COALESCE(${appInstanceId}::text, app_instance_id)
+          app_instance_id = COALESCE(${appInstanceId}::text, app_instance_id),
+          meta_anon_id    = COALESCE(${metaAnonId}::text, meta_anon_id)
       WHERE google_sub = ${googleClaims.sub}
       RETURNING id, display_name, referral_code
     `;
@@ -129,13 +140,14 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         referralCode = generateReferralCode();
         try {
           return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id)
+            INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id, meta_anon_id)
             VALUES (
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
               ${referralCode},
-              ${appInstanceId}::text
+              ${appInstanceId}::text,
+              ${metaAnonId}::text
             )
             RETURNING id, display_name, referral_code
           `;
@@ -143,13 +155,14 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           if (!isUniqueViolation(insertErr)) throw insertErr;
           referralCode = generateReferralCode();
           return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id)
+            INSERT INTO users (google_sub, email, display_name, referral_code, app_instance_id, meta_anon_id)
             VALUES (
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
               ${referralCode},
-              ${appInstanceId}::text
+              ${appInstanceId}::text,
+              ${metaAnonId}::text
             )
             RETURNING id, display_name, referral_code
           `;

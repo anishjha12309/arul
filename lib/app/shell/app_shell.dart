@@ -11,6 +11,7 @@ import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/arul_line_icons.dart';
+import '../widgets/english_only.dart';
 
 /// The tabbed scaffold around the three top-level surfaces (Wallpapers /
 /// Ringtones / Settings). Everything else — refer, upload, premium, the
@@ -114,22 +115,32 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     return Scaffold(
       // The dock FLOATS: the branch content runs full-bleed behind it and
       // scrolls under the capsule (the island treatment).
       extendBody: true,
       body: widget.navigationShell,
-      bottomNavigationBar: ArulNavDock(
-        currentIndex: widget.navigationShell.currentIndex,
-        onTap: _onTap,
-        items: [
-          // "Settings" is the screen's own title in every locale — the tab and
-          // the screen are the same word, so it shares one ARB key.
-          (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
-          (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
-          (glyph: ArulLineGlyph.settings, label: l10n.settingsTitle),
-        ],
+      // The dock is English in EVERY locale (EnglishOnly doc): `tabRingtones`
+      // is demoted, and one English tab between two translated ones read as a
+      // defect. The Builder is what puts the label lookup UNDER the override.
+      bottomNavigationBar: EnglishOnly(
+        child: Builder(
+          builder: (context) {
+            final en = AppLocalizations.of(context);
+            return ArulNavDock(
+              currentIndex: widget.navigationShell.currentIndex,
+              onTap: _onTap,
+              items: [
+                // "Settings" is the screen's own title in every locale — the
+                // tab and the screen are the same word, so it shares one ARB
+                // key; only the tab reads it through the override.
+                (glyph: ArulLineGlyph.wallpapers, label: en.tabWallpapers),
+                (glyph: ArulLineGlyph.ringtones, label: en.tabRingtones),
+                (glyph: ArulLineGlyph.settings, label: en.settingsTitle),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

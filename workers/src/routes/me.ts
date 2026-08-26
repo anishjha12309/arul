@@ -29,6 +29,7 @@ import { getDb } from "../lib/db.js";
 import { premiumPredicate } from "../lib/entitlement.js";
 import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
+import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 
 // ── GET /me ──────────────────────────────────────────────────────────────────
 
@@ -253,6 +254,14 @@ export async function handleDeleteAccount(
           "Could not cancel your subscription with PhonePe. Please try again.",
         );
       }
+      // The row is about to cascade-delete with the user; report the churn
+      // now while its prior status is still known.
+      await reportPostHogSubscriptionCancel(env, {
+        userId: sub,
+        merchantSubId,
+        reason: "account_deleted",
+        priorStatus: status,
+      });
     }
 
     // 2. Tombstone (trial consumed only) + cascade delete, atomically.

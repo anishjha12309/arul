@@ -1,20 +1,36 @@
 # Crons — the two triggers and the cold-connection hazard
 
 Read this before adding, splitting or "simplifying" a scheduled handler. Declared in
-`workers/wrangler.toml [triggers]` as `crons = ["0 * * * *", "30 21 * * *"]`.
+`workers/wrangler.toml [triggers]` as `crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]`.
+
+## Quarter-hour `*/15 * * * *` — autopay only, its own invocation
+
+**Workers Paid gives one invocation 10,000 subrequests, so the ceiling is the 15-minute cron wall
+clock, not the subrequest cap** — PhonePe calls are sequential at ~1 s each, so the scan is
+budgeted at 600 and throughput comes from run size AND cadence. Before this trigger existed the hourly run died partway down its oldest-first
+list ("Too many subrequests"), the fresh rows behind the failing head were never reached, and
+conversions sat at zero for 30+ hours with 58 debits due (2026-08-23 → 08-25). Autopay is NOT
+part of the hourly handler: a separate cron expression gets a separate invocation, so at minute 0
+the catalog rebuild (R2 + KV + Neon) and the scan each get a full budget — sharing one blew the cap
+mid-scan at 04:00Z on 08-25. There is still exactly one scan per tick. A COMPLETED settle also
+charges 9 to the budget for its three reporters (fetch + KV get/put each). Pass B also skips any row notified < 24 h ago without a call: PhonePe refuses to
+execute inside its notify window (`SUBSCRIPTION_DEBIT_EXECUTE_INTERVAL_NOT_STARTED`), and a
+recycled order re-notified by Pass A used to be executed by Pass B in the same run, every run.
+An order older than PhonePe's 48 h retry window (age from `notified_at`) is reconciled on the
+top-of-hour tick ONLY: it can settle only through PhonePe's own retries, and polling it every tick
+cost 26 of the then-40-call budget per run on 08-25, starving fresh executes.
 
 ## Hourly `0 * * * *`
-
-Two independent `waitUntil`s; neither can abort the other.
 
 1. **build-catalog** — no-op if `content_version` is unchanged, so most hours only rewrite
    `app_config.json` + `version.json` (whose `built_at` moves every successful run — the
    `content_version` inside it is the change signal). → **sweep-canonical**, but *only* after a
    rebuild that both fully succeeded and actually touched a scope. On-change convenience, not the
    safety net.
-2. **autopay notify + execute** — the renewal path. Pass A notifies 24 h before each debit; Pass B
-   redeems at `next_debit_at`; Pass C reconciles debits stuck `PENDING` for over 2 h. Short-circuits
-   on a KV `autopay:next_work_at` marker, so an idle hour costs one KV read, not a DB wake.
+2. **autopay notify + execute** is NOT here any more — it is the quarter-hour trigger above (the
+   renewal path: Pass A notifies 24 h before each debit; Pass B redeems at `next_debit_at`; Pass C
+   reconciles debits stuck `PENDING` for over 2 h; a KV `autopay:next_work_at` marker short-circuits
+   idle ticks to one KV read). Putting it back in this handler re-creates the shared-budget failure.
 
 ## Daily `30 21 * * *` (21:30 UTC = 03:00 IST, off-peak)
 

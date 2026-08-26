@@ -28,6 +28,14 @@ PhonePe docs, several of which are wrong. Running on **PRODUCTION** credentials.
    Order-id prefix is `DKS_`, which is how the shared merchant's streams stay distinguishable from
    Pakiza's `PKZ_`. The registered URL is `https://api.hsrutility.com/payments/webhook` — the hsr-cms
    dispatcher, which forwards `DKS_` orders to arul-api.
+   **Order events nest the ids under `payload.paymentFlow`** (state-change events keep them top-level —
+   PhonePe webhook reference, field table); read via `merchantSubscriptionIdOf()`. The flat read acked
+   every real redemption webhook as "Missing merchantSubscriptionId" (0 `txn:*` marks ever, 2026-08-25).
+   One webhook per MERCHANT, shared with Pakiza: Test-Mode, events and the SHA password apply to both;
+   the password is not editable after creation — the Worker secrets must match it.
+   Proven 2026-08-25 13:00 IST: a redemption settled (order COMPLETED) and the dispatcher logged ZERO
+   deliveries in the following 3 min while serving other traffic — PhonePe is not sending; fix is in the
+   Business dashboard (Test-Mode OFF, Redemption + Setup events ticked), not in code.
 
 ## Mandate setup
 

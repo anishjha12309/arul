@@ -913,8 +913,23 @@ export interface PhonePeWebhookPayload {
     orderId?: string;
     amount?: number;
     expireAt?: number;
+    /**
+     * State-change events (subscription.paused/unpaused/revoked/cancelled)
+     * carry these at the top of `payload`; every ORDER event (checkout.order.*,
+     * subscription.setup.order.*, subscription.redemption.order.*) nests them
+     * under `payload.paymentFlow` — PhonePe webhook-handling reference, field
+     * table, read 2026-08-25. Read both: `merchantSubscriptionIdOf()`.
+     */
     merchantSubscriptionId?: string;
     subscriptionId?: string;
+    paymentFlow?: {
+      type?: string;
+      merchantSubscriptionId?: string;
+      subscriptionId?: string;
+      amountType?: string;
+      maxAmount?: number;
+      frequency?: string;
+    };
     errorCode?: string;
     detailedErrorCode?: string;
     paymentDetails?: Array<{
@@ -924,6 +939,26 @@ export interface PhonePeWebhookPayload {
       state?: string;
     }>;
   };
+}
+
+/**
+ * The merchant subscription id of a webhook, wherever PhonePe put it: top-level
+ * for state-change events, `paymentFlow.*` for order events. Every one of Arul's
+ * real redemption webhooks is an ORDER event, and reading only the top level
+ * acked each of them with "Missing merchantSubscriptionId" — 0 `txn:*` marks
+ * ever written in production (found 2026-08-25).
+ */
+export function merchantSubscriptionIdOf(
+  pp: PhonePeWebhookPayload["payload"] | undefined,
+): string | undefined {
+  return pp?.merchantSubscriptionId ?? pp?.paymentFlow?.merchantSubscriptionId;
+}
+
+/** PhonePe's own subscription id, same two homes as above. */
+export function phonePeSubscriptionIdOf(
+  pp: PhonePeWebhookPayload["payload"] | undefined,
+): string | null {
+  return pp?.subscriptionId ?? pp?.paymentFlow?.subscriptionId ?? null;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

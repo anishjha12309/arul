@@ -25,8 +25,11 @@ Account-default goals therefore cannot hijack an App campaign's bidding.
 **Optimising toward an in-app action needs ≥10 distinct users/day on it** (Google's own floor; below
 that they instruct you to pick a commoner action). `trial_started` is not a signup — it is a UPI
 Autopay mandate authorisation (₹2 PENNY_DROP, `maxAmount` ₹199, UPI PIN entry), so it is bottom-funnel
-by construction and runs single digits/day. Keep it as a measured conversion; bid on something
-upstream.
+by construction and spent its first months under that floor. It has since CLEARED it — **re-read the
+current rate before assuming either way**, because the remedy differs: above the floor, bid on
+`trial_started` directly; below it, bid on `checkout_started` (GA4 `begin_checkout`, fired at the
+paywall tap) and keep `trial_started` as a measured conversion. A GA4 event is not an Ads conversion
+until it is imported — adding one to the app changes nothing in Ads by itself.
 
 ## `value` without `currency` is silently discarded
 
@@ -48,6 +51,18 @@ fastest way to confirm the bug is back (raw event at ₹0, `purchase` at its rea
   property that actually received it. Cost a full afternoon on 2026-08-19.
 - **Conversion-action status lags.** The Conversions summary table shows a stale status while the
   action's own detail page is current. Trust the detail page.
+
+## Consent-mode defaults are load-bearing for attribution
+
+GA4 attributes a session's source/medium only when the event stream carries the consent-mode v2
+signals; with none set (Google: "by default, no consent mode values are set") every `trial_started`
+landed under **`(not set)`** in User acquisition — 100% on 2026-08-25, tooltip "sends event data
+before sending the ad_user_data parameter". Google Ads still counts its own click-matched
+conversions, so Ads can look healthy while GA4's cpc row reads 0. The four
+`google_analytics_default_allow_*` manifest keys (all `true`, India-only app) are the fix; they must
+be manifest meta-data, not a Dart `setConsent()`, because `first_open` fires before Dart runs.
+Validate on device: logcat `FA-SVC … Setting DMA consent … source=MANIFEST, ad_user_data=granted`.
+Reports heal 24–48 h after the build reaches users; nothing backfills.
 
 ## There is ONE Firebase↔Ads link, and GA4 owns it
 

@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/app_instance_id.dart';
+import '../../../core/analytics/meta_anon_id.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/perf/boot_trace.dart';
@@ -309,6 +310,8 @@ class ApiAuthService implements AuthService {
       // instead of extending the post-picker wait; never throws (own catch).
       BootTrace.mark('signIn: fetchAppInstanceId() start (concurrent)');
       final appInstanceIdFuture = fetchAppInstanceId();
+      // Meta join key, same lifecycle + concurrency rationale (meta_anon_id.dart).
+      final metaAnonIdFuture = fetchMetaAnonId();
 
       BootTrace.mark('signIn: authenticate() called');
       final account = await GoogleSignIn.instance.authenticate();
@@ -334,6 +337,7 @@ class ApiAuthService implements AuthService {
       final referralCode = _referral?.pendingCode;
 
       final appInstanceId = await appInstanceIdFuture;
+      final metaAnonId = await metaAnonIdFuture;
       BootTrace.mark('signIn: fetchAppInstanceId() done');
 
       // Exchange Google ID token for our own Worker-issued JWT pair.
@@ -345,6 +349,7 @@ class ApiAuthService implements AuthService {
           // Null-aware elements: dropped entirely when absent.
           'referralCode': ?referralCode,
           'appInstanceId': ?appInstanceId,
+          'metaAnonId': ?metaAnonId,
         },
         requiresAuth: false,
       );

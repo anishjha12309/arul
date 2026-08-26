@@ -14,8 +14,10 @@ import com.hsrutility.arul.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Downscales oversized wallpaper sources before handing them to WallpaperManager.
@@ -25,8 +27,11 @@ import kotlin.math.min
  * service dying under memory pressure on lower-end or heavily customized devices
  * — exactly the budget hardware Arul targets.
  *
- * Adopted from the vendored flutter_wallpaper_plus package. The only change is
- * the package + the cache dir name (arul_wallpaper_cache).
+ * Adopted from the vendored flutter_wallpaper_plus package, plus ONE behaviour
+ * of our own: the bitmap is CENTRE-CROPPED TO THE DISPLAY ASPECT before it is
+ * handed over (see [cropToDisplayAspect]) - every source that is not already
+ * display-shaped goes through the decode/write path for that reason, not only
+ * oversized ones.
  */
 class ImageNormalizer(private val context: Context) {
 
@@ -39,6 +44,16 @@ class ImageNormalizer(private val context: Context) {
         private const val JPEG_QUALITY = 90
         private const val TARGET_PIXEL_RATIO_THRESHOLD = 2L
         private const val MAX_DECODE_ATTEMPTS = 5
+
+        /**
+         * How far the source may sit from the display aspect before it is
+         * cropped. 1% is under a pixel row at 1920 and skips the decode/write for
+         * a source that already matches the screen.
+         */
+        private const val ASPECT_TOLERANCE = 0.01f
+
+        /** Bumps the cache key so files written before the crop are not reused. */
+        private const val NORMALIZE_VERSION = "crop1"
 
         /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
         private fun logd(msg: String) {
@@ -53,6 +68,17 @@ class ImageNormalizer(private val context: Context) {
         }
 
         val targetSize = resolveTargetSize(target)
+        val displaySize = getDisplaySize()
+        val orientedBounds = if (exifSwapsAxes(imageFile)) {
+            ImageBounds(bounds.height, bounds.width)
+        } else {
+            bounds
+        }
+        val needsCrop = aspectMismatch(
+            orientedBounds.width,
+            orientedBounds.height,
+            displaySize,
+        )
         val sourcePixels = bounds.width.toLong() * bounds.height.toLong()
         val targetPixels = targetSize.width.toLong() * targetSize.height.toLong()
         val sourceLongEdge = max(bounds.width, bounds.height)
@@ -60,7 +86,8 @@ class ImageNormalizer(private val context: Context) {
                 bounds.height > targetSize.height ||
                 sourceLongEdge > MAX_SAFE_LONG_EDGE_PX ||
                 sourcePixels > targetPixels * TARGET_PIXEL_RATIO_THRESHOLD ||
-                imageFile.length() >= LARGE_SOURCE_BYTES
+                imageFile.length() >= LARGE_SOURCE_BYTES ||
+                needsCrop
 
         if (!needsNormalization) {
             return imageFile
@@ -81,7 +108,8 @@ class ImageNormalizer(private val context: Context) {
         logd(
             "Normalizing wallpaper source " +
                     "from ${bounds.width}x${bounds.height}, ${imageFile.length()} bytes " +
-                    "to fit within ${targetSize.width}x${targetSize.height}"
+                    "to fit within ${targetSize.width}x${targetSize.height}" +
+                    (if (needsCrop) ", crop to ${displaySize.width}x${displaySize.height}" else "")
         )
 
         val decoded = decodeBitmap(imageFile, targetSize)
@@ -90,19 +118,16 @@ class ImageNormalizer(private val context: Context) {
             )
 
         val oriented = applyExifOrientation(imageFile, decoded)
-        val scaled = scaleBitmapIfNeeded(oriented, targetSize)
+        val cropped = cropToDisplayAspect(oriented, displaySize)
+        val scaled = scaleBitmapIfNeeded(cropped, targetSize)
 
         try {
             writeBitmap(scaled, outputFile)
         } finally {
-            if (scaled !== oriented && !oriented.isRecycled) {
-                oriented.recycle()
-            }
-            if (oriented !== decoded && !decoded.isRecycled) {
-                decoded.recycle()
-            }
-            if (!scaled.isRecycled) {
-                scaled.recycle()
+            // Each stage may hand back its input unchanged, so recycle by
+            // identity, never by position.
+            for (bitmap in listOf(scaled, cropped, oriented, decoded)) {
+                if (!bitmap.isRecycled) bitmap.recycle()
             }
         }
 
@@ -249,6 +274,80 @@ class ImageNormalizer(private val context: Context) {
         return sampleSize.coerceAtLeast(1)
     }
 
+    /**
+     * Centre-crops [bitmap] to the display aspect.
+     *
+     * WHY (measured 2026-08-25 on a Nothing A001, Android 16, from a launcher
+     * screenshot template-matched against the source): a 9:16 source on a
+     * 9:19.9 screen is scaled to cover the height and is then WIDER than the
+     * screen. With no crop hint the OS keeps that extra width as parallax room
+     * and anchors the crop at the LEFT edge of the image; the launcher pans
+     * inside that room from its own offset, so the visible window ran from
+     * source column 38 to 826 of 1080 - centre 432, not 540 - and every subject
+     * landed right of centre. Passing a crop hint still leaves the OS free to
+     * extend it for parallax; a bitmap that already has the display shape
+     * leaves it nothing to allocate, so the image is centred on every launcher
+     * by construction. The cost is the parallax pan, which 9:16 catalog art
+     * never had room for anyway.
+     *
+     * The crop is centred on BOTH axes: a source taller than the screen (a user
+     * upload) loses top and bottom equally.
+     */
+    private fun cropToDisplayAspect(bitmap: Bitmap, display: TargetSize): Bitmap {
+        if (!aspectMismatch(bitmap.width, bitmap.height, display)) return bitmap
+
+        val displayAspect = display.width.toFloat() / display.height.toFloat()
+        val bitmapAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+        val cropWidth: Int
+        val cropHeight: Int
+        if (bitmapAspect > displayAspect) {
+            cropHeight = bitmap.height
+            cropWidth = (bitmap.height * displayAspect).roundToInt()
+                .coerceIn(1, bitmap.width)
+        } else {
+            cropWidth = bitmap.width
+            cropHeight = (bitmap.width / displayAspect).roundToInt()
+                .coerceIn(1, bitmap.height)
+        }
+        val left = (bitmap.width - cropWidth) / 2
+        val top = (bitmap.height - cropHeight) / 2
+
+        return try {
+            Bitmap.createBitmap(bitmap, left, top, cropWidth, cropHeight)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to crop bitmap to ${cropWidth}x${cropHeight}", e)
+            bitmap
+        }
+    }
+
+    private fun aspectMismatch(width: Int, height: Int, display: TargetSize): Boolean {
+        if (width <= 0 || height <= 0 || display.width <= 0 || display.height <= 0) {
+            return false
+        }
+        val displayAspect = display.width.toFloat() / display.height.toFloat()
+        val sourceAspect = width.toFloat() / height.toFloat()
+        return abs(sourceAspect - displayAspect) / displayAspect > ASPECT_TOLERANCE
+    }
+
+    /** True when the EXIF orientation rotates by 90/270 degrees, swapping width and height. */
+    private fun exifSwapsAxes(imageFile: File): Boolean {
+        val orientation = try {
+            ExifInterface(imageFile.absolutePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+        } catch (e: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
+        return when (orientation) {
+            ExifInterface.ORIENTATION_TRANSPOSE,
+            ExifInterface.ORIENTATION_ROTATE_90,
+            ExifInterface.ORIENTATION_TRANSVERSE,
+            ExifInterface.ORIENTATION_ROTATE_270 -> true
+            else -> false
+        }
+    }
+
     private fun applyExifOrientation(imageFile: File, bitmap: Bitmap): Bitmap {
         val orientation = try {
             ExifInterface(imageFile.absolutePath).getAttributeInt(
@@ -379,6 +478,8 @@ class ImageNormalizer(private val context: Context) {
             append(targetSize.height)
             append(':')
             append(JPEG_QUALITY)
+            append(':')
+            append(NORMALIZE_VERSION)
         }
         val fileName = "${NORMALIZED_FILE_PREFIX}${hashKey(key)}.jpg"
         return File(dir, fileName)

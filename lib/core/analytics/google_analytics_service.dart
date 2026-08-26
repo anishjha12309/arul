@@ -13,7 +13,8 @@ import 'analytics_service.dart';
 ///      conversions directly; it reads them from a linked GA4 property. So the
 ///      ★ conversion events ALSO map onto GA4 *standard* events, which are the
 ///      ones eligible to be marked as Google Ads conversions:
-///        login_success       → login    (standard)
+///        login_success       → login          (standard)
+///        checkout_started    → begin_checkout (standard, value+INR)
 ///        trial_started       → (none — see below)
 ///        subscription_active → purchase (standard, value+INR → Google Ads ROAS)
 ///      (We emit the standard event IN ADDITION to the raw-named event, so the
@@ -68,6 +69,16 @@ class GoogleAnalyticsService implements AnalyticsService {
       case 'login_success':
         unawaited(
           _analytics.logLogin(loginMethod: properties?['provider'] as String?),
+        );
+      case 'checkout_started':
+        // The mid-funnel standard event. `begin_checkout` throws only when a
+        // value arrives WITHOUT a currency, so passing INR unconditionally is
+        // safe even when the price hasn't loaded (value stays null).
+        unawaited(
+          _analytics.logBeginCheckout(
+            currency: _currency,
+            value: _value(properties),
+          ),
         );
       // Deliberately NOT mapped to `purchase` — a trial moves no money. The
       // raw `trial_started` logged above carries value/plan/order_id and is

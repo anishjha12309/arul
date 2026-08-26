@@ -45,6 +45,11 @@ preview_urls = false
 [vars]
 GA4_FIREBASE_APP_ID = "1:1083884444243:android:7fd6427950254fe7ea44a6"
 
+# PostHog ingestion host for the server-side first-conversion capture
+# (lib/posthog.ts). US Cloud — must match the app's POSTHOG_HOST dart-define.
+# The project api key is a secret (wrangler secret bulk), not a [vars] entry.
+POSTHOG_HOST = "https://us.i.posthog.com"
+
 # SHA-256 cert fingerprints served in /.well-known/assetlinks.json. Public by
 # definition (anyone can curl the file), so [vars] and not a secret.
 #
@@ -130,7 +135,7 @@ namespace_id = "2003"
 #   sweep-submissions — the backstop for anything the hourly on-change sweep
 #   didn't catch.
 [triggers]
-crons = ["0 * * * *", "30 21 * * *"]
+crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]
 
 # ─── Custom domain (API) ─────────────────────────────────────────────────────
 # `custom_domain = true` makes WRANGLER own this hostname: on deploy it creates

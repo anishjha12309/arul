@@ -1,6 +1,13 @@
 -- Arul — Neon Postgres schema (popularity counters). Apply after 05_feed_rank.sql.
 --
--- These two columns are the ONLY ordering input for the **All** chip in each tab
+-- NO LONGER A SORT KEY (2026-08-25). These stay as the LIFETIME totals the CMS
+-- shows and older installs read, but the feed now orders on the DECAYED copies in
+-- 10_apply_score.sql: a counter that only rises freezes the head of the feed
+-- forever, because the row at slot 1 earns applies partly BECAUSE it is at slot 1.
+-- Everything below still describes exactly what the number MEANS, which is
+-- unchanged — the same increment, on the same route, under the same conditions.
+--
+-- These two columns were the ONLY ordering input for the **All** chip in each tab
 -- (CLAUDE.md §5b): All serves `count DESC, created_at DESC, id ASC`. Category
 -- chips ignore them entirely and stay newest-first, so build-catalog's ORDER BY
 -- is unchanged — the app applies the popularity sort in feedOrder(), exactly the
