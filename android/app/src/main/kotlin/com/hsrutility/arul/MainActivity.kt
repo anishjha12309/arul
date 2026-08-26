@@ -502,6 +502,40 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
+     * Shields the PhonePe plugin's activity-result callback.
+     *
+     * `phonepe_payment_sdk` 3.0.2 (latest on pub.dev, 2026-08-26) registers an
+     * ActivityResult launcher in onAttachedToActivity whose callback completes a
+     * `lateinit var result` that startTransaction() sets. When Android recreates
+     * this process while PhonePe's B2bPgActivity is on top (2 GB phones, itel /
+     * Tecno class), the registry replays the pending result into a FRESH plugin
+     * instance that never saw a startTransaction — `UninitializedPropertyAccess-
+     * Exception` on the main thread, the one real crash in the Crashlytics list
+     * (13 users / 30 days, 2026-08-26), and it fires at the exact moment the user
+     * returns from paying. The result carries nothing we need: the mandate's
+     * outcome is reconciled from the server when the paywall reopens
+     * (`/payments/status` on open — PremiumScreen._reconcileOnOpen), and the
+     * `trial_started` conversion is recovered by TrialConversionCatchUp. So the
+     * dropped result costs nothing; the crash cost the celebration.
+     *
+     * Deliberately narrow: only that exception class, everything else propagates.
+     */
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        try {
+            @Suppress("DEPRECATION")
+            super.onActivityResult(requestCode, resultCode, data)
+        } catch (e: UninitializedPropertyAccessException) {
+            Log.w(
+                TAG,
+                "Dropped an activity result the PhonePe plugin had no pending call for " +
+                    "(process recreated behind its payment page); server reconcile covers it",
+                e,
+            )
+        }
+    }
+
+    /**
      * Resumes (or fails) a setRingtone call that was parked to prompt for the
      * pre-Android-10 WRITE_EXTERNAL_STORAGE permission.
      */

@@ -5,11 +5,11 @@ import 'package:phonepe_payment_sdk/phonepe_payment_sdk.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
-import 'entitlement_provider.dart';
 import 'trial_conversion_catch_up.dart';
 
 part 'premium_purchase_provider.g.dart';
@@ -59,11 +59,47 @@ final class PurchaseError extends PurchaseState {
 @Riverpod(keepAlive: false)
 class PremiumPurchase extends _$PremiumPurchase {
   @override
-  PurchaseState build() => const PurchaseIdle();
+  PurchaseState build() {
+    // Captured while the ref is alive, on purpose. This notifier is
+    // autoDispose and lives exactly as long as the paywall watches it, but a
+    // checkout keeps running after the paywall is popped: the user backs out
+    // of "Processing…" (or the UPI app returns them elsewhere) while the
+    // status poll is still awaiting the server. Every `ref.read` in that
+    // continuation used to throw "Cannot use the Ref … after it has been
+    // disposed" — 671 users in 30 days (Crashlytics, 2026-08-26) — and the
+    // throw landed BEFORE `trial_started` was tracked, so a mandate that
+    // settled after the user left the paywall reached Neon and no sink. With
+    // the dependencies held here the poll finishes its job on a dead ref;
+    // only the UI writes are skipped ([_setState], [_refreshEntitlement]).
+    _api = ref.read(apiClientProvider);
+    _analytics = ref.read(analyticsServiceProvider);
+    _catchUp = ref.read(trialConversionCatchUpProvider);
+    return const PurchaseIdle();
+  }
+
+  late ApiClient _api;
+  late AnalyticsService _analytics;
+  late TrialConversionCatchUp _catchUp;
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
-  ApiClient get _api => ref.read(apiClientProvider);
+  /// Writes [next] only while the paywall still owns this notifier. After the
+  /// screen is popped the state has no reader and the setter throws, so the
+  /// write is dropped; the next paywall open reconciles from the server.
+  void _setState(PurchaseState next) {
+    if (ref.mounted) state = next;
+  }
+
+  /// A checkout still awaiting its outcome AND someone there to see it. False
+  /// once disposed: in-flight work then only reports (conversion / failure
+  /// events), never repaints.
+  bool get _isProcessing => ref.mounted && state is PurchaseProcessing;
+
+  /// Re-reads entitlement so the UI flips — skipped when disposed (nothing is
+  /// watching; the paywall's open-time reconcile does it on return).
+  void _refreshEntitlement() {
+    if (ref.mounted) _refreshEntitlement();
+  }
 
   /// Tracks a ★ conversion event (`trial_started` / `subscription_active`) with
   /// the monthly price + order id. Fans out to PostHog + GA4 + Meta via the
@@ -76,20 +112,25 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// that follows cannot fire the late copy [TrialConversionCatchUp] keeps for
   /// trials granted with the app closed.
   void _trackConversion(String event, String merchantOrderId) {
+    // A poll that outlived the paywall can settle AFTER the user reopened it
+    // and the open-time reconcile already let the catch-up fire the late
+    // copy. The marker is the one record of "this order's trial_started went
+    // out", so consult it before adding a second.
+    if (event == 'trial_started' && _catchUp.isReported(merchantOrderId)) {
+      return;
+    }
     final price = _monthlyPriceRupees();
-    ref
-        .read(analyticsServiceProvider)
-        .track(
-          event,
-          properties: {
-            'plan': 'monthly',
-            'order_id': merchantOrderId,
-            // Null-aware element: omitted entirely when the price hasn't loaded.
-            'value': ?price,
-          },
-        );
+    _analytics.track(
+      event,
+      properties: {
+        'plan': 'monthly',
+        'order_id': merchantOrderId,
+        // Null-aware element: omitted entirely when the price hasn't loaded.
+        'value': ?price,
+      },
+    );
     if (event == 'trial_started') {
-      ref.read(trialConversionCatchUpProvider).markReported(merchantOrderId);
+      _catchUp.markReported(merchantOrderId);
     }
   }
 
@@ -110,17 +151,15 @@ class PremiumPurchase extends _$PremiumPurchase {
   void _trackCheckoutStarted(String method, String? targetApp) {
     _checkoutMethod = method;
     final price = _monthlyPriceRupees();
-    ref
-        .read(analyticsServiceProvider)
-        .track(
-          'checkout_started',
-          properties: {
-            'plan': 'monthly',
-            'method': method,
-            'target_app': ?targetApp,
-            'value': ?price,
-          },
-        );
+    _analytics.track(
+      'checkout_started',
+      properties: {
+        'plan': 'monthly',
+        'method': method,
+        'target_app': ?targetApp,
+        'value': ?price,
+      },
+    );
   }
 
   /// The ONE terminal-failure event, emitted through [_fail] so no error path
@@ -134,26 +173,24 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// `cancelled` separates a deliberate back-out from a real failure — the same
   /// split `login_cancelled` keeps against `login_failed`.
   void _trackPaymentFailed(String reason, {required bool cancelled}) {
-    ref
-        .read(analyticsServiceProvider)
-        .track(
-          'payment_failed',
-          properties: {
-            'reason': reason,
-            'cancelled': cancelled,
-            'plan': 'monthly',
-            // Which handoff was in flight when it died — the whole point of
-            // the event. Null only if a failure somehow precedes the tap.
-            'method': ?_checkoutMethod,
-          },
-        );
+    _analytics.track(
+      'payment_failed',
+      properties: {
+        'reason': reason,
+        'cancelled': cancelled,
+        'plan': 'monthly',
+        // Which handoff was in flight when it died — the whole point of
+        // the event. Null only if a failure somehow precedes the tap.
+        'method': ?_checkoutMethod,
+      },
+    );
   }
 
   /// Terminal failure: set the error state AND report it, in that order, so
   /// every one of this notifier's failure exits is counted exactly once.
   /// Always prefer this over assigning [PurchaseError] directly.
   void _fail(String reason, PurchaseError error) {
-    state = error;
+    _setState(error);
     _trackPaymentFailed(reason, cancelled: error.cancelled);
   }
 
@@ -166,8 +203,14 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// is paise), or null if the config hasn't loaded — matches the fallback the
   /// premium screen uses for display. Read synchronously from the already-cached
   /// provider (the paywall watched it), so no await on the success path.
-  double? _monthlyPriceRupees() =>
-      monthlyPriceRupees(ref.read(appConfigProvider).asData?.value);
+  double? _monthlyPriceRupees() => ref.mounted
+      ? monthlyPriceRupees(ref.read(appConfigProvider).asData?.value) ??
+            _priceAtStart
+      : _priceAtStart;
+
+  /// Price captured at the tap, so a conversion reported after the paywall is
+  /// gone still carries the value the optimisers key on.
+  double? _priceAtStart;
 
   /// Deep-link return scheme registered in AndroidManifest.xml.
   /// PhonePe uses this to bring the app back to the foreground after payment.
@@ -205,6 +248,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     if (state is PurchaseLoading || state is PurchaseProcessing) return;
 
     state = const PurchaseLoading();
+    _priceAtStart = _monthlyPriceRupees();
     // The user has committed to paying — count the checkout BEFORE any network
     // call, so an initiate failure reads as an abandoned checkout rather than
     // as nothing having happened at all.
@@ -315,7 +359,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'paymentMode': {'type': 'PAY_PAGE'},
       });
 
-      state = const PurchaseProcessing();
+      _setState(const PurchaseProcessing());
 
       // Signature:
       //   PhonePePaymentSdk.startTransaction(String request, String appSchema)
@@ -386,8 +430,8 @@ class PremiumPurchase extends _$PremiumPurchase {
         // Invalidate the DETAIL provider — the narrowed entitlementProvider
         // derives from it, so invalidating only the narrow one re-reads the
         // stale cached detail and the UI never flips to "Manage Subscription".
-        ref.invalidate(entitlementDetailProvider);
-        state = const PurchaseSuccess();
+        _refreshEntitlement();
+        _setState(const PurchaseSuccess());
         return;
       }
       // A setup of OUR OWN is still running (double-tap, or a retry after a
@@ -445,7 +489,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
 
-    state = const PurchaseProcessing();
+    _setState(const PurchaseProcessing());
     _intentOrderId = merchantOrderId;
     try {
       await _confirmWithServer(merchantOrderId, delays: _intentPollDelays);
@@ -482,7 +526,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// paid mandate always grants even if this screen already said failed.
   Future<void> pollNowOnResume() async {
     final orderId = _intentOrderId;
-    if (orderId == null || state is! PurchaseProcessing || _resolvingIntent) {
+    if (orderId == null || !_isProcessing || _resolvingIntent) {
       return;
     }
     _resolvingIntent = true;
@@ -493,9 +537,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       // the live order state first, and the setup webhook resurrects an
       // abandon-raced approval server-side.
       await Future<void>.delayed(const Duration(seconds: 2));
-      if (state is! PurchaseProcessing) return;
+      if (!_isProcessing) return;
       if (await _settleFromStatus(orderId)) return;
-      if (state is! PurchaseProcessing) return;
+      if (!_isProcessing) return;
       await _autoResolveIntent(orderId);
     } finally {
       _resolvingIntent = false;
@@ -508,7 +552,9 @@ class PremiumPurchase extends _$PremiumPurchase {
     try {
       final statusResp = await _api.post('/payments/status');
       final serverStatus = statusResp['status'] as String? ?? '';
-      if (state is! PurchaseProcessing) return true; // someone else settled it
+      // A cancel owned the outcome meanwhile. A DISPOSED notifier is not that
+      // case — nothing else can settle its order — so it still reports below.
+      if (ref.mounted && state is! PurchaseProcessing) return true;
 
       if (serverStatus == 'trialing' || serverStatus == 'active') {
         _pollGeneration++;
@@ -516,8 +562,8 @@ class PremiumPurchase extends _$PremiumPurchase {
           serverStatus == 'trialing' ? 'trial_started' : 'subscription_active',
           orderId,
         );
-        ref.invalidate(entitlementDetailProvider);
-        state = const PurchaseSuccess();
+        _refreshEntitlement();
+        _setState(const PurchaseSuccess());
         return true;
       }
       if (serverStatus == 'expired') {
@@ -584,8 +630,8 @@ class PremiumPurchase extends _$PremiumPurchase {
                 : 'subscription_active',
             merchantOrderId,
           );
-          ref.invalidate(entitlementDetailProvider);
-          state = const PurchaseSuccess();
+          _refreshEntitlement();
+          _setState(const PurchaseSuccess());
           return;
         }
 
@@ -746,7 +792,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     } catch (_) {
       // Non-fatal: fall back to whatever /me/subscription returns on invalidate.
     }
-    ref.invalidate(entitlementDetailProvider);
+    _refreshEntitlement();
   }
 
   /// Cancels the active subscription (revokes the PhonePe mandate).
@@ -761,7 +807,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     try {
       await _api.post('/payments/cancel');
       // Refresh entitlement so any UI bound to it re-reads the new state.
-      ref.invalidate(entitlementDetailProvider);
+      _refreshEntitlement();
       return null;
     } on ApiException catch (e) {
       return e.message.isNotEmpty

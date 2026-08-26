@@ -21,6 +21,7 @@ import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/config/app_config.dart';
+import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
@@ -89,19 +90,33 @@ Future<void> main() async {
       // clean run on visibly broken screens. presentError first restores the
       // console dump; Crashlytics still gets every error, so nothing is traded
       // away for it. Same line in Pakiza (fixed there 2026-08-21).
+      //
+      // FATAL is the default; `isNonCrashError` demotes the errors the app
+      // provably survives (image loads, transport failures) to non-fatal so
+      // the crash-free rate measures crashes — see that function for why.
       FlutterError.onError = (details) {
         FlutterError.presentError(details);
-        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+        FirebaseCrashlytics.instance.recordFlutterError(
+          details,
+          fatal: !isNonCrashError(details.exception, library: details.library),
+        );
       };
       WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        FirebaseCrashlytics.instance.recordError(
+          error,
+          stack,
+          fatal: !isNonCrashError(error),
+        );
         return true;
       };
 
       await _startApp();
     },
-    (error, stack) =>
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true),
+    (error, stack) => FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      fatal: !isNonCrashError(error),
+    ),
   );
 }
 

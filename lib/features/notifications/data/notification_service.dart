@@ -1,5 +1,5 @@
-import 'dart:ui' show Color;
-
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -215,10 +215,29 @@ class NotificationService {
   /// Prompts for the runtime notification permission (Android 13+). Returns
   /// whether notifications are allowed. Call this when the user turns the
   /// feature on — never at launch.
-  Future<bool> requestPermissions() async {
+  Future<bool> requestPermissions() {
+    // Single-flight: the OS dialog is modal, but the toggle behind it is not.
+    // A second tap while the sheet is up made the plugin throw
+    // `permissionRequestInProgress` out of an unawaited future (22 users in
+    // 30 days, Crashlytics 2026-08-26). Both taps now share the one answer.
+    return _permissionRequest ??= _requestPermissions().whenComplete(
+      () => _permissionRequest = null,
+    );
+  }
+
+  Future<bool>? _permissionRequest;
+
+  Future<bool> _requestPermissions() async {
     final android = _android;
     if (android == null) return false;
-    return await android.requestNotificationsPermission() ?? false;
+    try {
+      return await android.requestNotificationsPermission() ?? false;
+    } on PlatformException catch (e) {
+      // Defensive: a request the single-flight above did not see (a plugin
+      // re-entry from another surface). Not granted is the honest answer.
+      debugPrint('[NotificationService] permission request failed: $e');
+      return false;
+    }
   }
 
   /// Whether the OS currently allows this app to post notifications — the

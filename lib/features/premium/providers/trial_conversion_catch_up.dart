@@ -85,6 +85,12 @@ class TrialConversionCatchUp {
     unawaited(_prefs.setString(prefsKey, orderId));
   }
 
+  /// Whether [orderId]'s `trial_started` already went out from this install.
+  /// Both emitters consult it — the purchase notifier before an in-session
+  /// (or paywall-outliving) fire, [reconcile] before a late one — so the two
+  /// paths can never count one order twice.
+  bool isReported(String orderId) => _prefs.getString(prefsKey) == orderId;
+
   /// Fires the late `trial_started` when [entitlement] carries a trialing row
   /// this install has not reported. Returns true when it fired. Never throws:
   /// it runs inside the entitlement read, which must not fail for analytics.
