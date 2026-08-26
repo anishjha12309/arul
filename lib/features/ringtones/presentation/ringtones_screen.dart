@@ -13,11 +13,13 @@ import '../../../app/widgets/arul_earn_button.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../referral/providers/referral_providers.dart';
 import '../data/ringtone_set_service.dart';
 import '../providers/ringtone_catalog_providers.dart';
 import '../providers/ringtone_preview_provider.dart';
@@ -57,6 +59,93 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   // Cached so dispose() never touches ref (unusable there in Riverpod 3).
   RingtonePreviewNotifier? _previewNotifier;
 
+  /// The list's own controller, so a deep link can put its row at the top.
+  final ScrollController _scroll = ScrollController();
+
+  /// The gap [_buildList] draws between rows. Part of the deep-link scroll
+  /// arithmetic, so it lives beside the row extent rather than inline.
+  static const double _rowGap = 10;
+
+  /// Row a link asked for, as an index into the All list, waiting for that
+  /// list to be laid out. Consumed by [_scheduleDeepLinkScroll].
+  int? _pendingScrollIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // A ringtone target that lands while this screen is already built (a warm
+    // App Link, a deferred delivery) must trigger a build: _maybeOpenDeepLink
+    // runs from build() and nothing else would re-run it.
+    ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+  }
+
+  void _onDeepLinkChanged() {
+    scheduleMicrotask(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Open the ringtone a link asked for, if any — the ringtone twin of the
+  /// feed's `maybeOpenDeepLink`.
+  ///
+  /// Always lands on **All**, never the ringtone's own category: All is the
+  /// only chip guaranteed to contain every row, and the index is resolved
+  /// through [ringtoneFeedOrder] because the pager-equivalent here is a row
+  /// position in the list the tab SERVES, not in the raw catalog. The row is
+  /// scrolled to the TOP of the list ("the first one shown"), nothing is
+  /// auto-played — preview is a tap the user makes.
+  ///
+  /// A miss is silent and normal: the ringtone may have been unpublished since
+  /// the ad was built. Takes ONLY a ringtone target; a pending wallpaper
+  /// passes through untouched for the feed.
+  void _maybeOpenDeepLink(List<Ringtone> all) {
+    if (all.isEmpty) return;
+    final target = ArulDeepLink.consumeRingtone();
+    if (target == null) return;
+
+    // Clear the deferred copy too — it and ArulDeepLink are seeded together
+    // (main.dart) because either can win the startup race.
+    unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
+
+    const allSlug = WallpaperCategory.allSlug;
+    final index = ringtoneFeedOrder(
+      allSlug,
+      all,
+    ).indexWhere((r) => r.id == target.id);
+    if (index < 0) return;
+
+    // GA4-only (not on the PostHog allow-list, not a Meta ★ event).
+    ref
+        .read(analyticsServiceProvider)
+        .track('deep_link_opened', properties: target.analyticsProperties);
+
+    _pendingScrollIndex = index;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // No-op when All is already selected; otherwise the chip change rebuilds
+      // the list, and THAT build schedules the scroll.
+      ref.read(selectedRingtoneCategoryProvider.notifier).select(allSlug);
+    });
+  }
+
+  /// Once the All list is built, jump the pending row to the top. Every row is
+  /// the same height ([RingtoneRow.extent]) and the list has no top padding,
+  /// so the offset is arithmetic — no need to build the rows in between.
+  void _scheduleDeepLinkScroll() {
+    final index = _pendingScrollIndex;
+    if (index == null) return;
+    if (ref.read(selectedRingtoneCategoryProvider) !=
+        WallpaperCategory.allSlug) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      _pendingScrollIndex = null;
+      final offset = index * (RingtoneRow.extent + _rowGap);
+      _scroll.jumpTo(offset.clamp(0.0, _scroll.position.maxScrollExtent));
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -82,6 +171,8 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     if (_routeListener != null) {
       _router?.routeInformationProvider.removeListener(_routeListener!);
     }
+    ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
+    _scroll.dispose();
     _previewNotifier?.stop();
     super.dispose();
   }
@@ -107,6 +198,14 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final feed = ref.watch(ringtoneFeedProvider);
+
+    // Open any ringtone a share or ad link asked for — once the full catalog
+    // is in, since that turns an id into a row index in the list this tab
+    // serves. Re-checked on every build, like the feed's, because a target can
+    // land after the first catalog.
+    if (ref.watch(ringtoneCatalogProvider) case AsyncData(:final value)) {
+      _maybeOpenDeepLink(value);
+    }
 
     // Same rationale as the feed: keep the entitlement resolved while the tab
     // is up so the gate's await returns instantly on tap.
@@ -249,8 +348,12 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   }
 
   Widget _buildList(List<Ringtone> items) {
+    _scheduleDeepLinkScroll();
     return ListView.separated(
+      controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
+      // Top padding stays ZERO: the deep-link scroll computes its offset from
+      // the row extent alone (see _scheduleDeepLinkScroll).
       padding: EdgeInsets.fromLTRB(
         ArulTokens.screenPadding,
         0,
@@ -258,7 +361,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
         AppShell.dockClearance(context),
       ),
       itemCount: items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: _rowGap),
       itemBuilder: (context, i) =>
           RingtoneRow(ringtone: items[i], onSet: () => _onSetTapped(items[i])),
     );
@@ -425,6 +528,14 @@ class RingtoneRow extends ConsumerWidget {
   static const double coverSize = RingtoneTile.defaultSize;
   static const double _padH = 12;
   static const double _padV = 9;
+  static const double _borderWidth = 1;
+
+  /// The row's laid-out height: the art, the vertical padding and the hairline
+  /// border on both edges — and NOTHING else may grow it (the text column and
+  /// both controls fit inside the art's height). The deep-link scroll
+  /// multiplies this out, so a row taller than this puts the wrong ringtone at
+  /// the top; the widget test that pins it caught the border being left out.
+  static const double extent = coverSize + 2 * _padV + 2 * _borderWidth;
 
   /// The gap the handoff draws between the row's children. Both trailing
   /// controls lay out in a [ArulTokens.minHitTarget]-wide/tall box with the
@@ -462,6 +573,8 @@ class RingtoneRow extends ConsumerWidget {
             : (isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight),
         borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
         border: Border.all(
+          // Explicit so [extent] and this can never disagree.
+          width: _borderWidth,
           color: lit
               ? ArulTokens.goldBorder52
               : (isDark

@@ -11,6 +11,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_earn_button.dart';
@@ -142,11 +143,23 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // — dispose() alone would almost never flush the summary. Backgrounding is
     // the real end-of-session signal, so observe it.
     WidgetsBinding.instance.addObserver(this);
+    // A link target that lands while this screen is already built (a warm App
+    // Link, a deferred delivery) must trigger a build, because
+    // maybeOpenDeepLink runs from build() and nothing else would re-run it —
+    // least of all when the feed is parked offstage behind the Ringtones tab.
+    ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+  }
+
+  void _onDeepLinkChanged() {
+    scheduleMicrotask(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _dwellTimer?.cancel();
+    ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     WidgetsBinding.instance.removeObserver(this);
     // Backstop for the rare path where the screen really is torn down without
     // the app being backgrounded first.

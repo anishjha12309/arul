@@ -10,6 +10,7 @@
  * Routes:
  *   GET  /.well-known/assetlinks.json — App Links verification (public)
  *   GET  /w/:id                 — wallpaper share/ad link → Play + referrer (public)
+ *   GET  /r/:id                 — ringtone ad link → Play + referrer (public)
  *   POST /auth/login
  *   POST /auth/refresh
  *   POST /auth/logout
@@ -54,7 +55,11 @@ import {
   handleUploadUrl,
   handleConfirmUpload,
 } from "./routes/media.js";
-import { handleAssetLinks, handleWallpaperLink } from "./routes/deeplink.js";
+import {
+  handleAssetLinks,
+  handleWallpaperLink,
+  handleRingtoneLink,
+} from "./routes/deeplink.js";
 import {
   handleInitiate,
   handleWebhook,
@@ -107,10 +112,11 @@ app.use("/*", async (c, next) => {
 
 // ── Deep-link routes (PUBLIC — browsers, not the app) ─────────────────────────
 // Served on arul.hsrutility.com, the host that ships in shares and ad creatives.
-// Both are unauthenticated on purpose: assetlinks.json is fetched by Android's
-// verifier, and /w/:id by whoever tapped the link. See routes/deeplink.ts.
+// All unauthenticated on purpose: assetlinks.json is fetched by Android's
+// verifier, and /w/:id + /r/:id by whoever tapped the link. See routes/deeplink.ts.
 app.get("/.well-known/assetlinks.json", handleAssetLinks);
 app.get("/w/:id", handleWallpaperLink);
+app.get("/r/:id", handleRingtoneLink);
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);

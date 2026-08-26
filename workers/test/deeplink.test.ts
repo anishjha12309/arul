@@ -9,7 +9,11 @@
 
 import { describe, it, expect } from "vitest";
 import { makeEnv, makeCtx } from "./_ctx.js";
-import { handleAssetLinks, handleWallpaperLink } from "../src/routes/deeplink.js";
+import {
+  handleAssetLinks,
+  handleWallpaperLink,
+  handleRingtoneLink,
+} from "../src/routes/deeplink.js";
 
 const PLAY_SHA =
   "EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3";
@@ -17,11 +21,13 @@ const UPLOAD_SHA =
   "0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9";
 
 const WALLPAPER_ID = "95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f";
+const RINGTONE_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d";
 
-/// `params` is what Hono would have matched off `/w/:id`; `query` is derived
-/// from the url, so pass the real link the way a browser would send it.
+/// `params` is what Hono would have matched off `/w/:id` or `/r/:id`; `query`
+/// is derived from the url, so pass the real link the way a browser would send it.
 function ctxFor(url: string, env = makeEnv()) {
-  const id = new URL(url).pathname.split("/w/")[1];
+  const match = new URL(url).pathname.match(/^\/[wr]\/(.+)$/);
+  const id = match?.[1];
   return makeCtx({ env, url, ...(id !== undefined ? { params: { id } } : {}) });
 }
 
@@ -122,5 +128,65 @@ describe("GET /w/:id", () => {
     expect(location.searchParams.get("referrer")).toBe(
       `ref=ABCD1234&w=${WALLPAPER_ID}`,
     );
+  });
+
+  it("carries the ad's language through to the referrer", async () => {
+    // The language the ad was in is what the app switches to after the
+    // install — it has to survive the Play round-trip like the id does.
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&lang=hi`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `ref=ABCD1234&w=${WALLPAPER_ID}&lang=hi`,
+    );
+  });
+
+  it("drops a language outside the six shipped codes, keeps the rest", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=fr`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
+  });
+
+  it("lower-cases the language and the id", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID.toUpperCase()}?lang=TA`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=ta`);
+  });
+});
+
+describe("GET /r/:id", () => {
+  it("redirects to Play carrying the ringtone id under the r= key", async () => {
+    // `r=`, not `w=`: the app's parser reads the key to know which tab to open.
+    const res = handleRingtoneLink(
+      ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?ref=ABCD1234&lang=ta`),
+    );
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.origin + location.pathname).toBe(
+      "https://play.google.com/store/apps/details",
+    );
+    expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
+    expect(location.searchParams.get("referrer")).toBe(
+      `ref=ABCD1234&r=${RINGTONE_ID}&lang=ta`,
+    );
+  });
+
+  it("still sends a malformed ringtone link to the store, without the junk", async () => {
+    const res = handleRingtoneLink(
+      ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=%3Cscript%3E"),
+    );
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBeNull();
   });
 });

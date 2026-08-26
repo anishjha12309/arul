@@ -118,7 +118,9 @@
                 <data android:scheme="arul"/>
             </intent-filter>
             <!-- Android App Link for wallpaper shares and ad creatives:
-                 https://arul.hsrutility.com/w/<wallpaper-id>.
+                 https://arul.hsrutility.com/w/<wallpaper-id>  and, for
+                 ringtone ad creatives, /r/<ringtone-id>. Either may carry
+                 ?lang=<code> (docs/deep-links.md).
 
                  autoVerify="true" is what makes an INSTALLED app intercept the
                  link ahead of the browser. Android verifies it by fetching
@@ -146,6 +148,29 @@
                     android:scheme="https"
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/w/"/>
+                <!-- Same scheme + host (data elements in one filter merge);
+                     only the extra path is declared here. -->
+                <data android:pathPrefix="/r/"/>
+            </intent-filter>
+            <!-- Meta ads deep link: fb<META_APP_ID>://open?wallpaper_id=…&lang=…
+                 (or ?screen=ringtones&ringtone_id=…) — the form the ad team
+                 pastes into Meta's deep-link field, and what the Facebook /
+                 Instagram apps launch for an INSTALLED user. The app id comes
+                 from the same META_APP_ID placeholder the SDK meta-data uses,
+                 so the scheme can never drift from the SDK's app. A key-less
+                 dev build resolves to a bare "fb" scheme, which nothing sends.
+                 The NOT-installed half of the same ad is the SDK's deferred
+                 fetch in MainActivity, not this filter. Its own filter, on
+                 purpose: merged into the https one it would also register
+                 fb…://arul.hsrutility.com and put itself under autoVerify
+                 (see the cross-product note above). -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="fb${facebookAppId}"
+                    android:host="open"/>
             </intent-filter>
         </activity>
 

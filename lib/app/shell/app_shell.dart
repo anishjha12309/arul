@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/analytics/analytics_provider.dart';
+import '../../core/deeplink/deep_link_target.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../features/ringtones/providers/ringtone_catalog_providers.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
@@ -57,6 +59,12 @@ class AppShell extends ConsumerStatefulWidget {
         MediaQuery.viewPaddingOf(context).bottom;
   }
 
+  /// The dock branch a deep-link target lives on.
+  static int branchFor(ArulTab tab) => switch (tab) {
+    ArulTab.wallpapers => wallpapersBranch,
+    ArulTab.ringtones => ringtonesBranch,
+  };
+
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
 }
@@ -77,6 +85,43 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (!mounted) return;
       ref.read(ringtoneCatalogProvider);
     });
+    // A link decides which tab the shell opens on. Checked once the shell is
+    // up (the target may have been parked before sign-in) and again whenever
+    // one lands later — GA4F and the Meta SDK deliver mid-startup, and an App
+    // Link can arrive while the app is warm on the other tab.
+    ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+    _onDeepLinkChanged();
+  }
+
+  @override
+  void dispose() {
+    ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
+    super.dispose();
+  }
+
+  /// Deferred to a microtask: the value is written from go_router's redirect
+  /// and from async services, and `goBranch` navigates, which must not run
+  /// inside a build.
+  void _onDeepLinkChanged() => scheduleMicrotask(_followDeepLink);
+
+  /// Switch to the branch the pending target lives on. A wallpaper or ringtone
+  /// target is only PEEKED here — the tab's own screen consumes it once its
+  /// catalog can resolve the id. A tab-only target (`screen=ringtones` with no
+  /// id) has nothing further to show, so it is consumed on the switch.
+  void _followDeepLink() {
+    if (!mounted) return;
+    final target = ArulDeepLink.pendingTarget;
+    if (target == null) return;
+    if (target is TabLinkTarget) {
+      ArulDeepLink.consumeTab();
+      ref
+          .read(analyticsServiceProvider)
+          .track('deep_link_opened', properties: target.analyticsProperties);
+    }
+    final branch = AppShell.branchFor(target.tab);
+    if (widget.navigationShell.currentIndex != branch) {
+      widget.navigationShell.goBranch(branch);
+    }
   }
 
   @override

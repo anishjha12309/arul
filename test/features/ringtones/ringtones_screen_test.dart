@@ -22,13 +22,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
+import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
+import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/ringtones/data/ringtone_set_service.dart';
 import 'package:arul/features/ringtones/presentation/ringtone_tile.dart';
@@ -136,6 +140,10 @@ void main() {
     setter = _RecordingSet();
     analytics = _RecordingAnalytics();
     paywallSources = [];
+    // The deep-link consume clears its persisted copy through
+    // installReferrerServiceProvider, which reads SharedPreferences.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
 
     final router = GoRouter(
       initialLocation: '/ringtones',
@@ -155,6 +163,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           isOnlineProvider.overrideWith((ref) => Stream.value(true)),
           ringtoneCatalogProvider.overrideWith(() => _FakeCatalog(catalog)),
           ringtonePreviewProvider.overrideWith(() => preview),
@@ -471,5 +480,86 @@ void main() {
       greaterThanOrEqualTo(120),
       reason: "the handoff's 120, plus whatever the gesture bar takes",
     );
+  });
+
+  // ── Deep link ──────────────────────────────────────────────────────────────
+  // A ringtone ad link (`/r/<id>`, `fb…://open?ringtone_id=`) lands here: the
+  // row is scrolled to the top of ALL, the pref copy is cleared, and the
+  // GA4-only landing event fires. Nothing auto-plays.
+
+  group('deep link', () {
+    setUp(ArulDeepLink.reset);
+    tearDown(ArulDeepLink.reset);
+
+    /// A catalog long enough that the target row is off-screen at the top.
+    final long = [
+      for (var i = 0; i < 30; i++)
+        _rt('r$i', 'Track $i', i.isEven ? 'sivan' : 'amman'),
+    ];
+
+    testWidgets('scrolls the requested row to the top of All', (tester) async {
+      ArulDeepLink.requestTarget(const RingtoneLinkTarget('r20'));
+      await pumpScreen(tester, catalog: long);
+      await tester.pump(); // the post-frame jump
+
+      final list = tester.widget<ListView>(find.byType(ListView).last);
+      final extent = RingtoneRow.extent + 10;
+      expect(list.controller?.offset, 20 * extent);
+      // The target row is the first one laid out at the top edge.
+      final rowTop = tester.getTopLeft(
+        find.ancestor(
+          of: find.text('Track 20'),
+          matching: find.byType(RingtoneRow),
+        ),
+      );
+      final listTop = tester.getTopLeft(find.byType(ListView).last);
+      expect(rowTop.dy, closeTo(listTop.dy, 0.01));
+      expect(ArulDeepLink.pendingTarget, isNull, reason: 'consumed');
+      expect(analytics.events, contains('deep_link_opened'));
+    });
+
+    testWidgets('lands on All even when another chip was selected', (
+      tester,
+    ) async {
+      await pumpScreen(tester, catalog: long);
+      await tester.tap(find.widgetWithText(GestureDetector, 'Amman').first);
+      await tester.pump();
+      expect(find.text('Track 20'), findsNothing, reason: 'r20 is sivan');
+
+      ArulDeepLink.requestTarget(const RingtoneLinkTarget('r20'));
+      await tester.pump(); // listener → setState → consume + select(All)
+      await tester.pump(); // All list built → jump scheduled
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(RingtonesScreen)),
+      );
+      expect(
+        container.read(selectedRingtoneCategoryProvider),
+        WallpaperCategory.allSlug,
+      );
+      final list = tester.widget<ListView>(find.byType(ListView).last);
+      expect(list.controller?.offset, 20 * (RingtoneRow.extent + 10));
+    });
+
+    testWidgets('an unknown id is silently ignored', (tester) async {
+      ArulDeepLink.requestTarget(const RingtoneLinkTarget('gone'));
+      await pumpScreen(tester, catalog: long);
+      await tester.pump();
+
+      final list = tester.widget<ListView>(find.byType(ListView).last);
+      expect(list.controller?.offset, 0);
+      expect(ArulDeepLink.pendingTarget, isNull, reason: 'still consumed');
+      expect(analytics.events, isNot(contains('deep_link_opened')));
+    });
+
+    testWidgets('a pending WALLPAPER passes through untouched', (tester) async {
+      // The feed owns that one; this tab must not eat it.
+      ArulDeepLink.requestTarget(const WallpaperLinkTarget('w1'));
+      await pumpScreen(tester, catalog: long);
+      await tester.pump();
+
+      expect(ArulDeepLink.pendingTarget, const WallpaperLinkTarget('w1'));
+    });
   });
 }

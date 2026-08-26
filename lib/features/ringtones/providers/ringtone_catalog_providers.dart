@@ -236,24 +236,31 @@ class SelectedRingtoneCategory extends Notifier<String> {
   void select(String slug) => state = slug;
 }
 
-/// The list the screen renders: catalog filtered by the selected category, in
+/// The list the screen serves for [slug] — the ONE definition of ringtone
+/// order, the ringtone twin of `feedOrder()`: catalog filtered by category, in
 /// the three-tier order — admin pin, then most-SET, then catalog position.
 ///
 /// Identical rule to the wallpaper feed, through the same [orderedByUse], so the
 /// two tabs cannot drift — see it in catalog_providers.dart for why the pin is
 /// nulls-last and why the position tiebreaker is load-bearing. Every chip gets
 /// the comparator, All included: a category is All restricted to that category.
+///
+/// A deep link resolves its ringtone to a row index through this too: the
+/// index is a position in the list the tab SERVES, and raw catalog order would
+/// scroll to a different row whenever a set count has moved one.
+List<Ringtone> ringtoneFeedOrder(String slug, List<Ringtone> all) =>
+    orderedByUse(
+      slug == WallpaperCategory.allSlug
+          ? all
+          : all.where((r) => r.category == slug).toList(growable: false),
+      (r) => r.setCount,
+      rank: (r) => r.feedRank,
+    );
+
+/// The list the screen renders: [ringtoneFeedOrder] for the selected category.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {
   final slug = ref.watch(selectedRingtoneCategoryProvider);
   return ref
       .watch(ringtoneCatalogProvider)
-      .whenData(
-        (all) => orderedByUse(
-          slug == WallpaperCategory.allSlug
-              ? all
-              : all.where((r) => r.category == slug).toList(growable: false),
-          (r) => r.setCount,
-          rank: (r) => r.feedRank,
-        ),
-      );
+      .whenData((all) => ringtoneFeedOrder(slug, all));
 });

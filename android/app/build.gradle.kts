@@ -153,6 +153,16 @@ dependencies {
 
     // Coroutines — off-main-thread file persistence in the apply channel.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // Meta deferred deep links (MainActivity.fetchMetaDeferredLink). The
+    // facebook_app_events plugin already pulls facebook-android-sdk in this
+    // SAME range — declared here too because a plugin's `implementation`
+    // dependencies are invisible to this module's compile classpath, so
+    // AppLinkData / FacebookSdk would not resolve. Same range, not a pin, so
+    // Gradle keeps resolving ONE version for both (18.3.0 as of 2026-08-26);
+    // two different pins here and in the plugin would be a runtime mismatch.
+    implementation("com.facebook.android:facebook-core:[18.0,19.0)")
+    implementation("com.facebook.android:facebook-applinks:[18.0,19.0)")
 }
 
 flutter {

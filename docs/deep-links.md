@@ -1,77 +1,97 @@
 # Deep links
 
-Read this when touching the URL a share or an ad carries, the App Links setup, or anything that turns
-an incoming link into a wallpaper on screen. Share payload, caption and attribution rules are in
-[share.md](share.md); the feed ordering it lands on is CLAUDE.md §5b.
+Read this when touching the URL a share or an ad carries, the App Links / Meta-scheme setup, or
+anything that turns an incoming link into a wallpaper, a ringtone or a language on screen. Share
+payload + caption: [share.md](share.md). The three deferred (post-install) deliveries and their
+test recipes: [deferred-links.md](deferred-links.md). Feed order it lands on: CLAUDE.md §5b.
 
-`https://arul.hsrutility.com/w/<wallpaper-id>?ref=<code>` — built by
-`InstallReferrerService.buildWallpaperLink`. The same URL is what goes in ad creatives.
+## The two shapes the ad team pastes (nothing else is supported)
 
-One URL, two resolutions, and BOTH halves are required:
+| Platform | Wallpaper | Ringtone |
+| --- | --- | --- |
+| Google Ads App URL · WhatsApp share · any browser | `https://arul.hsrutility.com/w/<uuid>?lang=hi` | `https://arul.hsrutility.com/r/<uuid>?lang=ta` |
+| Meta deep-link field (Facebook / Instagram) | `fb<META_APP_ID>://open?wallpaper_id=<uuid>&lang=hi` | `fb<META_APP_ID>://open?screen=ringtones&ringtone_id=<uuid>&lang=hi` |
 
-- **App installed** — Android verified the host at install time and intercepts before any browser, so
-  `/w/:id` is never fetched. go_router's `/w/:id` route parks the id in `ArulDeepLink` and redirects to
-  `/`; the feed consumes it once the catalog lands and jumps to it **on All** (the only chip that
-  contains every row).
-- **Not installed** — the Worker's `/w/:id` redirects to Play with `referrer=ref=<code>&w=<id>`, which
-  Android replays to `InstallReferrerService` on first launch. That is what makes the WALLPAPER open
-  after the install, not just the app.
+`lang` ∈ `en ta te kn ml hi` (region tags and case are tolerated, anything else is dropped);
+`?ref=<code>` still rides on the https form for referral credit. Build the https ones with
+`InstallReferrerService.buildWallpaperLink` / `buildRingtoneLink`, never by hand. The Meta scheme
+uses the SAME `META_APP_ID` the SDK meta-data is baked from (`env/prod.json`), so it cannot drift.
+Meta also accepts the https form in its deep-link field (Meta doc, Apr 2026: App Links need no
+dashboard work) — the scheme form needs App Dashboard → Settings → Android: package
+`com.hsrutility.arul`, class `com.hsrutility.arul.MainActivity`. `screen=` alone just opens the tab;
+an id implies its tab. The parser accepts the query keys on both hosts (`deep_link_parser.dart`).
 
-Traps, all of which fail SILENTLY — nothing logs. The first three drop the link into a browser; the
-last three keep the app but lose the wallpaper:
+## One URL, five deliveries, ONE parser, one slot
+
+Every path ends in `ArulDeepLink` (`deep_link_target.dart`): a target (wallpaper · ringtone · tab)
+plus a language, each consumed exactly once by the surface that can act on it — the shell picks the
+dock branch (peek only), the feed jumps to the wallpaper **on All**, the Ringtones tab scrolls the row
+to the **top of All**, `DeepLinkLocaleSync` (above `MaterialApp`) applies the language live.
+
+| App state | Delivery | Where it enters |
+| --- | --- | --- |
+| Installed | https App Link (verified host) | go_router top-level `redirect` — Android hands Flutter the FULL intent URI |
+| Installed | `fb<id>://open?…` from the FB/IG apps | same redirect; go_router normalises the empty path to `/` |
+| Not installed, browser tap | Worker `/w/:id` · `/r/:id` → Play `referrer=ref=…&w=<uuid>&lang=hi` (`r=` for ringtones) | `InstallReferrerService.captureOnce` |
+| Not installed, Google App Campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
+| Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
+
+**The link's language ALWAYS wins** (owner's call, 2026-08-26) — over the device default and over a
+language the user picked in Settings; it goes through `LocaleNotifier.setLocale`, so Settings shows
+it as the current choice. GA4-only event `deep_link_opened` (`kind`, `source`, id) fires on every
+landing; it is deliberately NOT on the PostHog allow-list and not a Meta ★ event
+([analytics-events.md](analytics-events.md)).
+
+Traps, all of which fail SILENTLY — nothing logs. The first four drop the link into a browser; the
+rest keep the app but lose the target:
 
 - [ ] `ANDROID_CERT_SHA256` must carry the cert **Play actually signed this build with**, not only the
       upload key — Play re-signs every AAB, so an upload-key-only file verifies on a local release APK
       and fails on every real install. **Ground truth is the device, not the Play Console page**
       (`adb shell pm get-app-links <pkg>`): the console's listed fingerprints were verified wrong on a
       real install. The var takes a comma-separated list; list every candidate.
-- [ ] Four places must agree on the host: `kDeepLinkHost`, the manifest's `android:host`, the
-      `wrangler.toml` custom domain, and whoever serves `/.well-known/assetlinks.json`.
+- [ ] Four places must agree on the host: `kDeepLinkHost` (`deep_link_parser.dart`), the manifest's
+      `android:host`, the `wrangler.toml` custom domain, and whoever serves `/.well-known/assetlinks.json`.
 - [ ] `flutter_deeplinking_enabled` meta-data must stay true, or the intent opens the app onto `/` with
-      the id nowhere.
-- [ ] The https filter must stay SEPARATE from the `arul://` one. An intent-filter matches the cross
-      product of its schemes and hosts, so merging them registers `arul://arul.hsrutility.com` and puts
-      the PhonePe return scheme under `autoVerify`.
+      the URI nowhere. Verified against the engine jar (2026-08-26): the embedding passes
+      `intent.data.toString()` — scheme, host and query intact — both cold and via `onNewIntent`.
+- [ ] THREE intent-filters, never merged: `arul://` (PhonePe return), the https App Link (`/w/` and
+      `/r/` are two `<data>` elements in ONE filter), and `fb${facebookAppId}://open`. A filter matches
+      the cross product of its schemes and hosts, so merging registers `fb…://arul.hsrutility.com`
+      and puts a custom scheme under `autoVerify`.
+- [ ] The top-level `redirect` must return null for every scheme-less location — it runs on EVERY
+      navigation — and `/` for every foreign-scheme URI, parseable or not: an ad link with a typo lands
+      on the app, never on go_router's error page. It parks the target BEFORE the location becomes
+      `/`, because the feed can only be reached through the splash's auth decision.
 - [ ] ONE level of encoding on `referrer`. Double-encoding hands the app a single key literally named
-      `ref=CODE&w=<uuid>`, and both attribution and the deferred deep link stop working.
-- [ ] The deferred target is seeded from BOTH `captureOnce` and the persisted pref (main.dart), because
-      either can win the startup race against the feed's first catalog drain. Whoever consumes it clears
-      the pref — consuming one without the other re-opens the wallpaper next launch.
+      `ref=CODE&w=<uuid>`, and both attribution and the deferred deep link stop working. The six
+      language codes are duplicated in the Worker (`LANG_RE`) by necessity — a seventh is two edits.
+- [ ] The deferred target AND language are seeded from BOTH `captureOnce` / the bridge and the persisted
+      prefs (main.dart), because either can win the startup race against the first catalog drain.
+      Whoever consumes clears the pref (`clearPendingTarget` / `clearPendingLang`) — consuming one
+      without the other re-opens the target next launch.
+- [ ] Typed takes: the feed builds BEFORE the shell has switched tabs, so `consumeWallpaper()` must
+      never eat a pending ringtone and `consumeRingtone()` never a wallpaper. Both screens re-check on
+      every build AND listen to `ArulDeepLink.changes` — GA4F/Meta deliver mid-startup, a warm App
+      Link arrives while the other tab is up, and an offstage screen gets no build otherwise.
+- [ ] The ringtone scroll is arithmetic (`index × (RingtoneRow.extent + gap)`, zero top padding); a row
+      that could grow taller than `extent` puts the wrong ringtone at the top.
+- [ ] The Meta App ID's scheme is the SDK's convention — `fb<id>` — so a key-less dev build registers a
+      bare `fb` scheme, which nothing sends; that is fine, not a bug.
 
-An ad tapped inside Facebook/Instagram may load this URL in their in-app webview rather than handing
-the OS an intent, in which case an installed user still lands on Play. The fix is not in this repo —
-put the URL in the ad platform's deep-link field so the platform does the hand-off.
+An ad tapped inside Facebook/Instagram may load the https URL in their in-app webview rather than
+handing the OS an intent, in which case an installed user still lands on Play. The fix is not in this
+repo — put the URL (or the scheme form) in the ad platform's deep-link field so the platform does the
+hand-off.
 
-## Google Ads DDL — a THIRD delivery path, not a replacement
+## Proving it on a device (installed half; deferred halves in deferred-links.md)
 
-A Google App Campaign does NOT use the Play referrer above. GA4F fetches the ad group's App URL over
-the network at app start and writes it to SharedPreferences `google.analytics.deferred.deeplink.prefs`
-(key `deeplink`); `MainActivity` reads + listens, validates it is our `/w/<uuid>`, and hands it to the
-same `pending_deeplink_wallpaper` one-shot. Opt-in is the `google_analytics_deferred_deep_link_enabled`
-manifest meta-data. Contract + diagnostic recipe:
-[Enable DDL in your measurement SDK](https://support.google.com/google-ads/answer/12373942) — read it
-there, never from memory.
-
-- [ ] **Delivery identity is the URL ALONE**, never url+`timestamp`. GA4F writes those two keys
-      independently, so a composite token reads `0:<url>` on the launch that captures the link and
-      `<bits>:<url>` once the timestamp lands — the handled marker stops matching and an
-      already-consumed wallpaper re-opens on a later launch. (`timestamp` is also a Double stored as
-      raw long bits: `getLong` then `Double.longBitsToDouble`, never `getFloat`/`getString`.)
-- [ ] The App URL in the ad group must be **exactly** `https://arul.hsrutility.com/w/<uuid>`. Anything
-      else is dropped at the native boundary and the install lands on the plain feed with nothing
-      logged anywhere — the one hint is `W/MainActivity: Deferred deep link ignored` in logcat, and
-      the shipped build is FLAG_SECURE so logcat is the only window.
-- [ ] Native buffers the link and Flutter ACKs only after the id is **persisted**, so the ACK is the
-      commit point; a process death before it re-delivers (at-least-once), and the feed's
-      read-and-clear consume is what makes it exactly-once.
-- [ ] `maybeOpenDeepLink` must stay re-checkable on every feed build. GA4F delivers mid-startup, so a
-      once-per-mount flag drops the target for the whole session — and does the same to an App Link
-      tapped while the app is already warm.
-- [ ] Eligibility is narrow and account-side, so "the code is right" is not "it will fire": App
-      campaigns **for installs** only, **AdMob and YouTube** inventory only, Android only, deep links
-      must be **allowlisted** for feed-served dynamic ads, and the user must install AND open within
-      **24 h** of the click. Nothing in this repo can widen any of that.
-- [ ] Test without a live ad: register a diagnostic DDL against the device's AdID
-      (`.../pagead/conversion/app/deeplink?…&ddl_test=1`, expires in 24 h), then
-      `adb shell setprop debug.deferred.deeplink com.hsrutility.arul`. Logcat should show
-      `D/FA: Deferred Deep Link feature enabled.` with `gmp_version` ≥ `18200`.
+```bash
+adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"
+adb shell "am start -a android.intent.action.VIEW -d 'fb<META_APP_ID>://open?wallpaper_id=<uuid>&lang=hi'"
+node tools/drive.mjs dump   # debug build: expect the Ringtones dock cell active / Hindi labels
+```
+The inner quotes are load-bearing: an unquoted `&` is a background operator to the PHONE's shell, so
+the app receives the URL cut at `&` — the target opens and `lang` silently never arrives (paid for on
+the A001, 2026-08-26). A debug-signed build cannot verify the host (assetlinks lists release certs
+only); force it for the test with `adb shell pm set-app-links --package com.hsrutility.arul 2 arul.hsrutility.com`.

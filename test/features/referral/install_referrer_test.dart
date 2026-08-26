@@ -1,7 +1,12 @@
-// Unit tests for InstallReferrerService.parseReferralCode — the pure parsing of
-// a Play Install Referrer payload into our referral code. No platform channel.
+// Unit tests for InstallReferrerService — the pure parsing of a Play Install
+// Referrer payload into our referral code and deep-link request, the links it
+// builds, and the persisted handoff. No platform channel.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:arul/core/deeplink/deep_link_parser.dart';
+import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/features/referral/data/install_referrer_service.dart';
 
 void main() {
@@ -61,16 +66,32 @@ void main() {
   });
 
   // The deferred half of the deep link: an ad/share tap by someone WITHOUT the
-  // app. The Worker's /w/:id sends them to Play with `ref=<code>&w=<id>`, Play
-  // replays it on first launch, and these turn it back into a wallpaper.
-  group('InstallReferrerService.parseWallpaperTarget', () {
+  // app. The Worker's /w/:id or /r/:id sends them to Play with
+  // `ref=<code>&w=<id>&lang=<code>` (or `r=<id>`), Play replays it on first
+  // launch, and these turn it back into what to open and in which language.
+  group('InstallReferrerService referrer payload parsing', () {
     const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+    const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';
 
     test('extracts w= from the payload the Worker builds', () {
       expect(
         InstallReferrerService.parseWallpaperTarget('ref=ABCD1234&w=$id'),
         id,
       );
+    });
+
+    test('extracts r= from the ringtone payload', () {
+      expect(
+        InstallReferrerService.parseRingtoneTarget('ref=ABCD1234&r=$rid'),
+        rid,
+      );
+      expect(InstallReferrerService.parseWallpaperTarget('r=$rid'), isNull);
+    });
+
+    test('extracts lang= and reduces it to a shipped code', () {
+      expect(InstallReferrerService.parseLang('w=$id&lang=hi'), 'hi');
+      expect(InstallReferrerService.parseLang('lang=TA-IN'), 'ta');
+      expect(InstallReferrerService.parseLang('w=$id&lang=fr'), isNull);
     });
 
     test('finds w among utm params Play may append', () {
@@ -135,11 +156,119 @@ void main() {
       );
     });
 
+    test(
+      'the ad-creative forms carry lang, and round-trip through the parser',
+      () {
+        final w = InstallReferrerService.buildWallpaperLink(id, lang: 'hi');
+        final r = InstallReferrerService.buildRingtoneLink(
+          rid,
+          code: 'ABCD1234',
+          lang: 'ta',
+        );
+        expect(w, 'https://$kDeepLinkHost/w/$id?lang=hi');
+        expect(r, 'https://$kDeepLinkHost/r/$rid?ref=ABCD1234&lang=ta');
+
+        final parsedW = parseDeepLink(w, source: DeepLinkSource.appLink);
+        expect(parsedW?.target, const WallpaperLinkTarget(id));
+        expect(parsedW?.lang, 'hi');
+        final parsedR = parseDeepLink(r, source: DeepLinkSource.appLink);
+        expect(parsedR?.target, const RingtoneLinkTarget(rid));
+        expect(parsedR?.lang, 'ta');
+      },
+    );
+
     test('the host matches the one the app builds links for', () {
-      // Three places must agree or verification fails silently and every link
-      // opens a browser: this constant, AndroidManifest's android:host, and the
-      // wrangler.toml custom domain.
+      // Four places must agree or verification fails silently and every link
+      // opens a browser: this constant, AndroidManifest's android:host, the
+      // wrangler.toml custom domain, and whoever serves assetlinks.json.
       expect(kDeepLinkHost, 'arul.hsrutility.com');
     });
+  });
+
+  // The durable handoff: whatever path delivered it, a target and a language
+  // are persisted (to survive the startup race and a process death) AND handed
+  // to the live app, and the two kinds never sit in prefs together.
+  group('InstallReferrerService queue + pending', () {
+    const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+    const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';
+
+    setUp(ArulDeepLink.reset);
+    tearDown(ArulDeepLink.reset);
+
+    Future<InstallReferrerService> service([
+      Map<String, Object> initial = const {},
+    ]) async {
+      SharedPreferences.setMockInitialValues(initial);
+      return InstallReferrerService(await SharedPreferences.getInstance());
+    }
+
+    test('queueRequest persists both halves and seeds the live slot', () async {
+      final s = await service();
+      await s.queueRequest(
+        DeepLinkRequest(
+          target: const WallpaperLinkTarget(
+            id,
+            source: DeepLinkSource.googleAds,
+          ),
+          lang: 'hi',
+        ),
+      );
+      expect(s.pendingWallpaperId, id);
+      expect(s.pendingLang, 'hi');
+      expect(
+        s.pendingTarget,
+        const WallpaperLinkTarget(id, source: DeepLinkSource.googleAds),
+        reason: 'the source survives a process death too',
+      );
+      expect(ArulDeepLink.pendingTarget, s.pendingTarget);
+      expect(ArulDeepLink.consumeLocale(), 'hi');
+    });
+
+    test('a ringtone replaces a pending wallpaper (last write wins)', () async {
+      final s = await service();
+      await s.queueTarget(const WallpaperLinkTarget(id));
+      await s.queueTarget(const RingtoneLinkTarget(rid));
+      expect(s.pendingWallpaperId, isNull);
+      expect(s.pendingRingtoneId, rid);
+      expect(s.pendingTarget, const RingtoneLinkTarget(rid));
+    });
+
+    test('a tab-only target is handed live but never persisted', () async {
+      final s = await service();
+      await s.queueTarget(const TabLinkTarget(ArulTab.ringtones));
+      expect(s.pendingTarget, isNull);
+      expect(
+        ArulDeepLink.pendingTarget,
+        const TabLinkTarget(ArulTab.ringtones),
+      );
+    });
+
+    test('an invalid id or language is refused at the door', () async {
+      final s = await service();
+      await s.queueTarget(const WallpaperLinkTarget('not-a-uuid'));
+      await s.queueLocale('fr');
+      expect(s.pendingTarget, isNull);
+      expect(s.pendingLang, isNull);
+      expect(ArulDeepLink.pendingTarget, isNull);
+    });
+
+    test(
+      'clearPendingTarget / clearPendingLang drop the persisted copies',
+      () async {
+        final s = await service({
+          'pending_deeplink_ringtone': rid,
+          'pending_deeplink_source': 'meta',
+          'pending_deeplink_lang': 'te',
+        });
+        expect(
+          s.pendingTarget,
+          const RingtoneLinkTarget(rid, source: DeepLinkSource.meta),
+        );
+        await s.clearPendingTarget();
+        await s.clearPendingLang();
+        expect(s.pendingTarget, isNull);
+        expect(s.pendingLang, isNull);
+      },
+    );
   });
 }

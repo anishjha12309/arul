@@ -6,6 +6,7 @@ close a line by deleting it.
 
 ## Open
 
+- **Meta deferred deep links are unproven until the App Ads Helper "Test deep link" run** (recipe in [deferred-links.md](deferred-links.md) §Meta — needs the phone's Facebook app logged into the developer account, then uninstall/reinstall); the installed `fb<id>://open` path and both debug seams ARE proven on the A001 (2026-08-26). Also still needed: the Meta App Dashboard → Settings → Android entry (package + `com.hsrutility.arul.MainActivity`) for the scheme form.
 - **Google Ads native DDL has never run on a device, and the referral reward has never been proven
   end-to-end.** The GA4F bridge is compile- and test-verified only; it is NOT in the installed Play
   Beta (1.0.0+33). Proving it needs a new AAB on a testing track, a diagnostic DDL registered against

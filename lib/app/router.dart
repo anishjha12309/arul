@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/deeplink/deep_link_parser.dart';
 import '../core/deeplink/deep_link_target.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
@@ -32,23 +33,45 @@ import 'theme/theme.dart';
 /// gesture.
 final router = GoRouter(
   initialLocation: '/',
+  // Incoming links — the installed half of every ad/share URL
+  // (docs/deep-links.md). Android hands Flutter the intent's FULL URI (scheme,
+  // host, query — verified against the engine's embedding), so this sees
+  //   https://arul.hsrutility.com/w/<id>?lang=hi          (App Link)
+  //   https://arul.hsrutility.com/r/<id>?lang=ta          (App Link)
+  //   fb<APP_ID>://open?wallpaper_id=<id>&lang=hi          (Meta's scheme)
+  // exactly as sent. A top-level redirect rather than per-route ones because
+  // Meta's form has NO path: go_router normalises it to `/`, and a route-level
+  // redirect on `/` would then run for every ordinary navigation too.
+  //
+  // Whatever it parses is parked in ArulDeepLink and the location becomes `/`:
+  // the target lives on a tab, and the tabs can only be reached through the
+  // splash's auth decision, so short-circuiting to /browse here would show the
+  // shell to a signed-out user. Every foreign-scheme URI ends at `/`, valid or
+  // not — an ad link with a typo must land on the app, never on an error page.
+  // The PhonePe `arul://` return has no scheme we parse and resolved to `/`
+  // before this existed; it still does.
+  //
+  // Internal navigations (`/browse`, `/premium?…`) carry no scheme and pass
+  // straight through — this must stay a cheap null for them.
+  redirect: (_, state) {
+    if (state.uri.scheme.isEmpty) return null;
+    final request = parseDeepLinkUri(state.uri, source: DeepLinkSource.appLink);
+    if (request != null) {
+      final target = request.target;
+      if (target != null) ArulDeepLink.requestTarget(target);
+      final lang = request.lang;
+      if (lang != null) ArulDeepLink.requestLocale(lang);
+    }
+    return '/';
+  },
   routes: [
     GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
     GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
-    // Wallpaper deep link — the App Link half of `arul.hsrutility.com/w/<id>`
-    // (docs/share.md). Renders NOTHING and always redirects to `/`: the target
-    // is the feed, and the feed can only be reached through the splash's auth
-    // decision, so short-circuiting to /browse here would show the shell to a
-    // signed-out user. The id is parked in ArulDeepLink and consumed by the feed
-    // once the catalog lands — the same place the deferred install-referrer path
-    // delivers it, so both links open the same way.
-    GoRoute(
-      path: '/w/:id',
-      redirect: (_, state) {
-        ArulDeepLink.request(state.pathParameters['id'] ?? '');
-        return '/';
-      },
-    ),
+    // The App Link paths, declared so they can never surface as "no routes for
+    // location": the top-level redirect above has already parked the target
+    // and rewritten the location to `/` by the time these would match.
+    GoRoute(path: '/w/:id', redirect: (_, _) => '/'),
+    GoRoute(path: '/r/:id', redirect: (_, _) => '/'),
     StatefulShellRoute(
       // Not .indexedStack: the branches go through ArulBranchCrossfade so a tab
       // switch dissolves instead of cutting.

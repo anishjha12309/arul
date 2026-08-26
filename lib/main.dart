@@ -18,7 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/deeplink/deep_link_target.dart';
-import 'core/deeplink/google_ads_deferred_link_service.dart';
+import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/config/app_config.dart';
 import 'core/perf/boot_trace.dart';
@@ -268,29 +268,33 @@ Future<void> _startApp() async {
 
   // Referral attribution + deferred deep link: read the Play Install Referrer
   // once per install. It carries the referral code for the first sign-in AND,
-  // for an ad/share tap that happened before this install existed, the wallpaper
-  // to open. Fire-and-forget — off the critical path and a no-op without Play
-  // Services.
+  // for an ad/share tap that happened before this install existed, the
+  // wallpaper or ringtone to open and the language the ad was in. Fire-and-
+  // forget — off the critical path and a no-op without Play Services.
   //
   // The deep-link half is seeded from BOTH ends on purpose. captureOnce needs an
   // async Play Services round-trip, so on the very first launch after an ad
   // install it can land either side of the feed draining its first catalog.
-  // Seeding the already-persisted value here (before any UI exists) covers the
+  // Seeding the already-persisted values here (before any UI exists) covers the
   // race it loses; captureOnce seeds ArulDeepLink itself for the race it wins.
-  // The persisted copy is cleared by whoever actually consumes it, so a target
+  // The persisted copies are cleared by whoever actually consumes them (the
+  // tab that shows the target, DeepLinkLocaleSync for the language), so each
   // is delivered exactly once however the timing falls.
   final referrer = InstallReferrerService(prefs);
-  final deferredWallpaper = referrer.pendingWallpaperId;
-  if (deferredWallpaper != null) ArulDeepLink.request(deferredWallpaper);
+  final deferredTarget = referrer.pendingTarget;
+  if (deferredTarget != null) ArulDeepLink.requestTarget(deferredTarget);
+  final deferredLang = referrer.pendingLang;
+  if (deferredLang != null) ArulDeepLink.requestLocale(deferredLang);
   unawaited(referrer.captureOnce());
 
-  // Eligible Google App Campaigns deliver their post-install App URL through
-  // Google Analytics for Firebase rather than Play Install Referrer. Native
-  // Android buffers that URL across the Flutter-engine startup race; this feeds
-  // it into the SAME persisted one-shot target used above. Fire-and-forget so a
-  // network-delivered ad target can never delay the first frame.
-  final googleAdsDeferredLinks = GoogleAdsDeferredLinkService(referrer);
-  unawaited(googleAdsDeferredLinks.start());
+  // Ad installs that Play's referrer cannot describe arrive over the network
+  // instead: Google App Campaigns hand their App URL to Google Analytics for
+  // Firebase, Meta ads hand theirs to the Meta SDK's deferred App Link fetch.
+  // Native Android buffers both across the Flutter-engine startup race; this
+  // feeds them into the SAME persisted one-shot handoff used above. Fire-and-
+  // forget so a network-delivered ad target can never delay the first frame.
+  final deferredLinks = DeferredLinkService(referrer);
+  unawaited(deferredLinks.start());
 
   // google_sign_in v7: initialize the singleton once at startup. Both env files
   // carry a real client id, so this runs in every real build; the guard only

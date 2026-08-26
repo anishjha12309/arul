@@ -15,6 +15,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:arul/core/analytics/analytics_provider.dart';
+import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/wallpaper.dart';
@@ -69,18 +71,45 @@ class _HostState extends ConsumerState<_Host> with ApplyRestore<_Host> {
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
+/// Records every `track()` so the GA4-only landing event can be asserted.
+class _RecordingAnalytics implements AnalyticsService {
+  final events = <(String, Map<String, Object?>?)>[];
+
+  @override
+  void track(String event, {Map<String, Object?>? properties}) =>
+      events.add((event, properties));
+
+  @override
+  void identify(String userId, {Map<String, Object?>? userProperties}) {}
+
+  @override
+  void screen(String name, {Map<String, Object?>? properties}) {}
+
+  @override
+  void reset() {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   Future<
-    ({_HostState host, ProviderContainer container, SharedPreferences prefs})
+    ({
+      _HostState host,
+      ProviderContainer container,
+      SharedPreferences prefs,
+      _RecordingAnalytics analytics,
+    })
   >
   pumpHost(WidgetTester tester, Map<String, Object> savedFlags) async {
     SharedPreferences.setMockInitialValues(savedFlags);
     final prefs = await SharedPreferences.getInstance();
+    final analytics = _RecordingAnalytics();
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          analyticsServiceProvider.overrideWithValue(analytics),
+        ],
         child: const MaterialApp(home: _Host()),
       ),
     );
@@ -88,7 +117,12 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(_Host)),
     );
-    return (host: host, container: container, prefs: prefs);
+    return (
+      host: host,
+      container: container,
+      prefs: prefs,
+      analytics: analytics,
+    );
   }
 
   testWidgets('no pending flag → no restore, feed untouched', (tester) async {
@@ -303,7 +337,47 @@ void main() {
       await tester.pump();
 
       expect(h.host.jumpCalls, hasLength(1));
-      expect(ArulDeepLink.consume(), isNull);
+      expect(ArulDeepLink.consumeWallpaper(), isNull);
+    });
+
+    testWidgets('a pending RINGTONE passes through the feed untouched', (
+      tester,
+    ) async {
+      // The feed builds before the shell has switched to the Ringtones tab, so
+      // its wallpaper-typed take must leave a ringtone link for that tab —
+      // and must not clear the persisted copy either.
+      ArulDeepLink.requestTarget(const RingtoneLinkTarget('id-ring0'));
+      final h = await pumpHost(tester, {
+        'pending_deeplink_ringtone': 'id-ring0',
+      });
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, isEmpty);
+      expect(ArulDeepLink.pendingTarget, const RingtoneLinkTarget('id-ring0'));
+      expect(h.prefs.getString('pending_deeplink_ringtone'), 'id-ring0');
+    });
+
+    testWidgets('opening reports deep_link_opened with the link\'s source', (
+      tester,
+    ) async {
+      // GA4-only: the event answers "which channel lands people on content".
+      ArulDeepLink.requestTarget(
+        const WallpaperLinkTarget('id-temple0', source: DeepLinkSource.meta),
+      );
+      final h = await pumpHost(tester, {});
+
+      h.host.maybeOpenDeepLink(_catalog);
+      await tester.pump();
+
+      expect(h.host.jumpCalls, hasLength(1));
+      expect(h.analytics.events.single.$1, 'deep_link_opened');
+      expect(h.analytics.events.single.$2, {
+        'kind': 'wallpaper',
+        'source': 'meta',
+        'wallpaper_id': 'id-temple0',
+      });
     });
 
     testWidgets('a target parked AFTER the first catalog still opens', (

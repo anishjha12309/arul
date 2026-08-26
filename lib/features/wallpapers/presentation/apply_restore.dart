@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/wallpaper.dart';
@@ -107,15 +108,18 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   ///
   /// Re-checked on EVERY build with a catalog, unlike [maybeRestoreAfterApply]'s
   /// one-shot: a target can be parked here long after the feed's first catalog —
-  /// an App Link tapped while the app is already warm, or a Google Ads deferred
-  /// link, which GA4F fetches over the network at startup and may deliver at any
-  /// point in it. A once-per-mount flag dropped both on the floor for the whole
-  /// session. Nothing repeats, because [ArulDeepLink.consume] is read-and-clear.
+  /// an App Link tapped while the app is already warm, or a deferred link, which
+  /// GA4F / the Meta SDK fetch over the network at startup and may deliver at
+  /// any point in it. A once-per-mount flag dropped both on the floor for the
+  /// whole session. Nothing repeats, because [ArulDeepLink.consumeWallpaper]
+  /// is read-and-clear — and it takes ONLY a wallpaper: the feed builds before
+  /// the shell has switched to the Ringtones tab, so a pending ringtone must
+  /// pass through here untouched.
   void maybeOpenDeepLink(List<Wallpaper> allItems) {
     if (allItems.isEmpty) return;
 
-    final wallpaperId = ArulDeepLink.consume();
-    if (wallpaperId == null) return;
+    final target = ArulDeepLink.consumeWallpaper();
+    if (target == null) return;
 
     // Clear the deferred copy too. ArulDeepLink and the pref are seeded together
     // (main.dart) precisely because either can win the startup race; consuming
@@ -123,13 +127,19 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     unawaited(
       InstallReferrerService(
         ref.read(sharedPreferencesProvider),
-      ).clearPendingWallpaper(),
+      ).clearPendingTarget(),
     );
 
     const all = WallpaperCategory.allSlug;
     final list = feedOrder(all, allItems);
-    final index = list.indexWhere((w) => w.id == wallpaperId);
+    final index = list.indexWhere((w) => w.id == target.id);
     if (index < 0) return;
+
+    // GA4-only (not on the PostHog allow-list, not a Meta ★ event): which
+    // delivery channel actually lands people on the content they tapped.
+    ref
+        .read(analyticsServiceProvider)
+        .track('deep_link_opened', properties: target.analyticsProperties);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;

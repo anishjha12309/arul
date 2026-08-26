@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/deeplink/deep_link_locale_sync.dart';
 import '../core/providers/locale_provider.dart';
 import '../features/notifications/providers/notification_providers.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
@@ -40,29 +41,35 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     // not depend on the user opening any particular screen.
     ref.watch(notificationBootstrapProvider);
 
-    return MaterialApp.router(
-      title: 'Arul',
-      debugShowCheckedModeBanner: false,
-      routerConfig: router,
-      theme: ArulTheme.light(),
-      darkTheme: ArulTheme.dark(),
-      themeMode: ref.watch(themeModeProvider),
+    // A link's `lang=` lands on the live locale from here — above the
+    // MaterialApp, so it covers the sign-in screen as much as the feed, and for
+    // the whole session, so a deferred delivery that arrives seconds in still
+    // applies (deep_link_locale_sync.dart).
+    return DeepLinkLocaleSync(
+      child: MaterialApp.router(
+        title: 'Arul',
+        debugShowCheckedModeBanner: false,
+        routerConfig: router,
+        theme: ArulTheme.light(),
+        darkTheme: ArulTheme.dark(),
+        themeMode: ref.watch(themeModeProvider),
 
-      // Switch themes in ONE frame instead of lerping for 200ms.
-      //
-      // MaterialApp otherwise wraps the app in an AnimatedTheme, and a theme
-      // lerp is not a cheap crossfade: every frame interpolates the whole
-      // ThemeData — full ColorScheme, all fifteen text styles, every component
-      // sub-theme — and rebuilds every `Theme.of(context)` dependant in the
-      // tree. Over the feed, with video textures and shimmer already live, that
-      // is exactly the stutter people read as jank. Passing noAnimation makes
-      // MaterialApp use a plain Theme widget instead (material/app.dart), so the
-      // swap costs a single frame and the sheet's own dismiss animation is left
-      // to run alone.
-      themeAnimationStyle: AnimationStyle.noAnimation,
-      locale: ref.watch(localeProvider),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
+        // Switch themes in ONE frame instead of lerping for 200ms.
+        //
+        // MaterialApp otherwise wraps the app in an AnimatedTheme, and a theme
+        // lerp is not a cheap crossfade: every frame interpolates the whole
+        // ThemeData — full ColorScheme, all fifteen text styles, every component
+        // sub-theme — and rebuilds every `Theme.of(context)` dependant in the
+        // tree. Over the feed, with video textures and shimmer already live, that
+        // is exactly the stutter people read as jank. Passing noAnimation makes
+        // MaterialApp use a plain Theme widget instead (material/app.dart), so the
+        // swap costs a single frame and the sheet's own dismiss animation is left
+        // to run alone.
+        themeAnimationStyle: AnimationStyle.noAnimation,
+        locale: ref.watch(localeProvider),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+      ),
     );
   }
 }

@@ -5,15 +5,22 @@
  *                                      open in the app (Android App Links)
  *   GET /w/:id                       — the ONE URL that ships in shares and ad
  *                                      creatives for a specific wallpaper
+ *   GET /r/:id                       — the same for a ringtone (ad creatives
+ *                                      only — the app has no ringtone share)
  *
- * How one URL serves both halves of "open the wallpaper":
+ * Both content routes take `?ref=<code>` (referral attribution) and
+ * `?lang=<code>` (the language the ad was in; the app switches to it).
+ *
+ * How one URL serves both halves of "open the content":
  *   · App INSTALLED — Android verified this host against assetlinks.json at
  *     install time, so the OS resolves the https URL straight to the app and
- *     `/w/:id` is never fetched at all. The app reads the id off the intent.
+ *     these routes are never fetched at all. The app reads the URL off the
+ *     intent, query included.
  *   · App NOT installed — nothing intercepts, the browser lands here, and we
- *     redirect to Play carrying `referrer=ref=<code>&w=<id>`. Android replays
- *     that payload to the app on first launch (InstallReferrerService), which is
- *     what makes the wallpaper open AFTER the install completes.
+ *     redirect to Play carrying `referrer=ref=<code>&w=<id>&lang=<code>` (or
+ *     `r=<id>`). Android replays that payload to the app on first launch
+ *     (InstallReferrerService), which is what makes the wallpaper/ringtone open
+ *     — in the ad's language — AFTER the install completes.
  *
  * The referrer payload is why this is a redirect and not an HTML page: Play only
  * replays a referrer it received on the store URL, so the store URL has to be
@@ -33,15 +40,24 @@ import type { Env } from "../env.js";
 const PACKAGE_NAME = "com.hsrutility.arul";
 
 /**
- * Wallpaper ids are `uuid` (db/schema/02_content.sql). Validating here keeps
- * arbitrary attacker-supplied text out of the referrer payload we hand Play,
- * and out of the app's own parser on the other side.
+ * Wallpaper and ringtone ids are `uuid` (db/schema/02_content.sql,
+ * 04_ringtones.sql). Validating here keeps arbitrary attacker-supplied text out
+ * of the referrer payload we hand Play, and out of the app's own parser on the
+ * other side.
  */
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Referral codes are `^[A-Z0-9]{4,16}$` — same shape InstallReferrerService accepts. */
 const REF_RE = /^[A-Z0-9]{4,16}$/;
+
+/**
+ * The six shipped UI languages — `supportedAppLocales` in the app. Duplicated
+ * here by necessity (the Worker has no Dart), so a seventh language is an edit
+ * in BOTH places; an unknown code is dropped rather than forwarded, because the
+ * app would drop it anyway and the referrer string is better kept clean.
+ */
+const LANG_RE = /^(en|ta|te|kn|ml|hi)$/;
 
 // ── GET /.well-known/assetlinks.json ─────────────────────────────────────────
 
@@ -86,23 +102,44 @@ export function handleAssetLinks(c: Context<{ Bindings: Env }>): Response {
   );
 }
 
-// ── GET /w/:id ───────────────────────────────────────────────────────────────
+// ── GET /w/:id  ·  GET /r/:id ────────────────────────────────────────────────
 
+/** The wallpaper form: `w=<uuid>` in the referrer payload. */
 export function handleWallpaperLink(c: Context<{ Bindings: Env }>): Response {
-  const id = (c.req.param("id") ?? "").trim();
+  return redirectToPlay(c, "w");
+}
+
+/** The ringtone form: `r=<uuid>` in the referrer payload. */
+export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
+  return redirectToPlay(c, "r");
+}
+
+/**
+ * Send an uninstalled visitor to Play with everything the link carried packed
+ * into the store URL's `referrer`, which Android replays to the app after the
+ * install. `kind` is the referrer key the app's parser reads back (`w` / `r`).
+ */
+function redirectToPlay(
+  c: Context<{ Bindings: Env }>,
+  kind: "w" | "r",
+): Response {
+  const id = (c.req.param("id") ?? "").trim().toLowerCase();
   const ref = (c.req.query("ref") ?? "").trim().toUpperCase();
+  const lang = (c.req.query("lang") ?? "").trim().toLowerCase();
 
   // An id we don't recognise still sends the visitor to the store — a malformed
-  // link should cost an install, not 404 at someone who tapped an ad.
+  // link should cost an install, not 404 at someone who tapped an ad. Same for
+  // an unknown language: the link is kept, the junk is not.
   const parts: string[] = [];
   if (REF_RE.test(ref)) parts.push(`ref=${ref}`);
-  if (UUID_RE.test(id)) parts.push(`w=${id}`);
+  if (UUID_RE.test(id)) parts.push(`${kind}=${id}`);
+  if (LANG_RE.test(lang)) parts.push(`lang=${lang}`);
 
   const url = new URL("https://play.google.com/store/apps/details");
   url.searchParams.set("id", PACKAGE_NAME);
-  // ONE encodeURIComponent, so Play stores `ref=CODE&w=UUID` and replays it
-  // verbatim. URLSearchParams.set does that encoding itself — encoding the
-  // string first as well would double-encode it, and the app's
+  // ONE encodeURIComponent, so Play stores `ref=CODE&w=UUID&lang=hi` and
+  // replays it verbatim. URLSearchParams.set does that encoding itself —
+  // encoding the string first as well would double-encode it, and the app's
   // Uri.splitQueryString would then see one key called "ref=CODE&w=UUID".
   if (parts.length > 0) url.searchParams.set("referrer", parts.join("&"));
 

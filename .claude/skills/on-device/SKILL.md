@@ -78,10 +78,16 @@ node tools/drive.mjs dump              # in-app labels need a DEBUG build (seman
 node tools/drive.mjs tap "Ringtones"   # substring match on text/content-desc; --index N on ties
 node tools/drive.mjs swipe up          # fling the feed (down|left|right, --dist px, --ms n)
 node tools/drive.mjs open "https://arul.hsrutility.com/w/<id>"   # deep link — skip the tapping
+adb shell "am start -a android.intent.action.VIEW -d 'fb<META_APP_ID>://open?ringtone_id=<id>&lang=hi'"  # Meta form — INNER quotes or the phone's shell eats the &
 node tools/drive.mjs current           # focused window: how you detect an OS surface on top
 # also: tap x y · type · key back|wake|… · launch · stop · shot [path] · unlock
 ```
-A missed `tap` prints what IS on screen, so one failure self-corrects. Release/profile builds are
+A missed `tap` prints what IS on screen, so one failure self-corrects.
+
+**Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
+for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`
+between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: cmd.exe
+cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. Release/profile builds are
 label-less BY DESIGN (empty FlutterView) — drive them by coordinates or not at all.
 
 **Automation guard-rails.** dev.json points at the LIVE worker: a signed-in automated run writes
