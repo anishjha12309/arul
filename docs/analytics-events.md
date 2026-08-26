@@ -29,7 +29,7 @@ platform.** `subscription_active` reaches **PostHog only** (server, first settle
 that ends a LIVE row — user cancel, account deletion, PhonePe revoke (cron / status poll / webhook),
 permanent notify rejection — with `reason`, `prior_status`, `during_trial`. Restore-to-cancelled writes
 after a failed re-setup are NOT cancels. Cancellation rate = subscription_cancel ÷ trial_started, same cohort.
-The event LIST is the `track()` call sites — no table here to drift. The PostHog allow-list is pinned as
+The event LIST is the `track()` call sites — no table here to drift; the ★ NAMES are constants (`ArulEvents`, `analytics_events.dart`, pinned by `test/core/analytics_events_test.dart`) because every sink matches the literal and a typo would drop silently. The PostHog allow-list is pinned as
 an exact set by `test/core/analytics_gating_test.dart`. Consoles + DebugView: [analytics-ops.md](analytics-ops.md).
 Pakiza runs the identical mechanism with its own event catalogue — sync the MECHANISM, never the lists.
 

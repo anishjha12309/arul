@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/crash/crash_provider.dart';
@@ -244,7 +245,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       }
 
       analytics.track(
-        'wallpaper_shared',
+        ArulEvents.wallpaperShared,
         properties: {
           'wallpaper_id': wallpaper.id,
           'type': wallpaper.kind.name,

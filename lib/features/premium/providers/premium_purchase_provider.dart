@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:phonepe_payment_sdk/phonepe_payment_sdk.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
@@ -116,7 +117,8 @@ class PremiumPurchase extends _$PremiumPurchase {
     // and the open-time reconcile already let the catch-up fire the late
     // copy. The marker is the one record of "this order's trial_started went
     // out", so consult it before adding a second.
-    if (event == 'trial_started' && _catchUp.isReported(merchantOrderId)) {
+    if (event == ArulEvents.trialStarted &&
+        _catchUp.isReported(merchantOrderId)) {
       return;
     }
     final price = _monthlyPriceRupees();
@@ -129,7 +131,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'value': ?price,
       },
     );
-    if (event == 'trial_started') {
+    if (event == ArulEvents.trialStarted) {
       _catchUp.markReported(merchantOrderId);
     }
   }
@@ -559,7 +561,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       if (serverStatus == 'trialing' || serverStatus == 'active') {
         _pollGeneration++;
         _trackConversion(
-          serverStatus == 'trialing' ? 'trial_started' : 'subscription_active',
+          serverStatus == 'trialing'
+              ? ArulEvents.trialStarted
+              : ArulEvents.subscriptionActive,
           orderId,
         );
         _refreshEntitlement();
@@ -626,8 +630,8 @@ class PremiumPurchase extends _$PremiumPurchase {
         if (serverStatus == 'trialing' || serverStatus == 'active') {
           _trackConversion(
             serverStatus == 'trialing'
-                ? 'trial_started'
-                : 'subscription_active',
+                ? ArulEvents.trialStarted
+                : ArulEvents.subscriptionActive,
             merchantOrderId,
           );
           _refreshEntitlement();

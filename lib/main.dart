@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
+import 'core/analytics/analytics_events.dart';
 import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
@@ -174,7 +175,7 @@ void _maybeEnableFlutterDriver() {
 Future<void> _startPostHog(PostHogConfig config) async {
   await Posthog().setup(config);
   if (!AnalyticsCohort.isFreshInstall) return;
-  await Posthog().capture(eventName: 'Application Installed');
+  await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }
 
 /// Configures the app (system UI, image cache, PostHog, Meta, Google Sign-In,

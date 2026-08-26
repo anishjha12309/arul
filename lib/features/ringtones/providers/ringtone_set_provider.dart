@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../data/models/ringtone.dart';
@@ -175,7 +176,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
       );
 
       analytics.track(
-        'ringtone_set',
+        ArulEvents.ringtoneSet,
         properties: {'ringtone_id': ringtone.id, 'category': ringtone.category},
       );
 

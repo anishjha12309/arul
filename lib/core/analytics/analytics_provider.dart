@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../config/app_config.dart';
 import 'allowlisted_analytics_service.dart';
 import 'analytics_cohort.dart';
+import 'analytics_events.dart';
 import 'analytics_service.dart';
 import 'composite_analytics_service.dart';
 import 'google_analytics_service.dart';
@@ -57,20 +58,20 @@ const postHogAllowedEvents = <String>{
   // ── Acquisition ────────────────────────────────────────────────────────────
   // Where a cohort starts, and the event that makes the funnel resolvable
   // per-person. Pairs with `Application Installed` from `main.dart`.
-  'login_success',
+  ArulEvents.loginSuccess,
 
   // ── Value moments ──────────────────────────────────────────────────────────
   // What people came for. `wallpaper_applied` is also what orders the All feed
   // (via the server-side counter, NOT via this event — analytics is never a
   // ranking source), so its rate is worth watching directly.
-  'wallpaper_applied',
-  'wallpaper_shared',
-  'ringtone_set',
+  ArulEvents.wallpaperApplied,
+  ArulEvents.wallpaperShared,
+  ArulEvents.ringtoneSet,
 
   // ── Conversion ─────────────────────────────────────────────────────────────
   // The funnel's endpoint. The authoritative revenue number is always the Neon
   // subscriptions row — never count money here.
-  'trial_started',
+  ArulEvents.trialStarted,
 };
 
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys

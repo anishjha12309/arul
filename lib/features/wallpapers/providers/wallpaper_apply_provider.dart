@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/error/app_exception.dart';
@@ -323,7 +324,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     required bool confirmed,
   }) {
     analytics.track(
-      'wallpaper_applied',
+      ArulEvents.wallpaperApplied,
       properties: {
         ..._applyProps(wallpaper, target: target),
         'confirmed': confirmed,

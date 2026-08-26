@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 
+import 'analytics_events.dart';
 import 'analytics_service.dart';
 
 /// [AnalyticsService] backed by Firebase Analytics (Google Analytics 4).
@@ -69,7 +70,7 @@ class GoogleAnalyticsService implements AnalyticsService {
     // 2. Additionally emit the GA4 standard conversion event for ★ events, so
     //    it can be marked as a Google Ads conversion.
     switch (event) {
-      case 'login_success':
+      case ArulEvents.loginSuccess:
         unawaited(
           _analytics.logLogin(loginMethod: properties?['provider'] as String?),
         );
@@ -88,8 +89,8 @@ class GoogleAnalyticsService implements AnalyticsService {
       // call, 2026-08-26) — see the class doc. The raw `trial_started` logged
       // above carries value/plan/order_id and is the ONLY event marked as a
       // key event for Ads bidding.
-      case 'trial_started':
-      case 'subscription_active':
+      case ArulEvents.trialStarted:
+      case ArulEvents.subscriptionActive:
         break;
     }
   }

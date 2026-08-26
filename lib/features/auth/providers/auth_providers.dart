@@ -7,6 +7,7 @@ import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
 import '../domain/auth_service.dart';
@@ -24,6 +25,7 @@ AuthService authService(Ref ref) => ApiAuthService(
   analytics: ref.watch(analyticsServiceProvider),
   crash: ref.watch(crashReporterProvider),
   installReferrer: ref.watch(installReferrerServiceProvider),
+  appLanguage: () => ref.read(localeProvider).languageCode,
   // Resolved in main() before runApp, so it is settled by the time this
   // provider is first read (splash initState). Lets the stored-session seed
   // skip the fresh-install keystore wait — see _seedInitialState.

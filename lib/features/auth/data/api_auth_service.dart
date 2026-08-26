@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_reporter.dart';
@@ -25,6 +26,7 @@ class ApiAuthService implements AuthService {
     required this._analytics,
     required this._crash,
     InstallReferrerService? installReferrer,
+    this._appLanguage,
     this._freshInstall = false,
   }) : _api = apiClient,
        _referral = installReferrer {
@@ -48,6 +50,10 @@ class ApiAuthService implements AuthService {
   /// True only on the very first launch of this install (the persisted cohort
   /// draw was created this process — see AnalyticsCohort.isFreshInstall).
   final bool _freshInstall;
+
+  /// Current app language code for the `app_language` person property set at
+  /// sign-in. Optional so tests and define-less runs need not wire a locale.
+  final String Function()? _appLanguage;
 
   /// Optional — supplies a pending referral code (Play Install Referrer) to
   /// attach to the FIRST login so the Worker can attribute the install.
@@ -396,10 +402,20 @@ class ApiAuthService implements AuthService {
 
       _analytics.identify(
         userId,
-        userProperties: {'display_name': displayName, 'provider': 'google'},
+        userProperties: {
+          'display_name': displayName,
+          'provider': 'google',
+          // The UI language the user chose (not the device locale PostHog
+          // stamps as `$locale`) — the axis Arul's 6-locale cohorts split on.
+          // Login-time value; refreshed at the next sign-in, like Shubh's.
+          'app_language': ?_appLanguage?.call(),
+        },
       );
       _crash.setUserId(userId);
-      _analytics.track('login_success', properties: {'provider': 'google'});
+      _analytics.track(
+        ArulEvents.loginSuccess,
+        properties: {'provider': 'google'},
+      );
 
       return AuthSuccess(userId: userId);
     } on GoogleSignInException catch (e) {

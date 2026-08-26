@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/analytics/analytics_cohort.dart';
+import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
@@ -120,7 +121,7 @@ class TrialConversionCatchUp {
       if (reported == orderId) return false;
 
       _analytics.track(
-        'trial_started',
+        ArulEvents.trialStarted,
         properties: {
           'plan': 'monthly',
           'order_id': orderId,

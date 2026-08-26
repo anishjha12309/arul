@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:facebook_app_events/facebook_app_events.dart';
 
+import 'analytics_events.dart';
 import 'analytics_service.dart';
 
 /// [AnalyticsService] backed by Meta App Events (Facebook SDK).
@@ -65,7 +66,7 @@ class MetaAnalyticsService implements AnalyticsService {
   @override
   void track(String event, {Map<String, Object?>? properties}) {
     switch (event) {
-      case 'login_success':
+      case ArulEvents.loginSuccess:
         unawaited(
           _facebook.logCompletedRegistration(
             registrationMethod: properties?['provider'] as String?,
@@ -86,7 +87,7 @@ class MetaAnalyticsService implements AnalyticsService {
             paymentInfoAvailable: false,
           ),
         );
-      case 'trial_started':
+      case ArulEvents.trialStarted:
         unawaited(
           _facebook.logStartTrial(
             orderId: _orderId(properties),
