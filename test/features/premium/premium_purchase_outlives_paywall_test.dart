@@ -13,9 +13,11 @@
 // asked, only whether a dead screen is repainted.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,6 +27,8 @@ import 'package:arul/core/api/api_client.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
+import 'package:arul/features/premium/domain/entitlement.dart';
+import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
 
@@ -48,9 +52,13 @@ class _RecordingAnalytics implements AnalyticsService {
 /// Answers the three purchase endpoints in memory. `/payments/status` walks
 /// [statuses] one per call and repeats the last one.
 class _FakeApi extends ApiClient {
-  _FakeApi(this.statuses);
+  _FakeApi(this.statuses, {this.throwOnStatus = false});
 
   final List<String> statuses;
+
+  /// Every `/payments/status` dies before reaching the server — the poll
+  /// riding a dead radio behind the UPI app.
+  final bool throwOnStatus;
   int statusCalls = 0;
   int abandons = 0;
 
@@ -68,6 +76,7 @@ class _FakeApi extends ApiClient {
         };
       case '/payments/status':
         final i = statusCalls++;
+        if (throwOnStatus) throw const SocketException('Failed host lookup');
         return {
           'status': statuses[i < statuses.length ? i : statuses.length - 1],
         };
@@ -89,6 +98,7 @@ void main() {
     WidgetTester tester,
     _FakeApi api, {
     Map<String, Object> stored = const {},
+    List<Override> overrides = const [],
   }) async {
     SharedPreferences.setMockInitialValues(stored);
     prefs = await SharedPreferences.getInstance();
@@ -125,6 +135,7 @@ void main() {
             isFreshInstall: true,
           ),
         ),
+        ...overrides,
       ],
     );
     addTearDown(container.dispose);
@@ -210,6 +221,151 @@ void main() {
           'method': 'upi_app',
         },
       ]);
+    },
+  );
+
+  // The everyday path: the user stays on the paywall until the mandate settles.
+  // REGRESSION GUARD — the three tests above all run with the notifier already
+  // disposed, so `ref.mounted` is false in every guard and the mounted branch
+  // was never executed. A `_refreshEntitlement()` that recursed into itself
+  // therefore passed the whole suite while, on a real device, it threw
+  // StackOverflowError inside the poll's catch-all, swallowed the success, and
+  // showed "Payment received but confirmation is delayed" over a live mandate
+  // (device 2026-08-26). Any helper guarded by `ref.mounted` needs a mounted
+  // test or it is untested where it matters.
+  testWidgets(
+    'paywall still open: a settle flips to success and re-reads entitlement',
+    (tester) async {
+      final api = _FakeApi(['trialing']);
+      var entitlementBuilds = 0;
+      final container = await build(
+        tester,
+        api,
+        overrides: [
+          entitlementDetailProvider.overrideWith((ref) async {
+            entitlementBuilds++;
+            return const Entitlement(isPremium: false);
+          }),
+        ],
+      );
+      final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
+      addTearDown(purchaseSub.close);
+      // Keep entitlement alive, so an invalidation actually rebuilds it.
+      final entSub = container.listen(entitlementDetailProvider, (_, _) {});
+      addTearDown(entSub.close);
+      await container.read(entitlementDetailProvider.future);
+      final buildsBefore = entitlementBuilds;
+
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .startTrial(targetApp: 'com.phonepe.app'),
+      );
+      await tester.pump(const Duration(seconds: 30));
+
+      expect(
+        container.read(premiumPurchaseProvider),
+        isA<PurchaseSuccess>(),
+        reason: 'the success branch must survive with the paywall mounted',
+      );
+      expect(
+        entitlementBuilds,
+        greaterThan(buildsBefore),
+        reason: 'entitlement must be re-read so the UI flips to member view',
+      );
+      expect(eventsNamed('trial_started'), hasLength(1));
+    },
+  );
+
+  // ── The defect that started the 2026-08-26 incident ───────────────────────
+  // The payment succeeds server-side while the app's polls die on a torn-down
+  // radio behind the UPI app. The app gives up with "confirmation is delayed"
+  // — and used to leave the pre-purchase entitlement snapshot in place, so the
+  // paywall still read "Start free trial" to a user who WAS premium. The owner
+  // hit exactly that, concluded the payment had failed while autopay was armed,
+  // and revoked a live mandate from their UPI app.
+  testWidgets(
+    'an unreachable confirmation re-reads entitlement so the UI self-corrects',
+    (tester) async {
+      final api = _FakeApi(const ['pending'], throwOnStatus: true);
+      var entitlementBuilds = 0;
+      final container = await build(
+        tester,
+        api,
+        overrides: [
+          entitlementDetailProvider.overrideWith((ref) async {
+            entitlementBuilds++;
+            return const Entitlement(isPremium: false);
+          }),
+        ],
+      );
+      final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
+      addTearDown(purchaseSub.close);
+      final entSub = container.listen(entitlementDetailProvider, (_, _) {});
+      addTearDown(entSub.close);
+      await container.read(entitlementDetailProvider.future);
+      final buildsBefore = entitlementBuilds;
+
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .startTrial(targetApp: 'com.phonepe.app'),
+      );
+      // The intent budget is ~2 minutes of backoff; outlast it.
+      await tester.pump(const Duration(seconds: 200));
+
+      expect(container.read(premiumPurchaseProvider), isA<PurchaseError>());
+      expect(
+        eventsNamed('payment_failed').single?['reason'],
+        'confirmation_unreachable',
+        reason: 'never reached the server — must not claim a real declination',
+      );
+      expect(
+        entitlementBuilds,
+        greaterThan(buildsBefore),
+        reason:
+            'entitlement must be re-read so a granted trial surfaces itself',
+      );
+    },
+  );
+
+  // The resume checkpoint used to allow ONE 2 s grace before declaring failure
+  // and abandoning. PhonePe's ORDER state lags the payer's approval, so that
+  // window could tear down a mandate the user had just paid for.
+  testWidgets(
+    'resume checkpoint waits out PhonePe order lag instead of abandoning',
+    (tester) async {
+      final api = _FakeApi(const [
+        'pending', 'pending', 'pending', 'pending', 'pending', 'pending', //
+        'trialing',
+      ]);
+      final container = await build(tester, api);
+      final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
+      addTearDown(purchaseSub.close);
+
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .startTrial(targetApp: 'com.phonepe.app'),
+      );
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(
+        container.read(premiumPurchaseProvider),
+        isA<PurchaseProcessing>(),
+      );
+
+      // The user comes back from the UPI app having just approved.
+      unawaited(
+        container.read(premiumPurchaseProvider.notifier).pollNowOnResume(),
+      );
+      await tester.pump(const Duration(seconds: 60));
+
+      expect(
+        api.abandons,
+        0,
+        reason: 'must never abandon a setup that settles during the grace',
+      );
+      expect(container.read(premiumPurchaseProvider), isA<PurchaseSuccess>());
     },
   );
 }

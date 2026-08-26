@@ -9,6 +9,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/upi/upi_apps.dart';
+import 'entitlement_provider.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 import 'trial_conversion_catch_up.dart';
@@ -99,7 +100,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Re-reads entitlement so the UI flips — skipped when disposed (nothing is
   /// watching; the paywall's open-time reconcile does it on return).
   void _refreshEntitlement() {
-    if (ref.mounted) _refreshEntitlement();
+    if (ref.mounted) ref.invalidate(entitlementDetailProvider);
   }
 
   /// Tracks a ★ conversion event (`trial_started` / `subscription_active`) with
@@ -194,6 +195,23 @@ class PremiumPurchase extends _$PremiumPurchase {
   void _fail(String reason, PurchaseError error) {
     _setState(error);
     _trackPaymentFailed(reason, cancelled: error.cancelled);
+  }
+
+  /// Ends the flow WITHOUT a confirmed answer from the server — the mandate may
+  /// well be live. Identical to [_fail] plus an entitlement re-read.
+  ///
+  /// WHY the re-read: the grant can land while this screen is giving up (the
+  /// poll rides a dead radio behind the UPI app, or its budget runs out).
+  /// Without it the paywall keeps the pre-purchase snapshot and shows
+  /// "Start free trial" to a user who is already premium — not merely
+  /// cosmetic: on 2026-08-26 an owner test saw that screen over a live
+  /// mandate, concluded the payment had failed while autopay was armed, and
+  /// revoked the mandate from their UPI app. The refresh makes the screen
+  /// self-correct as soon as `/me` says premium, so nobody acts on a false
+  /// negative.
+  void _failUnconfirmed(String reason, PurchaseError error) {
+    _fail(reason, error);
+    _refreshEntitlement();
   }
 
   /// The checkout handoff currently in flight (`upi_app` / `phonepe_sdk`), set
@@ -511,6 +529,12 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
 
+  /// Re-check schedule for the resume checkpoint, in seconds (~14 s total).
+  /// Long enough for PhonePe's order state to catch up with an approval the
+  /// payer has already given; short enough that a real cancel still resolves
+  /// while the user is still looking at the screen.
+  static const _resumeGraceDelays = [2, 3, 4, 5];
+
   /// App-resumed checkpoint for the intent flow — the app decides, never the
   /// user. A third-party UPI app (Paytm, GPay…) that the user cancels out of
   /// tells PhonePe NOTHING — the order just stays PENDING — so the user
@@ -534,13 +558,19 @@ class PremiumPurchase extends _$PremiumPurchase {
     _resolvingIntent = true;
     try {
       if (await _settleFromStatus(orderId)) return;
-      // Short grace only — the popup must feel immediate. An approval that
-      // settles later than this is still never lost: the abandon below checks
-      // the live order state first, and the setup webhook resurrects an
-      // abandon-raced approval server-side.
-      await Future<void>.delayed(const Duration(seconds: 2));
-      if (!_isProcessing) return;
-      if (await _settleFromStatus(orderId)) return;
+      // Graded grace, not a single 2 s beat. PhonePe's ORDER state lags the
+      // payer's approval: the mandate can be authorized (and the ₹2 taken)
+      // while the order still reads PENDING for several seconds. Declaring
+      // failure inside that window puts a user in front of the refund line
+      // while their autopay is live — the state that makes people revoke a
+      // mandate they just paid for (owner device test, 2026-08-26). Each step
+      // re-asks and exits the moment the server owns an outcome, so a genuine
+      // cancel still resolves in seconds; only the ambiguous case waits.
+      for (final delay in _resumeGraceDelays) {
+        await Future<void>.delayed(Duration(seconds: delay));
+        if (!_isProcessing) return;
+        if (await _settleFromStatus(orderId)) return;
+      }
       if (!_isProcessing) return;
       await _autoResolveIntent(orderId);
     } finally {
@@ -696,7 +726,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       // NOT a known failure: the mandate may well have been approved. Still
       // counted, because the user's checkout ended without premium — the
       // `reason` is what separates it from a real declination.
-      _fail(
+      _failUnconfirmed(
         'confirmation_unreachable',
         const PurchaseError(
           'Payment received but confirmation is delayed. '
@@ -716,7 +746,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _autoResolveIntent(intentOrderId);
       return;
     }
-    _fail(
+    _failUnconfirmed(
       'confirmation_late',
       const PurchaseError(
         'Payment received but confirmation is delayed. '

@@ -66,8 +66,19 @@ export function toDate(value: unknown): Date | null {
 }
 
 export function getDb(env: Env): postgres.Sql {
-  return postgres(env.HYPERDRIVE.connectionString, {
-    max: 5,
+  const connectionString = env.HYPERDRIVE.connectionString;
+  // The verify-payments harness serves Postgres from PGlite, which accepts
+  // exactly ONE client connection at a time. Any route that runs queries
+  // concurrently (`/auth/login` does `Promise.all([insertUser,
+  // lookupTombstone])`) makes postgres.js open a second connection, and PGlite
+  // drops the first — surfacing as `Network connection lost` and a 500 that
+  // looks like an app bug. Pinning the pool to 1 makes postgres.js queue those
+  // queries on the single connection instead. Loopback-only by construction:
+  // a Hyperdrive connection string never points at 127.0.0.1:5433 in any
+  // deployed environment, so production keeps the real pool.
+  const isLocalHarness = connectionString.includes("127.0.0.1:5433");
+  return postgres(connectionString, {
+    max: isLocalHarness ? 1 : 5,
     fetch_types: false,
     prepare: true,
     connect_timeout: CONNECT_TIMEOUT_SECONDS,
