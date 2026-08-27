@@ -22,6 +22,9 @@ import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_apply_provider.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_prefetch_provider.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_share_provider.dart';
+import 'package:flutter/widgets.dart' show Locale;
+
+import 'package:arul/core/providers/locale_provider.dart';
 
 // ─── Fakes ────────────────────────────────────────────────────────────────────
 
@@ -223,6 +226,17 @@ class _FakeDirectShare implements DirectShareService {
 /// one line, then the link ALONE on the last line, and no second URL anywhere.
 String _caption(String link) => 'More devotional wallpapers on Arul:\n$link';
 
+/// The share link stamps the sharer's UI language, so the suite has to be able
+/// to say what it is; the real notifier reads SharedPreferences.
+class _FixedLocale extends LocaleNotifier {
+  _FixedLocale(this._locale);
+
+  final Locale _locale;
+
+  @override
+  Locale build() => _locale;
+}
+
 ProviderContainer _container({
   required WallpaperApplyService service,
   required _FakeWatermarkService watermark,
@@ -230,9 +244,11 @@ ProviderContainer _container({
   List<ShareParams>? sheetCalls,
   DirectShareService? directShare,
   ReferralRepository? referrals,
+  Locale locale = const Locale('en'),
 }) {
   return ProviderContainer(
     overrides: [
+      localeProvider.overrideWith(() => _FixedLocale(locale)),
       wallpaperApplyServiceProvider.overrideWithValue(service),
       wallpaperPrefetchServiceProvider.overrideWithValue(_NoPrefetch()),
       shareWatermarkServiceProvider.overrideWithValue(watermark),
@@ -357,6 +373,39 @@ void main() {
       // And it is the LAST thing in the message — messengers preview a trailing
       // link and bury an inline one.
       expect(text.trimRight().split('\n').last, startsWith('https://'));
+    });
+
+    test('the link stamps the language of the sharer as ilang, so a FRESH '
+        'install opens in it and an existing one does not change', () async {
+      // The caption is already written in the sharer's language; without this
+      // the friend who installs from it lands in English and has to go hunting
+      // through Settings. `ilang` (not `lang`) is what keeps it to fresh
+      // installs — the App Link parser ignores it, the Play referrer does not.
+      final sheetCalls = <ShareParams>[];
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: _FakeWatermarkService(),
+        sheetCalls: sheetCalls,
+        locale: const Locale('ta'),
+      );
+      addTearDown(c.dispose);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(_wallpaper(), buildCaption: _caption);
+
+      final text = sheetCalls.single.text!;
+      expect(text, contains('ilang=ta'));
+      expect(
+        text,
+        isNot(contains('lang=ta&')),
+        reason: 'plain lang= would override the language they chose',
+      );
+      expect(
+        RegExp(r'[?&]lang=').hasMatch(text),
+        isFalse,
+        reason: 'only ilang rides on a share',
+      );
     });
 
     test('WhatsApp takes the share when present, and the sheet never '

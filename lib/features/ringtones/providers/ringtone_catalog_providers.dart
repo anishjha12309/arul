@@ -209,17 +209,19 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
 /// bucket.
 const String othersCategorySlug = 'others';
 
-/// Alphabetical by label, except `others` is always LAST.
+/// [compareBrowseCategories] (Sivan first, then alphabetical), except `others`
+/// is always LAST.
 ///
 /// Plain alphabetical puts "Others" between "Murugan" and "Perumal", where it
 /// reads as one more deity in the row rather than the leftovers bucket it is.
-/// Pinning it to the end is the whole point of the category.
+/// Pinning it to the end is the whole point of the category. The rest of the
+/// order is the wallpaper row's, shared so the two tabs cannot drift.
 @visibleForTesting
 int compareRingtoneCategories(WallpaperCategory a, WallpaperCategory b) {
   final aOther = a.slug == othersCategorySlug;
   final bOther = b.slug == othersCategorySlug;
   if (aOther != bOther) return aOther ? 1 : -1;
-  return a.label.compareTo(b.label);
+  return compareBrowseCategories(a, b);
 }
 
 /// The ringtone list's OWN selected category — deliberately separate state from

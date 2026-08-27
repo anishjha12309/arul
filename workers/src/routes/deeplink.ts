@@ -56,6 +56,8 @@ const REF_RE = /^[A-Z0-9]{4,16}$/;
  * here by necessity (the Worker has no Dart), so a seventh language is an edit
  * in BOTH places; an unknown code is dropped rather than forwarded, because the
  * app would drop it anyway and the referrer string is better kept clean.
+ * Tested against the bare code only — the caller strips case and region tag
+ * first, so this must stay in step with the app's `normalizeLang`.
  */
 const LANG_RE = /^(en|ta|te|kn|ml|hi)$/;
 
@@ -125,7 +127,18 @@ function redirectToPlay(
 ): Response {
   const id = (c.req.param("id") ?? "").trim().toLowerCase();
   const ref = (c.req.query("ref") ?? "").trim().toUpperCase();
-  const lang = (c.req.query("lang") ?? "").trim().toLowerCase();
+  // Region tag stripped exactly as the app's `normalizeLang` does (`hi-IN` → `hi`,
+  // `ta_IN` → `ta`). Ad ops paste these by hand, and an ALREADY-INSTALLED user's
+  // link honours them — dropping them only here would hand a fresh install a
+  // different language than the same URL gives everyone else.
+  const norm = (raw: string) => raw.trim().toLowerCase().split(/[-_]/)[0];
+  const lang = norm(c.req.query("lang") ?? "");
+  // `ilang` = INSTALL language: what an in-app share stamps with the sharer's UI
+  // language. It reaches the app only through this referrer, never as a query the
+  // App Link parser reads — so a friend's share seeds a FRESH install's language
+  // and leaves an existing user's own Settings choice alone (owner's call,
+  // 2026-08-27). `lang` is the ad form and always wins, so it takes precedence.
+  const ilang = norm(c.req.query("ilang") ?? "");
 
   // An id we don't recognise still sends the visitor to the store — a malformed
   // link should cost an install, not 404 at someone who tapped an ad. Same for
@@ -133,7 +146,8 @@ function redirectToPlay(
   const parts: string[] = [];
   if (REF_RE.test(ref)) parts.push(`ref=${ref}`);
   if (UUID_RE.test(id)) parts.push(`${kind}=${id}`);
-  if (LANG_RE.test(lang)) parts.push(`lang=${lang}`);
+  const install = LANG_RE.test(lang) ? lang : LANG_RE.test(ilang) ? ilang : "";
+  if (install) parts.push(`lang=${install}`);
 
   const url = new URL("https://play.google.com/store/apps/details");
   url.searchParams.set("id", PACKAGE_NAME);

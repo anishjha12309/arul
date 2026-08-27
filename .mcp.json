@@ -6,7 +6,7 @@
     },
     "posthog": {
       "type": "http",
-      "url": "https://mcp.posthog.com/mcp?readonly=true"
+      "url": "https://mcp.posthog.com/mcp"
     }
   }
 }

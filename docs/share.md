@@ -19,6 +19,12 @@ below are the ones that were paid for by getting the second half wrong.
       recipient had even odds of tapping the one that credits nobody. Guarded by a test in
       `wallpaper_share_test.dart`; keep it.
 - [ ] Trailing, never inline: messengers preview a link at the end of a message and bury one mid-sentence.
+- [ ] **The link carries `ilang=<sharer's language>`, never `lang=`.** The caption is already written
+      in the sharer's language, so a friend who INSTALLS from it should land in that language —
+      but one who already has Arul must keep the language they chose. `ilang` is what splits those:
+      `parseDeepLinkUri` does not read it, so an App Link tap changes nothing, while the Worker
+      folds it into the Play referrer's `lang=` for a fresh install (owner's call, 2026-08-27).
+      `lang=` on a share would re-language an existing user from a stranger's phone.
 - [ ] **WhatsApp-first, system sheet as fallback — on both paths, by different mechanisms.** This
       asymmetry is load-bearing, not an inconsistency:
       · a **referral** is text, so `whatsapp://send?text=` is right and needs no platform channel

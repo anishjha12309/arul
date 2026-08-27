@@ -11,6 +11,7 @@
  *   GET  /.well-known/assetlinks.json — App Links verification (public)
  *   GET  /w/:id                 — wallpaper share/ad link → Play + referrer (public)
  *   GET  /r/:id                 — ringtone ad link → Play + referrer (public)
+ *   GET  /w/ · /r/              — same, id-less: a language-only ad link (public)
  *   POST /auth/login
  *   POST /auth/refresh
  *   POST /auth/logout
@@ -113,10 +114,19 @@ app.use("/*", async (c, next) => {
 // ── Deep-link routes (PUBLIC — browsers, not the app) ─────────────────────────
 // Served on arul.hsrutility.com, the host that ships in shares and ad creatives.
 // All unauthenticated on purpose: assetlinks.json is fetched by Android's
-// verifier, and /w/:id + /r/:id by whoever tapped the link. See routes/deeplink.ts.
+// verifier, and /w/ + /r/ (with or without an id) by whoever tapped the link.
+// See routes/deeplink.ts.
 app.get("/.well-known/assetlinks.json", handleAssetLinks);
 app.get("/w/:id", handleWallpaperLink);
 app.get("/r/:id", handleRingtoneLink);
+// Id-less forms: a language-only campaign link (`/w/?lang=hi`). The app already
+// matches these — its manifest filter is a pathPrefix — so the id-less half must
+// redirect rather than 404, or the same URL opens the app for one person and an
+// error page for the next. Both slash forms, because ad ops paste both.
+app.get("/w/", handleWallpaperLink);
+app.get("/w", handleWallpaperLink);
+app.get("/r/", handleRingtoneLink);
+app.get("/r", handleRingtoneLink);
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);

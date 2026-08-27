@@ -272,7 +272,8 @@ List<Wallpaper> _parseCache(String json) {
 }
 
 /// Categories, derived from the catalog — not a hardcoded list, so adding a
-/// seventh deity server-side needs no app release.
+/// seventh deity server-side needs no app release. Ordered by
+/// [compareBrowseCategories]: Sivan first, then alphabetical.
 final categoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   final all = switch (ref.watch(catalogProvider)) {
     AsyncData(:final value) => value,
@@ -285,7 +286,7 @@ final categoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   return labels.entries
       .map((e) => WallpaperCategory(e.key, e.value))
       .toList(growable: false)
-    ..sort((a, b) => a.label.compareTo(b.label));
+    ..sort(compareBrowseCategories);
 });
 
 final selectedCategoryProvider = NotifierProvider<SelectedCategory, String>(

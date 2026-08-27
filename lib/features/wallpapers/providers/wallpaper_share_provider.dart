@@ -9,6 +9,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/error/app_exception.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -391,6 +392,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   Future<({String url, bool attributed})> _installLink(
     Wallpaper wallpaper,
   ) async {
+    // The caption goes out in the sharer's language, so a fresh install should
+    // open in it too — as `ilang`, which only survives the Play referrer, never
+    // the App Link. A recipient who already has Arul keeps their own language.
+    final installLang = ref.read(localeProvider).languageCode;
     if (AppConfig.hasBackend) {
       try {
         final summary = await ref
@@ -403,6 +408,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
             url: InstallReferrerService.buildWallpaperLink(
               wallpaper.id,
               code: code,
+              installLang: installLang,
             ),
             attributed: true,
           );
@@ -414,7 +420,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     // Still the wallpaper link, just uncredited: losing attribution must never
     // also cost the deep link, which is the half that converts.
     return (
-      url: InstallReferrerService.buildWallpaperLink(wallpaper.id),
+      url: InstallReferrerService.buildWallpaperLink(
+        wallpaper.id,
+        installLang: installLang,
+      ),
       attributed: false,
     );
   }

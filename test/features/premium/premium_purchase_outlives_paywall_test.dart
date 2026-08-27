@@ -329,43 +329,53 @@ void main() {
     },
   );
 
-  // The resume checkpoint used to allow ONE 2 s grace before declaring failure
-  // and abandoning. PhonePe's ORDER state lags the payer's approval, so that
-  // window could tear down a mandate the user had just paid for.
-  testWidgets(
-    'resume checkpoint waits out PhonePe order lag instead of abandoning',
-    (tester) async {
-      final api = _FakeApi(const [
-        'pending', 'pending', 'pending', 'pending', 'pending', 'pending', //
-        'trialing',
-      ]);
-      final container = await build(tester, api);
-      final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
-      addTearDown(purchaseSub.close);
+  // Coming back from the UPI app without paying is the COMMON case, so the
+  // checkpoint must resolve at network speed — no timed grace of any size.
+  // Two have been tried and both were rejected on device: a 14 s ladder, then
+  // a 2 s beat. Production tails on 2026-08-26 showed why neither earned its
+  // keep — PhonePe still reported the order PENDING at every sample, so the
+  // extra polls returned exactly what the first one did and the abandon ran
+  // anyway.
+  //
+  // Nothing is lost by resolving immediately: `/payments/abandon` re-reads the
+  // LIVE order and answers settled:true rather than expiring one PhonePe says
+  // COMPLETED, and the setup webhook resurrects an approval that races the
+  // release. This test is the guard on that — re-introduce a delay of even one
+  // second and the short pump below leaves the flow unresolved.
+  testWidgets('resume checkpoint resolves without waiting out any grace', (
+    tester,
+  ) async {
+    final api = _FakeApi(const ['pending']);
+    final container = await build(tester, api);
+    final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
+    addTearDown(purchaseSub.close);
 
-      unawaited(
-        container
-            .read(premiumPurchaseProvider.notifier)
-            .startTrial(targetApp: 'com.phonepe.app'),
-      );
-      await tester.pump(const Duration(milliseconds: 10));
-      expect(
-        container.read(premiumPurchaseProvider),
-        isA<PurchaseProcessing>(),
-      );
+    unawaited(
+      container
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(targetApp: 'com.phonepe.app'),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(container.read(premiumPurchaseProvider), isA<PurchaseProcessing>());
 
-      // The user comes back from the UPI app having just approved.
-      unawaited(
-        container.read(premiumPurchaseProvider.notifier).pollNowOnResume(),
-      );
-      await tester.pump(const Duration(seconds: 60));
+    // The user returns from the UPI app without approving.
+    unawaited(
+      container.read(premiumPurchaseProvider.notifier).pollNowOnResume(),
+    );
+    // Far shorter than any grace that has ever been in this method.
+    await tester.pump(const Duration(milliseconds: 200));
 
-      expect(
-        api.abandons,
-        0,
-        reason: 'must never abandon a setup that settles during the grace',
-      );
-      expect(container.read(premiumPurchaseProvider), isA<PurchaseSuccess>());
-    },
-  );
+    expect(
+      api.abandons,
+      1,
+      reason: 'the claim must be released immediately, not after a wait',
+    );
+    expect(container.read(premiumPurchaseProvider), isA<PurchaseError>());
+
+    // Drain the background intent poll. Resolving above SILENCED it (via
+    // _pollGeneration) rather than cancelling its timers, so without this the
+    // harness fails the test for leaving one pending — which would bury the
+    // two assertions that actually matter.
+    await tester.pump(const Duration(seconds: 200));
+  });
 }

@@ -128,3 +128,19 @@ class WallpaperCategory {
 
   static const allSlug = '__all__';
 }
+
+/// Slug the browse rows pin to the FIRST chip after All, in BOTH tabs (owner's
+/// instruction 2026-08-27). Chip-row order only: it never touches `feed_rank`
+/// or the order of items inside a chip, so All still reads in merit order.
+const String sivanCategorySlug = 'sivan';
+
+/// Chip order for a browse row: [sivanCategorySlug] first, then alphabetical by
+/// label. The ringtone row layers `others`-last on top — see
+/// `compareRingtoneCategories`; both rows are the one browse axis (CLAUDE.md
+/// §5b) and must not drift into two different orders.
+int compareBrowseCategories(WallpaperCategory a, WallpaperCategory b) {
+  final aSivan = a.slug == sivanCategorySlug;
+  final bSivan = b.slug == sivanCategorySlug;
+  if (aSivan != bSivan) return aSivan ? -1 : 1;
+  return a.label.compareTo(b.label);
+}

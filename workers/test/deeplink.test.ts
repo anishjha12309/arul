@@ -160,6 +160,34 @@ describe("GET /w/:id", () => {
     const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=ta`);
   });
+
+  // Ad ops paste `hi-IN` as readily as `hi`, and an installed user's link
+  // honours it (the app's normalizeLang cuts the region tag). Dropping it only
+  // on the not-installed path handed a fresh install the device language while
+  // everyone else got Hindi — measured on the A001, 2026-08-26.
+  it.each([
+    ["hi-IN", "hi"],
+    ["ta_IN", "ta"],
+    ["TA-in", "ta"],
+  ])("strips the region tag off %s like the app does", async (raw, want) => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=${raw}`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `w=${WALLPAPER_ID}&lang=${want}`,
+    );
+  });
+
+  it("still drops a region-tagged language we do not ship", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=pt-BR`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
+  });
 });
 
 describe("GET /r/:id", () => {
@@ -188,5 +216,96 @@ describe("GET /r/:id", () => {
     expect(res.status).toBe(302);
     const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("referrer")).toBeNull();
+  });
+});
+
+// A language-only campaign link. The app's manifest filter is a pathPrefix, so
+// `/w/?lang=hi` ALREADY opens an installed app and sets the language — this
+// half exists so the same URL does not 404 at everyone who lacks the app.
+describe("GET /w/ and /r/ without an id (language-only links)", () => {
+  it.each([
+    ["https://arul.hsrutility.com/w/?lang=hi", "hi"],
+    ["https://arul.hsrutility.com/w?lang=hi", "hi"],
+    ["https://arul.hsrutility.com/w/?lang=hi-IN", "hi"],
+  ])("sends %s to Play carrying only the language", async (url, want) => {
+    const res = handleWallpaperLink(ctxFor(url));
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.origin + location.pathname).toBe(
+      "https://play.google.com/store/apps/details",
+    );
+    expect(location.searchParams.get("referrer")).toBe(`lang=${want}`);
+  });
+
+  it("does the same on the ringtone path", async () => {
+    const res = handleRingtoneLink(
+      ctxFor("https://arul.hsrutility.com/r/?lang=ta"),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe("lang=ta");
+  });
+
+  it("still reaches Play when the link carries nothing at all", async () => {
+    const res = handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/"));
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
+    expect(location.searchParams.get("referrer")).toBeNull();
+  });
+});
+
+// `ilang` is what an in-app SHARE stamps: the sharer's UI language, honoured
+// only by a fresh install. It has to land in the referrer as plain `lang=`,
+// because that is the key the app's referrer parser reads.
+describe("ilang (share install-language)", () => {
+  it("folds ilang into the referrer's lang", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(
+        `https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&ilang=ta`,
+      ),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `ref=ABCD1234&w=${WALLPAPER_ID}&lang=ta`,
+    );
+  });
+
+  it("normalises ilang exactly like lang", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=TA-in`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `w=${WALLPAPER_ID}&lang=ta`,
+    );
+  });
+
+  it("drops an ilang outside the six shipped codes", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=fr`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
+  });
+
+  // An ad creative would never send both, but if one ever does the explicit ad
+  // language is the one the campaign paid for.
+  it("lets an explicit lang beat ilang", async () => {
+    const res = handleWallpaperLink(
+      ctxFor(
+        `https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=hi&ilang=ta`,
+      ),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `w=${WALLPAPER_ID}&lang=hi`,
+    );
   });
 });

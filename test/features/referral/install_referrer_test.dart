@@ -177,6 +177,34 @@ void main() {
       },
     );
 
+    test('a share stamps installLang as ilang, which the parser ignores', () {
+      // The share caption is written in the sharer's language, so a FRESH
+      // install should open in it — but a recipient who already has Arul keeps
+      // the language they chose. `ilang` survives only the Play referrer, so
+      // parsing the same URL as an App Link yields the target and no language.
+      final link = InstallReferrerService.buildWallpaperLink(
+        id,
+        code: 'ABCD1234',
+        installLang: 'ta',
+      );
+      expect(link, 'https://$kDeepLinkHost/w/$id?ref=ABCD1234&ilang=ta');
+
+      final parsed = parseDeepLink(link, source: DeepLinkSource.appLink);
+      expect(parsed?.target, const WallpaperLinkTarget(id));
+      expect(parsed?.lang, isNull, reason: 'their own choice wins');
+    });
+
+    test('an explicit ad lang wins over installLang, never both', () {
+      expect(
+        InstallReferrerService.buildWallpaperLink(
+          id,
+          lang: 'hi',
+          installLang: 'ta',
+        ),
+        'https://$kDeepLinkHost/w/$id?lang=hi',
+      );
+    });
+
     test('the host matches the one the app builds links for', () {
       // Four places must agree or verification fails silently and every link
       // opens a browser: this constant, AndroidManifest's android:host, the

@@ -529,12 +529,6 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
 
-  /// Re-check schedule for the resume checkpoint, in seconds (~14 s total).
-  /// Long enough for PhonePe's order state to catch up with an approval the
-  /// payer has already given; short enough that a real cancel still resolves
-  /// while the user is still looking at the screen.
-  static const _resumeGraceDelays = [2, 3, 4, 5];
-
   /// App-resumed checkpoint for the intent flow — the app decides, never the
   /// user. A third-party UPI app (Paytm, GPay…) that the user cancels out of
   /// tells PhonePe NOTHING — the order just stays PENDING — so the user
@@ -558,19 +552,19 @@ class PremiumPurchase extends _$PremiumPurchase {
     _resolvingIntent = true;
     try {
       if (await _settleFromStatus(orderId)) return;
-      // Graded grace, not a single 2 s beat. PhonePe's ORDER state lags the
-      // payer's approval: the mandate can be authorized (and the ₹2 taken)
-      // while the order still reads PENDING for several seconds. Declaring
-      // failure inside that window puts a user in front of the refund line
-      // while their autopay is live — the state that makes people revoke a
-      // mandate they just paid for (owner device test, 2026-08-26). Each step
-      // re-asks and exits the moment the server owns an outcome, so a genuine
-      // cancel still resolves in seconds; only the ambiguous case waits.
-      for (final delay in _resumeGraceDelays) {
-        await Future<void>.delayed(Duration(seconds: delay));
-        if (!_isProcessing) return;
-        if (await _settleFromStatus(orderId)) return;
-      }
+      // NO artificial delay. There used to be a 2 s re-poll here (and before
+      // that a 14 s ladder); production tails on 2026-08-26 showed PhonePe
+      // still reporting the order PENDING at BOTH samples on every real
+      // back-out, so the wait never once changed the outcome — it only held a
+      // spinner in front of a user who had already decided.
+      //
+      // It is redundant by construction, not just empirically: the abandon
+      // below re-reads the LIVE order and answers settled:true instead of
+      // expiring when PhonePe says COMPLETED, so a payment that landed during
+      // the handoff is still caught — one call later, from a strictly fresher
+      // read than a second poll here would have been. Anything later than
+      // that belongs to the setup webhook, which resurrects an abandon-raced
+      // approval server-side. Resolution is now network-bound.
       if (!_isProcessing) return;
       await _autoResolveIntent(orderId);
     } finally {

@@ -68,11 +68,25 @@ class InstallReferrerService {
   ///
   /// A custom scheme cannot do the first half from an ad or a messenger: it is
   /// not a clickable URL, so it renders as plain text and resolves to nothing.
+  /// [installLang] is the SHARE form of [lang]: the sharer's current UI
+  /// language, honoured only when the link ends in a fresh install. It rides as
+  /// `ilang=`, which [parseDeepLinkUri] deliberately does not read — so tapping
+  /// a friend's Tamil share never re-languages an app the recipient already set
+  /// to Hindi, while a brand-new install still opens in the language the caption
+  /// is written in (owner's call, 2026-08-27). Ads keep using [lang], which wins
+  /// everywhere. The Worker folds `ilang` into the referrer's `lang=`.
   static String buildWallpaperLink(
     String wallpaperId, {
     String? code,
     String? lang,
-  }) => _buildLink('w', wallpaperId, code: code, lang: lang);
+    String? installLang,
+  }) => _buildLink(
+    'w',
+    wallpaperId,
+    code: code,
+    lang: lang,
+    installLang: installLang,
+  );
 
   /// The ringtone form of [buildWallpaperLink]: `/r/<id>`. Nothing in the app
   /// shares a ringtone (there is no ringtone share path); this exists so ad
@@ -81,17 +95,30 @@ class InstallReferrerService {
     String ringtoneId, {
     String? code,
     String? lang,
-  }) => _buildLink('r', ringtoneId, code: code, lang: lang);
+    String? installLang,
+  }) => _buildLink(
+    'r',
+    ringtoneId,
+    code: code,
+    lang: lang,
+    installLang: installLang,
+  );
 
   static String _buildLink(
     String segment,
     String id, {
     String? code,
     String? lang,
+    String? installLang,
   }) {
     final query = <String>[
       if (code != null && code.isNotEmpty) 'ref=$code',
       if (lang != null && lang.isNotEmpty) 'lang=$lang',
+      // `lang` already says it louder; never emit both.
+      if ((lang == null || lang.isEmpty) &&
+          installLang != null &&
+          installLang.isNotEmpty)
+        'ilang=$installLang',
     ];
     final suffix = query.isEmpty ? '' : '?${query.join('&')}';
     return 'https://$kDeepLinkHost/$segment/$id$suffix';

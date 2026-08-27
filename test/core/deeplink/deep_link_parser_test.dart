@@ -54,6 +54,30 @@ void main() {
       expect(req?.lang, 'ta');
     });
 
+    test('the id-less campaign form is a language-only request', () {
+      // `/w/?lang=hi` — what a language-only ad pastes. The manifest filter is a
+      // pathPrefix, so Android hands this to the app exactly like a full link.
+      final req = _parse('https://arul.hsrutility.com/w/?lang=hi');
+      expect(req?.target, isNull);
+      expect(req?.lang, 'hi');
+      expect(_parse('https://arul.hsrutility.com/r/?lang=ta')?.lang, 'ta');
+    });
+
+    test('ilang is IGNORED here — a share must not re-language an install', () {
+      // The whole point of the separate key: this is the tap of someone who
+      // ALREADY has Arul, and their own Settings choice outranks a friend's.
+      // Only the Play referrer honours it (the Worker folds it into `lang=`).
+      final req = _parse(
+        'https://arul.hsrutility.com/w/$_w?ref=ABCD1234&ilang=ta',
+      );
+      expect(req?.target, const WallpaperLinkTarget(_w));
+      expect(req?.lang, isNull);
+    });
+
+    test('ilang alone is not a request at all', () {
+      expect(_parse('https://arul.hsrutility.com/w/?ilang=ta'), isNull);
+    });
+
     test('the UUID is normalised and a trailing slash is tolerated', () {
       // android.net.Uri drops empty segments, so the native validator passes a
       // campaign URL written with a trailing slash; Dart must agree.
