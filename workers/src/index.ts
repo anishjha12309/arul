@@ -11,7 +11,7 @@
  *   GET  /.well-known/assetlinks.json — App Links verification (public)
  *   GET  /w/:id                 — wallpaper share/ad link → Play + referrer (public)
  *   GET  /r/:id                 — ringtone ad link → Play + referrer (public)
- *   GET  /w/ · /r/              — same, id-less: a language-only ad link (public)
+ *   GET  /w/ · /r/ · /          — same, id-less: a language-only ad link (public)
  *   POST /auth/login
  *   POST /auth/refresh
  *   POST /auth/logout
@@ -60,6 +60,7 @@ import {
   handleAssetLinks,
   handleWallpaperLink,
   handleRingtoneLink,
+  handleRootLink,
 } from "./routes/deeplink.js";
 import {
   handleInitiate,
@@ -127,6 +128,8 @@ app.get("/w/", handleWallpaperLink);
 app.get("/w", handleWallpaperLink);
 app.get("/r/", handleRingtoneLink);
 app.get("/r", handleRingtoneLink);
+// The bare link domain only (never the API host) — see handleRootLink.
+app.get("/", handleRootLink);
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);

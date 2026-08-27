@@ -29,25 +29,27 @@ import { getDb } from "../lib/db.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 import { verifyMediaObject } from "../lib/media-verify.js";
-import { HALF_LIFE_SECONDS } from "../lib/feed-score.js";
 
-// Maps kind → { table, privateKeyCol, lifetime counter, decaying score column }
+// Maps kind → { table, privateKeyCol, lifetime counter }
 // Wallpaper full_key is intentionally included (it's the apply gate key).
+//
+// The decaying twin of each counter (`apply_score`/`set_score`, with
+// `scored_at`) was dropped from this map on 2026-08-27 along with the ranking
+// that read it — see lib/feed-score.ts. The columns survive on the tables
+// unread; nothing writes them any more.
 const KIND_TABLE: Record<
   string,
-  { table: string; keyCol: string; countCol: string; scoreCol: string }
+  { table: string; keyCol: string; countCol: string }
 > = {
   wallpaper: {
     table: "wallpapers",
     keyCol: "full_key",
     countCol: "apply_count",
-    scoreCol: "apply_score",
   },
   ringtone: {
     table: "ringtones",
     keyCol: "audio_key",
     countCol: "set_count",
-    scoreCol: "set_score",
   },
 };
 
@@ -103,7 +105,7 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     );
   }
 
-  const { table, keyCol, countCol, scoreCol } = KIND_TABLE[kind];
+  const { table, keyCol, countCol } = KIND_TABLE[kind];
   const sql = getDb(env);
 
   // Background work this request must finish before the connection closes, but
@@ -154,27 +156,20 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     // and is drained by the `finally` below. A failed write is logged and
     // swallowed — a sort key must never cost someone their wallpaper.
     //
-    // ONE statement writes BOTH halves of the signal, which is what makes merit
-    // ranking free (db/schema/10_apply_score.sql): `apply_count` is the lifetime
-    // total the CMS shows, and `apply_score` is the same event decayed to now
-    // before being incremented — so an apply from HALF_LIFE_DAYS ago is already
-    // worth half by the time this one lands. Adding the decay here costs no extra
-    // round trip on the app's most latency-sensitive route; an events table would
-    // have cost a row per apply.
+    // ONE counter, ONE increment — the lifetime total the CMS shows and the feed
+    // is ordered by (db/schema/06_popularity.sql).
     //
-    // `scored_at` must be set in the SAME statement and AFTER it is read: it is
-    // the instant `apply_score` was decayed TO, and the score is meaningless
-    // without it (feed-score.ts). coalesce() makes the first-ever apply a no-op
-    // decay of 0, i.e. a plain "+ 1".
+    // This statement used to ALSO decay and re-increment `apply_score`/
+    // `set_score` and stamp `scored_at`, so a merit ranking could weight recent
+    // uses over old ones. That ranking was retired on 2026-08-27
+    // (lib/feed-score.ts): the feed is ordered by this counter directly, in SQL.
+    // Keeping the decay here would keep paying for a number nothing reads, and
+    // would leave two plausible sort keys on the table for the next person to
+    // choose wrongly between.
     if (countsAsUse(kind, action)) {
       tail = sql`
         UPDATE ${sql(table)}
-        SET ${sql(countCol)} = ${sql(countCol)} + 1,
-            ${sql(scoreCol)} = ${sql(scoreCol)} * pow(
-              0.5::double precision,
-              extract(epoch from (now() - coalesce(scored_at, now()))) / ${HALF_LIFE_SECONDS}
-            ) + 1,
-            scored_at = now()
+        SET ${sql(countCol)} = ${sql(countCol)} + 1
         WHERE id = ${id}
       `.catch((err: unknown) => {
         console.error(`[media/signed-url] ${countCol} increment failed:`, err);

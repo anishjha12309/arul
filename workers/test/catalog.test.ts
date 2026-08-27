@@ -13,12 +13,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import {
-  writeAppConfig,
-  deleteOrphanedPages,
-  interleaveByCategory,
-  composeFeedOrder,
-} from "../src/cron/build-catalog.js";
+import { writeAppConfig, deleteOrphanedPages } from "../src/cron/build-catalog.js";
 
 // ── Mock R2 bucket that supports list() + delete() for orphan-cleanup tests ───
 function makeListableR2(keys: string[]): {
@@ -213,218 +208,17 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
   });
 });
 
-// ── interleaveByCategory ─────────────────────────────────────────────────────
-// This decides what the app's All chip opens with, so its contract is a product
-// contract. Guarded here because the failure is invisible in code review: the
-// build succeeds, the catalog is valid, and the feed is simply wrong.
-describe("interleaveByCategory", () => {
-  const rows = (spec: Record<string, number>) =>
-    Object.entries(spec).flatMap(([cat, n]) =>
-      Array.from({ length: n }, (_, i) => ({ id: `${cat}${i}`, category: cat })),
-    );
-
-  it("deals one per category, so a bulk import cannot own the first screen", () => {
-    // The 2026-08-14 production shape: one import block, then another.
-    const out = interleaveByCategory(rows({ perumal: 20, sivan: 10, amman: 5 }));
-
-    expect(out.slice(0, 6).map((r) => r.category)).toEqual([
-      "perumal", "sivan", "amman",
-      "perumal", "sivan", "amman",
-    ]);
-  });
-
-  it("never reorders two rows of the SAME category", () => {
-    // Category chips filter this one page set, so this is what keeps a chip
-    // reading newest-first after the interleave.
-    const out = interleaveByCategory(rows({ sivan: 4, amman: 4 }));
-
-    expect(out.filter((r) => r.category === "sivan").map((r) => r.id)).toEqual([
-      "sivan0", "sivan1", "sivan2", "sivan3",
-    ]);
-  });
-
-  it("is idempotent — a rebuild never churns the feed", () => {
-    const once = interleaveByCategory(rows({ a: 7, b: 5, c: 3 }));
-    const twice = interleaveByCategory(once);
-    expect(twice.map((r) => r.id)).toEqual(once.map((r) => r.id));
-  });
-
-  it("is a permutation — never drops or duplicates a row", () => {
-    const input = rows({ a: 9, b: 4, c: 1, d: 6 });
-    const out = interleaveByCategory(input);
-    expect(out).toHaveLength(input.length);
-    expect(new Set(out.map((r) => r.id))).toEqual(
-      new Set(input.map((r) => r.id)),
-    );
-  });
-
-  it("drains an exhausted category instead of stalling", () => {
-    // Unequal counts are the normal case; the largest category tails alone.
-    const out = interleaveByCategory(rows({ big: 5, small: 1 }));
-    expect(out.map((r) => r.category)).toEqual([
-      "big", "small", "big", "big", "big", "big",
-    ]);
-  });
-
-  it("leaves a single-category catalog in plain catalog order", () => {
-    const input = rows({ only: 4 });
-    expect(interleaveByCategory(input).map((r) => r.id)).toEqual(
-      input.map((r) => r.id),
-    );
-  });
-
-  it("does not depend on Map iteration luck when sizes tie", () => {
-    // Equal-sized categories break on name, so the cycle is reproducible.
-    const a = interleaveByCategory(rows({ zebra: 3, alpha: 3 }));
-    const b = interleaveByCategory(rows({ alpha: 3, zebra: 3 }));
-    expect(a.map((r) => r.category)).toEqual(b.map((r) => r.category));
-    expect(a[0].category).toBe("alpha");
-  });
-
-  it("handles an empty catalog", () => {
-    expect(interleaveByCategory([])).toEqual([]);
-  });
-});
-
-// ── composeFeedOrder ─────────────────────────────────────────────────────────
-// THE feed order (CLAUDE.md §5b). Same reasoning as above: a wrong answer here
-// builds cleanly and ships a valid catalog that is simply in the wrong order.
-// The cohort-tie case is the load-bearing one — it is what keeps a bulk import
-// from owning the opening screens as a single-category block.
-describe("composeFeedOrder", () => {
-  const NOW = new Date("2026-09-01T00:00:00Z");
-  const daysAgo = (n: number) =>
-    new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
-
-  /** Rows of a given category, all created `age` days ago with no applies. */
-  const rows = (spec: Record<string, number>, age = 0) =>
-    Object.entries(spec).flatMap(([cat, n]) =>
-      Array.from({ length: n }, (_, i) => ({
-        id: `${cat}${i}`,
-        category: cat,
-        created_at: daysAgo(age),
-        apply_score: 0,
-        scored_at: null,
-      })),
-    );
-  /** Give `id` a decayed score, as if last applied `days` ago. */
-  const applied = <T extends { id: string }>(
-    list: T[],
-    spec: Record<string, [number, number]>,
-  ) =>
-    list.map((r) =>
-      spec[r.id]
-        ? { ...r, apply_score: spec[r.id][0], scored_at: daysAgo(spec[r.id][1]) }
-        : r,
-    );
-  const order = (list: Record<string, unknown>[]) =>
-    composeFeedOrder(list, NOW, "apply_score").map((r) => r["id"]);
-
-  it("puts the highest merit score first, across categories", () => {
-    const out = order(
-      applied(rows({ perumal: 3, sivan: 3, amman: 3 }, 90), {
-        amman2: [4, 0],
-        perumal1: [9, 0],
-        sivan0: [1, 0],
-      }),
-    );
-    expect(out.slice(0, 3)).toEqual(["perumal1", "amman2", "sivan0"]);
-  });
-
-  it("decays: an older apply loses to a newer one of the same size", () => {
-    // Both rows earned 4 applies. One earned them 90 days ago (three half-lives
-    // → 0.5), the other today. Ordering on the raw count would tie them forever;
-    // that tie is exactly the frozen head this feature exists to break.
-    const out = order(
-      applied(rows({ a: 1, b: 1 }, 90), { a0: [4, 90], b0: [4, 0] }),
-    );
-    expect(out).toEqual(["b0", "a0"]);
-  });
-
-  it("a stale favourite falls below a modest recent one", () => {
-    // 40 applies, none for a year (≈12 half-lives → ~0.01) vs 2 applies today.
-    const out = order(
-      applied(rows({ a: 1, b: 1 }, 400), { a0: [40, 365], b0: [2, 0] }),
-    );
-    expect(out).toEqual(["b0", "a0"]);
-  });
-
-  it("a brand-new row outranks the never-applied tail", () => {
-    // The newcomer credit IS the catch-up: without it a new row would sit below
-    // everything forever, never seen and so never applied.
-    const old = rows({ a: 5 }, 400);
-    const fresh = rows({ b: 1 }, 0);
-    expect(order([...old, ...fresh])[0]).toBe("b0");
-  });
-
-  it("a fresh import does NOT own the opening screens as one block", () => {
-    // The trap: 20 Perumal + 10 Sivan imported the same day. A credit that varied
-    // continuously with age would order them strictly by created_at and hand the
-    // first 20 slots to one category (the 2026-08-14 defect). Stepping the credit
-    // makes the whole cohort tie, so the interleave governs.
-    const out = order([...rows({ perumal: 20 }, 1), ...rows({ sivan: 10 }, 2)]);
-    expect(out.slice(0, 4)).toEqual(["perumal0", "sivan0", "perumal1", "sivan1"]);
-  });
-
-  it("the credit steps down, so last week's cohort sits below this week's", () => {
-    const out = order([...rows({ a: 2 }, 10), ...rows({ b: 2 }, 1)]);
-    expect(out).toEqual(["b0", "b1", "a0", "a1"]);
-  });
-
-  it("the long tail ties at exactly zero and stays interleaved", () => {
-    // Past CREDIT_FLOOR the credit is zeroed rather than left as a vanishing
-    // fraction — otherwise the whole never-applied tail would order by age.
-    const out = order([...rows({ perumal: 3 }, 300), ...rows({ sivan: 3 }, 400)]);
-    expect(out).toEqual([
-      "perumal0", "sivan0", "perumal1", "sivan1", "perumal2", "sivan2",
-    ]);
-  });
-
-  it("breaks a tie on interleaved catalog position, so the order is TOTAL", () => {
-    const input = rows({ a: 2, b: 2 }, 400);
-    expect(order(input)).toEqual(order(input));
-    expect(order(input)).toEqual(["a0", "b0", "a1", "b1"]);
-  });
-
-  it("is idempotent — a rebuild never churns the feed", () => {
-    const input = applied(rows({ a: 7, b: 5, c: 3 }, 30), {
-      b1: [3, 2], c0: [1, 10], a4: [8, 0],
-    });
-    const once = composeFeedOrder(input, NOW, "apply_score");
-    const twice = composeFeedOrder(once, NOW, "apply_score");
-    expect(twice.map((r) => r.id)).toEqual(once.map((r) => r.id));
-  });
-
-  it("is a permutation — never drops or duplicates a row", () => {
-    const input = applied(rows({ a: 9, b: 4, c: 1, d: 6 }, 5), {
-      a3: [2, 1], d0: [5, 0],
-    });
-    const out = composeFeedOrder(input, NOW, "apply_score");
-    expect(out).toHaveLength(input.length);
-    expect(new Set(out.map((r) => r.id))).toEqual(
-      new Set(input.map((r) => r.id)),
-    );
-  });
-
-  it("with no scores at all it IS interleaveByCategory", () => {
-    // Day one, and the permanent state of the tail. No merit data must mean no
-    // behaviour change from the order that shipped before scoring existed.
-    const input = rows({ perumal: 20, sivan: 10, amman: 5 }, 400);
-    expect(order(input)).toEqual(
-      interleaveByCategory(input).map((r) => r.id),
-    );
-  });
-
-  it("survives junk in the score columns", () => {
-    // Defensive: a bad value costs ONE row its merit, it never corrupts the rest.
-    const input = [
-      { id: "a0", category: "a", created_at: daysAgo(400), apply_score: "nope", scored_at: "also-nope" },
-      { id: "a1", category: "a", created_at: daysAgo(400), apply_score: 5, scored_at: daysAgo(0) },
-    ];
-    expect(order(input)).toEqual(["a1", "a0"]);
-  });
-
-  it("handles an empty catalog", () => {
-    expect(composeFeedOrder([], NOW, "apply_score")).toEqual([]);
-  });
-});
+// ── Feed order ───────────────────────────────────────────────────────────────
+// There is nothing left here to unit-test, and that is the point.
+//
+// The feed order used to be two exported pure functions (`composeFeedOrder` +
+// `interleaveByCategory`) implementing a decayed merit score, and this file
+// carried ~200 lines pinning their properties — because a wrong answer there
+// built cleanly and shipped a valid catalog that was simply in the wrong order.
+//
+// On 2026-08-27 the score was retired (src/lib/feed-score.ts). The order is now
+// one ORDER BY inside buildScope(), which needs a live DB to exercise and is
+// covered by the live smoke plan instead. What remains in JS is the rank
+// NUMBERING, tested in test/feed-score.test.ts.
+//
+// If ordering logic ever moves back into JS, it belongs here again.

@@ -13,6 +13,7 @@ import {
   handleAssetLinks,
   handleWallpaperLink,
   handleRingtoneLink,
+  handleRootLink,
 } from "../src/routes/deeplink.js";
 
 const PLAY_SHA =
@@ -307,5 +308,41 @@ describe("ilang (share install-language)", () => {
     expect(location.searchParams.get("referrer")).toBe(
       `w=${WALLPAPER_ID}&lang=hi`,
     );
+  });
+});
+
+// The bare link domain doubles as "get the app" — but only that host: the API
+// shares this Worker and an API caller must still get a 404, not an app advert.
+describe("GET / on the link domain", () => {
+  const rootCtx = (url: string) => makeCtx({ env: makeEnv(), url });
+
+  it("sends a language-only root link to Play", async () => {
+    const res = handleRootLink(
+      rootCtx("https://arul.hsrutility.com/?lang=hi"),
+    );
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
+    expect(location.searchParams.get("referrer")).toBe("lang=hi");
+  });
+
+  it("sends a bare root link to Play with no referrer", async () => {
+    const res = handleRootLink(
+      rootCtx("https://arul.hsrutility.com/"),
+    );
+
+    expect(res.status).toBe(302);
+    expect(
+      new URL(res.headers.get("location")!).searchParams.get("referrer"),
+    ).toBeNull();
+  });
+
+  it("still 404s on the API host", async () => {
+    const res = handleRootLink(
+      rootCtx("https://arul-api.hsrutility.com/?lang=hi"),
+    );
+
+    expect(res.status).toBe(404);
   });
 });

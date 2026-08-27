@@ -40,6 +40,13 @@ import type { Env } from "../env.js";
 const PACKAGE_NAME = "com.hsrutility.arul";
 
 /**
+ * The host that ships in shares and ad creatives. Only its ROOT doubles as a
+ * "get the app" link — `arul-api.hsrutility.com` shares this Worker and its root
+ * must stay a 404 rather than advertise the app to an API caller.
+ */
+const LINK_HOST = "arul.hsrutility.com";
+
+/**
  * Wallpaper and ringtone ids are `uuid` (db/schema/02_content.sql,
  * 04_ringtones.sql). Validating here keeps arbitrary attacker-supplied text out
  * of the referrer payload we hand Play, and out of the app's own parser on the
@@ -114,6 +121,37 @@ export function handleWallpaperLink(c: Context<{ Bindings: Env }>): Response {
 /** The ringtone form: `r=<uuid>` in the referrer payload. */
 export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
   return redirectToPlay(c, "r");
+}
+
+/**
+ * The bare link domain: `arul.hsrutility.com/?lang=hi` is what someone writes
+ * when they mean "the app, in Hindi", and a 404 there costs the install it was
+ * bought for. Only the not-installed half — the app's filter is a pathPrefix on
+ * `/w/` and `/r/`, so an installed phone opens a BROWSER here and reaches Play
+ * with an Open button, losing the language. `/w/?lang=hi` is the form that does
+ * both halves on every build already out there; keep recommending that one.
+ */
+export function handleRootLink(c: Context<{ Bindings: Env }>): Response {
+  // From the URL, not the Host header: the header is absent in unit contexts and
+  // proxy-writable in front of one, and the request URL always carries the host.
+  let host = "";
+  try {
+    host = new URL(c.req.url).hostname.toLowerCase();
+  } catch {
+    host = "";
+  }
+  if (host !== LINK_HOST) {
+    return c.json(
+      {
+        error: {
+          code: "not_found",
+          message: `Route not found: ${c.req.method} ${c.req.path}`,
+        },
+      },
+      404,
+    );
+  }
+  return redirectToPlay(c, "w");
 }
 
 /**

@@ -32,7 +32,7 @@
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 import { putPublicJson, getJsonString } from "../lib/r2.js";
-import { composeFeedOrder, rankFor } from "../lib/feed-score.js";
+import { rankFor } from "../lib/feed-score.js";
 
 // The app drains a WHOLE catalog before rendering its feed (category
 // filtering is client-side), so every extra page is user-visible first-paint
@@ -536,11 +536,10 @@ export async function refreshPopularityOrder(env: Env): Promise<
 }
 
 // ── Feed order ────────────────────────────────────────────────────────────────
-// interleaveByCategory + composeFeedOrder live in lib/feed-score.ts, beside the
-// scoring maths they are inseparable from, because the CMS has to reproduce this
-// EXACT order to explain it — and the CMS is a separate repo that mirrors that
-// one file. Re-exported here so the long-standing import path keeps working.
-export { interleaveByCategory, composeFeedOrder } from "../lib/feed-score.js";
+// There is no ordering FUNCTION any more. The order is the ORDER BY in
+// buildScope() below, and the only thing lib/feed-score.ts still owns is the
+// rank numbering the catalog emits — see that file for why the decayed score
+// and its category round-robin were retired (2026-08-27).
 
 // ── Postgres bigint normalization ─────────────────────────────────────────────
 /**
@@ -587,23 +586,30 @@ async function buildScope(
   // users for no reason, and anyone mid-pagination during a rebuild can see an
   // item twice or miss it entirely. `id` is unique, so appending it makes the
   // order reproducible forever.
+  //
+  // THIS ORDER BY *IS* THE FEED ORDER, and it is the whole of it (2026-08-27).
+  // It used to be a starting point that JS then re-sorted by a decayed merit
+  // score; that score is gone, so what the database returns is what ships, and
+  // the CMS reproduces the feed by copying this clause rather than re-running a
+  // formula against a matching clock. Keep the two in step.
+  //
+  // `sort_order` deliberately no longer leads. It is the order WITHIN a
+  // category that imports own, and leading with it meant the feed was really
+  // ordered by import sequence with popularity only breaking ties.
   if (scope === "wallpapers") {
-    // sort_order is no longer surfaced in the CMS (defaults to 0), so created_at
-    // is the real tiebreaker — newest first within an equal sort_order.
     rows = await sql`
       SELECT * FROM wallpapers
       WHERE is_published = true
-      ORDER BY sort_order ASC, created_at DESC, id ASC
+      ORDER BY apply_count DESC, created_at DESC, id ASC
     `;
   } else if (scope === "ringtones") {
-    // Same ordering contract as wallpapers: sort_order ASC, created_at DESC —
-    // newest first within an equal sort_order. NULLS LAST so a row with a null
-    // created_at (shouldn't happen, but the column is only defaulted) sinks to
-    // the end instead of leading the feed.
+    // Same contract on this table's own counter. NULLS LAST so a row with a
+    // null created_at (shouldn't happen, but the column is only defaulted)
+    // sinks to the end instead of leading the feed.
     rows = await sql`
       SELECT * FROM ringtones
       WHERE is_published = true
-      ORDER BY sort_order ASC, created_at DESC NULLS LAST, id ASC
+      ORDER BY set_count DESC, created_at DESC NULLS LAST, id ASC
     `;
   } else {
     throw new Error(`[build-catalog] unknown scope: ${scope}`);
@@ -640,15 +646,11 @@ async function buildScope(
     return false;
   });
 
-  // ── Compose the feed order ─────────────────────────────────────────────────
-  // Merit score DESC, ties in interleaved catalog position. Runs on the RAW rows
-  // (they still carry apply_score/scored_at, which the public shape strips) and
-  // AFTER validation, so a skipped row cannot leave a hole in the interleave
-  // cycle. One `now` for the whole build: scoring each row against its own clock
-  // reading would make the order depend on how long the build took.
-  const now = new Date();
-  const scoreCol = scope === "wallpapers" ? "apply_score" : "set_score";
-  const orderedRows = composeFeedOrder(validRows, now, scoreCol);
+  // ── The feed order ─────────────────────────────────────────────────────────
+  // Already decided, by the ORDER BY above. Validation only DROPS rows, and
+  // dropping preserves relative order, so the survivors are still in feed order
+  // and the ranks below are contiguous with no holes.
+  const orderedRows = validRows;
 
   // ── Strip private keys + columns the app never reads ───────────────────────
   // We keep ONLY what the Flutter models consume so catalog pages stay lean.
@@ -663,16 +665,17 @@ async function buildScope(
   //               preview/stream + cover rendering; mime stays — used to infer
   //               the file extension on set-as-ringtone; created_at STAYS.)
   //   `category` (the browse axis — feed chips filter on it) is always emitted.
-  //   `apply_count` / `set_count` are still emitted, but ONLY as the lifetime
-  //   number the CMS and older installs read — they are no longer the sort key.
-  //   `apply_score` / `set_score` / `scored_at` are DROPPED: they are the raw
-  //   decay state, meaningless without each other (feed-score.ts), and the app
-  //   must never re-derive an order from them. The score's one output is the rank
-  //   below.
-  //   `feed_rank` is COMPUTED here, not read from the row — position in the
-  //   merit order, sparse (10, 20, 30 …). Emitting it under the old name is
+  //   `apply_count` / `set_count` are emitted as the lifetime number the CMS and
+  //   older installs read. They are also what the ORDER BY sorted on, but the
+  //   app must not re-sort: it reads `feed_rank`, which already encodes this.
+  //   `apply_score` / `set_score` / `scored_at` are DROPPED. They are the
+  //   retired decay state (2026-08-27) — still written by /media/signed-url's
+  //   predecessor on any un-deployed instance, still on the table, and read by
+  //   nothing. Emitting them would invite the app to re-derive an order.
+  //   `feed_rank` is COMPUTED here, not read from the row — position in the feed
+  //   order, sparse (10, 20, 30 …). Emitting it under the old name is
   //   deliberate: the comparator already shipped in every install sorts on it
-  //   first, so merit ordering reaches phones that never update — in their
+  //   first, so this ordering reaches phones that never update — in their
   //   category chips as well as All, because a chip filters this page set and
   //   filtering preserves relative order. It is never null now; the app's
   //   null-means-unpinned branch simply stops being reachable.
