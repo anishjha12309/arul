@@ -144,13 +144,25 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
+                <!-- Each path gets a COMPLETE data element — scheme, host and
+                     prefix — even though Android would merge a bare
+                     <data android:pathPrefix="/r/"/> into the same cross product
+                     and route it correctly (it did: verified on a Play build).
+                     Google Ads' Deep link validator does NOT expand that merge.
+                     It read this filter element by element, listed only
+                     `https://arul.hsrutility.com/w/.*` as a valid App link, and
+                     answered "This deep link wasn't found in the app" for every
+                     /r/ URL — so a ringtone campaign could not be created while
+                     the phone opened the very same link fine (2026-08-29).
+                     Repeat the scheme and host on every path added here. -->
                 <data
                     android:scheme="https"
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/w/"/>
-                <!-- Same scheme + host (data elements in one filter merge);
-                     only the extra path is declared here. -->
-                <data android:pathPrefix="/r/"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:pathPrefix="/r/"/>
             </intent-filter>
             <!-- Meta ads deep link: fb<META_APP_ID>://open?wallpaper_id=…&lang=…
                  (or ?screen=ringtones&ringtone_id=…) — the form the ad team

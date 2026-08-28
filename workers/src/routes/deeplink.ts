@@ -17,14 +17,30 @@
  *     these routes are never fetched at all. The app reads the URL off the
  *     intent, query included.
  *   · App NOT installed — nothing intercepts, the browser lands here, and we
- *     redirect to Play carrying `referrer=ref=<code>&w=<id>&lang=<code>` (or
- *     `r=<id>`). Android replays that payload to the app on first launch
+ *     send the visitor to Play carrying `referrer=ref=<code>&w=<id>&lang=<code>`
+ *     (or `r=<id>`). Android replays that payload to the app on first launch
  *     (InstallReferrerService), which is what makes the wallpaper/ringtone open
  *     — in the ad's language — AFTER the install completes.
  *
- * The referrer payload is why this is a redirect and not an HTML page: Play only
- * replays a referrer it received on the store URL, so the store URL has to be
- * the thing the browser actually navigates to.
+ * Why that second half is a 200 HTML page that bounces and NOT a 302: Google Ads
+ * refuses an App-campaign deep link whose URL redirects — "Inclusion of redirect
+ * URLs: All URLs must take users directly to the app"
+ * (support.google.com/google-ads/answer/16434983). A 302 here made every `/w/`
+ * and `/r/` link unusable in the campaign's deep-link field while the app itself
+ * was verified and opening them correctly, so the error pointed at nothing a
+ * build could fix (measured against the live route, 2026-08-29).
+ *
+ * The referrer still has to ride on the store URL the BROWSER navigates to, because
+ * Play only replays a referrer it received itself — a client-side
+ * `location.replace()` is a real navigation, so the payload survives unchanged.
+ * Do NOT reintroduce `<meta http-equiv="refresh">` as a fallback: it is the one
+ * remaining form of redirect an HTML-parsing validator can still see, and it
+ * would put us back where we started.
+ *
+ * Side effect worth knowing: a link-preview crawler (WhatsApp is the first hop of
+ * every share) now renders THIS page instead of following through to Play's
+ * listing card — hence the og: tags, and hence `OG_IMAGE`: without one, every
+ * share card degraded from Play's icon card to bare text.
  *
  * Caveat worth knowing before buying ads: an in-app browser (Facebook,
  * Instagram) may load this URL itself rather than handing the OS an intent, in
@@ -45,6 +61,22 @@ const PACKAGE_NAME = "com.hsrutility.arul";
  * must stay a 404 rather than advertise the app to an API caller.
  */
 const LINK_HOST = "arul.hsrutility.com";
+
+/**
+ * The card a link-preview crawler shows for every share — the app icon, served
+ * from the CDN so this route still never touches R2 or the DB.
+ *
+ * `brand/` deliberately sits OUTSIDE the sweeps' prefixes (`wallpapers/`,
+ * `ringtones/`, `thumbs/` in sweep-canonical, `user/` in sweep-submissions), so
+ * no DB row has to exist to keep these bytes alive. Uploaded immutable: to
+ * change the icon, upload a NEW key and point this at it — never overwrite and
+ * purge, same reason the catalog is rebuilt rather than purged.
+ *
+ * Square 512×512, so the card type is `summary` and not `summary_large_image`
+ * (that one wants ~1200×630 and letterboxes anything else).
+ */
+const OG_IMAGE = "https://arul-cdn.hsrutility.com/brand/arul-icon.png";
+const OG_IMAGE_PX = 512;
 
 /**
  * Wallpaper and ringtone ids are `uuid` (db/schema/02_content.sql,
@@ -115,12 +147,12 @@ export function handleAssetLinks(c: Context<{ Bindings: Env }>): Response {
 
 /** The wallpaper form: `w=<uuid>` in the referrer payload. */
 export function handleWallpaperLink(c: Context<{ Bindings: Env }>): Response {
-  return redirectToPlay(c, "w");
+  return bounceToPlay(c, "w");
 }
 
 /** The ringtone form: `r=<uuid>` in the referrer payload. */
 export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
-  return redirectToPlay(c, "r");
+  return bounceToPlay(c, "r");
 }
 
 /**
@@ -151,18 +183,18 @@ export function handleRootLink(c: Context<{ Bindings: Env }>): Response {
       404,
     );
   }
-  return redirectToPlay(c, "w");
+  return bounceToPlay(c, "w");
 }
 
 /**
- * Send an uninstalled visitor to Play with everything the link carried packed
- * into the store URL's `referrer`, which Android replays to the app after the
+ * The store URL for an uninstalled visitor, with everything the link carried
+ * packed into `referrer` — the payload Android replays to the app after the
  * install. `kind` is the referrer key the app's parser reads back (`w` / `r`).
  */
-function redirectToPlay(
+function playStoreUrl(
   c: Context<{ Bindings: Env }>,
   kind: "w" | "r",
-): Response {
+): string {
   const id = (c.req.param("id") ?? "").trim().toLowerCase();
   const ref = (c.req.query("ref") ?? "").trim().toUpperCase();
   // Region tag stripped exactly as the app's `normalizeLang` does (`hi-IN` → `hi`,
@@ -202,7 +234,80 @@ function redirectToPlay(
   // Uri.splitQueryString would then see one key called "ref=CODE&w=UUID".
   if (parts.length > 0) url.searchParams.set("referrer", parts.join("&"));
 
-  // 302, not 301: the destination depends on query params and we may later want
-  // to change where an uninstalled visitor lands. A cached 301 would outlive that.
-  return c.redirect(url.toString(), 302);
+  return url.toString();
+}
+
+/** Escape for an HTML attribute or text node. */
+function esc(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * The bounce page. Everything on it is validated (`UUID_RE`, `REF_RE`,
+ * `LANG_RE`, a literal `screen=ringtones`), so no visitor-supplied text reaches
+ * the markup — the escaping is belt-and-braces for the day someone adds a key.
+ *
+ * The `<a>` is the real fallback for a JS-off browser, and it is what a preview
+ * crawler shows. No `<meta http-equiv="refresh">` — see the file header.
+ */
+function bounceToPlay(
+  c: Context<{ Bindings: Env }>,
+  kind: "w" | "r",
+): Response {
+  const store = playStoreUrl(c, kind);
+  const here = c.req.url;
+  const title = "Arul — Devotional Wallpapers & Ringtones";
+  const blurb =
+    "South Indian devotional wallpapers and ringtones. Opening the Arul app…";
+
+  const html = `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Arul">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(blurb)}">
+<meta property="og:url" content="${esc(here)}">
+<meta property="og:image" content="${esc(OG_IMAGE)}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="${OG_IMAGE_PX}">
+<meta property="og:image:height" content="${OG_IMAGE_PX}">
+<meta property="og:image:alt" content="Arul">
+<meta name="twitter:card" content="summary">
+<style>
+  :root { color-scheme: light dark }
+  body { margin:0; min-height:100vh; display:flex; align-items:center;
+         justify-content:center; text-align:center; padding:24px;
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:#100d08; color:#f4ecd8 }
+  h1 { margin:0 0 4px; font-size:28px; letter-spacing:.02em; color:#e8b64c }
+  p  { margin:0 0 24px; opacity:.75 }
+  a  { display:inline-block; padding:12px 24px; border-radius:999px;
+       background:#e8b64c; color:#100d08; font-weight:600;
+       text-decoration:none }
+</style>
+<main>
+  <h1>Arul</h1>
+  <p>${esc(blurb)}</p>
+  <a href="${esc(store)}">Continue to Google Play</a>
+</main>
+<script>location.replace(${JSON.stringify(store).replace(/</g, "\\u003C")})</script>
+`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      // The destination is derived from the query, which is part of the cache
+      // key anyway — but this page is the campaign's front door and we want a
+      // change to it live everywhere the moment it deploys.
+      "cache-control": "no-store",
+    },
+  });
 }

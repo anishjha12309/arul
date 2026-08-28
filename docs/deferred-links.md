@@ -22,16 +22,22 @@ from inside this repo without the recipe under each.
 
 ## Play Install Referrer (a browser tap on `/w/` or `/r/` with no app)
 
-The Worker 302s to Play with `referrer=ref=<code>&w=<uuid>&lang=hi` (or `r=<uuid>`); Android replays
-it to `captureOnce` on first launch (Play keeps it 90 days, once per install — the `_kChecked` pref).
+The Worker answers **200 with a bounce page** whose `location.replace()` sends the browser to Play
+with `referrer=ref=<code>&w=<uuid>&lang=hi` (or `r=<uuid>`). **Never a 302 nor a `<meta refresh>`:**
+Google Ads fetches an App-campaign deep link and rejects one that redirects ("All URLs must take
+users directly to the app"), so while these 302'd every link was refused there though the app was
+verified and opening them (2026-08-29); a JS navigation is real, so Play still gets the referrer. A
+preview crawler (WhatsApp, on every share) renders that page, not Play's card — hence `og:` tags and
+an `og:image` at `brand/arul-icon.png`, a prefix no sweep manages. Android replays it to
+`captureOnce` on first launch (Play keeps it 90 days, once per install — the `_kChecked` pref).
 Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
 `adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`
 — with no app to claim the App Link it lands in Play's listing sheet with the referrer attached;
-install from the testing track, launch, sign in. GA4F logs the referrer Play delivered
-(`V/FA-SVC … InstallReferrer API result: r=<uuid>&lang=ta`, with `log.tag.FA-SVC VERBOSE`), and the
-app's `deep_link_opened source=install_referrer` follows sign-in. A Play build is a release build:
-read its screen per the on-device skill (a11y service on, dump, off). A sideloaded APK never
-receives a referrer — use the seam instead.
+install from the testing track, launch, sign in. GA4F logs the referrer Play delivered (`V/FA-SVC …
+InstallReferrer API result: r=<uuid>&lang=ta`, with `log.tag.FA-SVC VERBOSE`), and the app's
+`deep_link_opened source=install_referrer` follows sign-in. A Play build is a release build: read
+its screen per the on-device skill. A sideloaded APK never receives a referrer — use the seam
+instead.
 
 ## Google Ads DDL — GA4F fetches the ad group's App URL
 

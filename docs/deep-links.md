@@ -33,7 +33,7 @@ a language, each consumed once by the surface that can act on it — the shell p
 | --- | --- | --- |
 | Installed | https App Link (verified host) | go_router top-level `redirect` — Android hands Flutter the FULL intent URI |
 | Installed | `fb<id>://open?…` from the FB/IG apps | same redirect; go_router normalises the empty path to `/` |
-| Not installed, browser tap | Worker `/w/:id` · `/r/:id` → Play `referrer=ref=…&w=<uuid>&lang=hi` (`r=` for ringtones) | `InstallReferrerService.captureOnce` |
+| Not installed, browser tap | Worker `/w/:id` · `/r/:id` → **200 bounce page, never a 302** ([deferred-links.md](deferred-links.md)) → Play `referrer=ref=…&w=<uuid>&lang=hi` (`r=` for ringtones) | `InstallReferrerService.captureOnce` |
 | Not installed, Google App Campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
 | Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
 

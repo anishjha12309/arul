@@ -32,6 +32,29 @@ function ctxFor(url: string, env = makeEnv()) {
   return makeCtx({ env, url, ...(id !== undefined ? { params: { id } } : {}) });
 }
 
+/**
+ * The store URL the bounce page navigates to. These routes answer 200 with HTML
+ * rather than 302 because Google Ads rejects a deep link whose URL redirects
+ * ("All URLs must take users directly to the app"), so there is no `Location`
+ * header to read — the destination lives in the page's `location.replace()`.
+ * Reading it from there is deliberate: it is the line real visitors execute.
+ */
+async function dest(res: Response): Promise<URL> {
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toContain("text/html");
+  const html = await res.text();
+  // A redirect the page performs itself is the whole point — assert we never
+  // grow one the validator can see.
+  expect(html).not.toMatch(/http-equiv=["']?refresh/i);
+  const match = html.match(/location\.replace\((".*?")\)/);
+  expect(match, "bounce page has no location.replace()").not.toBeNull();
+  const url = new URL(JSON.parse(match![1]) as string);
+  // The visible fallback has to agree with it, or a JS-off visitor lands
+  // somewhere else than everyone paying for the ad.
+  expect(html).toContain(`href="${url.toString().replace(/&/g, "&amp;")}"`);
+  return url;
+}
+
 describe("GET /.well-known/assetlinks.json", () => {
   it("serves a valid Digital Asset Links statement for the app package", async () => {
     const env = makeEnv({ ANDROID_CERT_SHA256: PLAY_SHA });
@@ -78,14 +101,58 @@ describe("GET /.well-known/assetlinks.json", () => {
   });
 });
 
+// The contract that cost a campaign: Google Ads validates the deep-link URL by
+// fetching it, and rejects one that redirects — "Inclusion of redirect URLs: All
+// URLs must take users directly to the app". While these routes 302'd, every
+// `/w/` and `/r/` link was refused in the campaign's deep-link field even though
+// the app was verified and opening them (measured on the live route 2026-08-29).
+describe("no HTTP redirect on any deep-link route", () => {
+  it.each([
+    ["wallpaper", () => handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=ta`))],
+    ["ringtone", () => handleRingtoneLink(ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`))],
+    ["ringtone tab", () => handleRingtoneLink(ctxFor("https://arul.hsrutility.com/r/?lang=ta"))],
+    ["language-only", () => handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/?lang=hi"))],
+    ["root", () => handleRootLink(makeCtx({ env: makeEnv(), url: "https://arul.hsrutility.com/?lang=hi" }))],
+  ])("%s links answer 200 with no Location header", async (_name, call) => {
+    const res = call();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+    // …and still reach Play, so the fix cannot have been "stop sending anyone".
+    expect((await dest(res)).origin).toBe("https://play.google.com");
+  });
+});
+
+// The bounce page is what a link-preview crawler renders now that it no longer
+// follows a 302 through to Play's listing card — WhatsApp is the first hop of
+// every share, so a share with no og:image is a share that lost its picture.
+describe("link-preview card", () => {
+  it("carries an og:image on a CDN prefix no sweep can reclaim", async () => {
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}`));
+    const html = await res.text();
+
+    expect(html).toContain(
+      '<meta property="og:image" content="https://arul-cdn.hsrutility.com/brand/arul-icon.png">',
+    );
+    // `brand/` is outside CANONICAL_PREFIXES and SUBMISSION_PREFIX, so the bytes
+    // survive without a DB row pointing at them. Moving this under wallpapers/
+    // or ringtones/ would have the sweep delete the icon within 12 hours.
+    expect(html).not.toMatch(/og:image"[^>]*(wallpapers|ringtones|thumbs|user)\//);
+    // Square art: summary_large_image would letterbox a 512×512 icon.
+    expect(html).toContain('<meta name="twitter:card" content="summary">');
+    expect(html).toContain('<meta property="og:title"');
+    expect(html).toContain('<meta property="og:url"');
+  });
+});
+
 describe("GET /w/:id", () => {
-  it("redirects to Play carrying the wallpaper id AND the referral code", async () => {
+  it("sends the visitor to Play carrying the wallpaper id AND the referral code", async () => {
     const res = handleWallpaperLink(
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234`),
     );
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.origin + location.pathname).toBe(
       "https://play.google.com/store/apps/details",
     );
@@ -103,7 +170,7 @@ describe("GET /w/:id", () => {
   it("carries the id alone when there is no referral code", async () => {
     const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}`));
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
   });
 
@@ -114,8 +181,8 @@ describe("GET /w/:id", () => {
       ctxFor("https://arul.hsrutility.com/w/not-a-uuid?ref=%3Cscript%3E"),
     );
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
     expect(location.searchParams.get("referrer")).toBeNull();
   });
@@ -125,7 +192,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=abcd1234`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `ref=ABCD1234&w=${WALLPAPER_ID}`,
     );
@@ -138,7 +205,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&lang=hi`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `ref=ABCD1234&w=${WALLPAPER_ID}&lang=hi`,
     );
@@ -149,7 +216,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=fr`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
   });
 
@@ -158,7 +225,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID.toUpperCase()}?lang=TA`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=ta`);
   });
 
@@ -175,7 +242,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=${raw}`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `w=${WALLPAPER_ID}&lang=${want}`,
     );
@@ -186,7 +253,7 @@ describe("GET /w/:id", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=pt-BR`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
   });
 });
@@ -198,8 +265,8 @@ describe("GET /r/:id", () => {
       ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?ref=ABCD1234&lang=ta`),
     );
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.origin + location.pathname).toBe(
       "https://play.google.com/store/apps/details",
     );
@@ -214,8 +281,8 @@ describe("GET /r/:id", () => {
       ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=%3Cscript%3E"),
     );
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     // Both junk values are dropped; the SECTION the path named survives, so a
     // typo in the id costs the track and not the tab (2026-08-27).
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones");
@@ -233,8 +300,8 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
   ])("sends %s to Play carrying only the language", async (url, want) => {
     const res = handleWallpaperLink(ctxFor(url));
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.origin + location.pathname).toBe(
       "https://play.google.com/store/apps/details",
     );
@@ -251,7 +318,7 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
       ctxFor("https://arul.hsrutility.com/r/?lang=ta"),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
   });
 
@@ -260,7 +327,7 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
       ctxFor("https://arul.hsrutility.com/w/?lang=ta"),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("lang=ta");
   });
 
@@ -269,7 +336,7 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
       ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `r=${RINGTONE_ID}&lang=ta`,
     );
@@ -280,15 +347,15 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
       ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=ta"),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
   });
 
   it("still reaches Play when the link carries nothing at all", async () => {
     const res = handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/"));
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
     expect(location.searchParams.get("referrer")).toBeNull();
   });
@@ -305,7 +372,7 @@ describe("ilang (share install-language)", () => {
       ),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `ref=ABCD1234&w=${WALLPAPER_ID}&lang=ta`,
     );
@@ -316,7 +383,7 @@ describe("ilang (share install-language)", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=TA-in`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `w=${WALLPAPER_ID}&lang=ta`,
     );
@@ -327,7 +394,7 @@ describe("ilang (share install-language)", () => {
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=fr`),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
   });
 
@@ -340,7 +407,7 @@ describe("ilang (share install-language)", () => {
       ),
     );
 
-    const location = new URL(res.headers.get("location")!);
+    const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(
       `w=${WALLPAPER_ID}&lang=hi`,
     );
@@ -357,8 +424,8 @@ describe("GET / on the link domain", () => {
       rootCtx("https://arul.hsrutility.com/?lang=hi"),
     );
 
-    expect(res.status).toBe(302);
-    const location = new URL(res.headers.get("location")!);
+    expect(res.status).toBe(200);
+    const location = await dest(res);
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
     expect(location.searchParams.get("referrer")).toBe("lang=hi");
   });
@@ -368,10 +435,7 @@ describe("GET / on the link domain", () => {
       rootCtx("https://arul.hsrutility.com/"),
     );
 
-    expect(res.status).toBe(302);
-    expect(
-      new URL(res.headers.get("location")!).searchParams.get("referrer"),
-    ).toBeNull();
+    expect((await dest(res)).searchParams.get("referrer")).toBeNull();
   });
 
   it("still 404s on the API host", async () => {
