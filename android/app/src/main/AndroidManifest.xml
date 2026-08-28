@@ -140,25 +140,43 @@
                  An intent-filter matches the cross product of its schemes and
                  hosts, so folding https in would also register arul://arul.hsrutility.com
                  and — worse — put the PhonePe return scheme under autoVerify. -->
+            <!-- ONE FILTER PER URL SHAPE — /w/ here, /r/ below. Not a style
+                 choice: "it's important that you create separate filters when
+                 your intention is to declare unique URLs … because multiple
+                 <data> elements in the same intent filter are actually merged
+                 together to account for all variations of their combined
+                 attributes" (developer.android.com/training/app-links/deep-linking).
+
+                 Both paths lived in ONE filter until build 53 and routed fine on
+                 the phone — the merge is harmless here, since /w/ and /r/ share a
+                 scheme and host so the cross product adds nothing. But a merged
+                 filter is ONE declaration to anything that enumerates the app's
+                 links: Google Ads' Deep link validator listed only
+                 `https://arul.hsrutility.com/w/.*` and answered "This deep link
+                 wasn't found in the app" for every /r/ URL, blocking a ringtone
+                 campaign while the same link opened the app instantly. Writing
+                 each <data> out in full (build 52) did NOT fix that — the
+                 platform still flattens one filter into one entry (dumpsys showed
+                 the host twice, both paths, one filter). Separate filters is the
+                 documented shape. Add a new path as a new FILTER, never as a
+                 second <data> here.
+
+                 autoVerify on both is deliberate and free: the system verifies
+                 hosts across ALL filters carrying VIEW + BROWSABLE + DEFAULT +
+                 http/https once the attribute appears on at least one of them. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <!-- Each path gets a COMPLETE data element — scheme, host and
-                     prefix — even though Android would merge a bare
-                     <data android:pathPrefix="/r/"/> into the same cross product
-                     and route it correctly (it did: verified on a Play build).
-                     Google Ads' Deep link validator does NOT expand that merge.
-                     It read this filter element by element, listed only
-                     `https://arul.hsrutility.com/w/.*` as a valid App link, and
-                     answered "This deep link wasn't found in the app" for every
-                     /r/ URL — so a ringtone campaign could not be created while
-                     the phone opened the very same link fine (2026-08-29).
-                     Repeat the scheme and host on every path added here. -->
                 <data
                     android:scheme="https"
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/w/"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
                 <data
                     android:scheme="https"
                     android:host="arul.hsrutility.com"
