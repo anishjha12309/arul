@@ -54,13 +54,32 @@ void main() {
       expect(req?.lang, 'ta');
     });
 
-    test('the id-less campaign form is a language-only request', () {
-      // `/w/?lang=hi` — what a language-only ad pastes. The manifest filter is a
-      // pathPrefix, so Android hands this to the app exactly like a full link.
+    test('/r/ with no id opens the RINGTONES tab', () {
+      // A campaign for the section rather than one track. The tab is the whole
+      // point of the path — `/r/?lang=ta` landing on the feed was the bug.
+      final req = _parse('https://arul.hsrutility.com/r/?lang=ta');
+      expect(req?.target, const TabLinkTarget(ArulTab.ringtones));
+      expect(req?.lang, 'ta');
+      // Same for a typo'd id: it still named ringtones, so land there.
+      expect(
+        _parse('https://arul.hsrutility.com/r/not-a-uuid')?.target,
+        const TabLinkTarget(ArulTab.ringtones),
+      );
+    });
+
+    test('/w/ with no id stays language-only, and claims no tab', () {
+      // Deliberately NOT symmetric — this is the shipped language-only shape,
+      // and the feed is where the app opens anyway.
       final req = _parse('https://arul.hsrutility.com/w/?lang=hi');
       expect(req?.target, isNull);
       expect(req?.lang, 'hi');
-      expect(_parse('https://arul.hsrutility.com/r/?lang=ta')?.lang, 'ta');
+    });
+
+    test('a real ringtone id still beats the tab fallback', () {
+      expect(
+        _parse('https://arul.hsrutility.com/r/$_r?lang=ta')?.target,
+        const RingtoneLinkTarget(_r),
+      );
     });
 
     test('ilang is IGNORED here — a share must not re-language an install', () {

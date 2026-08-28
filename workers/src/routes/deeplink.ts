@@ -184,6 +184,13 @@ function redirectToPlay(
   const parts: string[] = [];
   if (REF_RE.test(ref)) parts.push(`ref=${ref}`);
   if (UUID_RE.test(id)) parts.push(`${kind}=${id}`);
+  // An id-less `/r/` names the RINGTONES section, and the path does not survive
+  // the trip through Play — the app only ever sees this referrer string, so
+  // `/w/?lang=ta` and `/r/?lang=ta` would otherwise arrive byte-identical and a
+  // fresh install would land on the feed. `screen=` is the key the app's
+  // referrer parser ALREADY reads (`_targetFromQuery`), so this reaches builds
+  // that shipped before the id-less path meant anything.
+  else if (kind === "r") parts.push("screen=ringtones");
   const install = LANG_RE.test(lang) ? lang : LANG_RE.test(ilang) ? ilang : "";
   if (install) parts.push(`lang=${install}`);
 

@@ -101,6 +101,16 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
         };
       }
     }
+    // `/r/` names the RINGTONES section even with no id after it — a campaign
+    // for the tab rather than one track (`/r/?lang=ta`), and the landing for a
+    // `/r/<typo>` that names no row we have. `/w/` deliberately does NOT get the
+    // matching treatment: it is the shipped language-only shape (owner's call,
+    // 2026-08-27 — "only open the app in that language"), and the feed is where
+    // the app opens anyway, so claiming the tab would only yank a warm user off
+    // Ringtones for nothing.
+    if (target == null && segments.isNotEmpty && segments[0] == 'r') {
+      target = TabLinkTarget(ArulTab.ringtones, source: source);
+    }
   }
 
   Map<String, String> query;

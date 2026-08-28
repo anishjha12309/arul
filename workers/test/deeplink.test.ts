@@ -216,7 +216,9 @@ describe("GET /r/:id", () => {
 
     expect(res.status).toBe(302);
     const location = new URL(res.headers.get("location")!);
-    expect(location.searchParams.get("referrer")).toBeNull();
+    // Both junk values are dropped; the SECTION the path named survives, so a
+    // typo in the id costs the track and not the tab (2026-08-27).
+    expect(location.searchParams.get("referrer")).toBe("screen=ringtones");
   });
 });
 
@@ -239,13 +241,47 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
     expect(location.searchParams.get("referrer")).toBe(`lang=${want}`);
   });
 
-  it("does the same on the ringtone path", async () => {
+  // The path is the ONLY thing that says "ringtones", and it does not survive
+  // the trip through Play — the app sees the referrer and nothing else. Without
+  // `screen=`, `/w/?lang=ta` and `/r/?lang=ta` arrive identical and a fresh
+  // install lands on the feed. `screen=` is a key the app already reads, so this
+  // works on builds that shipped before the id-less path meant anything.
+  it("marks the ringtone path so a fresh install lands on that tab", async () => {
     const res = handleRingtoneLink(
       ctxFor("https://arul.hsrutility.com/r/?lang=ta"),
     );
 
     const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
+  });
+
+  it("does NOT mark the wallpaper path — it is the language-only shape", async () => {
+    const res = handleWallpaperLink(
+      ctxFor("https://arul.hsrutility.com/w/?lang=ta"),
+    );
+
+    const location = new URL(res.headers.get("location")!);
     expect(location.searchParams.get("referrer")).toBe("lang=ta");
+  });
+
+  it("a real ringtone id wins over the tab marker", async () => {
+    const res = handleRingtoneLink(
+      ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe(
+      `r=${RINGTONE_ID}&lang=ta`,
+    );
+  });
+
+  it("marks a typo'd ringtone id too — it still named ringtones", async () => {
+    const res = handleRingtoneLink(
+      ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=ta"),
+    );
+
+    const location = new URL(res.headers.get("location")!);
+    expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
   });
 
   it("still reaches Play when the link carries nothing at all", async () => {
