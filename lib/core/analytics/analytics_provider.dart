@@ -72,6 +72,17 @@ const postHogAllowedEvents = <String>{
   // The funnel's endpoint. The authoritative revenue number is always the Neon
   // subscriptions row — never count money here.
   ArulEvents.trialStarted,
+
+  // ── TEMPORARY diagnostics — sign-in wall test run, 2026-08-30 ─────────────
+  // Install→login sits at ~67% and nearly every non-login is a picker
+  // dismissal. These two carry `ms_since_authenticate` / `gis_code`, which
+  // split a real dismissal (seconds) from a post-selection failure the plugin
+  // reports as "cancelled" (later). GA4 has them too, but its custom
+  // dimensions lag ~48h; PostHog reads same-day and splits by $app_build.
+  // Remove once the diagnosis is done — the pinned set in
+  // test/core/analytics_gating_test.dart makes that a deliberate edit.
+  'login_cancelled',
+  'login_failed',
 };
 
 /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys

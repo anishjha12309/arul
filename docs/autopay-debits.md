@@ -58,6 +58,24 @@ and re-redeeming can only 4xx: clear `notified_at` + `redemption_order_id` so Pa
 order. **Only ever recycle off a SUCCESSFUL status read** — recycling because a status call errored
 could mint a second order and debit the user twice.
 
+## Dunning — the 45-day ladder (owner's call, 2026-08-29)
+
+A FAILED debit reschedules itself by pushing `next_debit_at` to `current_period_end` + day
+**2, 5, 10, 20, 32, 45** (`RETRY_OFFSET_DAYS`; `retry_count` is the index), aligned FORWARD to the
+next 21:30 UTC = 03:00 IST — inside NPCI's non-peak execute window (21:31–09:59 / 13:01–16:59 IST).
+Past the last rung the row expires. **Anchor on `current_period_end`, never on `now()`** — the
+failure path doesn't move it, so the schedule cannot drift however late a reconcile lands. Each rung
+is a fresh notify+order, the compliant unit: PhonePe's 1-attempt+3-retries/48h cap applies INSIDE
+one order (notify/execute reference, read 2026-08-29), nothing caps notify cycles per subscription,
+and the ≥2-day gap means a new order never overlaps the last one's 48h window. The same 45 days is a
+WALL on the recycle path: a row whose orders die non-terminally (forever NOTIFIED) never advances
+the ladder and used to mint orders without bound — past the wall it expires instead. The webhook's
+`redemption.*.failed` branch is LOG-ONLY: the cron's reconcile owns the FAILED transition, exactly
+once per order; a webhook increment advanced the index without scheduling (a skipped rung) and
+double-counted beside the cron's own +1. Entitlement is untouched — premium still ends at period
+end + grace while dunning runs in the background, and a mid-ladder settle grants the month from the
+settle date with `retry_count` reset to 0.
+
 ## The webhook is the fast path, the cron is the correct one
 
 The webhook ([payments.ts](../workers/src/routes/payments.ts), `subscription.redemption.*`) flips the

@@ -15,6 +15,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
 import com.facebook.applinks.AppLinkData
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
@@ -93,6 +94,12 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // MUST run before super.onCreate() — the library installs itself into the
+        // window before the activity's content exists, and the ordering is part of
+        // its documented contract. This is what makes LaunchTheme's splash render on
+        // API<=30; without it those attrs are Android-12-only and older devices get
+        // a bare `windowBackground` colour for the whole cold start.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()

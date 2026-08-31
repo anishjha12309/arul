@@ -175,9 +175,19 @@ class InstallReferrerService {
   @visibleForTesting
   static String? parseLang(String? raw) => parseReferrerPayload(raw)?.lang;
 
-  /// Query the Install Referrer API at most once per install and persist any
-  /// referral code, deep-link target and language found. Safe to call on every
-  /// launch (it self-guards).
+  /// Query the Install Referrer API once per install and persist any referral
+  /// code, deep-link target and language found. Safe to call on every launch
+  /// (it self-guards).
+  ///
+  /// The one-shot is spent only when Play ACTUALLY ANSWERS. A failed bind is
+  /// routine and transient — Google's own guidance is that the client "may lose
+  /// the connection if the Play Store service is updating in the background"
+  /// and "must call the startConnection() method to restart the connection".
+  /// Marking the install checked on a throw burned the shot on that, losing the
+  /// referral code and deep-link target for good with nothing logged. Retrying
+  /// is free: the referrer stays available for 90 days and this runs unawaited
+  /// off the startup path. A device with no Play Store throws every launch and
+  /// so retries forever — a failed AIDL bind, and it has no referrer to lose.
   Future<void> captureOnce() async {
     if (_prefs.getBool(_kChecked) ?? false) return;
 
@@ -189,11 +199,17 @@ class InstallReferrerService {
     final useDebugReferrer = kDebugMode && debugReferrer.isNotEmpty;
 
     String? raw;
+    // Did Play answer at all? A null `raw` from a successful call is a real
+    // answer (an organic install has no referrer) and still spends the shot;
+    // a throw does not.
+    var answered = false;
     if (useDebugReferrer) {
       raw = debugReferrer;
+      answered = true;
     } else {
       try {
         raw = (await PlayInstallReferrer.installReferrer).installReferrer;
+        answered = true;
       } catch (e) {
         // No Play Services / not an install-from-Play — expected in dev; ignore.
         debugPrint('[InstallReferrer] unavailable (non-fatal): $e');
@@ -217,7 +233,7 @@ class InstallReferrerService {
         debugPrint('[InstallReferrer] captured deep link: $request');
       }
     }
-    await _prefs.setBool(_kChecked, true);
+    if (answered) await _prefs.setBool(_kChecked, true);
   }
 
   /// Persist and hand over everything one link asked for.

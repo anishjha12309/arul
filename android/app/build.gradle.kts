@@ -138,6 +138,16 @@ dependencies {
     // scheduled (zonedSchedule) devotional reminders. Version pinned to Pakiza's.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
+    // Splash screen: BACKPORTS the Android 12 splash (icon on a field) to API 23+.
+    // Without it the platform attrs in values/styles.xml only apply on Android 12+,
+    // and API<=30 falls back to `windowBackground` — a FLAT COLOUR with no icon,
+    // which is ~28% of installs (measured on a vivo 1916 / Android 9: a bare ink
+    // rectangle for the whole cold start). Android's own migration guide: "If you
+    // migrate using the SplashScreen API directly, on Android 11 and earlier your
+    // splash screen looks exactly the same as before the migration" — which is
+    // exactly the bug — and it "strongly recommends" this library instead.
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Media3 ExoPlayer — the app's single video runtime, used by BOTH:
     //   • feedvideo/FeedVideoPlugin  — the in-feed live-preview texture pool
     //   • wallpaper/VideoRenderer    — the applied live wallpaper's own service

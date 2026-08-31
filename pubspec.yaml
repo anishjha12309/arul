@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+53
+version: 1.0.0+56
 
 environment:
   sdk: ^3.12.0
@@ -188,6 +188,14 @@ flutter:
 # Regenerating (`flutter_native_splash:create`) REWRITES values/colors.xml and
 # values/styles.xml, so these values must stay equal to what is checked in there
 # or a regen silently reverts the splash.
+#
+# STRONGER WARNING SINCE 2026-08-29: values/styles.xml is now HAND-OWNED. LaunchTheme
+# parents `Theme.SplashScreen.IconBackground` and sets `postSplashScreenTheme` +
+# `windowSplashScreenAnimatedIcon` for androidx.core:core-splashscreen, which backports
+# the Android 12 splash to API 23+. This generator does NOT emit any of that, so a regen
+# drops the backport and silently returns API<=30 to a bare flat-colour launch surface
+# (~28% of installs; measured on a vivo 1916 / Android 9). If you must regen, re-apply
+# the LaunchTheme block in BOTH values/ and values-night/ styles.xml afterwards.
 flutter_native_splash:
   color: "#14090C"        # == ArulTokens.darkSurface == values/colors.xml splash_bg. If these three
                           # ever disagree, the OS splash flashes a different black than

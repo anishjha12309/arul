@@ -81,3 +81,19 @@ library itself — it needs Node `net`/`Buffer`, and its appendix suffix is tele
 The privacy policy (`https://hsrutility.com/arul/privacy-policy/` — Arul's own since 2026-08-20; it
 is no longer shared with Pakiza, so a change here lands in this app alone) must disclose Meta,
 Google/Firebase and advertiser-ID collection.
+
+
+## Custom parameters are NOT queryable until registered (2026-08-29)
+
+**This property has ZERO registered custom dimensions** — every custom parameter the app sends is
+invisible to all GA4 reports and to the Data API. Verified: asking for `customEvent:reason` returns
+`Field customEvent:reason is not a valid dimension`. "GA4 is the complete, unsampled record" holds at
+the EVENT level, not the PARAMETER level. Affected: `gis_code` · `ms_since_authenticate` · `reason` ·
+`method` · `target_app` · `type` · `category` · `plan` · `late` — so "which UPI app expires the
+mandate" is not answerable off `method`/`target_app` until each is registered in **Admin → Data
+display → Custom definitions** (event-scoped, cap 50). Console only, no code.
+
+**GA4 cannot segment by build either.** `appVersion` is Firebase's `versionName`; `pubspec.yaml` is
+`1.0.0+<build>`, so every install reports `1.0.0` and "is this fixed in the new build?" is
+unanswerable there. Crashlytics is the only build-aware surface (it reads `versionCode`). Bump
+versionName per release, or send the build as a user property, before trusting a build-wise read.

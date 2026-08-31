@@ -29,7 +29,9 @@
  *       AND next_debit_at <= now()
  *     → call POST /subscriptions/v2/redeem
  *     → on COMPLETED: status='active', current_period_end=+1month, next_debit_at=+1month, notified_at=NULL
- *     → on FAILED:    increment retry_count; if retry_count >= MAX_RETRIES, mark expired
+ *     → on FAILED:    climb the 45-day dunning ladder (RETRY_OFFSET_DAYS) — the
+ *                     next attempt is scheduled by pushing next_debit_at forward;
+ *                     past the last rung, mark expired
  *     → on PENDING:   leave as-is (PhonePe is still processing / retrying via STANDARD strategy)
  *
  * NOTE: sendUserNotification below is a log-only stub BY DESIGN — Arul has no
@@ -66,8 +68,52 @@ const TERMINAL_MANDATE_STATES = new Set([
   "FAILED",
 ]);
 
-/** Maximum failed execute attempts before we expire the subscription. */
-const MAX_RETRIES = 5;
+/**
+ * The dunning ladder — days after the ORIGINAL due date (current_period_end,
+ * which the failure path never moves, so the schedule cannot drift) at which
+ * each retry of a FAILED debit runs. Business rule (owner, 2026-08-29): pursue
+ * a failed renewal for 45 days, spaced, replacing the old
+ * five-daily-attempts-then-expire scheme.
+ *
+ * Each rung is a FRESH notify + order. That is the compliant unit: PhonePe's
+ * 1-attempt+3-retries/48h cap applies INSIDE one redemption order (notify/
+ * execute API reference, read 2026-08-29), the RBI 24h pre-debit notice rides
+ * Pass A's re-notify, and nothing in PhonePe's docs caps notify cycles per
+ * subscription. Spaced rather than daily because every rung pings the user a
+ * pre-debit notice through PhonePe's rails — 7 attempts total, not 45 — and
+ * because most debits that will ever recover do so in the first week. The
+ * minimum 2-day gap also guarantees a new order never overlaps the previous
+ * order's 48h retry window.
+ *
+ * retry_count is the ladder index; when it walks off the end, the row expires
+ * exactly as before — just at day 45 instead of day ~5.
+ */
+const RETRY_OFFSET_DAYS = [2, 5, 10, 20, 32, 45];
+
+/**
+ * Hard wall on the same 45-day business rule, enforced on the recycle path: a
+ * row whose orders keep dying unsettled (e.g. forever NOTIFIED — a state that
+ * never goes terminal, so the FAILED ladder never advances) used to mint a
+ * fresh order every ~2 days without bound. Past this wall it expires instead.
+ */
+const DUNNING_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
+
+/**
+ * Schedule a ladder retry, landing it at the next 21:30 UTC = 03:00 IST at or
+ * after anchor+offset. NPCI executes autopay only in non-peak windows
+ * (21:31–09:59 and 13:01–16:59 IST, PhonePe notify reference); 03:00 IST puts
+ * both our notify (~24h earlier, also ~03:00 IST) and the execute inside the
+ * overnight window instead of leaving the timing to whenever the debit
+ * originally failed. Alignment only ever moves FORWARD (up to +24h) so a
+ * retry can never fire earlier than its rung.
+ */
+function nonPeakRetryAt(anchor: Date, offsetDays: number): Date {
+  const due = new Date(anchor.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+  const aligned = new Date(due);
+  aligned.setUTCHours(21, 30, 0, 0);
+  if (aligned.getTime() < due.getTime()) aligned.setUTCDate(aligned.getUTCDate() + 1);
+  return aligned;
+}
 
 /**
  * How long past its due date a debit may sit un-settled before we stop trusting
@@ -356,7 +402,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         redemption_order_id,
         retry_count,
         next_debit_at,
-        notified_at
+        notified_at,
+        current_period_end
       FROM subscriptions
       WHERE notified_at IS NOT NULL
         AND notified_at <= ${new Date(now.getTime() - EXECUTE_AFTER_NOTIFY_MS).toISOString()}
@@ -424,6 +471,9 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         // = a renewal. Read from the same SELECT as the row itself — a webhook
         // racing this scan is harmless, the per-transaction KV marks dedupe.
         priorStatus: row.status as string,
+        // The dunning ladder's anchor. NULL falls back to the due date so a
+        // hypothetical anchorless row still moves forward instead of throwing.
+        periodEnd: toDate(row.current_period_end) ?? toDate(row.next_debit_at),
       };
       const dueAt = toDate(row.next_debit_at);
       const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
@@ -451,8 +501,31 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         if (settled) phonePeCalls += SETTLE_REPORTER_SUBREQUESTS;
 
         // Order outlived its window and never settled — redeeming it again can
-        // only 4xx. Drop it so Pass A mints a fresh one instead of looping.
+        // only 4xx. Drop it so Pass A mints a fresh one instead of looping —
+        // UNLESS the row is past the 45-day dunning wall: an order that only
+        // ever dies non-terminally (forever NOTIFIED) never advances the FAILED
+        // ladder, so without this wall such a row minted fresh orders without
+        // bound. Same business window as the ladder's last rung.
         if (r.dead) {
+          if (
+            outcomeRow.periodEnd !== null &&
+            Date.now() - outcomeRow.periodEnd.getTime() > DUNNING_WINDOW_MS
+          ) {
+            await sql`
+              UPDATE subscriptions
+              SET status              = 'expired',
+                  notified_at         = NULL,
+                  redemption_order_id = NULL,
+                  updated_at          = now()
+              WHERE id = ${outcomeRow.id}
+            `;
+            console.warn(
+              `[autopay-notify] Sub ${merchantSubId} unsettled ${Math.round(
+                (Date.now() - outcomeRow.periodEnd.getTime()) / 86_400_000,
+              )}d past period end — dunning window exhausted, expired`,
+            );
+            continue;
+          }
           await recycleRedemption(sql, outcomeRow.id);
           console.warn(
             `[autopay-notify] Order ${redemptionOrderId} for sub ${merchantSubId} ` +
@@ -607,6 +680,7 @@ async function reconcileFromOrder(
     merchantSubId: string;
     redemptionOrderId: string;
     priorStatus: string;
+    periodEnd: Date | null;
   },
   overdueMs: number,
 ): Promise<{ settled: boolean; dead: boolean; state: string | null }> {
@@ -674,6 +748,7 @@ async function applyDebitOutcome(
     merchantSubId: string;
     redemptionOrderId: string;
     priorStatus: string;
+    periodEnd: Date | null;
   },
 ): Promise<boolean> {
   if (state === "COMPLETED") {
@@ -720,7 +795,7 @@ async function applyDebitOutcome(
 
   if (state === "FAILED") {
     const retries = row.retryCount + 1;
-    if (retries >= MAX_RETRIES) {
+    if (retries > RETRY_OFFSET_DAYS.length) {
       await sql`
         UPDATE subscriptions
         SET status      = 'expired',
@@ -728,16 +803,32 @@ async function applyDebitOutcome(
             updated_at  = now()
         WHERE id = ${row.id}
       `;
-      console.warn(`[autopay-notify] Sub ${row.merchantSubId} expired after ${retries} failures`);
+      console.warn(
+        `[autopay-notify] Sub ${row.merchantSubId} expired after ${retries} failed debits ` +
+        `across the 45-day dunning window`,
+      );
     } else {
+      // Climb the ladder: notified_at = NULL puts the row back in Pass A's
+      // window, and the pushed-out next_debit_at is what spaces the attempts —
+      // Pass A then re-notifies ~24h before the rung (its SELECT looks one
+      // notify-window ahead), so each retry carries its own fresh order and
+      // pre-debit notice.
+      const nextAttempt = nonPeakRetryAt(
+        row.periodEnd ?? new Date(),
+        RETRY_OFFSET_DAYS[retries - 1],
+      );
       await sql`
         UPDATE subscriptions
-        SET retry_count = ${retries},
-            notified_at = NULL,
-            updated_at  = now()
+        SET retry_count   = ${retries},
+            notified_at   = NULL,
+            next_debit_at = ${nextAttempt.toISOString()},
+            updated_at    = now()
         WHERE id = ${row.id}
       `;
-      // notified_at = NULL allows pass A to re-notify on the next cron run
+      console.log(
+        `[autopay-notify] Sub ${row.merchantSubId} debit FAILED (attempt ${retries}) — ` +
+        `next attempt ${nextAttempt.toISOString()} (day ${RETRY_OFFSET_DAYS[retries - 1]} of the ladder)`,
+      );
     }
     return true;
   }

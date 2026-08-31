@@ -32,10 +32,32 @@ class VideoBackground extends StatefulWidget {
   State<VideoBackground> createState() => _VideoBackgroundState();
 }
 
-class _VideoBackgroundState extends State<VideoBackground> {
+class _VideoBackgroundState extends State<VideoBackground>
+    with WidgetsBindingObserver {
   /// The video's own darkest region. If this and the video disagree, the reveal
-  /// pops — which is exactly what a splash must never do.
+  /// pops — which is exactly what a splash must never do. Still painted as the
+  /// base layer so any edge the poster's cover-fit leaves is never bare.
   static const _fallbackColor = ArulColors.ink;
+
+  /// FRAME 0 of `splash.mp4`, bundled (512x912 WebP, ~15 KB in the APK).
+  ///
+  /// This is the SECOND of the two gaps a cold start used to show. The first —
+  /// a bare launch surface before Flutter runs at all — is the Android splash
+  /// screen's job and is fixed by `androidx.core:core-splashscreen`
+  /// (values/styles.xml). This one is Flutter's: once the OS splash hands off,
+  /// the sign-in screen is up but the Media3 decoder has not produced a frame
+  /// yet, so the background was flat [_fallbackColor] until it did.
+  ///
+  /// Media3's own UI guidance is to hold a placeholder until the first frame is
+  /// rendered and only then reveal the video; `PlayerView` does this with
+  /// artwork behind its shutter. This widget drives a raw [Texture], so it has
+  /// to supply that artwork itself. The feed already ships the same pattern for
+  /// live cards (its `thumbs/` poster stays mounted under the texture) — the
+  /// auth background was the one place it was missing.
+  ///
+  /// It is frame 0 of the very file the texture plays, so the handoff needs no
+  /// crossfade: the two images are identical and the swap is imperceptible.
+  static const _posterAsset = 'assets/images/splash_poster.webp';
 
   _SharedAuthVideoPlayer? _shared;
   FeedVideoPlayer? _player;
@@ -44,7 +66,39 @@ class _VideoBackgroundState extends State<VideoBackground> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  /// Stop decoding while the app is off-screen.
+  ///
+  /// The ref count is held by the MOUNT, not by visibility, so backgrounding
+  /// the app (the Credential Manager account picker taking the foreground is
+  /// the common case) left `_refs == 1` and the player decoding a looping
+  /// video nobody could see — measured on device 2026-08-29.
+  ///
+  /// This PAUSES and deliberately does NOT tear the decoder down. Teardown
+  /// would free the ~110MB of graphics memory, but a 20-run harness on a 2.7GB
+  /// Android 9 phone showed ZERO low-memory kills of this app, so that win is
+  /// unproven — while the cost is certain: the fallback colour would flash on
+  /// every return from the picker. A Media3 pause keeps the decoder and the
+  /// decoded frame, so resume is instant.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _shared?.pauseForBackground();
+      case AppLifecycleState.resumed:
+        _shared?.resumeFromBackground();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // `inactive` also fires for transient overlays (the notification
+        // shade, a permission dialog); pausing there would churn playback for
+        // something the user is still looking past. `detached` is teardown.
+        break;
+    }
   }
 
   Future<void> _init() async {
@@ -77,6 +131,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Detach BEFORE release: once the last mount releases, the shared holder
     // may dispose the player (and its notifiers) after the grace period.
     _player?.firstFrame.removeListener(_onFirstFrame);
@@ -92,8 +147,20 @@ class _VideoBackgroundState extends State<VideoBackground> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Fallback colour while the video's first frame is decoding.
+        // Base colour: covers any edge the poster's cover-fit leaves bare.
         const ColoredBox(color: _fallbackColor),
+
+        // The shutter. Stays MOUNTED under the texture rather than being
+        // swapped out — same as the feed's live cards — so a decoder that
+        // drops or restarts can never expose bare colour.
+        const Image(
+          image: AssetImage(_posterAsset),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
+        ),
 
         // Video fill — cover-crop to fill the screen. A raw Texture does not
         // cover-fit itself, so wrap it in a FittedBox(cover) sized to the video's
@@ -197,6 +264,32 @@ class _SharedAuthVideoPlayer {
       // Native video unavailable — callers keep the solid fallback colour.
       return null;
     }
+  }
+
+  /// Stop decode while the app is off-screen. Keeps the decoder and the
+  /// decoded frame, so [resumeFromBackground] is instant. Idempotent — every
+  /// mounted [VideoBackground] calls it.
+  void pauseForBackground() {
+    final player = _player;
+    if (player == null || _dead) return;
+    unawaited(
+      player.then((p) {
+        if (!_dead) p?.pause();
+      }),
+    );
+  }
+
+  /// Resume after [pauseForBackground]. The `_refs > 0` guard keeps a
+  /// backgrounded app that is mid-grace-window from resurrecting playback on a
+  /// player that is about to be torn down.
+  void resumeFromBackground() {
+    final player = _player;
+    if (player == null || _dead) return;
+    unawaited(
+      player.then((p) {
+        if (!_dead && _refs > 0) p?.play();
+      }),
+    );
   }
 
   void release() {

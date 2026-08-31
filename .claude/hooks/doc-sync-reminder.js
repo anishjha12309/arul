@@ -10,8 +10,21 @@
 // First match wins. Order specific -> general.
 const ROUTES = [
   {
+    when: [
+      "android/app/src/main/res/values*/styles.xml",
+      "android/app/src/main/res/drawable*/launch_background.xml",
+      "lib/features/auth/presentation/widgets/video_background.dart",
+      "lib/core/auth/**",
+    ],
+    docs: ["docs/launch-surface.md"],
+  },
+  {
     when: ["lib/main.dart", "android/app/proguard-rules.pro", "lib/core/perf/**"],
-    docs: [".claude/skills/on-device/SKILL.md (release-silence contract)", "docs/perf-measurement.md"],
+    docs: [
+      ".claude/skills/on-device/SKILL.md (release-silence contract)",
+      "docs/perf-measurement.md",
+      "docs/launch-surface.md §Dead ends",
+    ],
   },
   {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],

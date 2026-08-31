@@ -724,6 +724,38 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
     // PhonePe's own id must be captured from the nested home too.
     expect(update).toContain("phonepe_subscription_id");
   });
+
+  it("acks a redemption failed event WITHOUT touching retry_count — the cron owns dunning", async () => {
+    // retry_count is the dunning ladder's index (cron/autopay-notify.ts): the
+    // cron's reconcile increments it exactly once per FAILED order and schedules
+    // the next rung. A webhook increment on the same order would advance the
+    // index without scheduling anything — a skipped rung and a shortened window.
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.redemption.order.failed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_R_FAIL_1",
+          orderId: "OMO_FAIL_1",
+          state: "FAILED",
+          amount: 19900,
+          paymentFlow: {
+            type: "SUBSCRIPTION_REDEMPTION",
+            merchantSubscriptionId: "DKS_S_FAIL",
+            subscriptionId: "OMS_FAIL",
+          },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(texts.some((t) => t.includes("retry_count"))).toBe(false);
+  });
 });
 
 describe("handleWebhook checkout.order.completed — one trial per user", () => {

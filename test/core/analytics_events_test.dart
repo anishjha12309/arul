@@ -27,6 +27,9 @@ void main() {
       'wallpaper_shared',
       'ringtone_set',
       'trial_started',
+      // TEMPORARY (2026-08-30 sign-in diagnosis) — see analytics_provider.dart.
+      'login_cancelled',
+      'login_failed',
     });
   });
 }

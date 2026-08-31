@@ -1,14 +1,15 @@
 # Analytics Events
 
 Never call SDKs from widgets — always `AnalyticsService`. `CompositeAnalyticsService` fans out to:
-- **PostHog** — **every install**, and **only the journey**: `Application Installed` → `login_success` → `trial_started` → `wallpaper_applied` / `wallpaper_shared` → `ringtone_set`. Nothing else reaches it (owner's call, 2026-08-18). Two gates: `AnalyticsCohort` (is this install in the panel? — currently all of them) and `AllowlistedAnalyticsService` (is this event on the list?). SDK lifecycle autocapture is **off**, so the install event is emitted by hand in `main.dart` — it is the one PostHog event that never passes through `AnalyticsService`.
+- **PostHog** — **every install**, and **only the journey**: `Application Installed` → `login_success` → `trial_started` → `wallpaper_applied` / `wallpaper_shared` → `ringtone_set`. Nothing else reaches it (owner's call, 2026-08-18). **TEMPORARY exception from build 55 (sign-in diagnosis, 2026-08-30): `login_cancelled` + `login_failed` are on the list so `ms_since_authenticate`/`gis_code` read same-day by `$app_build` — remove after. Build 56 adds `description` to both (the Credential Manager message, 100-char trim): the dismissal-vs-GMS-abort discriminator — timing under-splits (docs/edge-cases.md §Auth).** Two gates: `AnalyticsCohort` (is this install in the panel? — currently all of them) and `AllowlistedAnalyticsService` (is this event on the list?). SDK lifecycle autocapture is **off**, so the install event is emitted by hand in `main.dart` — it is the one PostHog event that never passes through `AnalyticsService`.
 - **GA4** (`firebase_analytics`) — **every event at 100%, from every install** (raw name), plus ★ events emitting GA4 *standard* `login`/`begin_checkout`. **`purchase` is NOT emitted anywhere** (2026-08-26) — `trial_started` is the ONLY Google Ads conversion source. Active when `AppConfig.firebaseEnabled` (real builds with `google-services.json`; `flutter test` skips). **The complete, unsampled record** — anything PostHog drops is still measurable here for free.
 - **Meta App Events** — ONLY ★ events (clean conversion signal); installs/launches auto-logged natively. Active when `AppConfig.metaEnabled`.
 
 ★ = `login_success` (GA4 `login`) · `checkout_started` (GA4 `begin_checkout` + Meta InitiateCheckout) ·
 `trial_started` (Meta StartTrial; **no** GA4 `purchase` — a trial moves no money) · `subscription_active`
 (**emits NOTHING to GA4 or Meta**). `trial_started` carries `plan`, `order_id` (PhonePe merchant order
-id) and `value` (INR); `login_success` only `provider`. **`trial_started` fires from the purchase poll —
+id) and `value` (INR); `login_success` carries `provider` plus `exchange_retried: true` when the
+build-56 network retry saved the token exchange (absent otherwise — the field readout for that fix). **`trial_started` fires from the purchase poll —
 or, for a trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget
 out: 13–15% of real trials vs Neon, 2026-08-26), late from `TrialConversionCatchUp` on the next `GET /me`
 showing `trialing` for a `merchant_order_id` this install never reported (`late: true`, once per order;

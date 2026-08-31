@@ -109,15 +109,19 @@ function updates(executed: Executed[]): Executed[] {
   return executed.filter((e) => /^UPDATE subscriptions/i.test(e.text));
 }
 
-function dueRow(overdueMs: number, status = "trialing", notifiedAgoMs = 25 * HOUR) {
+function dueRow(overdueMs: number, status = "trialing", notifiedAgoMs = 25 * HOUR, retryCount = 0) {
   return {
     id: "row-1",
     user_id: "user-1",
     status,
     merchant_subscription_id: SUB,
     redemption_order_id: ORDER,
-    retry_count: 0,
+    retry_count: retryCount,
     next_debit_at: new Date(Date.now() - overdueMs).toISOString(),
+    // The settle path writes current_period_end and next_debit_at as the same
+    // instant, and the failure path never moves current_period_end — it is the
+    // dunning ladder's anchor.
+    current_period_end: new Date(Date.now() - overdueMs).toISOString(),
     // Notified 25h ago by default — outside PhonePe's 24h notify→execute window.
     notified_at: new Date(Date.now() - notifiedAgoMs).toISOString(),
   };
@@ -453,5 +457,97 @@ describe("Pass B — a row is never stranded", () => {
     phonepe.executeRedemption.mockRejectedValue(new Error("gateway down"));
 
     await expect(runAutopayNotify(makeEnv())).resolves.toBeUndefined();
+  });
+});
+
+describe("Pass B — the 45-day dunning ladder", () => {
+  // The business rule (owner, 2026-08-29): a failed renewal debit is pursued for
+  // 45 days on a spaced ladder — days 2, 5, 10, 20, 32, 45 after the original
+  // due date — not daily-until-5-failures. Each rung is a FRESH notify+order
+  // (PhonePe's 1-attempt+3-retries/48h cap applies INSIDE one order, per their
+  // notify/execute API reference), and each retry lands at 21:30 UTC = 03:00
+  // IST, inside NPCI's non-peak execution window (21:31–09:59 IST).
+
+  const failedOrder = () =>
+    phonepe.getOrderStatus.mockResolvedValue({
+      state: "FAILED",
+      expireAt: Date.now() + 24 * HOUR,
+    });
+
+  /** The ladder reschedule UPDATE, if the run issued one. */
+  const ladderUpdate = (executed: Executed[]) =>
+    updates(executed).find(
+      (u) => u.text.includes("retry_count") && u.text.includes("next_debit_at"),
+    );
+
+  it("schedules the first retry ~2 days out at 21:30 UTC — not tomorrow", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+    failedOrder();
+
+    await runAutopayNotify(makeEnv());
+
+    const u = ladderUpdate(executed);
+    expect(u, "a FAILED debit must reschedule itself up the ladder").toBeDefined();
+    expect(u?.values[0]).toBe(1); // retry_count
+    const next = new Date(u?.values[1] as string);
+    // Anchor (current_period_end, 3h ago) + 2 days, aligned FORWARD to the next
+    // 21:30 UTC — so strictly more than a day away, well under four.
+    expect(next.getTime()).toBeGreaterThan(Date.now() + 24 * HOUR);
+    expect(next.getTime()).toBeLessThan(Date.now() + 4 * 24 * HOUR);
+    expect(next.getUTCHours()).toBe(21);
+    expect(next.getUTCMinutes()).toBe(30);
+    // Rescheduled, never expired: the ladder has five more rungs.
+    expect(updates(executed).some((x) => x.text.includes("'expired'"))).toBe(false);
+  });
+
+  it("still schedules the final rung at retry_count 5 (the day-45 attempt)", async () => {
+    const { sql, executed } = makeSql([dueRow(32 * 24 * HOUR, "active", 25 * HOUR, 5)]);
+    db.getDb.mockReturnValue(sql);
+    failedOrder();
+
+    await runAutopayNotify(makeEnv());
+
+    const u = ladderUpdate(executed);
+    expect(u).toBeDefined();
+    expect(u?.values[0]).toBe(6);
+    expect(updates(executed).some((x) => x.text.includes("'expired'"))).toBe(false);
+  });
+
+  it("expires the subscription when the day-45 attempt also fails", async () => {
+    const { sql, executed } = makeSql([dueRow(45 * 24 * HOUR, "active", 25 * HOUR, 6)]);
+    db.getDb.mockReturnValue(sql);
+    failedOrder();
+
+    await runAutopayNotify(makeEnv());
+
+    expect(updates(executed).some((x) => x.text.includes("'expired'"))).toBe(true);
+    expect(ladderUpdate(executed)?.text ?? "").not.toContain("next_debit_at");
+  });
+
+  it("expires a row whose orders die unsettled past the 45-day wall, instead of minting order ∞", async () => {
+    // A live mandate whose orders forever sit NOTIFIED recycles a fresh order
+    // every ~2 days without ever touching retry_count — unbounded before the
+    // wall existed. 46 days past the period end, the dead order must expire the
+    // row, not recycle again.
+    const row = dueRow(46 * 24 * HOUR);
+    const { sql, executed } = makeSql([row]);
+    db.getDb.mockReturnValue(sql);
+
+    phonepe.getOrderStatus.mockResolvedValue({
+      state: "NOTIFIED",
+      expireAt: Date.now() - HOUR, // dead: PhonePe will never settle it
+    });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(updates(executed).some((x) => x.text.includes("'expired'"))).toBe(true);
+    // The recycle shape (clear-for-re-notify without a status change) must NOT run.
+    expect(
+      updates(executed).some(
+        (x) => x.text.includes("redemption_order_id = NULL") && !x.text.includes("'expired'"),
+      ),
+    ).toBe(false);
+    expect(phonepe.executeRedemption).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:arul/core/api/api_client.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -7,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 
 /// Records every `signInWith` call and lets the test settle them by hand, so
 /// "was a second picker opened?" is answerable as a plain call count.
@@ -357,6 +360,70 @@ void main() {
       ]) {
         expect(map(code), isA<AuthFailure>(), reason: '$code must be visible');
       }
+    });
+  });
+
+  // Pins the exchange-retry policy proven on device (2026-08-31 matrix): the
+  // one blackout loss was this POST timing out on an already-recovered link
+  // with the Google credential in hand — a lost exchange must never cost a
+  // second account picker when a retry can land it.
+  group('postWithNetworkRetry', () {
+    test(
+      'retries a connectivity failure and returns the retry result',
+      () async {
+        var calls = 0;
+        final out = await ApiAuthService.postWithNetworkRetry(() async {
+          calls++;
+          if (calls == 1) throw http.ClientException('Request timed out');
+          return {'ok': true};
+        }, backoff: Duration.zero);
+        expect(calls, 2);
+        expect(out['ok'], true);
+      },
+    );
+
+    test('never retries a server response, even a 5xx', () async {
+      var calls = 0;
+      await expectLater(
+        ApiAuthService.postWithNetworkRetry(() async {
+          calls++;
+          throw const ApiException(
+            code: 'server_error',
+            message: 'boom',
+            status: 500,
+          );
+        }, backoff: Duration.zero),
+        throwsA(isA<ApiException>()),
+      );
+      expect(calls, 1);
+    });
+
+    test('gives up after maxAttempts and rethrows the network error', () async {
+      var calls = 0;
+      await expectLater(
+        ApiAuthService.postWithNetworkRetry(() async {
+          calls++;
+          throw const SocketException('Failed host lookup');
+        }, backoff: Duration.zero),
+        throwsA(isA<SocketException>()),
+      );
+      expect(calls, 3);
+    });
+
+    test('stops retrying once the elapsed cap has passed', () async {
+      var calls = 0;
+      await expectLater(
+        ApiAuthService.postWithNetworkRetry(
+          () async {
+            calls++;
+            throw http.ClientException('timeout');
+          },
+          elapsedCap: Duration.zero,
+          backoff: Duration.zero,
+        ),
+        throwsA(isA<http.ClientException>()),
+      );
+      expect(calls, 1);
     });
   });
 }

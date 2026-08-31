@@ -250,6 +250,12 @@ void main() {
         'wallpaper_shared',
         'ringtone_set',
         'trial_started',
+        // TEMPORARY (2026-08-30 sign-in diagnosis): the two picker-outcome
+        // diagnostics ride along so the cancel/failure split can be read
+        // same-day by build. Remove both here and in analytics_provider.dart
+        // when the diagnosis is done.
+        'login_cancelled',
+        'login_failed',
       });
     });
 
@@ -269,7 +275,6 @@ void main() {
         'wallpaper_apply_attempt',
         'ringtone_preview',
         'ringtone_set_attempt',
-        'login_failed',
         'share_watermark_failed',
         'profile_name_updated',
         'support_email_opened',

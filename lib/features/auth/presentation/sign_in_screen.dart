@@ -67,6 +67,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   bool _signingIn = false;
 
+  /// Once any attempt ends without a session, the pill's subtitle flips to a
+  /// retry nudge. The cancel outcome stays TOAST-less (the user may genuinely
+  /// have closed the sheet, and the field data says half of "cancels" are
+  /// GMS-side aborts the user never chose — 2026-08-31 diagnosis), but a
+  /// silent bounce back to an unchanged screen read as "nothing happened":
+  /// the subtitle is the quiet middle ground. Never auto-relaunch on a
+  /// cancel — the Credential Manager troubleshooting guide forbids it
+  /// ("don't automatically retry the request").
+  bool _retryNudge = false;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +114,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       final missed = notifier.takePendingAutoFailure();
       if (missed != null && mounted) {
         showArulToast(context, missed.message, kind: ToastKind.error);
+        setState(() => _retryNudge = true);
       }
       return;
     }
@@ -116,10 +127,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         case AuthSuccess():
           context.go('/browse');
         case AuthCancelled():
-          break; // sheet dismissed — the pill remains as the retry affordance
+          // No toast — but not a silent bounce either: the pill's subtitle
+          // flips to the retry nudge (rebuilt by the finally below).
+          _retryNudge = true;
         case AuthFailure(:final message):
           // Localized-enough surface + retry (the pill), never a stuck spinner.
           showArulToast(context, message, kind: ToastKind.error);
+          _retryNudge = true;
       }
       // This screen just handled the result live — drop the recorded copy so
       // a later mount can't replay a failure the user already saw.
@@ -219,7 +233,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ),
                     _SignInPill(
                       title: 'Continue with Google',
-                      subtitle: 'Choose an account to get started',
+                      subtitle: _retryNudge
+                          ? "Didn't go through? Tap to try again"
+                          : 'Choose an account to get started',
                       onTap: _signingIn ? () {} : _onPillTap,
                       busy: _signingIn,
                     ),

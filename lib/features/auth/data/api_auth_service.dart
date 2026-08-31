@@ -7,7 +7,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/auth/google_sign_in_init.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
@@ -278,15 +280,97 @@ class ApiAuthService implements AuthService {
         'provider': 'google',
         'kind': kind.name,
         // Null-aware elements: dropped entirely when absent.
-        'error': ?error,
+        'error': ?_trimForAnalytics(error),
         'gis_code': ?gisCode,
+        'ms_since_authenticate': ?_msSinceAuthenticate,
       },
     );
     return AuthFailure(message: message, kind: kind);
   }
 
+  /// Wall-clock since the CURRENT `authenticate()` call started, or null when
+  /// the failure happened before it (config guard, unsupported device).
+  ///
+  /// This exists because `login_cancelled` is a MIXED bucket and cannot be read
+  /// as a UX metric without it: `google_sign_in_android`'s README states that
+  /// configuration errors (wrong signing SHA, wrong package name, wrong
+  /// serverClientId) make Credential Manager return `canceled` AFTER the user
+  /// has already picked an account, and "the plugin has no way to distinguish
+  /// this case from the user canceling sign-in". A real dismissal lands in a
+  /// couple of seconds; a post-selection failure lands materially later, so the
+  /// elapsed time is what splits the two populations.
+  int? get _msSinceAuthenticate => _authClock?.elapsedMilliseconds;
+
+  /// Started immediately before `authenticate()`; see [_msSinceAuthenticate].
+  Stopwatch? _authClock;
+
+  /// Properties for every `login_cancelled` emission, so all three call sites
+  /// carry the same shape.
+  ///
+  /// [description] is the Credential Manager message — the ONLY signal that
+  /// splits a real dismissal ("activity is cancelled by the user") from a
+  /// GMS-side abort reported as a cancel ("[16] …", "Unable to get sync
+  /// account" — the official troubleshooting guide documents both). Elapsed
+  /// time cannot split them: measured on device (2026-08-31), a deliberate
+  /// dismissal and a mid-flow failure both land 5–30s after the auto-launched
+  /// `authenticate()`, because the clock starts at launch, not at the sheet.
+  Map<String, Object?> _cancelProperties({String? description}) => {
+    'provider': 'google',
+    'ms_since_authenticate': ?_msSinceAuthenticate,
+    'description': ?_trimForAnalytics(description),
+  };
+
+  /// GA4 silently drops any parameter VALUE over 100 chars (the event
+  /// survives, the property vanishes), so every free-text property is cut to
+  /// fit both sinks — PostHog just gets the same first 100 chars.
+  static String? _trimForAnalytics(String? s) =>
+      s == null || s.length <= 100 ? s : s.substring(0, 100);
+
+  /// Runs [post], retrying connectivity-class failures ([isNetworkError])
+  /// until [maxAttempts] are spent or [elapsedCap] has passed since the first
+  /// attempt started. A server RESPONSE (any [ApiException], even a 5xx) is
+  /// never retried — the server spoke; retrying is the caller's decision.
+  ///
+  /// The two-knob shape matches the two failure modes measured on device
+  /// (2026-08-31 matrix, prod bits): fully OFFLINE fails INSTANTLY
+  /// (`Failed host lookup`), so the attempt budget is what matters — three
+  /// tries burn ~4.5s and then fail honestly; a mid-flow BLIP kills the
+  /// socket and surfaces as ApiClient's 12s timeout on a link that recovered
+  /// seconds earlier (matrix RUN101: a 5s cut lost the login with the
+  /// credential already in hand), so the elapsed cap is what matters — one
+  /// more 12s attempt fits, a third would not. Worst case 12 + 1.5 + 12 =
+  /// 25.5s, inside the stall guard's 30s continuous-foreground budget
+  /// (auth_providers.dart _guard, restarted on return from the sheet).
+  ///
+  /// Pure and static so tests pin the policy without a platform channel.
+  @visibleForTesting
+  static Future<Map<String, dynamic>> postWithNetworkRetry(
+    Future<Map<String, dynamic>> Function() post, {
+    int maxAttempts = 3,
+    Duration elapsedCap = const Duration(seconds: 15),
+    Duration backoff = const Duration(milliseconds: 1500),
+    void Function()? onRetry,
+  }) async {
+    final clock = Stopwatch()..start();
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        return await post();
+      } catch (e) {
+        if (!isNetworkError(e)) rethrow;
+        if (attempt >= maxAttempts || clock.elapsed >= elapsedCap) rethrow;
+        onRetry?.call();
+        await Future<void>.delayed(backoff);
+      }
+    }
+  }
+
   Future<AuthResult> _signInWithGoogle() async {
     final attempt = ++_attemptSeq;
+    // Clear first: a failure BEFORE authenticate() (unsupported device, config
+    // guard) must not report the PREVIOUS attempt's elapsed time.
+    _authClock = null;
     try {
       // EXACTLY ONE account picker, always.
       //
@@ -298,7 +382,12 @@ class ApiAuthService implements AuthService {
       // "warm up" Credential Manager; the cold start it saves is ~230ms and it
       // costs a second visible sheet.
       //
-      // v7: use the singleton; initialize() was already called in main().
+      // v7: use the singleton. `initialize()` is STARTED in main() but no
+      // longer awaited there, so the contract (initialize → authenticate) is
+      // honoured by awaiting it here instead — off the cold-start path, on the
+      // one path that actually needs it. Never throws (see GoogleSignInInit).
+      await GoogleSignInInit.ready;
+
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
         return _googleFailure(
           AuthFailureKind.noPlayServices,
@@ -307,6 +396,11 @@ class ApiAuthService implements AuthService {
       }
 
       BootTrace.mark('signIn: authenticate() called');
+      // Left RUNNING deliberately: the property means "elapsed since
+      // authenticate() started", so a failure later in the flow (token
+      // exchange, POST /auth/login) reports its own real elapsed time rather
+      // than freezing at the picker's duration.
+      _authClock = Stopwatch()..start();
       final account = await GoogleSignIn.instance.authenticate();
       BootTrace.mark('signIn: authenticate() returned');
 
@@ -329,16 +423,32 @@ class ApiAuthService implements AuthService {
       // on later logins is harmless. Cleared after a successful exchange below.
       final referralCode = _referral?.pendingCode;
 
-      // Exchange Google ID token for our own Worker-issued JWT pair.
+      // Exchange Google ID token for our own Worker-issued JWT pair,
+      // retrying connectivity-class failures (see postWithNetworkRetry for
+      // the measured failure modes and the budget math). Losing this POST
+      // with the credential already in hand was the one reproducible loss in
+      // the 2026-08-31 device matrix — GMS survives blackouts this request
+      // did not, and without the retry the user is sent back through a
+      // SECOND account picker for a failure that was never Google's. Safe to
+      // retry: the Worker login is an idempotent upsert keyed on google_sub,
+      // and a pair minted by a lost attempt is never stored (ages out
+      // server-side).
       BootTrace.mark('signIn: POST /auth/login start');
-      final data = await _api.post(
-        '/auth/login',
-        body: {
-          'idToken': idToken,
-          // Null-aware elements: dropped entirely when absent.
-          'referralCode': ?referralCode,
+      var exchangeRetried = false;
+      final data = await postWithNetworkRetry(
+        () => _api.post(
+          '/auth/login',
+          body: {
+            'idToken': idToken,
+            // Null-aware elements: dropped entirely when absent.
+            'referralCode': ?referralCode,
+          },
+          requiresAuth: false,
+        ),
+        onRetry: () {
+          exchangeRetried = true;
+          BootTrace.mark('signIn: POST /auth/login retry after network error');
         },
-        requiresAuth: false,
       );
       BootTrace.mark('signIn: POST /auth/login done');
 
@@ -414,7 +524,12 @@ class ApiAuthService implements AuthService {
       _crash.setUserId(userId);
       _analytics.track(
         ArulEvents.loginSuccess,
-        properties: {'provider': 'google'},
+        properties: {
+          'provider': 'google',
+          // Present only when the exchange was saved by the network retry —
+          // the field readout for whether the retry earns its keep.
+          if (exchangeRetried) 'exchange_retried': true,
+        },
       );
 
       return AuthSuccess(userId: userId);
@@ -430,15 +545,20 @@ class ApiAuthService implements AuthService {
       final result = mapGoogleSignInException(e);
       switch (result) {
         case AuthCancelled():
-          // The one genuinely-quiet outcome — the user closed the sheet.
-          // Tracked (GA4-only; PostHog allowlist unaffected) so cancels are
-          // countable against login_success instead of invisible.
+          // No error toast (the user may genuinely have closed the sheet) but
+          // tracked WITH the plugin's description — see _cancelProperties for
+          // why the message text is the dismissal-vs-GMS-failure split.
           _analytics.track(
             'login_cancelled',
-            properties: {'provider': 'google'},
+            properties: _cancelProperties(description: e.description),
           );
         case AuthFailure(:final kind, :final message):
-          _googleFailure(kind, message, gisCode: e.code.name);
+          _googleFailure(
+            kind,
+            message,
+            gisCode: e.code.name,
+            error: e.description,
+          );
         case AuthSuccess():
           break; // unreachable: the mapper never returns success
       }
@@ -454,9 +574,23 @@ class ApiAuthService implements AuthService {
     } catch (e) {
       // Last-resort fallback for non-GIS, non-platform exceptions only —
       // GoogleSignInException above owns the plugin's outcomes now.
+      if (isNetworkError(e)) {
+        // Both exchange attempts (see _postLoginWithRetry) died on the wire.
+        // Reproduced on device 2026-08-31: the Google flow SURVIVED a 12s
+        // uplink blackout and delivered a credential — it was this POST that
+        // gave up. Say connection, not a generic "failed".
+        return _googleFailure(
+          AuthFailureKind.networkError,
+          "Couldn't reach the server. Check your internet connection and try again.",
+          error: e.toString(),
+        );
+      }
       final msg = e.toString().toLowerCase();
       if (msg.contains('cancel') || msg.contains('user_cancelled')) {
-        _analytics.track('login_cancelled', properties: {'provider': 'google'});
+        _analytics.track(
+          'login_cancelled',
+          properties: _cancelProperties(description: e.toString()),
+        );
         return const AuthCancelled();
       }
       debugPrint('[ApiAuthService] unexpected error: $e');
@@ -495,8 +629,12 @@ class ApiAuthService implements AuthService {
       default:
         // clientConfigurationError, uiUnavailable, userMismatch, unknownError
         // and any code a future plugin version adds: visible + retryable.
+        // The connection hint is earned by data, not guesswork: this bucket is
+        // network-dominated in the field (unknownError p50 ~4s/p90 ~39s), and
+        // a dead uplink mid-flow reproduces exactly here (device 2026-08-31).
         return const AuthFailure(
-          message: 'Sign-in failed. Please try again.',
+          message:
+              "Sign-in didn't complete. Check your internet connection and try again.",
           kind: AuthFailureKind.unknown,
         );
     }
@@ -513,7 +651,10 @@ class ApiAuthService implements AuthService {
     final message = e.message?.toLowerCase() ?? '';
 
     if (code.contains('cancel') || message.contains('cancel')) {
-      _analytics.track('login_cancelled', properties: {'provider': 'google'});
+      _analytics.track(
+        'login_cancelled',
+        properties: _cancelProperties(description: e.message),
+      );
       return const AuthFailure(
         message: 'Sign-in was cancelled.',
         kind: AuthFailureKind.unknown,

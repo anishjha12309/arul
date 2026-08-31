@@ -126,7 +126,9 @@ default applies). Only the severity is wrong (device, 2026-08-14).
   the redeem response) decides whether money moved.
 - **`phonepe_subscription_id` may stay NULL** when the webhook is lost and only status-reconcile runs.
   Harmless: the cron addresses PhonePe by *our* `merchant_subscription_id`.
-- Dunning: retries 1–4 stay alive, the subscription **expires at retry 5** and is then ignored.
+- Dunning: a FAILED debit climbs a **45-day ladder** — retries at days 2, 5, 10, 20, 32, 45 after
+  the original due date, each a fresh notify+order at 21:30 UTC (NPCI non-peak); the subscription
+  expires when the day-45 attempt also fails. Details: [autopay-debits.md](autopay-debits.md).
 
 The billing lifecycle has been proven end-to-end against UAT + a local stub — re-prove after a
 change with `.claude/skills/verify-payments/` (its reference.md holds the known-good baseline).

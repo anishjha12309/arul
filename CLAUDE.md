@@ -1,6 +1,6 @@
 # CLAUDE.md — Arul
 
-> Read first, every session. Behaviour contracts: [docs/edge-cases.md](docs/edge-cases.md) · Backend: [docs/architecture.md](docs/architecture.md) · Media: [docs/media-conventions.md](docs/media-conventions.md) · Data: [docs/data-model.md](docs/data-model.md) · Reminders: [docs/notifications.md](docs/notifications.md) · Ad/share links: [docs/deep-links.md](docs/deep-links.md) · Speed measurement traps: [docs/perf-measurement.md](docs/perf-measurement.md) · Open defects: [docs/known-issues.md](docs/known-issues.md).
+> Read first, every session. Behaviour contracts: [docs/edge-cases.md](docs/edge-cases.md) · Backend: [docs/architecture.md](docs/architecture.md) · Media: [docs/media-conventions.md](docs/media-conventions.md) · Data: [docs/data-model.md](docs/data-model.md) · Reminders: [docs/notifications.md](docs/notifications.md) · Ad/share links: [docs/deep-links.md](docs/deep-links.md) · Speed measurement traps: [docs/perf-measurement.md](docs/perf-measurement.md) · Cold-start surface: [docs/launch-surface.md](docs/launch-surface.md) · Open defects: [docs/known-issues.md](docs/known-issues.md).
 
 ## 0. Sibling app — Pakiza (`c:\Anish\Pakiza`)
 Peers, not parent and child. Most shared code came from Pakiza, but fixes flow BOTH ways. Read that repo when a shared behaviour is unclear; it encodes months of on-device fixes (decoder limits, PhonePe endpoint quirks, sweep safety).

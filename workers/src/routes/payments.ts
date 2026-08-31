@@ -841,15 +841,16 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       event === "subscription.redemption.order.failed" ||
       event === "subscription.redemption.transaction.failed"
     ) {
-      // Debit failed — STANDARD retry strategy means PhonePe auto-retries up to 48h.
-      // Increment retry_count. Terminal failure is handled by the cron after expiry window.
-      await sql`
-        UPDATE subscriptions
-        SET retry_count = retry_count + 1,
-            updated_at  = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-      `;
-      console.log(`[payments/webhook] Redemption failed for sub ${merchantSubId}, event: ${event}`);
+      // Debit failed — acknowledge only, never touch the row. retry_count is
+      // the dunning ladder's index (cron/autopay-notify.ts): the cron's
+      // reconcile applies the FAILED transition exactly once per order and
+      // schedules the next rung off it. An increment here would advance the
+      // index WITHOUT scheduling anything — a skipped rung and a shortened
+      // 45-day window — and it double-counted anyway (webhook +1, then the
+      // cron's reconcile +1 again for the same order).
+      console.log(
+        `[payments/webhook] Redemption failed for sub ${merchantSubId}, event: ${event} — cron owns dunning`,
+      );
 
     } else if (
       event === "subscription.revoked" ||

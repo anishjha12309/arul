@@ -147,19 +147,18 @@
                  together to account for all variations of their combined
                  attributes" (developer.android.com/training/app-links/deep-linking).
 
-                 Both paths lived in ONE filter until build 53 and routed fine on
-                 the phone — the merge is harmless here, since /w/ and /r/ share a
-                 scheme and host so the cross product adds nothing. But a merged
-                 filter is ONE declaration to anything that enumerates the app's
-                 links: Google Ads' Deep link validator listed only
-                 `https://arul.hsrutility.com/w/.*` and answered "This deep link
-                 wasn't found in the app" for every /r/ URL, blocking a ringtone
-                 campaign while the same link opened the app instantly. Writing
-                 each <data> out in full (build 52) did NOT fix that — the
-                 platform still flattens one filter into one entry (dumpsys showed
-                 the host twice, both paths, one filter). Separate filters is the
-                 documented shape. Add a new path as a new FILTER, never as a
-                 second <data> here.
+                 Both paths lived in ONE filter until build 53 and routed fine —
+                 the merge is harmless here, since /w/ and /r/ share a scheme and
+                 host so the cross product adds nothing. This split is the
+                 documented shape, not a bug fix: do NOT cite it as the reason
+                 Google Ads' Deep link validator once answered "This deep link
+                 wasn't found in the app" for /r/ URLs. That was a STALE SCAN on
+                 Google's side — its list was missing every link added on
+                 2026-08-26 (`/r/` and the fb scheme both), and when it finally
+                 re-read the app BOTH reappeared together, on a build whose shape
+                 no longer mattered. Play Console had read /r/ correctly out of
+                 the merged filter all along. Add a new path as a new FILTER
+                 anyway; it costs nothing and matches the docs.
 
                  autoVerify on both is deliberate and free: the system verifies
                  hosts across ALL filters carrying VIEW + BROWSABLE + DEFAULT +

@@ -11,7 +11,6 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_driver/driver_extension.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +20,7 @@ import 'core/analytics/analytics_events.dart';
 import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
+import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
@@ -317,17 +317,17 @@ Future<void> _startApp() async {
   // matters for define-less / test runs, where sign-in degrades to a graceful
   // failure instead of a crash-loop against Google's servers with a bogus
   // audience.
+  // NOT awaited: the wait is MOVED, not removed. `GoogleSignInInit.ready` is
+  // awaited in the sign-in path right before `supportsAuthenticate()`, so the
+  // v7 contract (initialize → authenticate) still holds — but an
+  // already-signed-in launch, which never calls `authenticate()`, no longer
+  // pays Credential Manager / Play Services init before the first frame.
+  // `google_sign_in`'s own example does not await it either. Failure is
+  // swallowed inside the holder (see its doc comment) so the unawaited future
+  // can never reach the zone handler as a FATAL.
   if (AppConfig.googleAuthConfigured) {
-    BootTrace.mark('GoogleSignIn.initialize start');
-    try {
-      await GoogleSignIn.instance.initialize(
-        serverClientId: AppConfig.googleWebClientId,
-      );
-    } catch (e) {
-      // Non-fatal: authenticate() will surface a localized failure + retry.
-      debugPrint('[main] GoogleSignIn.initialize failed: $e');
-    }
-    BootTrace.mark('GoogleSignIn.initialize done');
+    BootTrace.mark('GoogleSignIn.initialize started (not awaited)');
+    GoogleSignInInit.start(serverClientId: AppConfig.googleWebClientId);
   }
 
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED

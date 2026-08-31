@@ -83,6 +83,10 @@ createServer((req, res) => {
         merchantOrderId: moid,
         state: m,
         amount: 19900,
+        // orderexp:PAST -> a dead order (past its own expireAt) so the cron's
+        // recycle / 45-day-wall branch is drivable; default mirrors PhonePe's
+        // 48h order lifetime.
+        expireAt: modes().orderexp === "PAST" ? Date.now() - 3_600_000 : Date.now() + 172_800_000,
         paymentFlow: { subscriptionId: "STUB_SUB_1" },
       };
     } else if (url.includes("/subscriptions/v2/") && url.includes("/cancel")) {

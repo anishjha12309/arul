@@ -24,11 +24,11 @@ from inside this repo without the recipe under each.
 
 The Worker answers **200 with a bounce page** whose `location.replace()` sends the browser to Play
 with `referrer=ref=<code>&w=<uuid>&lang=hi` (or `r=<uuid>`). **Never a 302 nor a `<meta refresh>`:**
-Google Ads fetches an App-campaign deep link and rejects one that redirects ("All URLs must take
-users directly to the app"), so while these 302'd every link was refused there though the app was
-verified and opening them (2026-08-29); a JS navigation is real, so Play still gets the referrer. A
-preview crawler (WhatsApp, on every share) renders that page, not Play's card — hence `og:` tags and
-an `og:image` at `brand/arul-icon.png`, a prefix no sweep manages. Android replays it to
+"Google Ads doesn't support redirects or third-party deep linking solutions, which use redirects"
+(support.google.com/google-ads/answer/16416275) — a redirect lands users on an intermediate domain
+instead of the app. A JS navigation is real, so Play still gets the referrer. A preview crawler
+(WhatsApp, on every share) renders that page, not Play's card — hence `og:` tags and an `og:image`
+at `brand/arul-icon.png`, a prefix no sweep manages. Android replays it to
 `captureOnce` on first launch (Play keeps it 90 days, once per install — the `_kChecked` pref).
 Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
 `adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`
