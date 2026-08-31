@@ -27,6 +27,7 @@ class ArulPaywallView extends StatelessWidget {
     required this.monthlyPrice,
     required this.purchaseBusy,
     required this.showSocialProof,
+    this.onboardingVideo,
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
     required this.onBack,
@@ -45,6 +46,17 @@ class ArulPaywallView extends StatelessWidget {
 
   /// `feature_flags.show_social_proof`.
   final bool showSocialProof;
+
+  /// The localised onboarding clip, resolved by [PremiumScreen] from the app's
+  /// live locale — which IS the language the ad link carried.
+  ///
+  /// Non-null ONLY on the trial variant (owner's call): this screen also sells
+  /// ₹199/month to users whose trial is spent, and the clip's whole script is
+  /// "start your 1-day trial". When it is present it TAKES THE PLACE of the
+  /// brand lockup rather than being added above it — the lockup's Cinzel cannot
+  /// render Indic scripts anyway, and stacking both would push the offer below
+  /// the fold on most phones.
+  final Widget? onboardingVideo;
 
   /// Null when no mandate-capable UPI app is installed — the row disappears
   /// and the CTA falls through to the hosted-page flow.
@@ -65,7 +77,10 @@ class ArulPaywallView extends StatelessWidget {
           // Pinned, so the way out stays reachable however far the sell
           // scrolls.
           _NavRow(onBack: onBack),
-          _HeaderBlock(showSocialProof: showSocialProof),
+          _HeaderBlock(
+            showSocialProof: showSocialProof,
+            onboardingVideo: onboardingVideo,
+          ),
           // The handoff draws one ~745pt page, which is SHORTER than the phone
           // it lands on. Rather than let that slack pool into a hole above the
           // footer, the offer block is centred in what the two pinned ends
@@ -217,9 +232,12 @@ class _NavRow extends StatelessWidget {
 
 /// Social-proof pill + brand lockup, closed by the gold hairline.
 class _HeaderBlock extends StatelessWidget {
-  const _HeaderBlock({required this.showSocialProof});
+  const _HeaderBlock({required this.showSocialProof, this.onboardingVideo});
 
   final bool showSocialProof;
+
+  /// When present, stands in for [_BrandLockup] — see [ArulPaywallView].
+  final Widget? onboardingVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -233,15 +251,20 @@ class _HeaderBlock extends StatelessWidget {
             const SizedBox(height: ArulTokens.paywallTempleDividerTopGap),
             const PaywallTempleDivider(),
             const SizedBox(height: ArulTokens.paywallTempleDividerBottomGap),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                0,
-                20,
-                ArulTokens.paywallBrandBottomPadding,
+            // The clip replaces the lockup; it carries its own gutters and
+            // bottom gap so the hairline below stays where the handoff put it.
+            if (onboardingVideo case final video?)
+              video
+            else
+              const Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  0,
+                  20,
+                  ArulTokens.paywallBrandBottomPadding,
+                ),
+                child: _BrandLockup(),
               ),
-              child: _BrandLockup(),
-            ),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: ArulTokens.paywallHairlineInset,

@@ -5,6 +5,7 @@ import android.media.MediaCodecList
 import android.net.Uri
 import android.util.Log
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -105,7 +106,10 @@ class FeedVideoPlugin(
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
-                "create" -> result.success(create())
+                // `audio` is opt-in and defaults to false, so every existing
+                // caller (the feed's previews, the auth background) keeps the
+                // muted / no-focus player it has always got.
+                "create" -> result.success(create(call.argument<Boolean>("audio") ?: false))
                 "open" -> {
                     val id = call.argument<Int>("playerId") ?: return result.success(null)
                     val url = call.argument<String>("url") ?: return result.success(null)
@@ -126,6 +130,12 @@ class FeedVideoPlugin(
                 "stop" -> {
                     val id = call.argument<Int>("playerId")
                     if (id != null) players[id]?.stop()
+                    result.success(null)
+                }
+                "setVolume" -> {
+                    val id = call.argument<Int>("playerId")
+                    val volume = call.argument<Double>("volume")
+                    if (id != null && volume != null) players[id]?.setVolume(volume.toFloat())
                     result.success(null)
                 }
                 "paintedOpenId" -> {
@@ -163,10 +173,10 @@ class FeedVideoPlugin(
      * returns `{playerId, textureId}`. The producer + player survive every clip
      * swap; only [disposePlayer] tears them down.
      */
-    private fun create(): Map<String, Any> {
+    private fun create(audio: Boolean): Map<String, Any> {
         logDecoderCapsOnce()
         val playerId = nextPlayerId++
-        val pooled = PooledSurfacePlayer(playerId)
+        val pooled = PooledSurfacePlayer(playerId, audio)
         players[playerId] = pooled
         return mapOf("playerId" to playerId, "textureId" to pooled.textureId)
     }
@@ -245,8 +255,16 @@ class FeedVideoPlugin(
      * re-attached ([onSurfaceAvailable]) — this is what makes the texture pool
      * Impeller-compatible and survive backgrounding without recreating players.
      */
-    private inner class PooledSurfacePlayer(private val playerId: Int) :
-        TextureRegistry.SurfaceProducer.Callback {
+    private inner class PooledSurfacePlayer(
+        private val playerId: Int,
+        /**
+         * Audible player. FALSE for everything the feed and the auth background
+         * do — a preview must never duck the user's music. TRUE only for the
+         * paywall's onboarding clip, which is a voiceover: silent, it carries no
+         * message at all, so it is the one surface that earns audio focus.
+         */
+        private val withAudio: Boolean = false,
+    ) : TextureRegistry.SurfaceProducer.Callback {
 
         private val producer: TextureRegistry.SurfaceProducer =
             textureRegistry.createSurfaceProducer()
@@ -290,11 +308,24 @@ class FeedVideoPlugin(
             player = ExoPlayer.Builder(context, renderersFactory)
                 .setLoadControl(loadControl)
                 // Muted preview: never take audio focus (would duck other apps'
-                // audio and pause the user's music while just browsing).
-                .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ false)
+                // audio and pause the user's music while just browsing). An
+                // AUDIBLE player is the opposite case — it asks for focus like
+                // any media app, so a call or another player pauses it and the
+                // user's music is properly stopped rather than talked over.
+                .setAudioAttributes(
+                    if (withAudio) {
+                        AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build()
+                    } else {
+                        AudioAttributes.DEFAULT
+                    },
+                    /* handleAudioFocus = */ withAudio,
+                )
                 .build()
                 .apply {
-                    volume = 0f
+                    volume = if (withAudio) 1f else 0f
                     repeatMode = Player.REPEAT_MODE_OFF
                     setVideoSurface(producer.surface)
                     addListener(playerListener())
@@ -304,6 +335,12 @@ class FeedVideoPlugin(
 
         fun open(url: String, playWhenReady: Boolean, looping: Boolean): Long {
             val id = ++openId
+            // AUDIBLE players only — i.e. the paywall's onboarding clip, never
+            // the feed. Which language actually reached the user is otherwise
+            // unobservable from outside the app: the cuts are the same footage,
+            // so a screenshot cannot tell them apart and only this line can
+            // confirm the deep link's `lang` survived all the way to the media.
+            if (withAudio) Log.i(TAG, "audible open: $url")
             try {
                 player.repeatMode =
                     if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
@@ -345,6 +382,19 @@ class FeedVideoPlugin(
                 player.playWhenReady = false
             } catch (e: Exception) {
                 Log.w(TAG, "pause failed for $playerId", e)
+            }
+        }
+
+        /**
+         * Runtime mute / unmute for an audible player. Focus was decided at
+         * construction: a player built muted never asks for it, so setting a
+         * volume on one changes nothing the user can hear.
+         */
+        fun setVolume(volume: Float) {
+            try {
+                player.volume = volume.coerceIn(0f, 1f)
+            } catch (e: Exception) {
+                Log.w(TAG, "setVolume failed for $playerId", e)
             }
         }
 
@@ -405,6 +455,17 @@ class FeedVideoPlugin(
                 // that belongs to a since-swapped media.
                 lastPaintedOpenId = openId
                 emit(playerId, "firstFrame", mapOf("openId" to openId))
+            }
+
+            /**
+             * Only ever reached by a NON-looping open — a looping player
+             * re-enters BUFFERING/READY instead. Tagged with openId like the
+             * rest so a swap cannot deliver a stale "ended".
+             */
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                    emit(playerId, "ended", mapOf("openId" to openId))
+                }
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {

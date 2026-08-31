@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+56
+version: 1.0.0+58
 
 environment:
   sdk: ^3.12.0
@@ -126,6 +126,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    # ONE onboarding shutter frame for every language — the cuts are the same
+    # footage with re-voiced audio (~41 dB PSNR apart at frame 0), so five
+    # copies would have been 38 KB of the same picture. 512x288 LOSSY WebP,
+    # 9.6 KB: lossy, not lossless like the deity art, because this is a
+    # photograph and lossless comes out ~11x bigger for no visible gain.
+    # Bundled because the trial screen must paint the card instantly; the MP4
+    # itself is NOT bundled (Play cannot language-split flutter_assets, so all
+    # six cuts would ship to every install and one would ever play).
+    - assets/images/onboarding/
     - assets/premium/
     # Ringtone row art: one transparent gold figure per deity, composited over
     # the hashed jewel-tone ground the app still draws. Bundled, not streamed —

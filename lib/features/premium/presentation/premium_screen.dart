@@ -10,6 +10,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
@@ -21,6 +22,7 @@ import '../domain/entitlement.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
 import 'member_view.dart';
+import 'onboarding_video_card.dart';
 import 'paywall_view.dart';
 import 'resubscribe_view.dart';
 
@@ -414,11 +416,33 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             orElse: () => upiApps.first,
           );
 
+    // The onboarding clip is for the TRIAL SELL ONLY (owner's call): its script
+    // ends "press the button below to start your 1-day trial", which is a lie
+    // on the ₹199 variant a spent-trial user sees.
+    //
+    // `localeProvider` is WATCHED, not read: the link's language is applied by
+    // DeepLinkLocaleSync through LocaleNotifier, and the deferred deliveries
+    // (Play referrer, GA4F, Meta) can land seconds after launch — after a fast
+    // user is already on this screen. Watching re-resolves the source and the
+    // card swaps its media in place.
+    final locale = ref.watch(localeProvider);
+    final onboarding = trialEligible
+        ? resolveOnboardingVideo(config, locale.languageCode)
+        : null;
+
     return ArulPaywallView(
       trialEligible: trialEligible,
       monthlyPrice: monthlyPrice,
       purchaseBusy: purchaseBusy,
       showSocialProof: _showSocialProof(config),
+      onboardingVideo: onboarding == null
+          ? null
+          // Keyed by URL so a language change rebuilds into the SAME State
+          // (didUpdateWidget swaps the media) rather than churning the decoder.
+          : ArulOnboardingVideoCard(
+              key: const ValueKey('onboarding-video'),
+              source: onboarding,
+            ),
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
       onBack: () {

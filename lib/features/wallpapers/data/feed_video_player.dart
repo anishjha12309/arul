@@ -70,12 +70,25 @@ class FeedVideoPlayerPool {
   /// Creates a native ExoPlayer + its Flutter texture and returns a handle. The
   /// underlying player/surface live until [FeedVideoPlayer.dispose]. Returns
   /// null if the platform side is unavailable (e.g. headless widget test).
-  Future<FeedVideoPlayer?> create() async {
+  /// [audio] opts the native player into real [AudioAttributes] + audio focus
+  /// and an initial volume of 1. Everything in the feed and the auth background
+  /// leaves it false — a preview that ducked the user's music while they were
+  /// only browsing would be a bug. The paywall's onboarding clip is the one
+  /// caller that passes true, because it is a voiceover.
+  Future<FeedVideoPlayer?> create({bool audio = false}) async {
     if (_disposed) return null;
-    final res = await _hub.invokeCreate();
+    final res = await _hub.invokeCreate(audio: audio);
     if (res == null) return null;
     final playerId = (res['playerId'] as num).toInt();
     final textureId = (res['textureId'] as num).toInt();
+    // The pool can be disposed WHILE this create is in flight — a back press
+    // during the paywall's first frame is exactly that. The native player now
+    // exists, so returning it (or dropping it) would strand a decoder holding
+    // audio focus that nothing owns any more. Release it here instead.
+    if (_disposed) {
+      await _hub.invokeMethod('dispose', {'playerId': playerId});
+      return null;
+    }
     final handle = FeedVideoPlayer._(_hub, playerId, textureId);
     // Register on the shared hub (routes tagged events) and record local
     // ownership (so this pool's dispose only frees its own players).
@@ -89,6 +102,25 @@ class FeedVideoPlayerPool {
   /// players owned by another pool sharing the hub.
   Future<void> disposeAll() async {
     if (_disposed) return;
+    await _releaseOwned();
+  }
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    // NOT disposeAll(): `_disposed` is now true and that method's own guard
+    // would return before releasing anything, so `dispose()` used to free NO
+    // native player at all. Silent for every muted caller — the decoder simply
+    // ran on — and audible the moment the paywall's onboarding clip became the
+    // first player with sound: leaving /premium left the voiceover playing over
+    // whatever screen came next (device 2026-08-31).
+    await _releaseOwned();
+  }
+
+  /// Releases every native player THIS pool created. Callable in either state,
+  /// which is the whole point — the two public entry points differ only in
+  /// whether the pool stays usable afterwards.
+  Future<void> _releaseOwned() async {
     final own = _own.toList();
     _own.clear();
     for (final h in own) {
@@ -98,12 +130,6 @@ class FeedVideoPlayerPool {
     for (final h in own) {
       await _hub.invokeMethod('dispose', {'playerId': h.playerId});
     }
-  }
-
-  Future<void> dispose() async {
-    if (_disposed) return;
-    _disposed = true;
-    await disposeAll();
   }
 }
 
@@ -153,9 +179,11 @@ class _FeedVideoChannelHub {
 
   void unregister(int playerId) => _byId.remove(playerId);
 
-  Future<Map<String, dynamic>?> invokeCreate() async {
+  Future<Map<String, dynamic>?> invokeCreate({bool audio = false}) async {
     try {
-      return await _method.invokeMapMethod<String, dynamic>('create');
+      return await _method.invokeMapMethod<String, dynamic>('create', {
+        'audio': audio,
+      });
     } catch (_) {
       // No platform implementation (tests / unsupported host) — caller falls
       // back to poster-only.
@@ -238,6 +266,12 @@ class FeedVideoPlayer {
   /// retry / decoder-budget adaptation; unset (sign-in background) the error
   /// just suppresses the force-reveal below.
   void Function(String codeName)? onError;
+
+  /// Called when the CURRENT open played to its end. Only a non-looping open
+  /// can reach it — a looping player re-enters buffering instead. Unset for
+  /// every looping caller (the feed, the auth background); the paywall's
+  /// onboarding clip uses it to report that the pitch was watched through.
+  void Function()? onEnded;
 
   /// Called with the decoder name + software flag when the native side reports
   /// which video decoder the current open actually initialized (Media3
@@ -325,6 +359,12 @@ class FeedVideoPlayer {
 
   Future<void> pause() => _hub.invokeMethod('pause', {'playerId': playerId});
 
+  /// Runtime mute / unmute, 0..1. Only meaningful on a player created with
+  /// `audio: true` — a muted-by-construction player never took audio focus, so
+  /// raising its volume changes nothing the user can hear.
+  Future<void> setVolume(double volume) =>
+      _hub.invokeMethod('setVolume', {'playerId': playerId, 'volume': volume});
+
   /// Stops playback, releasing the codec while KEEPING the native player and
   /// its surface (Media3 STATE_IDLE holds "only limited resources"; a later
   /// [open] re-prepares on the same surface). Used to hand a scarce decoder to
@@ -367,6 +407,12 @@ class FeedVideoPlayer {
           // design — triage this on profile, not on a Play install.
           debugPrint('FeedVideo: first frame revealed player $playerId');
         }
+      case 'ended':
+        // Non-looping opens only (a looping player never reaches STATE_ENDED).
+        // Staleness-matched like firstFrame so a swap cannot deliver the
+        // previous clip's ending.
+        final openId = (event['openId'] as num?)?.toInt();
+        if (openId == null || openId >= _currentOpenId) onEnded?.call();
       case 'videoSize':
         final w = (event['width'] as num?)?.toDouble();
         final h = (event['height'] as num?)?.toDouble();
