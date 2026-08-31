@@ -4,39 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
-import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
-import '../../../data/models/app_config_model.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../ringtones/providers/ringtone_preview_provider.dart';
 import '../../wallpapers/data/feed_video_player.dart';
-
-/// A resolved onboarding clip: which language won and where its bytes are.
-@immutable
-class OnboardingVideoSource {
-  const OnboardingVideoSource({required this.lang, required this.url});
-
-  /// The language actually being shown — NOT necessarily the one asked for.
-  /// A link for a language with no cut yet (`hi`, until its dub lands) resolves
-  /// to `en`, and analytics reports what was really played.
-  final String lang;
-  final String url;
-
-  @override
-  bool operator ==(Object other) =>
-      other is OnboardingVideoSource && other.url == url;
-
-  @override
-  int get hashCode => url.hashCode;
-}
-
-/// Which cuts exist on the CDN when `app_config` has nothing to say.
-///
-/// The remote list is authoritative; this is only the offline / first-launch
-/// answer. `hi` is deliberately absent — the app ships six locales but only
-/// five cuts have been produced, and a Hindi link must fall back to English
-/// rather than request a key that 404s.
-const _defaultLangs = <String>['en', 'ta', 'te', 'kn', 'ml'];
+import '../domain/onboarding_video.dart';
 
 /// ONE bundled shutter frame for every language.
 ///
@@ -48,45 +19,6 @@ const _defaultLangs = <String>['en', 'ta', 'te', 'kn', 'ml'];
 /// reveals, which is the entire life of this image.)
 const _poster = 'assets/images/onboarding/poster.webp';
 
-/// Resolves the clip for [languageCode], or null when onboarding video is off.
-///
-/// Reads `feature_flags.onboarding_video` so the whole feature — the kill
-/// switch, the cache-busting version, and the set of languages that exist —
-/// moves without an app release. Shipping the Hindi dub is then an upload plus
-/// a CMS edit, which is the entire reason the MP4s are not bundled.
-OnboardingVideoSource? resolveOnboardingVideo(
-  AppConfigModel? config,
-  String languageCode,
-) {
-  final flag = config?.featureFlags['onboarding_video'];
-  final map = flag is Map ? flag : const {};
-
-  // Absent config must not gate the feature off: a cold start reaches the
-  // paywall before /config has landed on a slow connection, and a blank screen
-  // where the brand block used to be would be worse than either outcome.
-  if (map['enabled'] == false) return null;
-  if (AppConfig.cdnBaseUrl.isEmpty) return null;
-
-  final langs = switch (map['langs']) {
-    final List<dynamic> l when l.isNotEmpty => l.whereType<String>().toList(),
-    _ => _defaultLangs,
-  };
-  // The ladder: the language the link asked for, then English, then nothing at
-  // all — the caller puts the brand lockup back. Never a broken box.
-  final lang = langs.contains(languageCode)
-      ? languageCode
-      : (langs.contains('en') ? 'en' : null);
-  if (lang == null) return null;
-
-  final version = map['version'];
-  // `?v=` rather than a purge — the same cache discipline the catalog uses.
-  final query = version == null ? '' : '?v=$version';
-  return OnboardingVideoSource(
-    lang: lang,
-    url: '${AppConfig.cdnBaseUrl}/onboarding/$lang.mp4$query',
-  );
-}
-
 /// The onboarding clip on the trial screen — and ONLY there.
 ///
 /// It takes the place of the paywall's PREMIUM / ARUL brand lockup, which is
@@ -94,18 +26,26 @@ OnboardingVideoSource? resolveOnboardingVideo(
 /// or Malayalam at all. The screen is English by decision, so this card is the
 /// only thing on it that can speak the language the ad was tapped in.
 ///
-/// Plays WITH SOUND (owner's call): it is a voiceover pitch, and silent it
-/// carries no message. That makes it the one player in the app created with
-/// `audio: true` — everything in the feed stays muted and focus-free. A mute
-/// control is always on screen, and any ringtone preview is stopped first so
-/// two audio sources can never overlap.
+/// Plays WITH SOUND and on a LOOP (owner's calls): it is a voiceover pitch, and
+/// silent it carries no message. That makes it the one player in the app
+/// created with `audio: true` — everything in the feed stays muted and
+/// focus-free. A mute control is always on screen.
 ///
-/// Poster-first, exactly like [VideoBackground] and the feed's live cards: the
-/// bundled frame paints immediately and stays MOUNTED underneath, so a decoder
-/// that never starts leaves a still image rather than a black rectangle.
+/// **This widget does not own the player.** [PremiumScreen] creates it and
+/// opens the media the instant `/premium` is entered, in parallel with the
+/// `GET /me` the screen would otherwise have waited for before this card could
+/// even mount — that round trip, plus a platform-channel `create`, plus the
+/// fetch, used to run strictly one after another, which is the whole reason the
+/// poster sat there. Here the card only attaches, plays and reveals.
 class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
-  const ArulOnboardingVideoCard({super.key, required this.source});
+  const ArulOnboardingVideoCard({
+    super.key,
+    required this.player,
+    required this.source,
+  });
 
+  /// Null while the warm-up is still in flight — the poster covers that.
+  final FeedVideoPlayer? player;
   final OnboardingVideoSource source;
 
   @override
@@ -116,8 +56,6 @@ class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
 class _ArulOnboardingVideoCardState
     extends ConsumerState<ArulOnboardingVideoCard>
     with WidgetsBindingObserver {
-  FeedVideoPlayerPool? _pool;
-  FeedVideoPlayer? _player;
   bool _ready = false;
   bool _muted = false;
   bool _started = false;
@@ -131,38 +69,56 @@ class _ArulOnboardingVideoCardState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_init());
+    _attach();
   }
 
-  /// A deferred delivery (Play referrer, GA4F, the Meta SDK) can resolve the
-  /// language SECONDS after launch — after a fast user is already looking at
-  /// this card. The parent re-resolves on every locale change, so a new URL
-  /// here means the link's real language finally arrived: swap the media on the
-  /// surviving player rather than tearing the decoder down.
+  /// The player can arrive AFTER this card mounts (the warm-up lost the race
+  /// with `/me`), and the source can change under it when a deferred delivery
+  /// finally reports the ad's language — [PremiumScreen] re-opens the media on
+  /// the surviving player and hands the new source down here.
   @override
   void didUpdateWidget(ArulOnboardingVideoCard old) {
     super.didUpdateWidget(old);
-    if (old.source.url != widget.source.url) {
+    if (old.player != widget.player) {
+      old.player?.firstFrame.removeListener(_onFirstFrame);
+      _attach();
+    } else if (old.source != widget.source) {
       setState(() => _ready = false);
-      unawaited(_open());
+      unawaited(widget.player?.play());
     }
+  }
+
+  void _attach() {
+    final player = widget.player;
+    if (player == null) return;
+    if (player.firstFrame.value) {
+      _ready = true;
+      _markStarted();
+    } else {
+      player.firstFrame.addListener(_onFirstFrame);
+    }
+    // Opened with playWhenReady false so a warm-up can never play audio at a
+    // user who is not looking at this card (a non-trial-eligible one never sees
+    // it at all). Playing is this widget's job, and only once it is on screen.
+    unawaited(player.setVolume(_muted ? 0 : 1));
+    if (_visible) unawaited(player.play());
   }
 
   /// Pause when this route stops being the visible one.
   ///
-  /// Leaving `/premium` disposes the card, which now really does release the
-  /// player — but a route pushed OVER it (the policy reader, say) leaves the
-  /// card mounted and a voice talking behind a screen the user is reading.
-  /// `TickerMode` is exactly the signal: a `ModalRoute` mutes it once it is
-  /// fully covered, and leaves it ON for a bottom sheet, which is what the UPI
-  /// picker is — the clip is still half on screen there and should keep going.
+  /// Leaving `/premium` disposes the screen, which releases the player — but a
+  /// route pushed OVER it (the policy reader, say) leaves this mounted and a
+  /// voice talking behind a screen the user is reading. `TickerMode` is exactly
+  /// the signal: a `ModalRoute` mutes it once fully covered, and leaves it ON
+  /// for a bottom sheet, which is what the UPI picker is — the clip is still
+  /// half on screen there and should keep going.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final visible = TickerMode.valuesOf(context).enabled;
     if (visible == _visible) return;
     _visible = visible;
-    unawaited(visible ? _player?.play() : _player?.pause());
+    unawaited(visible ? widget.player?.play() : widget.player?.pause());
   }
 
   @override
@@ -171,7 +127,7 @@ class _ArulOnboardingVideoCardState
     switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
-        unawaited(_player?.pause());
+        unawaited(widget.player?.pause());
       case AppLifecycleState.resumed:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
@@ -183,48 +139,23 @@ class _ArulOnboardingVideoCardState
     }
   }
 
-  Future<void> _init() async {
-    // One shared AudioPlayer drives every ringtone preview; if one is running,
-    // the two voices would play over each other.
-    unawaited(ref.read(ringtonePreviewProvider.notifier).stop());
-
-    final pool = FeedVideoPlayerPool();
-    _pool = pool;
-    // The ONLY `audio: true` player in the app.
-    final player = await pool.create(audio: true);
-    // Null = no platform side (headless widget test). The poster below is a
-    // complete rendering on its own, so there is nothing to fall back to.
-    if (player == null || !mounted) {
-      await pool.dispose();
-      return;
-    }
-    _player = player
-      ..onEnded = _onEnded
-      ..firstFrame.addListener(_onFirstFrame);
-    await _open();
-  }
-
-  Future<void> _open() async {
-    // looping: false — a 15s pitch has an ending, and only a non-looping open
-    // can ever report it.
-    await _player?.open(widget.source.url, playWhenReady: true, looping: false);
-  }
-
   void _onFirstFrame() {
-    final player = _player;
+    final player = widget.player;
     if (player == null || !player.firstFrame.value || !mounted) return;
     if (!_ready) setState(() => _ready = true);
-    if (!_started) {
-      _started = true;
-      _track('onboarding_video_start');
-    }
+    _markStarted();
   }
 
-  void _onEnded() => _track('onboarding_video_complete');
+  void _markStarted() {
+    if (_started) return;
+    _started = true;
+    _track('onboarding_video_start');
+  }
 
-  /// GA4 only. These are not on [postHogAllowedEvents] and are not a Meta star
-  /// event, and none of them is a conversion — `trial_started` remains the
-  /// single source for that (CLAUDE.md §3).
+  /// GA4 only. Not on [postHogAllowedEvents], not a Meta star event, and not a
+  /// conversion — `trial_started` remains the single source for that
+  /// (CLAUDE.md §3). There is deliberately no "completed" event: the clip
+  /// LOOPS, and a looping player never reaches `STATE_ENDED`.
   void _track(String event) => ref
       .read(analyticsServiceProvider)
       .track(event, properties: {'lang': widget.source.lang});
@@ -233,85 +164,95 @@ class _ArulOnboardingVideoCardState
     ArulHaptics.tap();
     final next = !_muted;
     setState(() => _muted = next);
-    await _player?.setVolume(next ? 0 : 1);
+    await widget.player?.setVolume(next ? 0 : 1);
     if (next) _track('onboarding_video_muted');
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    final player = _player;
-    _player = null;
-    player?.firstFrame.removeListener(_onFirstFrame);
-    player?.onEnded = null;
-    // Releases the native player, its surface and the audio focus it holds.
-    unawaited(_pool?.dispose());
-    _pool = null;
+    widget.player?.firstFrame.removeListener(_onFirstFrame);
+    // The player belongs to PremiumScreen — pausing here keeps a torn-down card
+    // from leaving a voice running during the frame before the screen's own
+    // dispose releases it.
+    unawaited(widget.player?.pause());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final player = _player;
+    final player = widget.player;
     return Padding(
-      // Exactly the gutters and bottom gap the brand lockup used, so the gold
-      // hairline below stays on the rhythm the handoff set.
+      // Same gutters as the offer panel above it, so the two read as one
+      // column rather than two differently-indented blocks.
       padding: const EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
+        ArulTokens.paywallPanelInset,
+        10,
+        ArulTokens.paywallPanelInset,
         ArulTokens.paywallBrandBottomPadding,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
+      // Full width at the clip's OWN 16:9, on every screen. The frame is never
+      // cropped and never scaled down to make room — owner's call, and the
+      // right one: a short screen was being paid for out of the clip, which
+      // turned a talking head into a letterbox band of forehead. Room comes
+      // from the chrome around it instead (`dense` in paywall_view.dart), so
+      // the viewer sees the same framing everywhere and only the padding, the
+      // ornament and the price lockup shrink.
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: SizedBox(
+          key: const Key('onboarding-video-frame'),
+          width: double.infinity,
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: ArulTokens.paywallGoldSoft),
-          ),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // The shutter. Frame 0 of the very file playing above it, so
-                // the reveal needs no crossfade — and it stays MOUNTED, so a
-                // decoder that drops can never expose bare colour.
-                const Image(
-                  image: AssetImage(_poster),
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.low,
-                ),
-
-                if (_ready && player != null)
-                  ValueListenableBuilder<Size?>(
-                    valueListenable: player.videoSize,
-                    builder: (context, size, _) {
-                      if (size == null || size.width <= 0 || size.height <= 0) {
-                        return const SizedBox.shrink();
-                      }
-                      // A raw Texture does not cover-fit itself.
-                      return ClipRect(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          clipBehavior: Clip.hardEdge,
-                          child: SizedBox(
-                            width: size.width,
-                            height: size.height,
-                            child: Texture(textureId: player.textureId),
-                          ),
-                        ),
-                      );
-                    },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: ArulTokens.paywallGoldSoft),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // The shutter. Stays MOUNTED under the texture, so a
+                  // decoder that drops can never expose bare colour.
+                  const Image(
+                    image: AssetImage(_poster),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
                   ),
 
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: _MuteButton(muted: _muted, onTap: _toggleMute),
-                ),
-              ],
+                  if (_ready && player != null)
+                    ValueListenableBuilder<Size?>(
+                      valueListenable: player.videoSize,
+                      builder: (context, size, _) {
+                        if (size == null ||
+                            size.width <= 0 ||
+                            size.height <= 0) {
+                          return const SizedBox.shrink();
+                        }
+                        // A raw Texture does not cover-fit itself.
+                        return ClipRect(
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox(
+                              width: size.width,
+                              height: size.height,
+                              child: Texture(textureId: player.textureId),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: _MuteButton(muted: _muted, onTap: _toggleMute),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -340,15 +281,15 @@ class _MuteButton extends StatelessWidget {
           dimension: ArulTokens.minHitTarget,
           child: Center(
             child: Container(
-              width: 30,
-              height: 30,
+              width: 28,
+              height: 28,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: Color(0xB32E1D14),
               ),
               child: Icon(
                 muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                size: 16,
+                size: 15,
                 color: ArulTokens.paywallOnCta,
               ),
             ),

@@ -1,5 +1,5 @@
 import 'package:arul/data/models/app_config_model.dart';
-import 'package:arul/features/premium/presentation/onboarding_video_card.dart';
+import 'package:arul/features/premium/domain/onboarding_video.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 AppConfigModel _config(Map<String, dynamic> flags) =>
@@ -15,7 +15,6 @@ void main() {
       expect(source, isNotNull);
       expect(source!.lang, 'ta');
       expect(source.url, endsWith('/onboarding/ta.mp4'));
-      expect(source.posterAsset, 'assets/images/onboarding/ta.webp');
     });
 
     test('falls back to English for a locale with no cut', () {

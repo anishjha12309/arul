@@ -59,6 +59,7 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
   } catch (e) {
     debugPrint('[entitlement] trial catch-up skipped: $e');
   }
+
   return entitlement;
 });
 

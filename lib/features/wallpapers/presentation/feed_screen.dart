@@ -20,6 +20,7 @@ import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../data/feed_video_player.dart';
 import '../data/wallpaper_apply_service.dart';
 import '../providers/catalog_providers.dart';
 import '../providers/video_preload_provider.dart';
@@ -143,6 +144,29 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // — dispose() alone would almost never flush the summary. Backgrounding is
     // the real end-of-session signal, so observe it.
     WidgetsBinding.instance.addObserver(this);
+
+    // Pay the CDN's DNS + TCP + TLS now, so the paywall's onboarding clip does
+    // not. Cold, that handshake was 1189ms of the 1499ms the clip took to show
+    // its first frame; with the connection already pooled it reached it in
+    // 312ms (device 2026-08-31).
+    //
+    // HERE, and not earlier, for two reasons. It must be POST-AUTH: the splash
+    // is where the media warm once fought Google's token mint and
+    // POST /auth/login for the same pipe and made first login 7-8s
+    // (splash_screen.dart), and this screen is only reachable signed in. And it
+    // must not be the entitlement read, which is lazy — tried there first, it
+    // resolved 18s AFTER the paywall had already opened and warmed nothing.
+    //
+    // Issued from the NATIVE stack because ExoPlayer is on HttpURLConnection
+    // and only that pool is the one it will find warm. Language is irrelevant:
+    // a pooled connection is per HOST, so whichever cut the link asks for
+    // reuses this one. Two bytes, once per feed mount, off the critical path.
+    unawaited(
+      FeedVideoPlayerPool.warmConnection(
+        '${AppConfig.cdnBaseUrl}/onboarding/en.mp4',
+      ).catchError((_) {}),
+    );
+
     // A link target that lands while this screen is already built (a warm App
     // Link, a deferred delivery) must trigger a build, because
     // maybeOpenDeepLink runs from build() and nothing else would re-run it —

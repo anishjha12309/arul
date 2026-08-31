@@ -52,10 +52,15 @@ class ArulPaywallView extends StatelessWidget {
   ///
   /// Non-null ONLY on the trial variant (owner's call): this screen also sells
   /// ₹199/month to users whose trial is spent, and the clip's whole script is
-  /// "start your 1-day trial". When it is present it TAKES THE PLACE of the
-  /// brand lockup rather than being added above it — the lockup's Cinzel cannot
-  /// render Indic scripts anyway, and stacking both would push the offer below
-  /// the fold on most phones.
+  /// "start your 1-day trial".
+  ///
+  /// When present it TAKES THE PLACE of the brand lockup rather than being
+  /// added above it — the lockup's Cinzel cannot render Indic scripts anyway,
+  /// and stacking both would push the offer below the fold. The offer panel
+  /// moves up with it, out of the scrollable middle and into the fixed header
+  /// (owner's call, 2026-08-31), so the price is read before the clip and the
+  /// clip cannot scroll off. The clip caps its own height against the screen so
+  /// that block always fits.
   final Widget? onboardingVideo;
 
   /// Null when no mandate-capable UPI app is installed — the row disappears
@@ -69,47 +74,115 @@ class ArulPaywallView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Built once and placed in exactly ONE of the two branches below: above the
+    // clip in the fixed header when there is a clip, otherwise where it has
+    // always been, centred in the scrollable middle.
+    final video = onboardingVideo;
+    // The footer sits outside the middle's LayoutBuilder, so it reads the
+    // screen rather than the viewport. Same intent: on a short phone the
+    // chrome gives back padding so the clip fits above the fold.
+    final denseFooter = MediaQuery.sizeOf(context).height < 700;
+    // The clip layout has two blocks to fit where the handoff had one, so the
+    // panel gives back the air it can afford: its frame, the ₹2 and the badge
+    // keep every dimension the handoff specifies — only padding tightens.
+    // `dense` tightens them again on a short screen, where the clip being on
+    // screen at rest is non-negotiable and padding is the only slack there is.
+    _ShrinePanel offerPanel(bool dense) => _ShrinePanel(
+      padTop: trialEligible ? 24 : 26,
+      compact: video != null,
+      dense: dense,
+      child: trialEligible
+          ? _TrialOffer(monthlyPrice: monthlyPrice, dense: dense)
+          : _MonthlyOffer(monthlyPrice: monthlyPrice),
+    );
     return PaywallGround(
       child: Column(
         children: [
           // Pinned, so the way out stays reachable however far the sell
           // scrolls.
-          // Pinned, so the way out stays reachable however far the sell
-          // scrolls.
           _NavRow(onBack: onBack),
-          _HeaderBlock(
-            showSocialProof: showSocialProof,
-            onboardingVideo: onboardingVideo,
-          ),
-          // The handoff draws one ~745pt page, which is SHORTER than the phone
-          // it lands on. Rather than let that slack pool into a hole above the
-          // footer, the offer block is centred in what the two pinned ends
-          // leave — the same air above the panel as below the features. When
-          // the slack runs out (small screen, large text) the block scrolls
-          // instead, which is why the CTA is pinned and not in this list.
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _ShrinePanel(
-                        padTop: trialEligible ? 24 : 26,
-                        child: trialEligible
-                            ? _TrialOffer(monthlyPrice: monthlyPrice)
-                            : _MonthlyOffer(monthlyPrice: monthlyPrice),
-                      ),
-                      const _FeatureRow(),
-                    ],
-                  ),
-                ),
+          if (video == null) ...[
+            _HeaderBlock(showSocialProof: showSocialProof),
+            // The handoff draws one ~745pt page, which is SHORTER than the
+            // phone it lands on. Rather than let that slack pool into a hole
+            // above the footer, the offer block is centred in what the two
+            // pinned ends leave. When the slack runs out (small screen, large
+            // text) it scrolls instead, which is why the CTA is pinned and not
+            // in this list.
+            Expanded(
+              child: _ScrollableMiddle(
+                children: [offerPanel(false), const _FeatureRow()],
               ),
             ),
-          ),
+          ] else ...[
+            // Clip layout: offer read FIRST, clip under it, features last.
+            //
+            // All three SCROLL as one block between the pinned nav and the
+            // pinned CTA. Pinning the offer and the clip instead was tried on
+            // device (2026-08-31) and fails on a small phone: at 360x640dp the
+            // pinned blocks alone exceed the screen, so the flex children got
+            // zero and BOTH the clip and the feature row vanished behind a
+            // 1px overflow stripe. Scrolling keeps the ordering promise
+            // instead — the clip is above the feature row, so it is fully on
+            // screen at rest on every size, and only the features fall below
+            // the fold when there is genuinely no room.
+            //
+            // The clip is capped at a THIRD of the viewport so it cannot crowd
+            // the price out on a short screen; on a tall one that cap is above
+            // its natural 16:9 height and does nothing.
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Everything between the pinned nav and the pinned CTA has
+                  // this much room. Below ~420dp of it, ornament has to give
+                  // way: the social-proof pill goes, the gaps close up and the
+                  // clip takes a bigger share, because the clip being visible
+                  // WITHOUT scrolling is a requirement on every device and
+                  // padding is the only slack left to spend.
+                  final h = constraints.maxHeight;
+                  final dense = h < 420;
+                  // A SECOND, higher threshold, only for the feature row.
+                  // Between these two a phone has room for the social-proof
+                  // pill but not for three 48dp medallions AND two lines of
+                  // label — and a label sliced by the fold reads as broken
+                  // chrome, where the same row shrunk by 20% reads as designed.
+                  // Keeping the thresholds separate is what stops a very
+                  // common 360x800 phone from losing the pill for this.
+                  final tight = h < 520;
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: h),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _HeaderCrest(
+                            showSocialProof: showSocialProof && !dense,
+                            dense: dense,
+                          ),
+                          // `tight`, not `dense`: the panel's padding is
+                          // cheap to give back and costs the user nothing,
+                          // where `dense` also hides the social-proof pill.
+                          // Splitting them is what lets a 360x800 phone with
+                          // system bars fit the whole feature label AND keep
+                          // the pill.
+                          offerPanel(tight),
+                          // No height cap: the clip renders at its own 16:9,
+                          // full width, on every screen. Capping it here is
+                          // what made a small phone show a letterbox band of
+                          // forehead — the room comes out of `dense` above.
+                          video,
+                          _FeatureRow(tight: tight),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
           // Pinned: the buy decision must never be the thing below the fold.
           _Footer(
+            dense: video != null && denseFooter,
             ctaLabel: trialEligible ? 'Start Free Trial' : 'Subscribe Now',
             reassurance: trialEligible
                 ? '₹2 verification, refunded instantly · Cancel anytime'
@@ -231,52 +304,110 @@ class _NavRow extends StatelessWidget {
 }
 
 /// Social-proof pill + brand lockup, closed by the gold hairline.
-class _HeaderBlock extends StatelessWidget {
-  const _HeaderBlock({required this.showSocialProof, this.onboardingVideo});
+/// Social-proof pill + temple divider — the part of the header both layouts
+/// share. Tightens its gaps when a clip follows, because that layout has to fit
+/// the offer panel AND the clip where the handoff drew only the brand lockup.
+class _HeaderCrest extends StatelessWidget {
+  const _HeaderCrest({
+    required this.showSocialProof,
+    this.compact = true,
+    this.dense = false,
+  });
 
   final bool showSocialProof;
+  final bool compact;
 
-  /// When present, stands in for [_BrandLockup] — see [ArulPaywallView].
-  final Widget? onboardingVideo;
+  /// Short screen: close the gaps to the minimum that still reads as spacing.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       child: Padding(
-        padding: const EdgeInsets.only(top: 14),
+        padding: EdgeInsets.only(top: dense ? 4 : (compact ? 10 : 14)),
         child: Column(
           children: [
             if (showSocialProof) const _SocialProofPill(),
-            const SizedBox(height: ArulTokens.paywallTempleDividerTopGap),
+            SizedBox(
+              height: dense
+                  ? 6
+                  : (compact ? 12 : ArulTokens.paywallTempleDividerTopGap),
+            ),
             const PaywallTempleDivider(),
-            const SizedBox(height: ArulTokens.paywallTempleDividerBottomGap),
-            // The clip replaces the lockup; it carries its own gutters and
-            // bottom gap so the hairline below stays where the handoff put it.
-            if (onboardingVideo case final video?)
-              video
-            else
-              const Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  0,
-                  20,
-                  ArulTokens.paywallBrandBottomPadding,
-                ),
-                child: _BrandLockup(),
-              ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: ArulTokens.paywallHairlineInset,
-              ),
-              child: Container(
-                height: 1,
-                decoration: const BoxDecoration(
-                  gradient: ArulTokens.paywallHeaderHairline,
-                ),
-              ),
+            SizedBox(
+              height: dense
+                  ? 8
+                  : (compact ? 14 : ArulTokens.paywallTempleDividerBottomGap),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The gold rule that closes the header.
+class _HeaderHairline extends StatelessWidget {
+  const _HeaderHairline();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: ArulTokens.paywallHairlineInset,
+    ),
+    child: Container(
+      height: 1,
+      decoration: const BoxDecoration(
+        gradient: ArulTokens.paywallHeaderHairline,
+      ),
+    ),
+  );
+}
+
+/// The no-clip header, exactly as the handoff draws it.
+class _HeaderBlock extends StatelessWidget {
+  const _HeaderBlock({required this.showSocialProof});
+
+  final bool showSocialProof;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _HeaderCrest(showSocialProof: showSocialProof, compact: false),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            0,
+            20,
+            ArulTokens.paywallBrandBottomPadding,
+          ),
+          child: _BrandLockup(),
+        ),
+        const _HeaderHairline(),
+      ],
+    );
+  }
+}
+
+/// Centred when there is slack, scrollable when there is not. Both layouts put
+/// whatever must never be clipped through here.
+class _ScrollableMiddle extends StatelessWidget {
+  const _ScrollableMiddle({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: children,
+          ),
         ),
       ),
     );
@@ -463,19 +594,31 @@ class _SocialProofPillState extends State<_SocialProofPill> {
 
 /// The offer inside two crisp, parallel chamfered rules.
 class _ShrinePanel extends StatelessWidget {
-  const _ShrinePanel({required this.padTop, required this.child});
+  const _ShrinePanel({
+    required this.padTop,
+    required this.child,
+    this.compact = false,
+    this.dense = false,
+  });
+
+  /// Short screen — see [ArulPaywallView].
+  final bool dense;
 
   /// The handoff gives the monthly panel 26px of top padding and the trial
   /// panel 24 — the trial's extra lead line makes up the difference.
   final double padTop;
+
+  /// Give back the padding AROUND the panel so the clip has room beneath it.
+  /// Never the frame, the price or the badge — those stay handoff-exact.
+  final bool compact;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         ArulTokens.paywallPanelInset,
-        ArulTokens.paywallPanelTopGap,
+        dense ? 4 : (compact ? 10 : ArulTokens.paywallPanelTopGap),
         ArulTokens.paywallPanelInset,
         0,
       ),
@@ -486,9 +629,12 @@ class _ShrinePanel extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 ArulTokens.paywallPanelContentInset,
-                padTop + ArulTokens.paywallPanelFrameStroke,
+                (dense ? padTop - 16 : (compact ? padTop - 10 : padTop)) +
+                    ArulTokens.paywallPanelFrameStroke,
                 ArulTokens.paywallPanelContentInset,
-                ArulTokens.paywallPanelContentBottom,
+                dense
+                    ? 7
+                    : (compact ? 11 : ArulTokens.paywallPanelContentBottom),
               ),
               child: child,
             ),
@@ -536,9 +682,14 @@ class _MonthlyOffer extends StatelessWidget {
 /// immediately, but the user still SEES ₹2 leave their account, and an
 /// unexplained debit on a screen that said "free" reads as a scam.
 class _TrialOffer extends StatelessWidget {
-  const _TrialOffer({required this.monthlyPrice});
+  const _TrialOffer({required this.monthlyPrice, this.dense = false});
 
   final String monthlyPrice;
+
+  /// Short screen: scale the price lockup down and drop the ornament under it.
+  /// Nothing contractual is touched — the lead line, the badge and the
+  /// "Then ₹199/month" line all ship verbatim at every size.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -565,7 +716,19 @@ class _TrialOffer extends StatelessWidget {
           style: ArulTokens.paywallLead,
         ),
         const SizedBox(height: ArulTokens.paywallTrialLeadGap),
-        const PriceLockup(price: '₹2'),
+        // FittedBox rather than a smaller font: PriceLockup centres the rupee
+        // sign from a per-glyph ink table, so a uniform scale keeps that maths
+        // exactly right where a type-size change would not.
+        if (dense)
+          SizedBox(
+            height: ArulTokens.paywallDensePriceHeight,
+            child: const FittedBox(
+              fit: BoxFit.contain,
+              child: PriceLockup(price: '₹2'),
+            ),
+          )
+        else
+          const PriceLockup(price: '₹2'),
         const SizedBox(height: ArulTokens.paywallTrialPriceGap),
         Container(
           padding: const EdgeInsets.symmetric(
@@ -581,7 +744,7 @@ class _TrialOffer extends StatelessWidget {
             child: Text('REFUNDED INSTANTLY', style: ArulTokens.paywallBadge),
           ),
         ),
-        const _PriceDivider(),
+        if (!dense) const _PriceDivider() else const SizedBox(height: 10),
         // Contractually fixed — ships verbatim.
         Text(
           'Then $monthlyPrice/month via autopay. Cancel anytime.',
@@ -717,12 +880,22 @@ class PriceLockup extends StatelessWidget {
 // ─── Feature row ─────────────────────────────────────────────────────────────
 
 class _FeatureRow extends StatelessWidget {
-  const _FeatureRow();
+  const _FeatureRow({this.tight = false});
+
+  /// Short screen: 20% off the medallions and the gaps. Never the labels —
+  /// they are the content.
+  final bool tight;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 6),
+    return Padding(
+      // Tighter than the handoff's 24/6. The clip below the offer panel is
+      // never allowed to shrink (owner's call), so this row is where the
+      // vertical budget comes from — and it is the block that can afford it,
+      // being three icons and two words each. Without this the second line of
+      // "Unlimited HD Wallpapers" was sliced by the fold on 360x640 and on a
+      // 360x800 phone once the system bars were taken off.
+      padding: EdgeInsets.fromLTRB(24, tight ? 8 : 12, 24, 4),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -731,20 +904,23 @@ class _FeatureRow extends StatelessWidget {
               child: _Feature(
                 icon: PaywallOrnament.wallpapers,
                 label: 'Unlimited HD Wallpapers',
+                tight: tight,
               ),
             ),
-            _FeatureDivider(),
+            const _FeatureDivider(),
             Expanded(
               child: _Feature(
                 icon: PaywallOrnament.ringtones,
                 label: 'Devotional Ringtones',
+                tight: tight,
               ),
             ),
-            _FeatureDivider(),
+            const _FeatureDivider(),
             Expanded(
               child: _Feature(
                 icon: PaywallOrnament.daily,
                 label: 'Daily New Content',
+                tight: tight,
               ),
             ),
           ],
@@ -763,10 +939,11 @@ class _FeatureDivider extends StatelessWidget {
 }
 
 class _Feature extends StatelessWidget {
-  const _Feature({required this.icon, required this.label});
+  const _Feature({required this.icon, required this.label, this.tight = false});
 
   final PaywallOrnament icon;
   final String label;
+  final bool tight;
 
   @override
   Widget build(BuildContext context) {
@@ -775,8 +952,8 @@ class _Feature extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: ArulTokens.paywallMedallionSize,
-            height: ArulTokens.paywallMedallionSize,
+            width: tight ? 38 : ArulTokens.paywallMedallionSize,
+            height: tight ? 38 : ArulTokens.paywallMedallionSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ArulTokens.paywallMedallionFill,
@@ -788,11 +965,11 @@ class _Feature extends StatelessWidget {
             child: Center(
               child: PaywallOrnamentImage(
                 ornament: icon,
-                width: ArulTokens.paywallFeatureArtSize,
+                width: tight ? 25 : ArulTokens.paywallFeatureArtSize,
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: tight ? 4 : 6),
           Text(
             label,
             textAlign: TextAlign.center,
@@ -808,6 +985,7 @@ class _Feature extends StatelessWidget {
 
 class _Footer extends StatelessWidget {
   const _Footer({
+    this.dense = false,
     required this.ctaLabel,
     required this.reassurance,
     required this.busy,
@@ -817,6 +995,8 @@ class _Footer extends StatelessWidget {
     required this.onPurchase,
   });
 
+  /// Short screen — give back the outer padding, never the CTA's own height.
+  final bool dense;
   final String ctaLabel;
   final String reassurance;
   final bool busy;
@@ -829,11 +1009,11 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = selectedUpiApp;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         24,
-        18,
+        dense ? 8 : 18,
         24,
-        ArulTokens.paywallFooterBottomPadding,
+        dense ? 2 : ArulTokens.paywallFooterBottomPadding,
       ),
       child: Column(
         children: [

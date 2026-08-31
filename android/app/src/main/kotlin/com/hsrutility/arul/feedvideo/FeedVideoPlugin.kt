@@ -3,6 +3,7 @@ package com.hsrutility.arul.feedvideo
 import android.content.Context
 import android.media.MediaCodecList
 import android.net.Uri
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -20,6 +21,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.TextureRegistry
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Native Media3 ExoPlayer texture pool, exposed to Dart over a MethodChannel
@@ -132,6 +135,12 @@ class FeedVideoPlugin(
                     if (id != null) players[id]?.stop()
                     result.success(null)
                 }
+                // Fire-and-forget; Dart never waits on it.
+                "warmConnection" -> {
+                    val url = call.argument<String>("url")
+                    if (url != null) warmConnection(url)
+                    result.success(null)
+                }
                 "setVolume" -> {
                     val id = call.argument<Int>("playerId")
                     val volume = call.argument<Double>("volume")
@@ -176,6 +185,7 @@ class FeedVideoPlugin(
     private fun create(audio: Boolean): Map<String, Any> {
         logDecoderCapsOnce()
         val playerId = nextPlayerId++
+        if (audio) Log.i(TAG, "audible create: player $playerId")
         val pooled = PooledSurfacePlayer(playerId, audio)
         players[playerId] = pooled
         return mapOf("playerId" to playerId, "textureId" to pooled.textureId)
@@ -215,6 +225,39 @@ class FeedVideoPlugin(
     ): Long {
         val pooled = players[playerId] ?: return -1 // stale id → no-op
         return pooled.open(url, playWhenReady, looping)
+    }
+
+    /**
+     * Pay the DNS + TCP + TLS cost to the CDN BEFORE the clip is opened.
+     *
+     * Measured on device 2026-08-31: a cold open reached its first frame in
+     * 1499ms, of which the decoder accounted for ~390ms; a second open moments
+     * later, with the connection already pooled, took 312ms. The ~1.19s
+     * difference is handshake, not bytes — the clip needs about 18 KB to start
+     * and the CDN serves it from cache.
+     *
+     * ExoPlayer's DefaultHttpDataSource is built on HttpURLConnection, whose
+     * keep-alive pool is per-JVM, so a request issued here from the same stack
+     * is the one the player will reuse. It must NOT be a Dart-side fetch: that
+     * uses dart:io's own pool and would warm nothing the player can see.
+     *
+     * One byte is enough to complete the handshake; the body is irrelevant.
+     */
+    private fun warmConnection(url: String) {
+        Thread {
+            try {
+                val c = URL(url).openConnection() as HttpURLConnection
+                c.setRequestProperty("Range", "bytes=0-1")
+                c.connectTimeout = 5_000
+                c.readTimeout = 5_000
+                c.inputStream.use { it.read() }
+                Log.i(TAG, "warmed CDN connection (${c.responseCode})")
+            } catch (e: Exception) {
+                // Best effort only — a failed warm just means the open pays the
+                // handshake itself, exactly as it did before.
+                Log.w(TAG, "connection warm failed", e)
+            }
+        }.start()
     }
 
     private fun disposePlayer(playerId: Int) {
@@ -333,6 +376,14 @@ class FeedVideoPlugin(
                 }
         }
 
+        /**
+         * When the current audible open started, for the +Nms marks below. The
+         * clip's perceived speed is "how long the poster sat there", which is
+         * exactly open -> firstFrame; nothing else in the app measures it, and
+         * a release build reports no Dart logs at all.
+         */
+        private var audibleOpenAt = 0L
+
         fun open(url: String, playWhenReady: Boolean, looping: Boolean): Long {
             val id = ++openId
             // AUDIBLE players only — i.e. the paywall's onboarding clip, never
@@ -340,7 +391,10 @@ class FeedVideoPlugin(
             // unobservable from outside the app: the cuts are the same footage,
             // so a screenshot cannot tell them apart and only this line can
             // confirm the deep link's `lang` survived all the way to the media.
-            if (withAudio) Log.i(TAG, "audible open: $url")
+            if (withAudio) {
+                audibleOpenAt = SystemClock.elapsedRealtime()
+                Log.i(TAG, "audible open: $url")
+            }
             try {
                 player.repeatMode =
                     if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
@@ -454,6 +508,10 @@ class FeedVideoPlugin(
                 // the event with the current openId so Dart drops a first-frame
                 // that belongs to a since-swapped media.
                 lastPaintedOpenId = openId
+                if (withAudio && audibleOpenAt > 0L) {
+                    val ms = SystemClock.elapsedRealtime() - audibleOpenAt
+                    Log.i(TAG, "audible first frame: +${ms}ms")
+                }
                 emit(playerId, "firstFrame", mapOf("openId" to openId))
             }
 
@@ -463,6 +521,16 @@ class FeedVideoPlugin(
              * rest so a swap cannot deliver a stale "ended".
              */
             override fun onPlaybackStateChanged(state: Int) {
+                if (withAudio && audibleOpenAt > 0L) {
+                    val name = when (state) {
+                        Player.STATE_IDLE -> "IDLE"
+                        Player.STATE_BUFFERING -> "BUFFERING"
+                        Player.STATE_READY -> "READY"
+                        else -> "ENDED"
+                    }
+                    val ms = SystemClock.elapsedRealtime() - audibleOpenAt
+                    Log.i(TAG, "audible state=$name +${ms}ms")
+                }
                 if (state == Player.STATE_ENDED) {
                     emit(playerId, "ended", mapOf("openId" to openId))
                 }

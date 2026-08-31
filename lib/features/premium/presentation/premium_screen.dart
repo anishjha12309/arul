@@ -17,11 +17,13 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
+import '../../wallpapers/data/feed_video_player.dart';
 import '../../settings/presentation/confirm_dialog.dart';
 import '../domain/entitlement.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
 import 'member_view.dart';
+import '../domain/onboarding_video.dart';
 import 'onboarding_video_card.dart';
 import 'paywall_view.dart';
 import 'resubscribe_view.dart';
@@ -131,12 +133,83 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _reconcileOnOpen();
+    _warmOnboardingVideo();
+    // A deferred delivery (Play referrer, GA4F, the Meta SDK) can report the
+    // ad's language seconds after launch — possibly after a fast user is
+    // already on this screen. Re-target the SURVIVING player rather than
+    // rebuilding the decoder.
+    ref.listenManual(localeProvider, (_, _) => _retargetOnboardingVideo());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // Releases the native player, its surface and the audio focus it holds —
+    // the clip is the only audible player in the app, so a leak here is a voice
+    // that keeps talking over whatever screen comes next.
+    unawaited(_videoPool?.dispose());
+    _videoPool = null;
+    _videoPlayer = null;
     super.dispose();
+  }
+
+  // ─── Onboarding clip ───────────────────────────────────────────────────────
+  //
+  // Owned HERE, not by the card, purely for latency. The card cannot mount
+  // until `entitlementDetailProvider` resolves — until then this screen renders
+  // [ArulPaywallLoading] — so leaving the player with the card put a `GET /me`
+  // round trip, a platform-channel `create` and the media fetch strictly one
+  // after another before a single frame could appear. Starting here overlaps
+  // all three with the entitlement call. Measured cause of "the poster showed
+  // for way too long"; the file itself was never the bottleneck (the CDN serves
+  // it from cache in ~50ms and playback needs 250ms of buffer ≈ 18 KB).
+
+  FeedVideoPlayerPool? _videoPool;
+  FeedVideoPlayer? _videoPlayer;
+  OnboardingVideoSource? _videoSource;
+
+  Future<void> _warmOnboardingVideo() async {
+    final source = resolveOnboardingVideo(
+      // valueOrNull, not an await: /config may still be in flight, and the
+      // resolver's defaults are the correct answer without it.
+      ref.read(appConfigProvider).asData?.value,
+      ref.read(localeProvider).languageCode,
+    );
+    if (source == null) return;
+    _videoSource = source;
+
+    final pool = FeedVideoPlayerPool();
+    _videoPool = pool;
+    final player = await pool.create(audio: true);
+    if (player == null || !mounted) {
+      await pool.dispose();
+      _videoPool = null;
+      return;
+    }
+    _videoPlayer = player;
+    await _openOnboarding(source);
+    if (mounted) setState(() {});
+  }
+
+  /// `playWhenReady: false` ALWAYS. This screen has no idea yet whether the
+  /// user is trial-eligible, and a non-eligible one never sees the card — so
+  /// the warm-up must decode a first frame without ever making a sound.
+  /// Playing belongs to the card, which only does it once it is on screen.
+  /// `looping: true` is the seamless loop (owner's call): a looping player also
+  /// never reaches `STATE_ENDED`, which is why there is no "completed" event.
+  Future<void> _openOnboarding(OnboardingVideoSource source) =>
+      _videoPlayer?.open(source.url, playWhenReady: false, looping: true) ??
+      Future<void>.value();
+
+  Future<void> _retargetOnboardingVideo() async {
+    if (!mounted || _videoPlayer == null) return;
+    final next = resolveOnboardingVideo(
+      ref.read(appConfigProvider).asData?.value,
+      ref.read(localeProvider).languageCode,
+    );
+    if (next == null || next == _videoSource) return;
+    setState(() => _videoSource = next);
+    await _openOnboarding(next);
   }
 
   /// Returning from a UPI app is the intent flow's only "the user is back"
@@ -425,23 +498,25 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // (Play referrer, GA4F, Meta) can land seconds after launch — after a fast
     // user is already on this screen. Watching re-resolves the source and the
     // card swaps its media in place.
-    final locale = ref.watch(localeProvider);
-    final onboarding = trialEligible
-        ? resolveOnboardingVideo(config, locale.languageCode)
-        : null;
+    // Resolved and opened back in initState, so by the time this build runs the
+    // clip has been decoding for as long as `GET /me` took. `_videoPlayer` is
+    // still null if the warm-up lost that race — the card mounts on its poster
+    // and attaches when the player lands.
+    final source = _videoSource;
 
     return ArulPaywallView(
       trialEligible: trialEligible,
       monthlyPrice: monthlyPrice,
       purchaseBusy: purchaseBusy,
       showSocialProof: _showSocialProof(config),
-      onboardingVideo: onboarding == null
+      onboardingVideo: (!trialEligible || source == null)
           ? null
-          // Keyed by URL so a language change rebuilds into the SAME State
-          // (didUpdateWidget swaps the media) rather than churning the decoder.
+          // One constant key, so a language change rebuilds into the SAME State
+          // (didUpdateWidget re-attaches) rather than churning the decoder.
           : ArulOnboardingVideoCard(
               key: const ValueKey('onboarding-video'),
-              source: onboarding,
+              player: _videoPlayer,
+              source: source,
             ),
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,

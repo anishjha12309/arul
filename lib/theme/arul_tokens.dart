@@ -1370,6 +1370,11 @@ abstract final class ArulTokens {
   static const double paywallBrandBottomPadding = 13;
 
   /// Gap between the trial lead sentence and its ₹2 price lockup.
+  /// Height the ₹2 lockup is scaled into on a short screen, where the clip
+  /// has to stay on the first screenful. Uniform scale, so PriceLockup's
+  /// per-glyph ink centring survives it.
+  static const double paywallDensePriceHeight = 46;
+
   static const double paywallTrialLeadGap = 2;
 
   /// Gap between the ₹2 price lockup and the refund badge.

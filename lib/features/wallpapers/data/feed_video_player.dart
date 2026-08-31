@@ -46,6 +46,16 @@ class FeedVideoPlayerPool {
   factory FeedVideoPlayerPool() =>
       FeedVideoPlayerPool._(_FeedVideoChannelHub.instance);
 
+  /// Pay the CDN handshake up front, from the SAME native HTTP stack the
+  /// player will use — see `FeedVideoPlugin.warmConnection`. Fire and forget;
+  /// a failure just means the eventual open pays it itself.
+  ///
+  /// Deliberately static and pool-free: the caller (the entitlement provider)
+  /// wants the connection warm long before any player exists.
+  static Future<void> warmConnection(String url) => _FeedVideoChannelHub
+      .instance
+      .invokeMethod('warmConnection', {'url': url});
+
   /// Test seam: inject fake channels. Each call builds a FRESH, isolated hub
   /// bound to the given channels (it does NOT touch the process-global
   /// singleton), so tests don't leak channel state into each other or into
