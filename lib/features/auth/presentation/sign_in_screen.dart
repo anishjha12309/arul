@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -484,9 +483,15 @@ class _PolicyLink extends StatelessWidget {
   }
 }
 
-/// Self-contained multicolor Google "G" mark — a CustomPainter pinwheel
-/// approximation (four brand-colour ring arcs + the blue crossbar), so no
-/// network asset and no new package is needed.
+/// The Google "G" — Google's OWN asset, never a redraw. The branding
+/// guidelines ("required for app verification") say the G in a custom Sign in
+/// with Google button "must be the standard color version … you can't change
+/// the size or color" and list "create your own icon for the button" under
+/// Don't. `assets/images/google_g.webp` is `developers.google.com/identity/
+/// images/g-logo.png` (the image the build-a-custom-button guide itself uses),
+/// padded to square so nothing stretches, re-encoded lossless at 96px — the
+/// 20dp slot needs ≤80px even at 4x. It sits on the pill's ivory disc, which
+/// is the guidelines' white-background requirement.
 class _GoogleGMark extends StatelessWidget {
   const _GoogleGMark({required this.size});
 
@@ -494,62 +499,12 @@ class _GoogleGMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Image.asset(
+      'assets/images/google_g.webp',
       width: size,
       height: size,
-      child: CustomPaint(painter: _GoogleGPainter()),
+      filterQuality: FilterQuality.medium,
+      excludeFromSemantics: true,
     );
   }
-}
-
-class _GoogleGPainter extends CustomPainter {
-  static const _red = Color(0xFFEA4335);
-  static const _blue = Color(0xFF4285F4);
-  static const _yellow = Color(0xFFFBBC05);
-  static const _green = Color(0xFF34A853);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.width / 2;
-    final strokeWidth = radius * 0.44;
-    final ringRadius = radius - strokeWidth / 2;
-    final rect = Rect.fromCircle(center: center, radius: ringRadius);
-
-    void arc(double startDeg, double sweepDeg, Color color) {
-      final paint = Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.butt;
-      canvas.drawArc(
-        rect,
-        startDeg * math.pi / 180,
-        sweepDeg * math.pi / 180,
-        false,
-        paint,
-      );
-    }
-
-    // Angles measured clockwise from the positive x-axis (east = 0°).
-    arc(-90, 70, _red); // top → upper-right
-    arc(-20, 110, _blue); // upper-right → lower-right
-    arc(90, 100, _green); // bottom → lower-left
-    arc(190, 80, _yellow); // left → top
-
-    // The crossbar: the ring's right-middle segment, filled solid blue.
-    final barPaint = Paint()..color = _blue;
-    canvas.drawRect(
-      Rect.fromLTWH(
-        center.dx - strokeWidth * 0.15,
-        center.dy - strokeWidth / 2,
-        radius - center.dx + strokeWidth * 0.15,
-        strokeWidth,
-      ),
-      barPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_GoogleGPainter oldDelegate) => false;
 }

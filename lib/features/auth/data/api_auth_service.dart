@@ -219,12 +219,33 @@ class ApiAuthService implements AuthService {
       }
     }
     await _api.clearTokens();
+    await _clearGoogleCredentialState();
     _crash.setUserId(null);
     _emit(AuthUserState.unauthenticated());
     // Timing mark, readable in profile (and in a DIAG release): the baseline
     // harness reads logout duration — denylist round-trip + token clear — from
     // this line. Release builds are silent by design, so measure on profile.
     debugPrint('[ApiAuthService] signed out in ${sw.elapsedMilliseconds}ms');
+  }
+
+  /// Google's Credential Manager "Sign in with Google" guide, Handle sign-out:
+  /// call `clearCredentialState()` so every credential provider drops its
+  /// stored session for this app and "the next sign-in request gets full
+  /// sign-in options". The plugin's `signOut()` is exactly that call. Without
+  /// it a user who signed out to switch accounts can be handed the same
+  /// account again, and Google's precondition for automatic sign-in ("the
+  /// user has not explicitly signed out") is never recorded. Best-effort: the
+  /// local session is already gone by the time this runs, so a plugin error
+  /// must never strand the user signed in.
+  Future<void> _clearGoogleCredentialState() async {
+    try {
+      await GoogleSignInInit.ready;
+      await GoogleSignIn.instance.signOut();
+    } catch (e) {
+      debugPrint(
+        '[ApiAuthService] clearCredentialState failed (non-fatal): $e',
+      );
+    }
   }
 
   @override
@@ -245,6 +266,7 @@ class ApiAuthService implements AuthService {
     _analytics.track('account_deleted');
 
     await _api.clearTokens();
+    await _clearGoogleCredentialState();
     _crash.setUserId(null);
     _emit(AuthUserState.unauthenticated());
   }
