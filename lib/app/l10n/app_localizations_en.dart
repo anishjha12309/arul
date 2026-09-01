@@ -159,6 +159,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get applied => 'Wallpaper applied';
 
   @override
+  String get appliedLiveFallback =>
+      'Live wallpapers aren\'t supported on this phone, so we set a still image instead.';
+
+  @override
   String get offlineBody =>
       'You\'re offline. Check your connection and try again.';
 

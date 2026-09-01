@@ -451,8 +451,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     if (!mounted) return;
     final state = ref.read(wallpaperApplyProvider);
     switch (state) {
-      case WallpaperApplySuccess():
-        showArulToast(context, l10n.applied, kind: ToastKind.success);
+      case WallpaperApplySuccess(:final staticFallback):
+        // A live Success can only be the static fallback (a normal live apply
+        // ends Idle with the chooser open), and it needs its own line: the user
+        // asked for motion and got a still, so "Wallpaper applied" alone would
+        // read as the video being broken.
+        showArulToast(
+          context,
+          staticFallback ? l10n.appliedLiveFallback : l10n.applied,
+          kind: ToastKind.success,
+        );
         _video.reclaimDecoders();
       case WallpaperApplyError(:final isNetwork, :final premiumRequired):
         if (premiumRequired) {

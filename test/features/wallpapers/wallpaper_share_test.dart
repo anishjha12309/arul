@@ -65,7 +65,10 @@ class _FakeApplyService implements WallpaperApplyService {
   Future<void> applyStaticWallpaper(File file, ApplyTarget target) async {}
 
   @override
-  Future<void> applyLiveWallpaper(File file, ApplyTarget target) async {}
+  Future<LiveApplyResult> applyLiveWallpaper(
+    File file,
+    ApplyTarget target,
+  ) async => const LiveApplyResult(LiveApplyOutcome.chooser);
 }
 
 class _FakeWatermarkService implements ShareWatermarkService {

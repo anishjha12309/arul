@@ -56,8 +56,19 @@ final class WallpaperApplyLoading extends WallpaperApplyState {
 }
 
 final class WallpaperApplySuccess extends WallpaperApplyState {
-  const WallpaperApplySuccess({required this.isLive});
+  const WallpaperApplySuccess({
+    required this.isLive,
+    this.staticFallback = false,
+  });
   final bool isLive;
+
+  /// A LIVE wallpaper that this device cannot run, applied as its own first
+  /// frame instead (native [LiveApplyOutcome.staticFallback]). Live apply
+  /// normally ends [WallpaperApplyIdle] with the OS chooser open, so a live
+  /// Success can ONLY mean this — and it needs its own toast: telling the user
+  /// "Wallpaper applied" while the motion they picked is silently missing reads
+  /// as a bug.
+  final bool staticFallback;
 }
 
 final class WallpaperApplyError extends WallpaperApplyState {
@@ -132,6 +143,14 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     // double-tap inside those few milliseconds previously started two downloads
     // racing to write the same file.
     state = const WallpaperApplyLoading(stage: WallpaperApplyStage.preparing);
+
+    // Set the moment `wallpaper_apply_attempt` fires, and read by the catch
+    // blocks: a failure BEFORE that line (signed-url refusal, a dead connection
+    // mid-download) has no attempt to be counted against, and reporting one
+    // would put `wallpaper_apply_failed` outside its own denominator.
+    // Everything after it is the native call or the OS — which is exactly what
+    // the failure event exists to make visible.
+    var attempted = false;
 
     try {
       final filename = applyCacheFilename(wallpaper);
@@ -223,6 +242,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
         'wallpaper_apply_attempt',
         properties: _applyProps(wallpaper, target: target),
       );
+      attempted = true;
 
       // Persist restore state BEFORE the native call — see the flag docs above.
       if (feedPageIndex != null) {
@@ -243,7 +263,40 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
         // MediaCodec, and on a decoder-constrained SoC a still-held feed pool
         // would starve it into a frozen or black wallpaper.
         if (releaseVideoDecoders != null) await releaseVideoDecoders();
-        await service.applyLiveWallpaper(file, target);
+        final live = await service.applyLiveWallpaper(file, target);
+
+        if (live.outcome == LiveApplyOutcome.staticFallback) {
+          // This device cannot run live wallpapers at all, so the native side
+          // already applied the clip's first frame. Nothing is pending and
+          // nothing is unobservable — so this takes the STATIC semantics
+          // wholesale, including clearing the flags (they were written with
+          // `pending_apply_is_live: true`, and leaving them would have
+          // `apply_restore.dart` treat a finished apply as a chooser still open).
+          //
+          // The tripwire for the whole feature: this event's rate against
+          // `wallpaper_apply_attempt` where type=live is what says whether the
+          // fallback ever fires on mainstream devices. It should be ~0.
+          analytics.track(
+            'wallpaper_apply_live_fallback',
+            properties: {
+              ..._applyProps(wallpaper, target: target),
+              'reason': live.reason ?? 'unknown',
+            },
+          );
+          await _clearPending(prefs);
+          _trackApplied(
+            analytics,
+            wallpaper,
+            target: target,
+            confirmed: true,
+            fallback: true,
+          );
+          state = const WallpaperApplySuccess(
+            isLive: true,
+            staticFallback: true,
+          );
+          return;
+        }
 
         _trackApplied(analytics, wallpaper, target: target, confirmed: false);
         // Flags stay set: if the chooser causes a recreate, the feed restores
@@ -266,8 +319,16 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       if (e.premiumRequired) {
         // Not a defect — the live entitlement check did its job on a lapsed or
         // refunded subscription. Refresh the stale client snapshot that let the
-        // user get this far, then let the screen route to the paywall.
+        // user get this far, then let the screen route to the paywall. Not a
+        // failure event either: it has its own `apply_blocked_premium`.
         ref.invalidate(entitlementDetailProvider);
+      } else if (attempted) {
+        _trackFailed(
+          analytics,
+          wallpaper,
+          target: target,
+          code: e.code ?? 'unknown',
+        );
       }
       state = WallpaperApplyError(
         message: e.message,
@@ -278,6 +339,14 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       // Offline is the common case here (the download), and it is not a bug —
       // the UI must not print "ClientException: Failed host lookup".
       final network = isNetworkError(e);
+      if (attempted) {
+        _trackFailed(
+          analytics,
+          wallpaper,
+          target: target,
+          code: network ? 'network' : 'unknown',
+        );
+      }
       state = WallpaperApplyError(message: e.toString(), isNetwork: network);
     }
   }
@@ -317,17 +386,47 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
   /// which fires on chooser-open too — but it is flagged, so filtering
   /// `confirmed = true` recovers the strict count. Never use the unfiltered
   /// number to claim a completion rate.
+  ///
+  /// [fallback] marks the ONE live apply that is confirmed: the device could
+  /// not run a live wallpaper, so its first frame was applied instead. Without
+  /// it, "`confirmed` is true only on a static apply" (docs/analytics-events.md)
+  /// would quietly stop being true and a confirmed live row would look like a
+  /// defect in the events rather than what it is.
   void _trackApplied(
     AnalyticsService analytics,
     Wallpaper wallpaper, {
     required ApplyTarget target,
     required bool confirmed,
+    bool fallback = false,
   }) {
     analytics.track(
       ArulEvents.wallpaperApplied,
       properties: {
         ..._applyProps(wallpaper, target: target),
         'confirmed': confirmed,
+        if (fallback) 'fallback': true,
+      },
+    );
+  }
+
+  /// Fires `wallpaper_apply_failed` — the other half of the apply funnel, and
+  /// new: until it existed, `unsupported` vs `applyFailed` vs
+  /// `manufacturerRestriction` was invisible to every sink, so a device class
+  /// that can never apply anything was indistinguishable from one nobody tried.
+  /// GA4-only (not on the PostHog allow-list), like every other `*_attempt` /
+  /// failure diagnostic. [code] is the native `PlatformException.code`, or
+  /// `network`/`unknown` for the non-channel failures.
+  void _trackFailed(
+    AnalyticsService analytics,
+    Wallpaper wallpaper, {
+    required ApplyTarget target,
+    required String code,
+  }) {
+    analytics.track(
+      'wallpaper_apply_failed',
+      properties: {
+        ..._applyProps(wallpaper, target: target),
+        'code': code,
       },
     );
   }

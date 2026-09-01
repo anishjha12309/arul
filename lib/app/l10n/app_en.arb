@@ -48,6 +48,10 @@
   "applyTargetLock": "Lock screen",
   "applyTargetBoth": "Home and lock screen",
   "applied": "Wallpaper applied",
+  "appliedLiveFallback": "Live wallpapers aren't supported on this phone, so we set a still image instead.",
+  "@appliedLiveFallback": {
+    "description": "Toast after a LIVE wallpaper was applied as its own first frame, because the device has no live-wallpaper support at all. It must say BOTH things — the phone's limit, and that something was in fact applied — or the user reads a still image where they picked motion as a broken app."
+  },
   "offlineBody": "You're offline. Check your connection and try again.",
   "offlineTitle": "No internet",
   "offlineFeedBody": "Turn on the internet to see wallpapers.",

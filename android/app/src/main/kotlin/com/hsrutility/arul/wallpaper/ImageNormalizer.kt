@@ -275,6 +275,25 @@ class ImageNormalizer(private val context: Context) {
     }
 
     /**
+     * Centre-crops an ALREADY-DECODED [bitmap] to the display aspect and hands
+     * it back — the same geometry [normalizeIfNeeded] gives a file source, with
+     * no decode and no re-encode.
+     *
+     * The live-wallpaper static fallback ([WallpaperApplyChannel]) hands the
+     * clip's first frame straight to setBitmap, which the OS stores as a PNG,
+     * so that path is lossless end to end; routing the frame through
+     * [normalizeIfNeeded] instead would decode RGB_565 and re-encode JPEG q90
+     * for nothing. Only the CROP is shared, and it is shared rather than
+     * copied so the static and fallback paths can never drift into two
+     * different framings.
+     *
+     * Returns [bitmap] ITSELF when it already has the display shape, so callers
+     * must compare identity before recycling the result.
+     */
+    fun cropToDisplayAspect(bitmap: Bitmap): Bitmap =
+        cropToDisplayAspect(bitmap, getDisplaySize())
+
+    /**
      * Centre-crops [bitmap] to the display aspect.
      *
      * WHY (measured 2026-08-25 on a Nothing A001, Android 16, from a launcher

@@ -66,10 +66,12 @@ catalog/Neon wire values are `static`/`live` — an event↔Neon join on `type` 
 
 ## Reading the data — rules that prevent wrong conclusions
 
-- `wallpaper_applied.confirmed` is `true` only on a static apply. EVERY live apply goes through the
-  OS chooser, whose final "Set" tap is unobservable — live fires `confirmed=false` on chooser-open
-  (as Pakiza does). Filter `confirmed=true` for a strict completion count; **never quote the
-  unfiltered number as a completion rate.**
+- `wallpaper_applied.confirmed` is `true` on a static apply — **and on the one live apply that never
+  reaches a chooser**, the static fallback, which carries `fallback: true` beside it (present ONLY
+  there). EVERY other live apply goes through the OS chooser, whose final "Set" tap is unobservable —
+  those fire `confirmed=false` on chooser-open (as Pakiza does). Filter `confirmed=true` for a strict
+  completion count; **never quote the unfiltered number as a completion rate.**
+- **`wallpaper_apply_live_fallback` (`reason`: `featureMissing`|`chooserUnavailable`) is an over-fire tripwire, not a feature metric** — its rate against `wallpaper_apply_attempt` where `type=live` is the whole question: the fallback is for devices where live apply is impossible, so on mainstream hardware it must sit at ~0, and a rise means capable devices are being routed to a still image. **`wallpaper_apply_failed` (`code`) is only ever a SUBSET of `wallpaper_apply_attempt`** — it fires from the notifier's catch but only once the attempt event has, so a signed-url refusal or a dead connection mid-download is deliberately absent (counting one puts the numerator outside its denominator); a premium refusal is `apply_blocked_premium`, never this. `code` is the native `PlatformException.code`, else `network`/`unknown` — and **`unsupported` means two different things** (no live-wallpaper feature, vs `isWallpaperSupported` false), so split it by `type` before concluding anything.
 - `link_attributed=false` = the outgoing link carried no referral code; a WALLPAPER share still ships
   the App Link `/w/<id>` without `?ref=` (the Worker's Play redirect turns a code into `referrer=`), a
   REFERRAL share falls back to a plain store listing — either way the install can never be credited

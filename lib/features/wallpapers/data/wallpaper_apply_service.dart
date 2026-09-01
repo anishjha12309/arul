@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -23,8 +24,25 @@ enum ApplyTarget {
 // ─── Exception ───────────────────────────────────────────────────────────────
 
 class WallpaperApplyException implements Exception {
-  const WallpaperApplyException(this.message, {this.premiumRequired = false});
+  const WallpaperApplyException(
+    this.message, {
+    this.premiumRequired = false,
+    this.code,
+  });
   final String message;
+
+  /// The native `PlatformException.code` when this came from the apply channel
+  /// (`unsupported` | `manufacturerRestriction` | `permissionDenied` |
+  /// `sourceNotFound` | `applyFailed` | `unknown`), null otherwise.
+  ///
+  /// It used to be discarded at the channel boundary, which left every apply
+  /// failure looking identical to every sink. `wallpaper_apply_failed` reports
+  /// it, and that is the only reason it is threaded through — the UI still
+  /// maps failures to one localized line and must not branch on it. `unsupported`
+  /// in particular means two different things depending on which native method
+  /// raised it (no live-wallpaper feature vs. WallpaperManager unsupported), so
+  /// it is a diagnostic label, never a decision.
+  final String? code;
 
   /// The Worker refused with 403 `premium_required`.
   ///
@@ -37,6 +55,36 @@ class WallpaperApplyException implements Exception {
 
   @override
   String toString() => message;
+}
+
+// ─── Live apply outcome ─────────────────────────────────────────────
+
+/// What the native side actually did with a live apply.
+///
+/// The channel used to answer `null` for both, which made "the chooser is open
+/// over us" and "this device can't do live at all, so we applied the poster
+/// frame" indistinguishable — and they need opposite handling: one is an
+/// unobservable hand-off, the other is a finished, confirmed apply.
+enum LiveApplyOutcome {
+  /// The system live-wallpaper chooser opened. The user's "Set" tap happens in
+  /// an activity we cannot observe, so this is NEVER a success claim.
+  chooser,
+
+  /// Live apply is impossible on this device, so the native side applied the
+  /// clip's first frame as a static wallpaper. Already done when we get here.
+  staticFallback,
+}
+
+/// [LiveApplyOutcome] plus, for the fallback, WHY it was impossible.
+class LiveApplyResult {
+  const LiveApplyResult(this.outcome, {this.reason});
+
+  final LiveApplyOutcome outcome;
+
+  /// `featureMissing` | `chooserUnavailable` on [LiveApplyOutcome.staticFallback],
+  /// null otherwise. Reported as-is so the over-fire tripwire
+  /// (`wallpaper_apply_live_fallback`) can be split by cause.
+  final String? reason;
 }
 
 // ─── Gated action ────────────────────────────────────────────────────────────
@@ -93,8 +141,14 @@ abstract class WallpaperApplyService {
   /// video, then ALWAYS opens the system live-wallpaper preview/chooser, where
   /// the user makes the final "Set wallpaper" tap — every apply, even when our
   /// service is already active (deliberate product decision; no silent in-place
-  /// swap). Throws [WallpaperApplyException] if the chooser can't be opened.
-  Future<void> applyLiveWallpaper(File file, ApplyTarget target);
+  /// swap).
+  ///
+  /// Returns [LiveApplyOutcome.staticFallback] instead when the device cannot
+  /// run live wallpapers AT ALL (no platform feature, or no activity handles
+  /// either chooser intent): the native side has already applied the clip's
+  /// first frame as a static wallpaper, and that outcome is finished, not a
+  /// hand-off. Throws [WallpaperApplyException] on a real failure.
+  Future<LiveApplyResult> applyLiveWallpaper(File file, ApplyTarget target);
 }
 
 // ─── CDN-backed implementation ───────────────────────────────────────────────
@@ -109,6 +163,19 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
        _channel = channel ?? const MethodChannel(_channelName);
 
   static const _channelName = 'com.hsrutility.arul/wallpaper';
+
+  /// Test seam for the static fallback: `featureMissing` | `chooserUnavailable`
+  /// forces that reason on a device that is perfectly capable of live
+  /// wallpapers, so both branches can be walked without a Redmi.
+  ///
+  ///     flutter run --dart-define-from-file=env/dev.json \
+  ///       --dart-define=DEBUG_LIVE_WALLPAPER_FALLBACK=featureMissing
+  ///
+  /// Double-gated and dead in release: `kDebugMode` keeps the argument out of
+  /// the call here, and the native side ignores it unless `BuildConfig.DEBUG`.
+  static const _debugForceFallback = String.fromEnvironment(
+    'DEBUG_LIVE_WALLPAPER_FALLBACK',
+  );
 
   /// Present only when the Worker exists — drives the signed-url gate.
   final ApiClient? _api;
@@ -233,26 +300,44 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     } on PlatformException catch (e) {
       throw WallpaperApplyException(
         e.message ?? 'Failed to apply wallpaper (${e.code})',
+        code: e.code,
       );
     }
   }
 
   @override
-  Future<void> applyLiveWallpaper(File file, ApplyTarget target) async {
+  Future<LiveApplyResult> applyLiveWallpaper(
+    File file,
+    ApplyTarget target,
+  ) async {
     try {
       // The native side copies the MP4 into app-internal storage (persistent,
       // so the running wallpaper service reads a local file forever), saves the
       // service config, and opens the live-wallpaper preview/chooser. The
       // chooser owns the final home/lock decision, so [target] is not
       // forwarded for live (kept in the signature for symmetry).
-      await _channel.invokeMethod<void>('setVideoWallpaper', {
-        'filePath': file.path,
-        'enableAudio': false,
-        'loop': true,
-      });
+      final result = await _channel
+          .invokeMapMethod<String, Object?>('setVideoWallpaper', {
+            'filePath': file.path,
+            'enableAudio': false,
+            'loop': true,
+            if (kDebugMode && _debugForceFallback.isNotEmpty)
+              'debugForceFallback': _debugForceFallback,
+          });
+      if (result?['outcome'] == 'staticFallback') {
+        return LiveApplyResult(
+          LiveApplyOutcome.staticFallback,
+          reason: result?['reason'] as String?,
+        );
+      }
+      // Anything else is the product path. Deliberately the default: an
+      // unrecognised (or null, pre-fallback) payload must read as "the chooser
+      // is open", never as "we quietly applied a still image".
+      return const LiveApplyResult(LiveApplyOutcome.chooser);
     } on PlatformException catch (e) {
       throw WallpaperApplyException(
         e.message ?? 'Failed to set live wallpaper (${e.code})',
+        code: e.code,
       );
     }
   }

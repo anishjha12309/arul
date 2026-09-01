@@ -160,6 +160,10 @@ class AppLocalizationsTa extends AppLocalizations {
   String get applied => 'வால்பேப்பர் அமைக்கப்பட்டது';
 
   @override
+  String get appliedLiveFallback =>
+      'இந்த போனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.';
+
+  @override
   String get offlineBody =>
       'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
 

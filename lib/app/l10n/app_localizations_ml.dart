@@ -161,6 +161,10 @@ class AppLocalizationsMl extends AppLocalizations {
   String get applied => 'വാൾപേപ്പർ സെറ്റ് ചെയ്തു';
 
   @override
+  String get appliedLiveFallback =>
+      'ഈ ഫോൺ ലൈവ് വാൾപേപ്പർ പിന്തുണയ്ക്കുന്നില്ല, അതിനാൽ ഒരു നിശ്ചല ചിത്രം സെറ്റ് ചെയ്തു.';
+
+  @override
   String get offlineBody =>
       'നിങ്ങൾ ഓഫ്‌ലൈനിലാണ്. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.';
 

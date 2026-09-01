@@ -160,6 +160,10 @@ class AppLocalizationsKn extends AppLocalizations {
   String get applied => 'ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಆಗಿದೆ';
 
   @override
+  String get appliedLiveFallback =>
+      'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗೆ ಬೆಂಬಲ ಇಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಹೊಂದಿಸಿದ್ದೇವೆ.';
+
+  @override
   String get offlineBody =>
       'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
 

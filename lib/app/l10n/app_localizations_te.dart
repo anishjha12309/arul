@@ -160,6 +160,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get applied => 'వాల్‌పేపర్ సెట్ చేయబడింది';
 
   @override
+  String get appliedLiveFallback =>
+      'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లకు సపోర్ట్ లేదు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.';
+
+  @override
   String get offlineBody =>
       'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.';
 

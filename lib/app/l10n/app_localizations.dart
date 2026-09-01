@@ -394,6 +394,12 @@ abstract class AppLocalizations {
   /// **'Wallpaper applied'**
   String get applied;
 
+  /// Toast after a LIVE wallpaper was applied as its own first frame, because the device has no live-wallpaper support at all. It must say BOTH things — the phone's limit, and that something was in fact applied — or the user reads a still image where they picked motion as a broken app.
+  ///
+  /// In en, this message translates to:
+  /// **'Live wallpapers aren\'t supported on this phone, so we set a still image instead.'**
+  String get appliedLiveFallback;
+
   /// No description provided for @offlineBody.
   ///
   /// In en, this message translates to:

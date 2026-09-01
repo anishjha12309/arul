@@ -64,6 +64,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'Lock screen',
     'applyTargetBoth': 'Home and lock screen',
     'applied': 'Wallpaper applied',
+    'appliedLiveFallback':
+        'Live wallpapers aren\'t supported on this phone, so we set a still image instead.',
     'offlineBody': 'You\'re offline. Check your connection and try again.',
     'offlineTitle': 'No internet',
     'offlineFeedBody': 'Turn on the internet to see wallpapers.',
@@ -267,6 +269,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'பூட்டு திரை',
     'applyTargetBoth': 'முகப்பு மற்றும் பூட்டு திரை',
     'applied': 'வால்பேப்பர் அமைக்கப்பட்டது',
+    'appliedLiveFallback':
+        'இந்த போனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.',
     'offlineBody':
         'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     'offlineTitle': 'இணையம் இல்லை',
@@ -462,6 +466,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'లాక్ స్క్రీన్',
     'applyTargetBoth': 'హోమ్ మరియు లాక్ స్క్రీన్',
     'applied': 'వాల్‌పేపర్ సెట్ చేయబడింది',
+    'appliedLiveFallback':
+        'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లకు సపోర్ట్ లేదు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.',
     'offlineBody':
         'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.',
     'offlineTitle': 'ఇంటర్నెట్ లేదు',
@@ -650,6 +656,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'ಲಾಕ್ ಪರದೆ',
     'applyTargetBoth': 'ಮುಖ್ಯ ಮತ್ತು ಲಾಕ್ ಪರದೆ',
     'applied': 'ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಆಗಿದೆ',
+    'appliedLiveFallback':
+        'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗೆ ಬೆಂಬಲ ಇಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಹೊಂದಿಸಿದ್ದೇವೆ.',
     'offlineBody':
         'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'offlineTitle': 'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ',
@@ -841,6 +849,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'ലോക് സ്ക്രീൻ',
     'applyTargetBoth': 'ഹോം, ലോക് സ്ക്രീൻ',
     'applied': 'വാൾപേപ്പർ സെറ്റ് ചെയ്തു',
+    'appliedLiveFallback':
+        'ഈ ഫോൺ ലൈവ് വാൾപേപ്പർ പിന്തുണയ്ക്കുന്നില്ല, അതിനാൽ ഒരു നിശ്ചല ചിത്രം സെറ്റ് ചെയ്തു.',
     'offlineBody':
         'നിങ്ങൾ ഓഫ്‌ലൈനിലാണ്. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.',
     'offlineTitle': 'ഇന്റർനെറ്റ് ഇല്ല',
@@ -1030,6 +1040,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'लॉक स्क्रीन',
     'applyTargetBoth': 'होम और लॉक स्क्रीन',
     'applied': 'वॉलपेपर लगाया गया',
+    'appliedLiveFallback':
+        'यह फ़ोन लाइव वॉलपेपर नहीं चला सकता, इसलिए हमने एक स्थिर तस्वीर लगा दी।',
     'offlineBody': 'आप ऑफ़लाइन हैं। अपना कनेक्शन जाँचें और फिर कोशिश करें।',
     'offlineTitle': 'इंटरनेट नहीं है',
     'offlineFeedBody': 'वॉलपेपर देखने के लिए इंटरनेट चालू करें।',

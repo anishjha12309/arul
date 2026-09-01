@@ -159,6 +159,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get applied => 'वॉलपेपर लगाया गया';
 
   @override
+  String get appliedLiveFallback =>
+      'यह फ़ोन लाइव वॉलपेपर नहीं चला सकता, इसलिए हमने एक स्थिर तस्वीर लगा दी।';
+
+  @override
   String get offlineBody =>
       'आप ऑफ़लाइन हैं। अपना कनेक्शन जाँचें और फिर कोशिश करें।';
 

@@ -129,6 +129,96 @@ class ImageWallpaperManager(private val context: Context) {
             logd("Wallpaper set successfully")
         }
 
+    /**
+     * Sets an ALREADY-DECODED [bitmap] on home AND lock, for the live-wallpaper
+     * static fallback ([WallpaperApplyChannel.handleSetVideoWallpaper]): a
+     * device that cannot run live wallpapers at all gets the clip's own first
+     * frame instead of a dead end.
+     *
+     * Deliberately NOT [setWallpaper]'s path. The frame arrives decoded, so
+     * [ImageNormalizer.normalizeIfNeeded] would only add an RGB_565 decode and
+     * a JPEG q90 re-encode to a handoff that is otherwise lossless — the OS
+     * stores a bitmap given to `setBitmap` as a PNG. Only the centre-crop is
+     * shared, so the framing matches a static apply exactly.
+     *
+     * `visibleCropHint = null` is correct HERE and nowhere else: the bitmap is
+     * already display-aspect, so the OS has no slack to hand the launcher as
+     * parallax room (docs/edge-cases.md forbids the null hint on a RAW file,
+     * which is the case that framed every subject right of centre).
+     *
+     * Home and lock in ONE write: the chooser this stands in for commits
+     * `which=3`, so the fallback matches. `setBitmap` returns the new
+     * wallpaper's id, or zero on failure — the zero is the whole verification,
+     * which is why this path needs none of [setWallpaper]'s before/after
+     * getWallpaperId diffing.
+     *
+     * The caller owns [bitmap] and must recycle it; this only recycles the
+     * cropped copy it makes itself.
+     */
+    suspend fun setWallpaperFromBitmap(bitmap: Bitmap) =
+        withContext(Dispatchers.IO) {
+            val wallpaperManager = WallpaperManager.getInstance(context)
+
+            if (!wallpaperManager.isWallpaperSupported) {
+                throw WallpaperApplyException(
+                    "unsupported",
+                    "Wallpaper is not supported on this device.",
+                )
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                !wallpaperManager.isSetWallpaperAllowed
+            ) {
+                throw WallpaperApplyException(
+                    "manufacturerRestriction",
+                    "Setting wallpaper is blocked by device policy " +
+                            "(MDM, parental controls, or manufacturer restriction).",
+                )
+            }
+
+            val cropped = imageNormalizer.cropToDisplayAspect(bitmap)
+            logd("Setting bitmap wallpaper: ${cropped.width}x${cropped.height}")
+
+            try {
+                val id = wallpaperManager.setBitmap(
+                    cropped,
+                    null,
+                    true,
+                    WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK,
+                )
+                if (id == 0) {
+                    throw WallpaperApplyException(
+                        "applyFailed",
+                        "The system rejected the wallpaper write.",
+                    )
+                }
+            } catch (e: SecurityException) {
+                Log.e(TAG, "SecurityException setting bitmap wallpaper", e)
+                throw WallpaperApplyException(
+                    "permissionDenied",
+                    "Permission denied: ${e.message ?: "SET_WALLPAPER required"}",
+                )
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "OOM setting bitmap wallpaper", e)
+                throw WallpaperApplyException(
+                    "applyFailed",
+                    "Image is too large to process. Try a smaller image.",
+                )
+            } catch (e: WallpaperApplyException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected error setting bitmap wallpaper", e)
+                throw WallpaperApplyException(
+                    "applyFailed",
+                    "Failed to set wallpaper: ${e.message ?: "Unknown error"}",
+                )
+            } finally {
+                if (cropped !== bitmap && !cropped.isRecycled) cropped.recycle()
+            }
+
+            logd("Bitmap wallpaper set successfully")
+        }
+
     private fun setLockWithCompatibilityFallback(
         wallpaperManager: WallpaperManager,
         imageFile: File
