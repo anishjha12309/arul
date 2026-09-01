@@ -11,6 +11,11 @@
  *   4. exp > now  (jose handles this automatically)
  *   5. email_verified == true
  *
+ * The `nonce` claim is RETURNED, not checked here: only the caller knows what
+ * the request asked for. handleLogin compares the two ("ensure your
+ * server-side code validates that the request and response nonces are
+ * identical" — Sign in with Google implementation guide).
+ *
  * jose's createRemoteJWKSet caches the keyset and respects Cache-Control
  * from Google's response, which typically has a multi-hour TTL.
  */
@@ -35,6 +40,8 @@ export interface GoogleIdTokenClaims {
   email: string;
   email_verified: boolean;
   name: string | undefined;
+  /** Present only for tokens minted against a nonce (app builds from 1.0.0+60). */
+  nonce: string | undefined;
 }
 
 /**
@@ -69,5 +76,6 @@ export async function verifyGoogleIdToken(
     email: payload["email"] as string,
     email_verified: true,
     name: payload["name"] as string | undefined,
+    nonce: typeof payload["nonce"] === "string" ? payload["nonce"] : undefined,
   };
 }

@@ -274,7 +274,7 @@ class _FakeAuth implements AuthService {
   Future<void> get initialized => Future.value();
 
   @override
-  Future<AuthResult> signInWith(AuthProvider provider) =>
+  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) =>
       throw UnimplementedError();
 
   @override

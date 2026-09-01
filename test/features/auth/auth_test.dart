@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:arul/core/api/api_client.dart';
+import 'package:arul/core/auth/google_sign_in_init.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -18,10 +20,13 @@ class _FakeAuthService implements AuthService {
   int signOutCount = 0;
   int abandonCount = 0;
 
+  final List<bool> autoFlags = [];
+
   @override
-  Future<AuthResult> signInWith(AuthProvider provider) {
+  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) {
     final completer = Completer<AuthResult>();
     attempts.add(completer);
+    autoFlags.add(auto);
     return completer.future;
   }
 
@@ -424,6 +429,163 @@ void main() {
         throwsA(isA<http.ClientException>()),
       );
       expect(calls, 1);
+    });
+  });
+
+  // Google's 2026 "Implement Sign in with Google" guide puts the Credential
+  // Manager bottom sheet FIRST and the button flow behind it. These pin the
+  // order and, just as importantly, its two hard stops: never a second surface
+  // in one attempt, and never a picker over a sheet the user dismissed.
+  group('resolveGoogleCredential — surface order', () {
+    late List<String> surfaces;
+    late List<GoogleSignInException> unavailable;
+    late int buttonCalls;
+
+    setUp(() {
+      surfaces = [];
+      unavailable = [];
+      buttonCalls = 0;
+    });
+
+    Future<String> run({Future<String?>? Function()? sheet}) =>
+        ApiAuthService.resolveGoogleCredential<String>(
+          sheet: sheet,
+          button: () async {
+            buttonCalls++;
+            return 'button-credential';
+          },
+          onSurface: surfaces.add,
+          onSheetUnavailable: unavailable.add,
+        );
+
+    test('a credential from the sheet is the whole attempt — no picker after '
+        'it', () async {
+      final out = await run(sheet: () async => 'sheet-credential');
+
+      expect(out, 'sheet-credential');
+      expect(buttonCalls, 0, reason: 'ONE Google surface per attempt');
+      expect(surfaces, ['sheet']);
+    });
+
+    test('a sheet that drew NOTHING (null) falls through to the button', () async {
+      // No accounts, "Sign-in prompts" off, or no credential after both native
+      // steps: the user saw nothing, so the button is still their first surface.
+      final out = await run(sheet: () async => null);
+
+      expect(out, 'button-credential');
+      expect(surfaces, ['sheet', 'button']);
+      expect(unavailable, isEmpty, reason: 'nothing failed — it was empty');
+    });
+
+    test(
+      'a null sheet FUTURE (no lightweight flow here) falls through too',
+      () async {
+        final out = await run(sheet: () => null);
+
+        expect(out, 'button-credential');
+        expect(buttonCalls, 1);
+      },
+    );
+
+    test(
+      'a DISMISSED sheet STOPS the attempt — never a picker over it',
+      () async {
+        await expectLater(
+          run(
+            sheet: () async => throw const GoogleSignInException(
+              code: GoogleSignInExceptionCode.canceled,
+              description: 'activity is cancelled by the user',
+            ),
+          ),
+          throwsA(isA<GoogleSignInException>()),
+        );
+
+        expect(buttonCalls, 0, reason: 'the guide forbids retrying a cancel');
+        expect(surfaces, ['sheet']);
+        expect(unavailable, isEmpty, reason: 'a dismissal is not a failure');
+      },
+    );
+
+    test('every OTHER sheet failure is reported and falls through to the '
+        'button', () async {
+      for (final code in [
+        GoogleSignInExceptionCode.uiUnavailable,
+        GoogleSignInExceptionCode.interrupted,
+        // Where an Android 14 TransactionTooLargeException lands on GMS < 24.40.
+        GoogleSignInExceptionCode.unknownError,
+        GoogleSignInExceptionCode.providerConfigurationError,
+        GoogleSignInExceptionCode.clientConfigurationError,
+      ]) {
+        surfaces = [];
+        unavailable = [];
+        buttonCalls = 0;
+
+        final out = await run(
+          sheet: () async => throw GoogleSignInException(code: code),
+        );
+
+        expect(out, 'button-credential', reason: '$code must not end sign-in');
+        expect(surfaces, ['sheet', 'button']);
+        expect(unavailable.single.code, code, reason: 'counted, not swallowed');
+      }
+    });
+
+    test(
+      'the pill (no sheet) opens the button flow and nothing else',
+      () async {
+        final out = await run();
+
+        expect(out, 'button-credential');
+        expect(surfaces, ['button'], reason: 'a tap is already past the sheet');
+      },
+    );
+  });
+
+  // The nonce binds an ID token to the process that asked for it: the plugin
+  // accepts one only at initialize() and attaches it to every request after,
+  // and the Worker rejects a login whose request nonce and token claim differ.
+  group('GoogleSignInInit nonce', () {
+    setUp(GoogleSignInInit.resetForTest);
+    tearDown(GoogleSignInInit.resetForTest);
+
+    test('is 32 random bytes, unpadded base64url — Google\'s own shape', () {
+      final nonce = GoogleSignInInit.generateNonce();
+
+      expect(nonce, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
+      expect(base64Url.decode(base64.normalize(nonce)), hasLength(32));
+      expect(
+        GoogleSignInInit.generateNonce(),
+        isNot(nonce),
+        reason: 'a reused nonce protects nothing',
+      );
+    });
+
+    test('start() records the nonce for the exchange to send', () async {
+      GoogleSignInInit.start(serverClientId: 'server-client-id', nonce: 'n-1');
+
+      expect(GoogleSignInInit.nonce, 'n-1');
+      // Never throws, even with no platform implementation behind it.
+      await GoogleSignInInit.ready;
+    });
+
+    test(
+      'a second start() keeps the FIRST nonce — the tokens are bound to it',
+      () {
+        GoogleSignInInit.start(
+          serverClientId: 'server-client-id',
+          nonce: 'n-1',
+        );
+        GoogleSignInInit.start(
+          serverClientId: 'server-client-id',
+          nonce: 'n-2',
+        );
+
+        expect(GoogleSignInInit.nonce, 'n-1');
+      },
+    );
+
+    test('no nonce at all when start() never ran (define-less runs)', () {
+      expect(GoogleSignInInit.nonce, isNull);
     });
   });
 }

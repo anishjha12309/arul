@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// The auth providers the app supports. Add new values here when new providers
 /// are integrated — do NOT add provider-specific logic to widgets or the router.
 enum AuthProvider { google }
@@ -28,6 +30,21 @@ enum AuthFailureKind {
   tokenExchangeFailed,
   serverError,
   unknown,
+}
+
+/// The one wait during sign-in that the APP owns.
+///
+/// Everything up to the credential happens under Google's own UI — the sheet
+/// or the picker — so the app has nothing to say about it. Once the credential
+/// is in hand, `POST /auth/login` is ours (and can take up to 25.5s when the
+/// network retry earns its keep), and a busy pill with an unchanged subtitle
+/// reads as "nothing happened". True only for that window; reset per attempt.
+///
+/// A plain notifier rather than another [AuthService] member: it is UI-only
+/// state, it never gates a decision, and no test fake should have to grow a
+/// member to say "not exchanging".
+abstract final class SignInPhase {
+  static final ValueNotifier<bool> exchanging = ValueNotifier<bool>(false);
 }
 
 // ─── Auth state ──────────────────────────────────────────────────────────────
@@ -92,7 +109,16 @@ abstract interface class AuthService {
   Future<void> get initialized;
 
   /// Attempt sign-in via the given provider.
-  Future<AuthResult> signInWith(AuthProvider provider);
+  ///
+  /// [auto] marks the ONE automatic attempt of a signed-out stretch, fired
+  /// without a tap by the splash / the sign-in screen's first frame. It is
+  /// what selects the Credential Manager BOTTOM SHEET as the first surface
+  /// (Google's SIWG guide order). A user-initiated attempt — the pill — is
+  /// `auto: false` and goes straight to the button flow, because the reasons
+  /// Google gives for the button are exactly the reasons the user is tapping
+  /// it: the sheet was dismissed, there are no accounts, or the accounts on
+  /// the device need re-authentication.
+  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false});
 
   /// Declares every sign-in attempt started so far ABANDONED. If an abandoned
   /// attempt's `authenticate()` ever resolves after this (Credential Manager

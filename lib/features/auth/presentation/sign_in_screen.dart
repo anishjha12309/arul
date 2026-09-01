@@ -23,20 +23,23 @@ import 'widgets/video_background.dart';
 /// gate — public keys, no entitlement needed — not about reaching the feed
 /// without an account.
 ///
-/// PHASE CONTRACT — do not redesign this away: the real screen AUTO-LAUNCHES
-/// the FULL Google `authenticate()` on its first frame (google_sign_in v7:
-/// instance → initialize() → authenticate()). It must never be swapped to
-/// lightweight/silent auth; that was tried and rejected on retention grounds.
+/// PHASE CONTRACT — do not redesign this away: the real screen AUTO-LAUNCHES a
+/// Google credential request on its first frame, and that request is
+/// SHEET-FIRST (Google's SIWG guide: Credential Manager bottom sheet, then the
+/// button flow). It must never become a silent/no-UI check that leaves the
+/// user looking at a dead screen — the wall only works because a surface
+/// appears without a tap.
 ///
-/// Nor may lightweight auth run AHEAD of it as a warm-up — that was tried too,
-/// and measured on device (2026-08-11): `attemptLightweightAuthentication()`
-/// puts up a real Credential Manager bottom sheet on Android, so the user saw
-/// a drawer appear, hang, and vanish before the actual picker. ONE picker per
-/// sign-in. See `ApiAuthService._signInWithGoogle`.
+/// ONE visible Google surface per attempt: the picker follows the sheet only
+/// when the sheet drew NOTHING. A sheet run as a warm-up AHEAD of a picker is a
+/// different thing and stays forbidden (measured 2026-08-11: a drawer that
+/// appeared, hung and vanished, then the picker). See
+/// `ApiAuthService.resolveGoogleCredential`.
 ///
-/// The pill below is the fallback for a dismissed sheet — a generic
-/// "Continue with Google" retry affordance (never a named identity: the
-/// account choice belongs to Google's own sheet).
+/// The pill below is the button flow — Google's own fallback for a dismissed
+/// sheet, no Google accounts, or accounts needing re-auth. A tap therefore
+/// SKIPS the sheet. Generic "Continue with Google" copy, never a named
+/// identity: the account choice belongs to Google's own surface.
 ///
 /// The background player is SHARED with the splash — the same live decoder
 /// handed across the route — so arriving here never re-inits a MediaCodec.
@@ -80,10 +83,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   void initState() {
     super.initState();
     BootTrace.mark('signIn screen: initState');
-    // CONTRACT: auto-launch the FULL Google `authenticate()` on the first
-    // frame (google_sign_in v7: instance → initialize() [done in main()] →
-    // authenticate()). NEVER lightweight/silent auth — retention decision.
-    // The pill below is the fallback for a dismissed sheet.
+    // CONTRACT: auto-launch the Google credential request on the first frame
+    // (v7: instance → initialize() [done in main()] → sheet, then button).
+    // The pill below is the button flow on its own.
     // The guard is defensive: both defines are always set in shipped builds.
     // In a define-less local run there is nothing to authenticate against, so
     // auto-launch is skipped and the pill passes through to the feed.
@@ -230,13 +232,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         color: ArulTokens.ivory.withValues(alpha: 0.8),
                       ),
                     ),
-                    _SignInPill(
-                      title: 'Continue with Google',
-                      subtitle: _retryNudge
-                          ? "Didn't go through? Tap to try again"
-                          : 'Choose an account to get started',
-                      onTap: _signingIn ? () {} : _onPillTap,
-                      busy: _signingIn,
+                    // The subtitle is the only place the app narrates the
+                    // wait, and it may only claim a wait it OWNS: everything
+                    // up to the credential happens under Google's surface.
+                    ValueListenableBuilder<bool>(
+                      valueListenable: SignInPhase.exchanging,
+                      builder: (context, exchanging, _) => _SignInPill(
+                        title: 'Continue with Google',
+                        subtitle: exchanging
+                            ? 'Signing you in…'
+                            : _retryNudge
+                            ? "Didn't go through? Tap to try again"
+                            : 'Choose an account to get started',
+                        onTap: _signingIn ? () {} : _onPillTap,
+                        busy: _signingIn,
+                      ),
                     ),
                     const _TermsPrivacyLine(),
                   ],

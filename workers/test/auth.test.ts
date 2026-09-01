@@ -66,6 +66,7 @@ describe("POST /auth/login", () => {
       email: "aisha@example.com",
       email_verified: true,
       name: "Aisha",
+      nonce: undefined,
     });
     const { env } = envWithSql([
       {
@@ -121,6 +122,7 @@ describe("POST /auth/login", () => {
       email: "back@example.com",
       email_verified: true,
       name: "Back Again",
+      nonce: undefined,
     });
     const { sql, calls } = routedSql([
       { match: /UPDATE users[^]*google_sub/, rows: [] }, // no account
@@ -166,6 +168,7 @@ describe("POST /auth/login", () => {
       email: "fresh@example.com",
       email_verified: true,
       name: "Fresh",
+      nonce: undefined,
     });
     const { sql, calls } = routedSql([
       { match: /UPDATE users[^]*google_sub/, rows: [] },
@@ -181,6 +184,70 @@ describe("POST /auth/login", () => {
     const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
     expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
+  });
+
+  // ── Nonce (Google SIWG: "validate that the request and response nonces are
+  // identical") ──────────────────────────────────────────────────────────────
+  //
+  // The pair is checked, not just the request side: equal-or-nothing is what
+  // makes a nonce-bearing token unusable through an old-shaped request, and
+  // what keeps every pre-1.0.0+60 install — which sends none and whose tokens
+  // carry none — signing in.
+  describe("nonce", () => {
+    function loginWith(claimNonce: string | undefined, bodyNonce?: string) {
+      vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+        sub: "google-sub-nonce",
+        email: "nonce@example.com",
+        email_verified: true,
+        name: "Nonce",
+        nonce: claimNonce,
+      });
+      const { env } = envWithSql([
+        {
+          id: USER_ID,
+          display_name: "Nonce",
+          display_name_custom: false,
+          referral_code: "ABCD2345",
+        },
+      ]);
+      const body: Record<string, string> = { idToken: "valid" };
+      if (bodyNonce !== undefined) body.nonce = bodyNonce;
+      return handleLogin(makeCtx({ env, jsonBody: body }));
+    }
+
+    it("accepts a matching pair", async () => {
+      const res = await loginWith("n-abc", "n-abc");
+      expect(res.status).toBe(200);
+    });
+
+    it("401 nonce_mismatch when the values differ", async () => {
+      const res = await loginWith("n-abc", "n-xyz");
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+        "nonce_mismatch",
+      );
+    });
+
+    it("accepts a login with no nonce on either side (builds in the field)", async () => {
+      const res = await loginWith(undefined);
+      expect(res.status).toBe(200);
+    });
+
+    it("401 when the TOKEN carries a nonce the request omits (downgrade)", async () => {
+      const res = await loginWith("n-abc");
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+        "nonce_mismatch",
+      );
+    });
+
+    it("401 when the REQUEST carries a nonce the token does not", async () => {
+      const res = await loginWith(undefined, "n-abc");
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+        "nonce_mismatch",
+      );
+    });
   });
 });
 

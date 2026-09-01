@@ -16,8 +16,17 @@ import '../domain/auth_service.dart';
 
 /// [AuthService] implementation backed by the Cloudflare Worker API.
 ///
-/// Google sign-in flow:
-///   GoogleSignIn.instance.authenticate() → idToken → POST /auth/login
+/// Google sign-in follows the surface order of Google's own "Implement Sign in
+/// with Google" guide: Credential Manager BOTTOM SHEET first (automatic
+/// sign-in when exactly one authorized account exists), the "Sign in with
+/// Google" BUTTON flow as the fallback — for a sheet that drew nothing, a
+/// sheet that could not run, and every user-initiated retry.
+///   sheet | button → idToken (+ per-process nonce) → POST /auth/login
+///
+/// EXACTLY ONE visible Google surface per attempt: the picker follows a sheet
+/// only when the sheet drew NOTHING. A sheet run as a WARM-UP ahead of a
+/// picker is a different thing and is still forbidden (measured 2026-08-11:
+/// the user saw a drawer appear, hang and vanish, then the picker).
 ///
 /// Auth state is derived from stored tokens (no server-side session stream).
 /// The stream fires immediately on construction, then again after every
@@ -174,10 +183,10 @@ class ApiAuthService implements AuthService {
   AuthUserState get currentState => _current;
 
   @override
-  Future<AuthResult> signInWith(AuthProvider provider) {
+  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) {
     switch (provider) {
       case AuthProvider.google:
-        return _signInWithGoogle();
+        return _signInWithGoogle(auto: auto);
     }
   }
 
@@ -304,6 +313,7 @@ class ApiAuthService implements AuthService {
         // Null-aware elements: dropped entirely when absent.
         'error': ?_trimForAnalytics(error),
         'gis_code': ?gisCode,
+        'surface': ?_surface,
         'ms_since_authenticate': ?_msSinceAuthenticate,
       },
     );
@@ -323,7 +333,9 @@ class ApiAuthService implements AuthService {
   /// elapsed time is what splits the two populations.
   int? get _msSinceAuthenticate => _authClock?.elapsedMilliseconds;
 
-  /// Started immediately before `authenticate()`; see [_msSinceAuthenticate].
+  /// Started immediately before the FIRST Google surface of the attempt and
+  /// left running across a sheet→button escalation (one attempt, one clock);
+  /// see [_msSinceAuthenticate].
   Stopwatch? _authClock;
 
   /// Properties for every `login_cancelled` emission, so all three call sites
@@ -338,6 +350,7 @@ class ApiAuthService implements AuthService {
   /// `authenticate()`, because the clock starts at launch, not at the sheet.
   Map<String, Object?> _cancelProperties({String? description}) => {
     'provider': 'google',
+    'surface': ?_surface,
     'ms_since_authenticate': ?_msSinceAuthenticate,
     'description': ?_trimForAnalytics(description),
   };
@@ -388,26 +401,93 @@ class ApiAuthService implements AuthService {
     }
   }
 
-  Future<AuthResult> _signInWithGoogle() async {
+  /// Which Google surface the CURRENT attempt is on. Analytics data only —
+  /// never a branch condition. Null until a surface is actually opened, so a
+  /// failure before that (config guard, unsupported device) blames neither.
+  String? _surface;
+
+  static const _surfaceSheet = 'sheet';
+  static const _surfaceButton = 'button';
+
+  /// KILL SWITCH for sheet-first: `false` restores the previous behaviour —
+  /// the button flow only, on every attempt.
+  ///
+  /// A `static const` (a BUILD revert, not a server flag) deliberately:
+  /// `feature_flags` reach the app through `catalog/app_config.json`
+  /// (`appConfigProvider`), which is not on disk on a FIRST launch — and the
+  /// first launch is the whole install→login funnel this flow exists for. A
+  /// flag that arrives after the surface has opened controls nothing.
+  @visibleForTesting
+  static const bool sheetFirst = true;
+
+  /// The surface ORDER of Google's SIWG implementation guide, kept pure and
+  /// generic so the contract is pinnable without a platform channel.
+  ///
+  /// One attempt shows ONE Google surface. The button flow follows the sheet
+  /// only when the sheet drew nothing at all:
+  ///   * credential → done, on the sheet. With a single authorized account
+  ///     this is Google's automatic sign-in: the sheet shows briefly and
+  ///     nobody taps, so no copy may assume a tap happened.
+  ///   * null → nothing was drawable (no accounts on the device, "Sign-in
+  ///     prompts" turned off in Google Account settings, or no credential
+  ///     after BOTH native steps — authorized-filtered, then unfiltered).
+  ///     Nothing was shown, so the button is still the user's first surface.
+  ///   * `canceled` → the user DISMISSED the sheet. Stop. Never open the
+  ///     picker over a dismissed sheet: the Credential Manager troubleshooting
+  ///     guide forbids automatically retrying a cancellation, and a second
+  ///     surface inside one attempt is the 2026-08-11 "two pickers" bug by
+  ///     another route.
+  ///   * any other code → the sheet could not COMPLETE (`uiUnavailable`,
+  ///     `interrupted`, an Android 14 `TransactionTooLargeException` on
+  ///     GMS < 24.40 arriving as `unknownError`, a future code): report it and
+  ///     fall through to the button, which none of those failures affect.
+  ///     This bucket includes a failure AFTER the user picked an account —
+  ///     offline, GMS returns `unknownError` "[28404] Failed to retrieve an ID
+  ///     token" (device 2026-09-01) — so the picker CAN follow a sheet the user
+  ///     touched. That is deliberate: the user asked to sign in and the sheet
+  ///     could not deliver, and no signal distinguishes it from a sheet that
+  ///     never drew. Only `canceled` — the user saying no — stops the attempt.
+  ///
+  /// [sheet] is null when this attempt must not open one at all (a pill tap,
+  /// or the kill switch off). Its FUTURE may be null too — the plugin's
+  /// "no lightweight flow on this platform", handled exactly like a null
+  /// credential.
+  @visibleForTesting
+  static Future<T> resolveGoogleCredential<T extends Object>({
+    required Future<T?>? Function()? sheet,
+    required Future<T> Function() button,
+    required void Function(String surface) onSurface,
+    required void Function(GoogleSignInException e) onSheetUnavailable,
+  }) async {
+    if (sheet != null) {
+      onSurface(_surfaceSheet);
+      try {
+        final pending = sheet();
+        final credential = pending == null ? null : await pending;
+        if (credential != null) return credential;
+      } on GoogleSignInException catch (e) {
+        if (e.code == GoogleSignInExceptionCode.canceled) rethrow;
+        onSheetUnavailable(e);
+      }
+    }
+    onSurface(_surfaceButton);
+    return button();
+  }
+
+  Future<AuthResult> _signInWithGoogle({required bool auto}) async {
     final attempt = ++_attemptSeq;
-    // Clear first: a failure BEFORE authenticate() (unsupported device, config
-    // guard) must not report the PREVIOUS attempt's elapsed time.
+    // Clear first: a failure BEFORE any surface opened (unsupported device,
+    // config guard) must not report the PREVIOUS attempt's elapsed time or
+    // surface, and a fresh attempt never inherits a stale pill subtitle.
     _authClock = null;
+    _surface = null;
+    SignInPhase.exchanging.value = false;
     try {
-      // EXACTLY ONE account picker, always.
-      //
-      // `attemptLightweightAuthentication()` was tried here as a warm-up ahead
-      // of this call and REVERTED (measured on device, 2026-08-11): on Android
-      // its "minimal UI" is a real Credential Manager bottom sheet, so the user
-      // got a drawer that appeared, sat there, and vanished — and then the
-      // actual picker. Two pickers for one sign-in. Do not reintroduce it to
-      // "warm up" Credential Manager; the cold start it saves is ~230ms and it
-      // costs a second visible sheet.
-      //
       // v7: use the singleton. `initialize()` is STARTED in main() but no
-      // longer awaited there, so the contract (initialize → authenticate) is
-      // honoured by awaiting it here instead — off the cold-start path, on the
-      // one path that actually needs it. Never throws (see GoogleSignInInit).
+      // longer awaited there, so the contract (initialize → credential
+      // request) is honoured by awaiting it here instead — off the cold-start
+      // path, on the one path that actually needs it. Never throws (see
+      // GoogleSignInInit), and it is what put this process's nonce in place.
       await GoogleSignInInit.ready;
 
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
@@ -417,14 +497,52 @@ class ApiAuthService implements AuthService {
         );
       }
 
-      BootTrace.mark('signIn: authenticate() called');
-      // Left RUNNING deliberately: the property means "elapsed since
-      // authenticate() started", so a failure later in the flow (token
-      // exchange, POST /auth/login) reports its own real elapsed time rather
-      // than freezing at the picker's duration.
+      // Sheet first, but only for the automatic attempt: a tap means the user
+      // is already past what the sheet had to offer (see AuthService.signInWith
+      // and resolveGoogleCredential for the order and its reasons).
+      final useSheet = sheetFirst && auto;
+      _analytics.track(
+        'login_attempt',
+        properties: {
+          'provider': 'google',
+          'surface': useSheet ? _surfaceSheet : _surfaceButton,
+          'auto': auto,
+        },
+      );
+
+      BootTrace.mark('signIn: google surface opening');
+      // ONE clock for the whole attempt, left RUNNING deliberately: the
+      // property means "elapsed since the first Google surface opened", so a
+      // button step that follows an undrawable sheet keeps counting, and a
+      // failure later in the flow (token exchange, POST /auth/login) reports
+      // its own real elapsed time rather than freezing at the surface's.
       _authClock = Stopwatch()..start();
-      final account = await GoogleSignIn.instance.authenticate();
-      BootTrace.mark('signIn: authenticate() returned');
+      final account = await resolveGoogleCredential<GoogleSignInAccount>(
+        sheet: useSheet
+            ? () => GoogleSignIn.instance.attemptLightweightAuthentication(
+                // The plugin's DEFAULT swallows canceled/interrupted/
+                // uiUnavailable into a null result, which would make a
+                // DISMISSED sheet indistinguishable from an empty one — and
+                // put the picker up over it.
+                reportAllExceptions: true,
+              )
+            : null,
+        button: () {
+          BootTrace.mark('signIn: authenticate() called');
+          return GoogleSignIn.instance.authenticate();
+        },
+        onSurface: (surface) => _surface = surface,
+        onSheetUnavailable: (e) => _analytics.track(
+          'sheet_unavailable',
+          properties: {
+            'provider': 'google',
+            'gis_code': e.code.name,
+            'description': ?_trimForAnalytics(e.description),
+            'ms_since_authenticate': ?_msSinceAuthenticate,
+          },
+        ),
+      );
+      BootTrace.mark('signIn: credential in hand (surface=$_surface)');
 
       // Abandoned by the stall guard while Credential Manager sat on its
       // callback — a newer attempt (or none) owns the session now. Quietly
@@ -456,12 +574,20 @@ class ApiAuthService implements AuthService {
       // and a pair minted by a lost attempt is never stored (ages out
       // server-side).
       BootTrace.mark('signIn: POST /auth/login start');
+      // The credential is in hand, so the rest of the wait is OURS — the pill
+      // subtitle says so from here (see SignInPhase).
+      SignInPhase.exchanging.value = true;
       var exchangeRetried = false;
       final data = await postWithNetworkRetry(
         () => _api.post(
           '/auth/login',
           body: {
             'idToken': idToken,
+            // The nonce Google minted this token against (one per process, set
+            // at initialize()). The Worker rejects a login whose request nonce
+            // and token claim disagree; both absent is still accepted, which is
+            // what every build already in the field sends.
+            'nonce': ?GoogleSignInInit.nonce,
             // Null-aware elements: dropped entirely when absent.
             'referralCode': ?referralCode,
           },
@@ -548,6 +674,10 @@ class ApiAuthService implements AuthService {
         ArulEvents.loginSuccess,
         properties: {
           'provider': 'google',
+          // Which Google surface landed it, and how long the attempt took —
+          // the pair that says whether sheet-first is working.
+          'surface': ?_surface,
+          'ms_since_authenticate': ?_msSinceAuthenticate,
           // Present only when the exchange was saved by the network retry —
           // the field readout for whether the retry earns its keep.
           if (exchangeRetried) 'exchange_retried': true,
@@ -621,6 +751,10 @@ class ApiAuthService implements AuthService {
         'Sign-in failed. Please try again.',
         error: e.toString(),
       );
+    } finally {
+      // Identity-checked like every other side effect here: a zombie finishing
+      // late must not reset the pill of the attempt that replaced it.
+      if (attempt == _attemptSeq) SignInPhase.exchanging.value = false;
     }
   }
 

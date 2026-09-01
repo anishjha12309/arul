@@ -93,10 +93,14 @@ class AuthController extends _$AuthController {
   ///
   /// Safe to call from a button: a user who taps the pill while a sheet is
   /// already up gets that sheet's result, not a second sheet.
-  Future<AuthResult> signIn(AuthProvider provider) {
+  ///
+  /// [auto] is passed straight through to the service, where it selects the
+  /// FIRST Google surface — bottom sheet for the automatic attempt, button for
+  /// a tap (AuthService.signInWith). It is not a policy this layer owns.
+  Future<AuthResult> signIn(AuthProvider provider, {bool auto = false}) {
     final existing = _inFlight;
     if (existing != null) return existing;
-    final raw = ref.read(authServiceProvider).signInWith(provider);
+    final raw = ref.read(authServiceProvider).signInWith(provider, auto: auto);
     final started = DateTime.now();
     late final Future<AuthResult> guarded;
     guarded = _guard(raw, started).whenComplete(() {
@@ -213,7 +217,7 @@ class AuthController extends _$AuthController {
   Future<AuthResult>? autoSignIn(AuthProvider provider) {
     if (_autoLaunched) return _inFlight;
     _autoLaunched = true;
-    final attempt = signIn(provider);
+    final attempt = signIn(provider, auto: true);
     // Record a failure in case it settles before any screen joins; a screen
     // that DID join clears it after showing the toast itself. The service
     // never throws (every path returns a result), so no error continuation.

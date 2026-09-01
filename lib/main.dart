@@ -325,9 +325,17 @@ Future<void> _startApp() async {
   // `google_sign_in`'s own example does not await it either. Failure is
   // swallowed inside the holder (see its doc comment) so the unawaited future
   // can never reach the zone handler as a FATAL.
+  //
+  // The nonce is generated HERE, once per process, and handed to
+  // `initialize()` — the only place the plugin accepts one. Every ID token
+  // this process gets (sheet or button) then carries it, and the Worker
+  // rejects a login whose request nonce and token claim disagree.
   if (AppConfig.googleAuthConfigured) {
     BootTrace.mark('GoogleSignIn.initialize started (not awaited)');
-    GoogleSignInInit.start(serverClientId: AppConfig.googleWebClientId);
+    GoogleSignInInit.start(
+      serverClientId: AppConfig.googleWebClientId,
+      nonce: GoogleSignInInit.generateNonce(),
+    );
   }
 
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED

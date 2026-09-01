@@ -36,6 +36,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   let body: {
     idToken?: string;
     referralCode?: string;
+    nonce?: string;
   };
   try {
     body = await c.req.json();
@@ -60,6 +61,27 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   } catch (err) {
     console.error("[auth/login] Google idToken verification failed:", err);
     return errorResponse(401, "invalid_token", "Google idToken is invalid or expired");
+  }
+
+  // Nonce: the app generates one per PROCESS and hands it to
+  // GoogleSignIn.initialize(), so every ID token that process obtains carries
+  // it as a claim and the exchange sends the same value. Equal or nothing —
+  // which is what binds a token to the app process that requested it.
+  //
+  // Both absent is ACCEPTED on purpose: every build in the field before
+  // 1.0.0+60 sends no nonce and its tokens carry none. Requiring one either
+  // side would sign those installs out. Checking the pair (rather than only
+  // "if the body has one") is what closes the downgrade path: a nonce-bearing
+  // token replayed through an old-shaped request is rejected too.
+  const requestNonce =
+    typeof body.nonce === "string" && body.nonce ? body.nonce : null;
+  const tokenNonce = googleClaims.nonce ?? null;
+  if ((requestNonce || tokenNonce) && requestNonce !== tokenNonce) {
+    const missing = !requestNonce ? "request" : !tokenNonce ? "token" : "neither";
+    console.warn(
+      `[auth/login] nonce mismatch for google_sub ${googleClaims.sub} (missing: ${missing})`,
+    );
+    return errorResponse(401, "nonce_mismatch", "Sign-in nonce did not match");
   }
 
   // Rate limit AFTER verification, keyed by the GOOGLE ACCOUNT — never by IP.

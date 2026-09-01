@@ -57,7 +57,7 @@ Light / Dark / System, persisted. Read colours from **`lib/theme/arul_tokens.dar
 ## 8. Known Gotchas (MUST hold — full checklist in docs/edge-cases.md)
 1. Live video files: **1024×1824 only** (w%128==0, h%32==0, fits 1088×1920 hw-decoder cap) — anything else hits the green-edge / software-decode bug class on budget SoCs.
 2. Android 12+ wallpaper-apply restart: manifest `configChanges` includes `uiMode|colorMode` + `onConfigurationChanged` + dark launch theme. Apply must never cold-restart the app.
-3. Sign-in auto-launches FULL `authenticate()` on first frame — NEVER swap to lightweight/silent auth (retention decision), and never run it as a warm-up either: One Tap draws a real bottom sheet, so the user gets TWO pickers ([docs/edge-cases.md](docs/edge-cases.md) §Auth).
+3. Sign-in auto-launches Google's SHEET on the first frame and the picker only when the sheet drew NOTHING — one visible surface per attempt (never over a dismissal, never as a warm-up), a pill tap goes straight to the picker, and every ID token carries the per-process nonce the Worker matches ([docs/edge-cases.md](docs/edge-cases.md) §Auth).
 4. PhonePe: notify user 24h before each debit and never execute inside that window (quarter-hour cron, ≤600 PhonePe calls per invocation — on Workers Paid the 15-min cron wall clock is the ceiling, not the subrequest cap, [docs/cron.md](docs/cron.md)); SDK order token + the working cancel path are in [docs/phonepe.md](docs/phonepe.md).
 5. Hyperdrive query caching stays OFF (caused ~60s staleness).
 6. Stale catalog ≠ cache bug: fix by rebuilding, never by purging. Cache behaviour + its traps: [docs/caching.md](docs/caching.md).

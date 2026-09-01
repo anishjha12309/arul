@@ -9,7 +9,15 @@ Never call SDKs from widgets — always `AnalyticsService`. `CompositeAnalyticsS
 `trial_started` (Meta StartTrial; **no** GA4 `purchase` — a trial moves no money) · `subscription_active`
 (**emits NOTHING to GA4 or Meta**). `trial_started` carries `plan`, `order_id` (PhonePe merchant order
 id) and `value` (INR); `login_success` carries `provider` plus `exchange_retried: true` when the
-build-56 network retry saved the token exchange (absent otherwise — the field readout for that fix). **`trial_started` fires from the purchase poll —
+build-56 network retry saved the token exchange (absent otherwise — the field readout for that fix).
+**Sign-in SURFACE split (build 60, GA4-only — deliberately NOT on the PostHog list, which is the journey only):
+`login_attempt{provider, surface, auto}` once per attempt, carrying the FIRST surface tried (`sheet` for the
+auto-launch, `button` for a pill tap — a tap skips the sheet); `sheet_unavailable{gis_code, description,
+ms_since_authenticate}` when the sheet could not RUN and the button took over (a sheet that drew nothing emits
+nothing — nothing failed); and `surface` on `login_success` (with `ms_since_authenticate`), `login_cancelled`
+and `login_failed`, so a dismissal on the sheet and one on the picker stop being the same number. The
+free-text ones stay ≤100 chars (`_trimForAnalytics`). GA4 needs event-scoped custom dimensions registered for
+`surface`, `gis_code`, `description`, `ms_since_authenticate` or the params are collected but not reportable.** **`trial_started` fires from the purchase poll —
 or, for a trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget
 out: 13–15% of real trials vs Neon, 2026-08-26), late from `TrialConversionCatchUp` on the next `GET /me`
 showing `trialing` for a `merchant_order_id` this install never reported (`late: true`, once per order;
