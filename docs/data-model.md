@@ -60,6 +60,16 @@ not claw it back.
 trial_end · deleted_at. Written by `DELETE /me`; read by `/auth/login` to pre-seed a consumed trial
 on re-signup.
 
+**categories:** (slug, kind)(PK) · is_published · picker_order · created_at · published_at.
+**Written and read ONLY by the unified CMS** — no Worker route and no cron touches it, and
+`build-catalog` must never start: a category reaches the app by being on a PUBLISHED ROW, since the
+chips are derived from the catalog's items, so there is nothing here for the catalog to carry. It
+holds only OPERATOR-CREATED categories, staged unpublished so their rows can be uploaded and reviewed
+before anything appears in a chip; the CMS keeps those rows unpublished until the flag flips, and
+publishing flips both in one transaction with the `content_version` bump. The seeded slugs and
+anything already on a content row are never inserted, so nothing live can be retracted from here.
+`picker_order` sorts the CMS's dropdowns only — chips are sorted by `compareBrowseCategories`.
+
 **app_config:** singleton(id=1) · content_version · prices(jsonb) · support_email · policy_urls(jsonb)
 · feature_flags(jsonb) · min_supported_version
 
