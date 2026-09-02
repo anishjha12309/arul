@@ -1,14 +1,12 @@
-// QC — verify every imported file against docs/media-conventions.md.
-// Static: mjpeg 1080x1920, <=10MB. Live: h264 yuv420p 1024x1824, no-audio,
-// faststart (moov<mdat), <=15MB, <=10s, w%128==0 h%32==0, fits 1088x1920,
-// non-black frame0.
+// QC -> verify every imported file against docs/media-conventions.md.
+// Static: mjpeg 1080x1920, <=10MB. Live: h264 yuv420p 1024x1824, no audio, faststart (moov<mdat).
+// Live also: <=15MB, <=10s, w%128==0, h%32==0, fits 1088x1920, non-black frame 0.
 import { readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
 import { tmpdir } from "os";
 import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout (the in-repo cms/ folder this
-// used to point at was removed on 2026-07-20).
+// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 

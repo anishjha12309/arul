@@ -13,8 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
-/// Records every `signInWith` call and lets the test settle them by hand, so
-/// "was a second picker opened?" is answerable as a plain call count.
+/// Records every `signInWith` call and settles them by hand -> "was a second picker opened?" becomes a call count.
 class _FakeAuthService implements AuthService {
   final List<Completer<AuthResult>> attempts = [];
   int signOutCount = 0;
@@ -57,9 +56,8 @@ class _FakeAuthService implements AuthService {
 // ─── Domain model tests ───────────────────────────────────────────────────────
 
 void main() {
-  // Google's account picker is a system Activity: two overlapping attempts put
-  // two sheets on screen, and zero attempts strand the user on a dead screen.
-  // Both shipped once (2026-08-11) — these pin the guard from either side.
+  // Google's account picker is a system Activity -> two overlapping attempts put two sheets on screen.
+  // Zero attempts strand the user on a dead screen -> both shipped once -> these pin the guard from either side.
   group('AuthController auto sign-in', () {
     late _FakeAuthService auth;
     late AuthController controller;
@@ -123,8 +121,7 @@ void main() {
 
     test('a failure that settles with NO joiner is held, and consumed on '
         'read', () async {
-      // The splash fires the auto attempt fire-and-forget; a fast failure
-      // (e.g. no Play Services) settles before the sign-in screen mounts.
+      // The splash fires the auto attempt fire-and-forget -> a fast failure settles before the sign-in screen mounts.
       final first = controller.autoSignIn(AuthProvider.google)!;
       auth.settleLast(
         const AuthFailure(
@@ -208,10 +205,9 @@ void main() {
     });
   });
 
-  // Credential Manager can drop its callback outright — one attempt observed
-  // still pending 13 minutes later (device 2026-08-18). The busy pill ignores
-  // taps, so without the guard that hang bricked sign-in for the whole
-  // process. These pin the recovery path from both sides.
+  // Credential Manager can drop its callback outright -> one attempt was observed still pending 13 minutes later.
+  // The busy pill ignores taps -> without the guard that hang bricked sign-in for the whole process.
+  // These pin the recovery path from both sides.
   group('AuthController stall guard', () {
     late _FakeAuthService auth;
     late AuthController controller;
@@ -280,11 +276,9 @@ void main() {
 
     test('coming back to the foreground RESTARTS the clock — a settle during '
         'the fresh budget wins, never the abandon', () async {
-      // The 2026-08-22 device race: user sits in the account sheet past the
-      // stall budget, picks an account (app resumes), and the token exchange
-      // is still in flight when the next recheck window expires. Measured
-      // from the attempt's start the guard abandoned that healthy attempt;
-      // measured from the RESUME it must not.
+      // The device race -> the user sits in the account sheet past the stall budget, picks an account, the app resumes.
+      // The token exchange is still in flight when the next recheck window expires.
+      // Measured from the attempt's start the guard abandoned a healthy attempt -> measured from the RESUME it must not.
       var lifecycle = AppLifecycleState.paused;
       controller.lifecycleProbe = () => lifecycle;
 
@@ -292,8 +286,7 @@ void main() {
       // Sheet up well past stallLimit (120ms), then the user picks: resume.
       await Future<void>.delayed(const Duration(milliseconds: 200));
       lifecycle = AppLifecycleState.resumed;
-      // The exchange completes shortly after resume — inside the fresh
-      // budget, but long after the ORIGINAL clock expired.
+      // The exchange completes shortly after resume -> inside the fresh budget, long after the ORIGINAL clock expired.
       await Future<void>.delayed(const Duration(milliseconds: 60));
       auth.settleLast(const AuthSuccess(userId: 'u1'));
 
@@ -330,10 +323,9 @@ void main() {
     });
   });
 
-  // The old classifier string-sniffed for "cancel" — and Credential Manager
-  // phrases REAL failures that way (a token mint dying on a fresh LTE link
-  // surfaced as a silent pill-bounce, device 2026-08-18). Typed codes only;
-  // the enum is documented non-exhaustive, so unknowns must stay visible.
+  // The old classifier string-sniffed for "cancel" -> Credential Manager phrases REAL failures that way.
+  // A token mint dying on a fresh LTE link surfaced as a silent pill-bounce -> typed codes only.
+  // The enum is documented non-exhaustive -> unknowns must stay visible.
   group('mapGoogleSignInException', () {
     AuthResult map(GoogleSignInExceptionCode code) =>
         ApiAuthService.mapGoogleSignInException(
@@ -368,10 +360,8 @@ void main() {
     });
   });
 
-  // Pins the exchange-retry policy proven on device (2026-08-31 matrix): the
-  // one blackout loss was this POST timing out on an already-recovered link
-  // with the Google credential in hand — a lost exchange must never cost a
-  // second account picker when a retry can land it.
+  // The exchange-retry policy proven on device -> the one blackout loss was this POST timing out on a recovered link.
+  // The Google credential was already in hand -> a lost exchange must never cost a second account picker.
   group('postWithNetworkRetry', () {
     test(
       'retries a connectivity failure and returns the retry result',
@@ -432,10 +422,9 @@ void main() {
     });
   });
 
-  // Google's 2026 "Implement Sign in with Google" guide puts the Credential
-  // Manager bottom sheet FIRST and the button flow behind it. These pin the
-  // order and, just as importantly, its two hard stops: never a second surface
-  // in one attempt, and never a picker over a sheet the user dismissed.
+  // Google's guide puts the Credential Manager bottom sheet FIRST and the button flow behind it.
+  // Hard stop one -> never a second surface in one attempt.
+  // Hard stop two -> never a picker over a sheet the user dismissed.
   group('resolveGoogleCredential — surface order', () {
     late List<String> surfaces;
     late List<GoogleSignInException> unavailable;
@@ -468,8 +457,8 @@ void main() {
     });
 
     test('a sheet that drew NOTHING (null) falls through to the button', () async {
-      // No accounts, "Sign-in prompts" off, or no credential after both native
-      // steps: the user saw nothing, so the button is still their first surface.
+      // No accounts, "Sign-in prompts" off, or no credential after both native steps -> the user saw nothing.
+      // So the button is still their first surface.
       final out = await run(sheet: () async => null);
 
       expect(out, 'button-credential');
@@ -541,9 +530,8 @@ void main() {
     );
   });
 
-  // The nonce binds an ID token to the process that asked for it: the plugin
-  // accepts one only at initialize() and attaches it to every request after,
-  // and the Worker rejects a login whose request nonce and token claim differ.
+  // The nonce binds an ID token to the process that asked for it -> the plugin accepts one only at initialize().
+  // It attaches that nonce to every request after -> the Worker rejects a login whose request nonce and claim differ.
   group('GoogleSignInInit nonce', () {
     setUp(GoogleSignInInit.resetForTest);
     tearDown(GoogleSignInInit.resetForTest);

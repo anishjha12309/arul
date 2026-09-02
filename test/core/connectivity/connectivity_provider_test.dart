@@ -1,13 +1,8 @@
-// Tests for the offline gate's connectivity layer: isOnlineProvider maps the
-// connectivity_plus snapshot/stream to a plain online/offline bool. A fake
-// Connectivity is injected via connectivityProvider (the real plugin has no
-// platform channel under `flutter test`).
-//
-// Values are captured via `container.listen` (how a widget consumes the
-// provider) rather than `.future`: the seed stream closes right after its first
-// value, and reading `.future` on a just-closed StreamProvider with no active
-// listener never settles. Production reads it with `ref.watch`, which is the
-// listen path exercised here.
+// isOnlineProvider maps the connectivity_plus snapshot and stream to a plain online/offline bool.
+// A fake Connectivity is injected via connectivityProvider -> the real plugin has no channel under `flutter test`.
+// Values are captured with `container.listen`, not `.future` -> the seed stream closes right after its first value.
+// Reading `.future` on a just-closed StreamProvider with no active listener never settles.
+// Production reads it with `ref.watch` -> that is the listen path exercised here.
 
 import 'dart:async';
 
@@ -17,8 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 
-/// Minimal fake: a seeded [checkConnectivity] result plus an optional change
-/// stream. `noSuchMethod` covers any interface members the provider doesn't use.
+/// Minimal fake: a seeded [checkConnectivity] result plus an optional change stream.
+/// `noSuchMethod` covers any interface members the provider does not use.
 class _FakeConnectivity implements Connectivity {
   _FakeConnectivity(this._initial, [Stream<List<ConnectivityResult>>? changes])
     : _changes = changes ?? const Stream.empty();

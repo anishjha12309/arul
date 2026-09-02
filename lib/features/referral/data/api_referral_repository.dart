@@ -12,7 +12,7 @@ class ApiReferralRepository implements ReferralRepository {
 
   @override
   Future<List<ReferralModel>> getReferrals(String referrerId) async {
-    // GET /me/referrals (Worker, architecture.md §3.5) → { items: [...] }; 404 → [].
+    // GET /me/referrals (architecture.md §3.5) -> { items: [...] }; 404 -> [].
     try {
       final data = await _api.get('/me/referrals');
       return _parseItems(data);
@@ -24,13 +24,13 @@ class ApiReferralRepository implements ReferralRepository {
 
   @override
   Future<ReferralSummary> getReferralSummary() async {
-    // GET /me/referrals → { referral_code, items: [...], total_reward_days }.
+    // GET /me/referrals -> { referral_code, items: [...], total_reward_days }.
     try {
       final data = await _api.get('/me/referrals');
       final items = _parseItems(data);
       final total =
           (data['total_reward_days'] as num?)?.toInt() ??
-          // Fallback: derive from items if the server didn't send a total.
+          // Server sent no total -> sum the items.
           items.fold<int>(0, (sum, r) => sum + r.rewardDays);
       return ReferralSummary(
         referralCode: data['referral_code'] as String?,

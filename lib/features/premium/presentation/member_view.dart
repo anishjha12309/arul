@@ -6,8 +6,7 @@ import 'paywall_ornaments.dart';
 
 /// The premium plan home for trialing and active subscribers.
 ///
-/// Subscription state and actions remain owned by PremiumScreen; this widget
-/// only renders the five values that distinguish the two member states.
+/// State and actions stay owned by PremiumScreen -> this renders only the five distinguishing values.
 class ArulMemberView extends StatelessWidget {
   const ArulMemberView({
     super.key,

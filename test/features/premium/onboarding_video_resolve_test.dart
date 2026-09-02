@@ -5,9 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 AppConfigModel _config(Map<String, dynamic> flags) =>
     AppConfigModel(prices: const {}, policyUrls: const {}, featureFlags: flags);
 
-/// The fallback ladder is the whole risk here: an ad can carry any of the six
-/// locales, only five cuts exist, and getting it wrong means either a 404 where
-/// a video was promised or the wrong language talking at the user.
+/// An ad can carry any of the six locales but only five cuts exist -> a wrong resolve is a 404 or the wrong language.
 void main() {
   group('resolveOnboardingVideo', () {
     test('serves the requested language when a cut exists', () {
@@ -18,15 +16,13 @@ void main() {
     });
 
     test('falls back to English for a locale with no cut', () {
-      // `hi` is a live ad language with no dub produced yet. It must degrade to
-      // English, never request a key that does not exist.
+      // `hi` is a live ad language with no dub yet -> degrade to English, never request a key that does not exist.
       final source = resolveOnboardingVideo(_config({}), 'hi');
       expect(source?.lang, 'en');
     });
 
     test('reports the language actually played, not the one asked for', () {
-      // Analytics attributes the cut that ran; a `hi` link reporting "hi" would
-      // hide the fact that nobody has ever heard a Hindi pitch.
+      // Analytics attributes the cut that RAN -> a `hi` link reporting "hi" would hide that nobody heard a Hindi pitch.
       expect(resolveOnboardingVideo(_config({}), 'hi')?.lang, 'en');
     });
 

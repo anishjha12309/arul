@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 
-/// Label / icon / busy-spinner interior of [ArulButton]. Split out so the
-/// button file stays about the press physics.
+/// Label / icon / busy-spinner interior of [ArulButton].
+///
+/// Split out -> the button file stays about the press physics.
 class ButtonContent extends StatelessWidget {
   const ButtonContent({
     super.key,

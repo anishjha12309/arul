@@ -3,30 +3,23 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin plugins.
+    // The Flutter plugin reads the Android and Kotlin extensions -> it must be applied after both.
     id("dev.flutter.flutter-gradle-plugin")
-    // Firebase plugins are declared (apply false) in settings.gradle.kts but
-    // applied CONDITIONALLY below — the plugins {} DSL block can't be conditional,
-    // so we apply(plugin = …) only when android/app/google-services.json exists.
+    // The plugins {} DSL cannot be conditional -> Firebase is applied with apply(plugin = …) below instead.
 }
 
-// Firebase — applied ONLY when android/app/google-services.json is present. This
-// keeps the build green until the Firebase project is provisioned: without the
-// file the google-services plugin fails ("File google-services.json is missing"),
-// so dev/CI builds must not apply it. Dropping the file in enables Firebase
-// natively (pair it with FIREBASE_ENABLED=true in env/*.json for the Dart side).
-// Order matters: google-services MUST come before crashlytics/perf. crashlytics
-// auto-uploads the R8 mapping (isMinifyEnabled = true below) for deobfuscated
-// release stack traces.
+// google-services.json is git-ignored -> the plugin fails outright when it is missing -> apply Firebase only if it exists.
+// Dropping the file in enables Firebase natively -> pair it with FIREBASE_ENABLED=true in env/*.json for the Dart side.
+// google-services MUST be applied before crashlytics and perf -> the order of these three lines is load-bearing.
+// crashlytics auto-uploads the R8 mapping -> release stack traces come back deobfuscated -> keep minify on below.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
     apply(plugin = "com.google.firebase.firebase-perf")
 }
 
-// Release signing. key.properties is git-ignored; when absent the build silently
-// falls back to DEBUG keys — the release-build skill verifies CN=HSR Apps for
-// exactly this reason.
+// key.properties is git-ignored -> when absent the build silently signs with DEBUG keys.
+// The release-build skill checks CN=HSR Apps for exactly that reason.
 val keystoreProperties = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) f.inputStream().use { load(it) }
@@ -38,16 +31,14 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    // Generate BuildConfig so debug-only native logs can gate on BuildConfig.DEBUG.
+    // Native debug-only logging gates on BuildConfig.DEBUG -> that constant only exists if BuildConfig is generated.
     buildFeatures {
         buildConfig = true
     }
 
     compileOptions {
-        // Required by flutter_local_notifications (v22+): zonedSchedule uses
-        // java.time, which needs the backport on the older API levels this app
-        // still supports. Without it the build fails outright at
-        // checkDebugAarMetadata. Matches Pakiza.
+        // flutter_local_notifications' zonedSchedule uses java.time -> old API levels need the desugaring backport.
+        // Turn it off and the build fails outright at checkDebugAarMetadata -> not a runtime-only concern.
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -59,14 +50,11 @@ android {
         targetSdk = flutter.targetSdkVersion   // 36 -> edge-to-edge is ENFORCED
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Launcher + themed icons are vectors; render at build time for old APIs
-        // instead of shipping extra PNG densities.
+        // Launcher and themed icons are vectors -> old APIs cannot render them -> rasterise at build time.
         vectorDrawables.useSupportLibrary = true
 
-        // Meta SDK app id + client token → AndroidManifest meta-data. Empty when
-        // unset/placeholder (see realDefine), which leaves the SDK inert; the
-        // Dart side is gated in parallel by AppConfig.metaEnabled. A build with
-        // no META defines therefore still works (placeholders resolve to "").
+        // These feed the com.facebook.sdk.* manifest meta-data -> unset or placeholder resolves to "" -> the SDK stays inert.
+        // AppConfig.metaEnabled gates the Dart side in parallel -> a build with no META defines still works.
         val defines = dartDefines()
         manifestPlaceholders["facebookAppId"] = realDefine(defines, "META_APP_ID")
         manifestPlaceholders["facebookClientToken"] =
@@ -87,9 +75,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
-            // R8 only shrinks the Java/Kotlin layer — the APK is dominated by
-            // libflutter/libapp — but it earns its keep once Firebase, Play
-            // Services and PhonePe land. shrinkResources requires minify.
+            // R8 shrinks only the Java/Kotlin layer -> libflutter/libapp dominate the APK -> expect a modest win, not a big one.
+            // shrinkResources requires minify -> the two flags move together.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -101,13 +88,8 @@ android {
 }
 
 // ── Meta (Facebook) SDK config from dart-defines ──────────────────────────────
-// Flutter forwards `--dart-define[-from-file]` values to Gradle as the
-// `dart-defines` project property: a comma-separated list of base64-encoded
-// `KEY=VALUE` pairs. Decode it so META_APP_ID / META_CLIENT_TOKEN can be baked
-// into the AndroidManifest meta-data via manifestPlaceholders (see the
-// com.facebook.sdk.* entries in AndroidManifest.xml). Keeping the values here —
-// not committed in strings.xml — means no Meta config lives in the repo and the
-// same source of truth (env/*.json) drives both the Dart and native sides.
+// Flutter hands `--dart-define` values to Gradle as `dart-defines` -> a comma-separated list of base64 `KEY=VALUE` pairs.
+// Reading them here keeps Meta config out of strings.xml -> env/*.json stays the one source for both Dart and native.
 fun dartDefines(): Map<String, String> {
     val raw = (project.findProperty("dart-defines") as String?) ?: return emptyMap()
     return raw.split(",")
@@ -120,8 +102,7 @@ fun dartDefines(): Map<String, String> {
         .toMap()
 }
 
-// Treat env-file placeholders (`YOUR_…`, `placeholder-…`) as "unset" so a
-// half-configured build produces an inert SDK rather than a bogus app id.
+// Env-file placeholders count as UNSET -> a half-configured build gets an inert SDK, never a bogus app id.
 fun realDefine(defines: Map<String, String>, key: String): String {
     val v = defines[key] ?: return ""
     return if (v.startsWith("YOUR_") || v.startsWith("placeholder")) "" else v
@@ -134,43 +115,29 @@ kotlin {
 }
 
 dependencies {
-    // Java 8+ API desugaring — required by flutter_local_notifications for the
-    // scheduled (zonedSchedule) devotional reminders. Version pinned to Pakiza's.
+    // Java 8+ API desugaring -> flutter_local_notifications needs it for zonedSchedule -> version kept in step with Pakiza's.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
-    // Splash screen: BACKPORTS the Android 12 splash (icon on a field) to API 23+.
-    // Without it the platform attrs in values/styles.xml only apply on Android 12+,
-    // and API<=30 falls back to `windowBackground` — a FLAT COLOUR with no icon,
-    // which is ~28% of installs (measured on a vivo 1916 / Android 9: a bare ink
-    // rectangle for the whole cold start). Android's own migration guide: "If you
-    // migrate using the SplashScreen API directly, on Android 11 and earlier your
-    // splash screen looks exactly the same as before the migration" — which is
-    // exactly the bug — and it "strongly recommends" this library instead.
+    // BACKPORTS the Android 12 splash (icon on a field) to API 23+ -> the platform attrs alone apply only on Android 12+.
+    // Without it API<=30 falls back to `windowBackground` -> a flat iconless colour for the whole cold start.
+    // Android's migration guide says the direct SplashScreen API leaves Android 11 and earlier unchanged -> use this library.
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    // Media3 ExoPlayer — the app's single video runtime, used by BOTH:
-    //   • feedvideo/FeedVideoPlugin  — the in-feed live-preview texture pool
-    //   • wallpaper/VideoRenderer    — the applied live wallpaper's own service
-    // Keep the media3 modules in version lockstep.
+    // Media3 is the app's ONLY video runtime -> feedvideo/FeedVideoPlugin and wallpaper/VideoRenderer both build on it.
+    // Every media3 artifact below must share one version -> mixed versions fail at runtime, not at build time.
     implementation("androidx.media3:media3-exoplayer:1.10.1")
     implementation("androidx.media3:media3-common:1.10.1")
 
-    // Share-time watermarking (share/ShareWatermarkChannel): Transformer re-encodes
-    // the live clip with a full-frame PNG BitmapOverlay burned in. Same version
-    // lockstep rule as above — ALL media3 artifacts must match.
+    // Share-time watermarking -> Transformer re-encodes the live clip with a full-frame BitmapOverlay burned in.
     implementation("androidx.media3:media3-transformer:1.10.1")
     implementation("androidx.media3:media3-effect:1.10.1")
 
-    // Coroutines — off-main-thread file persistence in the apply channel.
+    // Coroutines carry the apply channel's file writes off the main thread.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // Meta deferred deep links (MainActivity.fetchMetaDeferredLink). The
-    // facebook_app_events plugin already pulls facebook-android-sdk in this
-    // SAME range — declared here too because a plugin's `implementation`
-    // dependencies are invisible to this module's compile classpath, so
-    // AppLinkData / FacebookSdk would not resolve. Same range, not a pin, so
-    // Gradle keeps resolving ONE version for both (18.3.0 as of 2026-08-26);
-    // two different pins here and in the plugin would be a runtime mismatch.
+    // MainActivity.fetchMetaDeferredLink needs AppLinkData/FacebookSdk -> a plugin's `implementation` deps are off our classpath.
+    // facebook_app_events pulls the SAME range -> declaring a RANGE, not a pin, keeps Gradle resolving ONE version for both.
+    // Two different pins here and in the plugin would be a runtime mismatch -> never pin these.
     implementation("com.facebook.android:facebook-core:[18.0,19.0)")
     implementation("com.facebook.android:facebook-applinks:[18.0,19.0)")
 }

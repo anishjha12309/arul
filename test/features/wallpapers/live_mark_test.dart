@@ -4,11 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:arul/features/wallpapers/presentation/live_mark.dart';
 import 'package:arul/theme/arul_tokens.dart';
 
-/// The live marker replaced a text badge, so the properties worth pinning are
-/// the ones that made a glyph the right answer at all: it carries no text, it
-/// borrows the Share circle's glass from the SAME tokens rather than restating
-/// them, and it keeps the shadow that is the only reason it survives a white
-/// temple.
+/// The live marker replaced a text badge -> it carries NO text, which is what made a glyph the right answer.
+/// It borrows the Share circle's glass from the SAME tokens -> never restate those values here.
+/// It keeps its shadow -> that is the only reason the mark survives a white temple.
 void main() {
   Future<void> pumpMark(WidgetTester tester) => tester.pumpWidget(
     const Directionality(
@@ -83,8 +81,7 @@ void main() {
     tester,
   ) async {
     await pumpMark(tester);
-    // Settles rather than timing out: proof there is no ticker in here. The
-    // mark shares a card with a live video texture.
+    // Settles rather than timing out -> proof there is no ticker here -> the mark shares a card with a video texture.
     await tester.pumpAndSettle();
   });
 }

@@ -1,37 +1,20 @@
 /**
- * Rate-limit helper over Cloudflare's native rate-limiting binding.
+ * Rate-limit helper over Cloudflare's native binding — [[ratelimits]] in wrangler.toml, injected as `env.RL_*`.
+ * https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
  *
- * Bindings are declared in wrangler.toml under [[ratelimits]] and injected as
- * `env.RL_*`. See https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
- *
- * Two deliberate properties:
- *
- *   1. FAIL OPEN. An absent binding (older deployment, unit tests) or a limiter
- *      that throws must never block a paying user. These limits exist to blunt
- *      abuse of expensive routes, not to enforce correctness — the real
- *      guarantees live in the entitlement check, the one-live-mandate guard and
- *      PhonePe itself. A rate limiter that takes the app down is worse than the
- *      abuse it prevents.
- *
- *   2. KEYED BY ACTOR, NOT IP, wherever an authenticated identity exists.
- *      Cloudflare's own guidance: IP keys punish carrier-grade NAT, which in
- *      India means a single mobile operator's subscribers share a key. User id
- *      is the right unit for /payments and /media. IP is used only where there
- *      is no verified identity yet (login).
- *
- * Counters are per Cloudflare location and eventually consistent, so treat the
- * effective limit as "roughly N per period per colo", not an exact quota.
+ * FAIL OPEN: an absent binding or a throwing limiter must never block a paying user
+ * These blunt abuse of expensive routes, they enforce nothing -> correctness lives in the entitlement
+ * check, the one-live-mandate guard and PhonePe -> a limiter that takes the app down is the worse failure
+ * KEYED BY ACTOR, NOT IP, wherever an identity is verified -> carrier-grade NAT shares one IP across a
+ * whole Indian operator's subscribers -> user id for /payments and /media, IP only pre-login
+ * Counters are per colo and eventually consistent -> read the limit as "roughly N per period per colo", not a quota
  */
 
-/** Client IP for the unauthenticated case. Falls back to a constant so a
- *  missing header degrades to one shared bucket rather than to no limit. */
+/** Client IP for the unauthenticated case -> a missing header degrades to one shared bucket, never to no limit. */
 export function clientIp(req: { header: (name: string) => string | undefined }): string {
   return req.header("CF-Connecting-IP") ?? req.header("X-Forwarded-For") ?? "unknown";
 }
 
-/**
- * @returns true when the request is allowed to proceed.
- */
 export async function allowRequest(
   limiter: RateLimit | undefined,
   key: string,
@@ -46,7 +29,7 @@ export async function allowRequest(
   }
 }
 
-/** Standard 429 envelope, matching the app's { error: { code, message } } shape. */
+/** 429 envelope -> the app parses every error as { error: { code, message } } -> keep the shape. */
 export function tooManyRequests(message = "Too many requests — please slow down"): Response {
   return Response.json(
     { error: { code: "rate_limited", message } },

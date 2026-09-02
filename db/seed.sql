@@ -1,10 +1,6 @@
--- Arul — Neon seed data. Run AFTER every db/schema/*.sql on a fresh database.
--- Only app_config is seeded. Wallpaper and ringtone rows arrive via the
--- content-import pipeline (tools/content-import) or the CMS — content-ops skill.
---
--- prices = PAYWALL DISPLAY values (paise, INR) served via catalog/app_config.json.
--- The Worker's actual debit amount is a constant in workers/src (₹199 = 19900) —
--- keep the two in sync when changing price.
+-- Arul — Neon seed data; run AFTER every db/schema/*.sql on a fresh database.
+-- Only app_config is seeded -> wallpaper and ringtone rows arrive via tools/content-import or the CMS.
+-- `prices` is PAYWALL DISPLAY only (paise, INR) -> the debit amount is a constant in workers/src -> change both.
 
 insert into app_config (
   id,
@@ -20,9 +16,7 @@ values (
   0,
   '{ "monthly": { "amount": 19900, "currency": "INR" } }'::jsonb,
   'support@hsrutility.com',
-  -- Arul's own sub-site. These were the shared /privacy/ and /terms/ pages until
-  -- 2026-08-20, when each app got a self-contained set; the shared privacy slug now
-  -- redirects to the website's own policy and no longer describes this app.
+  -- Legal pages live on Arul's OWN sub-site -> the shared /privacy/ page no longer describes this app.
   '{
      "privacy": "https://hsrutility.com/arul/privacy-policy/",
      "terms":   "https://hsrutility.com/arul/terms/",

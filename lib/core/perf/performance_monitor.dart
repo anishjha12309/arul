@@ -1,35 +1,28 @@
-/// Single interface for custom performance traces (Firebase Performance
-/// Monitoring).
+/// Single interface for custom performance traces (Firebase Performance Monitoring).
 ///
-/// Perf auto-collects app-start + all HTTP/S network traces with NO code, which
-/// already covers catalog/API/CDN latency. This abstraction is only for the few
-/// custom traces worth measuring by hand (v1: wallpaper apply). Widgets must
-/// never touch `FirebasePerformance` directly — depend on this behind
-/// `performanceMonitorProvider`, which picks the no-op when Firebase is not
-/// initialised.
+/// Perf auto-collects app-start and every HTTP/S trace with NO code -> catalog, API and CDN latency
+/// are already covered -> hand-write a trace only for what it misses (v1: wallpaper apply).
+/// Never touch `FirebasePerformance` from a widget -> depend on this via `performanceMonitorProvider`,
+/// which picks the no-op when Firebase is not initialised.
 abstract interface class PerformanceMonitor {
-  /// Starts (and returns) a running custom trace. Always pair with [PerfTrace.stop].
+  /// Starts (and returns) a running custom trace -> always pair with [PerfTrace.stop].
   Future<PerfTrace> startTrace(String name);
 }
 
-/// A single running trace. Stops the timer on [stop]; attributes/metrics added
-/// before then are uploaded with it.
+/// A single running trace -> attributes and metrics added before [stop] are uploaded with it.
 abstract interface class PerfTrace {
-  /// Low-cardinality string dimension (e.g. result=success). Avoid unbounded
-  /// values like ids — Perf caps attributes per trace.
+  /// Low-cardinality string dimension (e.g. result=success) -> Perf caps attributes per trace ->
+  /// never an unbounded value like an id.
   void putAttribute(String name, String value);
 
-  /// Sets a numeric metric on the trace.
   void setMetric(String name, int value);
 
   /// Stops and submits the trace.
   Future<void> stop();
 }
 
-/// No-op used ONLY under `flutter test`, or in a build without the
-/// `FIREBASE_ENABLED` define — the two cases where Firebase is never
-/// initialised. Every real build (debug, profile and release) gets the real
-/// Firebase monitor.
+/// No-op for the only two cases where Firebase is never initialised: `flutter test`, and a build
+/// without the `FIREBASE_ENABLED` define -> every real build (debug, profile, release) gets the real one.
 class NoOpPerformanceMonitor implements PerformanceMonitor {
   const NoOpPerformanceMonitor();
 

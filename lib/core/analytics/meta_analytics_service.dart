@@ -7,53 +7,26 @@ import 'analytics_service.dart';
 
 /// [AnalyticsService] backed by Meta App Events (Facebook SDK).
 ///
-/// UNLIKE [PostHogAnalyticsService], this does NOT forward every event. Meta is
-/// an *ad-optimisation* channel, not a product-analytics one: sending the full
-/// firehose would only dilute the conversion signal its algorithm trains on (and
-/// widen the privacy surface). So [track] maps ONLY the ★ conversion events from
-/// `docs/analytics-events.md` onto Meta standard events and drops the rest:
+/// Meta is an *ad-optimisation* channel, not a product-analytics one.
+/// The full firehose dilutes the signal its algorithm trains on -> [track] forwards ★ events ONLY:
 ///
-///   login_success        → CompleteRegistration
-///   checkout_started     → InitiateCheckout (+ INR value when known → ROAS)
-///   trial_started        → StartTrial      (+ INR value when known → ROAS)
-///   subscription_active  → (nothing — Subscribe REMOVED, see below)
+///   login_success    → CompleteRegistration
+///   checkout_started → InitiateCheckout (+ INR value when known → ROAS)
+///   trial_started    → StartTrial       (+ INR value when known → ROAS)
 ///
-/// **NO `Subscribe` EVENT IS SENT ANYWHERE** — removed from this class AND
-/// from the Worker's Conversions API path (owner's call, 2026-08-26). The
-/// server sent it as `action_source: "system_generated"`, which Meta files
-/// under **Website events** (Events Manager offered only a Website tab and
-/// asked us to improve `fbc` coverage — a web click param). So ONE conversion
-/// event was arriving from TWO source types: app SDK for the app-open ₹199
-/// setup, web-shaped server events for trial→paid. That desynchronises
-/// attribution — the dataset's raw counts stayed correct while the campaign
-/// column lagged and undercounted. A conversion event must have ONE source.
-///
-/// **StartTrial is the ONLY event campaigns optimise on** (`start_trial_mobile_app`).
-/// It is app-SDK-sourced and in-session, so it has one source and no
-/// settle-location split. Trial→paid is ~84%, so bidding on it loses no
-/// signal. Accepted cost: Meta gets no revenue/ROAS signal. Neon is revenue
-/// truth. Do NOT re-add Subscribe on either side.
-///
-/// `checkout_started` is the one NON-terminal event here, and it earns its
-/// place: Meta's standard-event reference defines InitiateCheckout as entering
-/// the checkout flow, and it is the only signal Meta gets at the point where
-/// most of this funnel is actually lost (the UPI Autopay mandate handoff — see
-/// docs/edge-cases.md). Its terminal partner `payment_failed` is deliberately
-/// NOT forwarded: a failure is a diagnostic, not a conversion, and feeding it
-/// to an optimiser trains on the wrong outcome. That one stays GA4-only.
-///
-/// App install + launch are logged automatically by the native SDK
-/// (`AutoInitEnabled` + `AutoLogAppEventsEnabled` in AndroidManifest.xml), so we
-/// never log those here.
-///
-/// [screen] is a no-op (screen views belong in PostHog). [identify] forwards the
-/// user id for Meta advanced matching; [reset] clears it on sign-out.
-///
-/// All calls are fire-and-forget — the SDK batches + uploads in the background —
-/// so the UI path is never blocked, matching the PostHog impl. It is only
-/// selected when a real App ID + client token are configured (see
-/// `analytics_provider.dart` / `AppConfig.metaEnabled`), so tests and key-less
-/// dev builds never touch the SDK.
+/// **NO `Subscribe` EVENT IS SENT ANYWHERE** — not here, not from the Worker's Conversions API path.
+/// The server sent `action_source: "system_generated"`, which Meta files under WEBSITE events.
+/// So one conversion event arrived from TWO source types -> the campaign column lagged, raw counts did not.
+/// A conversion event must have ONE source -> do NOT re-add Subscribe on either side.
+/// **StartTrial (`start_trial_mobile_app`) is the ONLY event campaigns optimise on** — one source.
+/// Trial→paid is ~84% -> bidding on it loses no signal; the accepted cost is no ROAS signal.
+/// Neon is revenue truth.
+/// `checkout_started` is the one NON-terminal event — Meta's only signal at the UPI mandate handoff.
+/// That handoff is where most of this funnel is lost (docs/edge-cases.md).
+/// `payment_failed` is a diagnostic, not a conversion -> forwarding it trains the optimiser wrong.
+/// App install and launch are auto-logged by the native SDK -> never log them here.
+/// [screen] is a no-op; [identify] feeds advanced matching; [reset] clears the id on sign-out.
+/// Fire-and-forget, and only selected with a real App ID + client token -> tests never touch the SDK.
 class MetaAnalyticsService implements AnalyticsService {
   MetaAnalyticsService([FacebookAppEvents? facebook])
     : _facebook = facebook ?? FacebookAppEvents();
@@ -75,15 +48,13 @@ class MetaAnalyticsService implements AnalyticsService {
       case 'checkout_started':
         unawaited(
           _facebook.logInitiatedCheckout(
-            // valueToSum + currency together are what make this eligible for
-            // ROAS optimisation (plugin doc, logInitiatedCheckout).
+            // valueToSum + currency TOGETHER are what make this eligible for ROAS optimisation.
             totalPrice: _value(properties),
             currency: _currency,
             contentType: 'subscription',
             contentId: properties?['plan'] as String?,
             numItems: 1,
-            // No payment details are collected in-app — PhonePe owns that
-            // screen — so this is honestly false rather than a flattering true.
+            // PhonePe owns the payment screen -> nothing is collected in-app -> honestly false.
             paymentInfoAvailable: false,
           ),
         );
@@ -102,8 +73,7 @@ class MetaAnalyticsService implements AnalyticsService {
 
   @override
   void identify(String userId, {Map<String, Object?>? userProperties}) {
-    // Advanced matching: associate Meta events with our user id. Cheap and
-    // improves attribution; the SDK hashes it before upload.
+    // Advanced matching — the SDK hashes the id before upload; cheap, and improves attribution.
     unawaited(_facebook.setUserID(userId));
   }
 
@@ -115,18 +85,15 @@ class MetaAnalyticsService implements AnalyticsService {
   @override
   void reset() => unawaited(_facebook.clearUserID());
 
-  /// Meta's StartTrial/Subscribe want a non-empty `orderId`. Use the PhonePe
-  /// merchant order id when the caller supplies one, else a stable fallback so
-  /// the event is still accepted (dedup on Meta's side is best-effort only).
+  /// Meta's StartTrial wants a NON-EMPTY `orderId` -> the PhonePe merchant order id, else a fallback.
+  /// Meta-side dedup is best-effort only.
   String _orderId(Map<String, Object?>? props) {
     final id = props?['order_id'];
     if (id is String && id.isNotEmpty) return id;
     return 'unknown';
   }
 
-  /// Revenue for ROAS optimisation. Accepts a `value` property as num or a
-  /// numeric string; returns null when absent so the event still logs (just
-  /// without a value-to-sum).
+  /// Revenue for ROAS. `value` may be a num or a numeric string -> null when absent, event still logs.
   double? _value(Map<String, Object?>? props) {
     final v = props?['value'];
     if (v is num) return v.toDouble();

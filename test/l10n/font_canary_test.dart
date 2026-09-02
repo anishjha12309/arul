@@ -1,21 +1,10 @@
-// The canary. It runs FIRST and it is permanent.
-//
-// Every verdict this directory produces is a width comparison, so the whole
-// audit is worth exactly as much as the fonts behind it. Two ways the font
-// stack can rot silently, both of which produce a GREEN matrix from fictional
-// numbers — the worst outcome available:
-//
-//   1. the real faces stop loading (a fixture is deleted, a path changes, an
-//      SDK bump changes FontLoader) and everything measures in FlutterTest box
-//      glyphs — a flat 1em advance per character;
-//   2. the per-weight static cuts stop resolving (someone "simplifies" the
-//      loader back onto one family, or drops `instance_fonts.py`) and every
-//      weight measures at 400 — bold text measures narrow, so real overflows
-//      pass.
-//
-// Both are asserted here, per script, against strict monotonicity rather than
-// against pinned pixel values: an SDK that changes hinting by a hundredth of a
-// pixel should not fail the suite, but an SDK that stops applying weight must.
+// The canary runs FIRST and is permanent -> every verdict in this directory is a width comparison.
+// So the whole audit is worth exactly as much as the fonts behind it.
+// Rot 1: the real faces stop loading and everything measures in FlutterTest box glyphs, a flat 1em per character.
+// Rot 2: the per-weight static cuts stop resolving and every weight measures at 400 -> bold measures narrow.
+// Both produce a GREEN matrix from fictional numbers -> the worst outcome available.
+// Asserted per script against strict MONOTONICITY, never pinned pixels.
+// An SDK that changes hinting by a hundredth of a pixel must not fail -> one that stops applying weight must.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,8 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/load_real_fonts.dart';
 import 'support/real_font_theme.dart';
 
-/// Bare consonants — no conjuncts, no combining marks. The point here is the
-/// FACE that got selected, and a simple string keeps shaping out of the way.
+/// Bare consonants, no conjuncts and no combining marks -> the point is the FACE selected, not the shaping.
 const _samples = <String, String>{
   'ta': 'வலபர',
   'te': 'వలపర',
@@ -81,9 +69,8 @@ void main() {
 
   group('real fonts are actually loaded', () {
     test('Latin is Roboto, not the box face', () {
-      // The box face advances exactly 1em per character. Roboto's "Wallpapers"
-      // is a little under half that, so anything close to the box width means
-      // the fixtures never loaded.
+      // The box face advances exactly 1em per character and Roboto's "Wallpapers" is under half that.
+      // So anything close to the box width means the fixtures never loaded.
       const box = _latin.length * 100.0;
       final real = _viaChain(_latin, FontWeight.w400, 'en');
       expect(
@@ -101,9 +88,8 @@ void main() {
       test('${entry.key} renders real glyphs, not tofu', () {
         final real = _viaChain(entry.value, FontWeight.w400, entry.key);
 
-        // Cinzel is a bundled Latin-only serif with none of these codepoints,
-        // so it is a live sample of what "no glyph anywhere" measures. If the
-        // chain matched it, the script has no face behind it.
+        // Cinzel is a bundled Latin-only serif with none of these codepoints -> a live sample of "no glyph anywhere".
+        // If the chain matched it, the script has no face behind it.
         final tofu = _width(
           entry.value,
           family: 'Cinzel',
@@ -129,10 +115,9 @@ void main() {
     }
 
     test('the five scripts measure five different widths', () {
-      // The sharpest tofu check available, and it needs no threshold: every
-      // sample is four bare consonants, so if any script fell through to the
-      // no-glyph face it would land on exactly the notdef advance and collide
-      // with the others. Five distinct widths means five distinct real faces.
+      // The sharpest tofu check available, and it needs no threshold -> every sample is four bare consonants.
+      // A script falling through to the no-glyph face lands on exactly the notdef advance and collides with the others.
+      // Five distinct widths therefore means five distinct real faces.
       final widths = <String, double>{
         for (final e in _samples.entries)
           e.key: _viaChain(e.value, FontWeight.w400, e.key),
@@ -198,8 +183,8 @@ void main() {
     }
 
     test('w800 Indic resolves to the 700 cut, as the device axis does', () {
-      // Noto's wght axes stop at 700. A phone renders a w800 Indic slot at 700;
-      // so must this. Equality here is the assertion, not a tolerance.
+      // Noto's wght axes stop at 700 -> a phone renders a w800 Indic slot at 700, and so must this.
+      // Equality here is the assertion, never a tolerance.
       for (final entry in _samples.entries) {
         expect(
           _viaChain(entry.value, FontWeight.w800, entry.key),
@@ -211,9 +196,8 @@ void main() {
   });
 
   group('the serif hands Indic to the fallback chain', () {
-    // headlineSmall (the sign-in headline, every screen title) is Marcellus,
-    // which is Latin-only. On device the Tamil in it falls through to the
-    // system Noto; the harness has to reproduce that, not measure tofu.
+    // headlineSmall carries every screen title and is Marcellus, which is Latin-only.
+    // On device the Tamil in it falls through to the system Noto -> the harness must reproduce that, not measure tofu.
     for (final entry in _samples.entries) {
       test('${entry.key} in a Marcellus slot matches the Noto face', () {
         final viaSerif = _width(

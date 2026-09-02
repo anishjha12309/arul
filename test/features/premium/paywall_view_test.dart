@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' show ImageByteFormat;
 
+import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/upi/upi_apps.dart';
 import 'package:arul/features/premium/presentation/paywall_view.dart';
 import 'package:arul/theme/arul_tokens.dart';
@@ -9,8 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// `flutter test` ships Ahem, not the app's bundled families, so the paywall's
-/// type has to be registered by hand before anything measures or renders it.
+/// `flutter test` ships Ahem, not the app's bundled families -> register the type by hand before measuring or rendering.
 Future<void> _loadPaywallFonts() async {
   const families = {
     'Cinzel': ['assets/fonts/Cinzel-Medium.ttf'],
@@ -35,6 +35,10 @@ Future<void> _loadPaywallFonts() async {
 
 Widget _host(Widget child) => MaterialApp(
   debugShowCheckedModeBanner: false,
+  // The paywall reads its copy from the ARBs -> without the delegates
+  // `AppLocalizations.of` resolves to null and every test here dies on its null-check.
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
   home: Scaffold(body: SafeArea(child: child)),
 );
 
@@ -55,12 +59,9 @@ ArulPaywallView _paywall({required bool trialEligible}) => ArulPaywallView(
 
 void main() {
   // ─── The price lockup ─────────────────────────────────────────────────────
-  //
-  // The one piece of this screen with arithmetic behind it: the rupee sign is
-  // set 16px smaller than the amount and must still land centred against it.
-  // Gelasio carries Georgia's old-style figures, so a digit string's ink
-  // centre MOVES with the digits — "₹2" and "₹199" need different offsets, and
-  // a fixed nudge would be right for at most one price.
+  // The one piece of this screen with arithmetic behind it -> the rupee sign is 16px smaller and must land centred.
+  // Gelasio carries Georgia's old-style figures -> a digit string's ink centre MOVES with the digits.
+  // So "₹2" and "₹199" need different offsets -> a fixed nudge would be right for at most one price.
 
   group('PriceLockup ink metrics', () {
     test('a full-height rupee sits at half its own height', () {
@@ -69,8 +70,7 @@ void main() {
     });
 
     test('descending figures pull the amount\'s centre down', () {
-      // "199": 1 stops at x-height, 9 drops to -0.172 — a LOWER centre than
-      // "11", which never crosses the baseline.
+      // "199": 1 stops at x-height and 9 drops to -0.172 -> a LOWER centre than "11", which never crosses the baseline.
       expect(
         PriceLockup.inkCentreEm('199'),
         lessThan(PriceLockup.inkCentreEm('11')),
@@ -85,8 +85,7 @@ void main() {
     test('the offset actually centres the two glyphs', () {
       for (final amount in ['199', '2', '99', '1499', '249.50']) {
         final dy = PriceLockup.rupeeOffset('₹', amount);
-        // Both sit on one baseline; applying dy to the rupee must put the two
-        // ink centres in the same place, to within a rounding error.
+        // Both sit on one baseline -> applying dy to the rupee must put the two ink centres in the same place.
         final rupeeCentre =
             PriceLockup.inkCentreEm('₹') * ArulTokens.paywallRupeeSize - dy;
         final amountCentre =
@@ -107,12 +106,10 @@ void main() {
     });
   });
 
-  // The table above is only worth anything if it describes the font Flutter
-  // actually rasterises, so this measures the RENDERED pixels: paint the
-  // lockup, find the two ink blocks either side of the gap, and compare where
-  // each one's ink actually sits. It fails if the glyph table drifts from the
-  // bundled TTF, if Gelasio is swapped, or if the rupee quietly falls back to
-  // a system font (which is the defect this whole lockup exists to prevent).
+  // The table above is only worth anything if it describes the font Flutter actually rasterises.
+  // So this measures RENDERED pixels -> paint the lockup, find the ink blocks either side of the gap, compare centres.
+  // It fails if the glyph table drifts from the bundled TTF, if Gelasio is swapped, or if the rupee falls back.
+  // A system-font fallback on the rupee is the defect this whole lockup exists to prevent.
   group('PriceLockup renders centred', () {
     setUpAll(_loadPaywallFonts);
 
@@ -159,10 +156,8 @@ void main() {
       // Ink = anything appreciably darker than the white ground.
       bool ink(int x, int y) => pixels[(y * width + x) * 4] < 200;
 
-      // The two halves are located by the widgets' own rects rather than by
-      // hunting for a blank column: at 56pt the space between two old-style
-      // figures can be wider than the 4pt lockup gap, so a pixel heuristic
-      // splits in the wrong place on a price like ₹1499.
+      // The two halves are located by the widgets' own rects, never by hunting for a blank column.
+      // At 56pt the gap between two old-style figures can exceed the 4pt lockup gap -> a pixel heuristic splits wrong.
       final origin = tester.getTopLeft(find.byKey(boundaryKey));
       (double, double) inkBounds(Finder finder) {
         final rect = tester.getRect(finder);
@@ -186,8 +181,7 @@ void main() {
       final symbolCentre = (symbolTop + symbolBottom) / 2;
       final amountCentre = (amountTop + amountBottom) / 2;
 
-      // 3px at pixelRatio 3 is one logical pixel — the most an antialiased
-      // glyph edge can shift a measured centre.
+      // 3px at pixelRatio 3 is one logical pixel -> the most an antialiased glyph edge can shift a measured centre.
       expect(
         symbolCentre,
         closeTo(amountCentre, 3),
@@ -210,28 +204,26 @@ void main() {
   group('ArulPaywallView', () {
     setUpAll(_loadPaywallFonts);
 
-    testWidgets(
-      'the monthly screen states the price and the fixed fine print',
-      (tester) async {
-        tester.view.physicalSize = const Size(390, 844);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
+    testWidgets('the monthly screen states the price and the fixed fine print', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
 
-        await tester.pumpWidget(_host(_paywall(trialEligible: false)));
+      await tester.pumpWidget(_host(_paywall(trialEligible: false)));
 
-        expect(find.text('₹'), findsOneWidget);
-        expect(find.text('199'), findsOneWidget);
-        expect(find.text('PER MONTH'), findsOneWidget);
-        expect(find.text('Subscribe Now'), findsOneWidget);
-        // Contractually fixed — a reworded version is a compliance problem, not
-        // a copy tweak.
-        expect(
-          find.text('₹199/month via autopay. Cancel anytime.'),
-          findsOneWidget,
-        );
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(find.text('₹'), findsOneWidget);
+      expect(find.text('199'), findsOneWidget);
+      expect(find.text('PER MONTH'), findsOneWidget);
+      expect(find.text('Subscribe Now'), findsOneWidget);
+      // Contractually fixed -> a reworded version is a compliance problem, not a copy tweak.
+      expect(
+        find.text('₹199/month via autopay. Cancel anytime.'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('the trial screen leads with ₹2 and names the refund', (
       tester,
@@ -255,8 +247,7 @@ void main() {
     testWidgets('a 4.7" screen scrolls rather than clipping the CTA', (
       tester,
     ) async {
-      // The handoff's page is ~925 tall; this viewport is not. The footer is
-      // pinned, so the buy button must still be on screen.
+      // The handoff's page is ~925 tall and this viewport is not -> the footer is pinned, so the buy button stays visible.
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);

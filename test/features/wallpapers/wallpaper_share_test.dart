@@ -43,9 +43,8 @@ class _FakeApplyService implements WallpaperApplyService {
     return Future.value('https://cdn.example.com/${w.key}');
   }
 
-  /// Every action the share path asked a signed URL for. The share must never
-  /// request `apply` — that would count a share toward `apply_count` and rank
-  /// wallpapers nobody kept to the top of All.
+  /// Every action the share path asked a signed URL for -> the share must NEVER request `apply`.
+  /// That would count a share toward `apply_count` and rank wallpapers nobody kept to the top of All.
   final downloadActions = <MediaUseAction>[];
 
   @override
@@ -78,22 +77,19 @@ class _FakeWatermarkService implements ShareWatermarkService {
     this.unsupportedSdkInt,
   });
 
-  /// Thrown by watermark attempts — every one of them, or just the first
-  /// [failTimes] when that is set.
+  /// Thrown by watermark attempts -> every one of them, or just the first [failTimes] when that is set.
   final ShareWatermarkException? failWith;
 
-  /// null = [failWith] applies forever; N = only the first N attempts fail,
-  /// which is how the one-shot retry gets exercised.
+  /// null means [failWith] applies forever; N fails only the first N attempts -> that is how the one-shot retry runs.
   final int? failTimes;
 
-  /// Non-null → this device cannot watermark VIDEO, and reports this API
-  /// level. Stands in for anything below API 31 (androidx/media#2535).
+  /// Non-null -> this device cannot watermark VIDEO and reports this API level.
+  /// Stands in for anything below API 31 (androidx/media#2535).
   final int? unsupportedSdkInt;
 
   final planned = <String>[];
 
-  /// Watermark attempts made, across both media kinds — the retry assertions
-  /// read this.
+  /// Watermark attempts made across both media kinds -> the retry assertions read this.
   int attempts = 0;
 
   @override
@@ -126,8 +122,7 @@ class _FakeWatermarkService implements ShareWatermarkService {
     WatermarkSpec spec, {
     required String outPath,
   }) async {
-    // Mirrors the real service: the support probe runs BEFORE any work, so an
-    // unsupported device never reaches the exporter or the overlay render.
+    // Mirrors the real service -> the support probe runs BEFORE any work, so an unsupported device renders nothing.
     final sdk = unsupportedSdkInt;
     if (sdk != null) throw ShareWatermarkUnsupportedException(sdk);
     return _attempt(outPath);
@@ -141,9 +136,8 @@ class _FakeWatermarkService implements ShareWatermarkService {
   }) async => Uint8List(0);
 }
 
-/// The real prefetch service's cache manager needs sqflite + app-support dirs
-/// that do not exist under `flutter test` — its lookup hangs, so stub it out
-/// (no cached copy → the notifier takes the plain download path).
+/// The real prefetch cache manager needs sqflite and app-support dirs absent under `flutter test` -> its lookup hangs.
+/// Stub it out -> no cached copy means the notifier takes the plain download path.
 class _NoPrefetch extends WallpaperPrefetchService {
   _NoPrefetch() : super(cdnBaseUrl: 'https://cdn.example.com');
 
@@ -154,8 +148,7 @@ class _NoPrefetch extends WallpaperPrefetchService {
 class _FakeReferralRepository implements ReferralRepository {
   _FakeReferralRepository({this.code});
 
-  /// Null = the account has no referral code yet (or the summary never
-  /// loaded), which is what makes the share fall back to the plain listing.
+  /// Null means the account has no referral code yet, or the summary never loaded -> the share falls back to the listing.
   final String? code;
 
   @override
@@ -205,9 +198,8 @@ Wallpaper _wallpaper({
       : 'wallpapers/murugan/$id.mp4',
 );
 
-/// Stands in for the native targeted-intent channel. [installed] false is the
-/// common case on a test device AND on a real one without WhatsApp, and is what
-/// makes the notifier fall through to the system sheet.
+/// Stands in for the native targeted-intent channel -> [installed] false is the common case on test and real devices.
+/// That is what makes the notifier fall through to the system sheet.
 class _FakeDirectShare implements DirectShareService {
   _FakeDirectShare({this.installed = false});
 
@@ -225,12 +217,12 @@ class _FakeDirectShare implements DirectShareService {
   }
 }
 
-/// The default caption builder — mirrors `l10n.wallpaperShareCaption`'s shape:
-/// one line, then the link ALONE on the last line, and no second URL anywhere.
+/// The default caption builder mirrors `l10n.wallpaperShareCaption`'s shape.
+/// One line, then the link ALONE on the last line, and no second URL anywhere.
 String _caption(String link) => 'More devotional wallpapers on Arul:\n$link';
 
-/// The share link stamps the sharer's UI language, so the suite has to be able
-/// to say what it is; the real notifier reads SharedPreferences.
+/// The share link stamps the sharer's UI language -> the suite must be able to say what it is.
+/// The real notifier reads it from SharedPreferences.
 class _FixedLocale extends LocaleNotifier {
   _FixedLocale(this._locale);
 
@@ -280,9 +272,8 @@ void main() {
 
   late Directory tmpDir;
 
-  // The share flow probes getTemporaryDirectory() for the apply flow's cached
-  // download before hitting the network. Mock path_provider so the probe finds
-  // a fresh temp dir (no cache hit → the normal fetch→download→share path).
+  // The share flow probes getTemporaryDirectory() for the apply flow's cached download before hitting the network.
+  // Mock path_provider so the probe finds a fresh temp dir -> no cache hit means the normal download-then-share path.
   setUp(() {
     tmpDir = Directory.systemTemp.createTempSync('arul_share_test');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -348,11 +339,9 @@ void main() {
     });
 
     test('the outgoing caption carries EXACTLY ONE link', () async {
-      // Regression guard. The caption used to be built as `'$message\n$link'`
-      // where `message` itself ended in a hard-coded marketing-site URL, so every
-      // shared wallpaper went out with two competing URLs and the recipient
-      // could easily tap the one that credits nobody. The caption owns the link
-      // now, so a second one cannot be appended by accident — this proves it.
+      // The caption used to be `'$message\n$link'` where `message` itself ended in a hard-coded marketing URL.
+      // Every shared wallpaper went out with two competing URLs -> the recipient could tap the one that credits nobody.
+      // The caption owns the link now -> a second one cannot be appended by accident.
       final sheetCalls = <ShareParams>[];
       final c = _container(
         service: _FakeApplyService(tmpDir),
@@ -371,19 +360,16 @@ void main() {
         hasLength(1),
         reason: 'a second URL splits the tap and loses the attribution',
       );
-      // …and the one link is the wallpaper deep link, not the store listing.
+      // And the one link is the wallpaper deep link, not the store listing.
       expect(text, contains('arul.hsrutility.com/w/'));
-      // And it is the LAST thing in the message — messengers preview a trailing
-      // link and bury an inline one.
+      // And it is the LAST thing in the message -> messengers preview a trailing link and bury an inline one.
       expect(text.trimRight().split('\n').last, startsWith('https://'));
     });
 
     test('the link stamps the language of the sharer as ilang, so a FRESH '
         'install opens in it and an existing one does not change', () async {
-      // The caption is already written in the sharer's language; without this
-      // the friend who installs from it lands in English and has to go hunting
-      // through Settings. `ilang` (not `lang`) is what keeps it to fresh
-      // installs — the App Link parser ignores it, the Play referrer does not.
+      // The caption is already in the sharer's language -> without this the friend who installs lands in English.
+      // `ilang`, not `lang`, is what keeps it to FRESH installs -> the App Link parser ignores it, the Play referrer does not.
       final sheetCalls = <ShareParams>[];
       final c = _container(
         service: _FakeApplyService(tmpDir),
@@ -429,9 +415,8 @@ void main() {
           .read(wallpaperShareProvider.notifier)
           .share(_wallpaper(), buildCaption: _caption);
 
-      // The FILE went to WhatsApp — the whole reason this path is a native
-      // targeted intent rather than a `whatsapp://send?text=` deep link, which
-      // would have dropped it and sent a bare caption.
+      // The FILE went to WhatsApp -> that is why this path is a native targeted intent.
+      // A `whatsapp://send?text=` deep link would have dropped the file and sent a bare caption.
       expect(direct.calls, hasLength(1));
       expect(direct.calls.single.filePath, endsWith('-wm-AR-TESTXY.jpg'));
       expect(direct.calls.single.mimeType, 'image/jpeg');
@@ -443,9 +428,8 @@ void main() {
     });
 
     test('a share asks for a SHARE grant, never an apply one', () async {
-      // The signed-url route counts only `apply` toward apply_count, so this is
-      // what keeps the All feed ordered by wallpapers people actually kept
-      // rather than ones they merely forwarded.
+      // The signed-url route counts only `apply` toward apply_count -> All stays ordered by what people kept.
+      // Not by what they merely forwarded.
       final service = _FakeApplyService(tmpDir);
       final c = _container(
         service: service,
@@ -462,14 +446,10 @@ void main() {
     });
 
     test('an unattributed link is REPORTED as unattributed', () async {
-      // `flutter test` has no dart-defines, so `AppConfig.hasBackend` is false
-      // and the referral lookup is skipped entirely — the share ships the plain
-      // Play listing. That is correct behaviour; what matters is that it is
-      // declared. `link_attributed` exists precisely so a share that can never
-      // be credited back to its sender is visible in the funnel instead of
-      // silently indistinguishable from one that can. A code IS present on the
-      // fake repository here, and the flag must still say false, because the
-      // link that actually went out carries no referrer.
+      // `flutter test` has no dart-defines -> `AppConfig.hasBackend` is false and the referral lookup is skipped.
+      // The share then ships the plain Play listing -> correct behaviour, and what matters is that it is DECLARED.
+      // `link_attributed` exists so a share that can never be credited to its sender is visible in the funnel.
+      // A code IS present on the fake repository here, and the flag must still say false -> the link carries no referrer.
       final analytics = _RecordingAnalytics();
       final sheetCalls = <ShareParams>[];
       final c = _container(
@@ -511,10 +491,8 @@ void main() {
 
     test('a device that CANNOT watermark video shares the clean original and '
         'tracks share_watermark_skipped', () async {
-      // Below API 31 Media3's Transformer resolves an API-31-only class on
-      // every API level and takes the process down with it (androidx/media#2535),
-      // so the export is not attempted at all. The share must still go out —
-      // untraced beats not happening.
+      // Below API 31 Media3's Transformer resolves an API-31-only class and takes the process down (androidx/media#2535).
+      // So the export is not attempted at all -> the share must still go out, because untraced beats not happening.
       final analytics = _RecordingAnalytics();
       final sheetCalls = <ShareParams>[];
       final watermark = _FakeWatermarkService(unsupportedSdkInt: 28);
@@ -539,7 +517,7 @@ void main() {
       // The recipient still gets a branded filename and the referral caption.
       expect(sheetCalls.single.fileNameOverrides, ['arul-murugan-vel.mp4']);
 
-      // A skip is NOT a failure and must never be reported as one.
+      // A skip is NOT a failure -> never report it as one.
       expect(analytics.events, isNot(contains('share_watermark_failed')));
       expect(analytics.props['share_watermark_skipped'], {
         'wallpaper_id': 'w1',
@@ -547,14 +525,14 @@ void main() {
         'sdk_int': 28,
       });
       expect(analytics.props['wallpaper_shared']?['watermarked'], false);
-      // Not retried — the answer cannot change on this device.
+      // Not retried -> the answer cannot change on this device.
       expect(watermark.attempts, 0);
     });
 
     test('a STATIC share is still watermarked on a device that cannot do '
         'video', () async {
-      // The static path never touches Media3, so the API-31 skip must not leak
-      // into it — those shares stay traceable on every Android version.
+      // The static path never touches Media3 -> the API-31 skip must not leak into it.
+      // Those shares stay traceable on every Android version.
       final sheetCalls = <ShareParams>[];
       final c = _container(
         service: _FakeApplyService(tmpDir),

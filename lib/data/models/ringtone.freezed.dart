@@ -15,28 +15,18 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Ringtone {
 
- String get id; String get title;/// Browse axis, same contract as [Wallpaper.category] — free text; an
-/// unknown/missing category must never crash the list, it falls into All.
- String get category;/// Which god the track is to, finer-grained than [category] and DISPLAY
-/// ONLY — the row's subtitle and its artwork. Never a browse axis: no chip
-/// filters on it and nothing orders by it (CLAUDE.md §5b keeps that job on
-/// `category`). It exists because one category spans several gods —
-/// `perumal` alone holds Venkateswara, Krishna, Rama and Narasimha — so
-/// category-level art would put Lakshmi's figure on a Chamundeshwari chant.
-///
-/// Nullable, and a null is ordinary rather than exceptional: a row authored
-/// before the field existed, or in the CMS without it, resolves through
-/// `deityAsset()` to its category's art and shows no subtitle.
- String? get deity; List<String> get tags; String get audioKey;/// Optional cover art R2 key. Null → the screen renders a decorated
-/// fallback tile (gold ♪ on a maroon/darkSurface gradient), never a broken
-/// image.
- String? get coverKey; String? get mime; int get sortOrder; DateTime? get createdAt;/// How many times a premium user has SET this as their ringtone — tier 2 of
-/// the list's order, mirroring [Wallpaper.applyCount]. Counted server-side
-/// in `/media/signed-url`; a ringtone has no share path, so every grant is a
-/// set.
- int get setCount;/// The admin's pin — tier 1, ahead of [setCount]. Same column, same
-/// semantics and the same null-means-unpinned contract as
-/// [Wallpaper.feedRank]; both tabs order through the one `orderedByUse`.
+ String get id; String get title;/// Browse axis, same contract as [Wallpaper.category] — free text.
+/// An unknown or missing category must never crash the list -> it falls into All.
+ String get category;/// Which god the track is to — finer than [category], and DISPLAY ONLY: row subtitle and art.
+/// NEVER a browse axis — no chip filters on it, nothing orders by it (CLAUDE.md §5b).
+/// One category spans several gods — `perumal` holds Venkateswara, Krishna, Rama, Narasimha.
+/// So category-level art would put Lakshmi's figure on a Chamundeshwari chant.
+/// Nullable, and null is ORDINARY -> `deityAsset()` resolves to the category's art, no subtitle.
+ String? get deity; List<String> get tags; String get audioKey;/// Optional cover art R2 key. Null -> a decorated fallback tile, never a broken image.
+ String? get coverKey; String? get mime; int get sortOrder; DateTime? get createdAt;/// How many times a premium user SET this — tier 2 of the order, mirroring [Wallpaper.applyCount].
+/// Counted server-side in `/media/signed-url`; a ringtone has no share path, so every grant is a set.
+ int get setCount;/// Tier 1, ahead of [setCount] — the same semantics and null contract as [Wallpaper.feedRank].
+/// Both tabs order through the one `orderedByUse`.
  int? get feedRank;
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
@@ -247,19 +237,14 @@ class _Ringtone extends Ringtone {
 
 @override final  String id;
 @override final  String title;
-/// Browse axis, same contract as [Wallpaper.category] — free text; an
-/// unknown/missing category must never crash the list, it falls into All.
+/// Browse axis, same contract as [Wallpaper.category] — free text.
+/// An unknown or missing category must never crash the list -> it falls into All.
 @override@JsonKey() final  String category;
-/// Which god the track is to, finer-grained than [category] and DISPLAY
-/// ONLY — the row's subtitle and its artwork. Never a browse axis: no chip
-/// filters on it and nothing orders by it (CLAUDE.md §5b keeps that job on
-/// `category`). It exists because one category spans several gods —
-/// `perumal` alone holds Venkateswara, Krishna, Rama and Narasimha — so
-/// category-level art would put Lakshmi's figure on a Chamundeshwari chant.
-///
-/// Nullable, and a null is ordinary rather than exceptional: a row authored
-/// before the field existed, or in the CMS without it, resolves through
-/// `deityAsset()` to its category's art and shows no subtitle.
+/// Which god the track is to — finer than [category], and DISPLAY ONLY: row subtitle and art.
+/// NEVER a browse axis — no chip filters on it, nothing orders by it (CLAUDE.md §5b).
+/// One category spans several gods — `perumal` holds Venkateswara, Krishna, Rama, Narasimha.
+/// So category-level art would put Lakshmi's figure on a Chamundeshwari chant.
+/// Nullable, and null is ORDINARY -> `deityAsset()` resolves to the category's art, no subtitle.
 @override final  String? deity;
  final  List<String> _tags;
 @override@JsonKey() List<String> get tags {
@@ -269,21 +254,16 @@ class _Ringtone extends Ringtone {
 }
 
 @override final  String audioKey;
-/// Optional cover art R2 key. Null → the screen renders a decorated
-/// fallback tile (gold ♪ on a maroon/darkSurface gradient), never a broken
-/// image.
+/// Optional cover art R2 key. Null -> a decorated fallback tile, never a broken image.
 @override final  String? coverKey;
 @override final  String? mime;
 @override@JsonKey() final  int sortOrder;
 @override final  DateTime? createdAt;
-/// How many times a premium user has SET this as their ringtone — tier 2 of
-/// the list's order, mirroring [Wallpaper.applyCount]. Counted server-side
-/// in `/media/signed-url`; a ringtone has no share path, so every grant is a
-/// set.
+/// How many times a premium user SET this — tier 2 of the order, mirroring [Wallpaper.applyCount].
+/// Counted server-side in `/media/signed-url`; a ringtone has no share path, so every grant is a set.
 @override@JsonKey() final  int setCount;
-/// The admin's pin — tier 1, ahead of [setCount]. Same column, same
-/// semantics and the same null-means-unpinned contract as
-/// [Wallpaper.feedRank]; both tabs order through the one `orderedByUse`.
+/// Tier 1, ahead of [setCount] — the same semantics and null contract as [Wallpaper.feedRank].
+/// Both tabs order through the one `orderedByUse`.
 @override final  int? feedRank;
 
 /// Create a copy of Ringtone

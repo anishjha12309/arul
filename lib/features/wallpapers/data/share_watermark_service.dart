@@ -8,11 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
-// ─── Exception ───────────────────────────────────────────────────────────────
-
-/// Any failure inside the watermark pipeline (asset load, decode, canvas,
-/// encode, native transform). Callers treat it as "share the original instead"
-/// — a watermark must never break the share itself.
+/// Any failure inside the watermark pipeline — asset load, decode, canvas, encode, transform.
+/// Callers treat it as "share the original instead" — a watermark must never break the share.
 class ShareWatermarkException implements Exception {
   const ShareWatermarkException(this.message);
   final String message;
@@ -21,33 +18,24 @@ class ShareWatermarkException implements Exception {
   String toString() => message;
 }
 
-/// The device cannot burn a watermark into VIDEO at all (below API 31).
+/// The device cannot burn a watermark into VIDEO at all, below API 31.
 ///
-/// Deliberately a distinct type, because it is a DESIGNED outcome rather than a
-/// failure: the caller shares the clean original and shows the user nothing. On
-/// a device that CAN watermark, a failure is treated as a defect and fails the
-/// share instead — see `wallpaper_share_provider`.
-///
-/// Why API 31: Media3's `ExoPlayerAssetLoader.Factory` references
-/// `android.media.metrics.LogSessionId` (an API-31 type) from a field, a
-/// constructor parameter and `createAssetLoader`, with no `SDK_INT` guard, so
-/// `Transformer.start()` throws `NoClassDefFoundError` on Android 11 and below
-/// and kills the process. androidx/media#2535, open; 1.7.1 is the last clean
-/// release. Statics are unaffected — that path never touches Media3.
+/// A DESIGNED outcome, not a failure -> a distinct type; the caller shares the clean original.
+/// On a device that CAN watermark, a failure is a defect and fails the share instead.
+/// Media3's `ExoPlayerAssetLoader.Factory` references an API-31 type with no `SDK_INT` guard.
+/// So `Transformer.start()` throws `NoClassDefFoundError` on Android 11 and kills the process.
+/// androidx/media#2535, open; 1.7.1 is the last clean release.
+/// Statics are unaffected — that path never touches Media3.
 class ShareWatermarkUnsupportedException extends ShareWatermarkException {
   ShareWatermarkUnsupportedException(this.sdkInt)
     : super('video watermarking needs API 31, device is API $sdkInt');
 
-  /// The device's `Build.VERSION.SDK_INT`, reported so the skip rate can be
-  /// broken down by OS version without a second probe.
+  /// The device's `Build.VERSION.SDK_INT` -> the skip rate splits by OS version, with no re-probe.
   final int sdkInt;
 }
 
-// ─── Spec ────────────────────────────────────────────────────────────────────
-
-/// One share's watermark plan: WHERE the logo and code go, and WHICH unique
-/// code identifies this particular copy (a leaked share is traceable to the
-/// share event, not just the wallpaper).
+/// One share's watermark plan — WHERE the logo and code go, and WHICH code identifies this copy.
+/// A leaked share is then traceable to the share EVENT, not just to the wallpaper.
 ///
 /// Corners: 0 = top-left, 1 = top-right, 2 = bottom-right, 3 = bottom-left.
 /// The code always sits diagonally opposite the logo.
@@ -63,8 +51,6 @@ class WatermarkSpec {
   int get codeCorner => (logoCorner + 2) % 4;
 }
 
-// ─── Service ─────────────────────────────────────────────────────────────────
-
 class ShareWatermarkService {
   ShareWatermarkService({
     Future<Uint8List> Function()? loadLogoBytes,
@@ -79,8 +65,7 @@ class ShareWatermarkService {
 
   static const _logoAsset = 'assets/images/watermark_logo.png';
 
-  /// Layout constants, all relative to the frame so one overlay pass serves
-  /// both a ~1080x1920 static and a 1024x1824 live frame identically.
+  /// Layout constants, all FRAME-RELATIVE -> one pass serves a 1080x1920 static and a 1024x1824 clip.
   static const _logoWidthFrac = 0.14; // logo width : frame width
   static const _insetFrac = 0.04; // corner inset : frame width
   static const _codeFontFrac = 0.025; // code font size : frame height
@@ -92,17 +77,13 @@ class ShareWatermarkService {
 
   ui.Image? _logo; // decoded once, reused across shares
 
-  /// Cached for the life of the service — the OS version cannot change under a
-  /// running process, and every live share would otherwise re-ask.
+  /// Cached for the service's life — the OS version cannot change under a running process.
   ({bool supported, int sdkInt})? _videoSupport;
 
   static Future<Uint8List> _loadBundledLogo() async =>
       (await rootBundle.load(_logoAsset)).buffer.asUint8List();
 
-  // ─── Planning ──────────────────────────────────────────────────────────────
-
-  /// Picks a random corner for the logo (code goes diagonally opposite) and
-  /// generates a fresh unique code for THIS share.
+  /// Picks a random corner for the logo, code diagonally opposite, and a fresh code for THIS share.
   WatermarkSpec plan({required String wallpaperId, String? userId}) {
     final corner = _random.nextInt(4);
     return WatermarkSpec(
@@ -111,9 +92,9 @@ class ShareWatermarkService {
     );
   }
 
-  /// 6–8 uppercase base36 chars, `AR-` prefixed. Mixes the user + wallpaper
-  /// hashes and the clock into a random stream, so two shares of the same
-  /// wallpaper by the same user in the same instant still differ.
+  /// 6–8 uppercase base36 chars, `AR-` prefixed.
+  /// Mixes the user and wallpaper hashes and the clock into a random stream.
+  /// So two shares of the same wallpaper by the same user in the same instant still differ.
   String _generateCode({required String wallpaperId, String? userId}) {
     const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     var mix = Object.hash(
@@ -130,8 +111,6 @@ class ShareWatermarkService {
     return out.toString();
   }
 
-  // ─── Overlay (shared by image + video paths) ───────────────────────────────
-
   Future<ui.Image> _logoImage() async {
     final cached = _logo;
     if (cached != null) return cached;
@@ -141,11 +120,10 @@ class ShareWatermarkService {
     return _logo = frame.image;
   }
 
-  /// Draws the brand mark (logo + "Arul" wordmark) and the unique code onto
-  /// [canvas] for a [width]x[height] frame. The ONE overlay code path: the
-  /// image pipeline composites it over the decoded source; the video pipeline
-  /// exports it alone as a transparent PNG. Legibility comes from edge contrast
-  /// (dark stroke + soft shadow under a white fill), not from raw opacity.
+  /// Draws the brand mark and the unique code onto [canvas] for a [width]x[height] frame.
+  ///
+  /// The ONE overlay code path — the image pipeline composites it, the video pipeline exports it.
+  /// Legibility comes from EDGE CONTRAST — a dark stroke and soft shadow under a white fill.
   Future<void> _drawOverlay(
     ui.Canvas canvas,
     WatermarkSpec spec,
@@ -164,11 +142,9 @@ class ShareWatermarkService {
       c == 0 || c == 1 ? inset : height - inset - itemH,
     );
 
-    // ── Brand mark: logo + wordmark treated as one group in the logo corner ──
-    // Cap-height of "Arul" roughly matches the logo height; laid out logo-first,
-    // wordmark-right, so it reads the same in every corner. The group's bounding
-    // box is what lands at the inset, so right corners right-align cleanly (the
-    // whole width + gap is accounted for) and nothing overflows the frame.
+    // Brand mark: logo and wordmark as ONE group in the logo corner.
+    // Laid out logo-first, wordmark-right -> it reads the same in every corner.
+    // The GROUP's bounding box lands at the inset -> right corners right-align, nothing overflows.
     final brandFontSize = logoH * 0.6;
     final (wordStroke, wordFill) = _labelPainters('Arul', brandFontSize);
     final gap = logoW * 0.15;
@@ -194,7 +170,7 @@ class ShareWatermarkService {
     wordStroke.paint(canvas, wordOffset);
     wordFill.paint(canvas, wordOffset);
 
-    // ── Unique code, diagonally opposite, same legibility treatment ──
+    // Unique code, diagonally opposite, same legibility treatment.
     final (codeStroke, codeFill) = _labelPainters(
       spec.code,
       height * _codeFontFrac,
@@ -204,13 +180,11 @@ class ShareWatermarkService {
     codeFill.paint(canvas, codePos);
   }
 
-  /// A dark stroke pass under a white fill with a soft drop shadow. Two
-  /// painters because `foreground` (the stroke) and `color` (the fill) can't
-  /// both live on one [TextStyle]. Shared by the wordmark and the code so a
-  /// single tweak serves both, and both read on any background.
+  /// A dark stroke pass under a white fill, with a soft drop shadow.
   ///
-  /// The bundled display serif ('Marcellus'); the engine falls back to the
-  /// default typeface when the family is unavailable (plain `flutter test`).
+  /// `foreground` and `color` cannot both live on one [TextStyle] -> two painters.
+  /// Shared by the wordmark and the code -> one tweak serves both, and both read on any background.
+  /// The bundled 'Marcellus'; the engine falls back to the default typeface when it is unavailable.
   (TextPainter, TextPainter) _labelPainters(String value, double fontSize) {
     TextPainter build(TextStyle style) => TextPainter(
       text: TextSpan(text: value, style: style),
@@ -244,9 +218,8 @@ class ShareWatermarkService {
     return (stroke, fill);
   }
 
-  /// Draws [logo] into [dst] with a soft dark drop shadow beneath — a blurred
-  /// black silhouette (srcIn tint) offset down-right — so the mark separates
-  /// from bright backgrounds, then the logo itself at [_opacity] on top.
+  /// Draws [logo] into [dst] over a soft dark drop shadow — a blurred silhouette offset down-right.
+  /// So the mark separates from bright backgrounds; the logo itself paints at [_opacity] on top.
   void _drawLogo(ui.Canvas canvas, ui.Image logo, Rect dst, double logoW) {
     final src = Rect.fromLTWH(
       0,
@@ -276,19 +249,15 @@ class ShareWatermarkService {
     );
   }
 
-  // ─── Image path ────────────────────────────────────────────────────────────
-
-  /// Longest edge a share decodes at. Canonical statics are 1080x1920
-  /// (docs/media-conventions.md), already well under this, so real content
-  /// decodes at its native size and its output is byte-for-byte unchanged. The
-  /// cap only bites on an unexpectedly large master — which would otherwise
-  /// materialise tens of MB of uncompressed RGBA on the UI isolate and then
-  /// COPY all of it into the encode isolate.
+  /// Longest edge a share decodes at.
+  ///
+  /// Canonical statics are 1080x1920, well under this -> real content is byte-for-byte unchanged.
+  /// The cap only bites on an unexpectedly large master.
+  /// That would materialise tens of MB of RGBA on the UI isolate, then COPY it into the encoder.
   static const _maxShareEdge = 2560;
 
-  /// The frame dimensions to decode [w]x[h] at: capped to [_maxShareEdge] on the
-  /// longer edge, aspect-ratio-preserving, and NEVER upscaled (a small source is
-  /// returned as-is). See [watermarkImage].
+  /// The dimensions to decode [w]x[h] at — capped to [_maxShareEdge] on the longer edge.
+  /// Aspect-ratio-preserving and NEVER upscaled; a small source is returned as-is.
   (int, int) _cappedDecodeSize(int w, int h) {
     final long = w > h ? w : h;
     if (long <= _maxShareEdge) return (w, h);
@@ -296,19 +265,15 @@ class ShareWatermarkService {
     return ((w * scale).round().clamp(1, w), (h * scale).round().clamp(1, h));
   }
 
-  /// Decodes [src] (jpg/webp) — CAPPED to a phone-appropriate resolution so the
-  /// decode, the raster pass and the uncompressed RGBA readback are all bounded
-  /// — composites the overlay, and writes a NEW quality-90 JPEG to [outPath]
-  /// (never mutates [src] — it may be a cache-manager entry). JPEG encoding runs
-  /// in [Isolate.run] so the UI isolate never blocks on a full-resolution
-  /// encode. The overlay layout is fully fractional, so the watermark lands
-  /// identically at any frame size.
+  /// Decodes [src], composites the overlay, and writes a NEW quality-90 JPEG to [outPath].
   ///
-  /// Every intermediate is disposed explicitly. The codec, the descriptor, its
-  /// buffer and the recorded picture each hold native memory that the GC frees
-  /// only on its own schedule — which on a low-RAM device is far too late when
-  /// a share is already holding a decoded frame, a composited frame and two
-  /// copies of the RGBA buffer.
+  /// CAPPED on decode -> the decode, the raster pass and the RGBA readback are all bounded.
+  /// Never mutates [src] — it may be a cache-manager entry.
+  /// Encoding runs in [Isolate.run] -> the UI isolate never blocks on a full-resolution encode.
+  /// The overlay layout is fully fractional -> the watermark lands identically at any frame size.
+  /// Every intermediate is disposed EXPLICITLY — codec, descriptor, buffer and picture hold native
+  /// memory the GC frees on its own schedule.
+  /// On a low-RAM device that is far too late, with a decoded frame and two RGBA copies already held.
   Future<File> watermarkImage(
     File src,
     WatermarkSpec spec, {
@@ -317,8 +282,7 @@ class ShareWatermarkService {
     try {
       final srcBytes = await src.readAsBytes();
 
-      // Read the header dimensions cheaply (no full decode), then decode DOWN
-      // to the capped size. Only ever downscales.
+      // Read the header dimensions cheaply, then decode DOWN to the capped size — never up.
       final buffer = await ui.ImmutableBuffer.fromUint8List(srcBytes);
       final descriptor = await ui.ImageDescriptor.encoded(buffer);
       final (targetW, targetH) = _cappedDecodeSize(
@@ -331,7 +295,7 @@ class ShareWatermarkService {
       );
       final frame = await codec.getNextFrame();
       final source = frame.image;
-      // The decoded image is independent of these now — release the encoded data.
+      // The decoded image is independent of these now -> release the encoded data.
       codec.dispose();
       descriptor.dispose();
       buffer.dispose();
@@ -382,10 +346,8 @@ class ShareWatermarkService {
     }
   }
 
-  // ─── Video path ────────────────────────────────────────────────────────────
-
-  /// The overlay alone on a transparent [width]x[height] canvas as PNG bytes —
-  /// the input the native Media3 overlay effect composites over every frame.
+  /// The overlay alone on a transparent [width]x[height] canvas, as PNG bytes.
+  /// The input the native Media3 overlay effect composites over every frame.
   Future<Uint8List> renderOverlayPng(
     WatermarkSpec spec, {
     required int width,
@@ -411,11 +373,9 @@ class ShareWatermarkService {
 
   /// Whether this device can burn a watermark into video, and its API level.
   ///
-  /// Asked before any work is done, so a device that cannot export never pays
-  /// for an overlay render it would only throw away. Anything unexpected — no
-  /// channel (plain `flutter test`), a malformed reply — reports UNSUPPORTED:
-  /// the failure mode of guessing wrong here used to be a dead app, so the
-  /// pessimistic answer is the safe one.
+  /// Asked BEFORE any work -> a device that cannot export never renders an overlay it discards.
+  /// Anything unexpected — no channel, a malformed reply — reports UNSUPPORTED.
+  /// Guessing wrong here used to be a dead app, so the pessimistic answer is the safe one.
   Future<({bool supported, int sdkInt})> videoWatermarkSupport() async {
     final cached = _videoSupport;
     if (cached != null) return cached;
@@ -432,13 +392,11 @@ class ShareWatermarkService {
     }
   }
 
-  /// Burns the overlay into [src] (an MP4) via the native transformer.
-  /// Live wallpapers are 1024x1824 BY RULE (docs/media-conventions.md), so the
-  /// overlay is rendered at exactly that size — the native side scales it to
-  /// the frame anyway, and probing the container here would cost a full parse.
+  /// Burns the overlay into [src] via the native transformer.
   ///
-  /// Throws [ShareWatermarkUnsupportedException] below API 31 WITHOUT doing any
-  /// work; the caller shares the clean original in that case.
+  /// Live wallpapers are 1024x1824 BY RULE -> the overlay renders at exactly that size.
+  /// The native side scales it to the frame anyway, and probing the container costs a full parse.
+  /// Throws [ShareWatermarkUnsupportedException] below API 31 WITHOUT doing any work.
   Future<File> watermarkVideo(
     File src,
     WatermarkSpec spec, {
@@ -457,9 +415,8 @@ class ShareWatermarkService {
       });
       return File(result ?? outPath);
     } on PlatformException catch (e) {
-      // codes: transform_failed | bad_input | unsupported_api. The last one can
-      // only appear if the native gate disagrees with the probe above; honour it
-      // as a skip rather than a failure so the share still goes out.
+      // Codes: transform_failed | bad_input | unsupported_api.
+      // The last appears only if the native gate disagrees with the probe -> honour it as a SKIP.
       if (e.code == 'unsupported_api') {
         throw ShareWatermarkUnsupportedException(support.sdkInt);
       }
@@ -471,8 +428,6 @@ class ShareWatermarkService {
     }
   }
 }
-
-// ─── Provider ────────────────────────────────────────────────────────────────
 
 final shareWatermarkServiceProvider = Provider<ShareWatermarkService>(
   (ref) => ShareWatermarkService(),

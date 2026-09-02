@@ -1,14 +1,8 @@
-// Tests for the offline gate on the feed.
-//
-//   - FeedError renders offline copy vs the generic load-failure copy.
-//   - FeedScreen: OFFLINE shows the offline FeedError even with a cached
-//     catalog on hand (and the Apply/Share rail is unreachable), while ONLINE
-//     the normal feed states render and the gate stays inert.
-//
-// The live-video pool is a native platform channel; here it is backed by fake
-// channels (with null mock handlers) so building FeedScreen never touches a
-// real plugin. The reel itself (video textures / cached images) needs a device
-// and is out of scope — the online case is exercised via the normal empty state.
+// FeedError renders offline copy rather than the generic load-failure copy.
+// OFFLINE shows the offline FeedError even with a cached catalog on hand -> the Apply/Share rail stays unreachable.
+// ONLINE the normal feed states render and the gate stays inert.
+// The live-video pool is a native channel -> fake channels with null mock handlers keep FeedScreen off the real plugin.
+// The reel itself needs a device and is out of scope -> the online case is exercised via the normal empty state.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,9 +43,8 @@ class _FakeCatalog extends CatalogNotifier {
 const _method = MethodChannel('arul_test/feed_video');
 const _events = MethodChannel('arul_test/feed_video_events');
 
-/// A VideoPreloadController wired to fake channels so it never hits the real
-/// FeedVideoPlugin. The reel isn't built in these tests, so it only ever
-/// constructs + disposes.
+/// A VideoPreloadController wired to fake channels so it never hits the real FeedVideoPlugin.
+/// The reel is not built in these tests -> it only ever constructs and disposes.
 VideoPreloadController _testController() => VideoPreloadController(
   cdnBaseUrl: 'https://cdn.test',
   prefetch: WallpaperPrefetchService(cdnBaseUrl: 'https://cdn.test'),
@@ -132,8 +125,7 @@ void main() {
           child: wrap(const FeedScreen()),
         ),
       );
-      // Let the isOnline stream + fake catalog resolve. NOT pumpAndSettle — the
-      // header gift icon and loading pulse animate forever.
+      // Let the isOnline stream and fake catalog resolve. NOT pumpAndSettle -> the gift icon and pulse animate forever.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 30));
     }

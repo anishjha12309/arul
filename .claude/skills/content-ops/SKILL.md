@@ -72,8 +72,10 @@ stamp `public, max-age=31536000, immutable`; `fix.mjs` re-PUTs bare. The shape o
 3. ONE Neon transaction: insert/replace rows **and** `content_version = content_version + 1`.
    Map per asset: key→`full_key` · image/video→`type` static/live · **category→category** (the browse
    axis) · title · dims→width/height · bytes. Leave `duration_ms` null unless ffprobe returns a real
-   value, and leave `sort_order` alone — only ringtones set it; wallpaper order across categories is
-   computed at build time by `interleaveByCategory`.
+   value, and leave `sort_order` alone — only ringtones set it, and nothing reads it for feed order.
+   Order is the ORDER BY in `build-catalog` alone ([docs/browse.md](../../../docs/browse.md)); a bulk
+   import lands tied on `created_at` and is separated by its random v4 `id`, which is what stops one
+   category owning the first screen.
 4. Rebuild the catalog; DB, catalog and R2 counts must agree, with all 6 categories present.
    Count the DB with `prod-query.mjs` (above), the catalog with `total` from `all_1.json`.
 5. Replaced objects are swept once no row references them — never immediately: a 12 h grace protects

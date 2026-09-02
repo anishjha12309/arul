@@ -1,6 +1,7 @@
 ---
 name: wallpaper-import
 description: Clean the generator watermark (Gemini sparkle or Veo text) from a folder of live wallpapers and import them into the Arul CMS (R2 + Neon + catalog) under a given category. Use whenever the user has a new folder of live wallpapers (.mp4) to add.
+disable-model-invocation: true
 ---
 
 # Live wallpaper import — de-watermark + push to CMS
@@ -19,7 +20,7 @@ Sources come from more than one generator and the removers are **not interchange
 | **Gemini sparkle** (Flash/Omni image-to-video) | fixed box, `wm-model.json` — output x795–935, y1595–1735 | `dewatermark.py` — un-blend the alpha + inpaint its edge ring |
 | **Veo text** ("Veo") | source x682–705, y1253–1264 (bottom-right), `veo-model.json` | crop the bottom strip off, then upscale back to spec |
 
-**Applying the Gemini remover to a non-Gemini file is destructive, not a no-op.** It divides by `(1-alpha)` at that fixed box, so with no sparkle there it **burns a black star into clean artwork**. That shipped-quality bug hit a whole 10-file Veo batch on 2026-07-31 (9 of 10 ruined, caught only by looking). The Veo crop is the safe direction: on a Gemini file it merely fails to remove the sparkle, which the spot-check catches.
+**Applying the Gemini remover to a non-Gemini file is destructive, not a no-op.** It divides by `(1-alpha)` at that fixed box, so with no sparkle there it **burns a black star into clean artwork**. That shipped-quality bug once ruined 9 of a 10-file Veo batch, caught only by looking. The Veo crop is the safe direction: on a Gemini file it merely fails to remove the sparkle, which the spot-check catches.
 
 `clean-batch.mjs` therefore **routes every file by measurement** (`wm-probe.py`, shape-correlation against both glyph templates — scoring brightness alone false-fires on busy artwork). Thresholds and their calibration: `ROOT/wm-probe-calibration.md`. Don't hand-force `--mode` unless you have already proven the batch.
 
@@ -45,7 +46,7 @@ Sources come from more than one generator and the removers are **not interchange
    - Then still **VIEW** the bottom-right corner of the outputs (`crop=420:260:604:1564`). The numbers are calibrated, not infallible, and `none` verdicts are a fail-safe that only the eye closes.
 7. **Plan:** `node ROOT/plan-batch.mjs <category> <Cat> <startN> ["excludeSrc,…"]` → `import-plan.json` (UUID keys, numbered titles).
 8. **QC gate:** `cd tools/content-import && node verify.mjs` — must show 0 failures.
-9. **Import:** `cp c:/Anish/Arul/tools/content-import/import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node import.mjs` — R2 PUT (media + thumbs, stamped `public, max-age=31536000, immutable`) → one Neon txn (rows + `content_version` bump) → build-catalog. **Never run the copy already sitting at ROOT** — it predates `ea72bbc` and ships objects with no `Cache-Control` (the 2026-07-31 batch proves it ran anyway). It must be copied rather than run in place: `aws4fetch`/`postgres` resolve only from ROOT's `node_modules`, so running it from `tools/content-import/` throws `ERR_MODULE_NOT_FOUND` before touching R2. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
+9. **Import:** `cp c:/Anish/Arul/tools/content-import/import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node import.mjs` — R2 PUT (media + thumbs, stamped `public, max-age=31536000, immutable`) → one Neon txn (rows + `content_version` bump) → build-catalog. **Never run the copy already sitting at ROOT** — it is an older revision and ships objects with no `Cache-Control`; a shipped batch proves it has been run by mistake. It must be copied rather than run in place: `aws4fetch`/`postgres` resolve only from ROOT's `node_modules`, so running it from `tools/content-import/` throws `ERR_MODULE_NOT_FOUND` before touching R2. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
 10. **Verify:** `node ROOT/e2e-verify.mjs`. Its "titles 1..N" line false-fails for offset batches — confirm titles via a DB query instead; all other checks must pass.
 
 11. **Archive + prune:** `node archive-index.mjs` records the new masters (merges, never

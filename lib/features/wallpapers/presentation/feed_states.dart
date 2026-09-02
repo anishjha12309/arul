@@ -10,24 +10,17 @@ import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
 
-/// The seven feed category labels, verbatim from the design (Spec > Reel
-/// feed). The first is chrome; the rest come from the catalog. Title-cased at the
-/// call site if the catalog ever yields a raw slug.
+/// The seven feed category labels, verbatim from the design — the first is chrome, the rest catalog.
+/// Title-cased at the call site if the catalog ever yields a raw slug.
 const _kAllLabel = 'All';
 
-// ─────────────────────────────── Chips row ──────────────────────────────────
-
-/// The horizontal category-chip row on the feed's solid top bar
-/// (`pad 0 16px, gap 8, h-scroll`).
+/// The horizontal category-chip row on the feed's solid top bar.
 ///
-/// Sits on the themed frame, not over media, so the chips follow light/dark.
-///
+/// Sits on the themed frame, not over media -> the chips follow light/dark.
 /// [ArulChipVariant.category] — the SAME variant the ringtone browse row uses.
-/// Both rows are the one browse axis (CLAUDE.md §5b) doing the one job, and
-/// running them on different variants meant the two tabs disagreed on what a
-/// category pill looks like: different height, different inactive fill, and an
-/// inactive label at primary weight here versus secondary there. The chip is
-/// the same control; it gets the same clothes.
+/// Both rows are the one browse axis (CLAUDE.md §5b) doing one job.
+/// Different variants made the two tabs disagree on height, inactive fill and label weight.
+/// The chip is the same control; it gets the same clothes.
 class FeedChips extends ConsumerWidget {
   const FeedChips({super.key});
 
@@ -36,10 +29,8 @@ class FeedChips extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final selected = ref.watch(selectedCategoryProvider);
 
-    // A loaded catalog with no categories at all: collapse, rather than leave a
-    // 34px band of nothing under the title. (The loading case never reaches
-    // here — the frame swaps in FeedChipsSkeleton, which holds the height, so
-    // there is no jump when the chips arrive.) Same rule in the ringtone row.
+    // A loaded catalog with NO categories -> collapse, never a 34px band of nothing under the title.
+    // The loading case never reaches here — FeedChipsSkeleton holds the height, so nothing jumps.
     if (categories.isEmpty) return const SizedBox.shrink();
 
     final items = <WallpaperCategory>[
@@ -71,11 +62,8 @@ class FeedChips extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────── Loading ────────────────────────────────────
-
-/// Chip-row skeleton for the feed's top bar while the catalog loads: three
-/// ivory-8% pills (Spec > Feed states > Loading). The chips themselves render
-/// once categories land.
+/// Chip-row skeleton for the feed's top bar while the catalog loads — three ivory-8% pills.
+/// The chips themselves render once categories land.
 class FeedChipsSkeleton extends StatelessWidget {
   const FeedChipsSkeleton({super.key});
 
@@ -109,10 +97,9 @@ class FeedChipsSkeleton extends StatelessWidget {
   }
 }
 
-/// Feed loading fill (Spec > Feed states > Loading): the sliding-gradient
-/// card with a centred gopuram + line that pulses on opacity only. No masked
-/// shimmer, no spinner. Renders in the same inset rounded card as the reel so
-/// the loading → content swap doesn't jump.
+/// Feed loading fill — the sliding-gradient card with a centred gopuram that pulses on opacity only.
+/// NO masked shimmer, no spinner.
+/// Renders in the same inset rounded card as the reel -> the loading → content swap never jumps.
 class FeedLoading extends StatelessWidget {
   const FeedLoading({super.key, required this.margin, required this.radius});
 
@@ -153,8 +140,7 @@ class FeedLoading extends StatelessWidget {
   }
 }
 
-/// Opacity pulse .55 ↔ 1 over 2s (Spec > Feed states > Loading). Transform/
-/// opacity only.
+/// Opacity pulse .55 ↔ 1 over 2s — transform and opacity only.
 class _OpacityPulse extends StatefulWidget {
   const _OpacityPulse({required this.child});
 
@@ -187,11 +173,9 @@ class _OpacityPulseState extends State<_OpacityPulse>
       FadeTransition(opacity: _opacity, child: widget.child);
 }
 
-// ──────────────────────────────── Empty ─────────────────────────────────────
-
-/// Empty state for a category with no wallpapers (Spec > Feed states > Empty).
-/// Chips remain (so the user can jump elsewhere); a gentle gopuram + copy + an
-/// outlined gold "Browse all" that switches the category back to All.
+/// Empty state for a category with no wallpapers.
+/// The chips remain, so the user can jump elsewhere.
+/// A gopuram, copy, and an outlined gold "Browse all" that switches the category back to All.
 class FeedEmpty extends StatelessWidget {
   const FeedEmpty({
     super.key,
@@ -205,8 +189,7 @@ class FeedEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Chips stay visible via the feed's persistent top bar; this is only the
-    // body, rendered on the themed frame.
+    // The chips stay visible via the feed's persistent top bar — this is only the body.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Column(
@@ -245,8 +228,7 @@ class FeedEmpty extends StatelessWidget {
   }
 }
 
-/// Outlined accent pill (Spec > Feed states > Empty: `border gold-50%, gold
-/// text, pad 12 26, r999`) — gold on the dark frame, maroon on the light one.
+/// Outlined accent pill — `border gold-50%, pad 12 26, r999`; gold on dark, maroon on light.
 class _OutlinedAccentPill extends StatelessWidget {
   const _OutlinedAccentPill({required this.label, required this.onTap});
 
@@ -281,24 +263,17 @@ class _OutlinedAccentPill extends StatelessWidget {
   }
 }
 
-// ──────────────────────────────── Error ─────────────────────────────────────
-
-/// Full-screen feed error (Spec > Feed states > Error). `cloud_off`, plain
-/// words, one green Retry.
+/// Full-screen feed error — `cloud_off`, plain words, one green Retry.
 ///
-/// Two modes, same layout/tokens:
-///   - default ([offline] false): the catalog fetch failed AND there is no
-///     cached copy — "Couldn't load wallpapers" / "Check your connection…".
-///   - [offline] true: the device is offline, so the feed is gated shut
-///     regardless of cache — "No internet" / "Turn on the internet to see
-///     wallpapers." (the product's "boom, no wallpapers" state).
+/// Two modes, same layout and tokens:
+///   - [offline] false — the catalog fetch failed AND there is no cached copy;
+///   - [offline] true — the device is offline, so the feed is gated shut regardless of cache.
 class FeedError extends StatelessWidget {
   const FeedError({super.key, required this.onRetry, this.offline = false});
 
   final VoidCallback onRetry;
 
-  /// Selects the offline copy over the generic load-failure copy. Nothing else
-  /// changes — same icon, same green Retry, same layout.
+  /// Selects the offline copy over the load-failure copy — same icon, same Retry, same layout.
   final bool offline;
 
   @override

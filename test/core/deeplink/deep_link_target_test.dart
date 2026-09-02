@@ -1,7 +1,6 @@
-// The parking slot between "a link arrived" and "the screen that can show it
-// is up". Pins the contract the shell, the feed, the Ringtones tab and the
-// locale sync all rely on: last write wins, typed takes never eat the other
-// kind, listeners fire on every write, and a take clears exactly once.
+// The parking slot between "a link arrived" and "the screen that can show it is up".
+// The shell, the feed, the Ringtones tab and the locale sync all rely on this contract.
+// Last write wins, a typed take never eats the other kind, listeners fire on every write, a take clears exactly once.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,8 +23,7 @@ void main() {
   });
 
   test('last write wins, across kinds', () {
-    // A user who taps a ringtone ad after a wallpaper link wants the ringtone,
-    // and the two must never sit side by side.
+    // A user who taps a ringtone ad after a wallpaper link wants the ringtone -> the two never sit side by side.
     ArulDeepLink.request('w1');
     ArulDeepLink.requestTarget(const RingtoneLinkTarget('r1'));
     expect(ArulDeepLink.pendingTarget, const RingtoneLinkTarget('r1'));
@@ -34,8 +32,7 @@ void main() {
   });
 
   test('a typed take leaves the other kind alone', () {
-    // The feed builds before the shell has switched tabs: its wallpaper take
-    // runs first and must pass a pending ringtone through untouched.
+    // The feed builds before the shell switches tabs -> its wallpaper take must pass a pending ringtone through untouched.
     ArulDeepLink.requestTarget(const RingtoneLinkTarget('r1'));
     expect(ArulDeepLink.consumeWallpaper(), isNull);
     expect(ArulDeepLink.consumeTab(), isNull);

@@ -1,47 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LaunchTheme: visible while the Flutter engine warms up.
-         Parent is Theme.SplashScreen.IconBackground (androidx.core:core-splashscreen),
-         NOT a platform theme: the compat library REPLAYS the Android 12 splash on
-         API 23+. With the platform attrs alone, API<=30 ignored them and fell back
-         to `windowBackground` — a flat ink rectangle with no icon at all, for the
-         entire cold start. Android's migration guide is explicit that the direct-API
-         route leaves "Android 11 and earlier ... exactly the same as before".
-
-         HAND-OWNED, NOT GENERATED: `flutter_native_splash:create` rewrites this file
-         and would drop the Theme.SplashScreen parent + postSplashScreenTheme,
-         silently reverting the backport. See the warning in pubspec.yaml. -->
+    <!-- Platform splash attrs are ignored on API<=30 -> cold start drew a flat iconless field -> keep the compat parent. -->
+    <!-- flutter_native_splash:create rewrites this file -> it drops the parent and postSplashScreenTheme -> never run it. -->
     <style name="LaunchTheme" parent="Theme.SplashScreen.IconBackground">
-        <!-- Icon-field crimson, NOT brand ink: the adaptive icon paints its own
-             crimson disc here and a dark field left it floating as a hard-edged
-             circle. Matching the field to the disc's edge colour dissolves the
-             seam, so the splash reads as one crimson ground under the gold mark. -->
+        <!-- NOT brand ink -> a dark field leaves the icon's crimson disc a hard-edged circle -> match the disc's EDGE colour. -->
         <item name="windowSplashScreenBackground">@color/splash_icon_field</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_field</item>
-        <!-- The gold gopuram alone. The adaptive icon's FOREGROUND layer, not
-             @mipmap/ic_launcher: an AdaptiveIconDrawable is only resolvable from
-             API 26, and minSdk here is 24. -->
+        <!-- minSdk 24 cannot resolve an AdaptiveIconDrawable -> @mipmap/ic_launcher would fail -> use its foreground layer. -->
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
-        <!-- Required by the library: the theme the Activity wears once the splash
-             is done. Flutter also swaps to NormalTheme via its own manifest
-             meta-data, so both agree and the set is idempotent. -->
+        <!-- Flutter also sets NormalTheme via manifest meta-data -> both name the same theme -> the set is idempotent. -->
         <item name="postSplashScreenTheme">@style/NormalTheme</item>
 
         <!-- Arul's launch surface is dark brand ink in BOTH themes -> light icons. -->
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <!-- Drop the 80% scrim Android paints behind 3-button nav; the feed draws its
-             own gradient there. -->
+        <!-- Android paints an 80% scrim behind 3-button nav -> the feed draws its own gradient there -> turn it off. -->
         <item name="android:enforceNavigationBarContrast">false</item>
 
-        <!-- DELIBERATELY ABSENT (deprecated AND ignored at targetSdk 35+):
-             statusBarColor . navigationBarColor . navigationBarDividerColor .
-             windowOptOutEdgeToEdgeEnforcement. They are dead config that would only
-             mislead the next reader. Paint system-bar backgrounds in Flutter. -->
+        <!-- Bar colour attrs are ignored at targetSdk 35+ -> re-adding them only misleads -> paint system bars in Flutter. -->
     </style>
 
-    <!-- Applied once Flutter takes over (io.flutter.embedding.android.NormalTheme),
-         and also the postSplashScreenTheme above. -->
+    <!-- Flutter's own manifest meta-data names this theme by string -> keep it called NormalTheme. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@color/splash_bg</item>
         <item name="android:enforceNavigationBarContrast">false</item>

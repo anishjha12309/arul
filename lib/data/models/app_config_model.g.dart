@@ -13,6 +13,9 @@ _AppConfigModel _$AppConfigModelFromJson(Map<String, dynamic> json) =>
       policyUrls: json['policy_urls'] as Map<String, dynamic>,
       featureFlags: json['feature_flags'] as Map<String, dynamic>,
       minSupportedVersion: json['min_supported_version'] as String?,
+      categoryOrder:
+          json['category_order'] as Map<String, dynamic>? ??
+          const <String, dynamic>{},
     );
 
 Map<String, dynamic> _$AppConfigModelToJson(_AppConfigModel instance) =>
@@ -22,4 +25,5 @@ Map<String, dynamic> _$AppConfigModelToJson(_AppConfigModel instance) =>
       'policy_urls': instance.policyUrls,
       'feature_flags': instance.featureFlags,
       'min_supported_version': instance.minSupportedVersion,
+      'category_order': instance.categoryOrder,
     };

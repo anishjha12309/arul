@@ -4,112 +4,90 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Thin, typed Dart wrapper over the native Media3 ExoPlayer texture pool
-/// (`FeedVideoPlugin` on the Android side).
+/// (`FeedVideoPlugin` on the Android side) — the wallpaper feed's live previews
+/// and the sign-in background video.
 ///
-/// This replaces the `media_kit` runtime for the wallpaper feed's live previews
-/// and the sign-in background video. The whole design is **player + surface
-/// REUSE**: [FeedVideoPlayerPool.create] makes a player that survives the whole
-/// session, and [FeedVideoPlayer.open] swaps its media (setMediaItem + prepare
-/// on the SURVIVING native ExoPlayer + surface) — never dispose+recreate per
-/// swipe. That reuse is what keeps a swipe from churning a fresh Android
-/// surface, which caused the `BLASTBufferQueue ... max frames` flood + settle
-/// jank on budget MediaTek SoCs. Do not "simplify" by disposing per swap.
-///
-/// ## One channel subscription, shared by every pool ([_FeedVideoChannelHub])
-///
-/// The native [FeedVideoPlugin] exposes exactly ONE `MethodChannel` and ONE
-/// broadcast `EventChannel`, with a single native `eventSink`. A Flutter
-/// [EventChannel] supports only ONE active stream listener — a second
-/// `receiveBroadcastStream().listen(...)` on the same channel triggers a native
-/// `onListen` that **overwrites** the first listener's sink, and the losing
-/// listener then receives NO `firstFrame` / `videoSize` / `error` events.
-///
-/// The app has TWO independent [FeedVideoPlayerPool] instances (the feed pool in
-/// `VideoPreloadController` and the sign-in background pool in `VideoBackground`)
-/// that can be alive at the same time. If each opened its own EventChannel
-/// subscription, the second one to listen would steal the sink and strand the
-/// other pool's cards on a permanent poster/dark-fill — this was the "only the
-/// first live wallpaper renders" bug.
-///
-/// The fix: all pools share a single process-global [_FeedVideoChannelHub] that
-/// owns the one MethodChannel and the one EventChannel subscription, plus a
-/// global `Map<int, FeedVideoPlayer>` of every live handle across ALL pools.
-/// Native `playerId`s are globally unique (native `nextPlayerId` is one shared
-/// counter), so each tagged event is routed to the right handle regardless of
-/// which pool created it. A [FeedVideoPlayerPool] is now a thin owner of just
-/// the handles IT created, so its own [dispose] only tears down its own players.
+/// Player + surface REUSE is the whole design -> [FeedVideoPlayerPool.create] makes a session-long
+/// player and [FeedVideoPlayer.open] swaps its media (setMediaItem + prepare on the SURVIVING native
+/// player + surface) -> never dispose+recreate per swipe, never "simplify" to a per-swap dispose.
+/// A fresh Android surface per swipe floods `BLASTBufferQueue ... max frames` and settle jank on
+/// budget MediaTek SoCs -> reuse is what avoids it.
+/// Native [FeedVideoPlugin] holds ONE MethodChannel, ONE broadcast EventChannel and ONE `eventSink`,
+/// and Flutter allows ONE active stream listener -> a second `receiveBroadcastStream().listen(...)`
+/// overwrites the first sink and the loser gets NO `firstFrame` / `videoSize` / `error` -> every
+/// pool shares one process-global [_FeedVideoChannelHub].
+/// Two pools are alive at once (the feed's in `VideoPreloadController`, sign-in's in
+/// `VideoBackground`) -> per-pool subscriptions stranded the other pool's cards on a permanent
+/// poster/dark-fill (the "only the first live wallpaper renders" bug).
+/// The hub also holds every live handle across ALL pools, and native `playerId`s are globally unique
+/// (one shared `nextPlayerId`) -> a tagged event reaches its handle whichever pool created it.
+/// A pool owns only the handles IT created -> its [dispose] never tears down another pool's players.
 class FeedVideoPlayerPool {
   FeedVideoPlayerPool._(this._hub);
 
-  /// Production instance wired to the real, process-global channel hub. Named to
-  /// match the native [FeedVideoPlugin] channel constants.
+  /// Production instance wired to the real, process-global channel hub.
   factory FeedVideoPlayerPool() =>
       FeedVideoPlayerPool._(_FeedVideoChannelHub.instance);
 
-  /// Pay the CDN handshake up front, from the SAME native HTTP stack the
-  /// player will use — see `FeedVideoPlugin.warmConnection`. Fire and forget;
-  /// a failure just means the eventual open pays it itself.
+  /// Pays the CDN handshake up front, from the SAME native HTTP stack the player will use — see
+  /// `FeedVideoPlugin.warmConnection`.
   ///
-  /// Deliberately static and pool-free: the caller (the entitlement provider)
-  /// wants the connection warm long before any player exists.
+  /// Fire and forget -> a failure only means the eventual open pays the handshake itself.
+  /// The caller (the entitlement provider) warms it long before any player exists -> static and
+  /// pool-free.
   static Future<void> warmConnection(String url) => _FeedVideoChannelHub
       .instance
       .invokeMethod('warmConnection', {'url': url});
 
-  /// Test seam: inject fake channels. Each call builds a FRESH, isolated hub
-  /// bound to the given channels (it does NOT touch the process-global
-  /// singleton), so tests don't leak channel state into each other or into
-  /// production code. Dispose the returned pool to tear the hub's subscription
-  /// down.
+  /// Test seam: inject fake channels.
+  ///
+  /// Each call builds a FRESH hub on those channels and never touches the process-global singleton
+  /// -> tests cannot leak channel state into each other or into production. Dispose the returned
+  /// pool to tear the hub's subscription down.
   @visibleForTesting
   factory FeedVideoPlayerPool.withChannels(
     MethodChannel method,
     EventChannel events,
   ) => FeedVideoPlayerPool._(_FeedVideoChannelHub.forTesting(method, events));
 
-  /// The shared channel hub (one MethodChannel + one EventChannel subscription
-  /// for the whole process, or an isolated one under test).
+  /// The shared channel hub — one MethodChannel + one EventChannel subscription for the whole
+  /// process, or an isolated one under test.
   final _FeedVideoChannelHub _hub;
 
-  /// Handles created by THIS pool, so [dispose] only releases its own players
-  /// and never another pool's.
+  /// Handles created by THIS pool -> [dispose] releases only these, never another pool's.
   final Set<FeedVideoPlayer> _own = {};
 
   bool _disposed = false;
 
-  /// Creates a native ExoPlayer + its Flutter texture and returns a handle. The
-  /// underlying player/surface live until [FeedVideoPlayer.dispose]. Returns
-  /// null if the platform side is unavailable (e.g. headless widget test).
-  /// [audio] opts the native player into real [AudioAttributes] + audio focus
-  /// and an initial volume of 1. Everything in the feed and the auth background
-  /// leaves it false — a preview that ducked the user's music while they were
-  /// only browsing would be a bug. The paywall's onboarding clip is the one
-  /// caller that passes true, because it is a voiceover.
+  /// Creates a native ExoPlayer + its Flutter texture and returns a handle.
+  ///
+  /// The player and surface live until [FeedVideoPlayer.dispose] -> null means the platform side is
+  /// unavailable (e.g. a headless widget test) -> the caller falls back to poster-only.
+  /// [audio] opts the native player into real [AudioAttributes], audio focus and volume 1 -> a
+  /// preview that ducked the user's music while they only browsed would be a bug -> the feed and the
+  /// auth background stay false; the paywall's onboarding voiceover is the one caller passing true.
   Future<FeedVideoPlayer?> create({bool audio = false}) async {
     if (_disposed) return null;
     final res = await _hub.invokeCreate(audio: audio);
     if (res == null) return null;
     final playerId = (res['playerId'] as num).toInt();
     final textureId = (res['textureId'] as num).toInt();
-    // The pool can be disposed WHILE this create is in flight — a back press
-    // during the paywall's first frame is exactly that. The native player now
-    // exists, so returning it (or dropping it) would strand a decoder holding
-    // audio focus that nothing owns any more. Release it here instead.
+    // The pool can be disposed mid-create (a back press on the paywall's first frame) -> the native
+    // player already exists -> returning or dropping it strands a decoder holding audio focus that
+    // nothing owns any more.
     if (_disposed) {
       await _hub.invokeMethod('dispose', {'playerId': playerId});
       return null;
     }
     final handle = FeedVideoPlayer._(_hub, playerId, textureId);
-    // Register on the shared hub (routes tagged events) and record local
-    // ownership (so this pool's dispose only frees its own players).
+    // Hub registration routes tagged events; local ownership keeps dispose to this pool's players.
     _hub.register(handle);
     _own.add(handle);
     return handle;
   }
 
-  /// Disposes ALL native players THIS pool created (used on teardown). Individual
-  /// reuse-pool releases go through [FeedVideoPlayer.dispose]. Does NOT touch
-  /// players owned by another pool sharing the hub.
+  /// Disposes ALL native players THIS pool created (teardown) -> a single reuse-pool release goes
+  /// through [FeedVideoPlayer.dispose] -> never touches another pool's players on the shared hub.
   Future<void> disposeAll() async {
     if (_disposed) return;
     await _releaseOwned();
@@ -118,18 +96,15 @@ class FeedVideoPlayerPool {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    // NOT disposeAll(): `_disposed` is now true and that method's own guard
-    // would return before releasing anything, so `dispose()` used to free NO
-    // native player at all. Silent for every muted caller — the decoder simply
-    // ran on — and audible the moment the paywall's onboarding clip became the
-    // first player with sound: leaving /premium left the voiceover playing over
-    // whatever screen came next (device 2026-08-31).
+    // NOT disposeAll(): `_disposed` is already true -> its own guard returns before releasing
+    // anything -> every native player leaks. Silent while every caller was muted (the decoder just
+    // ran on), audible once the paywall's onboarding clip gained sound — leaving /premium kept the
+    // voiceover playing over whatever screen came next.
     await _releaseOwned();
   }
 
-  /// Releases every native player THIS pool created. Callable in either state,
-  /// which is the whole point — the two public entry points differ only in
-  /// whether the pool stays usable afterwards.
+  /// Releases every native player THIS pool created -> callable in either state, since the two
+  /// public entry points differ only in whether the pool stays usable afterwards.
   Future<void> _releaseOwned() async {
     final own = _own.toList();
     _own.clear();
@@ -143,21 +118,20 @@ class FeedVideoPlayerPool {
   }
 }
 
-/// Process-global owner of the one native MethodChannel + the one EventChannel
-/// broadcast subscription, shared by every [FeedVideoPlayerPool]. Holds the
-/// registry of ALL live handles across ALL pools and fans each tagged native
-/// event out to the handle its `playerId` belongs to.
+/// Process-global owner of the one native MethodChannel and the one EventChannel broadcast
+/// subscription, shared by every [FeedVideoPlayerPool].
 ///
-/// Because Flutter delivers one `onListen` per active stream and this is the
-/// only subscriber in the whole process, native gets exactly one `onListen` and
-/// one live sink — no second listener can clobber it.
+/// Holds the registry of ALL live handles across ALL pools -> each tagged native event fans out to
+/// the handle its `playerId` belongs to.
+/// The only subscriber in the process -> native sees exactly one `onListen` and one live sink -> no
+/// second listener can clobber it.
 class _FeedVideoChannelHub {
   _FeedVideoChannelHub(this._method, this._events) {
     _eventSub = _events.receiveBroadcastStream().listen(
       _onEvent,
       onError: (_) {
-        // A malformed platform event must never crash the feed; ignore it (the
-        // per-card safety timer still reveals).
+        // A malformed platform event must never crash the feed -> swallow it; the per-card
+        // safety timer still reveals.
       },
     );
   }
@@ -170,8 +144,7 @@ class _FeedVideoChannelHub {
         const EventChannel('com.hsrutility.arul/feed_video_events'),
       );
 
-  /// Test seam: a fresh, isolated hub bound to fake channels (never the
-  /// singleton), so each test's channel state is isolated.
+  /// Test seam: a fresh hub on fake channels, never the singleton -> per-test channel isolation.
   factory _FeedVideoChannelHub.forTesting(
     MethodChannel method,
     EventChannel events,
@@ -181,8 +154,8 @@ class _FeedVideoChannelHub {
   final EventChannel _events;
   StreamSubscription<dynamic>? _eventSub;
 
-  /// EVERY live handle across ALL pools, keyed by globally-unique native
-  /// playerId, so a tagged event reaches its handle no matter which pool owns it.
+  /// EVERY live handle across ALL pools, keyed by the globally-unique native playerId -> a tagged
+  /// event reaches its handle whichever pool owns it.
   final Map<int, FeedVideoPlayer> _byId = {};
 
   void register(FeedVideoPlayer handle) => _byId[handle.playerId] = handle;
@@ -195,8 +168,7 @@ class _FeedVideoChannelHub {
         'audio': audio,
       });
     } catch (_) {
-      // No platform implementation (tests / unsupported host) — caller falls
-      // back to poster-only.
+      // No platform implementation (tests / unsupported host) -> caller falls back to poster-only.
       return null;
     }
   }
@@ -205,14 +177,14 @@ class _FeedVideoChannelHub {
     try {
       await _method.invokeMethod<void>(method, args);
     } catch (_) {
-      // Stale/unknown playerId or transient platform error — the native side
-      // treats these as no-ops; nothing to do here.
+      // Stale/unknown playerId or a transient platform error -> native treats both as no-ops.
     }
   }
 
-  /// Like [invokeMethod] but for a call that returns an int (e.g. a player's
-  /// last-painted openId). Returns null when the platform side is unavailable or
-  /// the id is stale, so callers can treat "unknown" distinctly from a value.
+  /// Like [invokeMethod] but for a call returning an int (e.g. a player's last-painted openId).
+  ///
+  /// Null when the platform side is unavailable or the id is stale -> callers can tell "unknown"
+  /// apart from a value.
   Future<int?> invokeIntMethod(String method, Map<String, dynamic> args) async {
     try {
       return await _method.invokeMethod<int>(method, args);

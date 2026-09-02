@@ -1,28 +1,20 @@
-/// Rendered string → ARB key.
-///
-/// A finding is only actionable if it names a key: the exclusivity rule removes
-/// a key from all five non-English ARBs, so an unattributed overflow is a
-/// finding nobody can act on.
-///
-/// Matching is exact first, then template-regex for the seven parameterized
-/// messages, then a couple of shapes the widget tree imposes on a string before
-/// it reaches a paragraph (a `Text.rich` splits one message across spans; a
-/// `\n` message reaches the paragraph whole). Anything still unmatched is
-/// reported as unattributed rather than guessed at.
+/// Rendered string -> ARB key.
+/// A finding is only actionable if it names a key -> the fix removes that key from all five non-English ARBs.
+/// So an unattributed overflow is a finding nobody can act on.
+/// Matching is exact first, then template-regex for the parameterized messages.
+/// Then the shapes the widget tree imposes -> a `Text.rich` splits one message across spans, a `\n` message arrives whole.
+/// Anything still unmatched is reported as unattributed rather than guessed at.
 library;
 
 import 'arb_index.g.dart';
 
-/// Stamped into a finding's detail when the rendered string maps to MORE THAN
-/// ONE ARB key, so nothing downstream can treat the guess as certain.
-///
-/// English strings can collide — 'Upload your content' is both uploadTitle and
-/// settingsUpload. While the translations differ, the collision only exists in
-/// English and fails safe — but the moment one of a colliding pair is demoted,
-/// all six locales render the same English string, every locale attributes to
-/// whichever key sorts first, and a genuine finding could be subtracted
-/// against a baseline entry recorded for the OTHER key. So an ambiguous
-/// finding is never baseline-subtracted.
+/// Stamped into a finding's detail when the rendered string maps to MORE THAN ONE ARB key.
+/// Nothing downstream may then treat the guess as certain.
+/// English strings collide -> 'Upload your content' is both uploadTitle and settingsUpload.
+/// While the translations differ the collision exists only in English and fails safe.
+/// But demote one of a colliding pair and all six locales render the same English string.
+/// Every locale then attributes to whichever key sorts first -> a real finding could be subtracted against the OTHER key.
+/// So an ambiguous finding is NEVER baseline-subtracted.
 const String kAmbiguousMarker = '[ambiguous-attribution]';
 
 class Attributor {
@@ -41,9 +33,8 @@ class Attributor {
 
   /// Every string this locale can render, for the "did we exercise it?" ledger.
   static Map<String, String> stringsFor(String locale) => {
-    // A demoted key is absent from a non-English ARB and gen_l10n back-fills the
-    // English template, so the English map is the fallback — exactly what the
-    // user sees.
+    // A demoted key is absent from a non-English ARB and gen_l10n back-fills the English template.
+    // So the English map is the fallback -> exactly what the user sees.
     ...kArbStrings['en']!,
     ...?kArbStrings[locale],
   };
@@ -65,8 +56,7 @@ class Attributor {
       if (template == null) continue;
       out.add(_Template(key, template));
     }
-    // Longest template first: "{price} charged today, then renews…" must not be
-    // shadowed by a shorter pattern that also matches.
+    // Longest template FIRST -> a long message must not be shadowed by a shorter pattern that also matches.
     out.sort((a, b) => b.template.length.compareTo(a.template.length));
     return out;
   }
@@ -83,8 +73,8 @@ class Attributor {
       if (t.matches(text)) return t.key;
     }
 
-    // A multi-line message reaches one paragraph whole but reaches a Column of
-    // Texts one line at a time. Match a line against the message it belongs to.
+    // A multi-line message reaches one paragraph whole but a Column of Texts one line at a time.
+    // So match a line against the message it belongs to.
     for (final entry in _exact.entries) {
       if (!entry.key.contains('\n')) continue;
       for (final line in entry.key.split('\n')) {
@@ -94,15 +84,13 @@ class Attributor {
     return null;
   }
 
-  /// True when [rendered] maps to more than one ARB key, so any attribution of
-  /// it is a guess. See [kAmbiguousMarker].
+  /// True when [rendered] maps to more than one ARB key -> any attribution of it is a guess (see [kAmbiguousMarker]).
   bool isAmbiguous(String rendered) =>
       (_exact[rendered.trim()] ?? const []).length > 1;
 
-  /// True when [rendered] is one of this locale's authored strings at all —
-  /// used to tell "a translated string overflowed" from "a wallpaper title in
-  /// the fake data overflowed", which is out of scope (CLAUDE.md §6: only UI
-  /// chrome is localized).
+  /// True when [rendered] is one of this locale's authored strings at all.
+  /// It separates "a translated string overflowed" from "a fake wallpaper title overflowed", which is out of scope.
+  /// Only UI chrome is localized (CLAUDE.md §6).
   bool isAuthored(String rendered) => attribute(rendered) != null;
 }
 
@@ -115,9 +103,8 @@ class _Template {
 
   bool matches(String text) => _pattern.hasMatch(text);
 
-  /// Turns `"Free for 1 day, then {price}/month."` into a regex that accepts any
-  /// substitution. The literal parts are escaped so a `.` in the copy cannot
-  /// match an arbitrary character and widen the net.
+  /// Turns a templated message into a regex that accepts any substitution.
+  /// The literal parts are escaped -> a `.` in the copy cannot match an arbitrary character and widen the net.
   static RegExp _compile(String template) {
     final buf = StringBuffer('^');
     var index = 0;

@@ -16,21 +16,19 @@ import '../domain/auth_service.dart';
 
 /// [AuthService] implementation backed by the Cloudflare Worker API.
 ///
-/// Google sign-in follows the surface order of Google's own "Implement Sign in
-/// with Google" guide: Credential Manager BOTTOM SHEET first (automatic
-/// sign-in when exactly one authorized account exists), the "Sign in with
-/// Google" BUTTON flow as the fallback — for a sheet that drew nothing, a
-/// sheet that could not run, and every user-initiated retry.
+/// Google's own "Implement Sign in with Google" guide fixes the surface order -> Credential Manager
+/// BOTTOM SHEET first (automatic sign-in when exactly one authorized account exists), the "Sign in
+/// with Google" BUTTON flow as the fallback for a sheet that drew nothing, a sheet that could not
+/// run, and every user-initiated retry.
 ///   sheet | button → idToken (+ per-process nonce) → POST /auth/login
 ///
-/// EXACTLY ONE visible Google surface per attempt: the picker follows a sheet
-/// only when the sheet drew NOTHING. A sheet run as a WARM-UP ahead of a
-/// picker is a different thing and is still forbidden (measured 2026-08-11:
-/// the user saw a drawer appear, hang and vanish, then the picker).
+/// EXACTLY ONE visible Google surface per attempt -> the picker follows a sheet only when the sheet
+/// drew NOTHING.
+/// A sheet run as a WARM-UP ahead of a picker is a different thing and stays forbidden -> measured,
+/// the user saw a drawer appear, hang and vanish, then the picker.
 ///
-/// Auth state is derived from stored tokens (no server-side session stream).
-/// The stream fires immediately on construction, then again after every
-/// sign-in / sign-out.
+/// Auth state is derived from stored tokens (no server-side session stream) -> the stream fires
+/// immediately on construction, then again after every sign-in / sign-out.
 class ApiAuthService implements AuthService {
   ApiAuthService({
     required ApiClient apiClient,
@@ -41,11 +39,9 @@ class ApiAuthService implements AuthService {
     this._freshInstall = false,
   }) : _api = apiClient,
        _referral = installReferrer {
-    // Seed the stream with the current persisted state. `_initialized`
-    // completes once this finishes so the splash can WAIT for the real
-    // stored-session verdict instead of sampling `currentState` on a timer
-    // (the encrypted secure-storage read can outrun a fixed brand-beat on a
-    // cold start, which would route a returning user to sign-in).
+    // The encrypted secure-storage read can outrun a fixed brand-beat on a cold start -> sampling
+    // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
+    // `_initialized`, which completes when this seed does.
     _initialized = _seedInitialState();
   }
 
@@ -58,16 +54,16 @@ class ApiAuthService implements AuthService {
   final AnalyticsService _analytics;
   final CrashReporter _crash;
 
-  /// True only on the very first launch of this install (the persisted cohort
-  /// draw was created this process — see AnalyticsCohort.isFreshInstall).
+  /// True only on the very first launch of this install — the persisted cohort draw was created
+  /// this process (`AnalyticsCohort.isFreshInstall`).
   final bool _freshInstall;
 
-  /// Current app language code for the `app_language` person property set at
-  /// sign-in. Optional so tests and define-less runs need not wire a locale.
+  /// Current app language code for the `app_language` person property set at sign-in.
+  /// Optional -> tests and define-less runs need not wire a locale.
   final String Function()? _appLanguage;
 
-  /// Optional — supplies a pending referral code (Play Install Referrer) to
-  /// attach to the FIRST login so the Worker can attribute the install.
+  /// Optional — supplies a pending Play Install Referrer code, attached to the FIRST login -> the
+  /// Worker can attribute the install.
   final InstallReferrerService? _referral;
 
   final _controller = StreamController<AuthUserState>.broadcast();
@@ -75,38 +71,28 @@ class ApiAuthService implements AuthService {
   // Tracks the current state so [currentState] can return synchronously.
   AuthUserState _current = AuthUserState.unauthenticated();
 
-  // ─── Initialisation ────────────────────────────────────────────────────────
-
-  /// Checks secure storage for an existing access token and emits the right
-  /// initial state.  Called once in the constructor; fire-and-forget.
+  /// Checks secure storage for an existing access token and emits the right initial state.
+  /// Called once in the constructor; fire-and-forget.
   ///
-  /// When tokens exist we authenticate OPTIMISTICALLY from the stored token and
-  /// emit immediately, then upgrade to the real profile via `GET /me` in the
-  /// background (the ApiClient auto-refreshes on 401). We sign the user out only
-  /// on a genuine 401 (refresh also failed); on a network/server error we keep
-  /// the optimistic state so the user isn't kicked out offline.
-  ///
-  /// Emitting before the network call is what keeps cold starts snappy: the
-  /// router leaves the splash as soon as the token is read from secure storage,
-  /// instead of stalling on a `/me` round-trip. It also makes the Android 12+
-  /// wallpaper-apply activity recreation a brief splash flash rather than a
-  /// multi-second splash-then-network wait. Browse/preview is public, so it's
-  /// safe to show before `/me` confirms; entitlement is always re-checked live.
+  /// Tokens exist -> authenticate OPTIMISTICALLY from the stored token and emit at once, then
+  /// upgrade to the real profile via `GET /me` in the background (ApiClient auto-refreshes on 401).
+  /// Sign out only on a genuine 401 (refresh failed too) -> a network/server error keeps the
+  /// optimistic state so the user is not kicked out offline.
+  /// Emitting before the network call -> the router leaves the splash on the storage read, not on a
+  /// `/me` round-trip -> cold starts stay snappy and the Android 12+ wallpaper-apply activity
+  /// recreation is a splash FLASH, not a multi-second splash-then-network wait.
+  /// Browse/preview is public -> safe to show before `/me` confirms; entitlement is re-checked live.
   Future<void> _seedInitialState() async {
-    // A true first launch cannot have a stored session: tokens live in the
-    // app's own data dir, created and destroyed with it, and allowBackup is
-    // false so no restore can resurrect them into a fresh install. Skipping
-    // the secure-storage read here matters because an install's FIRST read
-    // pays the keystore master-key setup — ~970ms measured (profile build,
-    // fresh install, 2026-08-22) — and after everything else was overlapped
-    // it was the last thing gating the account picker, on exactly the launch
-    // the install→login funnel lives or dies on. The freshness signal is the
-    // persisted cohort draw (AnalyticsCohort.isFreshInstall): the app's one
-    // durable first-launch marker, present on every install that ever
-    // launched, and false in any process that never ran resolve() — which
-    // degrades to the keystore wait below, never to a wrong verdict. The
-    // warm-up fired from main() still initialises the keystore in the
-    // background, so the post-login token WRITE finds it ready.
+    // Tokens live in the app's own data dir and allowBackup is false -> no restore can resurrect
+    // them -> a true first launch cannot have a stored session, so skip the read entirely.
+    // An install's FIRST secure-storage read pays the keystore master-key setup (~970ms measured on
+    // a profile build) -> once everything else was overlapped it was the last thing gating the
+    // account picker, on exactly the launch the install→login funnel lives or dies on.
+    // The freshness signal is the persisted cohort draw (AnalyticsCohort.isFreshInstall) — the one
+    // durable first-launch marker, false in any process that never ran resolve() -> that degrades
+    // to the keystore wait below, never to a wrong verdict.
+    // main()'s warm-up still initialises the keystore in the background -> the post-login token
+    // WRITE finds it ready.
     if (_freshInstall) {
       BootTrace.mark('authSeed: fresh install → unauthenticated');
       _emit(AuthUserState.unauthenticated());
@@ -121,9 +107,9 @@ class ApiAuthService implements AuthService {
       return;
     }
 
-    // 1. Optimistic: route straight to the feed off the stored token. Seed the
-    //    profile from the local cache so the name/email render instead of
-    //    going blank while `/me` is in flight — or staying blank if we're offline.
+    // 1. Optimistic: route straight to the feed off the stored token -> seed the profile from the
+    //    local cache so name/email render instead of blanking while `/me` is in flight, or staying
+    //    blank when offline.
     final cached = await _api.readCachedProfile();
     _emit(
       AuthUserState.authenticated(
@@ -153,8 +139,8 @@ class ApiAuthService implements AuthService {
           displayName: displayName,
           email: email,
         );
-        // Tie crash reports to the restored session (one of the few high-value
-        // Crashlytics touch points).
+        // Tie crash reports to the restored session — one of the few high-value Crashlytics
+        // touch points.
         _crash.setUserId(userId);
       }
     } on ApiException catch (e) {

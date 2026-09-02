@@ -15,43 +15,21 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.hsrutility.arul.BuildConfig
 import java.io.File
 
-/**
- * Manages ExoPlayer lifecycle for the live (video) wallpaper, bridging the
- * Engine's [SurfaceHolder] to Media3 ExoPlayer.
- *
- * Adopted verbatim (logic) from the vendored flutter_wallpaper_plus VideoRenderer
- * — every decision below was earned on real budget hardware:
- *
- * 1. The player is created in [initialize] and FULLY released in
- *    [releasePlayerInstance]. On visibility loss we release the player (and its
- *    hardware MediaCodec) and re-create it on visibility gain — ExoPlayer does
- *    NOT free the decoder on pause(); it holds the MediaCodec for the player's
- *    lifetime. On budget SoCs with 2–3 concurrent decoders, a paused-but-alive
- *    wallpaper would permanently occupy a slot WHILE INVISIBLE — exactly when the
- *    app's feed pool and the next apply preview need one. Releasing on invisible
- *    returns the slot. Cost: a brief re-buffer on return (the right trade here).
- *
- * 2. The release is debounced ([INVISIBLE_RELEASE_DELAY_MS]) so transient flaps
- *    (notification shade, recents peek) just pause and resume seamlessly; only a
- *    sustained absence frees the decoder.
- *
- * 3. Errors are caught and never crash the service — a crashing wallpaper service
- *    forces the user back to the default wallpaper (very bad UX).
- *
- * 4. Loop = REPEAT_MODE_ALL (seamless). Audio = volume 0/1 (muted by default for
- *    a wallpaper; never removed from the pipeline).
- *
- * 5. Scaling = SCALE_TO_FIT_WITH_CROPPING, set once per player. Our sources are
- *    ~9:16 (1024x1824) and every modern screen is taller (9:19.5-9:20+), so the
- *    default SCALE_TO_FIT filled the engine surface NON-uniformly: on a 1080x2392
- *    panel that is x1.055 across and x1.311 down, a ~24% vertical stretch on the
- *    applied wallpaper AND in the OS chooser preview (which previews this very
- *    service). SCALE_TO_FIT_WITH_CROPPING scales uniformly and centre-crops the
- *    overflow instead - aspect-true, full-bleed, matching the in-app feed's
- *    BoxFit.cover. It is applied by the native window at composite time from
- *    whatever surface the engine hands us, so it needs no display metrics, holds
- *    on every device and aspect, and re-derives itself on rotation/resize.
- */
+// Bridges the Engine's [SurfaceHolder] to Media3 ExoPlayer -> every decision below was earned on budget hardware.
+// ExoPlayer does NOT free the decoder on pause() -> it holds the MediaCodec for the player's whole lifetime.
+// On a SoC with 2-3 concurrent decoders a paused-but-alive wallpaper occupies a slot WHILE INVISIBLE.
+// That is exactly when the feed pool and the next apply preview need one -> release on invisible, re-create on visible.
+// The cost is a brief re-buffer on return, which is the right trade here.
+// The release is debounced by [INVISIBLE_RELEASE_DELAY_MS] -> a shade pull or recents peek pauses and resumes seamlessly.
+// Only a sustained absence frees the decoder.
+// Every error is caught and never crashes the service -> a crashing wallpaper service drops the user to the default.
+// Loop is REPEAT_MODE_ALL for seamlessness; audio is volume 0 or 1 and is never removed from the pipeline.
+// Scaling is SCALE_TO_FIT_WITH_CROPPING, set once per player -> sources are ~9:16 and every modern screen is taller.
+// The default SCALE_TO_FIT filled the surface NON-uniformly -> on a 1080x2392 panel that is a ~24% vertical stretch.
+// It showed on the applied wallpaper AND in the OS chooser preview, which previews this very service.
+// SCALE_TO_FIT_WITH_CROPPING scales uniformly and centre-crops -> aspect-true and full-bleed, like the feed's BoxFit.cover.
+// The native window applies it at composite time from whatever surface the engine hands over.
+// So it needs no display metrics, holds on every device and aspect, and re-derives itself on rotation or resize.
 @UnstableApi
 class VideoRenderer(private val context: Context) {
 
@@ -61,7 +39,7 @@ class VideoRenderer(private val context: Context) {
         /** Grace period before a now-invisible wallpaper releases its decoder. */
         private const val INVISIBLE_RELEASE_DELAY_MS = 500L
 
-        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        /** Debug-only log -> the BuildConfig.DEBUG gate strips it from a release build. */
         private fun logd(msg: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, msg)
         }
@@ -104,15 +82,14 @@ class VideoRenderer(private val context: Context) {
         currentVideoPath = videoPath
         currentSurfaceHolder = surfaceHolder
 
-        // Release any existing player but keep the retained path/holder above.
+        // Release any existing player but keep the retained path and holder above.
         releasePlayerInstance()
 
         try {
             player = ExoPlayer.Builder(context).build().apply {
                 setVideoSurfaceHolder(surfaceHolder)
-                // Aspect-true full-bleed - see point 5 in the class doc. Set on the
-                // player (not per-item), so swapVideo, which reuses this instance,
-                // keeps it; a re-created player passes through here again.
+                // Aspect-true full-bleed -> set on the PLAYER, not per item, so swapVideo keeps it when it reuses this instance.
+                // A re-created player passes through here again.
                 setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                 volume = if (audioEnabled) 1.0f else 0.0f
                 repeatMode = if (loopEnabled) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
@@ -128,18 +105,12 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    /**
-     * Swaps the playing video in place (same engine, same player) — used when a
-     * new live wallpaper is applied while THIS service is already the active
-     * system wallpaper, because Android ignores a re-Set of the same component
-     * ("Changing to the same component, ignoring") and never recreates the engine.
-     *
-     * If the player is currently released (invisible past the grace period), only
-     * the retained path is updated; the next visibility gain re-initializes with
-     * the new video via the existing path. Deliberately does NOT force play():
-     * playWhenReady is preserved, so an invisible-paused player stays paused and
-     * a pending [releaseOnIdle] still frees the decoder.
-     */
+    // Swaps the playing video in place, same engine and same player.
+    // It is needed because Android ignores a re-Set of the same component and never recreates the engine.
+    // If the player is already released, past the invisible grace period, only the retained path is updated.
+    // The next visibility gain then re-initializes with the new video through that path.
+    // Deliberately does NOT force play() -> playWhenReady is preserved, so an invisible-paused player stays paused.
+    // A pending [releaseOnIdle] still frees the decoder.
     fun swapVideo(videoPath: String, surfaceHolder: SurfaceHolder) {
         logd("Swapping video in place: $videoPath")
         currentVideoPath = videoPath
@@ -151,8 +122,7 @@ class VideoRenderer(private val context: Context) {
             activePlayer.prepare()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to swap video", e)
-            // Keep the retained path/holder so the next visibility gain re-inits
-            // cleanly with the new video instead of looping a broken player.
+            // Keep the retained path and holder -> the next visibility gain re-inits cleanly instead of looping a broken player.
             releasePlayerInstance()
         }
     }
@@ -224,7 +194,7 @@ class VideoRenderer(private val context: Context) {
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "Playback error: ${error.errorCodeName} — ${error.message}", error)
 
-            // If the source file is gone, re-prepare() would loop forever — bail.
+            // A missing source file would make re-prepare() loop forever -> bail instead.
             val path = currentVideoPath
             if (path != null && !File(path).exists()) {
                 Log.e(TAG, "Source file missing; not retrying: $path")

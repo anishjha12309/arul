@@ -19,7 +19,7 @@ by an orchestrator — return the raw verdict table below, no preamble.
 2. Hunt counter-evidence: a second code path that contradicts the first, a schema file or
    migration that moved on, wrangler.toml vs the claimed binding, a config value that
    changed, prod state that disagrees with the repo. For EXTERNAL claims, current official
-   vendor docs count too — never from memory (stale for 2026): find the page with WebSearch,
+   vendor docs count too — never from memory, which is presumed stale: find the page with WebSearch,
    read it with `trafilatura -u "<URL>" --markdown | head -150` via Bash (WebFetch is denied
    here), official portals only (developer.phonepe.com, developers.google.com,
    firebase.google.com/docs, posthog.com/docs, developers.cloudflare.com, pub.dev), cite
@@ -29,9 +29,9 @@ by an orchestrator — return the raw verdict table below, no preamble.
 
 ## Hearsay rule
 
-A doc cannot prove a doc. A comment cannot prove behaviour. Evidence citing the audited doc
-itself, another doc, or CLAUDE.md is auto-rejected — the claim becomes UNVERIFIED unless
-you find real evidence either way while hunting.
+A doc cannot prove a doc. A comment cannot prove behaviour. Evidence citing the audited doc itself,
+another doc, CLAUDE.md, a `.claude/rules/` file or an auto-memory file is auto-rejected — the claim
+becomes UNVERIFIED unless you find real evidence either way while hunting.
 
 ## Verdicts
 

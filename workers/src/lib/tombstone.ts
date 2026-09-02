@@ -1,19 +1,13 @@
 /**
  * Trial tombstones — the one-free-trial guard across account deletions.
  *
- * DELETE /me removes the user's rows entirely (PII gone), but first records
- * HMAC-SHA256(google_sub, TRIAL_TOMBSTONE_SECRET) in `trial_tombstones` when
- * the trial was consumed. /auth/login's new-user branch checks the same hash
- * and pre-seeds a consumed-trial subscriptions row, so delete → re-signup
- * never resets trial eligibility.
- *
- * The HMAC is one-way: the tombstone stores no PII and cannot be reversed to
- * a Google account, but the SAME Google account always re-derives the same
- * hash. TRIAL_TOMBSTONE_SECRET must therefore NEVER be rotated — a new secret
- * would orphan every existing tombstone and re-open trial farming.
+ * DELETE /me erases the user's rows -> delete then re-signup would reset trial eligibility -> hash first
+ * A consumed trial writes HMAC(google_sub) to `trial_tombstones` -> /auth/login re-derives it on every new user
+ * A hit pre-seeds a consumed-trial subscriptions row -> the second account starts with the trial already spent
+ * The HMAC is one-way -> no PII is stored, yet the same Google account always re-derives the same hash
+ * Rotating TRIAL_TOMBSTONE_SECRET orphans every existing tombstone -> trial farming re-opens -> NEVER rotate
  */
 
-/** HMAC-SHA256(googleSub, secret) as lowercase hex. */
 export async function hashGoogleSub(
   googleSub: string,
   secret: string,

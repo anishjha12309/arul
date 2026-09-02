@@ -14,10 +14,8 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../domain/entitlement.dart';
 
-/// Monthly price in rupees from the remote app_config (`prices.monthly.amount`
-/// is paise), or null when the config hasn't loaded. Shared by the purchase
-/// notifier and [TrialConversionCatchUp] so a late `trial_started` carries
-/// exactly the `value` an in-session one would.
+/// Monthly price in rupees from the remote app_config (`amount` is paise); null until it loads.
+/// Shared with the purchase notifier -> a late `trial_started` carries exactly an in-session `value`.
 double? monthlyPriceRupees(AppConfigModel? config) {
   final monthly = config?.prices['monthly'];
   if (monthly is Map && monthly['amount'] is num) {
@@ -28,33 +26,17 @@ double? monthlyPriceRupees(AppConfigModel? config) {
 
 /// Fires `trial_started` LATE for a trial that was granted with the app closed.
 ///
-/// WHY: `trial_started` is the ONLY event campaigns bid on, and it used to fire
-/// from exactly one place — the purchase notifier's `/payments/status` polls on
-/// the /premium screen. A trial granted any other way (the setup webhook
-/// resurrecting an abandon-raced claim, Android killing Arul behind the UPI
-/// app, the poll budget running out before PhonePe settled) reached the Neon
-/// row and never reached ANY sink. Measured 2026-08-26 against Neon: 13–15% of
-/// real trials had no `trial_started` in PostHog (100% cohort), i.e. the same
-/// share was missing from GA4/Google Ads and Meta. The server must NOT send it
-/// instead — one conversion fed by two source types (app SDK + server) is what
-/// desynchronised attribution and got the server-side `purchase`/`Subscribe`
-/// reporters deleted the same day. So the SAME app SDK fires it, just late: on
-/// the next `GET /me` that shows a `trialing` row whose `merchant_order_id`
-/// this install has not reported.
-///
-/// The marker is the last reported SETUP order id (`prefsKey`), written by the
-/// purchase notifier BEFORE it invalidates the entitlement (so the refresh that
-/// follows an in-session fire can never re-fire it) and by [reconcile] after a
-/// late fire. Keyed on the order, not a boolean, so a second account on the
-/// same device still gets its own event. The ~85% that fire in-session are
-/// untouched — same instant, same path as before.
-///
-/// Grandfathering: the first [reconcile] on an install that predates this
-/// class (marker never written, install not fresh) cannot tell "fired on the
-/// old build" from "lost", so it records the current order WITHOUT firing —
-/// one day's cohort of updaters forgoes recovery rather than risk a double
-/// count on the event that makes the money. A fresh install has no such
-/// history and fires.
+/// `trial_started` is the ONLY event campaigns bid on, and it fired from ONE place: the poll loop.
+/// A trial granted any other way reached the Neon row and NO sink — 13–15% of real trials.
+/// The server must NOT send it instead: two source types for one conversion desyncs attribution.
+/// So the SAME app SDK fires it, just late — on the next `GET /me` showing an unreported trial.
+/// The marker is the last reported SETUP order id ([prefsKey]), written before the invalidate.
+/// So the refresh that follows an in-session fire can never re-fire it.
+/// Keyed on the ORDER, not a boolean -> a second account on the same device gets its own event.
+/// The ~85% that fire in-session are untouched — same instant, same path.
+/// A pre-catch-up install cannot tell "fired on the old build" from "lost".
+/// So its first [reconcile] records the order WITHOUT firing — never risk a double count.
+/// A fresh install has no such history and fires.
 class TrialConversionCatchUp {
   TrialConversionCatchUp({
     required SharedPreferences prefs,
@@ -78,23 +60,20 @@ class TrialConversionCatchUp {
   /// `''` = initialised, nothing reported yet; absent = pre-catch-up install.
   static const prefsKey = 'arul_trial_started_reported_v1';
 
-  /// Records [orderId] as reported. `SharedPreferences` updates its in-memory
-  /// cache synchronously, so a [reconcile] later in the same tick already sees
-  /// it — the disk write is fire-and-forget (a lost write re-fires ONE event
-  /// on the next launch, the harmless direction).
+  /// Records [orderId] as reported.
+  ///
+  /// `SharedPreferences` updates its cache synchronously -> a [reconcile] this tick already sees it.
+  /// The disk write is fire-and-forget — a lost write re-fires ONE event, the harmless direction.
   void markReported(String orderId) {
     unawaited(_prefs.setString(prefsKey, orderId));
   }
 
   /// Whether [orderId]'s `trial_started` already went out from this install.
-  /// Both emitters consult it — the purchase notifier before an in-session
-  /// (or paywall-outliving) fire, [reconcile] before a late one — so the two
-  /// paths can never count one order twice.
+  /// BOTH emitters consult it -> the two paths can never count one order twice.
   bool isReported(String orderId) => _prefs.getString(prefsKey) == orderId;
 
-  /// Fires the late `trial_started` when [entitlement] carries a trialing row
-  /// this install has not reported. Returns true when it fired. Never throws:
-  /// it runs inside the entitlement read, which must not fail for analytics.
+  /// Fires the late `trial_started` when [entitlement] carries an unreported trialing row.
+  /// NEVER throws — it runs inside the entitlement read, which must not fail for analytics.
   bool reconcile(Entitlement entitlement) {
     try {
       final reported = _prefs.getString(prefsKey);
@@ -107,8 +86,7 @@ class TrialConversionCatchUp {
           orderId.isNotEmpty;
 
       if (!trialing) {
-        // Nothing owed. Initialise the marker so a trial that starts (and is
-        // lost) later on this install is recognised as new, not grandfathered.
+        // Nothing owed -> initialise the marker, so a later lost trial reads as new, not old.
         if (reported == null) markReported('');
         return false;
       }
@@ -126,8 +104,7 @@ class TrialConversionCatchUp {
           'plan': 'monthly',
           'order_id': orderId,
           'value': ?_monthlyPriceRupees(),
-          // Separates recovered events from in-session ones in every sink, so
-          // the recovered share stays measurable without a second event name.
+          // Separates recovered from in-session in every sink -> measurable without a second name.
           'late': true,
         },
       );
@@ -140,8 +117,8 @@ class TrialConversionCatchUp {
   }
 }
 
-/// App-wide [TrialConversionCatchUp]. `isFreshInstall` is read once here: the
-/// cohort draw is resolved in `main()` before the first entitlement read.
+/// App-wide [TrialConversionCatchUp].
+/// `isFreshInstall` is read once — the cohort draw resolves in `main()` before the first read.
 final trialConversionCatchUpProvider = Provider<TrialConversionCatchUp>((ref) {
   return TrialConversionCatchUp(
     prefs: ref.watch(sharedPreferencesProvider),

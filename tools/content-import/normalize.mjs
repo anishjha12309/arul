@@ -1,23 +1,16 @@
-// Stage C — normalize to Arul media rules. Images→1080x1920 JPG; videos→1024x1824
-// H.264/faststart/no-audio + a first-frame thumbnail. Writes normalized-manifest.json.
-// Per-item try/catch so one bad file never aborts the batch. Terse progress to stdout.
-//
-// Fidelity settings are tuned for what actually arrives: generator drops are
-// routinely 720x1280, so most clips are UPSCALED 1.42x to reach 1024 wide.
-// Upscaling cannot add detail, and the old CRF 24 — tuned for native-resolution
-// masters — put compression mush on top of an already-soft frame. Measured on a
-// real drop (2026-08-21), lanczos + a light unsharp at CRF 21 lifted frame
-// sharpness 35 -> 57 at the same output resolution. Native/downscaled sources
-// skip the heavy sharpening (it only adds halos there) and take CRF 20.
-// Geometry is unchanged and is a COVER fit — scale(increase) + crop NEVER
-// stretches; on a 9:16 source it trims 2px of width and no height at all.
+// Stage C -> normalize to Arul media rules: images to 1080x1920 JPG, videos to 1024x1824 H.264/faststart/no-audio.
+// Writes normalized-manifest.json plus a first-frame thumbnail per clip.
+// Per-item try/catch -> one bad file never aborts the batch.
+// Generator drops are routinely 720x1280 -> most clips are UPSCALED 1.42x -> upscaling cannot add detail.
+// CRF 24, tuned for native masters, put compression mush on an already-soft frame -> lanczos + unsharp at CRF 21 fixed it.
+// Native or downscaled sources skip the heavy sharpening -> it only adds halos there -> they take CRF 20.
+// Geometry is a COVER fit -> scale(increase) + crop NEVER stretches -> a 9:16 source loses 2px of width and no height.
 import { readFileSync, writeFileSync, mkdirSync, statSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
 import { createRequire } from "module";
 
-// sharp is not a dependency of this repo — borrow it from the hsr-cms checkout
-// (the in-repo cms/ folder this used to point at was removed on 2026-07-20).
+// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
@@ -32,19 +25,14 @@ const TARGET_IMG = { w: 1080, h: 1920 };
 const TARGET_VID = { w: 1024, h: 1824 };
 const TARGET_AR = TARGET_IMG.w / TARGET_IMG.h; // 0.5625
 
-/** Hard ceiling for a live clip (owner, 2026-08-21). Was 50 MB. */
+/** Hard ceiling for a live clip -> owner's call, well under what the Worker accepts. */
 const MAX_VID_BYTES = 15 * 1048576;
 /** Live clips are cut to this. The shipped library sits at 4-10 s. */
 const MAX_VID_SECONDS = 10;
 
-/**
- * Filter chain + encoder args for one clip.
- *
- * `out_range=tv` + `format=yuv420p` are load-bearing: without them ffmpeg emits
- * full-range `yuvj420p` from a full-range source, which verify.mjs rejects — the
- * whole reason fix.mjs exists. They are set here so a batch never needs repair.
- * `aq-mode=3` spends bits on flat gradients, which is where smoke and sky band.
- */
+// Without `out_range=tv` + `format=yuv420p` ffmpeg emits full-range `yuvj420p` -> verify.mjs rejects it.
+// That is the whole reason fix.mjs exists -> setting them here means a batch never needs repair.
+// `aq-mode=3` spends bits on flat gradients -> that is where smoke and sky band.
 function videoArgs(srcWidth, { maxrateK } = {}) {
   const upscaling = (srcWidth ?? 0) < TARGET_VID.w;
   const sharpen = upscaling
@@ -83,10 +71,8 @@ for (const it of work) {
       if (Math.abs(ar - TARGET_AR) / TARGET_AR > 0.12) flags.push("heavy-crop");
       if ((it.width ?? 9999) < 800 || (it.height ?? 9999) < 1400) flags.push("low-res");
       const outFile = join(OUT, `${base}.jpg`);
-      // Same fidelity reasoning as the video path: a 736px-wide source has to be
-      // upscaled 1.47x to reach 1080, so it gets lanczos3 plus a sharpen pass and
-      // a higher JPEG quality. A source already at or above 1080 is downscaling,
-      // where sharpening only adds halos.
+      // Same fidelity reasoning as the video path -> an upscaled source gets lanczos3, a sharpen pass and higher quality.
+      // A source already at or above 1080 is downscaling -> sharpening there only adds halos.
       const upscalingImg = (it.width ?? 9999) < TARGET_IMG.w;
       let pipe = sharp(src).resize(TARGET_IMG.w, TARGET_IMG.h, {
         fit: "cover",
@@ -102,10 +88,9 @@ for (const it of work) {
       console.log(`[${done}/${work.length}] img ${it.file} -> ${base}.jpg (${mb(bytes)}MB) ${flags.join(",")}`);
     } else {
       const outFile = join(OUT, `${base}.mp4`);
-      // Auto-trim (owner, 2026-08-21): a drop arrived with 44.8s and 30.5s clips
-      // against a library that sits at 4-10s. The cut is blind — it takes the
-      // FIRST window, so it can land mid-motion and will not respect a loop
-      // point — hence the `trimmed` flag: review those before publishing.
+      // Auto-trim (owner's call) -> drops have arrived at 30-45 s against a library that sits at 4-10 s.
+      // The cut is BLIND -> it takes the first window, can land mid-motion and ignores loop points.
+      // Hence the `trimmed` flag -> review every trimmed clip before publishing.
       const srcSeconds = it.durationS ?? 0;
       const trimmed = srcSeconds > MAX_VID_SECONDS;
       const trimArgs = trimmed ? ["-t", String(MAX_VID_SECONDS)] : [];
@@ -114,8 +99,7 @@ for (const it of work) {
       ], { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 64 * 1048576 });
       let bytes = statSync(outFile).size;
 
-      // Best detail-per-byte under a HARD ceiling: quality-first CRF, and only a
-      // clip that overshoots pays a bitrate cap, sized from its own duration.
+      // Best detail-per-byte under a HARD ceiling -> quality-first CRF, and only an overshooting clip pays a bitrate cap.
       if (bytes > MAX_VID_BYTES) {
         const seconds = Math.max(1, trimmed ? MAX_VID_SECONDS : srcSeconds || MAX_VID_SECONDS);
         const maxrateK = Math.floor((MAX_VID_BYTES * 8) / seconds / 1000 * 0.92);
@@ -129,7 +113,7 @@ for (const it of work) {
       if (trimmed) flags.push(`trimmed:${Math.round(srcSeconds)}s`);
       if (bytes > MAX_VID_BYTES) flags.push("oversize");
       if ((it.width ?? 9999) < TARGET_VID.w) flags.push("upscaled");
-      // first-frame thumbnail from the normalized clip (frame matches what ships)
+      // The thumbnail comes from the NORMALIZED clip -> the frame matches what ships.
       const thumbFile = join(THUMB, `${base}.jpg`);
       execFileSync("ffmpeg", [
         "-y", "-ss", "1", "-i", outFile, "-vframes", "1",

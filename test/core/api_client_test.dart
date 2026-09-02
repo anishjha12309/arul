@@ -1,11 +1,8 @@
-// Tests for ApiClient — the single HTTP entry point to the Worker API.
-// Covers: typed ApiException flags, token persistence (flutter_secure_storage),
-// JSON success/error parsing, Authorization header attachment, and the
-// single-flight 401 → /auth/refresh → retry-once logic that every gated call
-// depends on.
-//
-// http is mocked with package:http/testing MockClient; secure storage uses the
-// in-memory test platform installed by FlutterSecureStorage.setMockInitialValues.
+// ApiClient is the single HTTP entry point to the Worker API -> this pins what every gated call depends on.
+// Covered: typed ApiException flags, token persistence, JSON success/error parsing, the Authorization header.
+// Also the single-flight 401 -> /auth/refresh -> retry-once path.
+// http is mocked with package:http/testing MockClient.
+// Secure storage uses the in-memory platform FlutterSecureStorage.setMockInitialValues installs.
 
 import 'dart:async';
 import 'dart:convert';
@@ -201,7 +198,7 @@ void main() {
             }, 200);
           }
           protectedCalls++;
-          // Old token → 401; new token (after refresh) → 200.
+          // Old token -> 401; the new token after refresh -> 200.
           final auth = req.headers['Authorization'];
           return auth == 'Bearer acc-new'
               ? _json({'ok': true}, 200)
@@ -246,11 +243,9 @@ void main() {
       expect(refreshCalls, 1, reason: 'single-flight collapses the refreshes');
     });
 
-    // The single-flight completer is only awaited when a *second* concurrent
-    // caller is waiting on it; a lone failing refresh therefore leaves a phantom
-    // unhandled error on completer.future in addition to the error it throws to
-    // the caller. We assert the thrown error here and absorb the phantom in a
-    // guarded zone (source is owned by another agent; not ours to change).
+    // The single-flight completer is awaited only when a SECOND concurrent caller waits on it.
+    // So a lone failing refresh leaves a phantom unhandled error on completer.future besides the one it throws.
+    // Assert the thrown error and absorb the phantom in a guarded zone -> the source is not this suite's to change.
     Future<Object?> captureThrow(Future<void> Function() body) async {
       Object? thrown;
       await runZonedGuarded(
@@ -338,8 +333,7 @@ void main() {
   // ─── Request timeout (offline mid-call backstop) ────────────────────────────
 
   group('request timeout', () {
-    // Absorbs the phantom unhandled error a lone failing refresh leaves on the
-    // single-flight completer.future (same reason the 401 group needs it).
+    // Absorbs the phantom unhandled error a lone failing refresh leaves on the single-flight completer.future.
     Future<Object?> captureThrow(Future<void> Function() body) async {
       Object? thrown;
       await runZonedGuarded(
@@ -360,8 +354,7 @@ void main() {
     test(
       'a hung request throws a network-typed error instead of hanging',
       () async {
-        // The exact offline-mid-call case: the socket never responds. Without the
-        // bounded timeout this future never completes and the caller spins forever.
+        // The exact offline-mid-call case -> the socket never responds -> without the bounded timeout the caller spins.
         final c = ApiClient(
           httpClient: MockClient((_) => Completer<http.Response>().future),
           requestTimeout: const Duration(milliseconds: 50),
@@ -388,7 +381,7 @@ void main() {
     test(
       'the /auth/refresh POST also times out (retry path never hangs)',
       () async {
-        // GET → 401 forces a refresh; the /auth/refresh POST then hangs.
+        // GET -> 401 forces a refresh; the /auth/refresh POST then hangs.
         final c = ApiClient(
           httpClient: MockClient((req) {
             if (req.url.path == '/auth/refresh') {

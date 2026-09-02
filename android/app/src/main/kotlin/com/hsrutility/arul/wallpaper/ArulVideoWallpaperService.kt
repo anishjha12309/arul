@@ -6,42 +6,28 @@ import android.util.Log
 import android.view.SurfaceHolder
 import java.io.File
 
-/**
- * The live (video) wallpaper service. When the user selects Arul as their live
- * wallpaper, the system binds to THIS service and it loops the downloaded MP4 on
- * the home screen via [VideoRenderer] (Media3 ExoPlayer), running independently
- * of the Flutter app (survives app kill).
- *
- * Declared in AndroidManifest.xml as `.wallpaper.ArulVideoWallpaperService`
- * (exported, BIND_WALLPAPER, @xml/video_wallpaper).
- *
- * Config (video path + audio + loop) is written to SharedPreferences by
- * [WallpaperApplyChannel], read here on surface creation (so the service starts
- * correctly even after an app/process kill) AND observed live — a running engine
- * swaps its video when a new one is applied, because Android ignores a re-Set of
- * the already-active component and never recreates the engine.
- *
- * One video at a time (2026-07-05, deliberate): every engine — home, lock, or
- * both — follows the single shared [KEY_VIDEO_PATH]. No per-surface pinning;
- * identical behavior on every Android version.
- *
- * Adopted from the vendored flutter_wallpaper_plus VideoWallpaperService. Robust
- * by construction: every callback is wrapped, players never crash the service,
- * each engine plays its OWN private copy of the video (so Samsung-style dual
- * home/lock engines and a mid-run re-apply never yank a file from a live decoder).
- */
+// The system binds to THIS service when the user selects the app as their live wallpaper.
+// It loops the downloaded MP4 via [VideoRenderer], independently of the Flutter app -> it survives an app kill.
+// Config (video path, audio, loop) is written to SharedPreferences by [WallpaperApplyChannel].
+// It is read on surface creation, so the service starts correctly even after a process kill.
+// It is also OBSERVED live -> Android ignores a re-Set of the already-active component and never recreates the engine.
+// So a prefs change is the only signal a running engine gets that a new video was applied.
+// ONE video at a time, deliberately -> every engine, home or lock, follows the single shared [KEY_VIDEO_PATH].
+// No per-surface pinning -> identical behaviour on every Android version.
+// Every callback is wrapped -> a player must never crash the service.
+// Each engine plays its OWN private copy -> dual home/lock engines and a mid-run re-apply never yank a file from a decoder.
 class ArulVideoWallpaperService : WallpaperService() {
 
     companion object {
         private const val TAG = "ArulWallpaperSvc"
 
-        /** SharedPreferences file shared with [WallpaperApplyChannel] (writer). */
+        /** SharedPreferences file shared with [WallpaperApplyChannel], which is the writer. */
         const val PREFS_NAME = "arul_wallpaper_prefs"
         const val KEY_VIDEO_PATH = "video_path"
         const val KEY_ENABLE_AUDIO = "enable_audio"
         const val KEY_LOOP = "loop"
 
-        /** Directory (under filesDir) holding running engines' private copies. */
+        /** Directory under filesDir holding running engines' private copies. */
         const val ENGINE_PRIVATE_DIR = "arul_live_active"
 
         /** Orphaned private copies older than this are swept on engine start. */
@@ -57,7 +43,7 @@ class ArulVideoWallpaperService : WallpaperService() {
         /** Established once per engine; reused across surface recreations. */
         private var enginePrivatePath: String? = null
 
-        /** The prefs source the private copy was adopted from (staleness check). */
+        /** The prefs source the private copy was adopted from -> the staleness check reads it. */
         private var adoptedSourcePath: String? = null
 
         private var surfaceCreated = false
@@ -66,14 +52,9 @@ class ArulVideoWallpaperService : WallpaperService() {
             applicationContext.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         }
 
-        /**
-         * Applying a new live wallpaper while this service is ALREADY the active
-         * system wallpaper never recreates the engine — Android ignores a re-Set
-         * of the same component ("Changing to the same component, ignoring"). The
-         * prefs write by [WallpaperApplyChannel] is therefore the only signal a
-         * running engine gets, so react to it here (same process, so the listener
-         * is reliable).
-         */
+        // Applying a new wallpaper while this service is ALREADY active never recreates the engine.
+        // Android logs "Changing to the same component, ignoring" -> the prefs write is the only signal an engine gets.
+        // Same process, so the listener is reliable -> react to it here.
         private val prefsListener =
             SharedPreferences.OnSharedPreferenceChangeListener { changed, key ->
                 try {
@@ -128,12 +109,9 @@ class ArulVideoWallpaperService : WallpaperService() {
             }
         }
 
-        /**
-         * A new source video was applied. Adopt a private copy of it FIRST (so a
-         * failed copy keeps the old video playing), then drop the stale copy and
-         * swap the running player in place. Unlinking the old copy mid-decode is
-         * safe (the decoder's fd stays valid); overwriting it would not be.
-         */
+        // Adopt a private copy of the new source FIRST -> a failed copy keeps the old video playing.
+        // Only then drop the stale copy and swap the running player in place.
+        // Unlinking the old copy mid-decode is safe because the decoder's fd stays valid -> overwriting it would not be.
         private fun onSourceVideoChanged() {
             val newSource = configuredSourcePath()
             if (newSource == adoptedSourcePath) return
@@ -154,17 +132,13 @@ class ArulVideoWallpaperService : WallpaperService() {
             if (renderer != null) {
                 renderer.swapVideo(newPrivate, surfaceHolder)
             } else {
-                // First apply landed on a blank-surface engine (no video at start).
+                // The first apply landed on a blank-surface engine -> there was no video at start.
                 startRenderer(surfaceHolder)
             }
         }
 
-        /**
-         * Returns this engine's private video copy, establishing it once and
-         * reusing it across surface recreations. Kept in-memory (not in prefs) so
-         * sibling engines (Samsung home/lock) never share or delete each other's
-         * copy via a common key.
-         */
+        // Returns this engine's private copy, established once and reused across surface recreations.
+        // Kept IN MEMORY, never in prefs -> sibling home/lock engines must not share or delete each other's copy.
         private fun resolveEnginePrivatePath(): String? {
             enginePrivatePath?.let { existing ->
                 if (File(existing).existsNonEmpty()) return existing
@@ -287,7 +261,7 @@ class ArulVideoWallpaperService : WallpaperService() {
             xPixelOffset: Int,
             yPixelOffset: Int
         ) {
-            // Video wallpapers don't scroll — intentionally empty.
+            // Video wallpapers do not scroll -> intentionally empty.
         }
     }
 }

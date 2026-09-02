@@ -1,16 +1,11 @@
-// Tests for the purchase notifier OUTLIVING the paywall. The contracts:
-//   - a status poll still running when the paywall is popped (autoDispose)
-//     finishes on the dead ref WITHOUT throwing, and a mandate that settles
-//     then still fires `trial_started` (order id + value) and marks the order
-//     reported. This was the "Cannot use the Ref of premiumPurchaseProvider
-//     after it has been disposed" crash (671 users / 30 days, 2026-08-26),
-//     which threw BEFORE the conversion was tracked;
-//   - an order the catch-up already reported is never counted twice;
-//   - a failure after the paywall is gone still counts `payment_failed`.
-//
-// The payment sequence itself (initiate → launch → poll → settle/expire) is
-// asserted by call counts so a guard can never change WHEN the server is
-// asked, only whether a dead screen is repainted.
+// The purchase notifier must OUTLIVE the paywall -> a poll still running when the paywall pops must not throw.
+// A mandate that settles after the pop still fires `trial_started` (order id + value) and marks the order reported.
+// This was the "Cannot use the Ref of premiumPurchaseProvider after it has been disposed" crash.
+// It threw BEFORE the conversion was tracked -> the conversion was the thing actually lost.
+// An order the catch-up already reported is never counted twice.
+// A failure after the paywall is gone still counts `payment_failed`.
+// The payment sequence is asserted by CALL COUNTS -> a guard may change whether a dead screen repaints, never when the
+// server is asked.
 
 import 'dart:async';
 import 'dart:io';
@@ -49,15 +44,13 @@ class _RecordingAnalytics implements AnalyticsService {
   void reset() {}
 }
 
-/// Answers the three purchase endpoints in memory. `/payments/status` walks
-/// [statuses] one per call and repeats the last one.
+/// Answers the three purchase endpoints in memory -> `/payments/status` walks [statuses] and repeats the last.
 class _FakeApi extends ApiClient {
   _FakeApi(this.statuses, {this.throwOnStatus = false});
 
   final List<String> statuses;
 
-  /// Every `/payments/status` dies before reaching the server — the poll
-  /// riding a dead radio behind the UPI app.
+  /// Every `/payments/status` dies before reaching the server -> the poll riding a dead radio behind the UPI app.
   final bool throwOnStatus;
   int statusCalls = 0;
   int abandons = 0;
@@ -144,9 +137,8 @@ void main() {
     return container;
   }
 
-  /// Taps "start trial" on the UPI-intent path, waits until the app is polling,
-  /// then pops the paywall — dropping the only listener, which autoDisposes
-  /// the notifier while its poll is mid-flight.
+  /// Taps "start trial", waits until the app is polling, then pops the paywall -> the only listener is dropped.
+  /// That autoDisposes the notifier while its poll is still mid-flight.
   Future<void> startThenLeave(
     WidgetTester tester,
     ProviderContainer container,
@@ -224,15 +216,11 @@ void main() {
     },
   );
 
-  // The everyday path: the user stays on the paywall until the mandate settles.
-  // REGRESSION GUARD — the three tests above all run with the notifier already
-  // disposed, so `ref.mounted` is false in every guard and the mounted branch
-  // was never executed. A `_refreshEntitlement()` that recursed into itself
-  // therefore passed the whole suite while, on a real device, it threw
-  // StackOverflowError inside the poll's catch-all, swallowed the success, and
-  // showed "Payment received but confirmation is delayed" over a live mandate
-  // (device 2026-08-26). Any helper guarded by `ref.mounted` needs a mounted
-  // test or it is untested where it matters.
+  // The everyday path -> the user stays on the paywall until the mandate settles.
+  // The three tests above run with the notifier already disposed -> `ref.mounted` is false and the mounted branch never ran.
+  // A `_refreshEntitlement()` that recursed into itself therefore passed the whole suite.
+  // On device it threw StackOverflowError inside the poll's catch-all and swallowed the success over a LIVE mandate.
+  // Any helper guarded by `ref.mounted` needs a mounted test -> otherwise it is untested where it matters.
   testWidgets(
     'paywall still open: a settle flips to success and re-reads entitlement',
     (tester) async {
@@ -277,13 +265,11 @@ void main() {
     },
   );
 
-  // ── The defect that started the 2026-08-26 incident ───────────────────────
-  // The payment succeeds server-side while the app's polls die on a torn-down
-  // radio behind the UPI app. The app gives up with "confirmation is delayed"
-  // — and used to leave the pre-purchase entitlement snapshot in place, so the
-  // paywall still read "Start free trial" to a user who WAS premium. The owner
-  // hit exactly that, concluded the payment had failed while autopay was armed,
-  // and revoked a live mandate from their UPI app.
+  // ── The defect this group exists for ─────────────────────────────────────
+  // The payment succeeds server-side while the app's polls die on a torn-down radio behind the UPI app.
+  // The app gives up with "confirmation is delayed" -> it used to leave the pre-purchase entitlement snapshot in place.
+  // The paywall then read "Start free trial" to a user who WAS premium.
+  // A user hit exactly that, concluded the payment had failed while autopay was armed, and revoked a live mandate.
   testWidgets(
     'an unreachable confirmation re-reads entitlement so the UI self-corrects',
     (tester) async {
@@ -329,19 +315,12 @@ void main() {
     },
   );
 
-  // Coming back from the UPI app without paying is the COMMON case, so the
-  // checkpoint must resolve at network speed — no timed grace of any size.
-  // Two have been tried and both were rejected on device: a 14 s ladder, then
-  // a 2 s beat. Production tails on 2026-08-26 showed why neither earned its
-  // keep — PhonePe still reported the order PENDING at every sample, so the
-  // extra polls returned exactly what the first one did and the abandon ran
-  // anyway.
-  //
-  // Nothing is lost by resolving immediately: `/payments/abandon` re-reads the
-  // LIVE order and answers settled:true rather than expiring one PhonePe says
-  // COMPLETED, and the setup webhook resurrects an approval that races the
-  // release. This test is the guard on that — re-introduce a delay of even one
-  // second and the short pump below leaves the flow unresolved.
+  // Coming back from the UPI app without paying is the COMMON case -> the checkpoint resolves at network speed.
+  // No timed grace of any size -> a 14 s ladder and a 2 s beat were both tried and rejected on device.
+  // PhonePe still reported the order PENDING at every sample -> the extra polls returned what the first one did.
+  // Nothing is lost by resolving immediately -> `/payments/abandon` re-reads the LIVE order and answers settled:true.
+  // The setup webhook resurrects an approval that races the release.
+  // Re-introduce a delay of even one second and the short pump below leaves the flow unresolved.
   testWidgets('resume checkpoint resolves without waiting out any grace', (
     tester,
   ) async {
@@ -372,10 +351,8 @@ void main() {
     );
     expect(container.read(premiumPurchaseProvider), isA<PurchaseError>());
 
-    // Drain the background intent poll. Resolving above SILENCED it (via
-    // _pollGeneration) rather than cancelling its timers, so without this the
-    // harness fails the test for leaving one pending — which would bury the
-    // two assertions that actually matter.
+    // Resolving above SILENCED the background poll via _pollGeneration rather than cancelling its timers.
+    // So drain it here -> otherwise the harness fails for a pending timer and buries the two assertions that matter.
     await tester.pump(const Duration(seconds: 200));
   });
 }

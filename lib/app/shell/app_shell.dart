@@ -15,22 +15,15 @@ import '../l10n/app_localizations.dart';
 import '../widgets/arul_line_icons.dart';
 import '../widgets/english_only.dart';
 
-/// The tabbed scaffold around the three top-level surfaces (Wallpapers /
-/// Ringtones / Settings). Everything else — refer, upload, premium, the
-/// settings sub-screens — pushes OVER this shell as a full-screen route.
+/// The tabbed scaffold around Wallpapers / Ringtones / Settings — everything else pushes OVER it.
 ///
-/// The [StatefulShellRoute.indexedStack] keeps every branch alive, which is
-/// what makes tab switches instant — but it also means neither media system
-/// tears itself down when its tab hides. This widget is the referee:
+/// The stateful shell keeps every branch ALIVE -> hidden media never tears itself down -> referee:
 ///
-///   * leaving Wallpapers → `releaseDecoders()` frees every hardware decoder
-///     the feed's native pool holds (budget SoCs have only a handful, and the
-///     hidden feed must never keep playing behind the ringtone list);
-///   * returning → `reclaimDecoders()` reconciles the pool back onto the
-///     feed's current page (its list/index survive in the app-scoped
-///     controller);
-///   * leaving Ringtones → preview audio stops (also covered by the screen's
-///     own route listener; the double-stop is idempotent).
+///   * leaving Wallpapers -> `releaseDecoders()`: budget SoCs hold a handful, and a hidden feed must
+///     never keep playing behind the ringtone list;
+///   * returning -> `reclaimDecoders()` reconciles onto the current page; list and index live in the
+///     app-scoped controller;
+///   * leaving Ringtones -> preview audio stops; the screen's own route listener double-stops, idempotently.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -40,19 +33,12 @@ class AppShell extends ConsumerStatefulWidget {
   static const int ringtonesBranch = 1;
   static const int settingsBranch = 2;
 
-  /// How much bottom padding a scrollable owes the floating dock, which
-  /// overlays it (`extendBody: true`) — or ZERO when there is no dock above it.
+  /// Bottom padding a scrollable owes the floating dock it runs under — 0 when there is no dock.
   ///
-  /// The handoff's 120 is measured on a 390×844 frame with no gesture bar. On a
-  /// real device the dock is pushed up by the bottom safe area, so that much is
-  /// added on top — otherwise the last row hides behind the capsule on exactly
-  /// the phones that have a gesture pill.
-  ///
-  /// The ancestor check is what makes this safe to call anywhere. Settings'
-  /// sub-screens (notifications, premium, refer, upload) are pushed OVER the
-  /// shell, so they have no [AppShell] ancestor and get 0; a flat 120 left a
-  /// screen's worth of dead space at the bottom of those. Callers should not
-  /// have to know which way they were opened.
+  /// The handoff's 120 assumes a 390×844 frame with no gesture bar -> add the bottom safe area on top.
+  /// Otherwise the last row hides behind the capsule on exactly the phones that have a gesture pill.
+  /// Sub-screens pushed OVER the shell have no [AppShell] ancestor -> 0, not a flat 120 of dead space.
+  /// So the ancestor check is what makes this safe to call without knowing how the screen was opened.
   static double dockClearance(BuildContext context) {
     if (context.findAncestorWidgetOfExactType<AppShell>() == null) return 0;
     return ArulTokens.listBottomInsetUnderDock +
@@ -73,22 +59,16 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
-    // Warm the ringtone catalog once the first frame is up, so the Ringtones
-    // tab opens onto a ready list instead of paying its CDN drain on first
-    // tap (measured ~5 s cold). Post-frame keeps it off the launch-critical
-    // path; the shell only mounts after auth, and the drain is a few KB of
-    // edge-cached JSON. Read-only: the provider is keepAlive, its own
-    // offline-recheck ladder owns every failure mode, and the tab's normal
-    // loading/error states still cover a drain that is slow or still failing
-    // when the user arrives.
+    // A first tap on Ringtones paid a ~5 s cold CDN drain -> warm the catalog once a frame is up.
+    // Post-frame keeps it off the launch-critical path; the shell only mounts after auth.
+    // Read-only: the provider is keepAlive and its own offline-recheck ladder owns every failure.
+    // The tab's loading/error states still cover a drain that is slow or failing when the user lands.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(ringtoneCatalogProvider);
     });
-    // A link decides which tab the shell opens on. Checked once the shell is
-    // up (the target may have been parked before sign-in) and again whenever
-    // one lands later — GA4F and the Meta SDK deliver mid-startup, and an App
-    // Link can arrive while the app is warm on the other tab.
+    // A link decides which tab the shell opens on -> check once here; a target can be parked pre-sign-in.
+    // GA4F and the Meta SDK deliver mid-startup and an App Link can land warm -> listen for later ones.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
     _onDeepLinkChanged();
   }
@@ -99,15 +79,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.dispose();
   }
 
-  /// Deferred to a microtask: the value is written from go_router's redirect
-  /// and from async services, and `goBranch` navigates, which must not run
-  /// inside a build.
+  /// Written from go_router's redirect, and `goBranch` must not navigate during a build -> microtask.
   void _onDeepLinkChanged() => scheduleMicrotask(_followDeepLink);
 
-  /// Switch to the branch the pending target lives on. A wallpaper or ringtone
-  /// target is only PEEKED here — the tab's own screen consumes it once its
-  /// catalog can resolve the id. A tab-only target (`screen=ringtones` with no
-  /// id) has nothing further to show, so it is consumed on the switch.
+  /// Switch to the branch the pending target lives on.
+  ///
+  /// A wallpaper/ringtone target is only PEEKED -> the tab's screen consumes it once it resolves the id.
+  /// A tab-only target (`screen=ringtones`, no id) has nothing further to show -> consumed on the switch.
   void _followDeepLink() {
     if (!mounted) return;
     final target = ArulDeepLink.pendingTarget;
@@ -132,8 +110,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (from == to) return;
 
     if (from == AppShell.wallpapersBranch) {
-      // Fire-and-forget: the pool's own epoch guard makes a release racing a
-      // quick return safe (reclaim reconciles from scratch).
+      // The pool's epoch guard makes a release racing a quick return safe -> fire-and-forget.
       unawaited(ref.read(videoPreloadControllerProvider).releaseDecoders());
     }
     if (to == AppShell.wallpapersBranch) {
@@ -145,15 +122,13 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   void _onTap(int index) {
-    // A tab picks between values, so it ticks rather than presses. Re-tapping
-    // the active tab stays silent — nothing changed.
+    // A tab picks between values -> it ticks, never presses; re-tapping the active tab stays silent.
     if (index != widget.navigationShell.currentIndex) {
       ArulHaptics.selection();
     }
     widget.navigationShell.goBranch(
       index,
-      // Re-tapping the active tab pops that branch to its root (stock shell
-      // idiom) — a no-op here since each branch is a single screen.
+      // Re-tapping the active tab pops that branch to its root — a no-op while each branch is one screen.
       initialLocation: index == widget.navigationShell.currentIndex,
     );
   }
@@ -161,13 +136,12 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // The dock FLOATS: the branch content runs full-bleed behind it and
-      // scrolls under the capsule (the island treatment).
+      // The dock FLOATS -> branch content runs full-bleed behind it and scrolls under the capsule.
       extendBody: true,
       body: widget.navigationShell,
-      // The dock is English in EVERY locale (EnglishOnly doc): `tabRingtones`
-      // is demoted, and one English tab between two translated ones read as a
-      // defect. The Builder is what puts the label lookup UNDER the override.
+      // `tabRingtones` is demoted (EnglishOnly doc) -> one English tab among translated ones read as
+      // a defect -> the whole dock is English.
+      // The Builder is what puts the label lookup UNDER the override.
       bottomNavigationBar: EnglishOnly(
         child: Builder(
           builder: (context) {
@@ -176,9 +150,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               currentIndex: widget.navigationShell.currentIndex,
               onTap: _onTap,
               items: [
-                // "Settings" is the screen's own title in every locale — the
-                // tab and the screen are the same word, so it shares one ARB
-                // key; only the tab reads it through the override.
+                // Tab and screen are the same word -> one ARB key; only the tab reads it overridden.
                 (glyph: ArulLineGlyph.wallpapers, label: en.tabWallpapers),
                 (glyph: ArulLineGlyph.ringtones, label: en.tabRingtones),
                 (glyph: ArulLineGlyph.settings, label: en.settingsTitle),
@@ -194,24 +166,13 @@ class _AppShellState extends ConsumerState<AppShell> {
 /// One dock tab's content.
 typedef ArulNavItem = ({ArulLineGlyph glyph, String label});
 
-// ─── Branch crossfade ─────────────────────────────────────────────────────────
-
-/// Cross-fades between the branches over [ArulTokens.tabSwitch] instead of
-/// cutting between them.
+/// Cross-fades between branches over [ArulTokens.tabSwitch] instead of cutting between them.
 ///
-/// `StatefulShellRoute.indexedStack` swaps branches on a single frame, which on
-/// this app is a hard cut from a playing video reel to a list of cards — the
-/// jump the eye notices most. Pakiza cross-fades, and this is that container.
+/// `indexedStack` swaps branches on ONE frame -> a hard cut from a playing reel to a list of cards.
 ///
-/// It is careful about what a fade normally costs:
-///
-///   * every branch stays MOUNTED, so each tab keeps its own scroll position
-///     (the whole reason for a stateful shell);
-///   * only the incoming and outgoing branches are [Offstage]-visible, so an
-///     idle branch is laid out but never painted;
-///   * `TickerMode` is off for everything but the current branch, so the feed's
-///     animations — and the ringtone diya's flicker — stop dead on a hidden
-///     tab rather than burning frames behind one.
+///   * every branch stays MOUNTED -> each tab keeps its own scroll position;
+///   * only the incoming and outgoing branches are [Offstage]-visible -> an idle branch never paints;
+///   * `TickerMode` is off outside the current branch -> hidden animations stop, never burn frames.
 class ArulBranchCrossfade extends StatefulWidget {
   const ArulBranchCrossfade({
     super.key,
@@ -283,27 +244,15 @@ class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
   }
 }
 
-/// The floating island dock — a detached capsule hovering above the bottom
-/// edge; branch content scrolls full-bleed behind it (Scaffold.extendBody).
+/// The floating island dock — a detached capsule; branch content scrolls full-bleed behind it.
 ///
-/// Every tab shows its icon AND its label; the active one sits in a
-/// gold-tinted rounded cell that simply moves between tabs rather than gliding.
-/// That is deliberate: the previous dock slid a solid pill and revealed the
-/// label only on the active side, which made the two inactive tabs read as
-/// unlabelled glyphs and put a moving object under the user's thumb. Three
-/// tabs need names.
-///
-/// Paint-only, no blur: the handoff asks for `backdrop-blur 14`, but
-/// `BackdropFilter` costs ~6–9 ms of raster per frame on mid-tier Android and
-/// this capsule sits over a playing video feed (docs/ui-direction.md > Perf).
-/// The opaque [ArulTokens.dockFillDark] carries the same separation.
-///
-/// Behind the capsule is a vertical fade to the screen's own surface — Pakiza's
-/// treatment, and the reason its dock does not look see-through. Without it,
-/// content keeps scrolling past in the 18px side channels and the 14px below
-/// the capsule, so the eye reads a bar with rows sliding out from under it. The
-/// fade dissolves that content instead of slicing it. It absorbs no touches, so
-/// a drag that starts in the transparent zone still scrolls the list.
+/// Three tabs need names -> every tab shows icon AND label, and the active cell moves, never glides.
+/// A label on the active side only made the other two read as unlabelled glyphs under a sliding pill.
+/// `BackdropFilter` costs ~6–9 ms of raster per frame on mid-tier Android, over a live video feed.
+/// So no blur -> the opaque [ArulTokens.dockFillDark] carries the same separation (ui-direction > Perf).
+/// Without a fade behind the capsule, rows keep scrolling in the 18px side channels and 14px below.
+/// The eye reads that as a bar with rows sliding out from under it -> fade to the surface's own colour.
+/// The fade absorbs no touches -> a drag starting in the transparent zone still scrolls the list.
 class ArulNavDock extends StatelessWidget {
   const ArulNavDock({
     super.key,
@@ -326,9 +275,8 @@ class ArulNavDock extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          // Fade to the SURFACE's own alpha-0, never Colors.transparent — that
-          // is transparent black, and lerping through it drags the fade toward
-          // a grey smear on the ivory theme.
+          // Colors.transparent is transparent BLACK -> lerping through it greys the ivory fade.
+          // So fade to the SURFACE's own alpha-0, never Colors.transparent.
           colors: [
             surface.withValues(alpha: 0),
             surface.withValues(alpha: ArulTokens.dockScrimAlpha),
@@ -344,9 +292,7 @@ class ArulNavDock extends StatelessWidget {
           padding: const EdgeInsets.symmetric(
             horizontal: ArulTokens.dockSideInset,
           ),
-          // The pane is a fixed height with fixed-size labels, so an unclamped
-          // system font scale (2x on Android) would burst it. Same clamp Pakiza
-          // puts on its dock, and the same reason.
+          // Fixed height, fixed-size labels -> an unclamped 2x system font scale bursts the pane.
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1.1,
             child: Container(
@@ -403,8 +349,8 @@ class _DockTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Active reads as a lit cell: gold ink on a gold tint in the dark, and dark
-    // ink on solid pale gold in the light (gold-on-gold would vanish there).
+    // Active is a lit cell: gold ink on a gold tint in the dark.
+    // Gold-on-gold would vanish on the light theme -> dark ink on solid pale gold there instead.
     final Color fg;
     if (selected) {
       fg = isDark ? ArulTokens.gold : ArulTokens.lightText;
@@ -434,9 +380,8 @@ class _DockTab extends StatelessWidget {
                         ? ArulTokens.goldBorder45
                         : ArulTokens.goldBorder50,
                   ),
-                  // No halo. The handoff puts a 20px gold glow here; on a real
-                  // panel it fogged the cell's edge and made the dark theme
-                  // look hazy. Fill + rim already say "active".
+                  // The handoff's 20px gold glow fogged the cell edge and hazed
+                  // the dark theme -> no halo; fill and rim already say active.
                 )
               : null,
           child: Column(
@@ -448,10 +393,8 @@ class _DockTab extends StatelessWidget {
                 color: fg,
               ),
               const SizedBox(height: ArulTokens.dockTabGap),
-              // The cell is a fixed 58 inside a fixed 78 capsule, so a label at
-              // a 2× OS font size would overflow it. Flexible lets the Column
-              // hand it less room; scaleDown then fits the type into whatever
-              // room it got, instead of breaking the dock.
+              // A fixed 58 cell inside a fixed 78 capsule -> a 2× OS font size overflows the label.
+              // Flexible hands it less room and scaleDown fits the type to that -> the dock never breaks.
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

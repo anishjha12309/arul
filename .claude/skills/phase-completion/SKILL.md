@@ -20,7 +20,8 @@ step — but `*.g.dart`/`*.freezed.dart` do, and nothing below catches them bein
 ## 2. Definition of Done
 - [ ] `flutter analyze` clean; `dart format .` applied
 - [ ] Loading / empty / error states on every async surface
-- [ ] Edge cases handled with localized, user-visible messages (docs/edge-cases.md items for this phase)
+- [ ] Edge cases handled with localized, user-visible messages (the docs/edge-cases.md contracts
+      touching this phase)
 - [ ] Tests green — premium/payments included, testable like everything else
 - [ ] Analytics fire through `AnalyticsService`; update docs/analytics-events.md if events changed
 - [ ] UI matches docs/ui-direction.md (tokens only — no literal colors), dark + light
@@ -37,8 +38,8 @@ git push
 ```
 Standing exception: a pubspec version bump auto-commits via `.claude/hooks/version-commit.js` — it
 needs no approval and is not the phase commit. It runs `git add -A`, so it sweeps the WHOLE tree into
-that `build <version>` commit, not just the pubspec (`bc559fa` carried 6 files / 561 insertions).
-Land the phase commit first, then bump. After a release build,
+that `build <version>` commit, not just the pubspec — a bump has swept several unrelated files in
+before now. Land the phase commit first, then bump. After a release build,
 `release-commit-reminder.js` fires because an artifact is only reproducible if its source is in git;
 that reminder still does not authorize committing without approval.
 

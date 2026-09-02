@@ -1,22 +1,10 @@
 // The fallback for strings the matrix cannot reach by pumping.
-//
-// Some copy only appears behind a state the harness cannot drive without
-// scripting real interaction: a toast that needs a failed mail intent, a
-// ringtone-permission dialog that needs a denied WRITE_SETTINGS, the twelve
-// month abbreviations that need a scheduled festival, the upload screen's
-// ringtone-kind variants. Leaving those unmeasured would make the ledger a
-// statement about the harness rather than about the app, so they are measured
-// directly instead — same fonts, same locales, same envelope.
-//
-// WHAT IS ASSERTED, and why it is only this:
-//
-// A pumped screen gives its text a real slot. Here there is no slot, and
-// inventing one per key would be a guess dressed up as a measurement. So the
-// assertion is the one thing that is true regardless of layout: an unbreakable
-// TOKEN wider than the narrowest content slot in the app will clip wherever it
-// is put, because no amount of wrapping can save it. Everything softer than
-// that — total width, line count — is recorded as data for the report, not
-// asserted.
+// Some copy sits behind a state the harness cannot drive: a failed mail intent, a denied WRITE_SETTINGS, a festival.
+// Leaving those unmeasured would make the ledger a statement about the harness rather than about the app.
+// So they are measured directly -> same fonts, same locales, same envelope.
+// A pumped screen gives its text a real slot; here there is none, and inventing one per key would be a guess.
+// So the assertion is the one thing true regardless of layout -> an unbreakable TOKEN wider than the narrowest slot clips.
+// No amount of wrapping can save it -> everything softer, total width and line count, is recorded but NOT asserted.
 //
 //     L10N_AUDIT_OUT=build/l10n_audit flutter test test/l10n/slot_measure_test.dart
 
@@ -32,9 +20,8 @@ import 'support/envelope.dart';
 import 'support/inline_canary.dart';
 import 'support/load_real_fonts.dart';
 
-/// The narrowest slot real content ever gets: the 320dp gating width less the
-/// screen's own 16dp padding on each side. Anything wider than this at a gating
-/// text scale cannot be laid out without clipping or overflowing something.
+/// The narrowest slot real content ever gets -> the 320dp gating width less the screen's own 16dp padding each side.
+/// Anything wider at a gating text scale cannot be laid out without clipping or overflowing something.
 const double kNarrowestContentSlot = 320 - 16 * 2;
 
 /// The tightest text scale in the gating envelope.
@@ -111,7 +98,7 @@ void main() {
 }
 
 /// Keys no pumped screen ever rendered, from the matrix's own coverage dump.
-/// With no dump on disk every key is measured, which is the safe direction.
+/// With no dump on disk every key is measured -> that is the safe direction.
 List<String> _unexercisedKeys() {
   final all = kArbStrings['en']!.keys.toList()..sort();
   final file = File('build/l10n_audit/coverage-all.json');
@@ -149,19 +136,16 @@ double _width(String text, String locale) {
 
 /// The widest unbreakable run in [text].
 ///
-/// Splitting on whitespace is the right granularity for all six locales here:
-/// Tamil, Telugu, Kannada, Malayalam and Hindi all space their words, and none
-/// of these strings is a script that wraps mid-token. A zero-width joiner or a
-/// hard-space inside a token is exactly what makes it unbreakable, so those are
-/// deliberately NOT split on.
+/// Splitting on whitespace is the right granularity for all six locales -> every one of them spaces its words.
+/// None of these strings is a script that wraps mid-token.
+/// A zero-width joiner or hard-space inside a token is what makes it unbreakable -> those are deliberately NOT split on.
 ({String token, double px}) _widestToken(String text, String locale) {
   var best = '';
   var bestPx = 0.0;
   // Newlines are real breaks; the ARB uses them deliberately.
   for (final token in text.split(RegExp(r'[ \t\n]+'))) {
     if (token.isEmpty) continue;
-    // The button-weight cut, because a long token in a w600 label is the
-    // realistic worst case and is wider than the same token at w400.
+    // The button-weight cut -> a long token in a w600 label is the realistic worst case and is wider than at w400.
     final painter = TextPainter(
       text: TextSpan(
         text: token,

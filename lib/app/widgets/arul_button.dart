@@ -9,9 +9,8 @@ import 'button_kind.dart';
 
 export 'button_kind.dart' show ArulButtonKind;
 
-/// The commit affordance. Press is a real spring, not a curve: the overshoot on
-/// release is the cheapest cue that a surface is physical rather than a picture
-/// of a button. Costs one unbounded controller and zero layout work.
+/// The commit affordance. A real spring, not a curve -> the release overshoot reads as physical.
+/// Costs one unbounded controller and zero layout work.
 class ArulButton extends StatefulWidget {
   const ArulButton({
     super.key,
@@ -31,9 +30,8 @@ class ArulButton extends StatefulWidget {
   final bool busy;
   final bool expand;
 
-  /// The impulse fired as the finger lands. Pass [ArulHapticStyle.firm] for a
-  /// deliberate, committing press, or [ArulHapticStyle.none] where the outcome
-  /// toast already covers the beat.
+  /// The impulse fired as the finger lands.
+  /// [ArulHapticStyle.firm] for a committing press; [ArulHapticStyle.none] where a toast covers the beat.
   final ArulHapticStyle haptic;
 
   @override
@@ -65,10 +63,9 @@ class _ArulButtonState extends State<ArulButton>
       enabled: _enabled,
       label: widget.label,
       child: GestureDetector(
-        // Haptic on press-DOWN, in step with the spring dip, so the phone
-        // answers before the animation does. A disabled button is silent, and a
-        // press that turns into a scroll never gets here — inside a scrollable
-        // the tap recognizer only reports down once it survives the arena.
+        // Haptic on press-DOWN, in step with the spring dip -> the phone answers before the animation.
+        // A disabled button is silent, and a press that turns into a scroll never reaches here.
+        // Inside a scrollable the tap recognizer reports down only once it has survived the arena.
         onTapDown: _enabled
             ? (_) {
                 ArulHaptics.fire(widget.haptic);

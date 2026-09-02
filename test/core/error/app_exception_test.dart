@@ -1,5 +1,4 @@
-// Tests for the typed AppException hierarchy and mapException(), the data-layer
-// boundary that converts raw errors into typed exceptions.
+// mapException() is the data-layer boundary -> raw errors become typed AppExceptions there -> this pins that mapping.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arul/core/error/app_exception.dart';

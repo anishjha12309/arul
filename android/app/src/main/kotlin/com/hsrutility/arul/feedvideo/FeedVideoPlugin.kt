@@ -24,31 +24,14 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Native Media3 ExoPlayer texture pool, exposed to Dart over a MethodChannel
- * ([METHOD_CHANNEL]) + broadcast EventChannel ([EVENT_CHANNEL]).
- *
- * This replaces the old `media_kit` (libmpv) feed stack. Its whole reason to
- * exist is **player + surface REUSE**: the Dart `VideoPreloadController` keeps a
- * tiny fixed pool of these players alive for the whole session and moves a
- * player to a new clip with `open()` (== `setMediaItem` + `prepare` on a
- * SURVIVING ExoPlayer that keeps its `SurfaceProducer`), never dispose+recreate
- * per swipe. Recreating a surface per swipe is what churned the
- * `BLASTBufferQueue ... max frames` flood + settle-jank on budget MediaTek SoCs.
- *
- * Threading: ExoPlayer must be created and driven on the main thread. Flutter
- * MethodChannel handlers already arrive on the platform main thread, so every
- * handler below runs there directly. Unknown / stale playerIds are treated as a
- * success no-op — a call arriving just after `dispose()` must never throw.
- *
- * Reveal signalling: instead of media_kit's width + surface-rect settle dance,
- * the surface's first painted frame is reported natively via
- * [Player.Listener.onRenderedFirstFrame] as a `firstFrame` event. Because that
- * callback can fire for a PREVIOUS media around a `setMediaItem` swap, every
- * `open()` bumps a per-player `openId` that is echoed back on the event, so Dart
- * can drop a stale first-frame deterministically (belt-and-suspenders with its
- * own open-token guard).
- */
+// The whole reason this exists is player + surface REUSE -> the Dart pool keeps a few players alive all session.
+// A swipe moves a player to a new clip with open() == setMediaItem + prepare on a SURVIVING ExoPlayer.
+// Never dispose+recreate per swipe -> that churned the `BLASTBufferQueue ... max frames` flood on budget MediaTek SoCs.
+// ExoPlayer must be created and driven on the MAIN thread -> MethodChannel handlers already arrive there.
+// An unknown or stale playerId is a success no-op -> a call arriving just after dispose() must never throw.
+// The first painted frame is reported natively via onRenderedFirstFrame -> no width + surface-rect settle dance.
+// That callback can fire for a PREVIOUS media around a swap -> every open() bumps an openId echoed on the event.
+// Dart drops a stale first-frame on that id -> belt-and-braces with its own open-token guard.
 class FeedVideoPlugin(
     private val context: Context,
     private val messenger: BinaryMessenger,
@@ -60,11 +43,9 @@ class FeedVideoPlugin(
         const val EVENT_CHANNEL = "com.hsrutility.arul/feed_video_events"
         private const val TAG = "FeedVideoPlugin"
 
-        // Small demuxer/loading budget — mirrors the old libmpv 4 MB / ~2-4s
-        // readahead cap. A looping short preview never needs a deep buffer, and a
-        // small bufferForPlaybackMs makes the first frame paint after a small
-        // read (faster first paint on 4G). Constraints (Media3):
-        //   maxBufferMs >= minBufferMs, bufferForPlaybackMs <= minBufferMs.
+        // A looping short preview never needs a deep buffer -> keep the demuxer budget small.
+        // A small bufferForPlaybackMs paints the first frame after a small read -> faster first paint on 4G.
+        // Media3 constraints: maxBufferMs >= minBufferMs, and bufferForPlaybackMs <= minBufferMs.
         private const val MIN_BUFFER_MS = 2_000
         private const val MAX_BUFFER_MS = 4_000
         private const val BUFFER_FOR_PLAYBACK_MS = 250
@@ -87,20 +68,14 @@ class FeedVideoPlugin(
     // ─── EventChannel.StreamHandler ───────────────────────────────────────────
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        // The Dart side keeps ONE process-global subscription on this channel
-        // (all pools share it via the channel hub — see FeedVideoPlayerPool), so
-        // native gets exactly one live sink and no second listener can clobber
-        // the first. Flutter's stream handler always delivers onCancel for the
-        // previous listener before onListen for a replacement, so a plain assign
-        // is correct: `events` is always the newest, live sink.
+        // Dart keeps ONE process-global subscription on this channel -> native gets exactly one live sink.
+        // Flutter always delivers onCancel for the previous listener before onListen for its replacement.
+        // So a plain assign is correct -> `events` is always the newest live sink.
         eventSink = events
     }
 
     override fun onCancel(arguments: Any?) {
-        // Flutter guarantees onCancel(old) precedes onListen(new) on the single
-        // main thread, so a cancel here always refers to the current sink; null
-        // it. (With the single Dart subscription there is only ever one sink to
-        // begin with — this fires on final teardown.)
+        // onCancel(old) precedes onListen(new) on the single main thread -> a cancel here always means the current sink.
         eventSink = null
     }
 
@@ -109,9 +84,7 @@ class FeedVideoPlugin(
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
-                // `audio` is opt-in and defaults to false, so every existing
-                // caller (the feed's previews, the auth background) keeps the
-                // muted / no-focus player it has always got.
+                // `audio` is opt-in and defaults to false -> every existing caller keeps the muted, no-focus player.
                 "create" -> result.success(create(call.argument<Boolean>("audio") ?: false))
                 "open" -> {
                     val id = call.argument<Int>("playerId") ?: return result.success(null)
@@ -148,12 +121,10 @@ class FeedVideoPlugin(
                     result.success(null)
                 }
                 "paintedOpenId" -> {
-                    // The openId of the most recent frame this player has actually
-                    // painted (0 = nothing painted yet), so Dart's reveal-timeout
-                    // net can tell a lost onRenderedFirstFrame EVENT apart from a
-                    // clip that simply hasn't decoded yet — and never force-reveal
-                    // a reused player onto its previous clip's frozen frame. -1 for
-                    // a stale/unknown id.
+                    // The openId of the most recent frame actually painted, 0 when nothing has painted yet.
+                    // It lets Dart's reveal timeout tell a LOST first-frame event from a clip that has not decoded.
+                    // So a reused player is never force-revealed onto its previous clip's frozen frame.
+                    // -1 for a stale or unknown id.
                     val id = call.argument<Int>("playerId")
                     result.success(if (id != null) players[id]?.paintedOpenId() ?: -1 else -1)
                 }
@@ -169,7 +140,7 @@ class FeedVideoPlugin(
                 else -> result.notImplemented()
             }
         } catch (e: Exception) {
-            // Never surface a native crash to Dart mid-scroll; log + no-op.
+            // Never surface a native crash to Dart mid-scroll -> log it and no-op.
             Log.e(TAG, "onMethodCall(${call.method}) failed", e)
             result.success(null)
         }
@@ -177,11 +148,7 @@ class FeedVideoPlugin(
 
     // ─── Operations ───────────────────────────────────────────────────────────
 
-    /**
-     * Creates an ExoPlayer bound to a fresh Flutter [SurfaceProducer] texture and
-     * returns `{playerId, textureId}`. The producer + player survive every clip
-     * swap; only [disposePlayer] tears them down.
-     */
+    // The producer and player survive every clip swap -> only [disposePlayer] tears them down.
     private fun create(audio: Boolean): Map<String, Any> {
         logDecoderCapsOnce()
         val playerId = nextPlayerId++
@@ -191,14 +158,10 @@ class FeedVideoPlugin(
         return mapOf("playerId" to playerId, "textureId" to pooled.textureId)
     }
 
-    /**
-     * One-shot logcat diagnostic: what the SoC CLAIMS its concurrent decoder
-     * ceiling is for the feed's codecs. Budget SoCs often report (or actually
-     * enforce) 2, below the feed's previous+current+next window of 3 — the
-     * signature of the "third wallpaper never renders" bug. Diagnostic only: the
-     * reported number lies in both directions, so the Dart controller adapts on
-     * REAL decoder errors instead of trusting it.
-     */
+    // One-shot logcat diagnostic -> what the SoC CLAIMS its concurrent decoder ceiling is for the feed's codecs.
+    // Budget SoCs often report or enforce 2, below the feed's previous+current+next window of 3.
+    // That is the signature of the "third wallpaper never renders" bug.
+    // Diagnostic ONLY -> the number lies in both directions, so Dart adapts on real decoder errors instead.
     private var loggedDecoderCaps = false
     private fun logDecoderCapsOnce() {
         if (loggedDecoderCaps) return
@@ -227,22 +190,13 @@ class FeedVideoPlugin(
         return pooled.open(url, playWhenReady, looping)
     }
 
-    /**
-     * Pay the DNS + TCP + TLS cost to the CDN BEFORE the clip is opened.
-     *
-     * Measured on device 2026-08-31: a cold open reached its first frame in
-     * 1499ms, of which the decoder accounted for ~390ms; a second open moments
-     * later, with the connection already pooled, took 312ms. The ~1.19s
-     * difference is handshake, not bytes — the clip needs about 18 KB to start
-     * and the CDN serves it from cache.
-     *
-     * ExoPlayer's DefaultHttpDataSource is built on HttpURLConnection, whose
-     * keep-alive pool is per-JVM, so a request issued here from the same stack
-     * is the one the player will reuse. It must NOT be a Dart-side fetch: that
-     * uses dart:io's own pool and would warm nothing the player can see.
-     *
-     * One byte is enough to complete the handshake; the body is irrelevant.
-     */
+    // Pay the DNS + TCP + TLS cost to the CDN BEFORE the clip is opened.
+    // Measured on device: a cold open reached its first frame in 1499ms, a pooled one moments later in 312ms.
+    // The ~1.19s difference is handshake, not bytes -> the clip needs about 18 KB to start, served from cache.
+    // ExoPlayer's DefaultHttpDataSource is built on HttpURLConnection, whose keep-alive pool is per-JVM.
+    // So a request issued here from the same stack is the one the player reuses.
+    // It must NOT be a Dart-side fetch -> dart:io has its own pool and would warm nothing the player can see.
+    // One byte completes the handshake -> the body is irrelevant.
     private fun warmConnection(url: String) {
         Thread {
             try {
@@ -253,8 +207,7 @@ class FeedVideoPlugin(
                 c.inputStream.use { it.read() }
                 Log.i(TAG, "warmed CDN connection (${c.responseCode})")
             } catch (e: Exception) {
-                // Best effort only — a failed warm just means the open pays the
-                // handshake itself, exactly as it did before.
+                // Best effort only -> a failed warm just means the open pays the handshake itself.
                 Log.w(TAG, "connection warm failed", e)
             }
         }.start()
@@ -290,22 +243,13 @@ class FeedVideoPlugin(
 
     // ─── One pooled player + its reusable surface ─────────────────────────────
 
-    /**
-     * One ExoPlayer + its [TextureRegistry.SurfaceProducer]. Created ONCE and
-     * reused across feed indices — [open] only swaps media. Implements
-     * [TextureRegistry.SurfaceProducer.Callback] so that, on Impeller / after a
-     * backgrounding-driven surface recycle, the player's video output surface is
-     * re-attached ([onSurfaceAvailable]) — this is what makes the texture pool
-     * Impeller-compatible and survive backgrounding without recreating players.
-     */
+    // One ExoPlayer plus its SurfaceProducer, created ONCE and reused across feed indices -> [open] only swaps media.
+    // It implements SurfaceProducer.Callback so a recycled surface is re-attached in [onSurfaceAvailable].
+    // That is what makes the pool Impeller-compatible and lets it survive backgrounding without recreating players.
     private inner class PooledSurfacePlayer(
         private val playerId: Int,
-        /**
-         * Audible player. FALSE for everything the feed and the auth background
-         * do — a preview must never duck the user's music. TRUE only for the
-         * paywall's onboarding clip, which is a voiceover: silent, it carries no
-         * message at all, so it is the one surface that earns audio focus.
-         */
+        // FALSE for the feed and the auth background -> a preview must never duck the user's music.
+        // TRUE only for the paywall's onboarding clip -> it is a voiceover, so silent it carries no message at all.
         private val withAudio: Boolean = false,
     ) : TextureRegistry.SurfaceProducer.Callback {
 
@@ -316,13 +260,9 @@ class FeedVideoPlugin(
         /** Bumped per [open]; echoed on `firstFrame` so Dart drops stale frames. */
         private var openId = 0
 
-        /**
-         * The [openId] of the most recent frame actually rendered to the surface
-         * (set in [Player.Listener.onRenderedFirstFrame]). Queried by Dart via
-         * `paintedOpenId` so its reveal-timeout net reveals ONLY when the native
-         * first-frame event was lost, never onto a reused player that hasn't yet
-         * painted the current clip (which still shows the previous one).
-         */
+        // The [openId] of the most recent frame actually rendered to the surface.
+        // Dart queries it via `paintedOpenId` -> its reveal timeout fires ONLY when the native event was lost.
+        // Never onto a reused player that has not yet painted the current clip, which still shows the previous one.
         private var lastPaintedOpenId = 0
         fun paintedOpenId(): Int = lastPaintedOpenId
 
@@ -340,21 +280,16 @@ class FeedVideoPlugin(
                 )
                 .build()
 
-            // Budget SoCs can fail hardware codec init when several players are
-            // alive at once (concurrent-instance limits). Fall back to a
-            // lower-priority (possibly software) decoder instead of hard-failing
-            // — a paused window neighbour only needs its first frame decoded, so
-            // a slower decoder is fine. Capable devices never hit the fallback.
+            // Budget SoCs fail hardware codec init when several players are alive -> concurrent-instance limits.
+            // Fall back to a lower-priority, possibly software decoder instead of hard-failing.
+            // A paused window neighbour only needs its first frame decoded -> a slower decoder is fine there.
             val renderersFactory = DefaultRenderersFactory(context)
                 .setEnableDecoderFallback(true)
 
             player = ExoPlayer.Builder(context, renderersFactory)
                 .setLoadControl(loadControl)
-                // Muted preview: never take audio focus (would duck other apps'
-                // audio and pause the user's music while just browsing). An
-                // AUDIBLE player is the opposite case — it asks for focus like
-                // any media app, so a call or another player pauses it and the
-                // user's music is properly stopped rather than talked over.
+                // A muted preview NEVER takes audio focus -> it would duck other apps and pause music while browsing.
+                // An audible player asks for focus like any media app -> a call pauses it, and music stops rather than clashes.
                 .setAudioAttributes(
                     if (withAudio) {
                         AudioAttributes.Builder()
@@ -376,21 +311,16 @@ class FeedVideoPlugin(
                 }
         }
 
-        /**
-         * When the current audible open started, for the +Nms marks below. The
-         * clip's perceived speed is "how long the poster sat there", which is
-         * exactly open -> firstFrame; nothing else in the app measures it, and
-         * a release build reports no Dart logs at all.
-         */
+        // When the current audible open started, for the +Nms marks below.
+        // Perceived speed is "how long the poster sat there", which is exactly open -> firstFrame.
+        // Nothing else in the app measures it, and a release build reports no Dart logs at all.
         private var audibleOpenAt = 0L
 
         fun open(url: String, playWhenReady: Boolean, looping: Boolean): Long {
             val id = ++openId
-            // AUDIBLE players only — i.e. the paywall's onboarding clip, never
-            // the feed. Which language actually reached the user is otherwise
-            // unobservable from outside the app: the cuts are the same footage,
-            // so a screenshot cannot tell them apart and only this line can
-            // confirm the deep link's `lang` survived all the way to the media.
+            // AUDIBLE players only, i.e. the paywall's onboarding clip and never the feed.
+            // The cuts are the same footage -> a screenshot cannot tell the languages apart.
+            // Only this line confirms the deep link's `lang` survived all the way to the media.
             if (withAudio) {
                 audibleOpenAt = SystemClock.elapsedRealtime()
                 Log.i(TAG, "audible open: $url")
@@ -403,13 +333,10 @@ class FeedVideoPlugin(
                 player.prepare()
             } catch (e: Exception) {
                 Log.e(TAG, "open failed for player $playerId", e)
-                // Tag with THIS open's id + a distinct codeName so Dart can (a)
-                // drop it if a newer open has since swapped in, and (b) recognise
-                // it as a non-decoder open failure and schedule a re-open instead
-                // of giving up silently (which left the card stranded on its
-                // poster). Without openId Dart treated it as current, and without
-                // a codeName it fell through as ERROR_CODE_UNSPECIFIED — neither a
-                // decoder class (no retry) nor recoverable. See Defect D.
+                // Tag with THIS open's id -> Dart drops it if a newer open has since swapped in.
+                // Tag with a distinct codeName -> Dart recognises a non-decoder open failure and schedules a re-open.
+                // Without openId Dart treated it as current; without a codeName it fell through as ERROR_CODE_UNSPECIFIED.
+                // That is neither a decoder class nor recoverable -> the card was left stranded on its poster.
                 emit(
                     playerId,
                     "error",
@@ -439,11 +366,8 @@ class FeedVideoPlugin(
             }
         }
 
-        /**
-         * Runtime mute / unmute for an audible player. Focus was decided at
-         * construction: a player built muted never asks for it, so setting a
-         * volume on one changes nothing the user can hear.
-         */
+        // Runtime mute and unmute for an AUDIBLE player -> focus was decided at construction.
+        // A player built muted never asks for focus -> setting a volume on one changes nothing the user can hear.
         fun setVolume(volume: Float) {
             try {
                 player.volume = volume.coerceIn(0f, 1f)
@@ -452,14 +376,9 @@ class FeedVideoPlugin(
             }
         }
 
-        /**
-         * Stops playback and moves the player to STATE_IDLE, which releases its
-         * codec (the player holds "only limited resources" when idle) while the
-         * player object AND its SurfaceProducer survive — a later [open]
-         * re-prepares on the same surface, no churn. Used by Dart to hand a
-         * scarce decoder to a higher-priority index on codec-starved SoCs;
-         * never called per scroll.
-         */
+        // Moves the player to STATE_IDLE, which RELEASES its codec while the player and its SurfaceProducer survive.
+        // A later [open] re-prepares on the same surface -> no churn.
+        // Dart uses it to hand a scarce decoder to a higher-priority index on codec-starved SoCs -> never per scroll.
         fun stop() {
             try {
                 player.stop()
@@ -482,8 +401,7 @@ class FeedVideoPlugin(
         // ── SurfaceProducer.Callback (Impeller / backgrounding safety) ─────────
 
         override fun onSurfaceAvailable() {
-            // The old Surface was reclaimed and a fresh one is ready — re-attach
-            // it so the surviving player keeps rendering after resume.
+            // The old Surface was reclaimed and a fresh one is ready -> re-attach it so the player renders after resume.
             try {
                 player.setVideoSurface(producer.surface)
             } catch (e: Exception) {
@@ -492,9 +410,8 @@ class FeedVideoPlugin(
         }
 
         override fun onSurfaceCleanup() {
-            // Surface is about to become invalid (e.g. low memory / backgrounded).
-            // Detach it from the player so ExoPlayer doesn't render into a dead
-            // Surface; it is re-attached in onSurfaceAvailable.
+            // The Surface is about to become invalid -> detach it so ExoPlayer never renders into a dead Surface.
+            // onSurfaceAvailable re-attaches it.
             try {
                 player.clearVideoSurface()
             } catch (e: Exception) {
@@ -504,9 +421,8 @@ class FeedVideoPlugin(
 
         private fun playerListener(): Player.Listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
-                // Record what we've painted (for the paintedOpenId query) and tag
-                // the event with the current openId so Dart drops a first-frame
-                // that belongs to a since-swapped media.
+                // Record what was painted for the paintedOpenId query, and tag the event with the current openId.
+                // Dart then drops a first-frame belonging to a since-swapped media.
                 lastPaintedOpenId = openId
                 if (withAudio && audibleOpenAt > 0L) {
                     val ms = SystemClock.elapsedRealtime() - audibleOpenAt
@@ -515,11 +431,8 @@ class FeedVideoPlugin(
                 emit(playerId, "firstFrame", mapOf("openId" to openId))
             }
 
-            /**
-             * Only ever reached by a NON-looping open — a looping player
-             * re-enters BUFFERING/READY instead. Tagged with openId like the
-             * rest so a swap cannot deliver a stale "ended".
-             */
+            // STATE_ENDED is only reached by a NON-looping open -> a looping player re-enters BUFFERING/READY instead.
+            // Tagged with openId like the rest -> a swap cannot deliver a stale "ended".
             override fun onPlaybackStateChanged(state: Int) {
                 if (withAudio && audibleOpenAt > 0L) {
                     val name = when (state) {
@@ -538,8 +451,7 @@ class FeedVideoPlugin(
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) {
-                    // Match the texture buffer to the video so the Texture widget
-                    // isn't letterboxed/stretched by a stale buffer size.
+                    // Match the texture buffer to the video -> a stale buffer size letterboxes or stretches the Texture.
                     producer.setSize(videoSize.width, videoSize.height)
                     emit(
                         playerId,
@@ -549,14 +461,11 @@ class FeedVideoPlugin(
                 }
             }
 
-            // (decoder-selection reporting lives in decoderListener() below)
+            // Decoder-selection reporting lives in decoderListener() below.
             override fun onPlayerError(error: PlaybackException) {
                 Log.e(TAG, "player $playerId error: ${error.errorCodeName}", error)
-                // Structured so Dart can act on it: codeName distinguishes the
-                // budget-SoC decoder-contention class (ERROR_CODE_DECODER_* /
-                // ERROR_CODE_DECODING_*) from network errors, and openId lets a
-                // stale error from a since-swapped media be dropped (same
-                // convention as firstFrame).
+                // Structured so Dart can ACT on it -> codeName separates the decoder-contention class from network errors.
+                // openId lets a stale error from a since-swapped media be dropped -> same convention as firstFrame.
                 emit(
                     playerId,
                     "error",
@@ -570,16 +479,11 @@ class FeedVideoPlugin(
             }
         }
 
-        /**
-         * Reports which video decoder each `open()` actually got. With
-         * [DefaultRenderersFactory.setEnableDecoderFallback] a budget SoC that
-         * is out of hardware-decoder sessions falls back to the SOFTWARE
-         * decoder SILENTLY (no onPlayerError) — and the sw path is where
-         * gralloc stride padding leaks as the green edge strip
-         * (flutter/flutter#174026) AND where battery/thermal cost lives. Dart
-         * uses `isSoftware` as a decoder-contention signal to shrink its pool
-         * window, freeing a hw session for the visible card.
-         */
+        // Reports which video decoder each open() actually got.
+        // With decoder fallback on, a SoC out of hardware sessions drops to SOFTWARE silently -> no onPlayerError.
+        // The sw path is where gralloc stride padding leaks as the green edge strip (flutter/flutter#174026).
+        // It is also where the battery and thermal cost lives.
+        // Dart reads `isSoftware` as a decoder-contention signal -> it shrinks the pool window to free a hw session.
         private fun decoderListener(): AnalyticsListener = object : AnalyticsListener {
             override fun onVideoDecoderInitialized(
                 eventTime: AnalyticsListener.EventTime,
@@ -600,14 +504,10 @@ class FeedVideoPlugin(
         }
     }
 
-    /**
-     * Name-based software-decoder heuristic (mirrors ExoPlayer's internal
-     * MediaCodecUtil.isSoftwareOnly): the platform sw codecs are
-     * `c2.android.*` / `OMX.google.*`; some vendors mark theirs with `.sw.`.
-     * MediaCodecInfo.isHardwareAccelerated exists but requires resolving the
-     * MediaCodecInfo from the name — the prefix check is what ExoPlayer itself
-     * trusts, so match that.
-     */
+    // Name-based software-decoder heuristic, mirroring ExoPlayer's own MediaCodecUtil.isSoftwareOnly.
+    // The platform sw codecs are `c2.android.*` and `OMX.google.*`; some vendors mark theirs with `.sw.`.
+    // MediaCodecInfo.isHardwareAccelerated needs the MediaCodecInfo resolved from the name.
+    // The prefix check is what ExoPlayer itself trusts -> match that.
     private fun isSoftwareDecoder(name: String): Boolean {
         val n = name.lowercase()
         return n.startsWith("c2.android.") ||
@@ -617,13 +517,8 @@ class FeedVideoPlugin(
             n.contains("swcodec")
     }
 
-    /**
-     * Builds a Uri ExoPlayer's DefaultDataSource can open for all three source
-     * shapes the feed uses:
-     *   - a Flutter asset  → `asset:///flutter_assets/...`  (passed through)
-     *   - an https CDN URL → passed through
-     *   - a local absolute file path → wrapped as a proper `file://` Uri
-     */
+    // Builds a Uri DefaultDataSource can open for all three source shapes the feed uses.
+    // A Flutter asset and an https CDN URL pass through; a local absolute path is wrapped as a `file://` Uri.
     private fun toUri(url: String): Uri {
         return when {
             url.startsWith("asset:") ||

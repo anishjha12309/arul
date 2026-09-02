@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    FileProvider path config for the wallpaper apply flow.
-
-    Used when handing a local image file to the system wallpaper chooser via
-    a content:// URI (ACTION_ATTACH_DATA fallback). Live-wallpaper video files
-    are read directly by our own VideoWallpaperService from filesDir and never
-    need a FileProvider URI, but the cache/files entries are kept so any
-    file-backed apply path can be served safely.
--->
+<!-- The ACTION_ATTACH_DATA fallback hands the chooser a local image -> a file:// URI throws -> FileProvider serves it. -->
+<!-- The wallpaper service reads live MP4s straight from filesDir -> no content:// URI is minted for them. -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path
         name="cache"

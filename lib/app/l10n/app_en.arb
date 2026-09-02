@@ -242,5 +242,43 @@
   "uploadSuccessToast": "Submitted for review — thank you!",
   "uploadShareMomentTitle": "Thank you",
   "uploadShareMomentBody": "We'll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?",
-  "uploadComingSoonToast": "Upload is coming soon."
+  "uploadComingSoonToast": "Upload is coming soon.",
+  "premiumNavTitle": "SUBSCRIPTION",
+  "premiumEyebrow": "PREMIUM",
+  "premiumTagline": "Divine grace, every day",
+  "premiumPerMonthCaption": "PER MONTH",
+  "premiumTrialLeadPrefix": "Start your 1-day FREE trial for ",
+  "premiumRefundedBadge": "REFUNDED INSTANTLY",
+  "premiumFeatureWallpapers": "Unlimited HD Wallpapers",
+  "premiumFeatureRingtones": "Devotional Ringtones",
+  "premiumFeatureDaily": "Daily New Content",
+  "premiumCtaTrial": "Start Free Trial",
+  "premiumCtaSubscribe": "Subscribe Now",
+  "premiumReassuranceTrial": "₹2 verification, refunded instantly · Cancel anytime",
+  "premiumReassurancePaid": "Secured by UPI Autopay · Cancel anytime in one tap",
+  "premiumSelectedUpiApp": "Selected UPI App",
+  "upiPickerTitle": "Pay using",
+  "upiPickerLastUsed": "Last used",
+  "premiumTrialFinePrint": "Then {price}/month via autopay. Cancel anytime.",
+  "@premiumTrialFinePrint": {
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "premiumSocialProof": "{name} in {city} just applied a live wallpaper 🙏",
+  "@premiumSocialProof": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Anitha"
+      },
+      "city": {
+        "type": "String",
+        "example": "Madurai"
+      }
+    }
+  }
 }

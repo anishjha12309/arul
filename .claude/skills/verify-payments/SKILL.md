@@ -1,6 +1,7 @@
 ---
 name: verify-payments
-description: Verify the PhonePe Autopay billing path end-to-end without spending real money — mandate setup, notify, the ₹199 debit, renewal, failure/dunning and the referral reward. Use when changing anything under workers/src/routes/payments.ts, workers/src/cron/autopay-notify.ts, workers/src/lib/phonepe.ts, or before a release that touches subscriptions.
+description: Verify the PhonePe Autopay billing path end to end without spending real money — setup, notify, first debit, renewal, dunning, referral reward. Use before a release touching subscriptions, or when changing payments, autopay-notify or phonepe.ts.
+disable-model-invocation: true
 ---
 
 # Verify PhonePe payments without spending money
@@ -8,9 +9,8 @@ description: Verify the PhonePe Autopay billing path end-to-end without spending
 Exercising billing normally means real ₹199 debits on the live gateway. **PhonePe UAT accepts the
 whole protocol** — OAuth, setup, status, `notify`, `redeem` all work against `api-preprod.phonepe.com`
 with the Test credentials. UAT *can* settle a redemption, but only behind a simulator-backed mandate
-and only along whichever Test-Case Template the merchant is configured for (2026-08-12: a real settle
-observed via Pass C); a mandate created by `/payments/initiate` alone has no payer, so its redemption
-never terminates. Forcing `COMPLETED` and `FAILED` on demand — the two redemption outcomes that
+and only along whichever Test-Case Template the merchant is configured for; a mandate created by
+`/payments/initiate` alone has no payer, so its redemption never terminates. Forcing `COMPLETED` and `FAILED` on demand — the two redemption outcomes that
 change entitlement — is what the local stub is for. Report which half proved what; "verified"
 without that split is worthless. Stub modes, referral check, device walkthrough, the idle marker —
 all in [reference.md](reference.md).

@@ -1,15 +1,8 @@
-// Stage 0 — check a new drop against archive-index.json BEFORE spending any ffmpeg time.
-//
-// dedup.mjs answers "is this already in the library?" by hashing the LIVE catalog.
-// This answers the question the library cannot: "have I already handled this clip?" —
-// including clips that were imported and later DELETED, and clips that never shipped at
-// all. Those leave no trace in the catalog, so without this they come back on every
-// re-drop of the same Drive folder.
-//
-// Two signals, strongest first:
-//   sha  — 64-bit content hash. A match means the byte-identical file was staged before;
-//          this is a re-download, not a new clip.
-//   dHash — perceptual, frame at 1s. Survives re-encode/re-cut of the same generation.
+// Stage 0 -> check a new drop against archive-index.json BEFORE any ffmpeg time is spent.
+// dedup.mjs hashes the LIVE catalog -> it cannot see clips imported then DELETED, or never shipped at all.
+// Those leave no catalog trace -> without this index they return on every re-drop of the same Drive folder.
+// sha is a 64-bit content hash -> a match is a byte-identical re-download, not a new clip.
+// dHash is perceptual, frame at 1s -> it survives a re-encode or re-cut of the same generation.
 //
 // Usage: node archive-check.mjs <srcDir> [--t 8] [--json]
 import { readdirSync, readFileSync } from "fs";
@@ -22,8 +15,7 @@ const sharp = require("sharp");
 
 const SRC = process.argv[2];
 const ti = process.argv.indexOf("--t");
-const T = ti > -1 ? parseInt(process.argv[ti + 1], 10) : 8; // raw-vs-raw is a tighter
-// comparison than dedup.mjs's raw-vs-cleaned 10, so the default threshold is lower.
+const T = ti > -1 ? parseInt(process.argv[ti + 1], 10) : 8; // raw-vs-raw is tighter than dedup.mjs's raw-vs-cleaned 10
 const AS_JSON = process.argv.includes("--json");
 if (!SRC) { console.error("usage: archive-check.mjs <srcDir> [--t 8] [--json]"); process.exit(2); }
 
@@ -50,7 +42,7 @@ function frame(path) {
   return null;
 }
 const bySha = new Map(clips.map((c) => [c.s, c]));
-// what happened to an archived clip: shipped and still live, shipped then removed, or never imported
+// The fate of an archived clip -> shipped and still live, shipped then removed, or never imported.
 const fate = (c) => c.live
   ? `IN LIBRARY as ${c.cat}/${c.t || c.id || c.lid}`
   : c.id ? `imported as ${c.t}, ROW SINCE DELETED — do not re-import without deciding why`

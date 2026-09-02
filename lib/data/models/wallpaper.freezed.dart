@@ -15,37 +15,20 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Wallpaper {
 
- String get id; String get title;/// Browse axis (amman·ayyappan·murugan·perumal·sivan·temples — free text;
-/// a 7th is a server-side insert). An unknown/missing category must never
-/// crash the feed — it falls into All (docs/edge-cases.md).
- String get category;@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind get kind;/// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4`. Public by design
-/// (browse/preview are free); applying it is the premium gate.
-@JsonKey(name: 'full_key') String get key; int? get width; int? get height;/// How many times a premium user has APPLIED this wallpaper — the order of
-/// the All chip, and the only thing that orders it (`feedOrder()`).
+ String get id; String get title;/// Browse axis — amman·ayyappan·murugan·perumal·sivan·temples; free text, a 7th is an insert.
+/// An unknown or missing category must never crash the feed -> it falls into All.
+ String get category;@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind get kind;/// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4` — PUBLIC by design; browse is free.
+/// Applying it is the premium gate.
+@JsonKey(name: 'full_key') String get key; int? get width; int? get height;/// How many times a premium user APPLIED this — what orders the All chip (`feedOrder()`).
 ///
-/// Counted server-side in `/media/signed-url`, never from analytics: the
-/// route sees 100% of real applies while PostHog is sampled and GA4 is a
-/// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
-/// for exactly what the number does and does not mean.
+/// Counted server-side in `/media/signed-url`, NEVER analytics — PostHog is sampled, GA4 polled.
+/// That route sees 100% of real applies. Shares do not count.
+/// Absent from an older cached catalog it parses as 0 -> that feed degrades to newest-first.
+ int get applyCount;/// Tier 1 of [feedOrder], ahead of [applyCount]. Ascending — the smallest rank leads the feed.
 ///
-/// Absent from an older cached catalog parses as 0, which sorts as "never
-/// applied" — correct, and it degrades that whole cached feed to plain
-/// newest-first rather than to something arbitrary.
- int get applyCount;/// The admin's pin — tier 1 of [feedOrder], ahead of [applyCount].
-///
-/// Written by hand in the CMS and sparse by convention (10, 20, 30 …) so a
-/// later drag renumbers one row instead of cascading the list. Ascending:
-/// the smallest rank leads the feed.
-///
-/// **Null is the ordinary state, not a missing value** — ~all rows are
-/// unpinned, and they sort behind every pin on [applyCount] instead. That
-/// nullability is the feature's safety property: an import writes no rank, so
-/// a bulk drop can never displace the curated head. The first version of this
-/// column stored curation in `sort_order`, which every import reset.
-///
-/// Nullable also means an older cached catalog — built before the field was
-/// emitted — parses as "nothing pinned" and simply falls back to the
-/// popularity order, rather than failing to parse.
+/// build-catalog numbers EVERY row from its ORDER BY -> a current catalog page is never null here.
+/// Not a pin and not authored anywhere -> it is a position, so never write or sort it server-side.
+/// An older cached catalog built before this field parses as null -> that feed falls back to popularity.
  int? get feedRank;
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
@@ -253,43 +236,26 @@ class _Wallpaper extends Wallpaper {
 
 @override final  String id;
 @override final  String title;
-/// Browse axis (amman·ayyappan·murugan·perumal·sivan·temples — free text;
-/// a 7th is a server-side insert). An unknown/missing category must never
-/// crash the feed — it falls into All (docs/edge-cases.md).
+/// Browse axis — amman·ayyappan·murugan·perumal·sivan·temples; free text, a 7th is an insert.
+/// An unknown or missing category must never crash the feed -> it falls into All.
 @override@JsonKey() final  String category;
 @override@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) final  WallpaperKind kind;
-/// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4`. Public by design
-/// (browse/preview are free); applying it is the premium gate.
+/// R2 object key, e.g. `wallpapers/murugan/95b5276e.mp4` — PUBLIC by design; browse is free.
+/// Applying it is the premium gate.
 @override@JsonKey(name: 'full_key') final  String key;
 @override final  int? width;
 @override final  int? height;
-/// How many times a premium user has APPLIED this wallpaper — the order of
-/// the All chip, and the only thing that orders it (`feedOrder()`).
+/// How many times a premium user APPLIED this — what orders the All chip (`feedOrder()`).
 ///
-/// Counted server-side in `/media/signed-url`, never from analytics: the
-/// route sees 100% of real applies while PostHog is sampled and GA4 is a
-/// sink you'd have to poll. Shares do not count. See db/schema/06_popularity.sql
-/// for exactly what the number does and does not mean.
-///
-/// Absent from an older cached catalog parses as 0, which sorts as "never
-/// applied" — correct, and it degrades that whole cached feed to plain
-/// newest-first rather than to something arbitrary.
+/// Counted server-side in `/media/signed-url`, NEVER analytics — PostHog is sampled, GA4 polled.
+/// That route sees 100% of real applies. Shares do not count.
+/// Absent from an older cached catalog it parses as 0 -> that feed degrades to newest-first.
 @override@JsonKey() final  int applyCount;
-/// The admin's pin — tier 1 of [feedOrder], ahead of [applyCount].
+/// Tier 1 of [feedOrder], ahead of [applyCount]. Ascending — the smallest rank leads the feed.
 ///
-/// Written by hand in the CMS and sparse by convention (10, 20, 30 …) so a
-/// later drag renumbers one row instead of cascading the list. Ascending:
-/// the smallest rank leads the feed.
-///
-/// **Null is the ordinary state, not a missing value** — ~all rows are
-/// unpinned, and they sort behind every pin on [applyCount] instead. That
-/// nullability is the feature's safety property: an import writes no rank, so
-/// a bulk drop can never displace the curated head. The first version of this
-/// column stored curation in `sort_order`, which every import reset.
-///
-/// Nullable also means an older cached catalog — built before the field was
-/// emitted — parses as "nothing pinned" and simply falls back to the
-/// popularity order, rather than failing to parse.
+/// build-catalog numbers EVERY row from its ORDER BY -> a current catalog page is never null here.
+/// Not a pin and not authored anywhere -> it is a position, so never write or sort it server-side.
+/// An older cached catalog built before this field parses as null -> that feed falls back to popularity.
 @override final  int? feedRank;
 
 /// Create a copy of Wallpaper

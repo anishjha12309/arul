@@ -1,8 +1,7 @@
 # content-import — bulk wallpaper import pipeline
 
-One-time / batch importer for adding wallpapers (static **and** live) to the Arul R2
-bucket + Neon DB. The repo previously had no importer (the original 428 came from an
-external process); this is that pipeline, built for the Drive drop of 2026-07-16.
+Batch importer for adding wallpapers (static **and** live) to the Arul R2 bucket + Neon DB.
+The original catalogue came from an external process; this is the pipeline that replaced it.
 
 It handles the things the CMS one-at-a-time upload does not: **dedup against existing
 content**, **vision classification** into the six categories, a **visual review/correction
@@ -14,7 +13,7 @@ step**, and a **full media-convention QC gate**. ("The CMS" = the unified CMS wo
 - **Node 20+**, **ffmpeg + ffprobe** on PATH.
 - **sharp** — borrowed from the unified CMS repo's `node_modules` (`c:/Anish/Unified CMS/`) via
   `createRequire` (no separate install). **Requires that sibling repo to be checked out** — the
-  in-repo `cms/` this used to borrow from was deleted 2026-07-20.
+  in-repo `cms/` this used to borrow from is gone.
 - **aws4fetch + postgres** — `npm i aws4fetch postgres` inside the staging ROOT: `import.mjs` needs both,
   `fix.mjs` only aws4fetch, `ringtones-import.mjs` only postgres — which is why it runs FROM ROOT, not from here.
 - Secrets read at runtime from `workers/.dev.vars` (`R2_*`, `DATABASE_URL`, `CATALOG_BUILD_SECRET`) — never hardcoded.

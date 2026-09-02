@@ -1,19 +1,9 @@
 /**
- * Unit tests for PhonePe Standard Checkout v2 (OAuth / O-Bearer) helpers.
+ * The PhonePe Standard Checkout v2 helpers, with fetch and KV mocked — no real network.
  *
- * Coverage:
- *   - getAccessToken: KV caching, refresh, error handling
- *   - setupSubscription: exact request payload for BOTH auth paths — PENNY_DROP
- *     (amount=200) when trial-eligible, TRANSACTION (amount=19900) once the trial
- *     is consumed; maxAmount=19900, frequency=MONTHLY, productType=UPI_MANDATE
- *   - notifyRedemption: exact payload (type=SUBSCRIPTION_REDEMPTION,
- *     redemptionRetryStrategy=STANDARD, autoDebit=false, amount=19900)
- *   - executeRedemption: passes merchantOrderId, returns state+transactionId
- *   - initiateRefund: merchantRefundId, originalMerchantOrderId, amount
- *   - verifyCallbackAuth / verifyWebhookAuth: SHA256(username:password) hex comparison
- *   - buildMerchantSubscriptionId / buildMerchantOrderId: format and length constraints
- *
- * No real network calls — fetch and KV are mocked.
+ * These assert the EXACT request payloads -> a money-moving body is a contract with PhonePe, not an implementation detail
+ * setupSubscription is checked on BOTH auth paths -> PENNY_DROP when trial-eligible, TRANSACTION once consumed
+ * notifyRedemption is checked with autoDebit=false -> the Execute API is only valid while autoDebit is disabled
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -39,7 +29,7 @@ function makeMockKV(initial?: Map<string, string>): KVNamespace {
   const store = initial ?? new Map<string, string>();
   return {
     put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
-    // Mirrors real KV: when type="json", parse and return the object; otherwise return string.
+    // Mirror real KV -> type="json" parses and returns the object, anything else returns the raw string
     get: vi.fn(async (key: string, type?: string) => {
       const raw = store.get(key) ?? null;
       if (raw === null) return null;
@@ -81,7 +71,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
   };
 }
 
-/** Build a fake access-token response from PhonePe OAuth. */
+/** A fake PhonePe OAuth token response -> `expires_at` is epoch SECONDS, which is what the cache TTL is derived from. */
 function fakeOAuthResponse(expiresInSeconds = 3600): { access_token: string; token_type: string; expires_at: number; issued_at: number } {
   return {
     access_token: "test-access-token-xyz",
@@ -107,11 +97,11 @@ describe("getAccessToken", () => {
     const token = await getAccessToken(env);
     expect(token).toBe("test-access-token-xyz");
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
-    // Verify it called the sandbox OAuth URL
+    // It must call the SANDBOX OAuth URL -> the production host is a different path entirely
     const calledUrl = vi.mocked(fetch).mock.calls[0][0] as string;
     expect(calledUrl).toContain("api-preprod.phonepe.com");
     expect(calledUrl).toContain("/v1/oauth/token");
-    // Verify it was cached in KV
+    // The token must land in KV -> without the cache every call re-authenticates against PhonePe
     expect(env.KV.put).toHaveBeenCalled();
   });
 
@@ -129,7 +119,7 @@ describe("getAccessToken", () => {
   });
 
   it("refreshes token when cached token is within 60s of expiry", async () => {
-    // expires_at = now + 30s (within the 60s buffer)
+    // expires_at sits INSIDE the refresh buffer -> a cached token this close to expiry must be refetched
     const soonExpiry = Math.floor(Date.now() / 1000) + 30;
     const cachedEntry = JSON.stringify({ access_token: "old-token", expires_at: soonExpiry });
     const kv = makeMockKV(new Map([["phonepe:oauth", cachedEntry]]));
@@ -217,7 +207,7 @@ describe("setupSubscription", () => {
     const setupCall = vi.mocked(fetch).mock.calls[1];
     const body = JSON.parse((setupCall[1] as RequestInit).body as string) as Record<string, unknown>;
 
-    // Top-level amount MUST be 200 (PENNY_DROP)
+    // The top-level amount MUST be exactly 200 on PENNY_DROP -> PhonePe rejects any other value on that workflow
     expect(body.amount).toBe(200);
     expect(body.merchantOrderId).toBe("DKS_O_ABC_123");
 
@@ -238,8 +228,7 @@ describe("setupSubscription", () => {
   });
 
   it("sends TRANSACTION with the real first-debit amount when upfrontAmountPaise is set", async () => {
-    // One-trial-per-user: a trial-consumed user's new mandate is authorized via
-    // a real ₹199 first debit, not the ₹2 PENNY_DROP.
+    // One trial per user -> a trial-consumed user's new mandate is authorized by a REAL ₹199 first debit
     const env = makeEnv();
     mockFetchWithOAuthThenSetup({ orderId: "PP_ORDER_UPFRONT", state: "PENDING", token: "T" });
 
@@ -263,8 +252,7 @@ describe("setupSubscription", () => {
   });
 
   it("hits the Create SDK Order endpoint (/checkout/v2/sdk/order), not the web /pay", async () => {
-    // The mobile SDK needs the SDK order token; /checkout/v2/pay only yields a
-    // web-page token that the SDK rejects with PR004/401.
+    // The mobile SDK needs the SDK ORDER token -> /checkout/v2/pay only yields a web-page token the SDK rejects
     const env = makeEnv();
     mockFetchWithOAuthThenSetup({ orderId: "X", state: "PENDING", token: "T" });
 
@@ -321,11 +309,9 @@ describe("setupSubscription", () => {
     expect(result.expireAt).toBe(1776145172971);
   });
 
-  // A web-checkout token is NOT a valid SDK order token: handing one to the
-  // Flutter SDK is exactly what makes it return 401 / PR004 "Unauthorized" on
-  // device. The old code scraped ?token= out of redirectUrl as a "graceful"
-  // fallback, which turned a diagnosable server error into a 200 carrying a
-  // poisoned token. Never again — no SDK token is a hard failure.
+  // A web-checkout token is NOT a valid SDK order token -> handing one to the SDK is what returns 401 / PR004
+  // The old code scraped ?token= out of redirectUrl as a "graceful" fallback
+  // That turned a diagnosable server error into a 200 carrying a poisoned token -> no SDK token is a HARD failure
   it("throws rather than scraping a web ?token= out of redirectUrl (PR004 guard)", async () => {
     const env = makeEnv();
     mockFetchWithOAuthThenSetup({
@@ -368,9 +354,9 @@ describe("cancelSubscription", () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
   it("POSTs to /subscriptions/v2/{id}/cancel with O-Bearer and no X-MERCHANT-ID", async () => {
-    // The documented /checkout/v2/subscriptions/{id}/cancel returns 401 for our
-    // OAuth client; the working path is /subscriptions/v2/{id}/cancel, so that's
-    // tried first. X-MERCHANT-ID is partner-only and must be omitted.
+    // The DOCUMENTED /checkout/v2/subscriptions/{id}/cancel answers 401 for our OAuth client
+    // The working path is /subscriptions/v2/{id}/cancel -> it must be tried FIRST
+    // X-MERCHANT-ID is partner-only -> sending it flips PhonePe into partner auth -> omit it
     const env = makeEnv();
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))

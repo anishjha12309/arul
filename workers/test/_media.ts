@@ -1,9 +1,9 @@
 /**
- * Minimal-but-valid media byte fixtures for the server-side QC gate
- * (src/lib/media-verify.ts). Each builder emits just enough real structure for
- * the verifier's parsers — magic bytes, dimension headers, MP4 box tree — and
- * pads to ≥64 bytes (the verifier's too-small floor). Not a *.test.ts file, so
- * vitest does not run it directly.
+ * Minimal-but-VALID media byte fixtures for the server-side QC gate (src/lib/media-verify.ts).
+ *
+ * Each builder emits just enough real structure for the verifier's parsers -> magic bytes, dimensions, an MP4 box tree
+ * Every fixture pads to >=64 bytes -> that is the verifier's too-small floor -> a shorter one fails for the wrong reason
+ * Not a *.test.ts file -> vitest never runs it directly
  */
 
 // ── Byte assembly helpers ─────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ export function jpegFixture(width = 1080, height = 1920): Uint8Array {
 }
 
 export function webpFixture(width = 1080, height = 1920): Uint8Array {
-  // VP8X extended header carrying the canvas size (dims stored minus one).
+  // VP8X extended header carries the canvas size -> WebP stores each dimension MINUS ONE
   const vp8x = bytes([0, 0, 0, 0], u24le(width - 1), u24le(height - 1));
   const riffBody = bytes("WEBP", "VP8X", [vp8x.length, 0, 0, 0], vp8x);
   return pad(bytes("RIFF", [riffBody.length & 0xff, (riffBody.length >> 8) & 0xff, 0, 0], riffBody));
@@ -141,7 +141,7 @@ export function mp4Fixture(
     withAudio?: boolean;
     /** audio-only container (m4a) — no video track at all */
     audioOnly?: boolean;
-    /** place moov after a large mdat (the common non-faststart layout) */
+    /** Place moov AFTER a large mdat -> the common non-faststart layout the box walk must survive */
     moovAtEnd?: boolean;
   } = {},
 ): Uint8Array {
@@ -169,9 +169,8 @@ export function mp4Fixture(
 // ── Byte-backed R2 mock (QC gate tests) ───────────────────────────────────────
 
 /**
- * Minimal R2 binding whose head/get serve real bytes (with range support) so
- * the media-verify gate runs for real in confirm-upload tests. Tracks deletes
- * for auto-reject asserts.
+ * An R2 binding whose head/get serve REAL bytes, ranges included -> the media-verify gate runs for real here.
+ * It records deletes -> that is what the auto-reject assertions read
  */
 export function makeQcR2(
   objects: Record<string, { bytes: Uint8Array; contentType: string }>,

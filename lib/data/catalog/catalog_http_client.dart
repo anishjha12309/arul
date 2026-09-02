@@ -9,19 +9,14 @@ import 'catalog_version.dart';
 
 /// Fetches a paginated catalog JSON page from the CDN.
 ///
-/// CDN key format: `catalog/{scope}/{slug}_{page}.json`
-/// where [scope] is `wallpapers` or `ringtones`, and [slug] is a tag name or `all`.
-///
-/// When a [CatalogVersion] is provided, each request appends `?v=<version>` so a
-/// freshly-published catalog is a new edge-cache key (near-instant updates). The
-/// version is omitted when unknown, leaving behaviour identical to before.
-///
-/// On a non-200 *response* (cache miss, 404 end-of-pages) or a parse failure
-/// returns null so the caller can return an empty page (CDN-only, no DB
-/// fallback). A genuine connectivity failure (offline / host unreachable /
-/// timeout) is NOT a CDN miss — it throws [NetworkException] so the feed can
-/// distinguish "no internet" from "no content" and show a retry instead of a
-/// misleading empty state.
+/// Key format `catalog/{scope}/{slug}_{page}.json` — [scope] is `wallpapers` or `ringtones`, [slug]
+/// a tag name or `all`.
+/// A [CatalogVersion] appends `?v=<version>` -> a freshly-published catalog is a new edge-cache key
+/// -> near-instant updates; the stamp is omitted when the version is unknown.
+/// A non-200 *response* (cache miss, 404 past the last page) or a parse failure returns null -> the
+/// caller renders an empty page. CDN-only: there is no DB fallback.
+/// A connectivity failure (offline / host unreachable / timeout) is NOT a CDN miss -> it throws
+/// [NetworkException] so the feed can tell "no internet" from "no content" and offer a retry.
 class CatalogHttpClient {
   CatalogHttpClient({
     required this.cdnBaseUrl,

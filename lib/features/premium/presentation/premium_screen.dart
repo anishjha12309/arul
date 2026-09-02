@@ -11,6 +11,7 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
@@ -28,8 +29,7 @@ import 'onboarding_video_card.dart';
 import 'paywall_view.dart';
 import 'resubscribe_view.dart';
 
-/// Monthly price from app_config `prices` (paise) → "₹199". Falls back to the
-/// launch price when the remote config hasn't loaded yet.
+/// Monthly price from app_config `prices` (paise) → "₹199", falling back to the launch price.
 String _monthlyPrice(Map<String, dynamic>? prices) {
   final monthly = prices?['monthly'];
   if (monthly is Map && monthly['amount'] is num) {
@@ -61,22 +61,15 @@ String? _formatDate(DateTime? d) {
   return '${local.day} ${months[local.month - 1]} ${local.year}';
 }
 
-/// THE premium screen — paywall and plan home in one route.
+/// THE premium screen — paywall and plan home in ONE route.
 ///
-/// It used to be two screens (Settings → "Arul Premium" → a hero with a
-/// "Get Premium" button → the actual paywall), which made a free user tap
-/// "premium" twice to see a price. Now `/premium` renders whatever the user's
-/// REAL subscription state calls for, in one place:
-///   • no plan / expired / paused / pending → the paywall itself (perks, plan
-///     card, UPI picker, purchase CTA)
-///   • trialing / active                   → plan + billing details + Cancel
-///   • cancelled, still paid-through       → "auto-renew off" + billing +
-///     an INLINE Resubscribe (same purchase flow, no extra screen)
+/// Two screens made a free user tap "premium" twice to see a price -> `/premium` renders the state:
+///   • no plan / expired / paused / pending → the paywall (perks, plan card, UPI picker, CTA);
+///   • trialing / active                   → plan + billing details + Cancel;
+///   • cancelled, still paid-through       → "auto-renew off" + billing + an INLINE Resubscribe.
 ///
-/// `source` says which blocked verb (or settings) sent the user here — the one
-/// number that tells you which entry point actually sells the product. Tracking
-/// happens at the gate (`ensurePremium`), not here.
-///
+/// `source` is the blocked verb that sent the user here — which entry point actually sells.
+/// Tracking happens at the gate (`ensurePremium`), never here.
 /// This is also the only route that can reach `POST /payments/cancel`.
 class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
@@ -87,9 +80,8 @@ class PremiumScreen extends ConsumerStatefulWidget {
   ConsumerState<PremiumScreen> createState() => _PremiumScreenState();
 }
 
-/// Shared colour resolution for every state this screen can render — resolved
-/// once per build so the paywall, the billing card and the picker sheet cannot
-/// drift apart on theme.
+/// Shared colour resolution for every state this screen renders — resolved ONCE per build.
+/// So the paywall, the billing card and the picker sheet cannot drift apart on theme.
 class _Palette {
   _Palette(bool isDark)
     : bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
@@ -117,52 +109,52 @@ class _Palette {
   final Color footnote;
 }
 
+/// The UPI app the user last picked. Survives leaving `/premium`, which is the whole point:
+/// most setups die inside the UPI handoff, so the SECOND attempt is the common one — and while
+/// this lived in a State field, every retry silently reset the user to the allowlist head.
+const _kUpiAppKey = 'arul_upi_app';
+
 class _PremiumScreenState extends ConsumerState<PremiumScreen>
     with WidgetsBindingObserver {
-  /// UPI app the user picked; null until they touch the picker, and the build
-  /// falls back to the first installed app (allowlist order puts PhonePe
-  /// first). No installed UPI apps → no picker → hosted-page flow.
+  /// UPI app the user picked, restored from [_kUpiAppKey] on open.
+  /// The build then falls back to the first installed app — allowlist order puts Paytm first.
+  /// No installed UPI apps → no picker → the hosted-page flow.
   String? _selectedUpiPackage;
 
-  /// Cancel-subscription in flight (kept off the purchase state machine — the
-  /// confirm dialog + toast flow owns its own feedback).
+  /// Cancel-subscription in flight, kept OFF the purchase state machine — the dialog owns feedback.
   bool _cancelBusy = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Synchronous by construction — `sharedPreferencesProvider` is overridden in main() after its await.
+    _selectedUpiPackage = ref
+        .read(sharedPreferencesProvider)
+        .getString(_kUpiAppKey);
     _reconcileOnOpen();
     _warmOnboardingVideo();
-    // A deferred delivery (Play referrer, GA4F, the Meta SDK) can report the
-    // ad's language seconds after launch — possibly after a fast user is
-    // already on this screen. Re-target the SURVIVING player rather than
-    // rebuilding the decoder.
+    // A deferred delivery can report the ad's language seconds after launch, past a fast user.
+    // Re-target the SURVIVING player rather than rebuilding the decoder.
     ref.listenManual(localeProvider, (_, _) => _retargetOnboardingVideo());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Releases the native player, its surface and the audio focus it holds —
-    // the clip is the only audible player in the app, so a leak here is a voice
-    // that keeps talking over whatever screen comes next.
+    // Releases the native player, its surface and its audio focus.
+    // The clip is the app's only audible player -> a leak here is a voice over the next screen.
     unawaited(_videoPool?.dispose());
     _videoPool = null;
     _videoPlayer = null;
     super.dispose();
   }
 
-  // ─── Onboarding clip ───────────────────────────────────────────────────────
-  //
-  // Owned HERE, not by the card, purely for latency. The card cannot mount
-  // until `entitlementDetailProvider` resolves — until then this screen renders
-  // [ArulPaywallLoading] — so leaving the player with the card put a `GET /me`
-  // round trip, a platform-channel `create` and the media fetch strictly one
-  // after another before a single frame could appear. Starting here overlaps
-  // all three with the entitlement call. Measured cause of "the poster showed
-  // for way too long"; the file itself was never the bottleneck (the CDN serves
-  // it from cache in ~50ms and playback needs 250ms of buffer ≈ 18 KB).
+  // The clip's player is owned HERE, not by the card, purely for latency.
+  // The card cannot mount until `entitlementDetailProvider` resolves.
+  // So leaving the player with it serialised `GET /me`, a channel `create` and the media fetch.
+  // Starting here overlaps all three with the entitlement call.
+  // Measured cause of "the poster showed for way too long" — the file was never the bottleneck.
 
   FeedVideoPlayerPool? _videoPool;
   FeedVideoPlayer? _videoPlayer;
@@ -170,8 +162,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   Future<void> _warmOnboardingVideo() async {
     final source = resolveOnboardingVideo(
-      // valueOrNull, not an await: /config may still be in flight, and the
-      // resolver's defaults are the correct answer without it.
+      // valueOrNull, not an await -> /config may be in flight, and the defaults are correct anyway.
       ref.read(appConfigProvider).asData?.value,
       ref.read(localeProvider).languageCode,
     );
@@ -191,12 +182,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     if (mounted) setState(() {});
   }
 
-  /// `playWhenReady: false` ALWAYS. This screen has no idea yet whether the
-  /// user is trial-eligible, and a non-eligible one never sees the card — so
-  /// the warm-up must decode a first frame without ever making a sound.
-  /// Playing belongs to the card, which only does it once it is on screen.
-  /// `looping: true` is the seamless loop (owner's call): a looping player also
-  /// never reaches `STATE_ENDED`, which is why there is no "completed" event.
+  /// `playWhenReady: false` ALWAYS — this screen does not yet know if the user is trial-eligible.
+  /// A non-eligible one never sees the card -> the warm-up decodes a frame without making a sound.
+  /// Playing belongs to the card, once it is on screen.
+  /// `looping: true` is the seamless loop -> a looping player never reaches `STATE_ENDED`.
   Future<void> _openOnboarding(OnboardingVideoSource source) =>
       _videoPlayer?.open(source.url, playWhenReady: false, looping: true) ??
       Future<void>.value();
@@ -212,10 +201,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     await _openOnboarding(next);
   }
 
-  /// Returning from a UPI app is the intent flow's only "the user is back"
-  /// signal (third-party apps report nothing to PhonePe on cancel) — check the
-  /// server the moment it fires so an approval or a dead order resolves NOW
-  /// instead of on the next poll tick.
+  /// Returning from a UPI app is the intent flow's ONLY "the user is back" signal.
+  /// Third-party apps report nothing to PhonePe on cancel -> check the server the moment it fires.
+  /// So an approval or a dead order resolves NOW instead of on the next poll tick.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -223,47 +211,33 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     }
   }
 
-  /// Reconcile with PhonePe on open — but only when there is something to
-  /// reconcile, so a plain free-user paywall open costs no live PhonePe call.
+  /// Reconcile with PhonePe on open, but only when there is something to reconcile.
   ///
-  ///   • `pending`: the one state a user cannot recover from on their own — a
-  ///     mandate that completed at PhonePe whose S2S webhook never reached us.
-  ///     Only POST /payments/status asks PhonePe directly and lets the Worker
-  ///     flip the row, so we do it FOR them, silently.
-  ///   • premium (trialing/active/cancelled): a user who revokes the mandate
-  ///     from inside their UPI app fires NO merchant webhook, so our row can
-  ///     read 'active' forever — re-check so this screen never confidently
-  ///     states a plan that no longer exists.
+  ///   • `pending` — the one state a user cannot recover from: a mandate PhonePe completed whose
+  ///     S2S webhook never reached us. Only POST /payments/status asks PhonePe directly;
+  ///   • premium — revoking the mandate inside a UPI app fires NO merchant webhook, so our row can
+  ///     read 'active' forever. Re-check, or this screen states a plan that no longer exists.
   ///
   /// Best-effort throughout: a reconcile failure must never surface here.
   Future<void> _reconcileOnOpen() async {
     try {
       // Unconditional, and deliberately NOT gated on the cached entitlement.
       //
-      // That gate read `entitlementDetailProvider`'s CACHED snapshot, which on
-      // the path that matters most is stale by construction: the row only
-      // becomes 'pending' at initiate, so a snapshot the feed warmed before the
-      // purchase still says "no subscription" — the guard then decided there
-      // was nothing to reconcile at the exact moment there was, and the screen
-      // issued no request at all. A settled mandate stayed unclaimable from
-      // inside the app (device 2026-08-11).
-      //
-      // The cost guard it existed for now lives server-side, where it is
-      // reliable: a user with no subscription row gets an early return from
-      // /payments/status with no PhonePe call at all, so a plain free-user
-      // paywall open still costs one DB read and nothing more.
+      // The row only becomes 'pending' at initiate -> a snapshot warmed before the purchase is stale.
+      // The guard then found nothing to reconcile at the exact moment there was something.
+      // A settled mandate stayed unclaimable from inside the app.
+      // The cost guard now lives server-side: no subscription row -> an early return, no PhonePe call.
       await ref.read(premiumPurchaseProvider.notifier).refreshStatus();
     } catch (_) {
-      // Offline / server fault — leave the screen exactly as it was.
+      // Offline or server fault — leave the screen exactly as it was.
     }
   }
 
   /// Offers the share, then closes the screen.
   ///
-  /// Order matters: the sheet is shown while this route is still mounted and the
-  /// pop waits for it, so the sheet can never be left floating over a screen
-  /// that has gone. It is entirely skippable — "Not now" is one tap and lands in
-  /// the same place as closing the screen would have.
+  /// Order matters — the sheet shows while this route is mounted, and the pop waits for it.
+  /// So it can never be left floating over a screen that has gone.
+  /// Entirely skippable: "Not now" is one tap and lands where closing the screen would.
   Future<void> _celebrate(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     await ShareMomentSheet.show(
@@ -296,10 +270,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     setState(() => _cancelBusy = true);
     final notifier = ref.read(premiumPurchaseProvider.notifier);
 
-    // cancel() owns the message. refreshStatus() is a best-effort reconcile and
-    // must never turn a successful cancel into an error — hence the separate
-    // try. _cancelBusy is always cleared, so the button can't get stuck
-    // spinning.
+    // cancel() owns the message; refreshStatus() is a best-effort reconcile in its own try.
+    // A reconcile must never turn a successful cancel into an error.
+    // _cancelBusy is always cleared, so the button cannot get stuck spinning.
     String? error;
     try {
       error = await notifier.cancel();
@@ -326,9 +299,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   void _startPurchase(String? targetApp) {
     final l10n = AppLocalizations.of(context);
     if (!AppConfig.hasBackend) {
-      // Defensive: unreachable in shipped builds (API_BASE_URL is always
-      // set). Kept for define-less local runs, where there is no Worker to
-      // initiate against.
+      // Unreachable in shipped builds — API_BASE_URL is always set.
+      // Kept for define-less local runs, where there is no Worker to initiate against.
       showArulToast(context, l10n.premiumComingSoonToast);
       return;
     }
@@ -338,11 +310,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // PhonePe purchase flow: initiate → SDK / UPI intent → status poll →
-    // refresh entitlement. Success/failure feedback is reactive so the flow
-    // survives rebuilds while the SDK UI is up. On success the entitlement
-    // invalidation ALSO flips this screen to the member view underneath the
-    // celebration sheet — the same screen serves before and after.
+    // PhonePe flow: initiate → SDK/UPI intent → status poll → refresh entitlement.
+    // Feedback is REACTIVE -> the flow survives rebuilds while the SDK UI is up.
+    // On success the invalidation flips this screen to the member view under the celebration sheet.
     ref.listen<PurchaseState>(premiumPurchaseProvider, (prev, next) {
       switch (next) {
         case PurchaseSuccess():
@@ -351,14 +321,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             l10n.premiumWelcomeToast,
             kind: ToastKind.success,
           );
-          // The single warmest moment in the app to ask for a share — and the
-          // one point where the user has just decided Arul is worth paying for.
-          // Awaited before the pop so the sheet is never orphaned by this route
-          // disappearing beneath it.
+          // The warmest moment to ask for a share — they have just decided Arul is worth paying for.
+          // Awaited before the pop, so the sheet is never orphaned by this route disappearing.
           unawaited(_celebrate(context));
         case PurchaseError(:final message, :final cancelled):
-          // A self-cancelled payment reads as neutral info, not a red failure
-          // — the user changed their mind; nothing broke.
+          // A self-cancelled payment is neutral info, not a red failure — nothing broke.
           showArulToast(
             context,
             message,
@@ -374,16 +341,13 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         purchase is PurchaseLoading || purchase is PurchaseProcessing;
 
     final entitlementAsync = ref.watch(entitlementDetailProvider);
-    // This route is LIGHT, always (owner's call, 2026-08-11): the paywall is
-    // designed against the ivory palette only. The light theme is pinned at
-    // the ROUTE level (router.dart), not here — sheets and dialogs capture
-    // inherited themes from this screen's own context, which sits above
-    // anything this build could wrap.
+    // This route is LIGHT, always (owner's call) — the paywall is designed against ivory only.
+    // Sheets and dialogs inherit theme from this screen's context, above anything this build wraps.
+    // So the light theme is pinned at the ROUTE level (router.dart), never here.
     final p = _Palette(false);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Ivory ground → dark system-bar icons, matching the light theme's own
-      // overlay (theme.dart) since no AppBar is here to apply it.
+      // Ivory ground → dark system-bar icons; no AppBar here to apply the theme's own overlay.
       value: const SystemUiOverlayStyle(
         statusBarIconBrightness: Brightness.dark,
         systemNavigationBarIconBrightness: Brightness.dark,
@@ -398,17 +362,13 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                 if (context.canPop()) context.pop();
               },
             ),
-            // A failed fetch (offline, 401, 500) falls back to the paywall
-            // rather than a dead-end error card: the upsell is still a useful
-            // screen, and the Worker remains the authoritative gate anyway.
-            // Null entitlement = "we don't know" — the paywall then shows the
-            // paid copy, never a free-day promise the server might not
-            // honour.
+            // A failed fetch falls back to the PAYWALL, never a dead-end error card.
+            // The upsell is still useful, and the Worker remains the authoritative gate.
+            // Null entitlement = "we don't know" -> show the paid copy, never a free-day promise.
             error: (_, _) => _paywall(p, null, purchaseBusy),
             data: (e) {
               final sub = e.subscription;
-              // Only a LIVE plan gets the plan-home treatment; everything
-              // else (no row, pending, expired, paused, or lapsed) is a sell.
+              // Only a LIVE plan gets the plan-home treatment; everything else is a sell.
               if (!e.isPremium || sub == null) {
                 return _paywall(p, e, purchaseBusy);
               }
@@ -420,9 +380,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                   sub,
                   purchaseBusy,
                 ),
-                // isPremium was true, so pending/paused/expired can't reach
-                // here — but the enum is exhaustive and a silent wrong screen
-                // is worse than a safe one.
+                // isPremium was true, so pending/paused/expired cannot reach here.
+                // The enum is exhaustive though, and a silent wrong screen is worse than a safe one.
                 _ => _paywall(p, e, purchaseBusy),
               };
             },
@@ -432,55 +391,62 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  /// Resolves which UPI app the CTA will launch: the user's pick if it is
-  /// still installed, else the first allowlisted app, else null (hosted page).
+  /// Which UPI app the CTA launches — the user's pick if still installed, else the first allowlisted.
+  /// Null when none is installed, which means the hosted page.
   String? _resolvedUpiPackage(List<UpiApp> upiApps) => upiApps.isEmpty
       ? null
       : (upiApps.any((a) => a.packageName == _selectedUpiPackage)
             ? _selectedUpiPackage
             : upiApps.first.packageName);
 
+  /// Installed apps with the user's remembered pick floated to the head.
+  /// Everything below it keeps `MANDATE_APPS` order — one personal row, then the owner's order.
+  /// Android exposes no permission-free "most used app" signal, so our own memory IS that signal.
+  List<UpiApp> _orderedUpiApps(List<UpiApp> apps) {
+    final remembered = _selectedUpiPackage;
+    if (remembered == null) return apps;
+    final at = apps.indexWhere((a) => a.packageName == remembered);
+    // -1 = uninstalled since they picked it; 0 = already the head. Neither needs reordering.
+    if (at <= 0) return apps;
+    return [apps[at], ...apps.where((a) => a.packageName != remembered)];
+  }
+
   Future<void> _openUpiPicker(
-    _Palette p,
     List<UpiApp> upiApps,
     String currentPackage,
   ) async {
     ArulHaptics.tap();
     final picked = await showArulSheet<String>(
       context,
+      // The paywall's own ground — the generic sheet white read as a system dialog on cream.
+      surfaceColor: ArulTokens.paywallCream,
       builder: (sheetContext) => _UpiPickerSheet(
         apps: upiApps,
         selectedPackage: currentPackage,
-        palette: p,
+        rememberedPackage: _selectedUpiPackage,
       ),
     );
-    if (picked != null && mounted) {
-      setState(() => _selectedUpiPackage = picked);
-    }
+    if (picked == null || !mounted) return;
+    setState(() => _selectedUpiPackage = picked);
+    await ref.read(sharedPreferencesProvider).setString(_kUpiAppKey, picked);
   }
-
-  // ─── The three states ──────────────────────────────────────────────────────
 
   /// The sell — `design_handoff_arul_premium`, rendered by [ArulPaywallView].
   ///
-  /// This method resolves the four things that view cannot: trial eligibility,
-  /// the configured price, the UPI app the CTA will launch, and whether social
-  /// proof is switched on.
+  /// Resolves the four things that view cannot: trial eligibility, price, the UPI app, social proof.
   Widget _paywall(_Palette p, Entitlement? entitlement, bool purchaseBusy) {
-    // One free trial per user: a non-null trial_end means it was consumed.
-    // Advertise the trial only from a LOADED entitlement — the Worker
-    // re-checks trial_end at initiate anyway, so we must never promise a free
-    // day to a user it would charge.
+    // One free trial per user -> a non-null trial_end means it was consumed.
+    // Advertise the trial only from a LOADED entitlement — never promise a day the Worker charges.
     final trialEligible =
         entitlement != null && entitlement.subscription?.trialEnd == null;
 
     final config = ref.watch(appConfigProvider).asData?.value;
     final monthlyPrice = _monthlyPrice(config?.prices);
 
-    // Installed mandate-capable UPI apps (best-effort — empty on any failure,
-    // which simply hides the picker row and keeps the hosted-page flow).
-    final upiApps =
-        ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[];
+    // Installed mandate-capable UPI apps — best-effort; empty hides the row, keeping the hosted page.
+    final upiApps = _orderedUpiApps(
+      ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[],
+    );
     final selectedUpiPackage = _resolvedUpiPackage(upiApps);
     final selectedApp = upiApps.isEmpty
         ? null
@@ -489,19 +455,12 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             orElse: () => upiApps.first,
           );
 
-    // The onboarding clip is for the TRIAL SELL ONLY (owner's call): its script
-    // ends "press the button below to start your 1-day trial", which is a lie
-    // on the ₹199 variant a spent-trial user sees.
-    //
-    // `localeProvider` is WATCHED, not read: the link's language is applied by
-    // DeepLinkLocaleSync through LocaleNotifier, and the deferred deliveries
-    // (Play referrer, GA4F, Meta) can land seconds after launch — after a fast
-    // user is already on this screen. Watching re-resolves the source and the
-    // card swaps its media in place.
-    // Resolved and opened back in initState, so by the time this build runs the
-    // clip has been decoding for as long as `GET /me` took. `_videoPlayer` is
-    // still null if the warm-up lost that race — the card mounts on its poster
-    // and attaches when the player lands.
+    // The clip is for the TRIAL SELL ONLY — its script ends "start your 1-day trial".
+    // That is a lie on the ₹199 variant a spent-trial user sees.
+    // `localeProvider` is WATCHED, not read: deferred deliveries can land after the user arrives.
+    // Watching re-resolves the source, and the card swaps its media in place.
+    // Opened back in initState -> by this build the clip has decoded for as long as `GET /me` took.
+    // `_videoPlayer` is null if the warm-up lost that race — the card mounts on its poster instead.
     final source = _videoSource;
 
     return ArulPaywallView(
@@ -511,8 +470,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       showSocialProof: _showSocialProof(config),
       onboardingVideo: (!trialEligible || source == null)
           ? null
-          // One constant key, so a language change rebuilds into the SAME State
-          // (didUpdateWidget re-attaches) rather than churning the decoder.
+          // One constant key -> a language change rebuilds into the SAME State, never a new decoder.
           : ArulOnboardingVideoCard(
               key: const ValueKey('onboarding-video'),
               player: _videoPlayer,
@@ -524,7 +482,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         if (context.canPop()) context.pop();
       },
       onChangeUpiApp: () => _openUpiPicker(
-        p,
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
       ),
@@ -532,8 +489,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  /// `feature_flags.show_social_proof` — ON unless config says otherwise, so a
-  /// config the app could not fetch never silently strips the page.
+  /// `feature_flags.show_social_proof` — ON unless config says otherwise.
+  /// So a config the app could not fetch never silently strips the page.
   bool _showSocialProof(AppConfigModel? config) =>
       config?.featureFlags['show_social_proof'] != false;
 
@@ -556,8 +513,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   /// Cancelled but still inside the paid period — premium, not renewing.
-  /// This is why `cancelled` is in the entitlement IN-list. Resubscribe runs
-  /// the SAME purchase flow inline (UPI picker + CTA) — no second screen.
+  /// This is why `cancelled` is in the entitlement IN-list.
+  /// Resubscribe runs the SAME purchase flow inline (UPI picker + CTA) — no second screen.
   Widget _resubscribeHome(
     _Palette p,
     SubscriptionModel sub,
@@ -566,8 +523,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final monthlyPrice = _monthlyPrice(
       ref.watch(appConfigProvider).asData?.value?.prices,
     );
-    final upiApps =
-        ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[];
+    final upiApps = _orderedUpiApps(
+      ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[],
+    );
     final selectedUpiPackage = _resolvedUpiPackage(upiApps);
     final selectedApp = upiApps.isEmpty
         ? null
@@ -586,7 +544,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         if (context.canPop()) context.pop();
       },
       onChangeUpiApp: () => _openUpiPicker(
-        p,
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
       ),
@@ -595,65 +552,196 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 }
 
-// ─── UPI picker ──────────────────────────────────────────────────────────────
-
-/// The picker itself — an Arul sheet listing every installed mandate-capable
-/// UPI app; the tapped row pops with its package name.
+/// The picker — an Arul sheet listing every installed mandate-capable UPI app.
+/// The tapped row pops with its package name.
+///
+/// Rendered in the PAYWALL's system, not `_Palette`: the sheet opens over a hand-built cream and
+/// maroon screen, and a stock white list carrying the app's GENERIC maroon put two different
+/// maroons on one screen. `showArulSheet` gets `paywallCream` for the same reason.
+///
+/// Deliberately carries NO price and NO mandate footer (owner's call). Both live on the paywall
+/// behind it, and repeating them here made the sheet read as a second checkout step.
 class _UpiPickerSheet extends StatelessWidget {
   const _UpiPickerSheet({
     required this.apps,
     required this.selectedPackage,
-    required this.palette,
+    required this.rememberedPackage,
   });
 
   final List<UpiApp> apps;
   final String selectedPackage;
-  final _Palette palette;
+
+  /// The app a previous visit settled on — the one row that earns the "Last used" badge.
+  /// Null until they have ever picked; [_orderedUpiApps] has already floated it to the head.
+  final String? rememberedPackage;
 
   @override
   Widget build(BuildContext context) {
-    final p = palette;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Pay using',
-            style: ArulTokens.sheetTitle.copyWith(color: p.textPrimary),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 2, 20, 13),
+          child: Text(
+            AppLocalizations.of(context).upiPickerTitle,
+            style: ArulTokens.paywallWordmark.copyWith(
+              fontSize: 19,
+              height: 1.25,
+            ),
           ),
-          const SizedBox(height: 6),
-          for (final app in apps)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) => ArulHaptics.tap(),
-              onTap: () => Navigator.of(context).pop(app.packageName),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    _UpiAppIcon(app: app, size: 32, accent: p.accent),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        app.label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: app.packageName == selectedPackage
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: p.textPrimary,
+        ),
+        // The paywall's own header rule -> the sheet reads as part of that screen.
+        Container(
+          height: 1,
+          decoration: const BoxDecoration(
+            gradient: ArulTokens.paywallHeaderHairline,
+          ),
+        ),
+        // Six installed apps at 1.3x text scale overrun a short viewport -> scroll, never overflow.
+        // `showArulSheet` stays isScrollControlled, so the sheet itself still sizes to its content.
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final app in apps)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _UpiOptionRow(
+                      app: app,
+                      selected: app.packageName == selectedPackage,
+                      lastUsed: app.packageName == rememberedPackage,
+                      onTap: () => Navigator.of(context).pop(app.packageName),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One app in the picker, built so no translation can overflow it.
+///
+/// The overflow matrix demotes an overflowing KEY, and one demoted key sends the whole section
+/// English (`EnglishOnly`) -> on this screen that is all-or-nothing, so the row has to be safe by
+/// CONSTRUCTION rather than by measurement. Three rules do it: the icon is fixed and sits outside
+/// the flexible column, name and badge share a `Wrap` so a long locale drops the badge to its own
+/// line instead of pushing the row over, and every text is capped to the row's OWN constraints.
+class _UpiOptionRow extends StatelessWidget {
+  const _UpiOptionRow({
+    required this.app,
+    required this.selected,
+    required this.lastUsed,
+    required this.onTap,
+  });
+
+  final UpiApp app;
+  final bool selected;
+  final bool lastUsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => ArulHaptics.tap(),
+      onTap: onTap,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? ArulTokens.paywallMedallionFill
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? ArulTokens.paywallGold600
+                : ArulTokens.paywallBorderSoft,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Padding(
+          // Compensates the thicker selected border -> the icon never shifts between states.
+          padding: EdgeInsets.all(selected ? 10.5 : 11),
+          child: Row(
+            children: [
+              // Never shrinks: the launcher icon is the row's recognition cue and the only
+              // locale-invariant thing in it -> everything else reflows around it.
+              _UpiAppIcon(app: app, size: 44),
+              const SizedBox(width: 13),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // The label is the OS's own, already in the user's locale -> never an ARB key.
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: Text(
+                          app.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: ArulTokens.paywallUpiName.copyWith(
+                            fontSize: 14.5,
+                            height: 1.25,
+                            color: selected
+                                ? ArulTokens.paywallMaroon
+                                : ArulTokens.paywallInkUpi,
+                          ),
                         ),
                       ),
-                    ),
-                    if (app.packageName == selectedPackage)
-                      Icon(Icons.check_circle, size: 20, color: p.accent),
-                  ],
+                      if (lastUsed)
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth,
+                          ),
+                          child: const _LastUsedBadge(),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Last used" — the remembered pick made visible, so a returning user can see we kept it.
+class _LastUsedBadge extends StatelessWidget {
+  const _LastUsedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ArulTokens.paywallBorderPill),
+      ),
+      child: Text(
+        AppLocalizations.of(context).upiPickerLastUsed,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: ArulTokens.paywallPill.copyWith(
+          fontSize: 9.5,
+          height: 1.2,
+          letterSpacing: 0.95,
+          color: ArulTokens.paywallInkGold,
+        ),
       ),
     );
   }
@@ -661,24 +749,23 @@ class _UpiPickerSheet extends StatelessWidget {
 
 /// App icon from PackageManager bytes, or the wallet glyph fallback.
 class _UpiAppIcon extends StatelessWidget {
-  const _UpiAppIcon({
-    required this.app,
-    required this.size,
-    required this.accent,
-  });
+  const _UpiAppIcon({required this.app, required this.size});
 
   final UpiApp app;
   final double size;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     final icon = app.icon;
     if (icon == null) {
-      return Icon(
-        Icons.account_balance_wallet_outlined,
-        size: size - 4,
-        color: accent,
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Icon(
+          Icons.account_balance_wallet_outlined,
+          size: size - 12,
+          color: ArulTokens.paywallGoldDeep,
+        ),
       );
     }
     return ClipRRect(

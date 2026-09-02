@@ -4,32 +4,23 @@ import 'tokens.dart';
 
 /// Gradient scrims — how chrome stays legible over an arbitrary wallpaper.
 ///
-/// This is deliberately NOT glassmorphism. `BackdropFilter` costs roughly 6-9ms
-/// of raster per frame at a usable sigma on mid-tier Android; on the budget SoCs
-/// this app targets that alone would blow the 16ms budget the video decoder
-/// already competes for. `ShaderMask` and anything that forces `saveLayer()` are
-/// out for the same reason: they buy an offscreen pass per frame, per widget. A
-/// gradient is an ordinary paint — no offscreen buffer, no measurable cost — and
-/// over full-bleed photography it reads richer than blur anyway. (It is also what
-/// the big video feeds actually ship.)
+/// NOT glassmorphism: `BackdropFilter` costs ~6-9ms of raster per frame at a usable sigma on mid-tier
+/// Android -> on a budget SoC that alone blows the 16ms budget the video decoder already competes for.
+/// `ShaderMask` and anything forcing `saveLayer()` are out for the same reason — an offscreen pass per
+/// frame, per widget.
+/// A gradient is ordinary paint -> no offscreen buffer, no measurable cost -> and over full-bleed
+/// photography it reads richer than blur anyway (it is what the big video feeds ship).
 ///
-/// ── How these stops were chosen ──────────────────────────────────────────────
-/// The ground under a scrim is NOT ours: it is whatever wallpaper the user is
-/// looking at. So every ramp is tuned against the worst case an image can present
-/// — a PURE WHITE frame — and the guarantee is stated as the fraction of the
-/// scrim's height in which text still clears WCAG. Above that band, chrome must
-/// carry its own fill ([ArulColors.mediaFill]); it is not decoration, it is the
-/// difference between 2.2:1 and 4.19:1 for the gold Apply ring.
-///
-/// Both ramps fade black→transparent (`Color(0x00000000)` is transparent BLACK,
-/// so only alpha moves and no grey fringe appears mid-ramp), and both use four or
-/// five stops rather than two. A straight two-stop ramp puts a visible banding
-/// edge where the tail meets the image; the low-alpha stop near the end flattens
-/// it out for free.
+/// The ground under a scrim is NOT ours -> tune every ramp against the worst case an image can show,
+/// a PURE WHITE frame -> the guarantee is the fraction of the scrim's height where text clears WCAG.
+/// Above that band chrome carries its own fill ([ArulColors.mediaFill]) -> not decoration: it is
+/// 2.2:1 versus 4.19:1 for the gold Apply ring.
+/// `Color(0x00000000)` is transparent BLACK -> only alpha moves -> no grey fringe mid-ramp.
+/// A straight two-stop ramp bands visibly where the tail meets the image -> a third, low-alpha stop
+/// near the end flattens it out for free.
 abstract final class ArulScrims {
-  /// Behind top chrome (the feed chip row). The spec: feed top scrim, h130,
-  /// `.62 → 0`, tinted the dark surface `#14090C` (== rgba(20,9,12,x)). The
-  /// low-alpha mid-stop is the anti-banding tail.
+  /// Behind top chrome (the feed chip row) — spec: h130, `.62 → 0`, tinted the dark surface `#14090C`.
+  /// The low-alpha mid-stop is the anti-banding tail.
   static const top = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -41,9 +32,9 @@ abstract final class ArulScrims {
     stops: [0.0, 0.6, 1.0],
   );
 
-  /// Behind bottom chrome (meta + action rail). The spec: feed bottom scrim, h190,
-  /// `.72 → 0`. Stronger than [top] because this is where the text lives; chrome
-  /// that reaches above the guaranteed band carries its own [ArulColors.mediaFill].
+  /// Behind bottom chrome (meta + action rail) — spec: h190, `.72 → 0`.
+  /// The text lives here -> stronger than [top] -> chrome reaching above the guaranteed band still
+  /// carries its own [ArulColors.mediaFill].
   static const bottom = LinearGradient(
     begin: Alignment.bottomCenter,
     end: Alignment.topCenter,
@@ -55,12 +46,10 @@ abstract final class ArulScrims {
     stops: [0.0, 0.55, 1.0],
   );
 
-  /// Silk: the premium ground for the KolamBackground painter. Maroon into the
-  /// dark surface, off-axis so it reads as woven cloth rather than a flat ramp.
-  ///
-  /// This is the OPAQUE brand ground used by the painter. The translucent silk
-  /// card gradients from the spec (profile/hero/plan cards) live in
-  /// [ArulTokens.silkDark] / [ArulTokens.silkLight].
+  /// Silk: the OPAQUE premium ground for the KolamBackground painter.
+  /// Maroon into the dark surface, off-axis -> reads as woven cloth, not a flat ramp.
+  /// The TRANSLUCENT silk card gradients (profile/hero/plan) live in [ArulTokens.silkDark] /
+  /// [ArulTokens.silkLight].
   static const silk = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -68,8 +57,8 @@ abstract final class ArulScrims {
     stops: [0.0, 0.42, 1.0],
   );
 
-  /// Zari: the thin gold edge that makes a card look bordered rather than
-  /// stuck-on. Used as a 1px stroke, never a fill.
+  /// Zari: the thin gold edge that makes a card read as bordered, not stuck-on -> a 1px stroke,
+  /// never a fill.
   static const zari = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

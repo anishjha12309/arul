@@ -4,16 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Native first-frame stills for live wallpapers — the grid's FALLBACK when a
-/// pre-generated `thumbs/` object is missing (e.g. a wallpaper published before
-/// the thumbnail job ran).
+/// Native first-frame stills for live wallpapers — the FALLBACK when a `thumbs/` object is missing.
 ///
-/// The MP4s are `+faststart`, so the native MediaMetadataRetriever pulls the
-/// header plus the bytes around 0.5s — tens of KB, not the 4 MB clip — and caches
-/// the decoded frame on disk forever. A grid can therefore show a live item
-/// without holding a video decoder for it, which is the whole point: a budget SoC
-/// has only a handful of hardware decoders and a player-per-tile grid would fall
-/// back to software decode and stutter.
+/// The MP4s are `+faststart` -> the retriever pulls the header plus ~0.5s, tens of KB, not 4 MB.
+/// The decoded frame is then cached on disk forever.
+/// So a grid shows a live item WITHOUT holding a video decoder for it.
+/// A budget SoC has a handful of hardware decoders; a player per tile falls back to software.
 class VideoThumbnailService {
   VideoThumbnailService({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
@@ -22,8 +18,7 @@ class VideoThumbnailService {
 
   final MethodChannel _channel;
 
-  /// In-flight and completed lookups, so a fling that rebuilds the same tile
-  /// several times issues ONE native call, not one per build.
+  /// In-flight and completed lookups -> a fling that rebuilds a tile issues ONE native call.
   final Map<String, Future<File?>> _inFlight = {};
 
   Future<File?> thumbnail(String videoUrl) {
@@ -36,12 +31,11 @@ class VideoThumbnailService {
         final file = File(path);
         return await file.exists() ? file : null;
       } on PlatformException catch (e) {
-        // Expected on a dead link or an unreadable clip. The tile shows its
-        // skeleton; it must not throw into the grid's build.
+        // Expected on a dead link or an unreadable clip -> the tile shows its skeleton.
+        // It must never throw into the grid's build.
         debugPrint('video thumbnail failed for $videoUrl: ${e.message}');
-        // Drop the memo so a later scroll can retry (e.g. once connectivity is
-        // back) instead of caching the failure for the whole session. The
-        // removed value is this very future — discarding it is the point.
+        // Drop the memo -> a later scroll retries instead of caching the failure all session.
+        // The removed value is this very future — discarding it is the point.
         unawaited(_inFlight.remove(videoUrl) ?? Future<File?>.value());
         return null;
       } on MissingPluginException {

@@ -1,10 +1,9 @@
 /**
- * Shared test helpers for route-handler tests: an in-memory KV, a tagged-template
- * SQL mock (returns the same rows for every query), a full fake Env, and a
- * minimal Hono Context. Not a *.test.ts file, so vitest does not run it directly.
+ * Shared route-handler test helpers — an in-memory KV, a tagged-template SQL mock, a fake Env, a Hono Context.
  *
- * Handlers obtain the DB via getDb(env); each test file mocks ../src/lib/db.js
- * to return env._testSql, which is the sql produced by makeMockSql here.
+ * The SQL mock returns the SAME rows for every query -> a test needing per-query answers must sequence its own
+ * Handlers reach the DB through getDb(env) -> each test file mocks ../src/lib/db.js to return env._testSql
+ * Not a *.test.ts file -> vitest never runs it directly
  */
 
 import { vi } from "vitest";
@@ -57,9 +56,8 @@ export function makeEnv(overrides: Record<string, unknown> = {}): Env {
   return {
     KV: makeMockKV(),
     HYPERDRIVE: {} as Hyperdrive,
-    // Minimal R2 binding stub: head() resolves to a truthy object (upload
-    // "exists"), delete() is a no-op. Override per-test to simulate a missing
-    // object (head: async () => null).
+    // Minimal R2 stub -> head() resolves truthy so an upload "exists", and delete() is a no-op
+    // Override head per-test to simulate a missing object -> `head: async () => null`
     R2: {
       head: vi.fn(async () => ({ key: "stub" })),
       delete: vi.fn(async () => {}),
@@ -92,10 +90,8 @@ export function makeCtx(opts: {
   scheme?: string;
   jsonBody?: unknown;
   invalidJson?: boolean;
-  /** Request URL. Handlers that derive an origin from it (e.g. the PhonePe
-   *  redirectUrl in /payments/initiate) throw on undefined, so default it.
-   *  `c.req.query()` reads its search params, so pass the real URL for routes
-   *  that take query arguments. */
+  /** Request URL. A handler deriving an origin from it throws on undefined -> it is defaulted, never optional.
+   *  `c.req.query()` reads its search params -> pass the REAL url for any route that takes query arguments. */
   url?: string;
   /** Path parameters, as Hono would have matched them (e.g. `/w/:id`). */
   params?: Record<string, string>;
@@ -116,7 +112,7 @@ export function makeCtx(opts: {
           ? Promise.reject(new Error("bad json"))
           : Promise.resolve(opts.jsonBody),
     },
-    // Third arg mirrors Hono's: extra response headers.
+    // The third arg mirrors Hono's -> extra response headers -> keep the signature identical or tests drift from prod
     json: (body: unknown, status = 200, headers?: Record<string, string>) =>
       Response.json(body, headers ? { status, headers } : { status }),
     redirect: (location: string, status = 302) =>

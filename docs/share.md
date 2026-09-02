@@ -1,7 +1,8 @@
 # Share & outbound reach
 
-Read this when changing anything the app sends OUT of itself — a wallpaper share, a referral, or the copy
-on either. The link itself (App Links, ad creatives, deferred install) is [deep-links.md](deep-links.md). Summarised in [edge-cases.md](edge-cases.md) §Share; the properties are in
+Read this when changing anything the app sends OUT of itself — a wallpaper share, a referral, or the
+copy on either. The link itself (App Links, ad creatives, deferred install) is
+[deep-links.md](deep-links.md); the event properties are in
 [analytics-events.md](analytics-events.md).
 
 Every outbound message exists to do two things: deliver the thing, and bring someone back. The rules
@@ -23,7 +24,7 @@ below are the ones that were paid for by getting the second half wrong.
       in the sharer's language, so a friend who INSTALLS from it should land in that language —
       but one who already has Arul must keep the language they chose. `ilang` is what splits those:
       `parseDeepLinkUri` does not read it, so an App Link tap changes nothing, while the Worker
-      folds it into the Play referrer's `lang=` for a fresh install (owner's call, 2026-08-27).
+      folds it into the Play referrer's `lang=` for a fresh install (owner's call).
       `lang=` on a share would re-language an existing user from a stranger's phone.
 - [ ] **WhatsApp-first, system sheet as fallback — on both paths, by different mechanisms.** This
       asymmetry is load-bearing, not an inconsistency:

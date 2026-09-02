@@ -10,7 +10,7 @@ Lookup tables for a run already in progress. The procedure is in [SKILL.md](SKIL
 | mode | expected result on the `subscriptions` row |
 | --- | --- |
 | `COMPLETED` | `status='active'`; `current_period_end` and `next_debit_at` +1 month; `notified_at` and `redemption_order_id` cleared; `retry_count=0`; referral rewarded |
-| `FAILED` | `retry_count` +1, `notified_at` cleared, and `next_debit_at` pushed up the 45-day ladder (`current_period_end` + day 2/5/10/20/32/45, 21:30 UTC); past the last rung `status='expired'` and the row stops being picked up |
+| `FAILED` | `retry_count` +1, `notified_at` cleared, and `next_debit_at` pushed up the 45-day ladder (`current_period_end` + day 2/5/10/20/32/45, 21:30 UTC); past the SIXTH rung `status='expired'` and the row stops being picked up |
 | `PENDING` | nothing changes — an unsettled debit must never grant premium |
 
 A single word drives redeem AND order-status together. Token form drives endpoints separately —
@@ -25,9 +25,9 @@ cancel:FAIL mandate:ACTIVE          # DELETE /me must 502-abort, user survives
 Tokens: `redeem`/`order` (COMPLETED|FAILED|PENDING) · `mandate` (ACTIVE|CANCELLED|PAUSED…) ·
 `cancel` (OK|FAIL) · `orderexp:PAST` (order status answers a past `expireAt` — drives the cron's
 dead-order recycle and the 45-day dunning wall). Unlisted tokens keep defaults (redeem/order
-COMPLETED, mandate ACTIVE, cancel OK, orderexp future). The stub also answers `/order/{id}/status` and `/{id}/cancel` now — proven against the
-2026-08-12 full-matrix run (27/27, including a REAL settle observed via Pass C on a
-simulator-backed mandate).
+COMPLETED, mandate ACTIVE, cancel OK, orderexp future). The stub also answers `/order/{id}/status`
+and `/{id}/cancel`, proven against a full-matrix run including a REAL settle observed via Pass C on a
+simulator-backed mandate.
 
 ## The idle marker blocks repeat runs
 
@@ -56,10 +56,10 @@ cancellation does not claw it back.
 ## On-device mandate — only when you need a real UPI instrument
 
 Sign-in answering "Google token is invalid or expired" = `GOOGLE_WEB_CLIENT_ID` in
-`workers/.dev.vars` drifted from `env/dev.json`'s (the token's `aud` is the app's define; the local
-worker must expect the same id — prod already does). Fixed 2026-08-12; if it recurs, copy the value
-from `env/dev.json`. A debug build cannot install over the Play build (signature + versionCode) —
-`adb uninstall com.hsrutility.arul` first, reinstall from Play after.
+`workers/.dev.vars` has drifted from `env/dev.json`'s (the token's `aud` is the app's define; the
+local worker must expect the same id — prod already does). Copy the value across. A debug build
+cannot install over the Play build (signature + versionCode) — `adb uninstall com.hsrutility.arul`
+first, reinstall from Play after.
 
 A mandate created by `/payments/initiate` alone is `ACTIVE` but has no payer behind it, so its
 redemption falls back to a `UPI_QR` nobody pays. To authorize one properly:
@@ -85,16 +85,17 @@ makes UAT's responses disagree with the code for reasons that look like bugs.
 
 ## Known-good baseline
 
-The full lifecycle was proven against UAT + the local stub on 2026-07-29: trial mandate, repeat ₹199,
-double-tap → 409, 24h notify with **Pass B refusing an early debit**, settle, dunning to `expired` at
-retry 5, cancel keeping the period live, rebuy at ₹199, delete→re-login pre-seeding the consumed
-trial. Expected behaviour per step is specified as rules in `docs/phonepe.md` — re-run THIS skill
-when billing code changes rather than re-deriving. Two facts that make re-runs cheap:
+The full lifecycle has been proven against UAT plus the local stub: trial mandate, repeat ₹199,
+double-tap → 409, 24 h notify with **Pass B refusing an early debit**, settle, dunning through the
+ladder to `expired`, cancel keeping the period live, rebuy at ₹199, delete→re-login pre-seeding the
+consumed trial. Expected behaviour per step is specified as rules in `docs/phonepe.md` — re-run THIS
+skill when billing code changes rather than re-deriving. Two facts that make re-runs cheap:
 
 - **Time is the only thing simulated.** Notify/redeem/renewal key off `next_debit_at`, so backdating
   it is indistinguishable from waiting. Never wait out a real trial day.
 - **Local dev cannot receive the real S2S webhook** (`127.0.0.1` is unreachable from PhonePe). Drive
-  the handler with `workers/tools/prod-webhook.mjs`; production delivery itself (PhonePe →
-  `api.hsrutility.com` → `DKS_` dispatcher → arul-api) has been observed live.
+  the handler with `workers/tools/prod-webhook.mjs`. **Production delivery has never been observed** —
+  the `txn:` KV prefix is empty; see `docs/phonepe.md` §The webhook, which is the one home for that
+  fact. Do not re-assert it here.
 
 Endpoint facts and the traps that return 200 while broken: `docs/phonepe.md`.

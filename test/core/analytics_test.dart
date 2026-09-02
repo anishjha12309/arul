@@ -42,9 +42,7 @@ class _ThrowingAnalyticsService implements AnalyticsService {
 
 void main() {
   group('analyticsServiceProvider', () {
-    // Guards the real invariant: under `flutter test` none of the three
-    // backends are configured, so the provider's switch must land on the
-    // no-op and send nothing.
+    // Under `flutter test` none of the three backends are configured -> the provider's switch must land on the no-op.
     test('provides NoOpAnalyticsService', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -73,7 +71,7 @@ void main() {
 
     test('a throwing delegate does not stop the others', () {
       final good = _RecordingAnalyticsService();
-      // Throwing delegate first, so the good one only runs if we isolate it.
+      // Throwing delegate FIRST -> the good one only runs if the composite isolates it.
       final composite = CompositeAnalyticsService([
         _ThrowingAnalyticsService(),
         good,

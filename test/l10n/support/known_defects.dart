@@ -1,49 +1,30 @@
 /// The English baseline, subtracted.
-///
-/// §3 of the audit defines a translation-induced finding as one that fires in
-/// some locale but NOT in the English baseline of the identical screen, state
-/// and configuration. Only those are demotable. Everything else is a layout
-/// defect or a designed truncation: demoting a translation cannot fix a slot
-/// that is too small for English either.
-///
-/// So this is a set difference against a RECORDED run, not a hand-written
-/// allowlist — see `tools/l10n/gen_english_baseline.dart`. A hand-maintained
-/// list drifts, and every stale entry silently converts a real overflow into a
-/// "known defect", which is the exact failure this whole harness exists to
-/// prevent.
-///
-/// The signature is `kind|screen|config|key`. Configuration is part of it on
-/// purpose: English "Continue with Google" truncates at 320dp and fits at
-/// 360dp, so a Tamil truncation of the same key at 360dp IS translation-induced
-/// and must not be swallowed here.
-///
-/// ## Overflows are matched by MAGNITUDE, not by frame
-///
-/// An overflow finding carries no key — `A RenderFlex overflowed by 16 pixels
-/// on the bottom` names a box, not a string — so its signature would collapse
-/// to `overflow|screen|config`. Subtracting on that alone exempts the whole
-/// screen at that configuration in EVERY locale at ANY size: a Malayalam string
-/// pushing the language sheet 240px past the bottom would have matched
-/// English's 16px and been swallowed silently. So the baseline records how far
-/// English overflowed each frame and only an overflow no worse than that is
-/// subtracted.
+/// A translation-induced finding fires in some locale but NOT in the English baseline of the identical frame.
+/// Only those are demotable -> everything else is a layout defect or a designed truncation.
+/// Demoting a translation cannot fix a slot that is too small for English either.
+/// So this is a set difference against a RECORDED run, never a hand-written allowlist.
+/// A hand-maintained list drifts -> every stale entry converts a real overflow into a "known defect".
+/// The signature is `kind|screen|config|key`, and CONFIGURATION is part of it on purpose.
+/// English "Continue with Google" truncates at 320dp and fits at 360dp.
+/// So a Tamil truncation of the same key at 360dp IS translation-induced and must not be swallowed here.
+/// Overflows are matched by MAGNITUDE, not by frame -> an overflow finding carries no key.
+/// Its signature would collapse to `overflow|screen|config` -> subtracting on that exempts the whole screen everywhere.
+/// A Malayalam string pushing a sheet 240px past the bottom would have matched English's 16px and been swallowed.
+/// So the baseline records how far English overflowed each frame -> only an overflow no worse than that is subtracted.
 library;
 
 import 'attribution.dart' show kAmbiguousMarker;
 import 'english_baseline.g.dart';
 import 'finding.dart';
 
-/// Slack on the magnitude comparison, in logical pixels. Covers the sub-pixel
-/// difference between a harness run and a device run of the same frame — Layer
-/// 1 and Layer 2 measured the same upload-screen overflow as 29px and 28px.
+/// Slack on the magnitude comparison, in logical pixels -> it covers the sub-pixel difference between two runs.
+/// The two layers measured the same upload-screen overflow as 29px and 28px.
 const double kOverflowTolerancePx = 1.5;
 
-/// True when [f] also fires in English, on the same screen, at the same
-/// configuration — and, for an overflow, no less severely.
+/// True when [f] also fires in English on the same screen and configuration -> and, for an overflow, no less severely.
 bool isKnownDefect(Finding f) {
-  // An ambiguous attribution must never be subtracted: two ARB keys share the
-  // rendered string, so a baseline entry recorded against one of them says
-  // nothing about the other.
+  // An ambiguous attribution is NEVER subtracted -> two ARB keys share the rendered string.
+  // A baseline entry recorded against one of them says nothing about the other.
   if (f.detail.contains(kAmbiguousMarker)) return false;
 
   if (f.kind == FindingKind.overflow) {

@@ -12,69 +12,47 @@ import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../data/video_thumbnail_service.dart';
 
-/// Where the last good catalog is kept (a `{"items":[…]}` snapshot of the
-/// drained Worker catalog, in the same snake_case item shape).
+/// Where the last good catalog is kept — a `{"items":[…]}` snapshot in the same snake_case shape.
 const _catalogCacheFile = 'catalog.json';
 
-/// Directory holding the catalog snapshot. A provider seam so tests can point
-/// it at a temp dir (path_provider has no platform channel under
-/// `flutter test`); production always resolves the app-support dir.
+/// Directory holding the catalog snapshot — a provider SEAM, so tests can point at a temp dir.
+/// path_provider has no platform channel under `flutter test`; production resolves app-support.
 final catalogCacheDirProvider = FutureProvider<Directory>(
   (_) => getApplicationSupportDirectory(),
 );
 
-/// The catalog: the Worker-built, edge-cached page set
-/// (`catalog/version.json` no-store → `catalog/wallpapers/all_{page}.json?v=`,
-/// 200 items/page), drained to a single list because the feed filters by
-/// category client-side.
+/// The catalog — the Worker-built, edge-cached page set, drained to ONE list.
+/// The feed filters by category client-side, so pages are never fetched per chip.
 ///
-/// **Cache-FIRST (stale-while-revalidate), deliberately.** On a warm start the
-/// last good catalog is served from disk immediately — the wallpapers
-/// themselves are already in the image/video caches, so the feed paints in one
-/// frame — while the network drain runs in the background and swaps the fresh
-/// list in when it lands. This is what keeps a relaunch instant even on a
-/// slow-but-alive connection: the old network-first path sat on the loading
-/// state for the whole version.json + multi-page drain before showing anything.
-///
-/// A cold start (no cache yet) keeps the plain network path: fetch, parse,
-/// cache, or surface the error. Only a failure with NO cached catalog at all is
-/// a real error. Pull-to-refresh calls [CatalogNotifier.refresh], which
-/// bypasses the cached fast path so an explicit refresh always means fresh data.
+/// **Cache-FIRST, stale-while-revalidate, deliberately.**
+/// A warm start serves the disk snapshot at once, and the media is already in the caches.
+/// So the feed paints in one frame while the network drain swaps the fresh list in behind it.
+/// The old network-first path sat on the loading state for version.json plus the whole drain.
+/// A cold start with no cache keeps the plain network path: fetch, parse, cache, or error.
+/// ONLY a failure with no cached catalog at all is a real error.
+/// [CatalogNotifier.refresh] bypasses the cached fast path -> an explicit refresh means fresh data.
 final catalogProvider = AsyncNotifierProvider<CatalogNotifier, List<Wallpaper>>(
   CatalogNotifier.new,
 );
 
 class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
-  /// Bounded fan-out for the page drain. At 200 rows/page the whole drain is
-  /// page 1 + one parallel batch today, but the pool must stay: the catalog
-  /// grows in bulk imports, and a strictly sequential drain serialises every
-  /// RTT on a throttled CDN path — the cold start (no disk snapshot yet) sat
-  /// at ~5 s when 634 items were 32 pages of 20. Mirrors the reference's
-  /// bounded-concurrency discipline (WallpaperPrefetchService pumps at most a
-  /// few transfers at once so nothing is starved); one shared http.Client
-  /// keeps the TCP/TLS sessions pooled.
+  /// Bounded fan-out for the page drain — at 200 rows a page this is page 1 plus one batch today.
+  /// The pool must STAY: the catalog grows in bulk imports.
+  /// A sequential drain serialises every RTT on a throttled CDN path — 32 pages once cost ~5 s cold.
+  /// One shared http.Client keeps the TCP/TLS sessions pooled.
   static const _maxConcurrentPages = 4;
 
-  /// Monotonic token: each build()/refresh() claims a new one, and a background
-  /// revalidate only writes state if it is still the latest — so a stale drain
-  /// can never overwrite a newer refresh with older data.
+  /// Monotonic token — each build/refresh claims one, and a revalidate writes only while it is latest.
+  /// So a stale drain can never overwrite a newer refresh with older data.
   int _fetchSeq = 0;
 
-  /// Delays between automatic re-checks while the feed is parked on a network
-  /// error with nothing to show, after Riverpod's own exponential-backoff
-  /// retries (~13 s of quick [build] re-runs) are exhausted.
+  /// Delays between automatic re-checks while the feed is parked on a network error, showing nothing.
   ///
-  /// Those quick retries exist for a cold-start radio/DNS blip. They do nothing
-  /// for the real-world case: a user opens the app in a lift, a metro or a dead
-  /// zone, gets the error card, and then signal returns — the app has no
-  /// connectivity listener anywhere, so it never noticed and the card stayed
-  /// until a manual Retry. Mirrors
-  /// [RingtoneCatalogNotifier.offlineRecheckBackoffs]; both feeds shared the
-  /// defect, so both carry the fix.
-  ///
-  /// The ladder lengthens to two minutes and then holds, so a genuinely offline
-  /// device settles into one cheap catalog fetch every two minutes rather than
-  /// spinning the radio. Empty disables it (tests).
+  /// Riverpod's own ~13 s of quick retries cover a cold-start radio or DNS blip, and nothing else.
+  /// A user in a lift gets the error card, signal returns, and no connectivity listener notices.
+  /// The card then stayed until a manual Retry -> this ladder is the fix, mirrored in both feeds.
+  /// It lengthens to two minutes and HOLDS -> an offline device settles, never spins the radio.
+  /// Empty disables it (tests).
   @visibleForTesting
   static List<Duration> offlineRecheckBackoffs = const [
     Duration(seconds: 5),
@@ -89,10 +67,8 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
 
   @override
   Future<List<Wallpaper>> build() async {
-    // The provider outlives the screen, so the timer has to die with it or it
-    // keeps waking the radio after the tab is gone. Registered per build, so a
-    // rebuild (manual Retry invalidates this provider) also clears any pending
-    // re-check before the new load claims its own.
+    // The provider outlives the screen -> the timer must die with it, or it wakes the radio after.
+    // Registered per build, so a rebuild also clears any pending re-check before the new load.
     ref.onDispose(() {
       _recheckTimer?.cancel();
       _recheckTimer = null;
@@ -105,32 +81,28 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
       try {
         final cached = _parseCache(await file.readAsString());
         if (cached.isNotEmpty) {
-          // Serve the disk snapshot NOW; revalidate from the network in the
-          // background and swap the fresh catalog in when it arrives.
+          // Serve the disk snapshot NOW -> revalidate in the background and swap the fresh list in.
           unawaited(_revalidate(file, seq));
           return cached;
         }
       } catch (_) {
-        // Corrupt cache (a kill mid-write on an older build). Drop it and take
-        // the cold network path — never let a bad snapshot brick cold starts.
+        // A corrupt cache — a kill mid-write — must NEVER brick cold starts.
+        // Drop it and take the cold network path.
         await file.delete().catchError((_) => file);
       }
     }
 
-    // Cold start / self-healed cache: network is the only source. A failure
-    // here IS the error state (the feed renders retry).
+    // Cold start, or a self-healed cache -> the network is the only source.
+    // A failure here IS the error state, and the feed renders retry.
     try {
       final fresh = await _fetchCatalog();
       _recheckAttempt = 0;
       unawaited(_writeCache(file, fresh));
       return fresh;
     } catch (e) {
-      // Only a NETWORK failure is worth re-checking on a timer — it is the one
-      // that fixes itself when the link comes back. A parse miss or a missing
-      // catalog will fail identically forever and must wait for a manual retry.
-      // The ladder resets on every build() failure (Riverpod's quick retries
-      // land here too), so the first slow re-check after they give up is 5 s,
-      // not two minutes.
+      // Only a NETWORK failure is worth a timer — it is the one that fixes itself.
+      // A parse miss or a missing catalog fails identically forever and needs a manual retry.
+      // The ladder resets on every build() failure -> the first slow re-check is 5 s, not two minutes.
       if (isNetworkError(e)) {
         _recheckAttempt = 0;
         _scheduleOfflineRecheck(seq);
@@ -139,9 +111,8 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
     }
   }
 
-  /// Queue the next automatic re-check after a network failure left the feed
-  /// with nothing to show. The timer drives [refresh], which re-reads the
-  /// version pointer — a catalog published during the outage is picked up.
+  /// Queue the next automatic re-check after a network failure left the feed with nothing to show.
+  /// The timer drives [refresh], which re-reads the version pointer -> an outage-time publish lands.
   void _scheduleOfflineRecheck(int seq) {
     _recheckTimer?.cancel();
     final ladder = offlineRecheckBackoffs;
@@ -155,8 +126,8 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
     });
   }
 
-  /// Background refresh behind a served cache. Failure is silent — the user is
-  /// already looking at a working feed of the last good catalog.
+  /// Background refresh behind a served cache — failure is SILENT.
+  /// The user is already looking at a working feed of the last good catalog.
   Future<void> _revalidate(File file, int seq) async {
     try {
       final fresh = await _fetchCatalog();
@@ -170,13 +141,11 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
     }
   }
 
-  /// Pull-to-refresh AND the offline re-check timer's retry: authoritative
-  /// network reload. Re-reads the version pointer (so a just-published catalog
-  /// is picked up), bypasses the serve-cached-first fast path, and only settles
-  /// when fresh data (or a failure) lands. On failure with data on screen the
-  /// current feed is kept — the indicator simply settles; the error state is
-  /// reserved for a feed that has nothing to show, and only THAT state keeps
-  /// the re-check ladder climbing.
+  /// Pull-to-refresh AND the offline timer's retry — an authoritative network reload.
+  ///
+  /// Re-reads the version pointer, bypasses the cached fast path, settles only on fresh data.
+  /// On failure WITH data on screen the current feed is kept and the indicator simply settles.
+  /// The error state is reserved for a feed with nothing to show, and only that climbs the ladder.
   Future<void> refresh() async {
     invalidateCatalogVersion();
     final seq = ++_fetchSeq;
@@ -196,10 +165,8 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
     }
   }
 
-  /// Drains the full catalog: page 1 (which carries `total_pages`), then the
-  /// remaining pages with at most [_maxConcurrentPages] in flight, reassembled
-  /// in page order. A missing page N means end-of-pages (or a transient miss)
-  /// — everything up to it is served, matching the sequential drain's `break`.
+  /// Drains the full catalog — page 1 carries `total_pages`, then the rest, bounded and reassembled.
+  /// A missing page N means end-of-pages, or a transient miss -> everything up to it is served.
   Future<List<Wallpaper>> _fetchCatalog() async {
     final client = ref.read(catalogHttpClientProvider);
 
@@ -212,16 +179,14 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
 
     final first = await fetch(1);
     if (first == null) {
-      // Page 1 missing on the CDN means the catalog has never been built —
-      // an operational fault, not an app state.
+      // Page 1 missing on the CDN means the catalog was never built — an operational fault.
       throw StateError('catalog page 1 missing on CDN');
     }
 
     final all = [...first.items];
     final totalPages = first.totalPages;
     if (first.hasMore && totalPages > 1) {
-      // Worker pool over pages 2..totalPages; results land slotted by page so
-      // ordering is deterministic regardless of completion order.
+      // Worker pool over pages 2..totalPages, slotted BY PAGE -> order is completion-independent.
       final slots = List<CatalogPage<Wallpaper>?>.filled(totalPages - 1, null);
       var next = 2;
       Future<void> worker() async {
@@ -236,7 +201,7 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
       await Future.wait([for (var i = 0; i < workers; i++) worker()]);
 
       for (final page in slots) {
-        // End-of-pages / transient miss — serve what we have up to it.
+        // End-of-pages, or a transient miss -> serve what we have up to it.
         if (page == null) break;
         all.addAll(page.items);
       }
@@ -251,8 +216,7 @@ class CatalogNotifier extends AsyncNotifier<List<Wallpaper>> {
   }
 }
 
-/// Write AFTER a successful parse, so a malformed response can never poison the
-/// cache and brick every future cold start. Best-effort.
+/// Write AFTER a successful parse -> a malformed response can never poison the cache. Best-effort.
 Future<void> _writeCache(File file, List<Wallpaper> items) async {
   try {
     await file.writeAsString(
@@ -271,22 +235,35 @@ List<Wallpaper> _parseCache(String json) {
   return items.map(Wallpaper.fromJson).toList(growable: false);
 }
 
-/// Categories, derived from the catalog — not a hardcoded list, so adding a
-/// seventh deity server-side needs no app release. Ordered by
-/// [compareBrowseCategories]: Sivan first, then alphabetical.
+/// Categories DERIVED from the catalog -> a seventh deity server-side needs no app release.
+///
+/// ORDER comes from the CMS when an operator has set one (`app_config.category_order`),
+/// else [compareBrowseCategories]: Sivan first, then alphabetical. The two are layered,
+/// never mixed -> [orderedByCms] puts every listed slug first in the operator's order and
+/// leaves everything else to the built-in rule, so a category published after the last
+/// drag still appears in its usual slot.
+///
+/// The config is a separate CDN fetch from the catalog, so it can land LATER. Watching it
+/// here means the row simply re-sorts when it does; until then the built-in rule holds,
+/// which is also exactly what an install predating the field does forever.
 final categoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   final all = switch (ref.watch(catalogProvider)) {
     AsyncData(:final value) => value,
     _ => const <Wallpaper>[],
   };
+  final cfg = switch (ref.watch(appConfigProvider)) {
+    AsyncData(:final value) => value,
+    _ => null,
+  };
   final labels = <String, String>{};
   for (final w in all) {
     labels.putIfAbsent(w.category, () => w.categoryLabel);
   }
-  return labels.entries
-      .map((e) => WallpaperCategory(e.key, e.value))
-      .toList(growable: false)
-    ..sort(compareBrowseCategories);
+  return orderedByCms(
+    labels.entries.map((e) => WallpaperCategory(e.key, e.value)).toList(),
+    categoryOrderFor(cfg?.categoryOrder, 'wallpapers'),
+    compareBrowseCategories,
+  );
 });
 
 final selectedCategoryProvider = NotifierProvider<SelectedCategory, String>(
@@ -302,16 +279,12 @@ class SelectedCategory extends Notifier<String> {
 
 /// The list the feed serves for [slug] — the ONE definition of feed order.
 ///
-/// Every chip runs the SAME comparator ([orderedByUse]); a category chip is just
-/// All restricted to one category. That is the invariant: a filtered view can
-/// never contradict All. It holds because the comparator is a total order and
-/// its last tier is catalog POSITION — position within the filtered list is
-/// monotonic in position within the full one, so restricting the set cannot
-/// reverse any pair.
-///
-/// [apply_restore] resolves its saved page index through this too. That index is
-/// a position in the list the feed SERVES, so it must be validated against the
-/// same ordering or a post-apply restart restores to a different wallpaper.
+/// EVERY chip runs the same comparator; a category chip is All restricted to one category.
+/// The invariant: a filtered view can never contradict All.
+/// It holds because the comparator is a TOTAL order whose last tier is catalog position.
+/// Position in the filtered list is monotonic in the full one -> restricting cannot reverse a pair.
+/// [apply_restore] resolves its saved page index through this too — a position in the SERVED list.
+/// Validating it against any other ordering restores a post-apply restart to a different wallpaper.
 List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) => orderedByUse(
   slug == WallpaperCategory.allSlug
       ? all
@@ -320,40 +293,27 @@ List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) => orderedByUse(
   rank: (w) => w.feedRank,
 );
 
-/// The three-tier feed order (CLAUDE.md §5b), for any catalog list carrying a
-/// pin and a use counter:
+/// The three-tier feed order (CLAUDE.md §5b), for any catalog list with a rank and a use counter:
 ///
-///   1. [rank] ascending, **nulls last** — the admin's pins.
-///   2. [useCount] descending — popularity.
-///   3. catalog position ascending — newest-first within a category,
-///      interleaved across them by the Worker.
+///   1. [rank] ascending, **nulls last**;
+///   2. [useCount] descending — popularity;
+///   3. catalog position ascending — the order the Worker built.
 ///
-/// Shared with the Ringtones tab, whose model and provider are separate but
-/// whose rule is identical — written once so the two lists cannot drift apart.
-///
-/// Tier 1 is sparse by design: a null rank is the ordinary state, so most of the
-/// catalog falls straight through to tier 2. This is what lets an import land
-/// safely — new rows arrive unranked and cannot displace the curated head.
-///
-/// Tier 3 is load-bearing and must not be dropped for a bare sort on the earlier
-/// keys: Dart's `List.sort` is NOT stable, so ties — most of the catalog, most
-/// of the time, since an uncurated row with no applies ties on both tiers above —
-/// would come out in an order free to change between runs. The feed compares
-/// served lists by ORDERED IDS (`_syncFeed`), so that would re-point the pager
-/// and the video pool under a scrolling user on every cold start, revalidate and
-/// pull-refresh. Decorating with the index keeps the order TOTAL and a pure
-/// function of the list it is given.
-///
-/// The zero state is exactly right and is not a fallback: with nothing pinned
-/// and nothing applied, every comparison falls through to the index and the feed
-/// is plain catalog order — newest-first, interleaved.
+/// Shared with the Ringtones tab, written once so the two lists cannot drift apart.
+/// Tier 1 is SPARSE by design — a null rank is ordinary, so most of the catalog reaches tier 2.
+/// That is what lets an import land safely: new rows arrive unranked and displace nothing.
+/// Tier 3 is load-bearing. Dart's `List.sort` is NOT stable, and most rows tie on both tiers above.
+/// Their order would then be free to change between runs.
+/// The feed compares served lists by ORDERED IDS -> that re-points the pager under a scrolling user.
+/// Decorating with the index keeps the order TOTAL and a pure function of the list it is given.
+/// The zero state is exactly right, not a fallback: everything falls through to plain catalog order.
 List<T> orderedByUse<T>(
   List<T> all,
   int Function(T) useCount, {
   required int? Function(T) rank,
 }) {
-  // Decorate-sort-undecorate: read each key ONCE per row rather than twice per
-  // comparison — this runs on the chip tap that returns to All.
+  // Decorate-sort-undecorate — read each key ONCE per row, not twice per comparison.
+  // This runs on the chip tap that returns to All.
   final keyed = [
     for (var i = 0; i < all.length; i++)
       (rank: rank(all[i]), count: useCount(all[i]), i: i, row: all[i]),
@@ -369,28 +329,24 @@ List<T> orderedByUse<T>(
 
 /// `feed_rank` ASC, NULLS LAST.
 ///
-/// Nulls last is the whole contract — an unpinned row must sink BELOW every pin
-/// and be decided by popularity instead. Treating null as a number would do the
-/// opposite of the feature: as 0 it would pin the entire uncurated catalog above
-/// the curated head, and as a large value it would still make the pins a total
-/// order over rows the admin never touched.
+/// Nulls last is the whole contract — an unranked row sinks BELOW every ranked one.
+/// Popularity then decides it. Treating null as a NUMBER inverts the feature.
+/// As 0 it would put the entire unranked catalog on top; as a large value it still orders untouched rows.
 int _compareRank(int? a, int? b) {
   if (a == null) return b == null ? 0 : 1;
   if (b == null) return -1;
   return a.compareTo(b);
 }
 
-/// The feed: catalog filtered by the selected CATEGORY, in [feedOrder]. Never
-/// filtered by kind — static and live interleave by design (CLAUDE.md §5b).
+/// The feed — catalog filtered by the selected CATEGORY, in [feedOrder].
+/// NEVER filtered by kind: static and live interleave by design (CLAUDE.md §5b).
 final feedProvider = Provider<AsyncValue<List<Wallpaper>>>((ref) {
   final slug = ref.watch(selectedCategoryProvider);
   return ref.watch(catalogProvider).whenData((all) => feedOrder(slug, all));
 });
 
-/// Native first-frame stills — the grid's fallback for a live wallpaper whose
-/// pre-generated thumbnail is missing. App-scoped so its in-flight memo is shared
-/// across grid rebuilds and a fling issues one native call per clip, not one per
-/// build.
+/// Native first-frame stills — the fallback for a live wallpaper whose thumbnail is missing.
+/// App-scoped -> the in-flight memo is shared, and a fling issues one native call per CLIP.
 final videoThumbnailServiceProvider = Provider<VideoThumbnailService>(
   (ref) => VideoThumbnailService(),
 );

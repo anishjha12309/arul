@@ -1,9 +1,6 @@
 /**
- * Unit tests for the canonical-media sweep decision logic.
- *
- * sweepCanonical() itself needs a live DB + R2 binding, so we test the pure
- * `selectCanonicalKeysToDelete` core: given the objects seen, the keys still
- * referenced by wallpapers/ringtones rows, and `now`, decide which to delete.
+ * The canonical-media sweep DECISION logic.
+ * sweepCanonical() needs a live DB and R2 binding -> only the pure `selectCanonicalKeysToDelete` core is testable here
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -109,7 +106,7 @@ describe("selectCanonicalKeysToDelete", () => {
 
 describe("blastRadiusRefusal", () => {
   it("allows small deletions unconditionally (floor)", () => {
-    // 3 of 3 objects = 100%, but under the floor — a tiny prefix must stay sweepable.
+    // 3 of 3 objects is 100% but under the floor -> a tiny prefix must stay sweepable, or it never reclaims anything
     expect(blastRadiusRefusal(3, 3)).toBeNull();
     expect(blastRadiusRefusal(DELETE_FRACTION_FLOOR, DELETE_FRACTION_FLOOR)).toBeNull();
   });
@@ -138,12 +135,10 @@ describe("blastRadiusRefusal", () => {
 });
 
 // ── sweepCanonical: per-prefix reference sets ────────────────────────────────
-//
-// The regression this guards: reference sets used to be MERGED across both
-// tables. If `wallpapers` returned zero rows while `ringtones` returned some,
-// the ringtone keys kept the merged set non-empty, the old "is it empty?" guard
-// passed, and every wallpaper object was deleted. R2 has no versioning — that
-// loss is permanent.
+// The regression this guards: reference sets used to be MERGED across both tables
+// If `wallpapers` returned zero rows, the ringtone keys kept that merged set non-empty
+// The old "is it empty?" guard then passed and every wallpaper object was deleted
+// R2 has no versioning -> that loss is permanent -> this suite is the only thing standing in front of it
 
 describe("sweepCanonical — per-prefix failsafes", () => {
   function makeR2(objectsByPrefix: Record<string, string[]>) {
@@ -167,7 +162,7 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     };
   }
 
-  /** sql mock that answers the wallpapers query then the ringtones query. */
+  /** The sql mock answers the wallpapers query FIRST, then ringtones -> that order matches sweepCanonical's. */
   function makeSql(wallpaperKeys: string[], ringtoneKeys: string[]) {
     let call = 0;
     const fn = vi.fn(() => {
@@ -212,12 +207,12 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     expect(deleted).toEqual([]); // nothing lost
     expect(result.aborted).toBe(true);
     expect(result.abortedPrefixes["wallpapers/"]).toContain("0 referenced keys");
-    // The healthy prefix still swept normally.
+    // The healthy prefix still sweeps normally -> one prefix aborting must not stop the others
     expect(result.abortedPrefixes["ringtones/"]).toBeUndefined();
   });
 
   it("refuses a prefix whose deletions exceed the blast-radius cap", async () => {
-    // 1 of 40 wallpaper objects is still referenced → 39/40 would be deleted.
+    // 1 of 40 wallpaper objects is still referenced -> 39/40 would be deleted -> far past the cap, so refuse
     const objects = Array.from({ length: 40 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
     const { result, deleted } = await run(
       ["wallpapers/murugan/0.mp4"],
@@ -250,7 +245,7 @@ describe("sweepCanonical — per-prefix failsafes", () => {
   });
 
   it("a ringtone row can never vouch for a wallpaper object", async () => {
-    // Both tables populated, but the wallpaper object matches only a ringtone key.
+    // Both tables are populated, but the object under wallpapers/ matches only a RINGTONE key
     const { deleted } = await run(
       ["wallpapers/murugan/kept.mp4"],
       ["ringtones/murugan/a.mp3"],
@@ -259,9 +254,8 @@ describe("sweepCanonical — per-prefix failsafes", () => {
         "ringtones/": ["ringtones/murugan/a.mp3"],
       },
     );
-    // The stray ringtone-keyed object listed under wallpapers/ is not protected
-    // by the ringtones table — but it also isn't under a prefix it belongs to,
-    // so selectCanonicalKeysToDelete's prefix check keeps it out of scope.
+    // The ringtones table does not protect it -> but it is not under a prefix it belongs to either
+    // selectCanonicalKeysToDelete's prefix check keeps it out of scope -> a cross-table key is never judged
     expect(deleted).toEqual([]);
   });
 });

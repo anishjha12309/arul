@@ -1191,6 +1191,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upload is coming soon.'**
   String get uploadComingSoonToast;
+
+  /// No description provided for @premiumNavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'SUBSCRIPTION'**
+  String get premiumNavTitle;
+
+  /// No description provided for @premiumEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'PREMIUM'**
+  String get premiumEyebrow;
+
+  /// No description provided for @premiumTagline.
+  ///
+  /// In en, this message translates to:
+  /// **'Divine grace, every day'**
+  String get premiumTagline;
+
+  /// No description provided for @premiumPerMonthCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'PER MONTH'**
+  String get premiumPerMonthCaption;
+
+  /// No description provided for @premiumTrialLeadPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Start your 1-day FREE trial for '**
+  String get premiumTrialLeadPrefix;
+
+  /// No description provided for @premiumRefundedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'REFUNDED INSTANTLY'**
+  String get premiumRefundedBadge;
+
+  /// No description provided for @premiumFeatureWallpapers.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited HD Wallpapers'**
+  String get premiumFeatureWallpapers;
+
+  /// No description provided for @premiumFeatureRingtones.
+  ///
+  /// In en, this message translates to:
+  /// **'Devotional Ringtones'**
+  String get premiumFeatureRingtones;
+
+  /// No description provided for @premiumFeatureDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily New Content'**
+  String get premiumFeatureDaily;
+
+  /// No description provided for @premiumCtaTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Free Trial'**
+  String get premiumCtaTrial;
+
+  /// No description provided for @premiumCtaSubscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe Now'**
+  String get premiumCtaSubscribe;
+
+  /// No description provided for @premiumReassuranceTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'₹2 verification, refunded instantly · Cancel anytime'**
+  String get premiumReassuranceTrial;
+
+  /// No description provided for @premiumReassurancePaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Secured by UPI Autopay · Cancel anytime in one tap'**
+  String get premiumReassurancePaid;
+
+  /// No description provided for @premiumSelectedUpiApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected UPI App'**
+  String get premiumSelectedUpiApp;
+
+  /// No description provided for @upiPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay using'**
+  String get upiPickerTitle;
+
+  /// No description provided for @upiPickerLastUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last used'**
+  String get upiPickerLastUsed;
+
+  /// No description provided for @premiumTrialFinePrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Then {price}/month via autopay. Cancel anytime.'**
+  String premiumTrialFinePrint(String price);
+
+  /// No description provided for @premiumSocialProof.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} in {city} just applied a live wallpaper 🙏'**
+  String premiumSocialProof(String name, String city);
 }
 
 class _AppLocalizationsDelegate

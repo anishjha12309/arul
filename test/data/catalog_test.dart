@@ -1,10 +1,7 @@
-// Tests for the Worker-catalog data layer:
-//   - Wallpaper: snake_case parse of the Worker catalog item (incl. the Arul
-//     `category` delta), kind mapping, and the CRITICAL thumb derivation —
-//     thumbs/<category>/<file-stem>.jpg from full_key, NEVER from the DB id.
-//   - CatalogPage.fromJson envelope parsing.
-//   - CatalogHttpClient: ?v= stamping via CatalogVersion, null on CDN miss,
-//     NetworkException on connectivity failure.
+// The Worker-catalog data layer: snake_case parse of a catalog item, Arul's `category` delta, and kind mapping.
+// The CRITICAL one is thumb derivation -> thumbs/<category>/<file-stem>.jpg from full_key, NEVER from the DB id.
+// Also CatalogPage.fromJson envelope parsing.
+// Also CatalogHttpClient: ?v= stamping via CatalogVersion, null on a CDN miss, NetworkException on a connectivity failure.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -79,9 +76,7 @@ void main() {
     });
 
     test('posterUrl asks for thumbs/ ONLY for live; a static goes to full_key', () {
-      // Only live items get a thumbs/ object (buildplan.mjs sets thumb_key for
-      // video only), so a static asking for one is a guaranteed 404 before the
-      // fallback fetches the full JPG it was always going to fetch.
+      // Only live items get a thumbs/ object -> a static asking for one is a guaranteed 404 before the full-JPG fallback.
       final live = Wallpaper.fromJson(_item());
       expect(
         live.posterUrl('https://cdn.test'),

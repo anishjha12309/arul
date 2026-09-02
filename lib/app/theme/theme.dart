@@ -7,23 +7,19 @@ import 'typography.dart';
 
 /// Light + dark, fixed brand palette.
 ///
-/// NEVER seed from device wallpaper / dynamic colour: this app's whole job is
-/// showing wallpapers, so a theme that recoloured itself from the user's current
-/// one would fight its own content.
-///
-/// Dark is the primary theme — the product is media-first and most sessions are
-/// at night — but light is designed, not derived: it gets its own hand-specified
-/// scheme (schemes.dart), its own deepened rose/gold (the dark values fail 4.5:1
-/// on ivory), and a hairline-outlined card treatment it needs and dark does not.
+/// The app's whole job is showing wallpapers -> a theme recoloured from the current one fights its
+/// own content -> NEVER seed from device wallpaper or dynamic colour.
+/// Dark is primary (media-first, night sessions), but light is designed, not derived -> its own
+/// hand-specified scheme in schemes.dart, its own deepened rose/gold (the dark values fail 4.5:1 on
+/// ivory), and a hairline-outlined card treatment dark does not need.
 abstract final class ArulTheme {
   /// Both themes are built ONCE, lazily, and reused forever.
   ///
-  /// [_build] is not cheap — a 15-slot [TextTheme] plus fifteen component
-  /// sub-themes — and the root widget rebuilds on theme, locale and the
-  /// notification bootstrap, so calling it per build meant constructing two
-  /// full [ThemeData] on every one of those. Caching is only safe because the
-  /// palette is fixed: no dynamic colour, no wallpaper seeding (§7), so there is
-  /// no input that could make a second call differ from the first.
+  /// [_build] is not cheap (a 15-slot [TextTheme] plus fifteen component sub-themes) and the root
+  /// rebuilds on theme, locale and the notification bootstrap -> building per call costs two full
+  /// [ThemeData] every time.
+  /// Cacheable ONLY because the palette is fixed — no dynamic colour, no wallpaper seeding -> no
+  /// input can make a second call differ from the first.
   static final ThemeData _light = _build(
     scheme: ArulSchemes.light(),
     muted: ArulSchemes.lightMuted,
@@ -42,9 +38,9 @@ abstract final class ArulTheme {
     final text = ArulType.scale(scheme.onSurface, muted);
     final isDark = scheme.brightness == Brightness.dark;
 
-    // System-bar ICON brightness must follow the surface or the clock and battery
-    // go invisible — light icons on the ivory theme is exactly that bug. (Bar
-    // COLOURS are ignored at targetSdk 35+; only brightness/contrast still apply.)
+    // System-bar ICON brightness must follow the surface -> light icons on the ivory theme make the
+    // clock and battery invisible.
+    // Bar COLOURS are ignored at targetSdk 35+ -> only brightness and contrast still apply.
     final overlay = SystemUiOverlayStyle(
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       systemNavigationBarIconBrightness: isDark
@@ -59,8 +55,8 @@ abstract final class ArulTheme {
       scaffoldBackgroundColor: scheme.surface,
       splashFactory: InkSparkle.splashFactory,
 
-      // Predictive back IS the Android default since 3.38 — pinned so a future
-      // edit can't silently swap in Zoom*, which DISABLES the gesture.
+      // Predictive back is already the Android default -> pinned only so an edit can't silently swap
+      // in Zoom*, which DISABLES the gesture.
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),

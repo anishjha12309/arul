@@ -2,15 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// The two ColorSchemes, every role spelled out — maroon primary, gold
-/// secondary/tertiary, ivory light surface, `#14090C` dark surface.
+/// The two ColorSchemes, every role spelled out — maroon primary, gold accents, ivory/`#14090C` grounds.
 ///
-/// `ColorScheme.fromSeed` is deliberately NOT used. Its tonal-palette algorithm
-/// derives secondary and tertiary by rotating hue off the seed, so a maroon seed
-/// would generate the wrong gold (or none at all). Gold is a fixed brand accent,
-/// not a derivation, so every role is hand-specified. These roles drive
-/// ThemeData-derived chrome (scaffold, dialogs, sheets, text); screens read exact
-/// values from [ArulTokens] in lib/theme/arul_tokens.dart.
+/// `fromSeed` rotates hue off the seed for secondary/tertiary -> a maroon seed invents the wrong gold.
+/// Gold is a fixed brand accent, not a derivation -> every role is hand-specified here.
+/// These roles drive ThemeData chrome only -> screens read exact values from [ArulTokens].
 abstract final class ArulSchemes {
   static const ColorScheme lightScheme = ColorScheme(
     brightness: Brightness.light,
@@ -38,13 +34,11 @@ abstract final class ArulSchemes {
     surface: ArulColors.ivory,
     onSurface: ArulColors.inkText, //         13.48:1 on surface
     onSurfaceVariant: ArulColors.inkMuted, //  6.03:1 on surface, 5.11:1 on
-    //                                         surfaceContainerHighest (the idle
-    //                                         category chip — its worst ground)
+    // surfaceContainerHighest — the idle category chip, its worst ground.
     outline: ArulColors.ivoryOutline, //       3.53:1 on surface
     outlineVariant: ArulColors.ivoryOutlineVariant,
 
-    // The container ladder. onSurface holds ≥10.5:1 and onSurfaceVariant ≥4.7:1
-    // against every step, so a widget may sit on any of them without a re-check.
+    // Container ladder: onSurface ≥10.5:1 and onSurfaceVariant ≥4.7:1 on EVERY step -> sit on any of them.
     surfaceDim: ArulColors.ivoryDim,
     surfaceBright: ArulColors.ivoryRaised,
     surfaceContainerLowest: ArulColors.ivoryLowest,
@@ -60,19 +54,16 @@ abstract final class ArulSchemes {
     shadow: Colors.black,
     scrim: Colors.black,
 
-    // Elevation tint. Only the app bar's scrolled-under state opts in (every
-    // other component theme zeroes its surfaceTintColor); see Elevation.
+    // Elevation tint — only the app bar's scrolled-under state opts in; every other theme zeroes it.
     surfaceTint: ArulColors.roseDeep,
   );
 
   static const ColorScheme darkScheme = ColorScheme(
     brightness: Brightness.dark,
 
-    // 4.54:1 on surface — the tightest margin in the palette. It clears 4.5 for
-    // body text, but only just: for SMALL or THIN type directly on ink, reach for
-    // roseSoft (#E6A1B3, 8.7:1) instead. As a fill/icon/large-text colour (3:1)
-    // it has plenty of headroom, which is what it is actually used for — the
-    // selected category chip, where onPrimary rides it at 4.75:1.
+    // 4.54:1 on surface — the tightest margin in the palette; it clears 4.5 body text only just.
+    // For SMALL or THIN type directly on ink reach for roseSoft (#E6A1B3, 8.7:1) instead.
+    // Its real use is fill/icon/large text (3:1) — the selected chip, where onPrimary rides at 4.75:1.
     primary: ArulColors.rose,
     onPrimary: ArulColors.onRose, //          4.75:1 on primary
     primaryContainer: ArulColors.roseInk,
@@ -96,12 +87,11 @@ abstract final class ArulSchemes {
     surface: ArulColors.ink,
     onSurface: ArulColors.ivoryText, //       15.03:1 on surface
     onSurfaceVariant: ArulColors.ivoryMuted, // 9.62:1 on surface, 7.72:1 on
-    //                                          surfaceContainerHighest
+    // surfaceContainerHighest
     outline: ArulColors.inkOutline, //         3.64:1 on surface
     outlineVariant: ArulColors.inkOutlineVariant,
 
-    // Dark surface ladder, matched to the redesign: sheets/cards/dialogs read
-    // surfaceContainerLow, which is the dark sheet surface #1A0B0F.
+    // Dark surface ladder — sheets, cards and dialogs read surfaceContainerLow, the sheet #1A0B0F.
     surfaceDim: ArulColors.ink,
     surfaceBright: Color(0xFF2A1218),
     surfaceContainerLowest: Color(0xFF0D0609),
@@ -122,8 +112,8 @@ abstract final class ArulSchemes {
   static ColorScheme light() => lightScheme;
   static ColorScheme dark() => darkScheme;
 
-  /// The muted text tier. Body sub-copy, footnotes, the category eyebrow — every
-  /// place the type scale asks for less than full onSurface.
+  /// The muted text tier — sub-copy, footnotes, the eyebrow; anywhere the scale wants less than onSurface.
+
   static const lightMuted = ArulColors.inkMuted; // 6.03:1 on ivory
   static const darkMuted = ArulColors.ivoryMuted; // 9.62:1 on ink
 }

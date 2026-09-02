@@ -6,19 +6,14 @@ import 'package:http/http.dart' as http;
 /// Resolves the current catalog content version from the always-fresh
 /// `catalog/version.json` pointer (served `no-store` by build-catalog).
 ///
-/// Callers append `?v=<version>` to every catalog/app_config fetch. Because the
-/// version changes on each publish, the query makes a freshly-published catalog a
-/// new edge-cache key — so the app sees new content the instant it learns the
-/// version, while the page bodies stay edge-cacheable. See docs/architecture.md.
-///
-/// The resolved value is cached for the session and only re-fetched after
-/// [invalidate] (called on explicit pull-to-refresh). This gives two guarantees:
-///   • a single feed load / paginated drain stamps EVERY page with the same `?v`
-///     (no mid-drain version skew, even on slow networks), and
-///   • an explicit refresh is authoritative — it re-reads the pointer and picks
-///     up a just-published version immediately.
-/// On any failure we keep the last known version (or null → no `?v`), preserving
-/// the CDN-only, no-DB-fallback contract.
+/// Callers append `?v=<version>` to every catalog/app_config fetch -> a publish changes the version
+/// and so the edge-cache key -> new content lands at once while the bodies stay cacheable.
+/// Cached for the session, re-fetched only after [invalidate] -> one paginated drain stamps EVERY
+/// page with the same `?v`, so a slow network cannot mix two versions mid-drain.
+/// [invalidate] runs on explicit pull-to-refresh -> that read is authoritative and picks up a
+/// just-published version.
+/// On any failure keep the last known version (or null -> no `?v`) -> the CDN-only,
+/// no-DB-fallback contract holds. See docs/architecture.md.
 class CatalogVersion {
   CatalogVersion({required this.cdnBaseUrl, http.Client? client})
     : _client = client ?? http.Client();
@@ -45,7 +40,7 @@ class CatalogVersion {
       }
     } catch (e) {
       debugPrint('[CatalogVersion] version.json fetch failed: $e');
-      // Keep the last known version (may be null); callers simply omit ?v.
+      // Keep the last known version (may be null) -> callers simply omit ?v.
     }
     return _cached;
   }

@@ -8,8 +8,6 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../perf/boot_trace.dart';
 
-// ─── Typed error ─────────────────────────────────────────────────────────────
-
 /// Typed error thrown for any non-2xx API response.
 class ApiException implements Exception {
   const ApiException({
@@ -29,17 +27,12 @@ class ApiException implements Exception {
   String toString() => 'ApiException($status, $code): $message';
 }
 
-// ─── Token storage keys ───────────────────────────────────────────────────────
-
 const _kAccessTokenKey = 'arul_access_token';
 const _kRefreshTokenKey = 'arul_refresh_token';
 
-/// Locally cached identity (display name / email) so the profile UI can
-/// render offline instead of going blank. Cleared together with the tokens on
-/// sign-out / account deletion, so it never leaks across accounts.
+/// Locally cached identity so the profile UI renders offline instead of going blank.
+/// Cleared with the tokens on sign-out and account deletion -> it never leaks across accounts.
 const _kProfileKey = 'arul_profile';
-
-// ─── ApiClient ────────────────────────────────────────────────────────────────
 
 /// Wraps `http` with:
 ///   - Base URL from [AppConfig.apiBaseUrl]
@@ -58,70 +51,45 @@ class ApiClient {
   final FlutterSecureStorage _storage;
   final http.Client _http;
 
-  /// Hard ceiling on every HTTP round trip (request + refresh). Without it an
-  /// offline gated call — `/me/subscription`, `/media/signed-url` — hangs
-  /// forever: no response, no socket error, the future just never completes,
-  /// and the apply/share flow spins with no way out (confirmed on device). On
-  /// timeout we throw an [http.ClientException] so [isNetworkError] classifies
-  /// it as connectivity-class and the UI shows the offline message + retry
-  /// instead of hanging. 12s is well past any healthy round trip, so online
-  /// behavior is unchanged. Injectable for tests.
+  /// Hard ceiling on every HTTP round trip, request and refresh alike.
+  ///
+  /// Without it an offline gated call hangs forever — no response, no socket error, no completion.
+  /// Timing out throws [http.ClientException] -> classified connectivity-class -> offline UI + retry.
+  /// 12s is well past any healthy round trip -> online behaviour is unchanged. Injectable for tests.
   final Duration _requestTimeout;
 
   /// Prevents concurrent refresh races — only one in-flight refresh at a time.
   Completer<void>? _refreshCompleter;
 
-  /// GET paths whose response is coalesced while in flight and briefly replayed
-  /// after settling (see [_meFreshFor]).
+  /// GET paths coalesced while in flight and briefly replayed after settling (see [_meFreshFor]).
   ///
-  /// Only `/me`: it now serves the cold-start auth upgrade AND the entitlement
-  /// read, because the Worker LEFT JOINs the subscription row into that one
-  /// response. `/me/subscription` is deliberately NOT here — no client code
-  /// calls it any more (the Worker keeps the route alive only for app builds
-  /// released before the merge), and listing a path nothing requests is dead
-  /// config that reads as if two endpoints were still in play.
+  /// Only `/me`: the Worker LEFT JOINs the subscription row -> one response serves auth AND entitlement.
+  /// `/me/subscription` is deliberately absent — nothing calls it, and a dead path reads as live config.
   static const Set<String> _replayableGets = {'/me'};
 
   /// How long a completed replayable GET may be replayed to a later caller.
   ///
-  /// In-flight coalescing alone cannot collapse the cold-start pair: the
-  /// optimistic auth emission and the post-`/me` profile upgrade re-resolve the
-  /// entitlement provider about a second apart, so the second
-  /// `/me/subscription` starts after the first has already settled and there is
-  /// nothing left to join. Every authenticated cold start therefore made two
-  /// identical Neon-backed round trips.
-  ///
-  /// A few seconds covers that gap and nothing else. It is safe for entitlement
-  /// because the client copy is UX only — the real gate is the Worker's live
-  /// Neon check on `/media/signed-url` (CLAUDE.md §5) — and because
-  /// [invalidateMe] fires after every mutating request, so a purchase, cancel
-  /// or refund is never masked by a stale snapshot.
+  /// The cold-start pair re-resolves ~1s apart -> the second read starts after the first settled.
+  /// In-flight coalescing alone cannot collapse that -> every cold start made two Neon round trips.
+  /// A few seconds covers that gap and nothing else.
+  /// Safe because the client copy is UX only — the Worker's live Neon check is the real gate (§5).
+  /// [invalidateMe] fires after every mutating request -> a purchase or cancel is never masked.
   static const Duration _meFreshFor = Duration(seconds: 5);
 
   final Map<String, Future<Map<String, dynamic>>> _meInFlight = {};
   final Map<String, (Map<String, dynamic>, DateTime)> _meCache = {};
 
-  /// Bumped by [invalidateMe]. A replayable GET that STARTED before the bump
-  /// must not repopulate [_meCache] when it settles after the bump — without
-  /// this, a `/me` racing a mutation could re-serve the pre-mutation
-  /// entitlement for up to [_meFreshFor] after the mutation invalidated it.
+  /// Bumped by [invalidateMe]. A GET that STARTED before the bump must not repopulate [_meCache].
+  /// Otherwise a `/me` racing a mutation re-serves pre-mutation entitlement for [_meFreshFor].
   int _meEpoch = 0;
-
-  // ─── Token management ──────────────────────────────────────────────────────
 
   /// Opens the encrypted-storage channel early, off the critical path.
   ///
-  /// The FIRST read of a process pays for the platform channel plus Android
-  /// keystore init, and on a cold start that was measured at most of the ~990ms
-  /// between the first frame and the app knowing whether a session exists —
-  /// which is the gate on launching Google sign-in. Called fire-and-forget from
-  /// `main()`, it overlaps that cost with Firebase and prefs setup instead of
-  /// serialising after them.
-  ///
-  /// Uses the same default [FlutterSecureStorage] instance the constructor
-  /// falls back to, so this warms the channel the real read will use. Purely a
-  /// cache warm: it reads nothing anyone consumes and swallows every failure,
-  /// so the worst case is the old timing, never a wrong answer.
+  /// The FIRST read of a process pays the platform channel plus Android keystore init.
+  /// That was most of the ~990ms between first frame and knowing whether a session exists.
+  /// Fire-and-forget from `main()` -> the cost overlaps Firebase and prefs setup, never serialises.
+  /// Uses the same default [FlutterSecureStorage] the constructor falls back to -> the same channel.
+  /// It reads nothing anyone consumes and swallows every failure -> worst case is the old timing.
   static Future<void> warmSecureStorage() async {
     BootTrace.mark('secureStorage warm: start');
     try {
@@ -132,23 +100,16 @@ class ApiClient {
     BootTrace.mark('secureStorage warm: done');
   }
 
-  /// The route [warmUp] pokes: an EXISTING public one (Digital Asset Links)
-  /// that reads no DB, needs no JWT and answers from `c.env`. Deliberately not a
-  /// new `/health` endpoint — the cheapest warm is one that costs the Worker
-  /// nothing it isn't already built to do.
+  /// The route [warmUp] pokes — an EXISTING public one that reads no DB, needs no JWT, answers from env.
+  /// Deliberately not a new `/health` — the cheapest warm costs the Worker nothing it does not already do.
   static const _warmPath = '/.well-known/assetlinks.json';
 
-  /// Opens DNS + TLS to the API host (and wakes a cold Worker) while the splash
-  /// beat is still playing.
+  /// Opens DNS + TLS to the API host, and wakes a cold Worker, while the splash is still playing.
   ///
-  /// Until this existed, `POST /auth/login` was the FIRST request of the
-  /// process, so it paid the resolve, the handshake and the Worker cold start
-  /// with the user watching a spinner. This runs on the SAME [http.Client], so
-  /// the socket it leaves in the keep-alive pool is the one login reuses.
-  ///
-  /// Fire-and-forget by contract: no auth, no retry, no parsing, its own short
-  /// timeout, every failure swallowed — a 404 or a 503 warms the path just as
-  /// well as a 200. It must never delay or fail anything.
+  /// Otherwise `POST /auth/login` is the process's FIRST request and pays all three under a spinner.
+  /// Runs on the SAME [http.Client] -> the socket it leaves in the keep-alive pool is login's.
+  /// Fire-and-forget by contract: no auth, no retry, no parsing, short timeout, failures swallowed.
+  /// A 404 or a 503 warms the path as well as a 200 -> it must never delay or fail anything.
   Future<void> warmUp() async {
     if (!AppConfig.hasBackend) return;
     try {
@@ -174,23 +135,18 @@ class ApiClient {
   }
 
   Future<void> clearTokens() async {
-    // Same reason as the profile cache below, one layer up: the in-memory
-    // /me + /me/subscription snapshots belong to the session being torn down.
+    // The in-memory `/me` snapshot belongs to the session being torn down -> drop it with the tokens.
     invalidateMe();
     await Future.wait([
       _storage.delete(key: _kAccessTokenKey),
       _storage.delete(key: _kRefreshTokenKey),
-      // Drop the cached profile too so the next (or signed-out) user never sees
-      // the previous user's name/email.
+      // Drop the cached profile too -> the next or signed-out user never sees the previous name.
       _storage.delete(key: _kProfileKey),
     ]);
   }
 
-  // ─── Profile cache ───────────────────────────────────────────────────────────
-
-  /// Persists the user's identity locally so the profile UI survives an offline
-  /// cold start (the only other source is a live `GET /me`). Null fields are
-  /// dropped from the stored map.
+  /// Persists identity locally so the profile UI survives an offline cold start — else only `GET /me`.
+  /// Null fields are dropped from the stored map.
   Future<void> cacheProfile({
     String? userId,
     String? displayName,
@@ -222,8 +178,6 @@ class ApiClient {
     return token != null && token.isNotEmpty;
   }
 
-  // ─── HTTP helpers ──────────────────────────────────────────────────────────
-
   Uri _uri(String path) => Uri.parse('${AppConfig.apiBaseUrl}$path');
 
   Future<Map<String, String>> _authHeaders() async {
@@ -235,8 +189,6 @@ class ApiClient {
     };
   }
 
-  // ─── Core request (with 401 retry) ─────────────────────────────────────────
-
   /// POSTs [body] as JSON to [path]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> post(
     String path, {
@@ -246,9 +198,8 @@ class ApiClient {
 
   /// GETs [path]; refreshes the token + retries once on 401.
   ///
-  /// `/me` and `/me/subscription` are coalesced (see [_meInFlight]) and briefly
-  /// reused (see [_meFreshFor]): a request already in flight is handed to every
-  /// additional caller, and one that just completed is replayed.
+  /// `/me` is coalesced ([_meInFlight]) -> an in-flight request is handed to every extra caller.
+  /// It is also briefly reused ([_meFreshFor]) -> one that just completed is replayed.
   Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) {
     if (!_replayableGets.contains(path)) {
       return _requestWithRetry('GET', path, requiresAuth: requiresAuth);
@@ -261,19 +212,10 @@ class ApiClient {
       return Future.value(cached.$1);
     }
 
-    // The future stored (and returned) is the `whenComplete`-wrapped one, not
-    // the raw `_requestWithRetry` future — every caller (first + joiners) ends
-    // up awaiting THIS future, so the clear-on-settle side effect always runs
-    // before anyone regains control.
-    //
-    // The callback body MUST be a block: `Map.remove` returns the removed
-    // value — this very future — and a `whenComplete` callback that returns a
-    // future is awaited before the wrapped future settles. An arrow body here
-    // makes the future wait on itself: a permanent hang on every /me read.
-    //
-    // Remove-only-if-still-ours: invalidateMe() may have dropped this entry
-    // and a NEWER request may already occupy the slot — blindly removing would
-    // evict the newer flight and lose its coalescing.
+    // Store and return the `whenComplete`-WRAPPED future -> clear-on-settle runs before any resume.
+    // `Map.remove` returns THIS future and `whenComplete` awaits a returned future -> an arrow body
+    // makes the future wait on itself: a permanent hang on every `/me` read. Keep the block body.
+    // Remove only if still ours -> invalidateMe() plus a NEWER request must not lose its coalescing.
     final epoch = _meEpoch;
     late final Future<Map<String, dynamic>> future;
     future = _requestWithRetry('GET', path, requiresAuth: requiresAuth)
@@ -281,9 +223,8 @@ class ApiClient {
           if (identical(_meInFlight[path], future)) _meInFlight.remove(path);
         });
     _meInFlight[path] = future;
-    // Record only on success — an error must never be replayed to a joiner
-    // that arrives after the failure — and only if no mutation invalidated the
-    // window while this request was in flight (see [_meEpoch]).
+    // Record only on SUCCESS -> an error is never replayed to a joiner arriving after the failure.
+    // And only if no mutation invalidated the window mid-flight (see [_meEpoch]).
     unawaited(
       future
           .then((data) {
@@ -294,25 +235,18 @@ class ApiClient {
     return future;
   }
 
-  /// Drop any remembered `/me` / `/me/subscription` snapshot, forcing the next
-  /// read to hit the Worker.
+  /// Drop any remembered `/me` snapshot, forcing the next read to hit the Worker.
   ///
-  /// Called automatically after every non-GET request (see [_requestWithRetry]),
-  /// so no caller has to remember: a mandate setup, a cancel, or an account
-  /// delete all invalidate by construction.
-  ///
-  /// Also detaches any in-flight replayable GET (a joiner arriving after the
-  /// mutation must start a FRESH read, not adopt the pre-mutation one) and
-  /// bumps [_meEpoch] so the detached flight cannot repopulate the cache when
-  /// it settles.
+  /// Called after every non-GET ([_requestWithRetry]) -> setup, cancel and delete invalidate by design.
+  /// Detaches any in-flight replayable GET -> a joiner arriving after the mutation reads FRESH.
+  /// Bumps [_meEpoch] -> the detached flight cannot repopulate the cache when it settles.
   void invalidateMe() {
     _meCache.clear();
     _meInFlight.clear();
     _meEpoch++;
   }
 
-  /// DELETEs [path] with an optional JSON [body]; refreshes the token +
-  /// retries once on 401.
+  /// DELETEs [path] with an optional JSON [body]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> delete(
     String path, {
     Map<String, dynamic>? body,
@@ -320,8 +254,7 @@ class ApiClient {
   }) =>
       _requestWithRetry('DELETE', path, body: body, requiresAuth: requiresAuth);
 
-  /// Core request. On a 401 (when [requiresAuth]) runs a single-flight token
-  /// refresh and retries the request exactly once.
+  /// Core request. A 401 with [requiresAuth] runs a single-flight refresh and retries exactly once.
   Future<Map<String, dynamic>> _requestWithRetry(
     String method,
     String path, {
@@ -329,10 +262,8 @@ class ApiClient {
     bool requiresAuth = true,
     bool isRetry = false,
   }) async {
-    // Any non-GET can change what /me or /me/subscription would answer — a
-    // mandate setup, a cancel, an account delete. Drop the remembered snapshot
-    // up front so a caller that reads entitlement immediately after mutating it
-    // can never be served the pre-mutation answer.
+    // Any non-GET can change what `/me` would answer -> drop the remembered snapshot UP FRONT.
+    // So a caller reading entitlement straight after mutating it is never served the old answer.
     if (method != 'GET') invalidateMe();
 
     final headers = await _authHeaders();
@@ -391,10 +322,7 @@ class ApiClient {
     );
   }
 
-  // ─── Refresh ───────────────────────────────────────────────────────────────
-
-  /// Exchanges the stored refresh token for a new token pair; on failure clears
-  /// all tokens and throws an [ApiException] (sending the user back to sign-in).
+  /// Exchanges the refresh token for a new pair; on failure clears tokens and throws [ApiException].
   Future<void> _doRefresh() async {
     final refreshToken = await readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) {
@@ -425,17 +353,11 @@ class ApiClient {
         );
 
     if (response.statusCode != 200) {
-      // ONLY a 401 means the refresh token is genuinely dead. Everything else —
-      // 429 (rate limited), 5xx, a Cloudflare gateway blip, a Neon hiccup — is
-      // TRANSIENT, and wiping the session for those would sign a paying user
-      // out because the server had a bad second. That is the worst possible
-      // false positive: they lose premium access and have to re-authenticate,
-      // for a fault that was never theirs.
-      //
-      // Transient failures surface as a normal error the caller can retry; the
-      // stored tokens stay put and the next request succeeds. `isSessionExpired`
-      // deliberately does NOT match this code, so the UI never says
-      // "session expired" for what is really "server busy".
+      // ONLY a 401 means the refresh token is genuinely dead.
+      // 429, 5xx, a gateway blip, a Neon hiccup are TRANSIENT -> wiping tokens signs a payer out.
+      // That is the worst false positive: premium lost and a re-auth, for a fault that was not theirs.
+      // So a transient failure surfaces as a retryable error and the stored tokens stay put.
+      // `isSessionExpired` deliberately does NOT match this code -> the UI never says "session expired".
       if (response.statusCode != 401) {
         throw ApiException(
           code: 'refresh_unavailable',
@@ -464,8 +386,6 @@ class ApiClient {
     }
     await setTokens(accessToken: newAccess, refreshToken: newRefresh);
   }
-
-  // ─── Response parser ───────────────────────────────────────────────────────
 
   /// Decodes the JSON body — returns it on 2xx, else throws a typed [ApiException].
   Map<String, dynamic> _parseResponse(http.Response response) {

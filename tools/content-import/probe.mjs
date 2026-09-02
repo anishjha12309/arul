@@ -1,5 +1,5 @@
-// Stage A — probe every Drive file (ffprobe) + collapse intra-batch exact dupes (sha256).
-// Writes inventory.json; prints a terse summary only.
+// Stage A -> ffprobe every Drive file and collapse intra-batch exact dupes by sha256.
+// Writes inventory.json and prints a terse summary only.
 import { readdirSync, statSync, readFileSync, writeFileSync } from "fs";
 import { createHash } from "crypto";
 import { execFileSync } from "child_process";
@@ -42,7 +42,7 @@ for (const f of files) {
   items.push({ file: f, ext, kind, bytes, sha256, width, height, durationS, hasAudio, vcodec });
 }
 
-// Collapse exact duplicates by sha256 — keep the first, mark the rest.
+// Collapse exact duplicates by sha256 -> keep the first, mark the rest.
 const seen = new Map();
 for (const it of items) {
   if (seen.has(it.sha256)) it.dupOf = seen.get(it.sha256);

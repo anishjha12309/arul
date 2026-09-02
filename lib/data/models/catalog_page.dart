@@ -1,6 +1,5 @@
 /// Paginated response from the edge-cached CDN catalog.
-/// Plain Dart class (not freezed) because generic fromJson requires
-/// a caller-supplied item parser.
+/// A generic fromJson needs a caller-supplied item parser -> a plain Dart class, not freezed.
 class CatalogPage<T> {
   const CatalogPage({
     required this.items,

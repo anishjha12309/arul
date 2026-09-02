@@ -1,6 +1,5 @@
-// Stage F-plan — turn corrections.json + review-data.json into import-plan.json.
-// One fresh UUID per item used for BOTH the R2 key stem and the DB id, so the
-// video thumb key (thumbs/<cat>/<stem>.jpg) matches full_key's stem exactly.
+// Stage F-plan -> turn corrections.json + review-data.json into import-plan.json.
+// ONE fresh UUID per item serves both the R2 key stem and the DB id -> thumbs/<cat>/<stem>.jpg matches full_key's stem.
 import { readFileSync, writeFileSync } from "fs";
 import { randomUUID } from "crypto";
 const ROOT = "c:/Anish/arul-import";

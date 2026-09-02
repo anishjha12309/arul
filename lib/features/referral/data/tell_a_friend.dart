@@ -9,22 +9,13 @@ import '../../../core/config/app_config.dart';
 import '../providers/referral_providers.dart';
 import 'install_referrer_service.dart';
 
-/// The ONE outbound "tell a friend" path, shared by every surface that offers it
-/// — Refer & Earn, the Settings row, and the post-purchase and post-upload
-/// moments.
+/// The ONE outbound "tell a friend" path, shared by every surface that offers it.
 ///
-/// It exists because the copy and the attribution are the valuable parts, and
-/// they were previously inlined in a single screen. Every new entry point that
-/// re-derived them was a chance to ship a message in the wrong voice or a link
-/// that credits nobody. There is now one place to get both right.
-///
-/// The payload here is TEXT ONLY, which is why WhatsApp is reached by deep link
-/// rather than by the native targeted intent the wallpaper share needs — with no
-/// file to carry, `whatsapp://send?text=` is the right tool and needs no
-/// platform channel.
-///
-/// [source] names the surface and rides along on `referral_shared`, so the entry
-/// points can be compared and the dead ones removed.
+/// The copy and the attribution are the valuable parts, and every re-derivation risks both.
+/// So there is one place to get the voice right and one place to get the credit right.
+/// The payload here is TEXT ONLY -> WhatsApp by deep link, not the wallpaper share's file intent.
+/// With no file to carry, `whatsapp://send?text=` needs no platform channel.
+/// [source] names the surface and rides on `referral_shared` -> dead entry points are findable.
 Future<void> tellAFriend(
   BuildContext context,
   WidgetRef ref, {
@@ -40,10 +31,8 @@ Future<void> tellAFriend(
         'referral_shared',
         properties: {
           'source': source,
-          // False means this share can never be credited back to the sender —
-          // the summary hadn't loaded, or the account has no code yet. Worth
-          // knowing per surface: a screen that always shares unattributed is a
-          // screen whose warm-up is in the wrong place.
+          // False means this share can never be credited back — no summary yet, or no code.
+          // Worth knowing per surface: always-unattributed means that screen's warm-up is misplaced.
           'link_attributed': link.attributed,
         },
       );
@@ -65,12 +54,10 @@ Future<void> tellAFriend(
   await SharePlus.instance.share(ShareParams(text: message));
 }
 
-/// The referral-attributed Play link when the user's code is ALREADY known, the
-/// plain listing otherwise.
+/// The referral-attributed Play link when the code is ALREADY known, the plain listing otherwise.
 ///
-/// Deliberately synchronous — it reads the cached summary and never awaits.
-/// Sharing must not block on the network, and a share that pauses for a
-/// round-trip is a share the user abandons.
+/// A share that pauses for a round trip is a share the user abandons.
+/// So this is synchronous — it reads the cached summary and never awaits.
 ({String url, bool attributed}) _referralLink(WidgetRef ref) {
   final code = AppConfig.hasBackend
       ? ref.read(referralSummaryProvider).asData?.value.referralCode

@@ -1,37 +1,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Static wallpaper apply via WallpaperManager. Normal permission, auto-granted.
-         Live wallpapers go through the system chooser and need no permission. -->
+    <!-- Static apply needs WallpaperManager -> normal permission, auto-granted -> live uses the chooser and needs none. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
-    <!-- Required to set the device ringtone via RingtoneManager — nothing else
-         asks for it; without it every "Set" fails the Settings.System.canWrite
-         check on every device. Special-access, shows on the Play listing, so
-         the store form has to justify it (ringtones are a live feature —
-         docs/known-issues.md §Open). -->
+    <!-- Without WRITE_SETTINGS every "Set" fails Settings.System.canWrite -> RingtoneManager cannot write a device tone. -->
+    <!-- Special-access -> it shows on the Play listing -> the store form must justify it (docs/known-issues.md §Open). -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
-    <!-- Pre-Android-10 ONLY (capped at 28, so it never reaches a modern device or
-         the Play listing's runtime-permission list). Below API 29 a custom tone
-         must be copied into the PUBLIC Ringtones directory and registered on the
-         EXTERNAL MediaStore volume — both need this. Android 10+ uses scoped
-         storage and needs nothing. Runtime-prompted at the moment of the first
-         "Set" on those devices, never at launch — see MainActivity.setRingtone.
-         Same shape as Pakiza's (CLAUDE.md §0: shared behaviour, both repos). -->
+    <!-- Pre-API-29 a tone goes to the PUBLIC Ringtones dir and the EXTERNAL MediaStore volume -> both need this permission. -->
+    <!-- maxSdkVersion=28 -> it never reaches a modern device or the Play permission list -> Android 10+ needs nothing. -->
+    <!-- Runtime-prompted at the first "Set" on those devices, never at launch -> see MainActivity.setRingtone. -->
+    <!-- Same shape as Pakiza's -> shared behaviour, fix it in both repos (CLAUDE.md §0). -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"/>
 
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- Local devotional reminders (flutter_local_notifications). Runtime-prompted
-         on Android 13+ and only when the user turns the feature on in Settings —
-         never at launch. Nothing is scheduled while the master toggle is off. -->
+    <!-- Prompted on Android 13+ only when the user turns reminders on -> never at launch. -->
+    <!-- Nothing is scheduled while the master toggle is off -> the permission stays unasked. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Re-arms the scheduled reminders after a reboot; without it every pending
-         notification is silently dropped the first time the phone restarts.
-         Paired with ScheduledNotificationBootReceiver below. -->
+    <!-- Reminders are one-shot alarms -> a reboot drops every pending one -> this re-arms them via the boot receiver below. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
-    <!-- Live wallpaper support is OPTIONAL: the app still installs and runs on a
-         device without it, and the apply flow degrades to static-only. -->
+    <!-- Live wallpaper support is OPTIONAL -> the app installs on devices without it -> apply degrades to static-only. -->
     <uses-feature
         android:name="android.software.live_wallpaper"
         android:required="false"/>
@@ -44,24 +33,14 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true">
-        <!-- Google Ads App Campaign deferred deep links. For a user who installs
-             from an eligible ad, Firebase Analytics writes the ad group's App URL
-             into google.analytics.deferred.deeplink.prefs. MainActivity listens
-             for that value and hands it to the same one-shot Flutter wallpaper
-             target used by App Links and Play Install Referrer. -->
+        <!-- Install from an eligible Ads creative -> Firebase writes its App URL into google.analytics.deferred.deeplink.prefs. -->
+        <!-- MainActivity reads that value -> it feeds the same one-shot Flutter target as App Links and Play Install Referrer. -->
         <meta-data
             android:name="google_analytics_deferred_deep_link_enabled"
             android:value="true"/>
-        <!-- Consent mode v2 defaults (Google "Set up consent mode for apps",
-             Android). With NO defaults the SDK sends every event without the
-             ad_user_data / ad_personalization signals, and GA4 then drops the
-             session's acquisition attribution: User acquisition showed 100% of
-             trial_started under "(not set)" with the tooltip "data stream sends
-             event data before sending the ad_user_data parameter" (2026-08-25).
-             Manifest defaults apply before first_open fires, which a Dart-side
-             setConsent() cannot. Granted: Arul serves India only, where no
-             consent banner is required; scope these per region if the app ever
-             ships to the EEA. -->
+        <!-- No manifest defaults -> events ship without ad_user_data/ad_personalization -> GA4 drops the acquisition source. -->
+        <!-- Manifest defaults apply BEFORE first_open -> a Dart-side setConsent() cannot -> they must live here. -->
+        <!-- Arul serves India only -> no consent banner is required there -> scope these per region before any EEA release. -->
         <meta-data
             android:name="google_analytics_default_allow_analytics_storage"
             android:value="true"/>
@@ -74,9 +53,8 @@
         <meta-data
             android:name="google_analytics_default_allow_ad_personalization_signals"
             android:value="true"/>
-        <!-- enableOnBackInvokedCallback = predictive back. The manifest default is
-             FALSE on Android 13-15, so WITHOUT this the gesture is dead across most
-             of the install base. Flutter 3.38+ then supplies the page transition. -->
+        <!-- The predictive-back flag defaults to FALSE on Android 13-15 -> without it the gesture is dead on most installs. -->
+        <!-- Flutter 3.38+ supplies the page transition -> nothing app-side draws it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -87,20 +65,13 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|colorMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- uiMode|colorMode are LOAD-BEARING: applying a wallpaper makes the OS
-                 recolor (Material You) and recreate the activity. Handling both here
-                 keeps the app alive through apply; dropping either = cold restart on
-                 every apply (flutter/flutter#133722). -->
+            <!-- Applying a wallpaper makes the OS recolor and recreate the activity -> uiMode|colorMode are LOAD-BEARING. -->
+            <!-- Drop either one -> the app cold-restarts on every apply (flutter/flutter#133722). -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
-            <!-- Hand an incoming VIEW intent's PATH to the Flutter router as the
-                 initial route. Without this the App Link below still opens the
-                 app, but lands it on `/` with the wallpaper id nowhere — so a
-                 tap on a shared wallpaper would open the plain feed and look
-                 like the deep link simply doesn't work.
-                 Scoped by the intent-filters on this activity, so it cannot
-                 affect the arul:// PhonePe return (that carries no path). -->
+            <!-- Off -> an App Link still opens the app but lands on `/` with the wallpaper id nowhere -> it looks broken. -->
+            <!-- Scoped to this activity's filters -> the arul:// PhonePe return carries no path -> it cannot be affected. -->
             <meta-data
                 android:name="flutter_deeplinking_enabled"
                 android:value="true"/>
@@ -108,61 +79,26 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- arul:// return scheme: PhonePe brings the app back to the
-                 foreground with this after the payment flow (the appSchema
-                 passed to startTransaction). Rename of the reference's pakiza://. -->
+            <!-- PhonePe returns the user via this scheme -> it is the appSchema passed to startTransaction -> keep the two in step. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="arul"/>
             </intent-filter>
-            <!-- Android App Link for wallpaper shares and ad creatives:
-                 https://arul.hsrutility.com/w/<wallpaper-id>  and, for
-                 ringtone ad creatives, /r/<ringtone-id>. Either may carry
-                 ?lang=<code> (docs/deep-links.md).
-
-                 autoVerify="true" is what makes an INSTALLED app intercept the
-                 link ahead of the browser. Android verifies it by fetching
-                 https://arul.hsrutility.com/.well-known/assetlinks.json (served
-                 by the Arul Worker) and matching this package against the
-                 SHA-256 fingerprints there. Three things must agree or the link
-                 silently opens a browser with nothing logged: the host below,
-                 the wrangler.toml custom domain, and ANDROID_CERT_SHA256 — and
-                 the fingerprint must be the PLAY APP SIGNING cert, not just the
-                 upload key, or verification fails on every Play install while
-                 working perfectly on a locally-built APK.
-
-                 android:host is duplicated in kDeepLinkHost (Dart), which is
-                 what actually builds the outgoing links.
-
-                 Kept SEPARATE from the arul:// filter above: they cannot merge.
-                 An intent-filter matches the cross product of its schemes and
-                 hosts, so folding https in would also register arul://arul.hsrutility.com
-                 and — worse — put the PhonePe return scheme under autoVerify. -->
-            <!-- ONE FILTER PER URL SHAPE — /w/ here, /r/ below. Not a style
-                 choice: "it's important that you create separate filters when
-                 your intention is to declare unique URLs … because multiple
-                 <data> elements in the same intent filter are actually merged
-                 together to account for all variations of their combined
-                 attributes" (developer.android.com/training/app-links/deep-linking).
-
-                 Both paths lived in ONE filter until build 53 and routed fine —
-                 the merge is harmless here, since /w/ and /r/ share a scheme and
-                 host so the cross product adds nothing. This split is the
-                 documented shape, not a bug fix: do NOT cite it as the reason
-                 Google Ads' Deep link validator once answered "This deep link
-                 wasn't found in the app" for /r/ URLs. That was a STALE SCAN on
-                 Google's side — its list was missing every link added on
-                 2026-08-26 (`/r/` and the fb scheme both), and when it finally
-                 re-read the app BOTH reappeared together, on a build whose shape
-                 no longer mattered. Play Console had read /r/ correctly out of
-                 the merged filter all along. Add a new path as a new FILTER
-                 anyway; it costs nothing and matches the docs.
-
-                 autoVerify on both is deliberate and free: the system verifies
-                 hosts across ALL filters carrying VIEW + BROWSABLE + DEFAULT +
-                 http/https once the attribute appears on at least one of them. -->
+            <!-- Link shapes, ids and the ?lang= parameter: docs/deep-links.md. -->
+            <!-- autoVerify="true" is what makes an INSTALLED app intercept the link ahead of the browser. -->
+            <!-- Android verifies via /.well-known/assetlinks.json on that host -> the Worker serves it -> it must list this SHA-256. -->
+            <!-- Host here, wrangler.toml's custom domain and ANDROID_CERT_SHA256 must agree -> a mismatch silently opens a browser. -->
+            <!-- Use the PLAY APP SIGNING cert, not the upload key -> a local APK verifies, every Play install fails. -->
+            <!-- android:host is duplicated in kDeepLinkHost (Dart) -> that is what builds outgoing links -> change both. -->
+            <!-- A filter matches the CROSS PRODUCT of schemes and hosts -> merging https here would register arul://arul.hsrutility.com. -->
+            <!-- Worse, it would put the PhonePe return scheme under autoVerify -> never merge the two filters. -->
+            <!-- Multiple <data> elements in ONE filter merge into every combined variation -> declare one filter per URL shape. -->
+            <!-- The /w/ + /r/ merge was harmless, same scheme and host -> this split is the documented shape, not a bug fix. -->
+            <!-- Never cite it as the cure for Ads' "deep link wasn't found" on /r/ -> that was a stale scan on Google's side. -->
+            <!-- Add a new path as a new FILTER anyway -> it costs nothing and matches the docs. -->
+            <!-- autoVerify on one http/https filter verifies the host across ALL of them -> putting it on both is free. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -181,18 +117,11 @@
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/r/"/>
             </intent-filter>
-            <!-- Meta ads deep link: fb<META_APP_ID>://open?wallpaper_id=…&lang=…
-                 (or ?screen=ringtones&ringtone_id=…) — the form the ad team
-                 pastes into Meta's deep-link field, and what the Facebook /
-                 Instagram apps launch for an INSTALLED user. The app id comes
-                 from the same META_APP_ID placeholder the SDK meta-data uses,
-                 so the scheme can never drift from the SDK's app. A key-less
-                 dev build resolves to a bare "fb" scheme, which nothing sends.
-                 The NOT-installed half of the same ad is the SDK's deferred
-                 fetch in MainActivity, not this filter. Its own filter, on
-                 purpose: merged into the https one it would also register
-                 fb…://arul.hsrutility.com and put itself under autoVerify
-                 (see the cross-product note above). -->
+            <!-- fb<APP_ID>://open?wallpaper_id=…&lang=… (or ?screen=ringtones&ringtone_id=…) is what FB/IG launch for an INSTALLED user. -->
+            <!-- The id reuses the SDK meta-data's META_APP_ID placeholder -> the scheme can never drift from the SDK's app. -->
+            <!-- A key-less dev build resolves to a bare "fb" scheme -> nothing ever sends it -> harmless. -->
+            <!-- The NOT-installed half of the same ad is the SDK's deferred fetch in MainActivity -> not this filter. -->
+            <!-- Its own filter on purpose -> merged into the https one it would register fb…://arul.hsrutility.com under autoVerify. -->
             <intent-filter android:autoVerify="false">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -203,37 +132,22 @@
             </intent-filter>
         </activity>
 
-        <!-- Don't delete: used by the Flutter tool to generate GeneratedPluginRegistrant. -->
+        <!-- The Flutter tool reads this to generate GeneratedPluginRegistrant -> never delete it. -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
 
-        <!-- PostHog is initialised in Dart (main.dart: Posthog().setup() with the
-             POSTHOG_KEY dart-define), never from the manifest. Disable the
-             plugin's native manifest auto-init so it doesn't try — and fail — to
-             configure PostHog from a com.posthog.posthog.API_KEY meta-data we
-             deliberately don't ship: that path logged
-             `E/PostHog: Either …API_KEY must be provided!` on every launch.
-             With AUTO_INIT=false the plugin skips it (a benign info log instead)
-             and the Dart setup() stays the single source of truth. -->
+        <!-- PostHog is set up in Dart from a dart-define -> no API_KEY meta-data ships -> native auto-init errored every launch. -->
+        <!-- AUTO_INIT=false skips that path -> the Dart setup() stays the single source of truth. -->
         <meta-data
             android:name="com.posthog.posthog.AUTO_INIT"
             android:value="false" />
 
-        <!-- Meta (Facebook) App Events. App id + client token are injected at
-             build time from dart-defines (META_APP_ID / META_CLIENT_TOKEN) via
-             gradle manifestPlaceholders — no config lives in the repo. When the
-             defines are absent (dev without keys, or the placeholder in prod.json
-             pre-provisioning), gradle substitutes empty placeholders, the values
-             below resolve to a bare "fb"/"" and the SDK stays effectively inert;
-             we ALSO gate the Dart side via AppConfig.metaEnabled so no events are
-             sent. The `fb`-prefix on ApplicationId is Meta's required string form.
-             Auto-init + auto-logging ON (Android-only v1, no iOS ATT): this
-             captures the install/launch events Meta Ads needs for attribution
-             automatically; the ★ conversion events are logged explicitly via
-             MetaAnalyticsService. Advertiser-ID collection ON for install
-             attribution — the shared hsrutility.com privacy policy must keep
-             disclosing it (docs/analytics-ops.md). -->
+        <!-- App id and client token are injected from dart-defines via gradle manifestPlaceholders -> no Meta config in the repo. -->
+        <!-- Defines absent -> values resolve to a bare "fb"/"" and the SDK goes inert -> AppConfig.metaEnabled gates Dart as well. -->
+        <!-- The `fb` prefix on ApplicationId is Meta's required string form -> not a typo. -->
+        <!-- Auto-logging ON -> Meta Ads gets the install/launch events attribution needs -> ★ events go via MetaAnalyticsService. -->
+        <!-- Advertiser-ID collection ON for install attribution -> the privacy policy must keep disclosing it (docs/analytics-ops.md). -->
         <meta-data
             android:name="com.facebook.sdk.ApplicationId"
             android:value="fb${facebookAppId}" />
@@ -250,23 +164,16 @@
             android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
             android:value="true" />
 
-        <!-- Impeller ON. Do NOT flip this to chase the green-edge-strip artifact on
-             live wallpapers: it was tested against Skia on the reference app and the
-             strip is IDENTICAL, because Flutter backs TextureRegistry.SurfaceProducer
-             with an ImageReader on BOTH renderers, and the ImageReader consumer is
-             where the decoder's crop rect gets dropped (flutter#174026, #159955).
-             The only fix is content-side: video width % 128 == 0 AND height % 32 == 0
-             (docs/media-conventions.md). Confirm via logcat: "Using the Impeller
-             rendering backend". -->
+        <!-- Never flip this to chase the green-edge strip on live video -> Skia was tested and the strip is IDENTICAL. -->
+        <!-- Both renderers back SurfaceProducer with an ImageReader -> its consumer drops the crop rect (flutter#174026, #159955). -->
+        <!-- The only fix is content-side: width % 128 == 0 AND height % 32 == 0 (docs/media-conventions.md). -->
+        <!-- Confirm the backend in logcat: "Using the Impeller rendering backend". -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="true"/>
 
-        <!-- The applied live wallpaper IS this service: it reads the downloaded MP4
-             from app-internal storage and loops it on the home screen via Media3
-             (wallpaper/VideoRenderer). exported + BIND_WALLPAPER lets the system bind
-             to it securely; the meta-data points at the @xml/video_wallpaper
-             descriptor Android requires of every live wallpaper. -->
+        <!-- The applied live wallpaper IS this service -> it loops the downloaded MP4 from internal storage (wallpaper/VideoRenderer). -->
+        <!-- exported plus BIND_WALLPAPER -> only the system may bind to it -> neither attribute is optional. -->
         <service
             android:name=".wallpaper.ArulVideoWallpaperService"
             android:exported="true"
@@ -280,8 +187,7 @@
                 android:resource="@xml/video_wallpaper"/>
         </service>
 
-        <!-- Hands a local image file to the system wallpaper chooser as a content://
-             URI (the ACTION_ATTACH_DATA fallback in the static apply path). -->
+        <!-- The ACTION_ATTACH_DATA fallback needs a content:// URI for a local image -> this provider mints it. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -292,11 +198,8 @@
                 android:resource="@xml/wallpaper_file_paths"/>
         </provider>
 
-        <!-- flutter_local_notifications: fires scheduled reminders, and re-arms
-             the whole schedule after a reboot. The boot receiver is NOT optional
-             — the reminders are one-shot alarms held by AlarmManager, which the
-             OS clears on restart, so without it a phone that reboots once stops
-             notifying until the app is next opened. -->
+        <!-- Reminders are one-shot AlarmManager alarms -> a reboot clears them -> the boot receiver is NOT optional. -->
+        <!-- Lose it and a phone that reboots once stops notifying until the app is next opened. -->
         <receiver
             android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
@@ -321,34 +224,27 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
-        <!-- share_plus needs this to enumerate apps that can receive a share. -->
+        <!-- share_plus enumerates apps that can receive a share -> package visibility hides them without this. -->
         <intent>
             <action android:name="android.intent.action.SEND"/>
             <data android:mimeType="*/*"/>
         </intent>
-        <!-- url_launcher: mailto: for the support email. -->
+        <!-- url_launcher opens mailto: for the support email -> package visibility hides the handler without this. -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="mailto"/>
         </intent>
     </queries>
 
-    <!-- Detect whether WhatsApp is installed for the targeted referral AND
-         wallpaper shares. w4b (WhatsApp Business) is a separate package with the
-         same whatsapp:// scheme — without it, a user who runs only Business
-         silently falls through to the generic share sheet. -->
+    <!-- WhatsApp detection drives the targeted referral and wallpaper shares -> both packages must be listed. -->
+    <!-- w4b (Business) is a separate package on the same scheme -> omit it and Business-only users fall to the generic sheet. -->
     <queries>
         <package android:name="com.whatsapp"/>
         <package android:name="com.whatsapp.w4b"/>
     </queries>
 
-    <!-- PhonePe SDK + our own UpiIntentChannel — enumerate UPI apps for
-         intent-based payment. REQUIRED on Android 11+: without this,
-         package-visibility rules hide every UPI app, the picker lists nothing,
-         no payment app can be launched, and the mandate setup dies with a
-         generic failure. Every package in UpiIntentChannel.MANDATE_APPS must
-         appear here. Ported from the reference app, extended for the direct
-         UPI-intent mandate flow (BHIM, CRED, SuperMoney, PhonePe simulator). -->
+    <!-- REQUIRED on Android 11+ -> package visibility hides every UPI app -> the picker lists nothing and mandate setup dies. -->
+    <!-- Every package in UpiIntentChannel.MANDATE_APPS must appear here -> a missing one is invisible to the picker. -->
     <queries>
         <package android:name="com.phonepe.app"/>
         <package android:name="com.google.android.apps.nbu.paisa.user"/>
@@ -360,7 +256,7 @@
         <package android:name="com.dreamplug.androidapp"/>
         <package android:name="money.super.payments"/>
         <package android:name="com.phonepe.simulator"/>
-        <!-- Resolve upi:// (and the sandbox simulator's ppesim://) view intents. -->
+        <!-- Resolve upi:// and the sandbox simulator's ppesim:// VIEW intents. -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="upi"/>

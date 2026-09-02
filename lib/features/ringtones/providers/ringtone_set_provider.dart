@@ -13,13 +13,10 @@ import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../data/ringtone_set_service.dart';
 
-// ─── Stage & state ────────────────────────────────────────────────────────────
-
 /// Stages reported while setting a ringtone.
 enum RingtoneSetStage { checkingPermission, fetchingUrl, downloading, setting }
 
-/// State machine for setting a ringtone: idle → loading (per [RingtoneSetStage])
-/// → success | error. Ported from the reference.
+/// State machine for setting a ringtone: idle → loading, per [RingtoneSetStage] → success or error.
 sealed class RingtoneSetState {
   const RingtoneSetState();
 }
@@ -35,8 +32,7 @@ final class RingtoneSetLoading extends RingtoneSetState {
     this.progress,
   });
 
-  /// ID of the ringtone being set — cards use this to show a spinner only for
-  /// themselves.
+  /// ID of the ringtone being set — cards use it to spin only for themselves.
   final String ringtoneId;
   final RingtoneSetStage stage;
 
@@ -57,16 +53,12 @@ final class RingtoneSetError extends RingtoneSetState {
   });
   final String message;
 
-  /// True when the failure was a connectivity error, so the UI can show a
-  /// friendly "no internet" message instead of the raw exception text.
+  /// True for a connectivity error -> the UI shows "no internet", never the raw exception text.
   final bool isNetwork;
 
-  /// The server refused because the subscription is no longer live — the
-  /// screen routes to the paywall instead of toasting a generic failure.
+  /// The server refused because the subscription is no longer live -> route to the paywall, not a toast.
   final bool premiumRequired;
 }
-
-// ─── Service provider ─────────────────────────────────────────────────────────
 
 final ringtoneSetServiceProvider = Provider<RingtoneSetService>((ref) {
   return AndroidRingtoneSetService(
@@ -75,14 +67,10 @@ final ringtoneSetServiceProvider = Provider<RingtoneSetService>((ref) {
   );
 });
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
-
-/// Orchestrates setting a ringtone: permission check → signed URL (the Worker's
-/// LIVE entitlement check — the real premium gate) → download → MediaStore
-/// register + set as the device tone.
+/// Orchestrates setting a ringtone: permission check → signed URL → download → MediaStore + set.
+/// The signed-URL call is the Worker's LIVE entitlement check — the real premium gate.
 class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
-  /// The set that was interrupted by Android's "Modify system settings" grant
-  /// screen, resumed when the app comes back with the permission held.
+  /// The set interrupted by Android's grant screen, resumed when the app returns holding it.
   ({Ringtone ringtone, RingtoneTarget target})? _parkedForGrant;
   AppLifecycleListener? _grantReturnListener;
 
@@ -92,8 +80,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
     return const RingtoneSetIdle();
   }
 
-  /// Sets [ringtone] as the [target] tone, walking the permission → fetch →
-  /// download → set pipeline (see [RingtoneSetStage]).
+  /// Sets [ringtone] as the [target] tone, walking the [RingtoneSetStage] pipeline.
   Future<void> setRingtone(Ringtone ringtone, RingtoneTarget target) async {
     // Re-entrancy guard, same as apply/share.
     if (state is RingtoneSetLoading) {
@@ -111,13 +98,10 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
       );
       final canWrite = await service.canWriteSettings();
       if (!canWrite) {
-        // Straight to Android's "Modify system settings" grant screen — no
-        // in-app explainer in front of it (owner, 2026-08-21). The request is
-        // PARKED and finishes on its own when the app resumes holding the
-        // permission: the first cut made the user tap Set again, and the
-        // visible result was "I granted it and nothing happened — no 'ringtone
-        // set' popup the first time" (owner's device, 2026-08-22). A resume
-        // without the grant just drops it.
+        // Straight to Android's grant screen — NO in-app explainer in front of it (owner's call).
+        // The request is PARKED and finishes itself when the app resumes holding the permission.
+        // Making the user tap Set again read as "I granted it and nothing happened".
+        // A resume WITHOUT the grant just drops it.
         _parkedForGrant = (ringtone: ringtone, target: target);
         _grantReturnListener ??= AppLifecycleListener(
           onStateChange: (lifecycle) {
@@ -144,9 +128,8 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         stage: RingtoneSetStage.downloading,
         progress: 0.0,
       );
-      // Named by catalog id — a stable cache key, never shown to the user; the
-      // human-visible tone name is `ringtone.title`, threaded to the native
-      // MediaStore insert below.
+      // Named by catalog id — a stable cache key, never shown to the user.
+      // The human-visible tone name is `ringtone.title`, threaded to the MediaStore insert below.
       final ext = ringtone.mime == 'audio/mpeg' ? 'mp3' : 'aac';
       final filename = '${ringtone.id}.$ext';
       final file = await service.downloadFile(signedUrl, filename, (p) {
@@ -183,8 +166,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
       state = RingtoneSetSuccess(target: target);
     } on RingtoneSetException catch (e) {
       if (e.premiumRequired) {
-        // The client snapshot that let this through is stale — refresh it so
-        // the paywall the screen opens shows the real state.
+        // The client snapshot that let this through is stale -> refresh, so the paywall reads true.
         ref.invalidate(entitlementDetailProvider);
       }
       state = RingtoneSetError(
@@ -192,8 +174,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         premiumRequired: e.premiumRequired,
       );
     } catch (e) {
-      // The signed-URL POST and the download throw raw connectivity errors when
-      // offline — flag them so the screen shows a friendly message.
+      // The signed-URL POST and the download throw raw connectivity errors offline -> flag them.
       state = RingtoneSetError(
         message: e.toString(),
         isNetwork: isNetworkError(e),
@@ -201,10 +182,8 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
     }
   }
 
-  /// Runs the parked set once, on the first resume after the grant screen —
-  /// only if the permission is now held. The lifecycle listener is one-shot:
-  /// whatever the outcome, it is gone before the pipeline starts, so a later
-  /// resume can never replay the request.
+  /// Runs the parked set ONCE, on the first resume after the grant screen, if the permission is held.
+  /// The lifecycle listener is one-shot and gone before the pipeline starts -> no resume can replay it.
   Future<void> _resumeParkedSet() async {
     final parked = _parkedForGrant;
     _dropParkedSet();
@@ -224,8 +203,6 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
 
   void reset() => state = const RingtoneSetIdle();
 }
-
-// ─── Provider ─────────────────────────────────────────────────────────────────
 
 final ringtoneSetProvider =
     NotifierProvider<RingtoneSetNotifier, RingtoneSetState>(

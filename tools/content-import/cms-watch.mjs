@@ -1,17 +1,11 @@
 // Watch both Workers involved in a CMS upload and fish the result for errors.
-//
-// A CMS wallpaper batch upload touches three places, and only two of them log:
-//   1. POST /admin/arul/wallpapers/media/upload-url   → hsr-cms  (presign)
-//   2. PUT  <presigned R2 url>                        → R2 DIRECT, NOT a Worker.
-//      Browser-to-R2. It appears in NO Worker log — check the browser Network tab
-//      if bytes fail to land.
-//   3. POST /admin/arul/wallpapers (batch create)     → hsr-cms  (server-side QC,
-//      one Neon txn, content_version bump) → arul-api /internal/build-catalog
-//
-// Worth knowing before reading a quiet log: a **QC rejection is not logged**. The
-// handler redirects to `…/new?err=Upload rejected by QC — <title>: <message>` and
-// returns 302, so the reason shows in the CMS's red banner, not here. And ONE bad
-// file rejects the WHOLE batch — no rows inserted, every uploaded object deleted.
+// A batch upload touches three places and only two of them log:
+//   1. POST /admin/arul/wallpapers/media/upload-url   -> hsr-cms  (presign)
+//   2. PUT  <presigned R2 url>                        -> browser to R2 DIRECT, in NO Worker log
+//   3. POST /admin/arul/wallpapers (batch create)     -> hsr-cms QC + one Neon txn -> arul-api /internal/build-catalog
+// Bytes failing to land is step 2 -> no Worker ever sees it -> check the browser Network tab.
+// A QC rejection is NOT logged -> the handler 302s to `…/new?err=…` -> the reason shows in the CMS's red banner.
+// ONE bad file rejects the WHOLE batch -> no rows inserted and every uploaded object deleted.
 // A silent tail plus a red banner is a QC rejection, not a missing log.
 //
 // Usage:
@@ -67,12 +61,8 @@ mkdirSync(OUT, { recursive: true });
 console.log(`tailing ${TARGETS.map((t) => t.name).join(" + ")} → ${OUT}`);
 console.log(`Ctrl-C to stop, then: node cms-watch.mjs --report\n`);
 
-/**
- * `wrangler tail --format json` emits PRETTY-PRINTED objects spanning many lines,
- * not JSONL — a line-based reader captures only the opening "{". Split the stream
- * by brace depth instead, ignoring braces inside strings, and re-emit each event
- * as one compact line so the log really is JSONL for --report.
- */
+// `wrangler tail --format json` emits PRETTY-PRINTED objects, not JSONL -> a line reader captures only the opening "{".
+// So split the stream by brace depth, ignoring braces inside strings -> re-emit each event as one compact JSONL line.
 function makeSplitter(onEvent) {
   let buf = "";
   return (chunk) => {
@@ -98,18 +88,17 @@ function makeSplitter(onEvent) {
   };
 }
 
-// A `wrangler tail` session is not durable — Cloudflare expires it (and the CLI
-// exits 0, looking like a clean shutdown). An expired tail during an upload is
-// worse than no tail: the log stays silent and reads as "no errors". So respawn
-// until asked to stop, and say so loudly in the log.
+// A `wrangler tail` session is not durable -> Cloudflare expires it and the CLI exits 0, looking like a clean stop.
+// An expired tail during an upload is worse than no tail -> the log stays silent and reads as "no errors".
+// So respawn until asked to stop, and say so loudly in the log.
 let stopping = false;
 const children = [];
 const logs = new Map();
 function spawnTail(t) {
   if (!logs.has(t.name)) logs.set(t.name, createWriteStream(join(OUT, `${t.name}.jsonl`), { flags: "a" }));
   const log = logs.get(t.name);
-  // One command string, not an argv array: `npx` is a .cmd shim on Windows so a
-  // shell is required, and passing args alongside shell:true is deprecated.
+  // One command string, not an argv array -> `npx` is a .cmd shim on Windows, so a shell is required.
+  // Passing args alongside shell:true is deprecated -> keep them inside the string.
   const p = spawn(`npx wrangler tail ${t.name} --format json`, { cwd: t.cwd, shell: true });
   children.push(p);
   const split = makeSplitter((raw) => {

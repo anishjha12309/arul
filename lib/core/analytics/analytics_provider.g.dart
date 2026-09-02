@@ -8,48 +8,28 @@ part of 'analytics_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
-/// are configured, so call sites never change:
+/// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
-///     [AnalyticsCohort] panel (currently all of them); product analytics.
-///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
-///     autocapture is OFF, so the only event PostHog receives outside this list
-///     is the hand-emitted `Application Installed` in `main.dart`.
-///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
-///     conversion events (login/purchase) for Google Ads — when
-///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
-///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
-///     complete, unsampled record.
-///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
-///     (real App ID + client token).
+///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
+///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
+///   * Meta App Events — ★ conversion events only.
 ///
-/// If more than one is present they're wrapped in a [CompositeAnalyticsService];
-/// a single one is returned directly; none → [NoOpAnalyticsService], so
-/// `flutter test`, CI, and key-less dev builds send nothing.
+/// Several present -> [CompositeAnalyticsService]; one -> itself; none -> [NoOpAnalyticsService].
+/// So `flutter test`, CI and key-less dev builds send nothing.
 
 @ProviderFor(analyticsService)
 final analyticsServiceProvider = AnalyticsServiceProvider._();
 
-/// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
-/// are configured, so call sites never change:
+/// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
-///     [AnalyticsCohort] panel (currently all of them); product analytics.
-///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
-///     autocapture is OFF, so the only event PostHog receives outside this list
-///     is the hand-emitted `Application Installed` in `main.dart`.
-///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
-///     conversion events (login/purchase) for Google Ads — when
-///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
-///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
-///     complete, unsampled record.
-///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
-///     (real App ID + client token).
+///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
+///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
+///   * Meta App Events — ★ conversion events only.
 ///
-/// If more than one is present they're wrapped in a [CompositeAnalyticsService];
-/// a single one is returned directly; none → [NoOpAnalyticsService], so
-/// `flutter test`, CI, and key-less dev builds send nothing.
+/// Several present -> [CompositeAnalyticsService]; one -> itself; none -> [NoOpAnalyticsService].
+/// So `flutter test`, CI and key-less dev builds send nothing.
 
 final class AnalyticsServiceProvider
     extends
@@ -59,25 +39,15 @@ final class AnalyticsServiceProvider
           AnalyticsService
         >
     with $Provider<AnalyticsService> {
-  /// App-wide [AnalyticsService]. Assembles the real backends from whichever keys
-  /// are configured, so call sites never change:
+  /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
   ///
-  ///   * PostHog — [postHogAllowedEvents] only, and only for installs in the
-  ///     [AnalyticsCohort] panel (currently all of them); product analytics.
-  ///     Requires a real `POSTHOG_KEY` AND cohort membership. Its SDK lifecycle
-  ///     autocapture is OFF, so the only event PostHog receives outside this list
-  ///     is the hand-emitted `Application Installed` in `main.dart`.
-  ///   * Google Analytics (GA4/Firebase) — EVERY event at 100% + ★→standard
-  ///     conversion events (login/purchase) for Google Ads — when
-  ///     `AppConfig.firebaseEnabled` (every real build with google-services.json +
-  ///     FIREBASE_ENABLED=true; skipped under `flutter test`). This is the
-  ///     complete, unsampled record.
-  ///   * Meta App Events — ★ conversion events only — when `AppConfig.metaEnabled`
-  ///     (real App ID + client token).
+  ///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
+  ///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+  ///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
+  ///   * Meta App Events — ★ conversion events only.
   ///
-  /// If more than one is present they're wrapped in a [CompositeAnalyticsService];
-  /// a single one is returned directly; none → [NoOpAnalyticsService], so
-  /// `flutter test`, CI, and key-less dev builds send nothing.
+  /// Several present -> [CompositeAnalyticsService]; one -> itself; none -> [NoOpAnalyticsService].
+  /// So `flutter test`, CI and key-less dev builds send nothing.
   AnalyticsServiceProvider._()
     : super(
         from: null,

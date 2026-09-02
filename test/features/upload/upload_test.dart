@@ -1,10 +1,7 @@
-// Tests for the upload feature:
-//   - UploadConstraints: size/type limits and labels (the client+server contract)
-//   - UploadNotifier: the branches reachable without the real R2 PUT
-//     (the actual file PUT uses a top-level http.put that isn't injectable):
-//       * not signed in        → UploadError('Not signed in')
-//       * Worker omits uploadUrl→ UploadError('Upload URL not received')
-//       * Worker rejects (e.g. too_large) → UploadError(server message)
+// UploadConstraints holds the size and type limits -> that is the client+server contract.
+// UploadNotifier is covered only on the branches reachable without the real R2 PUT.
+// The file PUT uses a top-level http.put that is not injectable -> those branches stop before it.
+// Covered: not signed in, a Worker that omits uploadUrl, and a Worker that rejects with a server message.
 
 import 'dart:convert';
 
@@ -29,7 +26,7 @@ void main() {
         10 * 1024 * 1024,
       );
       expect(UploadConstraints.maxBytes('wallpaper', 'live'), 50 * 1024 * 1024);
-      // wallpaperType is ignored for a ringtone — the audio cap either way.
+      // wallpaperType is ignored for a ringtone -> the audio cap applies either way.
       expect(
         UploadConstraints.maxBytes('ringtone', 'static'),
         15 * 1024 * 1024,
@@ -85,9 +82,8 @@ void main() {
     test(
       'unsupported audio resolves to a type the ringtone allow-list rejects',
       () {
-        // ogg/wav/flac are named so the user gets the authored "choose an
-        // MP3/AAC/M4A" toast rather than the generic octet-stream path — but they
-        // must still FAIL the allow-list, not sneak through it.
+        // ogg/wav/flac are NAMED so the user gets the authored "choose an MP3/AAC/M4A" toast, not the octet-stream path.
+        // They must still FAIL the allow-list -> naming them must never let them through.
         final audio = UploadConstraints.allowedTypes('ringtone', 'static');
         for (final name in ['a.ogg', 'a.wav', 'a.flac']) {
           expect(audio.contains(UploadConstraints.mimeFromName(name)), isFalse);
@@ -113,8 +109,7 @@ void main() {
           authServiceProvider.overrideWithValue(_FakeAuth(auth)),
         ],
       );
-      // Subscribe + pump so the auth stream emits and asData is populated
-      // before submit reads ref.read(authStateStreamProvider).asData.
+      // Subscribe and pump so the auth stream emits -> asData must be populated before submit reads it.
       c.listen(authStateStreamProvider, (_, _) {});
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
@@ -203,7 +198,7 @@ void main() {
             sentKey =
                 (jsonDecode(req.body) as Map<String, dynamic>)['key']
                     as String?;
-            // Return no uploadUrl to stop before the (un-mockable) R2 PUT.
+            // Return no uploadUrl -> the flow stops before the un-mockable R2 PUT.
             return http.Response(
               '{}',
               200,
@@ -227,7 +222,7 @@ void main() {
           auth: AuthUserState.authenticated(userId: 'u1'),
           mock: MockClient((req) async {
             sent = jsonDecode(req.body) as Map<String, dynamic>;
-            // No uploadUrl → stop before the (un-mockable) R2 PUT.
+            // No uploadUrl -> the flow stops before the un-mockable R2 PUT.
             return http.Response(
               '{}',
               200,
@@ -248,8 +243,8 @@ void main() {
               category: 'murugan',
             );
 
-        // The presign request is what carries the kind — the Worker sizes the
-        // allow-list off contentType and QCs the object against `kind` at confirm.
+        // The presign request carries the kind -> the Worker sizes the allow-list off contentType.
+        // It then QCs the object against `kind` at confirm time.
         expect(sent?['kind'], 'ringtone');
         expect(sent?['contentType'], 'audio/mpeg');
         expect(sent?['key'], startsWith('user/u1/submissions/'));
@@ -259,7 +254,7 @@ void main() {
   });
 }
 
-// Emits the given auth state once then closes (clean StreamProvider dispose).
+// Emits the given auth state once then closes -> a clean StreamProvider dispose.
 class _FakeAuth implements AuthService {
   _FakeAuth(this._state);
   final AuthUserState _state;

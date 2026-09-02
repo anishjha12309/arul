@@ -24,8 +24,8 @@ abstract class ReferralModel with _$ReferralModel {
     required int rewardDays,
     DateTime? createdAt,
 
-    /// Friend's display label from the Worker (`/me/referrals`): their name, or a
-    /// masked email fallback, or null. Never the raw email (privacy).
+    /// Friend's label from `/me/referrals`: their name, a masked email, or null — never the raw
+    /// email (privacy).
     String? referredName,
   }) = _ReferralModel;
 

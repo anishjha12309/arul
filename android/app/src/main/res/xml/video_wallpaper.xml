@@ -1,14 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Wallpaper service descriptor required by Android for all live wallpapers.
-
-    Referenced from the <service> meta-data in AndroidManifest.xml
-    (android.service.wallpaper). The system reads this to register
-    ArulVideoWallpaperService as a selectable live wallpaper.
-
-    We intentionally omit android:description / android:thumbnail — the
-    system falls back to the app label/icon, and the user only ever reaches
-    this service via our own apply flow (the live-wallpaper chooser opened
-    with EXTRA_LIVE_WALLPAPER_COMPONENT pointing straight at it).
--->
+<!-- Android registers a live wallpaper from this descriptor -> the manifest service points at it -> empty is fine, absent is not. -->
+<!-- Users only arrive via EXTRA_LIVE_WALLPAPER_COMPONENT -> the entry is never browsed -> no description or thumbnail. -->
 <wallpaper xmlns:android="http://schemas.android.com/apk/res/android" />

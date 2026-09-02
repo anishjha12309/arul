@@ -1,24 +1,10 @@
 /**
- * Internal routes — operator / cron only.
+ * Internal routes — operator and cron only. TWO different secrets guard them; check each handler.
  *
- *   POST /internal/build-catalog
- *     Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>
- *     Rebuilds R2 catalog JSON from Neon. Called by:
- *       - The hourly CRON (via the scheduled handler in index.ts)
- *       - Manual operator trigger (curl with the bearer secret)
- *     Supports optional { scope } body to rebuild a single scope.
- *
- *   POST /internal/run-redemptions
- *     Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>
- *     FOR TESTING: immediately run notify+execute for one or all due subscriptions,
- *     bypassing the 24h window when { "force": true } is passed.
- *     Body: { "force"?: boolean, "merchantSubscriptionId"?: string }
- *     - If merchantSubscriptionId is specified, only that subscription is processed.
- *     - If force=true, the next_debit_at check is skipped. DANGER: this worker
- *       runs on PhonePe PRODUCTION credentials, so a forced redemption debits a
- *       real ₹199 from a real customer's account. It is not a dry run — use it
- *       deliberately, against a subscription you own.
- *     This route reuses the same logic as the cron but is callable on demand.
+ * CATALOG_BUILD_SECRET guards the SAFE routes: build-catalog, sweep-submissions, sweep-canonical
+ * OPS_SECRET guards the routes that MOVE MONEY: run-redemptions and refund -> never widen either
+ * /internal/run-redemptions with { force: true } skips the next_debit_at and 24h checks
+ * This Worker runs on PhonePe PRODUCTION credentials -> a forced redemption debits a REAL ₹199 -> not a dry run
  */
 
 import type { Context } from "hono";
@@ -60,9 +46,8 @@ export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise
   }
 
   try {
-    // Operator-triggered builds always rebuild (force=true). The version gate is a
-    // cron-only optimization; forcing here guarantees content changes reflect
-    // immediately and prevents stale catalog entries.
+    // An operator-triggered build ALWAYS rebuilds -> the version gate is a cron-only optimization
+    // Applying it here would skip a rebuild a publish or delete actually needed -> the catalog would stay stale
     const results = await buildCatalog(env, scope, true);
     return c.json({ ok: true, results });
   } catch (err) {
@@ -75,9 +60,8 @@ export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise
 }
 
 // ── POST /internal/sweep-submissions ─────────────────────────────────────────
-//   Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>
-//   Reclaims orphaned user-submission objects from R2 (backstop for the inline
-//   delete-on-approve/reject). Called by the hourly CRON and on-demand for testing.
+//   Auth: Bearer CATALOG_BUILD_SECRET -> a content route, so the CMS's secret is the right one
+//   The backstop for the inline delete-on-approve/reject -> the daily cron runs it, this is the on-demand door
 
 export async function handleSweepSubmissions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -104,12 +88,11 @@ export async function handleSweepSubmissions(c: Context<{ Bindings: Env }>): Pro
 }
 
 // ── POST /internal/sweep-canonical ───────────────────────────────────────────
-//   Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>
-//   Reclaims canonical media objects under BOTH the wallpapers/ and ringtones/
-//   prefixes that no DB row references — full_key, audio_key AND cover_key all
-//   count as references. Catches abandoned CMS uploads + lost delete/replace
-//   cleanups. Called by the hourly CRON (after the rebuild) and on-demand for
-//   testing. This is why the bucket must never be shared with another app.
+//   Auth: Bearer CATALOG_BUILD_SECRET -> a content route, so the CMS's secret is the right one
+//   Reclaims canonical objects no DB row references -> full_key, audio_key AND cover_key all count as references
+//   It catches abandoned CMS uploads and lost delete/replace cleanups -> neither is ever retried inline
+//   The hourly cron runs it only when a scope changed; the daily cron runs it unconditionally
+//   It deletes anything unreferenced under its prefixes -> NEVER share this bucket with another app
 
 export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -140,10 +123,8 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
 export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // Auth: OPS_SECRET — NOT CATALOG_BUILD_SECRET. This route debits real money
-  // (force:true charges every due subscriber ₹199 immediately), and
-  // CATALOG_BUILD_SECRET is handed to the CMS worker just to trigger rebuilds.
-  // One string must never authorize both.
+  // Auth: OPS_SECRET, NOT CATALOG_BUILD_SECRET -> force:true charges every due subscriber ₹199 immediately
+  // CATALOG_BUILD_SECRET is handed to the CMS just to trigger rebuilds -> one string must never authorize both
   if (!authorizeOps(c, env)) {
     return Response.json(
       { error: { code: "unauthorized", message: "Invalid secret" } },
@@ -174,7 +155,7 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
   try {
     const now = new Date();
 
-    // Build the query — force bypasses the 24h and next_debit_at checks
+    // force bypasses BOTH the 24h notify window and the next_debit_at check -> it debits rows that are not due
     let rows;
     if (targetMerchantSubId) {
       rows = await sql`
@@ -211,7 +192,7 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
         // Step 1: Notify (if not already notified)
         let redemptionOrderId = row.redemption_order_id as string | null;
         if (!redemptionOrderId || force) {
-          // Verify ACTIVE before notify
+          // PhonePe requires the mandate be verified ACTIVE before a notify
           const subStatus = await getSubscriptionStatus(env, merchantSubId);
           if (subStatus.state !== "ACTIVE") {
             result.error = `Subscription state is ${subStatus.state}, not ACTIVE`;
@@ -279,21 +260,15 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
 }
 
 // ── POST /internal/refund ────────────────────────────────────────────────────
-//
-//   Auth: Authorization: Bearer <CATALOG_BUILD_SECRET>   (operator/support only)
-//   Body: { "originalMerchantOrderId": string, "amountPaise"?: number }
-//
-//   Refunds a ₹199 monthly debit (disputes / goodwill). NOT used for the ₹2 trial
-//   validation — PENNY_DROP auto-reverses that, so no refund call is ever needed
-//   for the trial. amountPaise defaults to 19900 (full month) if omitted; must be
-//   ≤ the original transaction amount.
-//
-//   The pg.refund.* webhook updates audit logs as the refund settles.
+//   Auth: Bearer OPS_SECRET -> operator and support only -> this route moves real money
+//   Refunds a ₹199 monthly debit for a dispute or goodwill -> amountPaise defaults to the full month
+//   NEVER needed for the ₹2 trial validation -> PENNY_DROP auto-reverses that on its own
+//   The pg.refund.* webhook updates the audit log as the refund settles -> this call only starts it
 
 export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // Auth: OPS_SECRET — moves money, see handleRunRedemptions.
+  // Auth: OPS_SECRET -> this moves money -> see handleRunRedemptions
   if (!authorizeOps(c, env)) {
     return Response.json(
       { error: { code: "unauthorized", message: "Invalid secret" } },
@@ -322,9 +297,8 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
     );
   }
 
-  // Never refund more than one month. A fat-fingered amountPaise used to be
-  // passed straight to PhonePe; the only ceiling was PhonePe's own
-  // "≤ original transaction amount" check.
+  // Never refund more than one month -> a fat-fingered amountPaise reached PhonePe unchecked
+  // The only ceiling was PhonePe's own "<= original transaction amount" -> that is not our business rule
   if (amountPaise > MONTHLY_PRICE_PAISE) {
     return Response.json(
       {
@@ -337,10 +311,9 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
     );
   }
 
-  // The order must actually be OURS. Without this the route would ask PhonePe to
-  // refund any merchant order id the caller could name — including one belonging
-  // to the OTHER app on the same PhonePe merchant account. Setup orders live in
-  // merchant_order_id, redemption orders in redemption_order_id.
+  // The order must actually be OURS -> without this the route refunds any merchant order id a caller can name
+  // That includes one belonging to the OTHER app on the same PhonePe merchant account
+  // Setup orders live in merchant_order_id, redemption orders in redemption_order_id -> check both columns
   const sql = getDb(env);
   let ownerUserId: string;
   try {
@@ -373,7 +346,7 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 
   try {
-    // merchantRefundId must be unique; reuse the order-id builder with a REF tag.
+    // merchantRefundId must be UNIQUE -> reuse the order-id builder with a REF tag rather than inventing a scheme
     const merchantRefundId = buildMerchantOrderId(originalMerchantOrderId, "REF").slice(0, 63);
     const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, amountPaise);
     console.log(
@@ -390,17 +363,14 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 }
 
-/** Monthly price in paise (₹199) — the refund ceiling. Mirrors payments.ts. */
+/** Monthly price in paise, and the refund ceiling -> mirrored in payments.ts -> change both together. */
 const MONTHLY_PRICE_PAISE = 19900;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Authorize an operator route that MOVES MONEY.
- *
- * Requires OPS_SECRET and nothing else. Fails closed when OPS_SECRET is unset
- * so a missing secret can never silently fall back to a weaker check — an
- * unconfigured Worker refuses to debit rather than accepting any bearer.
+ * Authorize an operator route that MOVES MONEY. OPS_SECRET and nothing else.
+ * FAILS CLOSED when OPS_SECRET is unset -> an unconfigured Worker refuses to debit rather than accept any bearer
  */
 function authorizeOps(c: Context<{ Bindings: Env }>, env: Env): boolean {
   const expected = env.OPS_SECRET ?? "";
@@ -413,13 +383,12 @@ function authorizeOps(c: Context<{ Bindings: Env }>, env: Env): boolean {
   return timingSafeEqual(token, expected);
 }
 
-/** Length-independent constant-time string compare (no early exit on mismatch). */
+/** Length-independent constant-time compare -> an early exit on mismatch leaks the secret one byte at a time. */
 function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const ab = enc.encode(a);
   const bb = enc.encode(b);
-  // Fold length into the result instead of returning early, so a wrong-length
-  // guess is not distinguishable by timing from a wrong-value guess.
+  // Fold length INTO the result rather than returning early -> a wrong-length guess must time like a wrong-value one
   let diff = ab.length ^ bb.length;
   const n = Math.max(ab.length, bb.length);
   for (let i = 0; i < n; i++) {

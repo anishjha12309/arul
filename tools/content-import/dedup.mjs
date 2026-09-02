@@ -1,10 +1,9 @@
-// Stage B — compare each normalized item's dHash against existing R2 (refhashes.json)
-// and against other batch items. Flags likely duplicates for review (never auto-drops).
+// Stage B -> compare each normalized item's dHash against refhashes.json and against the other batch items.
+// Flags likely duplicates for REVIEW -> it never auto-drops one.
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout (the in-repo cms/ folder this
-// used to point at was removed on 2026-07-20).
+// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 

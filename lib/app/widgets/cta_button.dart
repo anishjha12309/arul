@@ -3,12 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 
-/// The green primary CTA — spec: "ctaGreen `#1FA75A` — ALL primary CTAs".
+/// The green primary CTA — `ctaGreen` is the fill for ALL primary CTAs.
 ///
-/// Fully-rounded (r999), green fill, darkening to [ArulTokens.ctaGreenHover] on
-/// press, white 15–16px/600 label with an optional leading icon. Feedback is
-/// transform + opacity ONLY (spec motion rule): a slight scale-down and the
-/// colour swap, no shadow, no blur.
+/// Press feedback is transform + opacity ONLY (the spec's motion rule) -> a scale dip and the colour
+/// swap, never a shadow or a blur.
 class CtaButton extends StatefulWidget {
   const CtaButton({
     super.key,
@@ -25,18 +23,16 @@ class CtaButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
 
-  /// The impulse fired as the finger lands. [ArulHapticStyle.firm] suits the
-  /// committing presses (start premium, apply); [ArulHapticStyle.none] where an
-  /// outcome toast already carries the beat.
+  /// The impulse fired as the finger lands -> [ArulHapticStyle.firm] for committing presses (start
+  /// premium, apply), [ArulHapticStyle.none] where an outcome toast already carries the beat.
   final ArulHapticStyle haptic;
 
-  /// One of 50 / 52 / 54 per the design (spec: "primary 50–54px"). Defaults to
-  /// [ArulTokens.ctaHeight52].
+  /// One of 50 / 52 / 54 — the design's primary range.
   final double height;
 
   final IconData? icon;
 
-  /// Spec button label is 15–16px; default 15, pass 16 where the site calls it.
+  /// The spec's label size is 15–16px -> pass 16 only where the call site asks for it.
   final double fontSize;
 
   final bool expand;
@@ -92,7 +88,7 @@ class _CtaButtonState extends State<CtaButton> {
       enabled: _enabled,
       label: widget.label,
       child: GestureDetector(
-        // Press-DOWN, in step with the scale dip and the colour swap.
+        // The haptic rides press-DOWN -> it lands in step with the scale dip and the colour swap.
         onTapDown: _enabled
             ? (_) {
                 ArulHaptics.fire(widget.haptic);
@@ -107,9 +103,8 @@ class _CtaButtonState extends State<CtaButton> {
           duration: const Duration(milliseconds: 90),
           child: Opacity(
             opacity: _enabled ? 1 : 0.5,
-            // A Container with a non-null alignment fills bounded constraints
-            // even with width null, so a compact pill (expand: false) must be
-            // forced back to its intrinsic width.
+            // A Container with a non-null alignment fills bounded constraints even at width null ->
+            // force a compact pill (expand: false) back to its intrinsic width.
             child: wrapIntrinsic(
               Container(
                 width: widget.expand ? double.infinity : null,

@@ -1,15 +1,9 @@
 /**
- * END-TO-END referral test against REAL Neon (the actual lib functions + real
- * SQL, not mocks). Skipped unless E2E_NEON=1 so it never runs in normal CI.
+ * END-TO-END referral test against REAL Neon — the actual lib functions and real SQL, nothing mocked.
+ * Run: E2E_NEON=1 npx vitest run referral.e2e
  *
- * Run:  E2E_NEON=1 npx vitest run referral.e2e
- *
- * Exercises the full backend loop:
- *   captureReferral → isPremium(false) → grantReferralReward → isPremium(true)
- *   → idempotency → the /me/referrals aggregate query.
- *
- * Creates namespaced throwaway users (google_sub 'e2e-ref-*') and deletes them
- * (cascades referrals/subscriptions) in afterAll.
+ * Skipped unless E2E_NEON=1 -> it writes to a live database -> it must never run in normal CI
+ * Its users are namespaced 'e2e-ref-*' and deleted in afterAll -> the cascade takes referrals and subscriptions with them
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -26,7 +20,7 @@ import { isPremium } from "../src/lib/entitlement.js";
 const RUN = process.env.E2E_NEON === "1";
 
 function readDevVar(key: string): string | undefined {
-  // vitest runs with cwd = workers/, where .dev.vars lives.
+  // vitest runs with cwd = workers/, which is where .dev.vars lives -> the DATABASE_URL is read from there
   const devPath = path.join(process.cwd(), ".dev.vars");
   const text = fs.readFileSync(devPath, "utf8");
   const m = text.match(new RegExp(`^${key}=(.*)$`, "m"));
@@ -45,7 +39,7 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
     if (!conn) throw new Error("Neon connection string not found in .dev.vars");
     sql = postgres(conn, { max: 2, fetch_types: false });
 
-    // Fresh slate for this run.
+    // Fresh slate for this run -> a previous aborted run may have left its namespaced rows behind
     await sql`DELETE FROM users WHERE google_sub LIKE 'e2e-ref-%'`;
 
     const [referrer] = await sql<{ id: string }[]>`
@@ -73,7 +67,7 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
   });
 
   it("captureReferral links the friend to the referrer + opens a pending row", async () => {
-    // Simulate the code arriving lowercased/with spaces (Play Install Referrer).
+    // The code arrives lowercased and spaced from the Play Install Referrer -> capture must normalize it
     const linked = await captureReferral(sql, friendId, `  ${referrerCode.toLowerCase()}  `);
     expect(linked).toBe(referrerId);
 
@@ -88,7 +82,7 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
   });
 
   it("captureReferral is a no-op on a second attempt (unique referred_user_id)", async () => {
-    // Re-running must not create a duplicate referrals row.
+    // Re-running must not create a duplicate referrals row -> login can re-capture the same code
     await captureReferral(sql, friendId, referrerCode);
     const rows = await sql`SELECT id FROM referrals WHERE referred_user_id = ${friendId}`;
     expect(rows.length).toBe(1);
@@ -111,14 +105,14 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
       SELECT round(extract(epoch FROM (reward_premium_until - now())) / 86400)::int AS days
       FROM users WHERE id = ${referrerId}
     `;
-    // ~30 days out (allow slop for execution time).
+    // Assert a RANGE around the reward window -> execution time moves the computed expiry by seconds
     expect(u.days).toBeGreaterThanOrEqual(29);
     expect(u.days).toBeLessThanOrEqual(30);
   });
 
   it("referrer IS premium via the reward pool (no subscription row)", async () => {
     expect(await isPremium(sql, referrerId)).toBe(true);
-    // Prove it comes from the reward pool, not a subscription.
+    // Prove the entitlement comes from the REWARD POOL, not a subscription -> that branch is what the client copy missed
     const subs = await sql`SELECT 1 FROM subscriptions WHERE user_id = ${referrerId}`;
     expect(subs.length).toBe(0);
   });
@@ -131,7 +125,7 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
   });
 
   it("the /me/referrals aggregate reflects the reward (total 30, masked name)", async () => {
-    // Mirror the handleMeReferrals query exactly.
+    // Mirror the handleMeReferrals query EXACTLY -> a paraphrase here tests something the route does not run
     const rows = await sql`
       SELECT r.status, r.reward_days, u.display_name AS referred_name, u.email AS referred_email
       FROM referrals r
@@ -143,7 +137,7 @@ describe.skipIf(!RUN)("referral E2E (real Neon)", () => {
     const total = rows.reduce((s, row) => s + Number(row.reward_days), 0);
     expect(total).toBe(30);
     expect(rows[0].status).toBe("rewarded");
-    // Friend has a blank display_name → the API masks the email.
+    // A blank display_name falls through to the MASKED email -> the referrer must never see a full address
     expect((rows[0].referred_name as string | null) ?? "").toBe("");
     expect(rows[0].referred_email).toContain("@example.com");
   });

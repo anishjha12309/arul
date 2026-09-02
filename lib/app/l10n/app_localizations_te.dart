@@ -595,4 +595,63 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'అప్‌లోడ్ త్వరలో వస్తుంది.';
+
+  @override
+  String get premiumNavTitle => 'సబ్‌స్క్రిప్షన్';
+
+  @override
+  String get premiumEyebrow => 'ప్రీమియం';
+
+  @override
+  String get premiumTagline => 'ప్రతిరోజూ దైవ కృప';
+
+  @override
+  String get premiumPerMonthCaption => 'నెలకు';
+
+  @override
+  String get premiumTrialLeadPrefix => 'మీ 1 రోజు ఉచిత ట్రయల్ ప్రారంభించండి ';
+
+  @override
+  String get premiumRefundedBadge => 'వెంటనే వాపసు';
+
+  @override
+  String get premiumFeatureWallpapers => 'అపరిమిత HD వాల్‌పేపర్లు';
+
+  @override
+  String get premiumFeatureRingtones => 'భక్తి రింగ్‌టోన్‌లు';
+
+  @override
+  String get premiumFeatureDaily => 'ప్రతిరోజూ కొత్త కంటెంట్';
+
+  @override
+  String get premiumCtaTrial => 'ఉచిత ట్రయల్ ప్రారంభించు';
+
+  @override
+  String get premiumCtaSubscribe => 'ఇప్పుడే సబ్‌స్క్రైబ్ చేయండి';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 ధృవీకరణ, వెంటనే వాపసు · ఎప్పుడైనా రద్దు చేయవచ్చు';
+
+  @override
+  String get premiumReassurancePaid => 'UPI ఆటోపే భద్రత · ఒకే ట్యాప్‌లో రద్దు';
+
+  @override
+  String get premiumSelectedUpiApp => 'UPI యాప్';
+
+  @override
+  String get upiPickerTitle => 'దీని ద్వారా చెల్లించండి';
+
+  @override
+  String get upiPickerLastUsed => 'చివరిగా వాడినది';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'తర్వాత నెలకు $price ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-లో $name లైవ్ వాల్‌పేపర్ పెట్టారు 🙏';
+  }
 }

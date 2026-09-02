@@ -1,19 +1,10 @@
-// QC a folder of ready-to-upload live wallpapers — no import-plan needed.
-//
-// verify.mjs checks files listed in import-plan.json, i.e. the scripted-import path.
-// This checks a plain FOLDER, for the hand-off path: files the operator uploads
-// through the CMS by hand. It enforces both gates a manual upload must clear:
-//
-//   docs/media-conventions.md  — h264 / yuv420p / 1024x1824 / no audio / faststart
-//                                / <=15MB / <=10s / non-black first frame
-//   the CMS's own server gate  — hsr-cms media-verify.ts verifyLiveWallpaper():
-//                                stsd fourcc in {avc1, avc3}, width%128==0,
-//                                height%32==0, within 1088x1920, <=15MB, <=10s
-//
-// The CMS gate matters more than it looks: it runs per file on batch create and
-// ONE failure rejects the WHOLE batch — no rows inserted and every already-
-// uploaded object deleted. Catching it here costs seconds; catching it there
-// costs the entire upload.
+// QC a folder of ready-to-upload live wallpapers -> no import-plan needed.
+// verify.mjs checks the files listed in import-plan.json -> that is the scripted-import path.
+// This checks a plain FOLDER -> the hand-off path, where the operator uploads through the CMS by hand.
+// Gate 1 is docs/media-conventions.md -> h264 / yuv420p / 1024x1824 / no audio / faststart / <=15MB / <=10s / non-black frame 0.
+// Gate 2 is the CMS's own verifyLiveWallpaper() -> stsd fourcc avc1|avc3, w%128==0, h%32==0, within 1088x1920, <=15MB, <=10s.
+// Gate 2 runs per file on batch create and ONE failure rejects the WHOLE batch -> no rows, every object deleted.
+// Catching it here costs seconds -> catching it there costs the entire upload.
 //
 // Usage: node verify-folder.mjs <dir> [<dir>...]
 import { readdirSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "fs";
@@ -28,9 +19,8 @@ const DIRS = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 if (!DIRS.length) { console.error("usage: verify-folder.mjs <dir> [<dir>...]"); process.exit(2); }
 const tmp = mkdtempSync(join(tmpdir(), "qcf-"));
 
-// Authoring ceiling (owner, 2026-08-21), NOT the server's — the Worker still
-// accepts up to MAX_BYTES_BY_MIME["video/mp4"] = 50 MB so a user submission from
-// a phone is not rejected. This is what OUR pipeline is allowed to produce.
+// The AUTHORING ceiling, NOT the server's -> the Worker still accepts 50 MB so a phone submission is not rejected.
+// This is what OUR pipeline is allowed to produce (owner's call).
 const MAX_BYTES = 15 * 1024 * 1024;
 const CMS_CODECS = ["avc1", "avc3"];          // WALLPAPER_VIDEO.allowedCodecs
 
@@ -38,7 +28,7 @@ const ffprobe = (f) => JSON.parse(execFileSync("ffprobe",
   ["-v", "error", "-show_streams", "-show_format", "-of", "json", f],
   { encoding: "utf8", maxBuffer: 64 << 20 }));
 
-/** moov before mdat — progressive playback; also what verify.mjs asserts. */
+/** moov before mdat -> progressive playback; also what verify.mjs asserts. */
 function faststart(path) {
   const fd = openSync(path, "r"), size = statSync(path).size, buf = Buffer.alloc(16);
   let pos = 0, moov = -1, mdat = -1, ftyp = false;
@@ -90,9 +80,8 @@ for (const dir of DIRS) {
     const luma = await frame0Luma(path);
     if (luma < 16) errs.push(`frame0 near-black (luma=${luma})`);
 
-    // Not failures — upscales look soft on a 1080p phone, so this is worth the
-    // operator's eye rather than a block. Duration IS a failure: normalize.mjs
-    // trims to 10 s, so anything longer skipped the pipeline.
+    // An upscale looks soft on a 1080p phone -> worth the operator's eye, not a block -> these are notes.
+    // Duration IS a failure -> normalize.mjs trims to 10 s, so anything longer skipped the pipeline.
     const dur = Number(meta.format?.duration ?? 0);
     if (dur > 10.5) errs.push(`${dur.toFixed(1)}s > 10s (normalize.mjs trims; this was not)`);
     if (bytes > 10 * 1024 * 1024) notes.push(`${f}: ${(bytes / 1048576).toFixed(1)}MB`);

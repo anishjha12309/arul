@@ -8,16 +8,14 @@ part of 'upi_apps.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Installed mandate-capable UPI apps for the paywall picker. keepAlive: the
-/// installed-apps set changes only when the user installs/uninstalls a UPI app
-/// — re-querying PackageManager per paywall open buys nothing.
+/// Installed mandate-capable UPI apps for the paywall picker.
+/// The set changes only on an install or uninstall -> keepAlive; re-querying per open buys nothing.
 
 @ProviderFor(installedUpiApps)
 final installedUpiAppsProvider = InstalledUpiAppsProvider._();
 
-/// Installed mandate-capable UPI apps for the paywall picker. keepAlive: the
-/// installed-apps set changes only when the user installs/uninstalls a UPI app
-/// — re-querying PackageManager per paywall open buys nothing.
+/// Installed mandate-capable UPI apps for the paywall picker.
+/// The set changes only on an install or uninstall -> keepAlive; re-querying per open buys nothing.
 
 final class InstalledUpiAppsProvider
     extends
@@ -27,9 +25,8 @@ final class InstalledUpiAppsProvider
           FutureOr<List<UpiApp>>
         >
     with $FutureModifier<List<UpiApp>>, $FutureProvider<List<UpiApp>> {
-  /// Installed mandate-capable UPI apps for the paywall picker. keepAlive: the
-  /// installed-apps set changes only when the user installs/uninstalls a UPI app
-  /// — re-querying PackageManager per paywall open buys nothing.
+  /// Installed mandate-capable UPI apps for the paywall picker.
+  /// The set changes only on an install or uninstall -> keepAlive; re-querying per open buys nothing.
   InstalledUpiAppsProvider._()
     : super(
         from: null,

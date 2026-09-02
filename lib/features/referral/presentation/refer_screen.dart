@@ -9,18 +9,12 @@ import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
 
-/// Refer & Earn: one warm silk hero
-/// card with the WhatsApp CTA, a rewards summary card, a numbered "how it
-/// works" card, and a quiet empty state below.
+/// Refer & Earn — a silk hero card with the WhatsApp CTA, a rewards card, a "how it works" card.
 ///
-/// The CTA shares the referral-attributed Play link
-/// (WhatsApp-first, share-sheet fallback) and "Rewards earned" reads
-/// `/me/referrals` via [referralSummaryProvider]. Both degrade to the plain
-/// link / zero state while the summary loads, and in define-less local runs
-/// (no backend) — never in a shipped build.
-///
-/// `featured_seasonal_and_gifts` (the spec's icon) has no Material equivalent
-/// in Flutter's icon set — substituted with [Icons.card_giftcard_rounded].
+/// The CTA shares the referral-attributed Play link, WhatsApp-first with a share-sheet fallback.
+/// "Rewards earned" reads `/me/referrals` via [referralSummaryProvider].
+/// Both degrade to the plain link and the zero state while the summary loads, never in a real build.
+/// The spec's `featured_seasonal_and_gifts` icon has no Material equivalent -> card_giftcard_rounded.
 class ReferScreen extends ConsumerWidget {
   const ReferScreen({super.key});
 
@@ -30,20 +24,15 @@ class ReferScreen extends ConsumerWidget {
     (n: '3', text: l10n.referStep3),
   ];
 
-  /// WhatsApp-first share of the referral-attributed Play link; system sheet
-  /// when WhatsApp is absent or the launch fails (docs/edge-cases.md).
-  ///
-  /// The mechanics moved to [tellAFriend] when Settings and the post-purchase
-  /// screen grew their own entry points — one copy, one attribution rule, one
-  /// analytics shape for all of them.
+  /// WhatsApp-first share of the referral-attributed Play link; the system sheet on any failure.
+  /// The mechanics live in [tellAFriend] -> one copy, one attribution rule, one analytics shape.
   Future<void> _share(BuildContext context, WidgetRef ref) =>
       tellAFriend(context, ref, source: 'refer_screen');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    // Rewards summary; the zero state stands while it loads, and in a
-    // define-less local run that has no backend to read it from.
+    // Rewards summary — the zero state stands while it loads, and in a backend-less local run.
     final rewardDays = AppConfig.hasBackend
         ? (ref.watch(referralSummaryProvider).asData?.value.totalRewardDays ??
               0)

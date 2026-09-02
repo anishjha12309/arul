@@ -8,14 +8,12 @@ part of 'package_info_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Loads the platform [PackageInfo] once and caches it. Used for the real
-/// app version in the support-email diagnostics block.
+/// Loads the platform [PackageInfo] once and caches it — the app version in the support-email block.
 
 @ProviderFor(packageInfo)
 final packageInfoProvider = PackageInfoProvider._();
 
-/// Loads the platform [PackageInfo] once and caches it. Used for the real
-/// app version in the support-email diagnostics block.
+/// Loads the platform [PackageInfo] once and caches it — the app version in the support-email block.
 
 final class PackageInfoProvider
     extends
@@ -25,8 +23,7 @@ final class PackageInfoProvider
           FutureOr<PackageInfo>
         >
     with $FutureModifier<PackageInfo>, $FutureProvider<PackageInfo> {
-  /// Loads the platform [PackageInfo] once and caches it. Used for the real
-  /// app version in the support-email diagnostics block.
+  /// Loads the platform [PackageInfo] once and caches it — the app version in the support-email block.
   PackageInfoProvider._()
     : super(
         from: null,

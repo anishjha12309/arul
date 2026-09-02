@@ -602,4 +602,65 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'பதிவேற்றம் விரைவில் வருகிறது.';
+
+  @override
+  String get premiumNavTitle => 'சந்தா';
+
+  @override
+  String get premiumEyebrow => 'பிரீமியம்';
+
+  @override
+  String get premiumTagline => 'தினமும் தெய்வ அருள்';
+
+  @override
+  String get premiumPerMonthCaption => 'மாதம் ஒன்றுக்கு';
+
+  @override
+  String get premiumTrialLeadPrefix =>
+      'உங்கள் 1 நாள் இலவச சோதனையைத் தொடங்குங்கள் ';
+
+  @override
+  String get premiumRefundedBadge => 'உடனே திரும்பக் கிடைக்கும்';
+
+  @override
+  String get premiumFeatureWallpapers => 'வரம்பற்ற HD வால்பேப்பர்கள்';
+
+  @override
+  String get premiumFeatureRingtones => 'பக்தி ரிங்டோன்கள்';
+
+  @override
+  String get premiumFeatureDaily => 'தினமும் புதிய உள்ளடக்கம்';
+
+  @override
+  String get premiumCtaTrial => 'இலவச சோதனையைத் தொடங்கு';
+
+  @override
+  String get premiumCtaSubscribe => 'இப்போதே சந்தா செய்';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 சரிபார்ப்பு, உடனே திரும்பும் · எப்போதும் ரத்து செய்யலாம்';
+
+  @override
+  String get premiumReassurancePaid =>
+      'UPI ஆட்டோபே பாதுகாப்பு · ஒரே தட்டலில் ரத்து';
+
+  @override
+  String get premiumSelectedUpiApp => 'UPI ஆப்';
+
+  @override
+  String get upiPickerTitle => 'இதன் மூலம் செலுத்து';
+
+  @override
+  String get upiPickerLastUsed => 'கடைசியாக பயன்படுத்தியது';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'பிறகு மாதம் $price ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-ல் $name லைவ் வால்பேப்பர் போட்டார் 🙏';
+  }
 }

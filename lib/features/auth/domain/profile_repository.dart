@@ -10,7 +10,7 @@ abstract interface class ProfileRepository {
   Future<Map<String, dynamic>?> getProfile(String userId);
 
   /// Updates editable profile fields for [userId].
-  /// Only provided (non-null) fields are written.
+  /// A null field -> not written -> pass only what changed.
   Future<void> updateProfile(
     String userId, {
     String? displayName,

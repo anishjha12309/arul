@@ -1,37 +1,17 @@
--- Arul — Neon Postgres schema (popularity counters). Apply after 05_feed_rank.sql.
+-- Arul — lifetime popularity counters; these ARE the feed's sort key.
 --
--- NO LONGER A SORT KEY (2026-08-25). These stay as the LIFETIME totals the CMS
--- shows and older installs read, but the feed now orders on the DECAYED copies in
--- 10_apply_score.sql: a counter that only rises freezes the head of the feed
--- forever, because the row at slot 1 earns applies partly BECAUSE it is at slot 1.
--- Everything below still describes exactly what the number MEANS, which is
--- unchanged — the same increment, on the same route, under the same conditions.
---
--- These two columns were the ONLY ordering input for the **All** chip in each tab
--- (CLAUDE.md §5b): All serves `count DESC, created_at DESC, id ASC`. Category
--- chips ignore them entirely and stay newest-first, so build-catalog's ORDER BY
--- is unchanged — the app applies the popularity sort in feedOrder(), exactly the
--- way it used to apply feed_rank.
---
--- `not null default 0` is load-bearing: at zero data every row ties and the sort
--- collapses to pure newest-first, which IS the intended default behaviour. A
--- nullable column would need NULLS LAST handling in two languages to get there.
+-- The sort key -> build-catalog orders count DESC, created_at DESC, id ASC -> the same clause on every chip.
+-- A counter only rises -> slot 1 earns applies because it IS slot 1 -> the sticky head is an accepted cost.
+-- Pins and a decayed score were both tried and removed -> never add a second sort key beside the counter.
+-- `not null default 0` is load-bearing -> at zero data every row ties -> the sort collapses to newest-first.
 --
 -- What the number MEANS, precisely — it is not "successful applies":
---   · Incremented in /media/signed-url AFTER the live entitlement check passes,
---     so only PREMIUM users move it. A blocked free user never reaches the route
---     (403); that intent shows up as apply_blocked_premium in analytics instead.
---   · It counts the moment a URL is GRANTED, not a confirmed apply. The OS
---     wallpaper chooser can still be cancelled (CLAUDE.md §0) and we deliberately
---     do not round-trip a confirmation — a second endpoint on the app's most
---     latency-sensitive path is not worth the accuracy for a sort key.
---   · Wallpaper SHARES are excluded: the request carries an `action` field and
---     only 'apply' counts. Ringtones have no share, so every ringtone grant is a
---     set. Requests with no `action` (builds shipped before this change) count
---     for neither, so old clients cannot pollute the number.
+--   · Bumped in /media/signed-url after the entitlement check -> only PREMIUM users move it.
+--   · A blocked free user 403s -> the intent lands in analytics as apply_blocked_premium -> never in this counter.
+--   · Counts a URL GRANT, not a confirmed apply -> the OS chooser can still be cancelled -> no confirm round trip.
+--   · Shares are excluded: the request carries `action` and only 'apply' counts -> every ringtone grant is a set.
+--   · A request with no `action` counts for neither -> pre-change builds cannot pollute the number.
 --
--- No index, on purpose. Nothing ever filters or sorts on these in SQL:
--- build-catalog full-scans the published rows regardless, and the ordering
--- happens client-side over the already-downloaded catalog.
+-- No index, on purpose -> build-catalog full-scans every published row -> a btree on the counter buys nothing.
 alter table wallpapers add column if not exists apply_count bigint not null default 0;
 alter table ringtones  add column if not exists set_count   bigint not null default 0;

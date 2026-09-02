@@ -1,37 +1,14 @@
 /**
- * Server-side media QC — the byte-level gate every upload must pass before a
- * DB row can reference it. Reads the object from R2 via the BINDING (ranged
- * GETs of a few KB — Class B ops, no egress) and verifies that the bytes
- * actually are what the signed PUT's Content-Type claims:
+ * Server-side media QC — the byte-level gate every upload passes before a DB row may reference it.
  *
- *   images (wallpaper / ringtone cover)
- *     - magic bytes match the stored content-type (JPEG/PNG/WebP)
- *     - dimensions parse from the header and sit inside the per-role bounds
- *   video (live wallpaper, video/mp4)
- *     - ISO-BMFF ftyp present; moov located by a top-level box walk (handles
- *       moov-at-end, 64-bit largesize boxes)
- *     - exactly the hw-decoder-safe geometry the apps need (WALLPAPER_VIDEO
- *       below — the green-edge rule from the submissions preview, now a hard
- *       server gate), H.264 only, and at least one video track
- *   audio (ringtone)
- *     - MP3 / ADTS-AAC magic, or an MP4 (m4a) container whose tracks include
- *       audio and NO video (a renamed video can't ship as a ringtone)
- *
- * There is no "ringtone cover" role. Ringtone row art is GENERATED ON THE
- * CLIENT — the Arul app draws a procedural kolam medallion from the row's id +
- * category (`ringtone_medallion.dart`: "the catalog ships no cover art for
- * ringtones"), and Pakiza does the same — so no cover object is ever uploaded,
- * stored or served, and there is nothing here to verify. The role and its
- * 512×512 rule were removed 2026-08-10 once the CMS stopped authoring covers;
- * nothing in any of the three repos called them.
- *
- * Every check also enforces the real object size against MAX_BYTES_BY_MIME —
- * the presign endpoints only validate the CLAIMED size, so this is the first
- * place the actual byte count is checked.
- *
- * SHARED MODULE: copied verbatim into both app Workers (src/lib/media-verify.ts
- * in c:\Anish\Arul\workers and c:\Anish\Pakiza\workers) the same way
- * media-constraints.ts is — keep all three copies in sync.
+ * Reads through the R2 BINDING in ranged few-KB GETs -> Class B ops, no egress -> a full download is never needed
+ * A signed PUT enforces only the CLAIMED Content-Type and size -> this is the first place real BYTES are checked
+ *   image  magic bytes match the stored type (JPEG/PNG/WebP) and header dimensions sit inside the per-role bounds
+ *   video  ftyp present, moov found by a top-level box walk (moov-at-end and 64-bit largesize both handled)
+ *   video  exactly the hw-decoder-safe WALLPAPER_VIDEO geometry, H.264 only, at least one video track
+ *   audio  MP3/ADTS-AAC magic, or an m4a whose tracks carry audio and NO video -> a renamed video cannot pass
+ * There is NO ringtone-cover role -> row art is drawn on the client from the row's id -> no cover object exists
+ * SHARED MODULE, copied verbatim into Pakiza's worker as media-constraints.ts is -> keep the copies in sync
  */
 
 import { MAX_BYTES_BY_MIME } from "./media-constraints.js";
@@ -39,12 +16,11 @@ import { MAX_BYTES_BY_MIME } from "./media-constraints.js";
 // ── Per-role structural rules ─────────────────────────────────────────────────
 
 /**
- * Live-wallpaper geometry (verified on-device 2026-07-06, SD695 + Dimensity
- * 900): software-decode fallback pads buffer width to 128px and Flutter's
- * ImageReader samples the padding as a green edge strip (flutter/flutter
- * #174026); >1088/>1920 exceeds budget hw-decoder caps and forces permanent
- * software decode. Canonical encode is 1024×1824. Mirrors the client-side
- * dimCheck in pages/submissions.tsx — this is the enforcing copy.
+ * Live-wallpaper geometry — proven on budget SoCs (SD695, Dimensity 900). Canonical encode is 1024x1824.
+ *
+ * Software decode pads buffer width to 128px -> Flutter's ImageReader samples the padding -> a green edge strip
+ * Anything over 1088x1920 exceeds budget hw-decoder caps -> permanent software decode -> that same green edge
+ * The CMS preview's dimCheck mirrors these numbers -> THIS is the enforcing copy -> the preview can only warn
  */
 export const WALLPAPER_VIDEO = {
   widthMultiple: 128,
@@ -93,9 +69,8 @@ function fail(code: VerifyFail["code"], message: string): VerifyFail {
 }
 
 /**
- * Verify the object at `key` as `role`. For "wallpaper", static vs live is
- * derived from the stored content-type (image/* vs video/mp4) — the same
- * derivation the approve/publish flows use.
+ * Verify the object at `key` as `role`.
+ * Static vs live comes from the STORED content-type, never from a caller flag -> approve/publish derive it the same way
  */
 export async function verifyMediaObject(
   bucket: R2Bucket,
@@ -154,7 +129,7 @@ class R2Reader {
   async read(offset: number, length: number): Promise<Uint8Array | null> {
     if (offset >= this.size) return new Uint8Array(0);
     const len = Math.min(length, this.size - offset);
-    // Serve from the cached head chunk when fully contained (saves Class B ops).
+    // Serve from the cached head chunk when fully contained -> the header is read many times -> saves Class B ops
     if (this.headChunk && offset + len <= this.headChunk.length) {
       return this.headChunk.subarray(offset, offset + len);
     }
@@ -185,7 +160,7 @@ function u32(b: Uint8Array, o: number): number {
   return ((b[o]! << 24) | (b[o + 1]! << 16) | (b[o + 2]! << 8) | b[o + 3]!) >>> 0;
 }
 function u64(b: Uint8Array, o: number): number {
-  // JS number is fine: file sizes here are ≤ 50MB.
+  // Sizes here are <= 50MB -> well under 2^53 -> a JS number loses nothing
   return u32(b, o) * 4294967296 + u32(b, o + 4);
 }
 function fourcc(b: Uint8Array, o: number): string {
@@ -225,8 +200,7 @@ async function parseJpegDims(reader: R2Reader): Promise<Dims | null> {
   if (!buf) return null;
   let o = 2;
   for (let guard = 0; guard < 512; guard++) {
-    // Top up the buffer if the walk approaches its end (SOF can sit deep
-    // behind large APPn/EXIF segments).
+    // SOF can sit deep behind large APPn/EXIF segments -> top the buffer up as the walk nears its end
     if (o + 9 > buf.length && buf.length < Math.min(MAX_JPEG_SCAN, reader.size)) {
       const more = await reader.read(0, Math.min(buf.length * 4, MAX_JPEG_SCAN));
       if (!more || more.length <= buf.length) return null;
@@ -321,9 +295,8 @@ interface Mp4Info {
 }
 
 /**
- * Top-level box walk (ranged 16-byte header reads, so a leading multi-MB mdat
- * is skipped, not fetched) to find ftyp + moov, then a single read of the moov
- * body. Returns null when the file is not a sane MP4.
+ * Walk top-level boxes for ftyp + moov, then read the moov body once. Null when the file is not a sane MP4.
+ * Headers are read 16 bytes at a time -> a leading multi-MB mdat is SKIPPED, never fetched
  */
 async function parseMp4(reader: R2Reader): Promise<Mp4Info | null> {
   let offset = 0;

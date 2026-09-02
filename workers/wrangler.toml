@@ -1,73 +1,39 @@
-# Arul Worker — deploy config. Every provisioned id below is real, and the
-# comment above each one carries the command that created it. A `TODO_` here
-# means the resource does not exist yet — never deploy past one.
+# Arul Worker deploy config -> every id below is real, its creation command sits above it -> keep that pairing
+# A `TODO_` id means the resource does not exist yet -> never deploy past one
 name = "arul-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-25"
 compatibility_flags = ["nodejs_compat"]
-account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as the reference app
+account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as Pakiza
 
-# `workers_dev = true` is LOAD-BEARING, not a leftover: declaring any `routes`
-# entry makes wrangler default workers.dev to FALSE, which silently kills
-# arul-api.twilight-smoke-d495.workers.dev — the host every already-installed
-# build (including the Play testing track) still points at. Keep both serving
-# until a release using the custom domain has fully rolled out.
-#
-# IT MUST STAY UP HERE, above every `[table]` header. It was originally written
-# beside the `[[routes]]` block at the bottom of this file, where the preceding
-# `[triggers]` header captured it as `triggers.workers_dev` — wrangler warned
-# ("Unexpected fields found in triggers field") and deployed with workers.dev
-# OFF, so that hostname served a bare Cloudflare 1042 error page for every
-# installed build while the custom domain looked perfectly healthy. Same TOML
-# capture rule the [observability] note at the bottom of this file describes.
+# Declaring any [[routes]] entry defaults workers.dev to FALSE -> installed builds 1042 -> keep this true
+# arul-api.twilight-smoke-d495.workers.dev is what shipped builds call -> keep both hosts serving
+# Retire it only when a custom-domain-only release has fully rolled out
+# A [table] header above this key swallows it (once became triggers.workers_dev) -> keep it above all tables
 workers_dev = true
 
-# `preview_urls` MUST be stated explicitly, because it FOLLOWS `workers_dev`
-# when omitted — and we need workers_dev ON, so leaving this out silently turns
-# previews back on at every deploy.
-#
-# OFF because a preview URL (`<version-prefix>-arul-api.<subdomain>.workers.dev`)
-# is public and runs THAT VERSION against the LIVE bindings — real Neon, KV, R2
-# and PhonePe credentials. Verified 2026-07-30: a superseded version was still
-# answering on its own hostname, which meant pre-fix `/payments/initiate` logic
-# (the one that could create a double mandate) stayed reachable against
-# production data. Cloudflare also serves no logs for preview URL traffic, so it
-# bypasses the payment audit trail `head_sampling_rate = 1` below exists to keep.
-#
-# Turn back on only for a deliberate staging host, behind Cloudflare Access.
+# Omitted, preview_urls FOLLOWS workers_dev (ON here) -> previews silently return -> state it explicitly
+# Preview URLs are public and run THAT version against LIVE bindings -> superseded code stays reachable -> OFF
+# Preview-URL traffic gets no Cloudflare logs -> bypasses the payment audit trail -> OFF
+# Turn on only for a deliberate staging host behind Cloudflare Access
 preview_urls = false
 
 # ─── Plain-text vars ─────────────────────────────────────────────────────────
 
-# PostHog ingestion host for the server-side first-conversion capture
-# (lib/posthog.ts). US Cloud — must match the app's POSTHOG_HOST dart-define.
-# The project api key is a secret (wrangler secret bulk), not a [vars] entry.
+# Server-side capture host (lib/posthog.ts) -> must match the app's POSTHOG_HOST dart-define -> US Cloud
+# The project api key is a secret (wrangler secret bulk) -> never a [vars] entry
 POSTHOG_HOST = "https://us.i.posthog.com"
 
-# SHA-256 cert fingerprints served in /.well-known/assetlinks.json. Public by
-# definition (anyone can curl the file), so [vars] and not a secret.
-#
-# MUST be the **Play App Signing** certificate — Play Console → Setup → App
-# integrity → App signing key certificate. Play re-signs every AAB with that key,
-# so an upload-key-only value verifies on a local release APK and fails silently
-# on every Play install (links just open the browser, nothing logs). List both,
-# comma-separated, so sideloaded release builds verify too.
-# GROUND TRUTH IS THE DEVICE, NOT THE PLAY CONSOLE PAGE. Verified 2026-08-14 on a
-# real Play install: `adb shell pm get-app-links com.hsrutility.arul` reported
-# `Signatures: [AB:38:0E:...]` and a verification state of 1024
-# (STATE_FIRST_VERIFIER_DEFINED = failed), because the file listed only the two
-# fingerprints read off the console — neither of which is what Play actually
-# signed this app with. Nothing logs that failure; links simply open a browser.
-# If verification ever fails again, read the fingerprint off the device first.
-#
+# Served in /.well-known/assetlinks.json -> anyone can curl it -> [vars], not a secret
+# Play re-signs every AAB -> upload-key-only values fail on every Play install -> list the Play App Signing cert
+# App Link failures log NOTHING (links just open a browser) -> the console page has been wrong -> read the cert off the device
+#   adb shell pm get-app-links com.hsrutility.arul -> `Signatures:` is ground truth, state 1024 = failed
 #   1st = the cert Play ACTUALLY signs with (every Play install)
-#   2nd/3rd = console-reported app-signing + upload certs, kept so other install
-#             paths and locally-built release APKs still verify
+#   2nd/3rd = console-reported app-signing + upload certs, so sideloaded release APKs verify too
 ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:61:7A:50:84:9E:B6:53:75:CA:E2:1A:D2:5F,EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
-# Refresh-token jti denylist · PhonePe webhook idempotency ("txn:<orderId>") ·
-# PhonePe OAuth cache ("phonepe:oauth") · catalog_version:<scope> gate.
+# Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>
 # Create: cd workers && npx wrangler kv namespace create KV  (+ --preview)
 [[kv_namespaces]]
 binding = "KV"
@@ -76,7 +42,7 @@ preview_id = "7314407718774cfe8388a3f365cd7c37"
 
 # ─── Hyperdrive (Neon Postgres) ──────────────────────────────────────────────
 # Create: npx wrangler hyperdrive create arul-hyperdrive --connection-string="postgres://…"
-# Query caching stays OFF (caused ~60s staleness in the reference app).
+# Query caching stays OFF -> cached reads went ~60s stale -> never enable it
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "19dda46cef1c42fc9d3176704feb74dc"
@@ -88,24 +54,18 @@ bucket_name = "south-indian-wallpapers"
 preview_bucket_name = "south-indian-wallpapers"
 
 # ─── Rate limiters ────────────────────────────────────────────────────────────
-# Nothing here was rate limited before, so any authenticated caller could spam
-# the expensive routes: /payments/initiate creates a real PhonePe mandate order
-# per call, /auth/login costs a Google JWKS verify + a Neon write, and
-# /media/signed-url costs a live Neon entitlement read.
-#
-# Counters are PER CLOUDFLARE LOCATION and eventually consistent (Cloudflare
-# documents this API as permissive, not an accounting system) — so these are
-# abuse dampeners, not quotas. Limits sit well above real user behaviour.
-#
-# namespace_id is per-account, so these are distinct from Pakiza's 1001-1003.
-# `period` accepts only 10 or 60.
+# /payments/initiate creates a REAL PhonePe mandate order per call -> spam costs money -> limited
+# /auth/login costs a Google JWKS verify + a Neon write; /media/signed-url a live Neon entitlement read
+# Counters are PER CLOUDFLARE LOCATION and eventually consistent -> abuse dampeners, not quotas
+# Limits sit well above real user behaviour -> a real user must never hit one
+# namespace_id is per-account -> Pakiza's 1001-1003 are its own -> keep these distinct
+# `period` accepts only 10 or 60
 [[ratelimits]]
 name = "RL_PAYMENTS"
 namespace_id = "2001"
   [ratelimits.simple]
   limit = 15       # mandate-setup attempts per user per minute. Generous ON PURPOSE:
-                   # blocking someone who is TRYING TO PAY is the worst false
-                   # positive in the app; 15/min still stops scripted abuse.
+                   # blocking someone TRYING TO PAY is the worst false positive -> 15/min still stops abuse
   period = 60
 
 [[ratelimits]]
@@ -113,7 +73,7 @@ name = "RL_AUTH"
 namespace_id = "2002"
   [ratelimits.simple]
   limit = 20       # login/refresh per IDENTITY per minute (google_sub / user id,
-                   # never IP — see the carrier-NAT note in routes/auth.ts)
+                   # never IP -> carrier NAT shares one IP across users -> see routes/auth.ts)
   period = 60
 
 [[ratelimits]]
@@ -124,57 +84,38 @@ namespace_id = "2003"
   period = 60
 
 # ─── Scheduled triggers ──────────────────────────────────────────────────────
-# Hourly:  build-catalog → on-change sweep-canonical ∥ autopay notify/execute
-# Daily 21:30 UTC (03:00 IST, off-peak): unconditional sweep-canonical +
-#   sweep-submissions — the backstop for anything the hourly on-change sweep
-#   didn't catch.
+# 0 * * * *    -> build-catalog, then sweep-canonical only when the catalog changed
+# */15 * * * * -> autopay notify/execute ONLY; folding it into the hourly run blew the subrequest cap
+# 30 21 * * *  -> (03:00 IST, off-peak) unconditional sweeps + the popularity content_version bump
 [triggers]
 crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]
 
 # ─── Custom domain (API) ─────────────────────────────────────────────────────
-# `custom_domain = true` makes WRANGLER own this hostname: on deploy it creates
-# the Cloudflare custom domain and its DNS record, so there is nothing to click
-# in the dashboard and no zone id to look up (wrangler resolves the zone from the
-# hostname). Costs nothing — a subdomain of a zone you already own is free, and
-# Workers custom domains carry no per-hostname charge.
-#
-# Declaring this block is what flips workers.dev off by default — `workers_dev
-# = true` counteracts it and lives at the TOP of this file, not here. Do not
-# move it down beside this block: a `[table]` header above it swallows it.
+# `custom_domain = true` -> wrangler makes the CF domain + DNS record on deploy -> no dashboard step, no zone id
+# A subdomain of a zone we already own is free -> Workers custom domains carry no per-hostname charge
+# This block is what flips workers.dev off -> `workers_dev = true` at the TOP counteracts it -> leave it there
 
 [[routes]]
 pattern = "arul-api.hsrutility.com"
 custom_domain = true
 
 # ─── Custom domain (deep links) ──────────────────────────────────────────────
-# The host that ships inside every wallpaper share and ad creative:
-# https://arul.hsrutility.com/w/<wallpaper-id>
-#
-# A SECOND hostname rather than a path on arul-api: Android verifies App Links
-# per HOST, and the verified host is what users and advertisers see in a link.
-# "arul-api.hsrutility.com/w/…" reads as an API endpoint in a WhatsApp preview.
-#
-# Everything routes to this same Worker, so /w/:id and assetlinks.json answer on
-# both hostnames and every other path 404s here — that is fine and deliberate;
-# only the app talks to arul-api, only browsers talk to arul.
-#
-# Wrangler owns this hostname the same way it owns arul-api: `custom_domain =
-# true` creates the Cloudflare custom domain and its DNS record on deploy. Free
-# (a subdomain of a zone we already own) and nothing to click in the dashboard.
+# The host inside every share and ad creative: https://arul.hsrutility.com/w/<wallpaper-id>
+# Android verifies App Links per HOST -> users and advertisers read that host -> a second hostname, not a path
+# "arul-api.hsrutility.com/w/…" reads as an API endpoint in a WhatsApp preview -> keep the names apart
+# Both hostnames hit this same Worker -> /w/:id and assetlinks.json answer on both, all else 404s -> deliberate
+# Only the app talks to arul-api, only browsers talk to arul
 [[routes]]
 pattern = "arul.hsrutility.com"
 custom_domain = true
 
-# MEDIA (arul-cdn.hsrutility.com) is NOT here: it attaches to the R2 BUCKET, not
-# to this Worker, so wrangler.toml cannot express it. Use
+# arul-cdn.hsrutility.com attaches to the R2 BUCKET, not to this Worker -> wrangler.toml cannot express it
 #   npx wrangler r2 bucket domain add south-indian-wallpapers \
 #     --domain arul-cdn.hsrutility.com --zone-id <hsrutility.com zone id>
-# or the dashboard (R2 → bucket → Settings → Custom Domains). It is REQUIRED
-# before launch, not cosmetic: Cloudflare rate-limits the r2.dev URL and treats
-# it as development-only, and **caching does not apply to r2.dev at all** — which
-# would break the entire "edge-cached, zero-egress" cost model this app rests on.
-# When it lands, swap R2_CDN_BASE_URL (secret + env/dev.json + env/prod.json).
-# No catalog rebuild needed — catalog rows carry relative keys, not absolute URLs.
+# Cloudflare treats r2.dev as development-only and rate-limits it -> never serve media from it
+# Caching does not apply to r2.dev AT ALL -> the edge-cached zero-egress cost model collapses -> CDN host only
+# The host lives in R2_CDN_BASE_URL (secret + env/dev.json + env/prod.json) -> change it in all three
+# Catalog rows carry relative keys, not absolute URLs -> moving the CDN host needs no rebuild
 
 # ─── Secrets (`npx wrangler secret put <NAME>` — full descriptions: README.md) ──
 # JWT_SECRET  GOOGLE_WEB_CLIENT_ID
@@ -182,24 +123,15 @@ custom_domain = true
 # PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 # PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 # CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
-# OPS_SECRET — operator-only, MOVES REAL MONEY: /internal/run-redemptions
-#   (debits ₹199 from live subscribers) and /internal/refund. Kept separate from
-#   CATALOG_BUILD_SECRET on purpose: that one is handed to the CMS for rebuilds,
-#   and one string must never authorize both "rebuild" and "charge everybody".
-#   Fails closed when unset — a 401 on a money route means the wrong secret, so
-#   never widen the check to accept the catalog one.
-# (No ADMIN_* here — authoring moved to the standalone hsr-cms worker, 2026-07-20.
-#  No CF_ZONE_ID/CF_PURGE_TOKEN either — purge-on-publish went with it.)
+# OPS_SECRET is operator-only and MOVES REAL MONEY: /internal/run-redemptions debits ₹199, /internal/refund
+# CATALOG_BUILD_SECRET is handed to the CMS -> one string must never authorize "rebuild" AND "charge everybody"
+# OPS_SECRET fails closed when unset -> a 401 on a money route means the wrong secret -> never widen it
+# No ADMIN_*, no CF_ZONE_ID/CF_PURGE_TOKEN -> authoring is hsr-cms's and `?v=` replaced purging -> do not re-add
 
 # ─── Observability (Workers Logs) ─────────────────────────────────────────────
-# MUST be declared. Wrangler treats this file as authoritative, so with no
-# [observability] block `wrangler deploy` leaves stored logs OFF — and every
-# failure path here (a webhook that couldn't reach Neon, a refused canonical
-# sweep, a failed rebuild, an autopay debit that errored) is console.error and
-# nothing else. Without retention those are unrecoverable after the fact.
-#
-# KEEP THIS TABLE LAST. In TOML a [table] header captures every bare key that
-# follows it, so placing this above a top-level key silently swallows that key.
+# Wrangler treats this file as authoritative -> no [observability] block means stored logs OFF -> declare it
+# Every failure path here is console.error and nothing else -> without retention they are unrecoverable
+# A [table] header captures every bare key after it -> a top-level key below is swallowed -> KEEP THIS LAST
 [observability]
 enabled = true
 head_sampling_rate = 1

@@ -5,22 +5,13 @@ import 'package:flutter/material.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
-/// Full-screen looping video background.
-/// Uses [splash.mp4] from assets/images/.
+/// Full-screen looping video background, playing `splash.mp4`.
 ///
-/// Shows a solid dark colour until the first frame is rendered so there's
-/// no blank-white flash on first paint.
-///
-/// Backed by the native Media3 ExoPlayer texture pool ([FeedVideoPlayerPool]) —
-/// the same video runtime as the wallpaper feed's live previews, so the app
-/// ships a single video stack (no media_kit / libmpv).
-///
-/// All mounts share ONE native player via [_SharedAuthVideoPlayer]: the auth
-/// flow shows this background on several consecutive screens (splash → sign-in
-/// → post-login splash), and releasing + recreating a MediaCodec per screen
-/// swap is slow on budget SoCs — the background would sit on the solid
-/// fallback while the fresh decoder inits. Handing the live player across
-/// screens means every screen after the first paints video immediately.
+/// Shows a solid dark colour until the first frame renders -> no blank-white flash on first paint.
+/// Backed by the same Media3 texture pool as the feed's live previews -> ONE video stack in the app.
+/// All mounts share ONE native player via [_SharedAuthVideoPlayer].
+/// Recreating a MediaCodec per screen swap is slow on budget SoCs -> the fallback would sit visible.
+/// Handing the live player across screens -> every screen after the first paints video immediately.
 class VideoBackground extends StatefulWidget {
   const VideoBackground({super.key, this.overlayOpacity = 0.42});
 
@@ -34,29 +25,17 @@ class VideoBackground extends StatefulWidget {
 
 class _VideoBackgroundState extends State<VideoBackground>
     with WidgetsBindingObserver {
-  /// The video's own darkest region. If this and the video disagree, the reveal
-  /// pops — which is exactly what a splash must never do. Still painted as the
-  /// base layer so any edge the poster's cover-fit leaves is never bare.
+  /// The video's own darkest region — if the two disagreed the reveal would pop.
+  /// Still painted as the base layer -> any edge the poster's cover-fit leaves is never bare.
   static const _fallbackColor = ArulColors.ink;
 
-  /// FRAME 0 of `splash.mp4`, bundled (512x912 WebP, ~15 KB in the APK).
+  /// FRAME 0 of `splash.mp4`, bundled (512×912 WebP, ~15 KB in the APK).
   ///
-  /// This is the SECOND of the two gaps a cold start used to show. The first —
-  /// a bare launch surface before Flutter runs at all — is the Android splash
-  /// screen's job and is fixed by `androidx.core:core-splashscreen`
-  /// (values/styles.xml). This one is Flutter's: once the OS splash hands off,
-  /// the sign-in screen is up but the Media3 decoder has not produced a frame
-  /// yet, so the background was flat [_fallbackColor] until it did.
-  ///
-  /// Media3's own UI guidance is to hold a placeholder until the first frame is
-  /// rendered and only then reveal the video; `PlayerView` does this with
-  /// artwork behind its shutter. This widget drives a raw [Texture], so it has
-  /// to supply that artwork itself. The feed already ships the same pattern for
-  /// live cards (its `thumbs/` poster stays mounted under the texture) — the
-  /// auth background was the one place it was missing.
-  ///
-  /// It is frame 0 of the very file the texture plays, so the handoff needs no
-  /// crossfade: the two images are identical and the swap is imperceptible.
+  /// After the OS splash hands off, the Media3 decoder has produced no frame yet.
+  /// The background was flat [_fallbackColor] until it did -> this is the shutter that covers it.
+  /// Media3's guidance is to hold a placeholder and reveal the video only on the first frame.
+  /// `PlayerView` does that with its own artwork; a raw [Texture] must supply it itself.
+  /// It is frame 0 of the very file the texture plays -> no crossfade, the swap is imperceptible.
   static const _posterAsset = 'assets/images/splash_poster.webp';
 
   _SharedAuthVideoPlayer? _shared;
@@ -72,17 +51,12 @@ class _VideoBackgroundState extends State<VideoBackground>
 
   /// Stop decoding while the app is off-screen.
   ///
-  /// The ref count is held by the MOUNT, not by visibility, so backgrounding
-  /// the app (the Credential Manager account picker taking the foreground is
-  /// the common case) left `_refs == 1` and the player decoding a looping
-  /// video nobody could see — measured on device 2026-08-29.
-  ///
-  /// This PAUSES and deliberately does NOT tear the decoder down. Teardown
-  /// would free the ~110MB of graphics memory, but a 20-run harness on a 2.7GB
-  /// Android 9 phone showed ZERO low-memory kills of this app, so that win is
-  /// unproven — while the cost is certain: the fallback colour would flash on
-  /// every return from the picker. A Media3 pause keeps the decoder and the
-  /// decoded frame, so resume is instant.
+  /// The ref count is held by the MOUNT, not by visibility -> backgrounding left `_refs == 1`.
+  /// The player then decoded a looping video nobody could see — measured on device.
+  /// This PAUSES and deliberately does NOT tear the decoder down.
+  /// Teardown would free ~110MB of graphics memory, but a 20-run harness showed ZERO LMK kills.
+  /// The cost is certain either way: the fallback colour flashes on every return from the picker.
+  /// A Media3 pause keeps the decoder and the decoded frame -> resume is instant.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -94,9 +68,8 @@ class _VideoBackgroundState extends State<VideoBackground>
         _shared?.resumeFromBackground();
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
-        // `inactive` also fires for transient overlays (the notification
-        // shade, a permission dialog); pausing there would churn playback for
-        // something the user is still looking past. `detached` is teardown.
+        // `inactive` also fires for transient overlays -> pausing churns playback the user sees past.
+        // `detached` is teardown.
         break;
     }
   }
@@ -105,19 +78,15 @@ class _VideoBackgroundState extends State<VideoBackground>
     final shared = _SharedAuthVideoPlayer.acquire();
     _shared = shared;
     final player = await shared.player;
-    // player == null: platform unavailable (e.g. a headless widget test) —
-    // keep the solid fallback colour rather than blocking the screen on the
-    // background video.
+    // A null player means the platform is unavailable -> keep the fallback colour, never block.
     if (player == null || !mounted) return;
     _player = player;
 
     if (player.firstFrame.value) {
-      // Shared-player handoff from the previous screen: the frame is already
-      // decoded — paint it right away, no fallback flash.
+      // Shared-player handoff — the frame is already decoded -> paint at once, no fallback flash.
       setState(() => _ready = true);
     } else {
-      // Reveal once the native first frame has painted, so the solid fallback
-      // covers any decode delay.
+      // Reveal on the native first frame -> the solid fallback covers any decode delay.
       player.firstFrame.addListener(_onFirstFrame);
     }
   }
@@ -132,8 +101,7 @@ class _VideoBackgroundState extends State<VideoBackground>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Detach BEFORE release: once the last mount releases, the shared holder
-    // may dispose the player (and its notifiers) after the grace period.
+    // Detach BEFORE release -> the last release lets the holder dispose the player and its notifiers.
     _player?.firstFrame.removeListener(_onFirstFrame);
     _player = null;
     _shared?.release();
@@ -150,9 +118,8 @@ class _VideoBackgroundState extends State<VideoBackground>
         // Base colour: covers any edge the poster's cover-fit leaves bare.
         const ColoredBox(color: _fallbackColor),
 
-        // The shutter. Stays MOUNTED under the texture rather than being
-        // swapped out — same as the feed's live cards — so a decoder that
-        // drops or restarts can never expose bare colour.
+        // The shutter stays MOUNTED under the texture, like the feed's live cards.
+        // So a decoder that drops or restarts can never expose bare colour.
         const Image(
           image: AssetImage(_posterAsset),
           fit: BoxFit.cover,
@@ -162,9 +129,7 @@ class _VideoBackgroundState extends State<VideoBackground>
           filterQuality: FilterQuality.low,
         ),
 
-        // Video fill — cover-crop to fill the screen. A raw Texture does not
-        // cover-fit itself, so wrap it in a FittedBox(cover) sized to the video's
-        // intrinsic size inside a ClipRect (matching the old BoxFit.cover).
+        // A raw Texture does not cover-fit itself -> a FittedBox(cover) at the intrinsic size, clipped.
         if (_ready && player != null)
           ValueListenableBuilder<Size?>(
             valueListenable: player.videoSize,
@@ -195,24 +160,18 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 }
 
-/// Ref-counted owner of the ONE background player shared by every
-/// [VideoBackground] mount in the auth flow.
+/// Ref-counted owner of the ONE background player every [VideoBackground] mount in auth shares.
 ///
-/// The player + decoder are created on the first [acquire], survive route
-/// swaps between screens (the next screen acquires before — or within the
-/// grace window after — the previous one releases), and are torn down shortly
-/// after the LAST mount releases (i.e. the user actually left the auth flow).
-/// The grace timer exists because a route replacement may dispose the old
-/// screen before the new one inits — without it that ordering would churn the
-/// decoder, which is exactly what this class exists to prevent.
+/// Created on the first [acquire]; torn down shortly after the LAST mount releases.
+/// A route replacement may dispose the old screen BEFORE the new one inits.
+/// That ordering would churn the decoder -> the grace timer bridges it.
 class _SharedAuthVideoPlayer {
   _SharedAuthVideoPlayer._();
 
   static _SharedAuthVideoPlayer? _instance;
 
-  /// How long after the last release the native player is kept alive. Long
-  /// enough to bridge any route-swap dispose→init gap; short enough that the
-  /// decoder is freed promptly once the feed takes over.
+  /// How long after the last release the player is kept alive — enough to bridge a route-swap gap.
+  /// Short enough that the decoder is freed promptly once the feed takes over.
   static const _releaseGrace = Duration(seconds: 2);
 
   int _refs = 0;
@@ -221,8 +180,7 @@ class _SharedAuthVideoPlayer {
   FeedVideoPlayerPool? _pool;
   Future<FeedVideoPlayer?>? _player;
 
-  /// Resolves to the shared player, or null when the platform side is
-  /// unavailable (headless widget tests).
+  /// Resolves to the shared player, or null when the platform side is unavailable.
   Future<FeedVideoPlayer?> get player => _player ?? Future.value();
 
   static _SharedAuthVideoPlayer acquire() {
@@ -231,8 +189,7 @@ class _SharedAuthVideoPlayer {
     holder._teardown = null;
     holder._refs++;
     holder._player ??= holder._create();
-    // Resume if a release-to-zero paused it — the decoder and decoded first
-    // frame survive a Media3 pause, so this is instant.
+    // Resume if a release-to-zero paused it — decoder and frame survive a pause, so it is instant.
     unawaited(
       holder._player!.then((p) {
         if (!holder._dead && holder._refs > 0) p?.play();
@@ -251,9 +208,8 @@ class _SharedAuthVideoPlayer {
         _pool = null;
         return null;
       }
-      // Media3 DefaultDataSource plays a Flutter asset via the asset:/// scheme
-      // (resolved from the APK's flutter_assets/). Looped + muted (the pool
-      // creates muted, no audio focus).
+      // Media3 DefaultDataSource plays a Flutter asset via `asset:///`, out of flutter_assets.
+      // Looped and muted — the pool creates muted, so no audio focus is taken.
       await player.open(
         'asset:///flutter_assets/assets/video/splash.mp4',
         playWhenReady: true,
@@ -266,9 +222,8 @@ class _SharedAuthVideoPlayer {
     }
   }
 
-  /// Stop decode while the app is off-screen. Keeps the decoder and the
-  /// decoded frame, so [resumeFromBackground] is instant. Idempotent — every
-  /// mounted [VideoBackground] calls it.
+  /// Stop decode while off-screen. Keeps the decoder and frame -> [resumeFromBackground] is instant.
+  /// Idempotent — every mounted [VideoBackground] calls it.
   void pauseForBackground() {
     final player = _player;
     if (player == null || _dead) return;
@@ -279,9 +234,8 @@ class _SharedAuthVideoPlayer {
     );
   }
 
-  /// Resume after [pauseForBackground]. The `_refs > 0` guard keeps a
-  /// backgrounded app that is mid-grace-window from resurrecting playback on a
-  /// player that is about to be torn down.
+  /// Resume after [pauseForBackground].
+  /// The `_refs > 0` guard stops a mid-grace resume reviving a player about to be torn down.
   void resumeFromBackground() {
     final player = _player;
     if (player == null || _dead) return;
@@ -302,12 +256,9 @@ class _SharedAuthVideoPlayer {
       _teardownNow();
       return;
     }
-    // Decide once create() settles (it may still be in flight — disposing the
-    // pool mid-create would leak the native player it is about to register):
-    // a real player pauses now (stop burning decode cycles) and lives through
-    // the grace window in case the next auth screen is about to mount; a null
-    // player (headless widget test) tears down immediately — a pending grace
-    // timer would trip the test framework's pending-timer check.
+    // Disposing the pool mid-create leaks the native player it is about to register -> wait for it.
+    // A real player pauses now and lives through the grace window, in case another screen mounts.
+    // A null player tears down at once — a pending grace timer trips the test pending-timer check.
     unawaited(
       player.then((p) {
         if (_dead || _refs > 0) return;

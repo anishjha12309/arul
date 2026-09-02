@@ -1,10 +1,9 @@
 /**
- * Unit tests for the public deep-link routes.
+ * The public deep-link routes — the only ones a BROWSER ever reaches.
  *
- * These two are the only routes a BROWSER ever reaches, and both fail silently
- * in production when they are wrong: a bad assetlinks.json means Android quietly
- * stops verifying the App Link and every shared wallpaper opens a browser tab
- * instead of the app, with nothing logged anywhere. Hence the pinning here.
+ * Both fail SILENTLY in production when wrong -> a bad assetlinks.json stops Android verifying the App Link
+ * Every shared wallpaper then opens a browser tab instead of the app, with nothing logged anywhere
+ * That invisibility is why these are pinned here rather than left to on-device checks
  */
 
 import { describe, it, expect } from "vitest";
@@ -24,8 +23,8 @@ const UPLOAD_SHA =
 const WALLPAPER_ID = "95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f";
 const RINGTONE_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d";
 
-/// `params` is what Hono would have matched off `/w/:id` or `/r/:id`; `query`
-/// is derived from the url, so pass the real link the way a browser would send it.
+/// `params` is what Hono would have matched off `/w/:id`; `query` derives from the URL
+/// So pass the REAL link exactly as a browser would send it -> a synthesised query tests the wrong thing
 function ctxFor(url: string, env = makeEnv()) {
   const match = new URL(url).pathname.match(/^\/[wr]\/(.+)$/);
   const id = match?.[1];
@@ -33,24 +32,21 @@ function ctxFor(url: string, env = makeEnv()) {
 }
 
 /**
- * The store URL the bounce page navigates to. These routes answer 200 with HTML
- * rather than 302 because Google Ads rejects a deep link whose URL redirects
- * ("All URLs must take users directly to the app"), so there is no `Location`
- * header to read — the destination lives in the page's `location.replace()`.
- * Reading it from there is deliberate: it is the line real visitors execute.
+ * The store URL the bounce page navigates to.
+ * These routes answer 200 with HTML, never 302 -> Google Ads rejects a deep link whose URL redirects
+ * So there is no `Location` header to read -> the destination lives in the page's own `location.replace()`
+ * Reading it from there is deliberate -> that is the line real visitors execute
  */
 async function dest(res: Response): Promise<URL> {
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("text/html");
   const html = await res.text();
-  // A redirect the page performs itself is the whole point — assert we never
-  // grow one the validator can see.
+  // A redirect the page performs ITSELF is the whole point -> assert we never grow one a validator can see
   expect(html).not.toMatch(/http-equiv=["']?refresh/i);
   const match = html.match(/location\.replace\((".*?")\)/);
   expect(match, "bounce page has no location.replace()").not.toBeNull();
   const url = new URL(JSON.parse(match![1]) as string);
-  // The visible fallback has to agree with it, or a JS-off visitor lands
-  // somewhere else than everyone paying for the ad.
+  // The visible fallback must AGREE with it -> otherwise a JS-off visitor lands somewhere the campaign did not buy
   expect(html).toContain(`href="${url.toString().replace(/&/g, "&amp;")}"`);
   return url;
 }
@@ -61,7 +57,7 @@ describe("GET /.well-known/assetlinks.json", () => {
     const res = handleAssetLinks(ctxFor("https://arul.hsrutility.com/.well-known/assetlinks.json", env));
 
     expect(res.status).toBe(200);
-    // Android's verifier requires application/json specifically.
+    // Android's verifier requires application/json SPECIFICALLY -> any other type fails verification silently
     expect(res.headers.get("content-type")).toContain("application/json");
 
     const body = (await res.json()) as Array<Record<string, unknown>>;
@@ -77,11 +73,9 @@ describe("GET /.well-known/assetlinks.json", () => {
   });
 
   it("serves EVERY comma-separated fingerprint", async () => {
-    // Play re-signs the AAB with its own key, so the Play App Signing cert and
-    // the upload cert are different certificates. Listing only one of them means
-    // verification passes on a locally-built release APK and fails on every
-    // install that came from Play — the exact bug that looks like "it works on
-    // my phone".
+    // Play re-signs the AAB with its own key -> the App Signing cert and the upload cert are DIFFERENT certificates
+    // Listing only one passes on a locally-built release APK and fails on every install that came from Play
+    // That is the exact bug that looks like "it works on my phone" -> assert both are served
     const env = makeEnv({ ANDROID_CERT_SHA256: `${PLAY_SHA}, ${UPLOAD_SHA}` });
     const res = handleAssetLinks(ctxFor("https://arul.hsrutility.com/.well-known/assetlinks.json", env));
 
@@ -92,8 +86,7 @@ describe("GET /.well-known/assetlinks.json", () => {
   });
 
   it("503s rather than serving an empty statement when unconfigured", async () => {
-    // An empty array and a 503 both fail verification, but only one of them is
-    // visible to a human wondering why their link opens Chrome.
+    // An empty array and a 503 both fail verification -> only the 503 is visible to a human debugging it
     const env = makeEnv({ ANDROID_CERT_SHA256: "" });
     const res = handleAssetLinks(ctxFor("https://arul.hsrutility.com/.well-known/assetlinks.json", env));
 
@@ -101,11 +94,9 @@ describe("GET /.well-known/assetlinks.json", () => {
   });
 });
 
-// The contract that cost a campaign: Google Ads validates the deep-link URL by
-// fetching it, and rejects one that redirects — "Inclusion of redirect URLs: All
-// URLs must take users directly to the app". While these routes 302'd, every
-// `/w/` and `/r/` link was refused in the campaign's deep-link field even though
-// the app was verified and opening them (measured on the live route 2026-08-29).
+// The contract that cost a campaign: Google Ads FETCHES the deep-link URL and rejects one that redirects
+// While these routes 302'd, every /w/ and /r/ link was refused in the campaign's deep-link field
+// The app itself was verified and opening them correctly -> the error pointed at nothing a build could fix
 describe("no HTTP redirect on any deep-link route", () => {
   it.each([
     ["wallpaper", () => handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=ta`))],
@@ -118,14 +109,13 @@ describe("no HTTP redirect on any deep-link route", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("location")).toBeNull();
-    // …and still reach Play, so the fix cannot have been "stop sending anyone".
+    // …and still reach Play -> the fix cannot have been "stop sending anyone anywhere"
     expect((await dest(res)).origin).toBe("https://play.google.com");
   });
 });
 
-// The bounce page is what a link-preview crawler renders now that it no longer
-// follows a 302 through to Play's listing card — WhatsApp is the first hop of
-// every share, so a share with no og:image is a share that lost its picture.
+// A link-preview crawler renders THIS page now that it no longer follows a 302 to Play's listing card
+// WhatsApp is the first hop of every share -> a share with no og:image is a share that lost its picture
 describe("link-preview card", () => {
   it("carries an og:image on a CDN prefix no sweep can reclaim", async () => {
     const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}`));
@@ -134,11 +124,10 @@ describe("link-preview card", () => {
     expect(html).toContain(
       '<meta property="og:image" content="https://arul-cdn.hsrutility.com/brand/arul-icon.png">',
     );
-    // `brand/` is outside CANONICAL_PREFIXES and SUBMISSION_PREFIX, so the bytes
-    // survive without a DB row pointing at them. Moving this under wallpapers/
-    // or ringtones/ would have the sweep delete the icon within 12 hours.
+    // `brand/` sits outside CANONICAL_PREFIXES and SUBMISSION_PREFIX -> the bytes survive with no DB row
+    // Moving it under wallpapers/ or ringtones/ would have the sweep delete the icon within the grace window
     expect(html).not.toMatch(/og:image"[^>]*(wallpapers|ringtones|thumbs|user)\//);
-    // Square art: summary_large_image would letterbox a 512×512 icon.
+    // The art is square -> summary_large_image would letterbox it -> the card type must stay `summary`
     expect(html).toContain('<meta name="twitter:card" content="summary">');
     expect(html).toContain('<meta property="og:title"');
     expect(html).toContain('<meta property="og:url"');
@@ -157,11 +146,9 @@ describe("GET /w/:id", () => {
       "https://play.google.com/store/apps/details",
     );
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
-    // ONE level of encoding: Play stores this string and replays it verbatim to
-    // the app, whose Uri.splitQueryString then reads `ref` and `w` as two keys.
-    // Double-encoding would hand the app a single key literally named
-    // "ref=ABCD1234&w=<uuid>", and both referral attribution and the deferred
-    // deep link would silently stop working.
+    // Exactly ONE level of encoding -> Play stores this string and replays it VERBATIM to the app
+    // The app's Uri.splitQueryString then reads `ref` and `w` as two keys
+    // Double-encoding hands it a single key literally named "ref=…&w=…" -> attribution and the deferred link both die
     expect(location.searchParams.get("referrer")).toBe(
       `ref=ABCD1234&w=${WALLPAPER_ID}`,
     );
@@ -175,8 +162,7 @@ describe("GET /w/:id", () => {
   });
 
   it("still sends a malformed link to the store, without the junk", async () => {
-    // A broken link should cost an install, never 404 at someone who tapped an
-    // ad — and unvalidated text must not reach the referrer payload.
+    // A broken link must never 404 at someone who tapped an ad -> and unvalidated text must not reach the payload
     const res = handleWallpaperLink(
       ctxFor("https://arul.hsrutility.com/w/not-a-uuid?ref=%3Cscript%3E"),
     );
@@ -199,8 +185,7 @@ describe("GET /w/:id", () => {
   });
 
   it("carries the ad's language through to the referrer", async () => {
-    // The language the ad was in is what the app switches to after the
-    // install — it has to survive the Play round-trip like the id does.
+    // The ad's language is what the app switches to after install -> it must survive the Play round-trip like the id
     const res = handleWallpaperLink(
       ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&lang=hi`),
     );
@@ -229,10 +214,9 @@ describe("GET /w/:id", () => {
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=ta`);
   });
 
-  // Ad ops paste `hi-IN` as readily as `hi`, and an installed user's link
-  // honours it (the app's normalizeLang cuts the region tag). Dropping it only
-  // on the not-installed path handed a fresh install the device language while
-  // everyone else got Hindi — measured on the A001, 2026-08-26.
+  // Ad ops paste `hi-IN` as readily as `hi`, and an installed user's link honours it via normalizeLang
+  // Dropping it only on the NOT-installed path handed a fresh install the device language
+  // Everyone else got Hindi from the same URL -> the two paths must strip the region tag identically
   it.each([
     ["hi-IN", "hi"],
     ["ta_IN", "ta"],
@@ -260,7 +244,7 @@ describe("GET /w/:id", () => {
 
 describe("GET /r/:id", () => {
   it("redirects to Play carrying the ringtone id under the r= key", async () => {
-    // `r=`, not `w=`: the app's parser reads the key to know which tab to open.
+    // `r=`, never `w=` -> the app's parser reads the KEY to know which tab to open
     const res = handleRingtoneLink(
       ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?ref=ABCD1234&lang=ta`),
     );
@@ -283,15 +267,13 @@ describe("GET /r/:id", () => {
 
     expect(res.status).toBe(200);
     const location = await dest(res);
-    // Both junk values are dropped; the SECTION the path named survives, so a
-    // typo in the id costs the track and not the tab (2026-08-27).
+    // Both junk values are dropped but the SECTION the path named survives -> a typo in the id costs the track, not the tab
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones");
   });
 });
 
-// A language-only campaign link. The app's manifest filter is a pathPrefix, so
-// `/w/?lang=hi` ALREADY opens an installed app and sets the language — this
-// half exists so the same URL does not 404 at everyone who lacks the app.
+// A language-only campaign link. The app's manifest filter is a pathPrefix -> `/w/?lang=hi` already opens an install
+// This half exists only so the SAME URL does not 404 at everyone who lacks the app
 describe("GET /w/ and /r/ without an id (language-only links)", () => {
   it.each([
     ["https://arul.hsrutility.com/w/?lang=hi", "hi"],
@@ -308,11 +290,10 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
     expect(location.searchParams.get("referrer")).toBe(`lang=${want}`);
   });
 
-  // The path is the ONLY thing that says "ringtones", and it does not survive
-  // the trip through Play — the app sees the referrer and nothing else. Without
-  // `screen=`, `/w/?lang=ta` and `/r/?lang=ta` arrive identical and a fresh
-  // install lands on the feed. `screen=` is a key the app already reads, so this
-  // works on builds that shipped before the id-less path meant anything.
+  // The PATH is the only thing that says "ringtones", and it does not survive the trip through Play
+  // The app sees the referrer and nothing else -> without `screen=` the two URLs arrive identical
+  // A fresh install would then land on the feed -> `screen=` is a key the app already reads
+  // So this works on builds that shipped before the id-less path meant anything
   it("marks the ringtone path so a fresh install lands on that tab", async () => {
     const res = handleRingtoneLink(
       ctxFor("https://arul.hsrutility.com/r/?lang=ta"),
@@ -361,9 +342,8 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
   });
 });
 
-// `ilang` is what an in-app SHARE stamps: the sharer's UI language, honoured
-// only by a fresh install. It has to land in the referrer as plain `lang=`,
-// because that is the key the app's referrer parser reads.
+// `ilang` is what an in-app SHARE stamps -> the sharer's UI language, honoured only by a FRESH install
+// It must land in the referrer as plain `lang=` -> that is the key the app's referrer parser reads
 describe("ilang (share install-language)", () => {
   it("folds ilang into the referrer's lang", async () => {
     const res = handleWallpaperLink(
@@ -398,8 +378,7 @@ describe("ilang (share install-language)", () => {
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
   });
 
-  // An ad creative would never send both, but if one ever does the explicit ad
-  // language is the one the campaign paid for.
+  // An ad creative would never send both -> if one ever does, the explicit ad language is what the campaign paid for
   it("lets an explicit lang beat ilang", async () => {
     const res = handleWallpaperLink(
       ctxFor(
@@ -414,8 +393,8 @@ describe("ilang (share install-language)", () => {
   });
 });
 
-// The bare link domain doubles as "get the app" — but only that host: the API
-// shares this Worker and an API caller must still get a 404, not an app advert.
+// The bare link domain doubles as "get the app" -> but ONLY that host
+// The API host shares this Worker -> an API caller must still get a 404, never an app advert
 describe("GET / on the link domain", () => {
   const rootCtx = (url: string) => makeCtx({ env: makeEnv(), url });
 

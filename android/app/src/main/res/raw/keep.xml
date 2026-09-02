@@ -1,19 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  These resources are referenced ONLY by name (Resources.getIdentifier) from
-  flutter_local_notifications — never as R.* from Kotlin — so R8 / AGP resource
-  shrinking treats them as unused and strips them (and their names) from the
-  release build. That makes the plugin throw `invalid_icon` and silently drop the
-  custom sound, so notifications break in the .aab and work fine in debug. Keep
-  them explicitly so the runtime lookup still resolves.
-
-    - ic_notification        small (status-bar) icon — the gopuram silhouette
-    - ic_notification_large  coloured brand mark shown beside the text
-    - arul_bell              custom chime — ABSENT ON PURPOSE until the audio is
-                             supplied. tools:keep on a resource that does not
-                             exist is a no-op, so this line is safe to carry now
-                             and correct the moment the file lands. Required
-                             format and the two-line switch-on: docs/notifications.md.
--->
+<!-- flutter_local_notifications resolves these by NAME, never as R.* -> R8 shrinking strips them. -->
+<!-- Stripped names throw `invalid_icon` and drop the chime -> only the .aab breaks, so this file is not optional. -->
+<!-- arul_bell is ABSENT until the audio is supplied -> tools:keep on a missing resource is a harmless no-op. -->
+<!-- Chime format and the two-line switch-on: docs/notifications.md. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:keep="@drawable/ic_notification,@drawable/ic_notification_large,@raw/arul_bell" />

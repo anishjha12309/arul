@@ -1,49 +1,17 @@
 /// Puts the REAL Android font stack inside the test binary.
-///
-/// `flutter test` renders every glyph with the FlutterTest face — a flat 1em
-/// box per character, which has nothing to do with the metrics of Roboto or of
-/// the five Noto Indic faces Android ships. Every width this matrix measures
-/// would be fiction without this file, and fiction that fails SAFE-LOOKING:
-/// English measures ~2× too wide (so a real overflow passes) while Tamil and
-/// Telugu conjuncts measure at an advance they never take.
-///
-/// The faces come from the stock Android 16 emulator image
-/// (`test/fixtures/fonts/device-android36/`, fingerprint in LICENSES.md), cut
-/// into per-weight STATIC instances by `tools/l10n/instance_fonts.py`.
-///
-/// ## Two traps, both paid for
-///
-/// **1. Variable fonts load at their DEFAULT instance.** [FontLoader] does not
-/// read `fontWeight:`, and `fontWeight:` drives no `wght` axis, so a raw `-VF`
-/// file measures every weight at 400 — bold text would measure falsely narrow.
-/// Hence the static cuts.
-///
-/// **2. Style matching inside a FontLoader family is INERT.** Registering the
-/// per-weight cuts under one family name is the recipe that gets passed around,
-/// and it silently does not work. Measured here, at 100px, on
-/// `NotoSansDevanagariUI` cuts whose `usWeightClass` is demonstrably 400/500/
-/// 600/700:
-///
-/// ```text
-///   registered ascending   w400=221.10 w500=221.10 w600=221.10 w700=221.10
-///   registered descending  w400=239.40 w500=239.40 w600=239.40 w700=239.40
-///   the 700 cut alone      w400=239.40 …
-/// ```
-///
-/// The FIRST-registered face wins every request; the requested weight is never
-/// consulted. (Noto Tamil happened to resolve correctly under the same
-/// treatment, and Roboto served its 700 cut for a w600 request — the behaviour
-/// is per-font, which is worse than uniformly broken because it looks fine
-/// until you check the one font that isn't.)
-///
-/// So: **one family per (script, weight), single face each**, and the harness
-/// picks the family from the weight itself — see [uiFamilyFor] / [fallbackFor].
-/// Nothing is left to the matcher.
-///
-/// The app asks for `fontFamily: null` almost everywhere (the platform stack —
-/// `lib/app/theme/typography.dart`). A null family in the test binary resolves
-/// to the box face and NOT to anything registered here, so naming the stack is
-/// the harness's job: `real_font_theme.dart`.
+/// `flutter test` renders every glyph with the FlutterTest face -> a flat 1em box per character.
+/// That has nothing to do with Roboto's metrics or the five Noto Indic faces Android ships.
+/// Without this file every width is fiction, and fiction that fails SAFE-LOOKING.
+/// English measures ~2x too wide, so a real overflow passes; Indic conjuncts measure at an advance they never take.
+/// The faces come from a stock Android emulator image, cut into per-weight STATIC instances by tools/l10n/instance_fonts.py.
+/// Trap 1: variable fonts load at their DEFAULT instance -> [FontLoader] ignores `fontWeight:` and it drives no `wght` axis.
+/// So a raw `-VF` file measures every weight at 400 -> bold would measure falsely narrow -> hence the static cuts.
+/// Trap 2: style matching INSIDE a FontLoader family is inert -> the FIRST-registered face wins every request.
+/// The requested weight is never consulted, and the behaviour is PER-FONT -> some fonts look fine, which is worse.
+/// So: one family per (script, weight), a single face each -> the harness picks the family from the weight itself.
+/// See [uiFamilyFor] and [fallbackFor] -> nothing is left to the matcher.
+/// The app asks for `fontFamily: null` almost everywhere -> a null family in the test binary resolves to the box face.
+/// It does NOT resolve to anything registered here -> naming the stack is `real_font_theme.dart`'s job.
 library;
 
 import 'dart:io';
@@ -51,22 +19,18 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The bundled display serif, under its shipping name so the theme's
-/// `fontFamily: 'Marcellus'` slots resolve to the real face. Marcellus is
-/// Latin-only; an Indic headline falls through [fallbackFor] exactly as it
-/// falls through Android's system chain on device.
+/// The bundled display serif, under its shipping name -> the theme's `fontFamily: 'Marcellus'` slots resolve for real.
+/// Marcellus is Latin-only -> an Indic headline falls through [fallbackFor], exactly as it does on device.
 const String kSerifFamily = 'Marcellus';
 
-/// Latin cuts the fixtures provide. Roboto's `wght` axis spans 100–900, so
-/// every weight the theme asks for exists.
+/// Latin cuts the fixtures provide -> Roboto's `wght` axis spans 100-900, so every weight the theme asks for exists.
 const List<int> kLatinWeights = <int>[400, 500, 600, 700, 800];
 
-/// Indic cuts the fixtures provide. The Noto `wght` axes stop at 700 — which is
-/// also where a real phone stops, so a `w800` Indic slot resolving to the 700
-/// cut is fidelity, not an approximation.
+/// Indic cuts the fixtures provide -> the Noto `wght` axes stop at 700, which is also where a real phone stops.
+/// So a `w800` Indic slot resolving to the 700 cut is fidelity, not an approximation.
 const List<int> kIndicWeights = <int>[400, 500, 600, 700];
 
-/// Script tag → the family-name prefix its per-weight families use.
+/// Script tag -> the family-name prefix its per-weight families use.
 const Map<String, String> kIndicPrefixes = <String, String>{
   'ta': 'ArulTa',
   'te': 'ArulTe',
@@ -93,9 +57,8 @@ final _assetFonts = Directory('assets/fonts');
 
 bool _loaded = false;
 
-/// Every family this harness registers. Anything a rendered paragraph resolves
-/// to that is NOT in here would paint box glyphs, so the walk treats it as a
-/// harness failure rather than as a measurement.
+/// Every family this harness registers -> anything a paragraph resolves to that is NOT here would paint box glyphs.
+/// The walk treats that as a harness failure rather than as a measurement.
 final Set<String> kRegisteredFamilies = <String>{
   for (final w in kLatinWeights) '$_latinPrefix$w',
   for (final p in kIndicPrefixes.values)
@@ -118,10 +81,8 @@ int _nearest(List<int> available, int want) {
 String uiFamilyFor(FontWeight weight) =>
     '$_latinPrefix${_nearest(kLatinWeights, weight.value)}';
 
-/// The fallback chain for [weight]: Latin first (it owns digits, punctuation,
-/// ₹ and any Latin word inside a translated string), then one family per Indic
-/// script at the same weight. Scripts share no codepoints, so their order among
-/// themselves is immaterial.
+/// The fallback chain for [weight] -> Latin FIRST, because it owns digits, punctuation and Latin words in a translation.
+/// Then one family per Indic script at the same weight -> scripts share no codepoints, so their order is immaterial.
 List<String> fallbackFor(FontWeight weight) {
   final indic = _nearest(kIndicWeights, weight.value);
   return <String>[
@@ -130,12 +91,9 @@ List<String> fallbackFor(FontWeight weight) {
   ];
 }
 
-/// Registers the real faces. Idempotent, so every file in the matrix can call
-/// it from `setUpAll` without paying for it twice.
-///
-/// Throws — loudly, before a single measurement is taken — if a fixture or an
-/// instanced cut is missing. A silently short font list is the one failure mode
-/// that yields a GREEN matrix built from fictional metrics.
+/// Registers the real faces, idempotently -> every file in the matrix can call it from `setUpAll` without paying twice.
+/// Throws loudly, before a single measurement, if a fixture or an instanced cut is missing.
+/// A silently short font list is the one failure mode that yields a GREEN matrix built from fictional metrics.
 Future<void> loadRealFonts() async {
   if (_loaded) return;
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -169,10 +127,8 @@ Future<void> loadRealFonts() async {
   }
   await _register(kSerifFamily, [marcellus]);
 
-  // The remaining bundled faces under their shipping names. The paywall tree is
-  // English-by-decision and out of the matrix, but the app builds these styles
-  // while constructing the theme, and a missing family there would surface as
-  // noise in the findings rather than as signal.
+  // The remaining bundled faces under their shipping names -> the paywall tree is English-by-decision and out of scope.
+  // But the app builds these styles while constructing the theme -> a missing family would surface as noise, not signal.
   for (final entry in const {
     'Cinzel': ['Cinzel-Medium.ttf'],
     'Lora': [

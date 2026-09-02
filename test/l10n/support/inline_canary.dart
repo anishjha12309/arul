@@ -1,28 +1,18 @@
-/// The canary, again — but inside whatever process is about to measure.
-///
-/// `font_canary_test.dart` proves the real faces load and that each weight
-/// resolves to its own cut. It proves it in ITS OWN isolate: `flutter test`
-/// runs every file in a separate process, so a green canary says nothing about
-/// the process the matrix runs in. If the fonts failed to register only there —
-/// a fixture deleted between runs, a path that resolves differently under a
-/// different working directory, an SDK that changes `FontLoader` — the matrix
-/// would measure box glyphs and pass, because box glyphs are WIDER than real
-/// Latin and the English baseline it subtracts would be inflated to match.
-///
-/// So the matrix asserts it for itself, in `setUpAll`, before the first pump.
-/// Cheap: two `TextPainter` layouts.
+/// The canary again, but inside whatever process is about to measure.
+/// `font_canary_test.dart` proves the faces load in ITS OWN isolate -> `flutter test` runs every file separately.
+/// So a green canary there says nothing about the process the matrix runs in.
+/// Fonts failing to register only here would measure box glyphs and PASS.
+/// Box glyphs are WIDER than real Latin -> the English baseline it subtracts inflates to match.
+/// So the matrix asserts it for itself in `setUpAll`, before the first pump -> two `TextPainter` layouts.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'load_real_fonts.dart';
 
-/// Throws unless the real fonts are live in THIS process.
-///
-/// Two independent claims, the same two the standalone canary makes:
-///   * a Tamil string measures as Noto Tamil rather than as the box face;
-///   * w700 Latin measures wider than w400, which can only be true if the
-///     per-weight static cuts are resolving.
+/// Throws unless the real fonts are live in THIS process -> two independent claims, as the standalone canary makes.
+/// A Tamil string measures as Noto Tamil rather than as the box face.
+/// w700 Latin measures wider than w400 -> that can only be true if the per-weight static cuts are resolving.
 void assertRealFontsLive() {
   const tamil = 'வலபர';
   const latin = 'Wallpapers';
@@ -46,8 +36,8 @@ void assertRealFontsLive() {
     return out;
   }
 
-  // The box face advances exactly 1em per character, so 4 Tamil letters would
-  // measure 400.0 on the nose. Real Noto Tamil is nowhere near that.
+  // The box face advances exactly 1em per character -> 4 Tamil letters would measure 400.0 on the nose.
+  // Real Noto Tamil is nowhere near that.
   final tamilWidth = width(tamil, FontWeight.w400, 'ta');
   if (tamilWidth >= 400 - 0.01) {
     throw StateError(

@@ -1,18 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!--
-  DEBUG-ONLY override of the release network config.
-
-  This file lives in src/debug/res, so Gradle's resource merger substitutes it
-  for the main src/main/res/xml/network_security_config.xml in DEBUG BUILDS
-  ONLY. Release/profile builds are untouched and keep cleartextTrafficPermitted
-  = false exactly as before — nothing here can ship.
-
-  Why it exists: pointing a debug build at a locally running `wrangler dev`
-  (via `adb reverse tcp:8787 tcp:8787`) means talking to http://127.0.0.1:8787,
-  and the release config blocks all cleartext. The exception is scoped to the
-  loopback addresses only, so even in a debug build every real host still
-  requires TLS.
--->
+<!-- Lives in src/debug/res -> Gradle's merger uses it in DEBUG builds only -> nothing here can ship. -->
+<!-- `adb reverse` points debug at http://127.0.0.1:8787 -> the base config blocks cleartext -> hence this override. -->
+<!-- The exception covers loopback addresses only -> every real host still requires TLS, debug builds included. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">

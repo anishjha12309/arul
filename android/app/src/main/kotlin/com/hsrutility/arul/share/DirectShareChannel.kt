@@ -9,34 +9,17 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-/**
- * Fires an ACTION_SEND straight at ONE app (WhatsApp), carrying the wallpaper
- * FILE plus its caption, and reports honestly whether it could.
- *
- * Why this exists rather than a `whatsapp://send?text=` deep link: that scheme
- * carries text and nothing else. The referral screen can use it because a
- * referral IS just text, but a wallpaper share's payload is the media — deep
- * linking it would silently drop the image or clip and send a bare caption,
- * which is worse than not targeting WhatsApp at all. Only a real ACTION_SEND
- * with EXTRA_STREAM keeps the file, and only [Intent.setPackage] makes it skip
- * the chooser.
- *
- * The file is exposed through the app's existing FileProvider
- * (`${applicationId}.fileprovider`, see @xml/wallpaper_file_paths) — the shared
- * copy lives in the cache dir, which that config already covers. A raw `file://`
- * URI would throw FileUriExposedException on anything since Android 7.
- *
- * Contract (the Dart caller is built against exactly this):
- *   channel  com.hsrutility.arul/direct_share
- *   method   shareToPackage {package, filePath, mimeType, text}
- *   success  → true  = the target app opened and owns the share from here
- *              false = target not installed, or it cannot receive this mime
- *                      type; the caller MUST fall back to the system sheet
- *   errors   → "bad_input" (missing args, or the file is gone)
- *
- * `false` is a routine answer, not a failure. Most installs will not have
- * WhatsApp Business; some will have no WhatsApp at all.
- */
+// Fires an ACTION_SEND straight at ONE app, carrying the wallpaper FILE plus its caption.
+// A `whatsapp://send?text=` deep link carries TEXT and nothing else -> it would drop the media and send a bare caption.
+// The referral screen can use that scheme because a referral IS just text -> a wallpaper share's payload is the media.
+// Only ACTION_SEND with EXTRA_STREAM keeps the file, and only [Intent.setPackage] makes it skip the chooser.
+// The file goes through the app's existing FileProvider -> the shared copy lives in the cache dir, which it covers.
+// A raw `file://` URI would throw FileUriExposedException on anything since Android 7.
+// Contract the Dart caller is built against: shareToPackage {package, filePath, mimeType, text}.
+// true means the target app opened and owns the share from here.
+// false means the target is missing or cannot take this mime type -> the caller MUST fall back to the system sheet.
+// "bad_input" means missing args or a file that is gone.
+// `false` is a ROUTINE answer, not a failure -> most installs have no WhatsApp Business and some have no WhatsApp.
 class DirectShareChannel(private val activity: Activity) :
     MethodChannel.MethodCallHandler {
 
@@ -76,8 +59,7 @@ class DirectShareChannel(private val activity: Activity) :
                     file,
                 )
             } catch (e: IllegalArgumentException) {
-                // The path sits outside every <paths> entry. Treat it as "cannot
-                // direct-share" rather than an error: the system sheet still can.
+                // The path sits outside every <paths> entry -> treat it as "cannot direct-share", not as an error.
                 result.success(false)
                 return
             }
@@ -88,15 +70,12 @@ class DirectShareChannel(private val activity: Activity) :
                 type = mimeType
                 putExtra(Intent.EXTRA_STREAM, uri)
                 if (!text.isNullOrEmpty()) putExtra(Intent.EXTRA_TEXT, text)
-                // Without this the target app gets a URI it is not allowed to
-                // read, and the share lands as a broken attachment.
+                // Without this the target app gets a URI it may not read -> the share lands as a broken attachment.
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
-        // Resolve BEFORE starting: an unresolvable targeted intent throws, and we
-        // want a clean false so the caller can fall back. `com.whatsapp` and
-        // `com.whatsapp.w4b` are both declared in <queries>, so package
-        // visibility does not hide them from this check.
+        // Resolve BEFORE starting -> an unresolvable targeted intent throws, and a clean false is what the caller needs.
+        // Both WhatsApp packages are declared in <queries> -> package visibility does not hide them from this check.
         if (intent.resolveActivity(activity.packageManager) == null) {
             result.success(false)
             return

@@ -1,10 +1,7 @@
-// Ringtone import — stage 1 of 2: build the plan.
+// Ringtone import, stage 1 of 2 -> build the plan.
 //
-// The wallpaper pipeline (probe → normalize → dedup → classify → review →
-// buildplan) exists because images arrive unlabelled, mis-sized and duplicated.
-// Ringtone drops are not like that: they arrive already cut to length and
-// already NAMED after the deity, so classification is a lookup and the QC is one
-// ffprobe. Hence one small script instead of eight.
+// Ringtone drops arrive already cut to length and NAMED after the deity -> classification is a lookup, QC is one ffprobe.
+// That is why this is one small script and not the wallpaper pipeline's eight stages.
 //
 //   node ringtones-plan.mjs                        # writes ringtone-import-plan.json
 //   SRC=c:/path/to/drop node ringtones-plan.mjs
@@ -14,8 +11,8 @@
 //   FOLDERED  <SRC>/<FolderName>/*.mp3   → category from FOLDER_CATEGORY
 //   FLAT      <SRC>/*.mp3                → category from CATEGORY_BY_TITLE
 //
-// Writes <ROOT>/ringtone-import-plan.json. No credentials and no writes outside
-// ROOT; the only network call is a READ of the live catalog, for dedup.
+// Writes <ROOT>/ringtone-import-plan.json.
+// No credentials and no writes outside ROOT -> the only network call is a READ of the live catalog, for dedup.
 import { readdirSync, statSync, writeFileSync } from "fs";
 import { execFileSync } from "child_process";
 import { join, basename, extname } from "path";
@@ -27,27 +24,16 @@ const CDN = process.env.CDN || "https://arul-cdn.hsrutility.com";
 const ALLOW_DUPES = process.argv.includes("--allow-duplicate-titles");
 
 // ─── Classification ──────────────────────────────────────────────────────────
-// Category is THE browse axis (CLAUDE.md §5b) and the ringtone medallion picks
-// its motif from it (`_motifByCategory` in ringtone_medallion.dart), so a
-// category outside the supported set would render an arbitrary hashed motif —
-// a real cost, not a cosmetic one.
-//
-// RINGTONE CATEGORIES ARE NOT THE WALLPAPER ONES. There is no `temples`, and
-// there IS an `others` (owner, 2026-08-06). The five deities are
-// perumal · murugan · sivan · amman · ayyappan; anything belonging to none of
-// them — Hanuman, Ganesha, the Madhwa guru Raghavendra — goes to `others`, which
-// has its own neutral medallion motif. Each tab derives its chips from its own
-// catalog, so the two tabs legitimately differ.
-//
-// **Classify from the track's LYRICS, never from its file name.** The first
-// pass of the 2026-08-05 drop was named-based and got five of thirty wrong: a
-// Chottanikkara Devi chant filed as Vishnu, two Hanuman tracks as Ayyappan, two
-// Ganesha tracks as Shiva. Generated drops ship auto-titles ("Divine Call",
-// "Devout Offering") that say nothing about the deity at all.
+// Category is THE browse axis (CLAUDE.md §5b) and the ringtone medallion picks its motif from it.
+// A category outside the supported set renders an arbitrary hashed motif -> a real cost, not a cosmetic one.
+// RINGTONE CATEGORIES ARE NOT THE WALLPAPER ONES -> there is no `temples`, and there IS an `others` (owner's call).
+// The five deities are perumal · murugan · sivan · amman · ayyappan -> anything belonging to none of them is `others`.
+// Each tab derives its chips from its own catalog -> the two tabs legitimately differ.
+// Classify from the track's LYRICS, NEVER from its file name -> a name-based pass got five of thirty wrong.
+// Generated drops ship auto-titles ("Divine Call", "Devout Offering") -> they say nothing about the deity.
 
-/// Drop-folder name → category. Folder names come from whoever assembled the
-/// drive folder, so match loosely (lowercased, punctuation-stripped) and keep
-/// every spelling that has actually arrived rather than renaming the source.
+// Drop-folder name -> category. The names come from whoever assembled the drive folder.
+// So match loosely, lowercased and punctuation-stripped -> keep every spelling that has arrived, never rename the source.
 const FOLDER_CATEGORY = {
   amman: "amman",
   ayyappan: "ayyappan",
@@ -63,7 +49,7 @@ const FOLDER_CATEGORY = {
   shivji: "sivan",
   shivan: "sivan",
   shiva: "sivan",
-  // Anything outside the five deities — Hanuman, Ganesha, gurus/saints.
+  // Anything outside the five deities -> Hanuman, Ganesha, gurus and saints.
   others: "others",
   hanuman: "others",
   anjaneya: "others",
@@ -71,14 +57,10 @@ const FOLDER_CATEGORY = {
   vinayagar: "others",
 };
 
-// The 2026-08-05 drop, classified from the generation prompts' lyrics and
-// verified against published sources. The trailing comment on each line is the
-// SPECIFIC deity, which is what was actually established — the category is a
-// coarser bucket laid over it. This is the record of truth for these titles;
-// do not re-derive it from the file names.
-//
-// Those trailing deities are now a real column, and `backfill-deity.sql` is that
-// same mapping written as SQL — keep the two in step when either changes.
+// Classified from the generation prompts' LYRICS and verified against published sources.
+// The trailing comment on each line is the SPECIFIC deity -> the category is a coarser bucket laid over it.
+// This is the record of truth for these titles -> never re-derive it from the file names.
+// Those deities are now a real column and `backfill-deity.sql` is the same mapping in SQL -> keep the two in step.
 const CATEGORY_BY_TITLE = {
   // perumal — Vishnu and his avatars
   "Anantha Padmanabha": "perumal", // Vishnu, Thiruvananthapuram
@@ -102,13 +84,13 @@ const CATEGORY_BY_TITLE = {
   "Saranam Ayyappa": "ayyappan", // Ayyappan, Sabarimala
 
   // murugan
-  "Divine Call": "murugan", // Shanmukha — confirmed by ear, 2026-08-06
+  "Divine Call": "murugan", // Shanmukha — confirmed by ear
   "Kukke Subrahmanya": "murugan", // Subrahmanya, Kukke
   "Vetrivel Muruga": "murugan", // Murugan, Palani
 
   // sivan
   "Cosmic Tandava": "sivan", // Nataraja, Chidambaram
-  "Devout Offering": "sivan", // Shiva — confirmed by ear, 2026-08-06
+  "Devout Offering": "sivan", // Shiva — confirmed by ear
   "Dharmasthala Manjunatha": "sivan", // Manjunatha (Shiva), Dharmasthala
   "Hara Hara Mahadeva": "sivan", // Mallikarjuna, Srisailam
   "Shiva Shankara": "sivan", // Shiva, Murudeshwara
@@ -121,29 +103,24 @@ const CATEGORY_BY_TITLE = {
   "Vinayaga Arul": "others", // Ganesha — not Shiva
 };
 
-/// Source title → the title actually shipped. Only for a genuine clash with a
-/// row that is ALREADY LIVE under the same name but is a different recording;
-/// two identically-titled rows are indistinguishable in the list, and the live
-/// one cannot be renamed without breaking a user's existing set.
+// Source title -> the title actually shipped. Only for a genuine clash with a row that is ALREADY LIVE.
+// Two identically-titled rows are indistinguishable in the list -> renaming the live one breaks a user's existing set.
 const TITLE_OVERRIDE = {
-  "Muruga Muruga": "Muruga Muruga II", // 2026-08-11 drop; ≠ the 2026-08-06 track of that name
+  "Muruga Muruga": "Muruga Muruga II", // ≠ the earlier live track of that name
 };
 
-// The order categories are drawn from when interleaving. Largest first so the
-// round-robin never leaves a long tail of one category at the end of the feed.
+// Categories are drawn in this order when interleaving -> largest first, so no long tail of one category at the end.
 const INTERLEAVE = ["perumal", "murugan", "sivan", "amman", "others", "ayyappan"];
 
-// docs/media-conventions.md — ringtone audio. Size and codec are HARD (they
-// break playback or the budget); length is the doc's word: "≤40 s recommended",
-// so an over-long track warns and ships rather than blocking a drop.
+// docs/media-conventions.md, ringtone audio -> size and codec are HARD, they break playback or the budget.
+// Length is only "≤40 s recommended" -> an over-long track warns and ships rather than blocking a drop.
 const MAX_BYTES = 15 * 1024 * 1024;
 const SOFT_MAX_SECONDS = 40;
 
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // ─── Read the drop ───────────────────────────────────────────────────────────
-/** "Amme Narayana-30s.mp3" → "Amme Narayana". A cut length is a production
- *  detail; it must never reach a title the user reads. */
+/** "Amme Narayana-30s.mp3" -> "Amme Narayana" — a cut length must never reach a title the user reads. */
 function titleFrom(file) {
   const t = basename(file, extname(file))
     .replace(/-\d+s$/i, "")
@@ -165,10 +142,8 @@ function collectSources() {
       out.push({ path: join(SRC, d, f), title: titleFrom(f), category, folder: d });
     }
   }
-  // The two layouts are ALTERNATIVES, not additive. A newly-foldered drop
-  // normally sits next to the loose files of an earlier drop that already
-  // landed, so reading both would re-offer imported tracks and abort the run on
-  // title collisions. Folders holding audio ⇒ the folders are the drop.
+  // The two layouts are ALTERNATIVES, never additive -> a foldered drop usually sits beside an earlier drop's loose files.
+  // Reading both would re-offer imported tracks and abort on title collisions -> folders holding audio ARE the drop.
   if (out.length) {
     const loose = entries.filter(isAudio).length;
     if (loose) console.log(`FOLDERED layout — ignoring ${loose} loose file(s) at the top of ${SRC}`);
@@ -207,9 +182,8 @@ function probe(path) {
 }
 
 // ─── Live catalog, for dedup + the sort_order high-water mark ────────────────
-// Read from the CDN rather than the DB: no credentials, and the catalog is what
-// users actually see. A drop re-run by mistake is the failure this prevents —
-// nothing else in the pipeline would notice 35 duplicate rows.
+// Read from the CDN, not the DB -> no credentials, and the catalog is what users actually see.
+// A drop re-run by mistake is the failure this prevents -> nothing else in the pipeline would notice duplicate rows.
 async function readLiveCatalog() {
   const items = [];
   for (let page = 1; page <= 50; page++) {
@@ -260,8 +234,7 @@ for (const src of sources) {
   const bytes = statSync(src.path).size;
   const p = probe(src.path);
 
-  // Anything failing is REPORTED, never silently fixed — this repo does no
-  // server-side transcoding and the fix belongs upstream.
+  // Anything failing is REPORTED, never silently fixed -> there is no server-side transcoding; the fix belongs upstream.
   if (p.codec !== "mp3") problems.push(`${src.title}: codec=${p.codec}, expected mp3`);
   if (bytes > MAX_BYTES) problems.push(`${src.title}: ${(bytes / 1048576).toFixed(1)}MB > 15MB`);
   if (!p.durationMs) problems.push(`${src.title}: unreadable duration`);
@@ -275,10 +248,9 @@ for (const src of sources) {
     category: src.category,
     tags: [],
     audio_key: `ringtones/${src.category}/${id}.mp3`,
-    // Row art is a BUNDLED PNG resolved from `deity` (deity_art.dart), so no cover
-    // object is ever uploaded and this stays null. Note this plan writes no `deity`
-    // either — the INSERT has no such column, so a drop lands null and renders the
-    // category's default until a follow-up UPDATE sets it. See RINGTONES.md.
+    // Row art is a BUNDLED asset resolved from `deity` (deity_art.dart) -> no cover object is uploaded -> this stays null.
+    // This plan writes no `deity` either -> the INSERT has no such column -> a drop lands null.
+    // A null deity renders the category's default until a follow-up UPDATE sets it (docs/ringtones.md).
     cover_key: null,
     mime: "audio/mpeg",
     duration_ms: p.durationMs,
@@ -309,11 +281,9 @@ if (collisions.length && !ALLOW_DUPES) {
 }
 
 // ─── Interleave → sort_order ─────────────────────────────────────────────────
-// Ordering is `sort_order ASC, created_at DESC` and a drop is ONE transaction,
-// so without an explicit sort_order every new row ties and the list clumps by
-// insertion order. Continue from the live high-water mark so an existing user's
-// first screen does not re-shuffle, then round-robin the categories inside the
-// new block so it alternates deities instead of running 18 of one.
+// A drop is ONE transaction -> without an explicit sort_order every new row ties and clumps by insertion order.
+// Continue from the live high-water mark -> an existing user's first screen does not re-shuffle.
+// Round-robin the categories inside the new block -> it alternates deities instead of running one for 18 rows.
 const byCategory = new Map(INTERLEAVE.map((c) => [c, []]));
 for (const it of items) byCategory.get(it.category).push(it);
 for (const list of byCategory.values()) list.sort((a, b) => a.title.localeCompare(b.title));

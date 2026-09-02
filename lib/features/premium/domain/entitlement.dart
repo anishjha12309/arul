@@ -2,15 +2,11 @@ import '../../../data/models/subscription_model.dart';
 
 /// The user's premium entitlement, as the SERVER computed it.
 ///
-/// [isPremium] is the Worker's answer (`premium` on `GET /me`), never derived
-/// client-side. The rule lives in exactly ONE place —
-/// workers/src/lib/entitlement.ts (subscription statuses + the debit-grace
-/// window + the referral reward pool) — because the client-side copy that used
-/// to live here drifted: it knew nothing about `reward_premium_until`, so a
-/// referrer holding only earned reward days was bounced to the paywall by the
-/// gate while the Worker's `/media/signed-url` would happily have signed for
-/// them. Do not re-derive premium from [subscription]; it is carried only so
-/// the premium screen can display status and dates.
+/// [isPremium] is the Worker's `premium` on `GET /me`, NEVER derived client-side.
+/// The rule lives in exactly ONE place — workers/src/lib/entitlement.ts (CLAUDE.md §5).
+/// The client copy that used to live here drifted: it knew nothing of `reward_premium_until`.
+/// A reward-only referrer was then paywalled by the gate the Worker would have signed for.
+/// So never re-derive premium from [subscription] — it is carried only to display status and dates.
 class Entitlement {
   const Entitlement({required this.isPremium, this.subscription});
 

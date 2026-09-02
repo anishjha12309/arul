@@ -1,13 +1,8 @@
-// Tests for the catalog provider's cache strategy (stale-while-revalidate):
-//   - cold start (no cache): network drain, page order preserved across the
-//     bounded-concurrency fan-out, cache written after a successful parse.
-//   - warm start: the DISK snapshot is served immediately even while the
-//     network is still in flight, then the fresh catalog replaces it when the
-//     background revalidate lands (and is re-cached).
-//   - refresh(): bypasses the cached fast path (real network), and a refresh
-//     failure keeps the data on screen instead of blanking the feed.
-//   - corrupt cache: self-heals (deleted) and falls through to the network;
-//     the error state exists ONLY when there is no cache AND the network fails.
+// The catalog provider's cache strategy is stale-while-revalidate -> these pin each of its four paths.
+// Cold start with no cache -> network drain, page order preserved across the fan-out, cache written after a good parse.
+// Warm start -> the DISK snapshot is served immediately, then the background revalidate replaces and re-caches it.
+// refresh() bypasses the cached fast path -> a refresh failure keeps the data on screen instead of blanking the feed.
+// A corrupt cache self-heals by deletion -> the error state exists ONLY with no cache AND a failed network.
 
 import 'dart:convert';
 import 'dart:io';
@@ -35,16 +30,14 @@ Map<String, dynamic> _item(
   'full_key': 'wallpapers/$category/$stem.jpg',
   'width': 1080,
   'height': 1920,
-  // Omitted entirely when never applied — the shape of a freshly published row
-  // AND of a catalog cached by a build that predates the column.
+  // Omitted entirely when never applied -> the shape of a fresh row AND of a cache written before the column existed.
   'apply_count': ?applyCount,
-  // Same: omitted when the admin has not pinned the row, which is ~every row.
+  // Same -> omitted when the admin has not pinned the row, which is nearly every row.
   'feed_rank': ?feedRank,
 };
 
-/// Ten ids in catalog order (= newest first, as build-catalog emits them).
-/// Shared by the ordering tests so they can assert that promoting two items
-/// leaves the other eight in exactly the relative order they arrived in.
+/// Ten ids in catalog order, newest first, as build-catalog emits them.
+/// Shared by the ordering tests -> promoting two items must leave the other eight in exactly the order they arrived in.
 const _stems = [
   'sivan0',
   'sivan1',
@@ -72,8 +65,7 @@ http.Response _pageResponse(int page, int totalPages, List<String> stems) =>
       headers: {'content-type': 'application/json'},
     );
 
-/// Poll until [condition] holds (bounded) — lets the background revalidate's
-/// unawaited future run to completion in real-async tests.
+/// Poll until [condition] holds, bounded -> lets the background revalidate's unawaited future finish in a real-async test.
 Future<void> _pumpUntil(bool Function() condition) async {
   for (var i = 0; i < 200 && !condition(); i++) {
     await Future<void>.delayed(const Duration(milliseconds: 5));
@@ -96,8 +88,7 @@ void main() {
   });
 
   tearDown(() async {
-    // The provider's cache write is fire-and-forget; on Windows a still-open
-    // handle makes delete throw. Retry briefly instead of failing the test.
+    // The provider's cache write is fire-and-forget -> on Windows a still-open handle makes delete throw -> retry briefly.
     for (var i = 0; ; i++) {
       try {
         await tempDir.delete(recursive: true);
@@ -118,11 +109,9 @@ void main() {
       }),
     );
     final container = ProviderContainer(
-      // Disable Riverpod 3's automatic exponential-backoff retry: the tests
-      // below assert the SETTLED error state, and a pending retry would keep
-      // `.future` unresolved past the test timeout. Production keeps the
-      // default retry (a cold-start network blip self-heals, mirroring the
-      // reference feed's initial-load backoffs).
+      // Riverpod 3's automatic backoff retry is off here -> the tests below assert the SETTLED error state.
+      // A pending retry would keep `.future` unresolved past the test timeout.
+      // Production keeps the default retry -> a cold-start network blip self-heals.
       retry: (retryCount, error) => null,
       overrides: [
         catalogCacheDirProvider.overrideWith((_) async => tempDir),
@@ -164,7 +153,7 @@ void main() {
         'p3a',
         'p3b',
       ]);
-      // Cache written after the successful parse (best-effort, so poll).
+      // The cache is written after a successful parse, best-effort -> poll for it rather than awaiting.
       await _pumpUntil(() => cacheFile.existsSync());
       final cached =
           jsonDecode(await cacheFile.readAsString()) as Map<String, dynamic>;
@@ -209,7 +198,7 @@ void main() {
       );
       expect(sw.elapsed, lessThan(const Duration(milliseconds: 500)));
 
-      // Open the network gate → the background revalidate replaces the state.
+      // Open the network gate -> the background revalidate replaces the state.
       gateOpen = true;
       await _pumpUntil(() {
         final s = container.read(catalogProvider);
@@ -249,7 +238,7 @@ void main() {
   group('refresh()', () {
     test('bypasses the cached fast path and hits the network', () async {
       await seedCache(['old1']);
-      // Build-time network is down → cache served, revalidate fails silently.
+      // Build-time network is down -> the cache is served and the revalidate fails silently.
       handler = (_) async => throw http.ClientException('Failed host lookup');
       final container = makeContainer();
       expect(
@@ -257,7 +246,7 @@ void main() {
         'old1',
       );
 
-      // Network comes back; an explicit refresh must fetch it.
+      // The network comes back -> an explicit refresh must fetch it.
       serveThreePages();
       requestedPaths.clear();
       await container.read(catalogProvider.notifier).refresh();
@@ -292,9 +281,8 @@ void main() {
   });
 
   group('feed order', () {
-    /// A catalog shaped like a real bulk import: a 30-wallpaper Sivan batch at
-    /// the head (one transaction, so they tie on sort_order AND created_at and
-    /// build-catalog emits them consecutively), then older mixed content.
+    /// A catalog shaped like a real bulk import -> a 30-wallpaper Sivan batch at the head, then older mixed content.
+    /// One transaction means they tie on sort_order AND created_at -> build-catalog emits them consecutively.
     void serveClumpedCatalog() {
       final items = <Map<String, dynamic>>[
         for (var i = 0; i < 30; i++) _item('sivan$i', category: 'sivan'),
@@ -340,11 +328,9 @@ void main() {
       'with nothing applied yet, All IS catalog order — so a bulk import does '
       'own the top, deliberately',
       () async {
-        // The accepted cost of "default behaviour is newest only" (2026-08-13).
-        // This replaced an FNV-1a shuffle whose whole job was to stop exactly
-        // this. Pinned as a REQUIREMENT rather than left untested, because the
-        // next person to see 30 Sivan wallpapers in a row will read it as a bug
-        // and re-introduce a shuffle that fights the popularity order.
+        // The accepted cost of "default behaviour is newest only" -> it replaced an FNV-1a shuffle built to stop this.
+        // Pinned as a REQUIREMENT, not left untested -> the next reader will see 30 Sivan in a row and call it a bug.
+        // A re-introduced shuffle would fight the popularity order.
         serveClumpedCatalog();
 
         final all = await feedFor(makeContainer(), WallpaperCategory.allSlug);
@@ -386,8 +372,7 @@ void main() {
 
     test('applied wallpapers lead All by count, and everything else keeps the '
         'exact relative order it arrived in', () {
-      // Two rows promoted out of the ten, with counts deliberately opposite to
-      // catalog order — only apply_count can produce this head.
+      // Two rows promoted out of ten, with counts deliberately opposite to catalog order -> only apply_count makes this head.
       const applied = {'temple0': 5, 'amman1': 12};
       final all = [
         for (final s in _stems)
@@ -407,9 +392,8 @@ void main() {
 
     test('an apply_count tie falls back to catalog position, so All stays a '
         'TOTAL order', () {
-      // Dart's List.sort is not stable, so ties MUST be broken explicitly or
-      // this order is free to change between runs — which would re-point the
-      // pager and the video pool under a scrolling user on every revalidate.
+      // Dart's List.sort is NOT stable -> ties must be broken explicitly or the order is free to change between runs.
+      // That would re-point the pager and the video pool under a scrolling user on every revalidate.
       final all = [
         Wallpaper.fromJson(_item('sivan0', applyCount: 7)),
         Wallpaper.fromJson(_item('amman0', applyCount: 7)),
@@ -421,8 +405,8 @@ void main() {
         'amman0',
         'murugan0',
       ]);
-      // Reversing the INPUT reverses the tie, because catalog position is the
-      // tiebreaker — the order is a pure function of the list it is given.
+      // Reversing the INPUT reverses the tie, because catalog position is the tiebreaker.
+      // The order is a pure function of the list it is given.
       expect(
         feedOrder(
           WallpaperCategory.allSlug,
@@ -434,8 +418,8 @@ void main() {
 
     test('a category chip runs the SAME comparator as All — a filtered view '
         'can never contradict All', () {
-      // THE invariant of the three-tier order. Every chip sorts; a category is
-      // All restricted to that category, never a differently-ordered list.
+      // THE invariant of the three-tier order -> every chip sorts, and a category is All restricted to that category.
+      // It is never a differently-ordered list.
       final all = [
         for (final s in _stems)
           Wallpaper.fromJson(
@@ -458,9 +442,8 @@ void main() {
     });
 
     test('apply_count survives the disk-cache round-trip', () {
-      // The cache is written as toJson() and read back as fromJson(), so a count
-      // that does not round-trip would silently flatten every warm start back to
-      // newest-first until the background revalidate landed.
+      // The cache round-trips through toJson()/fromJson() -> a count that does not survive flattens every warm start.
+      // It would read newest-first until the background revalidate landed.
       final applied = Wallpaper.fromJson(_item('sivan0', applyCount: 30));
       expect(Wallpaper.fromJson(applied.toJson()).applyCount, 30);
     });
@@ -468,9 +451,8 @@ void main() {
     test(
       'feed_rank survives the disk-cache round-trip, and a null stays null',
       () {
-        // Same trap as the count above: a pin that does not round-trip would drop
-        // every warm start back to the popularity order until the revalidate
-        // landed. And a null must NOT come back as 0 — 0 is a valid top pin.
+        // Same trap as the count above -> a pin that does not round-trip drops every warm start to popularity order.
+        // And a null must NOT come back as 0 -> 0 is a valid top pin.
         final pinned = Wallpaper.fromJson(_item('sivan0', feedRank: 20));
         expect(Wallpaper.fromJson(pinned.toJson()).feedRank, 20);
 
@@ -481,7 +463,7 @@ void main() {
     );
 
     test('a pin leads the feed, ahead of a far more popular row', () {
-      // Tier 1 beats tier 2 — that is the entire point of reviving the column.
+      // Tier 1 beats tier 2 -> that is the entire point of the rank field.
       final all = [
         Wallpaper.fromJson(_item('sivan0', applyCount: 500)),
         Wallpaper.fromJson(_item('amman0', feedRank: 10)),
@@ -512,8 +494,7 @@ void main() {
     test(
       'an unpinned row sinks below every pin — nulls LAST, never rank 0',
       () {
-        // Treating null as 0 would pin the whole uncurated catalog above the
-        // curated head, i.e. exactly invert the feature.
+        // Treating null as 0 would pin the whole uncurated catalog above the curated head -> exactly inverting it.
         final all = [
           Wallpaper.fromJson(_item('unpinned0', applyCount: 99)),
           Wallpaper.fromJson(_item('pinned', feedRank: 400)),
@@ -539,8 +520,7 @@ void main() {
 
     test('a duplicate rank falls back to catalog position, so the order stays '
         'TOTAL', () {
-      // Same non-stable-sort hazard as the apply_count tie above: the CMS writes
-      // sparse ranks, but nothing in the DB stops two rows sharing one.
+      // Same non-stable-sort hazard as the apply_count tie -> the CMS writes sparse ranks, but two rows may share one.
       final all = [
         Wallpaper.fromJson(_item('first', feedRank: 10)),
         Wallpaper.fromJson(_item('second', feedRank: 10)),
@@ -562,9 +542,8 @@ void main() {
     });
 
     test('an unrelated bulk import leaves the pins untouched', () {
-      // The property that retired v1: curation lived in sort_order and every
-      // import reset it. Imported rows arrive with NO rank, so they land behind
-      // the curated head no matter how new they are.
+      // The property that retired v1 -> curation lived in sort_order and every import reset it.
+      // Imported rows arrive with NO rank -> they land behind the curated head however new they are.
       final curated = [
         Wallpaper.fromJson(_item('pin0', category: 'amman', feedRank: 10)),
         Wallpaper.fromJson(_item('pin1', category: 'amman', feedRank: 20)),
@@ -574,7 +553,7 @@ void main() {
           Wallpaper.fromJson(_item('fresh$i', category: 'sivan')),
       ];
 
-      // Imported rows lead the CATALOG (newest first) yet trail the pins.
+      // Imported rows lead the CATALOG, newest first, yet still trail the pins.
       final ordered = feedOrder(WallpaperCategory.allSlug, [
         ...imported,
         ...curated,
@@ -586,8 +565,7 @@ void main() {
 
     test('an uncurated, never-applied category chip is plain catalog order — '
         'newest first', () async {
-      // The live shape today: sorting a chip only changes it once something is
-      // pinned or applied, so the zero state must stay exactly newest-first.
+      // Sorting a chip only changes it once something is pinned or applied -> the zero state must stay newest-first.
       serveClumpedCatalog();
 
       final sivan = await feedFor(makeContainer(), 'sivan');

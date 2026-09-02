@@ -1,7 +1,6 @@
-// The language half of a deep link. Pins: a `lang` parked before the first
-// frame lands on the live locale, one that lands later does too, it goes
-// through the same persisted `arul_locale` Settings writes, the deferred
-// pending copy is cleared, and an unsupported code changes nothing.
+// A `lang` parked before the first frame reaches the live locale, and so does one that lands later.
+// It goes through the same persisted `arul_locale` that Settings writes -> the deferred pending copy is cleared.
+// An unsupported code changes nothing.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,7 +69,7 @@ void main() {
   testWidgets('the link ALWAYS wins, even over an explicit Settings choice', (
     tester,
   ) async {
-    // Owner's call, 2026-08-26: an ad in a language switches the app to it.
+    // Owner's call -> an ad in a language switches the app to it.
     final h = await pump(tester, prefs: {'arul_locale': 'ml'});
     await tester.pump();
     expect(h.container.read(localeProvider), const Locale('ml'));

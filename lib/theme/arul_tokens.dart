@@ -2,36 +2,24 @@ import 'package:flutter/material.dart';
 
 /// ARUL — the single normative design-token source for the UI.
 ///
-/// Screen code reads tokens from here; it never spells a hex, radius, duration
-/// or letter-spacing literal of its own.
-///
-/// Naming follows the design vocabulary (maroon / gold / ivory / darkSurface /
-/// ctaGreen / darkTextSecondary / feedTopScrim / silkDark …) so a screen author
-/// can consume a token by the same word the design uses.
-///
-/// Where the design gives a RANGE (`.04–.05`, `16–20px`, `50–54px`) both
-/// endpoints are exposed when they map to two genuinely different usage sites
-/// (e.g. [cardBgDark04] vs [cardBgDark05]); where the range is one decision the
-/// chosen value is noted in the token's doc comment.
-///
-/// Letter-spacing: the design quotes tracking in `em`; Flutter's `letterSpacing`
-/// is logical pixels, so every value below is pre-multiplied (`em × fontSize`)
-/// and the arithmetic is shown in the comment.
+/// Screen code reads tokens from here — it never spells a hex, radius, duration or tracking literal.
+/// Naming follows the DESIGN vocabulary -> an author consumes a token by the word the design uses.
+/// A design RANGE exposes both endpoints only when they map to two genuinely different usage sites.
+/// Where a range is one decision, the chosen value is noted in the token's own doc.
+/// The design quotes tracking in `em` and Flutter takes logical pixels.
+/// So every value below is pre-multiplied (`em × fontSize`), with the arithmetic in the comment.
 abstract final class ArulTokens {
   ArulTokens._();
 
-  // ───────────────────────────── Brand colors ─────────────────────────────
-  // Spec > Colors.
+  // Brand colors — Spec > Colors.
 
-  /// maroon (primary) — active states, light-theme icons, muted destructive
-  /// buttons, confirm CTA. `#7A1E33`.
+  /// maroon (primary) `#7A1E33` — active states, light icons, muted destructive buttons, confirm CTA.
   static const Color maroon = Color(0xFF7A1E33);
 
   /// maroon hover / pressed confirm CTA. `#8D2740`.
   static const Color maroonHover = Color(0xFF8D2740);
 
-  /// gold (accent) — highlights, selection borders, premium badging, icons on
-  /// dark. `#D4A017`.
+  /// gold (accent) `#D4A017` — highlights, selection borders, premium badging, icons on dark.
   static const Color gold = Color(0xFFD4A017);
 
   /// ivory — light background AND dark-theme primary text. `#FAF5EC`.
@@ -52,8 +40,7 @@ abstract final class ArulTokens {
   /// ctaGreen hover / pressed. `#1C9450`.
   static const Color ctaGreenHover = Color(0xFF1C9450);
 
-  // ───────────────────────── Dark theme text ladder ───────────────────────
-  // Spec > Colors > Dark theme.
+  // Dark theme text ladder — Spec > Colors > Dark theme.
 
   /// Dark theme primary text. `#FAF5EC` (== [ivory]).
   static const Color darkText = ivory;
@@ -70,8 +57,7 @@ abstract final class ArulTokens {
   /// Dark theme faint. `#6E5C4C`.
   static const Color darkFaint = Color(0xFF6E5C4C);
 
-  // ───────────────────── Dark theme surfaces & borders ────────────────────
-  // Spec > Colors > Dark theme. `card bg rgba(250,245,236,.04–.05)` etc.
+  // Dark theme surfaces and borders — Spec > Colors > Dark theme.
 
   /// Card fill, low end. `rgba(250,245,236,.04)`.
   static const Color cardBgDark04 = Color.fromRGBO(250, 245, 236, 0.04);
@@ -79,10 +65,8 @@ abstract final class ArulTokens {
   /// Card fill, high end. `rgba(250,245,236,.05)`.
   static const Color cardBgDark05 = Color.fromRGBO(250, 245, 236, 0.05);
 
-  /// Card border, quietest. `rgba(250,245,236,.08)` — the floating dock's rim,
-  /// which only needs to describe an edge because the shadow does the lifting.
-  /// Same value as [rowDividerDark]; kept separate because one is a border role
-  /// and the other a divider role, and they move independently.
+  /// Card border, quietest. `rgba(250,245,236,.08)` — the dock's rim, where the shadow lifts.
+  /// Same value as [rowDividerDark], kept SEPARATE: border and divider are two roles that move apart.
   static const Color cardBorderDark08 = Color.fromRGBO(250, 245, 236, 0.08);
 
   /// Card border, low end. `rgba(250,245,236,.09)`.
@@ -100,34 +84,26 @@ abstract final class ArulTokens {
   /// Gold-tint fill, high end. `rgba(212,160,23,.14)`.
   static const Color goldTintFill14 = Color.fromRGBO(212, 160, 23, 0.14);
 
-  /// Card fill, ringtone-row idle. `rgba(250,245,236,.045)` — the ringtones
-  /// handoff's row/chip fill, a hair below [cardBgDark04]/[cardBgDark05].
+  /// Card fill, ringtone-row idle `rgba(250,245,236,.045)` — a hair below [cardBgDark04].
   static const Color cardBgDark045 = Color.fromRGBO(250, 245, 236, 0.045);
 
-  /// Card border, ringtone chip row. `rgba(250,245,236,.12)` — sits between
-  /// [cardBorderDark09] and [cardBorderDark14].
+  /// Card border, ringtone chip row `rgba(250,245,236,.12)` — between the 09 and 14 steps.
   static const Color cardBorderDark12 = Color.fromRGBO(250, 245, 236, 0.12);
 
-  /// Outlined-control border on dark. `rgba(250,245,236,.22)` — the feed chip's
-  /// inactive rim and the ringtone row's play button / "Set" pill.
+  /// Outlined-control border on dark `rgba(250,245,236,.22)` — inactive chips, play button, Set pill.
   static const Color ivoryBorder22 = Color.fromRGBO(250, 245, 236, 0.22);
 
-  /// Outlined-control label on dark. `rgba(250,245,236,.86)` — the ringtone
-  /// row's "Set" pill text.
+  /// Outlined-control label on dark `rgba(250,245,236,.86)` — the ringtone row's "Set" pill text.
   static const Color ivoryText86 = Color.fromRGBO(250, 245, 236, 0.86);
 
   /// Gold-tint fill, Earn chip. `rgba(212,160,23,.12)`.
   static const Color goldTintFill12 = Color.fromRGBO(212, 160, 23, 0.12);
 
-  // ───────────────────────── Earn button surface ──────────────────────────
-  // Ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`.
-  // The gradient IS the "shimmer" in the reference art — a soft
-  // vertical sheen, not a moving highlight. Alphas and stops are Pakiza's; the
-  // gold they are struck from is ARUL's [gold], because a palette is the one
-  // thing the two apps deliberately do not share (CLAUDE.md §0).
+  // Earn button surface, ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`.
+  // The GRADIENT is the "shimmer" in the reference art — a soft sheen, never a moving highlight.
+  // Alphas and stops are Pakiza's; the gold is ARUL's [gold] — a palette is never shared (§0).
 
-  /// Earn button fill, LIGHT. White falling to cream, exactly as Pakiza draws
-  /// it — the sheen comes from the step, so neither stop is tinted gold.
+  /// Earn button fill, LIGHT — white falling to cream; the sheen is the STEP, so neither stop is gold.
   static const LinearGradient earnFillLight = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -150,10 +126,9 @@ abstract final class ArulTokens {
 
   /// Barely-there lift under a LIGHT-theme header control, and null on dark.
   ///
-  /// The app is otherwise flat by design, but the light theme's Earn button
-  /// starts at pure white on a cream ground, where a rim alone leaves it
-  /// looking painted on rather than raised. Pakiza's `controlLift`, struck from
-  /// Arul's ink instead of Pakiza's.
+  /// The app is otherwise FLAT by design.
+  /// But pure white on a cream ground with only a rim reads as painted on, not raised.
+  /// Pakiza's `controlLift`, struck from Arul's ink.
   static const List<BoxShadow> controlLift = [
     BoxShadow(
       color: Color.fromRGBO(43, 17, 22, 0.05),
@@ -183,8 +158,7 @@ abstract final class ArulTokens {
   /// Premium-plan-card SOLID gold border (1.5px). Spec > Premium screen.
   static const Color goldBorderSolid = gold;
 
-  // ───────────────────────── Light theme ladder ───────────────────────────
-  // Spec > Colors > Light theme.
+  // Light theme ladder — Spec > Colors > Light theme.
 
   /// Light theme primary text. `#2B1116`.
   static const Color lightText = Color(0xFF2B1116);
@@ -216,36 +190,30 @@ abstract final class ArulTokens {
   /// Light-theme selection / hero border. `rgba(122,30,51,.18)`.
   static const Color maroonBorder18 = Color.fromRGBO(122, 30, 51, 0.18);
 
-  /// Light-theme dock rim. `rgba(122,30,51,.08)` — quieter than
-  /// [cardBorderLight] because the dock already carries a drop shadow.
+  /// Light-theme dock rim `rgba(122,30,51,.08)` — quieter than [cardBorderLight]; a shadow lifts it.
   static const Color maroonBorder08 = Color.fromRGBO(122, 30, 51, 0.08);
 
-  // ──────────────── Ringtones: now-playing + dock chrome ──────────────────
-  // From the ringtones design handoff (external; these values ARE the record).
-  // Roles the rest of the system had no equivalent for.
+  // Ringtones: now-playing and dock chrome, from the ringtones handoff.
+  // These values ARE the record — roles the rest of the system had no equivalent for.
 
-  /// The now-playing row's title on the LIGHT theme. `#A3760F` — [gold] itself
-  /// fails contrast on a white card, so the design darkens it for light only;
-  /// dark stays on [gold].
+  /// The now-playing row's title on LIGHT, `#A3760F` — [gold] itself fails contrast on a white card.
+  /// Darkened for light only; dark stays on [gold].
   static const Color nowPlayingTitleLight = Color(0xFFA3760F);
 
   // ─────────────────────────── Gold ink on light ──────────────────────────
 
-  /// Gold TEXT/glyph ink on a LIGHT surface. `#A3760F`.
+  /// Gold TEXT or glyph ink on a LIGHT surface. `#A3760F`.
   ///
-  /// Same value as [nowPlayingTitleLight] and the same cause — [gold] does not
-  /// carry on ivory — but a different role, so they move independently: that
-  /// one is a list row's playing state, this one is a gold-led control's label
-  /// (the Earn pill). Anything gold-on-light that is TYPE, not fill, reads this.
+  /// Same value and cause as [nowPlayingTitleLight] — [gold] does not carry on ivory.
+  /// A different ROLE though, so the two move independently: a row's state versus a control's label.
+  /// Anything gold-on-light that is TYPE, not fill, reads this.
   static const Color goldInkLight = Color(0xFFA3760F);
 
-  /// The floating dock's surface on DARK. `#1B1215` — deliberately a step
-  /// warmer/lighter than [darkSurface] so the capsule separates from the feed
-  /// behind it without a rim doing the work. Light uses [cardBgLight].
+  /// The dock's surface on DARK, `#1B1215` — a step warmer than [darkSurface].
+  /// So the capsule separates from the feed behind it without a rim. Light uses [cardBgLight].
   static const Color dockFillDark = Color(0xFF1B1215);
 
-  /// The dock's active-tab cell on LIGHT. `#F0DCAA` — a solid pale gold; the
-  /// dark theme uses the translucent [goldTintFill13] instead.
+  /// The dock's active-tab cell on LIGHT, `#F0DCAA` — solid pale gold; dark uses [goldTintFill13].
   static const Color dockActiveFillLight = Color(0xFFF0DCAA);
 
   /// Dock drop shadow, dark. `0 16px 38px rgba(0,0,0,.6)`.
@@ -268,30 +236,25 @@ abstract final class ArulTokens {
 
   /// The gold halo around a now-playing row's pause button.
   ///
-  /// The handoff asks for `0 0 14px rgba(212,160,23,.35)`, and the dock's
-  /// active cell for a second `0 0 20px` halo. On a phone rather than a design
-  /// canvas those two read as haze: a 20px gold blur on a near-black capsule
-  /// fogs the tab's edge, and stacked with the button's halo the dark theme
-  /// looked smeared. The dock's is GONE — its cell has fill and a rim, which is
-  /// enough — and this one is halved to a tight contact glow that still says
-  /// "lit" without bleeding into the row.
+  /// The handoff asks for a 14px halo here and a second 20px one on the dock's active cell.
+  /// On a phone those read as haze — a 20px gold blur on a near-black capsule fogs the tab's edge.
+  /// Stacked with this one, the dark theme looked smeared.
+  /// The dock's is GONE: its cell has fill and a rim, which is enough.
+  /// This one is HALVED to a tight contact glow that still says "lit" without bleeding into the row.
   static const List<BoxShadow> nowPlayingButtonGlow = [
     BoxShadow(blurRadius: 8, color: Color.fromRGBO(212, 160, 23, 0.18)),
   ];
 
-  // ────────────────────────────── Scrims ──────────────────────────────────
-  // Spec > Colors > Scrims: all `rgba(20,9,12,x)`. `Color(0x0014090C)` is a
-  // transparent darkSurface, so only alpha moves and no grey fringe appears.
+  // Scrims — Spec > Colors > Scrims; all `rgba(20,9,12,x)`.
+  // `Color(0x0014090C)` is a TRANSPARENT darkSurface -> only alpha moves, and no grey fringe appears.
 
   static const Color _scrim0 = Color.fromRGBO(20, 9, 12, 0.0);
 
-  /// Feed top chrome scrim, h130, `.62 → 0`. Extra low-alpha mid-stop kills
-  /// banding where the tail meets the wallpaper.
+  /// Feed top chrome scrim, h130, `.62 → 0` — an extra low-alpha mid-stop kills the tail's banding.
   static const LinearGradient feedTopScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    // The spec is a plain two-stop `.62 → 0`; no mid-stop, or the mid-range
-    // reads visibly weaker than the reference.
+    // The spec is a plain two-stop `.62 → 0` -> no mid-stop, or the mid-range reads weaker.
     colors: [Color.fromRGBO(20, 9, 12, 0.62), _scrim0],
   );
 
@@ -316,21 +279,13 @@ abstract final class ArulTokens {
     stops: [0.0, 0.35, 0.55, 1.0],
   );
 
-  /// Sign-in scrim. Re-cut from Spec > Sign-in's 3-stop `.28 → 0 (38–62%) →
-  /// .72`, which assumed the sign-in block hung off the BOTTOM edge and so put
-  /// its darkness at 100%.
+  /// Sign-in scrim, re-cut from the spec's 3-stop ramp, which put its darkness at the bottom edge.
   ///
-  /// Nothing sits at the bottom now. The only free-floating chrome is the
-  /// wordmark up top; everything else lives on the silk panel, which carries
-  /// its own ground ([mediaFillStrong]) and needs no help. So this ramp does
-  /// exactly two jobs and then gets out of the way: a ceiling dark enough for
-  /// the wordmark, and a floor that keeps the nav bar from floating — with the
-  /// middle left near-clear on purpose, because that band is the artwork the
-  /// user is being asked to sign in for.
-  ///
-  /// Do NOT strengthen the middle to "help" the panel. That trade was measured
-  /// the other way: the panel is opaque enough alone, and darkening the centre
-  /// only costs the wallpaper.
+  /// Nothing sits at the bottom now — the only free-floating chrome is the wordmark up top.
+  /// Everything else lives on the silk panel, which carries its own ground and needs no help.
+  /// So this ramp does two jobs: a ceiling dark enough for the wordmark, and a floor for the nav bar.
+  /// The MIDDLE is left near-clear on purpose — that band is the artwork the user is signing in for.
+  /// Do NOT strengthen the middle to "help" the panel; darkening the centre only costs the wallpaper.
   static const LinearGradient signInScrim = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -349,11 +304,9 @@ abstract final class ArulTokens {
   /// Dialog barrier overlay. `.60`.
   static const Color dialogOverlay = Color.fromRGBO(20, 9, 12, 0.60);
 
-  // ─────────────────────────── Silk gradients ─────────────────────────────
-  // Spec > Colors > Silk gradients (profile / hero / plan cards).
+  // Silk gradients — Spec > Colors; profile, hero and plan cards.
 
-  /// Silk, dark theme. `135deg rgba(122,30,51,.35) → rgba(212,160,23,.10)`,
-  /// paired with [silkBorderDark] (gold 30%).
+  /// Silk, dark theme — `135deg rgba(122,30,51,.35) → rgba(212,160,23,.10)`, with [silkBorderDark].
   static const LinearGradient silkDark = LinearGradient(
     begin: Alignment.topLeft, // 135deg
     end: Alignment.bottomRight,
@@ -363,8 +316,7 @@ abstract final class ArulTokens {
     ],
   );
 
-  /// Silk, light theme. `rgba(122,30,51,.10) → rgba(212,160,23,.10)`, paired
-  /// with [silkBorderLight] (maroon 18%).
+  /// Silk, light theme — `rgba(122,30,51,.10) → rgba(212,160,23,.10)`, with [silkBorderLight].
   static const LinearGradient silkLight = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -380,96 +332,73 @@ abstract final class ArulTokens {
   /// Silk card border, light — maroon 18% (== [maroonBorder18]).
   static const Color silkBorderLight = maroonBorder18;
 
-  /// Dark sheet surface gradient: [darkSheetGradientTop] → [darkSheetSurface].
-  /// Spec > Premium gate: `#241014 → #1A0B0F`.
+  /// Dark sheet surface gradient — [darkSheetGradientTop] → [darkSheetSurface], `#241014 → #1A0B0F`.
   static const LinearGradient sheetGradientDark = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [darkSheetGradientTop, darkSheetSurface],
   );
 
-  /// Feed loading placeholder fill. Spec > Feed states > Loading:
-  /// `110deg #14090C 30% → #2A1218 50% → #14090C 70%`.
+  /// Feed loading placeholder fill — `110deg #14090C 30% → #2A1218 50% → #14090C 70%`.
   static const Color skeletonBase = darkSurface; // #14090C
   static const Color skeletonHighlight = Color(0xFF2A1218);
 
-  /// Fill for chrome that sits on media with NO scrim under it to help.
-  /// [darkSurface] at 80%.
+  /// Fill for chrome on media with NO scrim under it — [darkSurface] at 80%.
   ///
-  /// The scrims are tuned for chrome at the screen's EDGES, where a ramp can
-  /// reach full strength. A panel floating mid-screen has no such luxury — the
-  /// scrim is at its weakest there by design, because that band is the artwork
-  /// the user came for. So the panel carries its own ground: this under
-  /// [silkDark] holds ivory text at ~10:1 over the worst case an image can
-  /// present, a pure white frame, which is the bar `ArulScrims` sets.
-  ///
-  /// Same value as the legacy `ArulColors.mediaFillStrong` — one role, one
-  /// number, so the two ladders cannot drift.
+  /// The scrims are tuned for chrome at the screen's EDGES, where a ramp reaches full strength.
+  /// A panel floating mid-screen has no such luxury — the scrim is weakest there by design.
+  /// So the panel carries its own ground: this under [silkDark] holds ivory at ~10:1 on a white frame.
+  /// That is the bar `ArulScrims` sets.
+  /// Same value as the legacy `ArulColors.mediaFillStrong` -> one role, one number, no drift.
   static const Color mediaFillStrong = Color(0xCC14090C);
 
   // ─────────────────────────── Text over media ────────────────────────────
 
-  /// Shadow for text/icons sitting directly on media. Spec > Spacing/misc:
-  /// `0 1px 8px rgba(0,0,0,.6)`.
+  /// Shadow for text or icons sitting directly on media — `0 1px 8px rgba(0,0,0,.6)`.
   static const List<Shadow> overMediaShadow = [
     Shadow(offset: Offset(0, 1), blurRadius: 8, color: Color(0x99000000)),
   ];
 
-  /// Shadow for the feed action-rail icons (Apply / Share). The single
-  /// [overMediaShadow] lets an ivory glyph wash out over pale wallpapers
-  /// (white temples, bright sky). This stacks a tight, near-opaque contact
-  /// halo — which hugs the glyph edge and reads as separation on light media —
-  /// under a broader soft spread that keeps it grounded over dark media. Result:
-  /// the icon carries its own contrast on ANY background without a chip or
-  /// border breaking the chromeless rail.
+  /// Shadow for the feed action-rail icons.
+  ///
+  /// A single [overMediaShadow] lets an ivory glyph wash out over pale wallpapers.
+  /// This stacks a tight, near-opaque contact halo that hugs the glyph edge on light media.
+  /// Under it, a broader soft spread keeps the glyph grounded over dark media.
+  /// So the icon carries its own contrast on ANY background, with no chip breaking the rail.
   static const List<Shadow> railIconShadow = [
     Shadow(blurRadius: 3, color: Color(0xE6000000)),
     Shadow(offset: Offset(0, 1), blurRadius: 10, color: Color(0xB3000000)),
   ];
 
-  /// **The over-media glass recipe** — ivory held as glass: a translucent fill
-  /// under a hairline of the same ivory at higher alpha.
+  /// **The over-media glass recipe** — a translucent ivory fill under a hairline of the same ivory.
   ///
-  /// This is the app's language for a control that sits directly on someone's
-  /// wallpaper and must not compete with it (the feed's Share circle, the live
-  /// mark). Both read these two tokens rather than spelling the rgba twice —
-  /// they are the SAME object at two sizes, and a drift between them would
-  /// read as two different design systems on one card.
+  /// The app's language for a control that sits on someone's wallpaper and must not compete with it.
+  /// Every such control reads these two tokens rather than spelling the rgba twice.
+  /// They are the SAME object at two sizes -> a drift would read as two design systems on one card.
   static const Color overMediaGlassFill = Color.fromRGBO(250, 245, 236, 0.18);
   static const Color overMediaGlassBorder = Color.fromRGBO(250, 245, 236, 0.45);
 
-  /// **Smoked** glass — the fill for chrome sitting on RAW artwork, with no
-  /// scrim underneath to supply contrast.
+  /// **Smoked** glass — the fill for chrome on RAW artwork, with no scrim to supply contrast.
   ///
-  /// [overMediaGlassFill] cannot do this job, and no amount of tuning makes it:
-  /// it is ivory, ivory is near-white, and a near-white fill over a white
-  /// marble temple is invisible at ANY alpha — raising it makes the disc whiter,
-  /// not clearer. Chrome with an unknown background behind it has to be the
-  /// DARK half of the pair, with the ivory kept for the glyph and the rim.
-  ///
-  /// [darkSurface] at `.55`, the alpha the legacy ladder's `mediaFillStrong`
-  /// was measured at: dense enough to clear 3:1 for an ivory glyph over the
-  /// brightest wallpaper in the catalog, translucent enough that the artwork
-  /// still reads through it — a lens, never a chip. On dark artwork it all but
-  /// vanishes and the rim carries the shape, which is exactly right: the mark
-  /// should be quiet where it is already legible.
-  ///
-  /// Not a shadow. A shadow bleeds OUTSIDE its object onto the wallpaper (which
-  /// is why the live mark's was removed); this is contained by the disc.
+  /// [overMediaGlassFill] cannot do this job and no tuning makes it: ivory is near-white.
+  /// A near-white fill over a white marble temple is invisible at ANY alpha, whiter but not clearer.
+  /// Chrome over an unknown background must be the DARK half, with ivory kept for glyph and rim.
+  /// [darkSurface] at `.55` — the alpha `mediaFillStrong` was measured at.
+  /// Dense enough to clear 3:1 for an ivory glyph over the brightest wallpaper in the catalog.
+  /// Translucent enough that the artwork still reads through — a LENS, never a chip.
+  /// On dark artwork it all but vanishes and the rim carries the shape, which is right.
+  /// NOT a shadow: a shadow bleeds outside its object onto the wallpaper; this is contained by the disc.
   static const Color overMediaInkFill = Color.fromRGBO(20, 9, 12, 0.55);
 
-  // ────────────────────────────── Typography ──────────────────────────────
-  // Spec > Typography. UI = system stack (fontFamily null). Serif =
-  // 'Marcellus' (bundled) for the Latin wordmark, screen titles, price/reward
-  // numerals and hero headings ONLY — never a localized string.
+  // Typography — Spec > Typography. UI is the system stack, `fontFamily` null.
+  // The bundled 'Marcellus' serif is for the Latin wordmark, titles, numerals and hero headings ONLY.
+  // NEVER a localized string.
 
   /// The bundled display-serif family. Latin-only; must NOT wrap Indic text.
   static const String serif = 'Marcellus';
 
   /// Splash wordmark "Arul". 54px, Marcellus, ls `.04em` (54 × .04 = 2.16).
-  /// Was 44px under a 44px gopuram mark; with the mark gone the type carries
-  /// the splash alone, so it takes the weight — and stays the largest wordmark
-  /// in the app, above the 38px sign-in.
+  /// With no gopuram mark the type carries the splash alone -> the largest wordmark in the app.
   static const TextStyle wordmarkSplash = TextStyle(
     fontFamily: serif,
     fontSize: 54,
@@ -478,10 +407,8 @@ abstract final class ArulTokens {
     color: ivory,
   );
 
-  /// Sign-in wordmark "Arul". 38px, Marcellus. Was 30px when a 34px gopuram
-  /// mark sat above it; with the mark gone the type is the only brand element
-  /// on the screen, so it takes the weight (still clearly below the 44px
-  /// splash, which keeps its mark).
+  /// Sign-in wordmark "Arul". 38px, Marcellus.
+  /// The only brand element on the screen -> it takes the weight, still below the splash's.
   static const TextStyle wordmarkSignIn = TextStyle(
     fontFamily: serif,
     fontSize: 38,
@@ -490,8 +417,7 @@ abstract final class ArulTokens {
     color: ivory,
   );
 
-  /// Tagline / eyebrow. 11px caps, gold, ls `.42em` (11 × .42 = 4.62).
-  /// Apply over an already-uppercased string.
+  /// Tagline / eyebrow. 11px caps, gold, ls `.42em` (11 × .42 = 4.62), over an uppercased string.
   static const TextStyle tagline = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.w600,
@@ -499,8 +425,7 @@ abstract final class ArulTokens {
     color: gold,
   );
 
-  /// Screen title. 22px Marcellus. Colour supplied by the theme at the call
-  /// site ([lightText] / [darkText]).
+  /// Screen title. 22px Marcellus; colour comes from the theme at the call site.
   static const TextStyle screenTitle = TextStyle(
     fontFamily: serif,
     fontSize: 22,
@@ -508,18 +433,12 @@ abstract final class ArulTokens {
     letterSpacing: 0.3,
   );
 
-  /// The title in a top-level tab's header band ([ArulScreenHeader]). 26px
-  /// Marcellus, ls `.04em` (26 × .04 = 1.04).
+  /// The title in a top-level tab's header band. 26px Marcellus, ls `.04em` (26 × .04 = 1.04).
   ///
-  /// ONE size for all three tabs. They cross-fade into each other, so a title
-  /// that resized between them read as the whole screen jumping. Do not tune
-  /// this per screen — change it here and all three move together.
-  ///
-  /// Was 24 (the wallpaper feed's original metric) until 2026-08-06. The band
-  /// itself is unchanged at [headerControlSize]: 26 × 1.15 line height is 29.9,
-  /// which still clears 34, so the type grew without the header growing and the
-  /// reel below it did not move. That headroom runs out around 29 — past there
-  /// the band has to grow too, and growing the band resizes the reel card.
+  /// ONE size for all three tabs — they cross-fade, so a resizing title read as the screen jumping.
+  /// Never tune it per screen: change it here and all three move together.
+  /// 26 × 1.15 is 29.9, which still clears the 34 band -> the header did not grow with the type.
+  /// That headroom runs out around 29 — past there the band grows, and a bigger band resizes the reel.
   static const TextStyle screenHeaderTitle = TextStyle(
     fontFamily: serif,
     fontSize: 26,
@@ -527,19 +446,14 @@ abstract final class ArulTokens {
     letterSpacing: 1.04,
   );
 
-  /// The WORDMARK in the wallpaper feed's header band — "Arul", 28px Marcellus,
-  /// ls `.04em` (28 × .04 = 1.12).
+  /// The WORDMARK in the feed's header band — "Arul", 28px Marcellus, ls `.04em` (28 × .04 = 1.12).
   ///
-  /// The one deliberate exception to "one size for all three tabs". Ringtones
-  /// and Settings show a page TITLE; the feed shows the brand, and a wordmark
-  /// that matched the labels around it read as a third tab name rather than as
-  /// the app's own mark. It is a different kind of object, so it gets its own
-  /// token instead of a per-screen override of [screenHeaderTitle].
-  ///
-  /// 28 is near the ceiling: `28 × 1.15 = 32.2` inside a [headerControlSize]
-  /// band of 34 leaves 1.8 total, and the feed spends some of that dropping the
-  /// mark ([ArulScreenHeader.titleDrop]). Past ~29 the line box exceeds the band
-  /// and the Row overflows — grow the band first if this ever needs to.
+  /// The ONE deliberate exception to "one size for all three tabs".
+  /// The other tabs show a page TITLE; the feed shows the brand.
+  /// A wordmark matching the labels around it read as a third tab name, not as the app's mark.
+  /// A different kind of object -> its own token, never a per-screen override of [screenHeaderTitle].
+  /// 28 is near the ceiling: `28 × 1.15 = 32.2` in a 34 band leaves 1.8, some spent on the drop.
+  /// Past ~29 the line box exceeds the band and the Row overflows — grow the band first.
   static const TextStyle wordmarkHeader = TextStyle(
     fontFamily: serif,
     fontSize: 28,
@@ -554,8 +468,7 @@ abstract final class ArulTokens {
     height: 1.2,
   );
 
-  /// Premium / refer price & reward numerals. Marcellus. Size varies per site
-  /// (20–30px per spec) — pass `.copyWith(fontSize:)`; default 22.
+  /// Premium and refer numerals, Marcellus. Size varies per site — `.copyWith(fontSize:)`; default 22.
   static const TextStyle priceNumeral = TextStyle(
     fontFamily: serif,
     fontSize: 22,
@@ -576,9 +489,8 @@ abstract final class ArulTokens {
     fontWeight: FontWeight.w500,
   );
 
-  /// Row title with the list's optical tracking. 15px w500, ls `.005em`
-  /// (15 × .005 = 0.075) — the ringtone row, where a single ellipsised line
-  /// needs the extra air that a two-line [rowTitle] block does not.
+  /// Row title with the list's optical tracking. 15px w500, ls `.005em` (15 × .005 = 0.075).
+  /// For the ringtone row — a single ellipsised line needs air a two-line [rowTitle] block does not.
   static const TextStyle rowTitleTracked = TextStyle(
     fontSize: 15,
     height: 1.35,
@@ -591,12 +503,9 @@ abstract final class ArulTokens {
 
   /// Floating-dock label, inactive. 12px w500, ls `.2`.
   ///
-  /// The tracking is the point: every other small label in the app carries the
-  /// theme's `labelMedium`/`labelSmall` tracking, and a dock label set at 0
-  /// read as a different typeface sitting under the same screen. Size dropped
-  /// from the handoff's 12.5 to 12 so three labels — one of them "Wallpapers" —
-  /// sit in their thirds without FittedBox having to shrink them on a 360dp
-  /// phone, which is what actually made the dock look off-family.
+  /// The TRACKING is the point — every other small label carries the theme's, and 0 read as a new face.
+  /// 12, not the handoff's 12.5 -> three labels sit in their thirds without FittedBox shrinking them.
+  /// That shrinking is what actually made the dock look off-family on a 360dp phone.
   static const TextStyle dockLabel = TextStyle(
     fontSize: 12,
     height: 1.15,
@@ -634,34 +543,24 @@ abstract final class ArulTokens {
     fontWeight: FontWeight.w600,
   );
 
-  // Why both chip styles pin `height` and `leadingDistribution`, when the rest
-  // of this file leaves line-height to the theme:
+  // Why the chip styles pin `height` and `leadingDistribution`, where the rest of the file does not.
   //
-  // A `Text` merges its style into the ambient `DefaultTextStyle`, which in a
-  // MaterialApp is `bodyMedium` — and ours carries `height: 1.45`. So a chip
-  // label with no height of its own got a 19.6px line box for 13.5px of type,
-  // and Flutter's DEFAULT leading distribution is `proportional`: it hands the
-  // 6px of slack out in the font's own ascent:descent ratio, ~79% of it above
-  // the baseline. Centring that box centres the SLACK, not the letters, so
-  // every chip label and the Earn pill's sat ~2.7px low inside a 34px pill —
-  // obvious next to an icon that really is centred.
-  //
+  // A `Text` merges into the ambient `bodyMedium`, and ours carries `height: 1.45`.
+  // So a chip label with no height got a 19.6px line box for 13.5px of type.
+  // Flutter's DEFAULT leading distribution is proportional -> ~79% of that slack goes above baseline.
+  // Centring that box centres the SLACK, not the letters -> labels sat ~2.7px low in a 34px pill.
   // `height: 1` makes the box the type, and `even` splits what is left equally.
-  // Both fixed-height chip rows and the Earn pill come out actually centred.
-  // Anything else that centres one of these styles in a box of its own gets it
-  // right for free; a control that SIZES to the label instead now measures ~6px
-  // shorter, which is why the surface chip's padding was re-cut to match.
+  // Anything centring one of these styles in its own box then gets it right for free.
+  // A control that SIZES to the label measures ~6px shorter — why the surface chip's padding was re-cut.
 
-  /// Button label. spec range 15–16px; chosen 15px w600. Bump per site with
-  /// `.copyWith(fontSize: 16)` where the design calls for 16.
+  /// Button label. 15px w600 from the spec's 15–16 range; `.copyWith(fontSize: 16)` where asked.
   static const TextStyle button = TextStyle(
     fontSize: 15,
     height: 1.2,
     fontWeight: FontWeight.w600,
   );
 
-  // ─────────────────────────────── Radii ──────────────────────────────────
-  // Spec > Spacing / radii / misc.
+  // Radii — Spec > Spacing / radii / misc.
 
   /// Card corner. spec range 18–22; chosen 20.
   static const double cardRadius = 20;
@@ -681,8 +580,7 @@ abstract final class ArulTokens {
   /// Icon-chip corner. 12.
   static const double iconChipRadius = 12;
 
-  /// List-row corner (the ringtone row card). 15 — tighter than [cardRadius],
-  /// because a 66-tall row with a 20 radius reads as a lozenge.
+  /// List-row corner. 15 — tighter than [cardRadius]; a 66-tall row at 20 reads as a lozenge.
   static const double rowRadius = 15;
 
   /// Cover-art corner (the ringtone medallion). 13.
@@ -708,10 +606,9 @@ abstract final class ArulTokens {
   /// Card inner padding, high end. 20.
   static const double cardPadding20 = 20;
 
-  // ────────────────────── Top-level tab header band ───────────────────────
-  // One band for Wallpapers / Ringtones / Settings — see [ArulScreenHeader].
-  // These ARE the wallpaper feed's existing metrics; changing them moves the
-  // reel, whose card geometry is solved from the height left below the band.
+  // Top-level tab header band — ONE band for all three tabs; see [ArulScreenHeader].
+  // These ARE the feed's existing metrics -> changing them MOVES the reel.
+  // The card geometry is solved from the height left below the band.
 
   /// Drop above the header's title row. 6.
   static const double headerTopPadding = 6;
@@ -719,36 +616,26 @@ abstract final class ArulTokens {
   /// Gap below the header band before a tab's own content. 8.
   static const double headerBottomPadding = 8;
 
-  /// The height of the band, and of every control that sits in it. 34.
+  /// The height of the band, and of every control in it. 34.
   ///
-  /// It briefly went to 42 to match Pakiza's header controls and came back:
-  /// the handoff draws the Earn button at the SAME height as the category chips
-  /// under it, and 34 is what those are. It is also the ONE number the reel's
-  /// card geometry is solved against (`feed_card_geometry.dart` derives
-  /// everything from the height left below the band), so this is the value that
-  /// keeps the card its designed size.
+  /// The handoff draws the Earn button at the SAME height as the category chips under it, which is 34.
+  /// It is also the ONE number the reel's card geometry is solved against.
+  /// So this is the value that keeps the card its designed size.
   static const double headerControlSize = 34;
 
-  /// Header control corner. 14 — Pakiza's `AppRadius.headerButton`. NOT
-  /// [pillRadius]: the Earn button is a rounded rectangle, not a capsule, and
-  /// that is most of why it reads as a button rather than a chip.
+  /// Header control corner. 14 — Pakiza's `AppRadius.headerButton`.
+  /// NOT [pillRadius]: a rounded rectangle, not a capsule, is most of why it reads as a button.
   static const double headerButtonRadius = 14;
 
-  /// Gap between a tab's chip row and the content below it. 18.
-  ///
-  /// One value for both browse tabs. At 10 the chips sat almost on top of the
-  /// content and the browse row read as part of the list rather than as chrome
-  /// above it.
+  /// Gap between a tab's chip row and the content below it. 18, one value for both browse tabs.
+  /// At 10 the chips sat on top of the content and the row read as part of the list, not as chrome.
   static const double chipsBottomGap = 20;
 
   /// The air ABOVE the chip row, on top of [headerBottomPadding].
   ///
-  /// The chip row is meant to sit in equal air, and it did not: the title band
-  /// left only [headerBottomPadding] (8) above it while the drop to the content
-  /// below was 33, so the row rode high in its own band. These two constants
-  /// now resolve to the same gap either side — `headerBottomPadding + this ==
-  /// chipsBottomGap` — and the pair sums to what the old lopsided pair summed
-  /// to, so the reel below did not resize when the row was recentred.
+  /// 8 above against 33 below left the row riding high in its own band.
+  /// These now resolve to the same gap either side — `headerBottomPadding + this == chipsBottomGap`.
+  /// The pair sums to what the lopsided pair summed to -> the reel did not resize on recentring.
   static const double chipsTopGap = chipsBottomGap - headerBottomPadding;
 
   // ──────────────────────────── Button heights ────────────────────────────
@@ -771,10 +658,8 @@ abstract final class ArulTokens {
   /// Minimum interactive hit target. 44.
   static const double minHitTarget = 44;
 
-  // ───────────────────────── Floating dock geometry ───────────────────────
-  // Constraints in docs/ui-direction.md §Dock; these values are the record.
-  // The dock overlays the branch content (Scaffold.extendBody), so these are
-  // also what a scrolling list must clear — see [listBottomInsetUnderDock].
+  // Floating dock geometry — constraints in docs/ui-direction.md §Dock; these values are the record.
+  // The dock OVERLAYS the branch content -> these are also what a scrolling list must clear.
 
   /// Dock capsule height. 78.
   static const double dockHeight = 78;
@@ -797,22 +682,19 @@ abstract final class ArulTokens {
   /// Gap between a dock tab's icon and its label. 6.
   static const double dockTabGap = 6;
 
-  /// Bottom padding a scrollable owes the floating dock so its last item stays
-  /// reachable. 120 — the handoff's number, and comfortably clear of
-  /// [dockHeight] + [dockBottomInset].
+  /// Bottom padding a scrollable owes the dock, so its last item stays reachable.
+  /// 120 — the handoff's number, comfortably clear of [dockHeight] + [dockBottomInset].
   static const double listBottomInsetUnderDock = 120;
 
-  /// How opaque the fade behind the dock becomes. `.95`, not 1: a hairline of
-  /// the content below still shows through, which reads as depth rather than as
-  /// a pasted-on bar.
+  /// How opaque the fade behind the dock becomes. `.95`, not 1 -> a hairline of content shows through.
+  /// That reads as depth rather than as a pasted-on bar.
   static const double dockScrimAlpha = 0.95;
 
-  /// Where that fade reaches full strength, as a fraction of its own height.
+  /// Where the fade reaches full strength, as a fraction of its height.
   /// `.42` — content dissolves on the way in instead of meeting a hard edge.
   static const double dockScrimStop = 0.42;
 
-  // ──────────────────────────── Icon chip ─────────────────────────────────
-  // Spec: 40×40 r12, gold-tint (dark) / maroon-tint (light), 21px icon.
+  // Icon chip — 40×40 r12, gold-tint on dark and maroon-tint on light, with a 21px icon.
 
   /// Icon-chip box size. 40×40.
   static const double iconChipSize = 40;
@@ -820,8 +702,7 @@ abstract final class ArulTokens {
   /// Icon-chip glyph size. 21.
   static const double iconChipIconSize = 21;
 
-  // ───────────────────────────── Sheet grabber ────────────────────────────
-  // Spec: 44×4 r2, rgba(250,245,236,.25) dark / rgba(43,17,22,.2) light.
+  // Sheet grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)` light.
 
   static const double grabberWidth = 44;
   static const double grabberHeight = 4;
@@ -829,8 +710,7 @@ abstract final class ArulTokens {
   static const Color grabberColorDark = Color.fromRGBO(250, 245, 236, 0.25);
   static const Color grabberColorLight = Color.fromRGBO(43, 17, 22, 0.20);
 
-  // ─────────────────────────────── Motion ─────────────────────────────────
-  // Spec > Motion. Transform/opacity only — never blur, never ShaderMask.
+  // Motion — Spec > Motion. Transform and opacity ONLY: never blur, never ShaderMask.
 
   /// Chrome recede: fade OUT while swiping. 150ms.
   static const Duration chromeRecedeOut = Duration(milliseconds: 150);
@@ -850,12 +730,10 @@ abstract final class ArulTokens {
   /// Splash hairline loader loop. 1600ms linear.
   static const Duration hairlineLoop = Duration(milliseconds: 1600);
 
-  /// Cross-fade between two dock branches. 200ms — long enough to read as a
-  /// dissolve rather than a cut, short enough that a tab still feels instant.
+  /// Cross-fade between dock branches. 200ms — a dissolve rather than a cut, still instant.
   static const Duration tabSwitch = Duration(milliseconds: 200);
 
-  /// The now-playing diya's flame sway + glow pulse. 1100ms ease-in-out,
-  /// alternating (so one full there-and-back is 2200ms).
+  /// The diya's flame sway and glow pulse. 1100ms ease-in-out, alternating — 2200ms there and back.
   static const Duration diyaFlicker = Duration(milliseconds: 1100);
 
   /// The ease-out curve for chrome settle. spec: "ease-out".
@@ -867,25 +745,17 @@ abstract final class ArulTokens {
   /// Linear loop for the two continuous sweeps (skeleton, hairline).
   static const Curve loopCurve = Curves.linear;
 
-  // ──────────────────────── Splash hairline loader ────────────────────────
-  // Spec > Splash: 120×2px gold with sliding gradient, 1.6s linear loop.
+  // Splash hairline loader — 120×2px gold with a sliding gradient, on a 1.6s linear loop.
 
   static const double hairlineWidth = 120;
   static const double hairlineHeight = 2;
 
-  // ════════════════════ Premium paywall ("holy authenticity") ═════════════
-  //
-  // design_handoff_arul_premium — a SELF-CONTAINED visual system for the one
-  // route that sells the product, and the reason every token below carries the
-  // `paywall` prefix instead of joining the ladders above.
-  //
-  // It does not reuse the app palette and must not be "harmonised" into it:
-  // its maroon is #7A1F23, a different ink from [maroon] (#7A1E33), and its
-  // creams sit warmer than [ivory]. Two paywall screens (monthly / free trial)
-  // share one shell, so a value changed here moves both — which is the point.
-  //
-  // The route is pinned LIGHT (router.dart) and English-only (CLAUDE.md §5), so
-  // these are absolute colours with no dark counterpart, by design.
+  // Premium paywall — a SELF-CONTAINED visual system for the one route that sells the product.
+  // That is why every token below carries the `paywall` prefix instead of joining the ladders above.
+  // It does NOT reuse the app palette and must never be "harmonised" into it.
+  // Its maroon is #7A1F23, a different ink from [maroon], and its creams sit warmer than [ivory].
+  // Two paywall screens share one shell -> a value changed here moves both, which is the point.
+  // The route is pinned LIGHT and English-only -> these are absolute colours with no dark counterpart.
 
   /// Paywall maroon — headline ink, corner brackets, the trial badge. `#7A1F23`.
   static const Color paywallMaroon = Color(0xFF7A1F23);
@@ -912,8 +782,7 @@ abstract final class ArulTokens {
   /// The shrine panel's inner 1px rule. Gold soft `#E0C58A`.
   static const Color paywallGoldSoft = Color(0xFFE0C58A);
 
-  /// Header block ground. `#FAF5E9` — a half-step warmer than [paywallCream],
-  /// which is what separates the brand block from the page without a rule.
+  /// Header block ground `#FAF5E9` — a half-step warmer than [paywallCream], separating without a rule.
   static const Color paywallHeaderBg = Color(0xFFFAF5E9);
 
   /// Page ground, and the 4px ring inside the shrine frame. `#FDF8EC`.
@@ -932,8 +801,7 @@ abstract final class ArulTokens {
   /// Body ink — nav title, feature labels. `#4A3524`.
   static const Color paywallInk = Color(0xFF4A3524);
 
-  /// Secondary ink — social-proof pill, trial lead line, "Selected UPI App".
-  /// `#6B5A41`.
+  /// Secondary ink `#6B5A41` — the social-proof pill, the trial lead line, "Selected UPI App".
   static const Color paywallInkSecondary = Color(0xFF6B5A41);
 
   /// Muted ink — the fine print under the price, and the UPI caret. `#8B7355`.
@@ -961,8 +829,7 @@ abstract final class ArulTokens {
   /// Social-proof pill rim. `#E0D4B4`.
   static const Color paywallBorderPill = Color(0xFFE0D4B4);
 
-  /// The 1px rules flanking "PREMIUM" — gold at the end nearest the word,
-  /// fading outward. The right-hand rule is this one mirrored.
+  /// The 1px rules flanking "PREMIUM" — gold nearest the word, fading out; the right one is mirrored.
   static const LinearGradient paywallBrandRule = LinearGradient(
     begin: Alignment.centerLeft,
     end: Alignment.centerRight,
@@ -976,8 +843,7 @@ abstract final class ArulTokens {
     colors: [Color(0x00D9A544), paywallGold600, Color(0x00D9A544)],
   );
 
-  /// The vertical hairlines between feature columns — gold at 40%, fading out
-  /// top and bottom.
+  /// The vertical hairlines between feature columns — gold at 40%, fading out top and bottom.
   static const LinearGradient paywallFeatureDivider = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -993,10 +859,10 @@ abstract final class ArulTokens {
     ),
   ];
 
-  /// The CTA's top lip — the handoff's `inset 0 1px 0 rgba(255,255,255,.15)`,
-  /// drawn as a foreground gradient because Flutter has no inset box-shadow.
-  /// White fading out by 4% of the pill's height; it is what stops the CTA
-  /// reading as flat, so the stops are as load-bearing as the colour.
+  /// The CTA's top lip — the handoff's `inset 0 1px 0 rgba(255,255,255,.15)`.
+  /// Flutter has no inset box-shadow -> drawn as a foreground gradient instead.
+  /// White fading out by 4% of the pill's height; it is what stops the CTA reading as flat.
+  /// So the STOPS are as load-bearing as the colour.
   static const LinearGradient paywallCtaTopLip = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -1004,14 +870,11 @@ abstract final class ArulTokens {
     stops: [0.0, 0.04],
   );
 
-  // ───────────────────── Premium paywall — typography ─────────────────────
-  // Three BUNDLED families, paywall-only (pubspec.yaml): Cinzel for display,
-  // Lora for everything else, Gelasio for the price numerals. Tracking is
-  // quoted in `em` by the handoff and pre-multiplied here, as everywhere above.
-  //
-  // Every Lora style carries Gelasio in [paywallSerifFallback]: Lora has no
-  // U+20B9, and "₹199" in the fine print would otherwise pull a Roboto rupee
-  // into a serif sentence.
+  // Premium paywall typography — three BUNDLED, paywall-only families.
+  // Cinzel for display, Lora for everything else, Gelasio for the price numerals.
+  // Tracking is quoted in `em` by the handoff and pre-multiplied here, as everywhere above.
+  // Lora has no U+20B9 -> every Lora style carries Gelasio in [paywallSerifFallback].
+  // Otherwise "₹199" in the fine print pulls a Roboto rupee into a serif sentence.
 
   /// The display family — "SUBSCRIPTION", "PREMIUM", "ARUL". Weight 500 only.
   static const String paywallDisplayFamily = 'Cinzel';
@@ -1019,15 +882,27 @@ abstract final class ArulTokens {
   /// The text family — everything that is not display or numeral.
   static const String paywallTextFamily = 'Lora';
 
-  /// The numeral family: Georgia's metric-compatible twin, and the only
-  /// bundled serif carrying ₹. See pubspec.yaml.
+  /// The numeral family — Georgia's metric-compatible twin, and the only bundled serif carrying ₹.
   static const String paywallNumeralFamily = 'Gelasio';
 
   /// Per-glyph fallback for the text family — supplies ₹ and nothing else.
   static const List<String> paywallSerifFallback = [paywallNumeralFamily];
 
-  /// Nav title "SUBSCRIPTION". Cinzel 500 15px, ls `.18em` (15 × .18 = 2.7).
-  /// Apply over an already-uppercased string.
+  /// The Indic form of a letter-spaced display style.
+  ///
+  /// The FACE needs no handling: Flutter falls back per GLYPH, so a Tamil run inside a Cinzel or
+  /// Lora style already lands on the system stack — which covers all five scripts at zero bundled
+  /// bytes, exactly as Marcellus does for the rest of the app. The bundled Latin subsets are never
+  /// asked for a glyph they do not carry.
+  ///
+  /// The TRACK is what cannot survive. Letter-spacing is a Latin small-caps device; Indic scripts
+  /// have no case to spell in caps, and spacing their glyphs pulls a combining mark visually off
+  /// the consonant it belongs to. Call sites that hand back Cinzel's TRAILING track as left padding
+  /// must drop that padding in the same breath, or the label sits off-centre with nothing to centre.
+  static TextStyle paywallUntracked(TextStyle latin) =>
+      latin.copyWith(letterSpacing: 0);
+
+  /// Nav title "SUBSCRIPTION". Cinzel 500 15px, ls `.18em` (15 × .18 = 2.7), over uppercased text.
   static const TextStyle paywallNavTitle = TextStyle(
     fontFamily: paywallDisplayFamily,
     fontWeight: FontWeight.w500,
@@ -1039,9 +914,8 @@ abstract final class ArulTokens {
 
   /// The "PREMIUM" eyebrow. Cinzel 500 13px, ls `.42em` (13 × .42 = 5.46).
   ///
-  /// The tracking is trailing as well as leading, so the word sits ~5px right
-  /// of true centre unless the trailing space is trimmed — see the eyebrow's
-  /// padding in the paywall view.
+  /// The tracking is TRAILING as well as leading -> the word sits ~5px right of true centre.
+  /// The eyebrow's padding in the paywall view trims that back.
   static const TextStyle paywallEyebrow = TextStyle(
     fontFamily: paywallDisplayFamily,
     fontWeight: FontWeight.w500,
@@ -1080,8 +954,8 @@ abstract final class ArulTokens {
     color: paywallInkSecondary,
   );
 
-  /// "PER MONTH". Lora 500 14px, ls `.28em` (14 × .28 = 3.92). Uppercased at
-  /// the call site; the trailing track is trimmed the same way as the eyebrow.
+  /// "PER MONTH". Lora 500 14px, ls `.28em` (14 × .28 = 3.92), uppercased at the call site.
+  /// The trailing track is trimmed the same way as the eyebrow's.
   static const TextStyle paywallPriceCaption = TextStyle(
     fontFamily: paywallTextFamily,
     fontFamilyFallback: paywallSerifFallback,
@@ -1092,8 +966,7 @@ abstract final class ArulTokens {
     color: paywallInkGold,
   );
 
-  /// The trial lead line, "Start your 1-day FREE trial for ₹199".
-  /// Lora 500 14px.
+  /// The trial lead line, "Start your 1-day FREE trial for ₹199". Lora 500 14px.
   static const TextStyle paywallLead = TextStyle(
     fontFamily: paywallTextFamily,
     fontFamilyFallback: paywallSerifFallback,
@@ -1116,8 +989,7 @@ abstract final class ArulTokens {
 
   /// The fine print under the gold divider. Lora 400 12.5px.
   ///
-  /// Both strings it carries are contractually fixed (the handoff) — they state
-  /// what the mandate charges, so they ship verbatim.
+  /// Both strings it carries are contractually FIXED — they state what the mandate charges.
   static const TextStyle paywallFinePrint = TextStyle(
     fontFamily: paywallTextFamily,
     fontFamilyFallback: paywallSerifFallback,
@@ -1203,8 +1075,8 @@ abstract final class ArulTokens {
   static const double paywallPanelInset = 28;
   static const double paywallPanelTopGap = 26;
 
-  /// The cream ring inside the shrine frame (4) and the gold rule inside that
-  /// (1) — the handoff's two inset box-shadows, drawn as nested borders.
+  /// The cream ring inside the shrine frame and the gold rule inside that.
+  /// The handoff's two inset box-shadows, drawn as nested borders.
   static const double paywallPanelRingWidth = 4;
 
   /// Corner brackets: 14 × 14 at 2px, hung 6px OUTSIDE each corner.
@@ -1216,9 +1088,8 @@ abstract final class ArulTokens {
   static const double paywallPriceDividerWidth = 44;
   static const double paywallPriceDividerHeight = 2;
 
-  /// Feature medallion: a 48px ring at 1.5px around a 20px line icon drawn at
-  /// 1.8px — the handoff's own SVG stroke, kept because a Material glyph at
-  /// this size reads heavier than the frame around it.
+  /// Feature medallion — a 48px ring at 1.5px around a 20px line icon drawn at 1.8px.
+  /// The handoff's own SVG stroke, kept because a Material glyph reads heavier than its frame.
   static const double paywallMedallionSize = 48;
   static const double paywallMedallionBorder = 1.5;
   static const double paywallFeatureIconSize = 20;
@@ -1342,6 +1213,11 @@ abstract final class ArulTokens {
   /// Horizontal inset of the CTA's floret ornaments.
   static const double paywallCtaOrnamentInset = 16;
 
+  /// Air between a floret and the CTA label. Only a long label ever reaches it — English stops
+  /// well short — but a Tamil label scaled to fit lands EXACTLY on the padding edge, and touching
+  /// the ornament reads as a collision rather than a tight fit.
+  static const double paywallCtaLabelGap = 10;
+
   /// Display size of the lotus crowning the CTA.
   static const double paywallCtaLotusSize = 32;
 
@@ -1369,12 +1245,11 @@ abstract final class ArulTokens {
   /// Bottom padding between the brand lockup and its closing hairline.
   static const double paywallBrandBottomPadding = 13;
 
-  /// Gap between the trial lead sentence and its ₹2 price lockup.
-  /// Height the ₹2 lockup is scaled into on a short screen, where the clip
-  /// has to stay on the first screenful. Uniform scale, so PriceLockup's
-  /// per-glyph ink centring survives it.
+  /// Height the ₹2 lockup is scaled into on a short screen, where the clip must stay on screen.
+  /// A UNIFORM scale, so PriceLockup's per-glyph ink centring survives it.
   static const double paywallDensePriceHeight = 46;
 
+  /// Gap between the trial lead sentence and its ₹2 price lockup.
   static const double paywallTrialLeadGap = 2;
 
   /// Gap between the ₹2 price lockup and the refund badge.

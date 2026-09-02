@@ -1,11 +1,8 @@
-// PostToolUse (Write|Edit) hook: name the doc that covers the file just edited.
-//
-// WHY: docs drift from code because nobody knows which doc covers what, and
-// scanning docs/ to find out is expensive. This is a static route table, so the
-// lookup is O(1): match the path, print the doc name, done.
-//
-// REMINDS, NEVER BLOCKS. Always exits 0. No match => prints nothing.
-// Editing this table is the maintenance job — see .claude/skills/doc-update/.
+// Nobody knows which doc covers what -> scanning docs/ is expensive -> match the edited path against
+// a static table and print the doc name.
+// Reminds, never blocks -> always exits 0 -> no match prints nothing.
+// The table IS the maintenance job -> keep it in step with .claude/rules/ globs -> see
+// .claude/skills/doc-update/.
 
 // First match wins. Order specific -> general.
 const ROUTES = [
@@ -14,7 +11,7 @@ const ROUTES = [
       "android/app/src/main/res/values*/styles.xml",
       "android/app/src/main/res/drawable*/launch_background.xml",
       "lib/features/auth/presentation/widgets/video_background.dart",
-      "lib/core/auth/**",
+      "lib/features/auth/presentation/splash_screen.dart",
     ],
     docs: ["docs/launch-surface.md"],
   },
@@ -39,8 +36,14 @@ const ROUTES = [
     docs: ["CLAUDE.md §5 Premium Entitlement", "docs/architecture.md §Entitlement", "docs/edge-cases.md §Premium / payments"],
   },
   {
-    when: ["workers/src/routes/auth.ts", "workers/src/lib/jwt.ts", "workers/src/lib/google.ts", "lib/features/auth/**"],
-    docs: ["docs/architecture.md §Security", "docs/edge-cases.md §Auth"],
+    when: [
+      "workers/src/routes/auth.ts",
+      "workers/src/lib/jwt.ts",
+      "workers/src/lib/google.ts",
+      "lib/features/auth/**",
+      "lib/core/auth/**",
+    ],
+    docs: ["docs/auth.md", "docs/architecture.md §Security"],
   },
   {
     when: ["workers/src/routes/media.ts", "workers/src/lib/r2.ts", "workers/src/lib/media-constraints.ts", "workers/src/lib/media-verify.ts"],
@@ -68,7 +71,7 @@ const ROUTES = [
   },
   {
     when: ["workers/src/env.ts", "env.example.json"],
-    docs: ["workers/README.md §Secrets", "CLAUDE.md §9 Secrets & Environment"],
+    docs: ["workers/README.md §Secrets", "CLAUDE.md §6 Secrets & environment"],
   },
   {
     when: ["workers/src/routes/**", "workers/src/index.ts", "lib/core/api/**"],
@@ -83,16 +86,25 @@ const ROUTES = [
     docs: ["docs/notifications.md"],
   },
   {
-    when: ["lib/core/analytics/**", "workers/src/lib/ga4.ts"],
+    when: ["lib/core/analytics/**", "workers/src/lib/posthog.ts"],
     docs: ["docs/analytics-events.md", "docs/analytics-ops.md", "docs/google-ads.md"],
   },
   {
-    when: ["android/**/feedvideo/**", "lib/features/wallpapers/data/**"],
-    docs: ["docs/edge-cases.md §Video feed", "docs/media-conventions.md §THE video rule"],
+    when: [
+      "android/**/feedvideo/**",
+      "lib/features/wallpapers/data/**",
+      "lib/features/wallpapers/presentation/video_preload_controller.dart",
+      "lib/features/wallpapers/presentation/viewer_media.dart",
+    ],
+    docs: ["docs/video-feed.md", "docs/media-conventions.md §THE video rule"],
   },
   {
-    when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/wallpaper/**", "android/**/share/**"],
-    docs: ["docs/edge-cases.md §Wallpaper apply", "docs/known-issues.md §Traps already paid for", "docs/share.md", "docs/deep-links.md §Google Ads DDL"],
+    when: ["android/**/wallpaper/**", "lib/features/wallpapers/providers/wallpaper_apply_provider.dart"],
+    docs: ["docs/wallpaper-apply.md", "docs/known-issues.md §Traps already paid for"],
+  },
+  {
+    when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/share/**"],
+    docs: ["docs/known-issues.md §Traps already paid for", "docs/share.md", "docs/deferred-links.md"],
   },
   {
     when: ["lib/features/wallpapers/**/*share*"],
@@ -100,21 +112,21 @@ const ROUTES = [
   },
   {
     when: ["lib/theme/**", "lib/app/theme/**"],
-    docs: ["docs/ui-direction.md", "CLAUDE.md §7 Theming"],
+    docs: ["docs/ui-direction.md", ".claude/rules/theming.md"],
   },
   {
-    when: ["lib/features/wallpapers/**"],
-    docs: ["docs/edge-cases.md §Browse", "CLAUDE.md §5b Browse Model"],
+    when: ["workers/src/cron/build-catalog.ts", "workers/src/lib/feed-score.ts", "lib/features/wallpapers/**"],
+    docs: ["docs/browse.md", "CLAUDE.md §5b Browse Model"],
   },
   {
     when: ["lib/features/ringtones/**"],
-    docs: ["docs/edge-cases.md §Ringtones", "docs/architecture.md §API"],
+    docs: ["docs/ringtones.md", "docs/architecture.md §API"],
   },
-  // The hooks are CODE, not prose — CLAUDE.md §11 and release-build/SKILL.md both
+  // The hooks are CODE, not prose — CLAUDE.md §8 and release-build/SKILL.md both
   // make claims about what they enforce, so changing one can silently contradict them.
   {
     when: [".claude/hooks/**"],
-    docs: ["CLAUDE.md §11 Definition of Done & Git", ".claude/skills/release-build/SKILL.md"],
+    docs: ["CLAUDE.md §8 Definition of done & git", ".claude/skills/release-build/SKILL.md"],
   },
   // LAST, and it must stay last — it is a catch-all, and first-match-wins means
   // anything above it wins. Seven of the twelve files in workers/src/lib were named
@@ -200,11 +212,16 @@ process.stdin.on("end", () => {
     rel = rel.split(path.sep).join("/").replace(/^\.\//, "");
     // Outside the repo, or a doc edit (the doc IS the update) — say nothing.
     if (rel.startsWith("..")) return;
-    // Prose only: docs/, the two root READMEs, and the skill/agent definitions.
-    // .claude/hooks/ is deliberately NOT here — it is executable code that CLAUDE.md
-    // §11 makes claims about, and suppressing the whole .claude/ tree is exactly how
-    // the hooks drifted from the docs describing what they enforce.
-    if (/^(docs\/|CLAUDE\.md$|README\.md$|\.claude\/(skills|agents)\/)/i.test(rel)) return;
+    // Prose edits ARE the doc update -> a reminder there is noise -> exempt docs/, the READMEs,
+    // the tools docs and .claude/{skills,agents,rules}.
+    // .claude/hooks/ is deliberately NOT exempt -> it is code CLAUDE.md makes claims about ->
+    // suppressing the whole .claude/ tree is how the hooks drifted from those claims.
+    if (
+      /^(docs\/|CLAUDE\.md$|README\.md$|workers\/README\.md$|tools\/content-import\/.*\.md$|\.claude\/(skills|agents|rules)\/)/i.test(
+        rel
+      )
+    )
+      return;
 
     const relLower = rel.toLowerCase();
     for (const route of ROUTES) {

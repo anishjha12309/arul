@@ -1,14 +1,9 @@
-// Tests for ApplyRestore — the read-back half of the post-apply restore
-// (docs/edge-cases.md §Apply). The contract under guard:
-//   - the saved page index is a position in the list the feed SERVES for the
-//     saved chip, so it must be validated through feedOrder() — validating
-//     against the raw catalog accepts indices that don't exist in a filtered
-//     chip and restores the user onto a different wallpaper. That holds for
-//     All's curated head as much as for its shuffled tail.
-//   - the pending flags are consumed exactly once, even when the restore is
-//     rejected, so a stale flag can never hijack every future cold start.
-//   - the saved category chip is re-selected, so the feed lands on the
-//     wallpapers the user actually left, not on "All".
+// ApplyRestore is the read-back half of the post-apply restore (docs/edge-cases.md §Apply).
+// The saved page index is a position in the list the feed SERVES for the saved chip -> validate it through feedOrder().
+// Validating against the raw catalog accepts indices a filtered chip lacks -> the user restores onto another wallpaper.
+// That holds for All's curated head as much as for its shuffled tail.
+// The pending flags are consumed exactly once, even when the restore is rejected -> no stale flag hijacks a cold start.
+// The saved category chip is re-selected -> the feed lands on the wallpapers the user left, not on "All".
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,8 +29,8 @@ Wallpaper _wp(String stem, String category) => Wallpaper.fromJson({
   'height': 1920,
 });
 
-/// 10 items: sivan has 4, so a raw-catalog index (0..9) is NOT always a valid
-/// sivan-chip index (0..3) — the discriminator for the feedOrder contract.
+/// 10 items with 4 in sivan -> a raw-catalog index (0..9) is NOT always a valid sivan-chip index (0..3).
+/// That gap is the discriminator for the feedOrder contract.
 final _catalog = [
   for (var i = 0; i < 4; i++) _wp('sivan$i', 'sivan'),
   for (var i = 0; i < 2; i++) _wp('amman$i', 'amman'),
@@ -159,8 +154,7 @@ void main() {
     'an index past the filtered chip is rejected even though the catalog '
     'is longer',
     (tester) async {
-      // 7 is a valid raw-catalog index (10 items) but sivan serves only 4 —
-      // the exact confusion that restored users onto a different wallpaper.
+      // 7 is a valid raw-catalog index but sivan serves only 4 -> the exact confusion that restored the wrong wallpaper.
       final h = await pumpHost(tester, {
         appliedWallpaperPendingKey: true,
         pendingApplyPageIndexKey: 7,
@@ -205,10 +199,8 @@ void main() {
     'an All index resolves through the POPULARITY order: index 0 is the '
     'most-applied wallpaper, not the newest one',
     (tester) async {
-      // temple0 sits last in catalog order; applies move it to slot 0, which is
-      // the slot the saved index refers to. This is the whole reason
-      // apply_restore has to go through feedOrder(): a restart landing on the
-      // wrong wallpaper is the bug it exists to prevent.
+      // temple0 sits last in catalog order but applies move it to slot 0 -> that is the slot the saved index refers to.
+      // This is why apply_restore goes through feedOrder() -> a restart landing on the wrong wallpaper is the bug.
       final applied = [
         for (final w in _catalog)
           w.id == 'id-temple0' ? w.copyWith(applyCount: 12) : w,
@@ -277,9 +269,8 @@ void main() {
   });
 
   // ── Deep link ──────────────────────────────────────────────────────────────
-  // The other thing that turns a saved reference into a page index. Shares the
-  // feedOrder() contract above: an id resolved against the raw catalog would
-  // open a DIFFERENT wallpaper than the one the link named.
+  // The other thing that turns a saved reference into a page index -> it shares the feedOrder() contract above.
+  // An id resolved against the raw catalog would open a DIFFERENT wallpaper than the link named.
   group('deep link', () {
     setUp(ArulDeepLink.reset);
     tearDown(ArulDeepLink.reset);
@@ -287,9 +278,8 @@ void main() {
     testWidgets('opens the requested wallpaper on All, at its served index', (
       tester,
     ) async {
-      // Give temple0 the applies so All's popularity order puts it first — the
-      // index handed to the pager must be its position in THAT list, not its
-      // position in the catalog (where it is last).
+      // Give temple0 the applies so All's popularity order puts it first.
+      // The index handed to the pager must be its position in THAT list, not in the catalog, where it is last.
       final catalog = [
         for (final w in _catalog)
           w.id == 'id-temple0' ? w.copyWith(applyCount: 9) : w,
@@ -326,8 +316,7 @@ void main() {
     });
 
     testWidgets('the target is consumed exactly once', (tester) async {
-      // A catalog revalidate calls this again with fresh data. A target left
-      // behind would drag the user back to the same wallpaper every time.
+      // A catalog revalidate calls this again with fresh data -> a target left behind would drag the user back every time.
       ArulDeepLink.request('id-temple0');
       final h = await pumpHost(tester, {});
 
@@ -343,9 +332,8 @@ void main() {
     testWidgets('a pending RINGTONE passes through the feed untouched', (
       tester,
     ) async {
-      // The feed builds before the shell has switched to the Ringtones tab, so
-      // its wallpaper-typed take must leave a ringtone link for that tab —
-      // and must not clear the persisted copy either.
+      // The feed builds before the shell switches to Ringtones -> its wallpaper-typed take must leave a ringtone link alone.
+      // It must not clear the persisted copy either.
       ArulDeepLink.requestTarget(const RingtoneLinkTarget('id-ring0'));
       final h = await pumpHost(tester, {
         'pending_deeplink_ringtone': 'id-ring0',
@@ -383,10 +371,8 @@ void main() {
     testWidgets('a target parked AFTER the first catalog still opens', (
       tester,
     ) async {
-      // Two links land here late by design: an App Link tapped while the app is
-      // already warm, and a Google Ads deferred link, which GA4F fetches over
-      // the network at startup and can deliver at any point in it. A
-      // once-per-mount flag swallowed both for the whole session.
+      // Two links land here LATE by design -> an App Link tapped while the app is warm, and a Google Ads deferred link.
+      // GA4F fetches the deferred one over the network and can deliver at any point -> a once-per-mount flag ate both.
       final h = await pumpHost(tester, {});
 
       h.host.maybeOpenDeepLink(_catalog);
@@ -395,8 +381,7 @@ void main() {
 
       ArulDeepLink.request('id-temple0');
       h.host.maybeOpenDeepLink(_catalog);
-      // The feed calls this from build(), so its post-frame callback always has
-      // a frame to ride; here nothing is dirty, so schedule one by hand.
+      // The feed calls this from build(), so its post-frame callback always has a frame -> nothing is dirty here.
       tester.element(find.byType(_Host)).markNeedsBuild();
       await tester.pump();
 
@@ -405,9 +390,8 @@ void main() {
 
     testWidgets('consuming clears the deferred copy so it cannot re-fire on '
         'the next launch', (tester) async {
-      // main.dart seeds ArulDeepLink AND leaves the pref in place, because
-      // either can win the startup race. Consuming one without the other would
-      // re-open this wallpaper next launch.
+      // main.dart seeds ArulDeepLink AND leaves the pref in place -> either can win the startup race.
+      // Consuming one without the other would re-open this wallpaper next launch.
       ArulDeepLink.request('id-temple0');
       final h = await pumpHost(tester, {
         'pending_deeplink_wallpaper': 'id-temple0',

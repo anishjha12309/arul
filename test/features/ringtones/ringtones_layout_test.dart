@@ -1,17 +1,9 @@
-// Layout resilience for the Ringtones surface — the class of defect a device
-// check finds LAST, because it needs the right phone, the right language and
-// the right accessibility setting all at once.
-//
-// The screen is drawn to a 390×844 frame with one short English word in the
-// header and a three-letter verb on every row. Neither survives contact with
-// the shipping app on its own: "Set" is "സെറ്റ് ചെയ്യുക" in Malayalam, the
-// title is half again as long in Tamil, and nothing in this app clamps the OS
-// font-size setting — so a Row of inflexible children would push itself off a
-// 320dp screen. Every case below asserts the frame simply does not break.
-//
-// Note the test font makes every glyph a fixed-width box, WIDER than the real
-// faces at the same size. That is a feature here: passing under it means real
-// text has slack to spare.
+// Layout resilience for the Ringtones surface -> the defect class a device check finds LAST.
+// It needs the right phone, the right language and the right accessibility setting all at once.
+// The frame is 390x844 with one short English word in the header and a three-letter verb on every row.
+// Neither survives the shipping app -> "Set" is far longer in Malayalam and the title half again as long in Tamil.
+// Nothing here clamps the OS font-size setting -> a Row of inflexible children would push off a 320dp screen.
+// The test font makes every glyph a fixed-width box, WIDER than the real faces -> passing here leaves real text slack.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,10 +28,9 @@ class _FakeCatalog extends RingtoneCatalogNotifier {
   Future<List<Ringtone>> build() async => _items;
 }
 
-/// One row per category, so every medallion motif is exercised, plus the two
-/// longest titles in the shipped catalog and one deliberately longer than
-/// anything published — the row has to hold at ×2 text scale on a 320dp screen,
-/// and a future import will not ask permission before being long.
+/// One row per category, so every medallion motif is exercised.
+/// Plus the two longest titles in the shipped catalog and one longer than anything published.
+/// The row has to hold at x2 text scale on a 320dp screen -> a future import will not ask permission before being long.
 Ringtone _rt(String id, String title, String category) =>
     Ringtone(id: id, title: title, category: category, audioKey: '$id.mp3');
 
@@ -54,9 +45,8 @@ final _catalog = <Ringtone>[
   _rt('r8', 'Vetrivel Muruga', 'murugan'),
 ];
 
-/// The real notifier owns a just_audio player, which needs a platform. This
-/// keeps the one-row-at-a-time contract and opens with a row playing, so the
-/// now-playing row's taller layout is what the frames are measured against.
+/// The real notifier owns a just_audio player, which needs a platform -> this keeps the one-row-at-a-time contract.
+/// It opens with a row playing -> the now-playing row's taller layout is what the frames are measured against.
 class _StubPreview extends RingtonePreviewNotifier {
   @override
   RingtonePreviewState build() =>
@@ -158,9 +148,7 @@ void main() {
   });
 
   group('the other states hold too', () {
-    // Each of these ALSO has to clear the floating dock — a Retry button or a
-    // last skeleton row hidden behind the capsule is the same defect as an
-    // overflow, just quieter.
+    // Each of these ALSO has to clear the floating dock -> a Retry button behind the capsule is the same defect, quieter.
     for (final f in _frames) {
       testWidgets('loading · ${f.width.toInt()}dp ×${f.scale}', (tester) async {
         await sized(tester, f.width);

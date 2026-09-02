@@ -8,20 +8,16 @@ part of 'notification_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The [NotificationService]. Overridden in `main()` with the instance whose
-/// `initialize()` was kicked off there — the same shape as
-/// `sharedPreferencesProvider`, and for the same reason: the service is created
-/// before `runApp` so a notification tap that LAUNCHED the app has a live
-/// handler by the time the plugin replays it.
+/// The [NotificationService], overridden in `main()` with the instance initialised there.
+///
+/// Created before `runApp` -> a notification tap that LAUNCHED the app has a live handler on replay.
 
 @ProviderFor(notificationService)
 final notificationServiceProvider = NotificationServiceProvider._();
 
-/// The [NotificationService]. Overridden in `main()` with the instance whose
-/// `initialize()` was kicked off there — the same shape as
-/// `sharedPreferencesProvider`, and for the same reason: the service is created
-/// before `runApp` so a notification tap that LAUNCHED the app has a live
-/// handler by the time the plugin replays it.
+/// The [NotificationService], overridden in `main()` with the instance initialised there.
+///
+/// Created before `runApp` -> a notification tap that LAUNCHED the app has a live handler on replay.
 
 final class NotificationServiceProvider
     extends
@@ -31,11 +27,9 @@ final class NotificationServiceProvider
           NotificationService
         >
     with $Provider<NotificationService> {
-  /// The [NotificationService]. Overridden in `main()` with the instance whose
-  /// `initialize()` was kicked off there — the same shape as
-  /// `sharedPreferencesProvider`, and for the same reason: the service is created
-  /// before `runApp` so a notification tap that LAUNCHED the app has a live
-  /// handler by the time the plugin replays it.
+  /// The [NotificationService], overridden in `main()` with the instance initialised there.
+  ///
+  /// Created before `runApp` -> a notification tap that LAUNCHED the app has a live handler on replay.
   NotificationServiceProvider._()
     : super(
         from: null,
@@ -134,47 +128,32 @@ abstract class _$NotificationSettingsNotifier
   }
 }
 
-/// Side-effecting bootstrap: re-arms the local schedule whenever settings
-/// change, and once on startup.
+/// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
 ///
-/// Watched from the root widget so it stays alive for the app's lifetime. This
-/// is the SINGLE place that drives scheduling — the notifier's mutators only
-/// persist state, so there is exactly one path from "settings changed" to
-/// "alarms re-armed" and no way for the two to drift.
-///
-/// The startup run is not optional: the festival reminders are one-shot alarms,
-/// so re-arming on launch is what carries the schedule past each festival and
-/// into the next.
+/// Watched from the ROOT widget so it stays alive for the app's lifetime.
+/// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
+/// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
+/// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
 
 @ProviderFor(notificationBootstrap)
 final notificationBootstrapProvider = NotificationBootstrapProvider._();
 
-/// Side-effecting bootstrap: re-arms the local schedule whenever settings
-/// change, and once on startup.
+/// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
 ///
-/// Watched from the root widget so it stays alive for the app's lifetime. This
-/// is the SINGLE place that drives scheduling — the notifier's mutators only
-/// persist state, so there is exactly one path from "settings changed" to
-/// "alarms re-armed" and no way for the two to drift.
-///
-/// The startup run is not optional: the festival reminders are one-shot alarms,
-/// so re-arming on launch is what carries the schedule past each festival and
-/// into the next.
+/// Watched from the ROOT widget so it stays alive for the app's lifetime.
+/// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
+/// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
+/// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
 
 final class NotificationBootstrapProvider
     extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
     with $FutureModifier<void>, $FutureProvider<void> {
-  /// Side-effecting bootstrap: re-arms the local schedule whenever settings
-  /// change, and once on startup.
+  /// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
   ///
-  /// Watched from the root widget so it stays alive for the app's lifetime. This
-  /// is the SINGLE place that drives scheduling — the notifier's mutators only
-  /// persist state, so there is exactly one path from "settings changed" to
-  /// "alarms re-armed" and no way for the two to drift.
-  ///
-  /// The startup run is not optional: the festival reminders are one-shot alarms,
-  /// so re-arming on launch is what carries the schedule past each festival and
-  /// into the next.
+  /// Watched from the ROOT widget so it stays alive for the app's lifetime.
+  /// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
+  /// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
+  /// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
   NotificationBootstrapProvider._()
     : super(
         from: null,

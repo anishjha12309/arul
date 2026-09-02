@@ -1,16 +1,8 @@
-// Build archive-index.json — the durable record of every source clip that has passed
-// through the staging ROOT, kept so the media itself can be deleted.
-//
-// WHY: the masters/ and normalized/ folders under ROOT are ~250 MB of .mp4 that is
-// already shipped to R2. Deleting them is safe for the LIBRARY (refhash.mjs rebuilds
-// refhashes.json from the live CDN catalog), but it would lose every trace of a source
-// clip that was NEVER imported — a rejected dup, an off-size export, a QC failure. Those
-// would silently come back on the next Drive drop. This index is that trace, at ~200
-// bytes per clip instead of ~1.4 MB.
-//
-// Records, per clip: perceptual dHash (near-dup, survives re-encode), a 64-bit content
-// hash (byte-exact re-download), dims/duration/bytes, which folder(s) it lived in, and
-// the library row it became if it was imported.
+// The durable record of every source clip staged under ROOT -> the media itself can then be deleted.
+// refhash.mjs rebuilds refhashes.json from the live CDN catalog -> deleting the masters is safe for the LIBRARY.
+// But a clip that was NEVER imported leaves no trace -> a rejected dup or QC failure returns on the next drop.
+// This index is that trace at ~200 bytes per clip instead of ~1.4 MB of .mp4.
+// Per clip: dHash (near-dup), a 64-bit content hash (byte-exact), dims/duration/bytes, folders, the row it became.
 //
 // Usage: node archive-index.mjs [--root c:/Anish/arul-import] [--out <path>]
 //        node archive-index.mjs --dry-run     # print the tally, write nothing
@@ -19,7 +11,7 @@ import { execFileSync } from "child_process";
 import { join, relative } from "path";
 import { createHash } from "crypto";
 import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout, same as refhash.mjs / dedup.mjs.
+// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
@@ -30,8 +22,8 @@ const DRY = process.argv.includes("--dry-run");
 
 const VID = new Set([".mp4", ".mov", ".webm", ".mkv", ".m4v"]);
 const IMG = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-// Folder -> category. Scratch stages (drive/, normalized/) are overwritten every run, so
-// they carry no category of their own; theirs is resolved from the import plan join below.
+// Folder -> category. Scratch stages (drive/, normalized/) are overwritten every run -> they carry no category.
+// Theirs is resolved from the import-plan join below.
 const FOLDER_CAT = {
   "masters-amman": "amman", "masters-amman-new": "amman", "drive-amman-0730": "amman",
   "masters-ayyappan": "ayyappan", "masters-ayyappa-new": "ayyappan",
@@ -42,16 +34,15 @@ const FOLDER_CAT = {
 const SKIP_DIR = new Set(["node_modules", "thumbs", ".git"]);
 
 // ---- hashes -----------------------------------------------------------------
-// dHash exactly as refhash.mjs / dedup.mjs compute it, so the values are comparable
-// across all three indexes.
+// dHash computed EXACTLY as refhash.mjs and dedup.mjs do -> the values stay comparable across all three indexes.
 async function dhashBuf(buf) {
   const { data } = await sharp(buf).greyscale().resize(9, 8, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
   let hash = 0n, bit = 0n;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= (1n << bit); bit++; }
   return hash.toString(16).padStart(16, "0");
 }
-// Frame at 1s to match the thumbnail clean-batch.mjs makes; falls back to frame 0 for
-// clips shorter than that. `vf` optionally applies a cleaning geometry (see coverage).
+// Frame at 1s matches the thumbnail clean-batch.mjs makes -> shorter clips fall back to frame 0.
+// `vf` optionally applies a cleaning geometry -> see the coverage pass below.
 function frameVF(path, vf) {
   for (const ss of ["1", "0"]) {
     try {
@@ -94,9 +85,8 @@ const files = dirs.flatMap((d) => walk(join(ROOT, d)));
 console.log(`scanning ${files.length} media files across ${dirs.length} folders under ${ROOT}`);
 
 // ---- import-plan join: base -> shipped library row --------------------------
-// plan-batch.mjs always writes import-plan.json, so each batch clobbered the last; the
-// per-category copies that were saved are all the provenance there is. Missing plans are
-// expected — the dHash match against the live catalog is the authoritative coverage check.
+// plan-batch.mjs always writes import-plan.json -> each batch clobbered the last -> provenance is partial by design.
+// Missing plans are expected -> the dHash match against the live catalog is the authoritative coverage check.
 const plans = readdirSync(ROOT).filter((f) => /^import-plan.*\.json$/.test(f));
 const byBase = new Map();
 for (const p of plans) {
@@ -108,14 +98,13 @@ for (const p of plans) {
 }
 console.log(`import-plan provenance: ${byBase.size} bases from ${plans.length} plan file(s)`);
 
-// stem() matches clean-batch.mjs so a master filename joins to the plan's `base`.
+// stem() must match clean-batch.mjs -> that is what joins a master filename to the plan's `base`.
 const stem = (f) => f.replace(/\.[^.]+$/, "").replace(/\s+\(\d+\)$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
 
 // ---- build ------------------------------------------------------------------
-// MERGE, never truncate. Once archive-prune.mjs has run, the media this index describes
-// is GONE — a plain rebuild would scan the few survivors and silently drop the record of
-// everything already deleted, which is the whole point of the file. Existing records are
-// seeded first and are never removed; a re-scan only adds clips and fills in blanks.
+// MERGE, never truncate -> after archive-prune.mjs the media this index describes is GONE.
+// A plain rebuild would scan the survivors and drop the record of everything deleted -> the whole point of the file.
+// Existing records are seeded first and never removed -> a re-scan only adds clips and fills in blanks.
 const bySha = new Map();
 if (existsSync(OUT)) {
   try {
@@ -134,8 +123,7 @@ for (const path of files) {
   const bytes = statSync(path).size;
   const s = sha(path);
 
-  // Byte-identical copies across folders collapse to one record (masters-* are backups
-  // of what drive/ held, so most clips exist twice).
+  // masters-* are backups of what drive/ held -> most clips exist twice -> byte-identical copies collapse to one record.
   if (bySha.has(s)) {
     const r = bySha.get(s);
     if (!r.f.includes(folder)) r.f.push(folder);
@@ -161,12 +149,11 @@ for (const path of files) {
 }
 
 // ---- coverage stamp: is this clip actually in the live library? --------------
-// MUST happen here, while the media still exists. A raw master is watermarked 720x1280
-// while the shipped thumb comes from the CLEANED 1024x1824 clip, and the Veo path crops
-// 40 bottom rows first — so a raw-vs-shipped dHash is not a like-for-like comparison.
-// Where the raw hash is not already close, re-extract the frame under each cleaning
-// geometry and take the best. Category is NOT used to restrict the search: the pipeline's
-// review step legitimately re-files a clip into another category.
+// MUST happen here, while the media still exists -> a pruned clip has no file left to re-extract from.
+// A raw master is watermarked 720x1280 while the shipped thumb comes from the CLEANED 1024x1824 clip.
+// The Veo path crops 40 bottom rows first -> a raw-vs-shipped dHash is not like-for-like.
+// So where the raw hash is not already close, re-extract under each cleaning geometry and take the best.
+// Category never restricts the search -> the pipeline's review step legitimately re-files a clip.
 const REF = join(ROOT, "refhashes.json");
 if (existsSync(REF)) {
   const refs = JSON.parse(readFileSync(REF, "utf8")).filter((r) => r.dhash);
@@ -176,9 +163,8 @@ if (existsSync(REF)) {
   const best = (d) => refs.reduce((b, r) => { const h = ham(d, r.dhash); return h < b.h ? { h, r } : b; }, { h: 999, r: null });
   console.log(`\ncoverage: matching ${bySha.size} clips against ${refs.length} live catalog items`);
   for (const rec of [...bySha.values()]) {
-    // A verdict already stamped stands: it was reached while the clip was still on disk and
-    // could be re-extracted under each cleaning geometry. Re-deriving it from the raw hash
-    // alone would be strictly worse, and for a pruned clip there is no file left to read.
+    // A stamped verdict stands -> it was reached while the clip was on disk and could be re-extracted.
+    // Re-deriving it from the raw hash alone would be strictly worse -> never overwrite one.
     if (rec.live !== undefined && !rec._paths) continue;
     if (rec.id && liveIds.has(rec.id)) { rec.live = 1; rec.hd = 0; continue; } // plan UUID still in catalog
     let b = rec.d ? best(rec.d) : { h: 999, r: null };
@@ -192,7 +178,7 @@ if (existsSync(REF)) {
       }
     }
     rec.hd = b.h === 999 ? null : b.h;
-    // 10 is dedup.mjs's "already in storage" threshold, reused here for the same question.
+    // 10 is dedup.mjs's "already in storage" threshold -> reused here for the same question.
     if (b.h <= 10) { rec.live = 1; if (!rec.id && b.r) rec.lid = b.r.id; }
     else rec.live = 0;
   }
@@ -211,8 +197,7 @@ console.log(`with import provenance: ${recs.filter((r) => r.id).length}`);
 
 if (DRY) { console.log("\n--dry-run: nothing written"); process.exit(0); }
 
-// Minified on purpose: this file is the permanent stand-in for 250 MB of media, and it is
-// read by tools, not by eye. archive-check.mjs pretty-prints what it matches.
+// Minified on purpose -> this file is read by tools, not by eye -> archive-check.mjs pretty-prints its matches.
 const payload = {
   v: 1,
   note: "Durable record of source clips staged under arul-import; the media itself was deleted. d=dHash(frame@1s), s=sha256-64, b=bytes, f=folders, cat=category, id/t=shipped library row.",

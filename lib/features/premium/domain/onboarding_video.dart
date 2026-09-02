@@ -8,9 +8,8 @@ import '../../../data/models/app_config_model.dart';
 class OnboardingVideoSource {
   const OnboardingVideoSource({required this.lang, required this.url});
 
-  /// The language actually being shown — NOT necessarily the one asked for.
-  /// A link for a language with no cut yet (`hi`, until its dub lands) resolves
-  /// to `en`, and analytics reports what was really played.
+  /// The language actually shown — NOT necessarily the one asked for: a link for a language with no
+  /// cut yet (`hi`, until its dub lands) resolves to `en`, and analytics reports what really played.
   final String lang;
   final String url;
 
@@ -24,18 +23,17 @@ class OnboardingVideoSource {
 
 /// Which cuts exist on the CDN when `app_config` has nothing to say.
 ///
-/// The remote list is authoritative; this is only the offline / first-launch
-/// answer. `hi` is deliberately absent — the app ships six locales but only
-/// five cuts have been produced, and a Hindi link must fall back to English
-/// rather than request a key that 404s.
+/// The remote list is authoritative -> this is only the offline / first-launch answer.
+/// Six locales ship but five cuts exist -> `hi` is deliberately absent, so a Hindi link falls back to
+/// English instead of requesting a key that 404s.
 const _defaultLangs = <String>['en', 'ta', 'te', 'kn', 'ml'];
 
 /// Resolves the clip for [languageCode], or null when onboarding video is off.
 ///
-/// Reads `feature_flags.onboarding_video` so the whole feature — the kill
-/// switch, the cache-busting version, and the set of languages that exist —
-/// moves without an app release. Shipping the Hindi dub is then an upload plus
-/// a CMS edit, which is the entire reason the MP4s are not bundled.
+/// `feature_flags.onboarding_video` holds the kill switch, the cache-busting version and the set of
+/// languages that exist -> a re-cut or the Hindi dub is an upload plus a CMS edit, never a release ->
+/// the MP4s live on the CDN and are NEVER bundled (Play cannot language-split `flutter_assets`).
+/// Shown on the TRIAL variant of `/premium` only — its script says "start your 1-day trial".
 OnboardingVideoSource? resolveOnboardingVideo(
   AppConfigModel? config,
   String languageCode,
@@ -43,9 +41,8 @@ OnboardingVideoSource? resolveOnboardingVideo(
   final flag = config?.featureFlags['onboarding_video'];
   final map = flag is Map ? flag : const {};
 
-  // Absent config must not gate the feature off: a cold start reaches the
-  // paywall before /config has landed on a slow connection, and a blank screen
-  // where the brand block used to be would be worse than either outcome.
+  // A cold start reaches the paywall before /config lands on a slow link -> only an explicit
+  // `enabled: false` gates the feature off, never an absent config.
   if (map['enabled'] == false) return null;
   if (AppConfig.cdnBaseUrl.isEmpty) return null;
 
@@ -53,8 +50,8 @@ OnboardingVideoSource? resolveOnboardingVideo(
     final List<dynamic> l when l.isNotEmpty => l.whereType<String>().toList(),
     _ => _defaultLangs,
   };
-  // The ladder: the language the link asked for, then English, then nothing at
-  // all — the caller puts the brand lockup back. Never a broken box.
+  // Ladder: the language the link asked for -> `en` -> null, where the caller puts the brand lockup
+  // back. Never a broken box.
   final lang = langs.contains(languageCode)
       ? languageCode
       : (langs.contains('en') ? 'en' : null);

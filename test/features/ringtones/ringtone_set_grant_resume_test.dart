@@ -1,12 +1,7 @@
-// The WRITE_SETTINGS grant round trip. Android grants "Modify system settings"
-// on a Settings screen, not in a dialog, so the Set tap that discovers the
-// missing permission leaves the app. The request must finish BY ITSELF when the
-// user comes back holding the grant — the first cut parked nothing, and the
-// visible result was "I granted it and nothing happened": no ringtone and no
-// "ringtone set" popup until a second tap (owner's device, 2026-08-22).
-//
-// Driven through the real WidgetsBinding lifecycle, because that is the only
-// signal the notifier has that the user is back.
+// Android grants "Modify system settings" on a Settings SCREEN, not in a dialog -> the Set tap leaves the app.
+// The request must finish BY ITSELF when the user comes back holding the grant.
+// The first cut parked nothing -> the visible result was "I granted it and nothing happened" until a second tap.
+// Driven through the real WidgetsBinding lifecycle -> that is the only signal the notifier has that the user is back.
 
 import 'dart:io';
 
@@ -90,8 +85,7 @@ void main() {
 
   /// The app leaving for the Settings screen and coming back.
   Future<void> roundTrip() async {
-    // The engine walks every intermediate state; a listener rejects a jump
-    // straight from paused to resumed, so the test walks them too.
+    // The engine walks every intermediate state -> a listener rejects a jump straight from paused to resumed.
     for (final state in const [
       AppLifecycleState.resumed,
       AppLifecycleState.inactive,
@@ -160,8 +154,7 @@ void main() {
     expect(service.settingsOpened, 1);
     expect(container.read(ringtoneSetProvider), isA<RingtoneSetIdle>());
 
-    // And it stays dropped: a grant made later is picked up by the NEXT tap,
-    // not by a stale request.
+    // And it stays dropped -> a grant made later is picked up by the NEXT tap, never by a stale request.
     service.canWrite = true;
     await roundTrip();
     expect(service.sets, isEmpty);

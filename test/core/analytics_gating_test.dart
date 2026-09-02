@@ -73,8 +73,7 @@ void main() {
       expect(inner.tracked, isEmpty);
     });
 
-    // The whole point of inverting the old sample-rate map: a brand-new track()
-    // call site must cost nothing in PostHog until someone opts it in.
+    // Inverting the old sample-rate map means a brand-new track() call site costs NOTHING until someone opts it in.
     test('a new, unknown event defaults to dropped', () {
       svc.track('some_feature_added_next_quarter');
       expect(inner.tracked, isEmpty);
@@ -100,15 +99,12 @@ void main() {
     });
 
     test('defaults to non-member before resolve() runs', () {
-      // Fail closed: a build that forgets to resolve must send nothing rather
-      // than everything, because the wrong direction here costs money.
+      // Fail closed -> a build that forgets to resolve sends nothing, not everything -> the wrong direction costs money.
       expect(AnalyticsCohort.isMember, isFalse);
     });
 
     test('membership is exactly draw < rate', () async {
-      // Asserted against debugRate, not against a literal: the rate is a tuning
-      // knob (0.05 → 1.0 on 2026-08-13) and hardcoding it here turns every
-      // retune into two unrelated test failures.
+      // Asserted against debugRate, never a literal -> the rate is a tuning knob and a copy turns a retune into two failures.
       final prefs = await SharedPreferences.getInstance();
       final justUnder = AnalyticsCohort.debugRate * 0.5;
       expect(
@@ -119,9 +115,8 @@ void main() {
     });
 
     test('a draw at or above the rate stays out', () async {
-      // Random.nextDouble() is [0,1), so at rate 1.0 no such draw can occur and
-      // the panel is genuinely every install — which is the current state. The
-      // rule still has to hold for any narrower rate, so exercise it directly.
+      // Random.nextDouble() is [0,1) -> at rate 1.0 no excluding draw can occur -> the panel is genuinely every install.
+      // The rule still has to hold for any narrower rate -> exercise it directly.
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       const narrowRate = 0.05;
@@ -143,9 +138,8 @@ void main() {
         AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.01));
         AnalyticsCohort.debugReset();
 
-        // Second launch draws a number that WOULD exclude this install, but the
-        // persisted draw wins — otherwise a user would drift in and out of the
-        // panel and every retention curve built on it would be wrong.
+        // A second launch draws a number that WOULD exclude this install -> the persisted draw wins.
+        // Otherwise a user drifts in and out of the panel -> every retention curve built on it would be wrong.
         expect(
           AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.99)),
           isTrue,
@@ -157,12 +151,9 @@ void main() {
       'the DRAW is stored, not the boolean — which is what makes widening the '
       'rate additive',
       () async {
-        // The property the whole design rests on, and the one a stored boolean
-        // would lose: because each install keeps its raw draw, raising the rate
-        // (0.05 → 1.0, 2026-08-13) only ever ADDS installs and never drops one
-        // that was already reporting, so retention curves stay continuous across
-        // the change. A stored boolean would force a fresh draw per install and
-        // break every cohort spanning it.
+        // The property the design rests on, and the one a stored boolean would lose -> each install keeps its RAW draw.
+        // So raising the rate only ADDS installs and never drops one already reporting -> retention curves stay continuous.
+        // A stored boolean would force a fresh draw per install -> every cohort spanning the change would break.
         final prefs = await SharedPreferences.getInstance();
         AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.07));
         expect(prefs.getDouble('analytics_posthog_cohort_draw_v1'), 0.07);
@@ -174,10 +165,8 @@ void main() {
   });
 
   group('AnalyticsCohort.isFreshInstall', () {
-    // Drives the hand-emitted `Application Installed` in main.dart, which is the
-    // ONLY thing PostHog now receives outside postHogAllowedEvents. Wrong in
-    // either direction is silent: never true = no installs in PostHog at all,
-    // true twice = an install count that quietly overstates.
+    // Drives the hand-emitted `Application Installed` in main.dart -> the ONLY thing PostHog gets outside the allow-list.
+    // Wrong either way is silent -> never true means no installs at all, true twice means an overstated install count.
     setUp(() {
       SharedPreferences.setMockInitialValues({});
       AnalyticsCohort.debugReset();
@@ -203,8 +192,7 @@ void main() {
     });
 
     test('false for an install that predates the flag', () async {
-      // Its draw is already on disk from an earlier release, so shipping this
-      // cannot back-date an "install" onto the existing base.
+      // Its draw is already on disk from an earlier release -> shipping this cannot back-date an "install" onto the base.
       SharedPreferences.setMockInitialValues({
         'analytics_posthog_cohort_draw_v1': 0.42,
       });
@@ -214,18 +202,13 @@ void main() {
     });
   });
 
-  // The two gates above are correct in isolation; these assert how they are
-  // WIRED, which is where the money and the missing-event bugs actually live.
+  // The two gates above are correct in isolation -> these assert how they are WIRED, where the real bugs live.
   group('postHogAllowedEvents (the real list)', () {
     test('no paywall-block event is billed', () {
-      // Inverted on 2026-08-18: the blocked-premium events left the list with
-      // the rest of the non-journey noise (owner's call — PostHog shows the
-      // journey only; GA4 still has all three at 100%).
-      //
-      // Still asserted through the ENUM rather than as literals, because that is
-      // what the feed actually concatenates into the event name: if a
-      // `PremiumGateAction` is renamed AND someone re-adds its old event string
-      // here, the list would grow an event that nothing can ever fire.
+      // The blocked-premium events left the list with the rest of the non-journey noise (owner's call).
+      // PostHog shows the journey only -> GA4 still has all three at 100%.
+      // Still asserted through the ENUM, never literals -> that is what the feed concatenates into the event name.
+      // A renamed `PremiumGateAction` plus a re-added old string here would grow an event nothing can ever fire.
       for (final action in PremiumGateAction.values) {
         expect(
           postHogAllowedEvents,
@@ -239,34 +222,27 @@ void main() {
     });
 
     test('the billed events are exactly this list', () {
-      // Pinned as a SET, not a subset. Trimmed from eleven to five on
-      // 2026-08-18 (owner's call): PostHog carries the journey — install →
-      // login → trial → apply/share → ringtone set — and nothing else. The
-      // install half is `Application Installed`, captured in main.dart and so
-      // deliberately absent from this list.
+      // Pinned as a SET, not a subset -> PostHog carries the journey and nothing else (owner's call).
+      // The journey is install -> login -> trial -> apply/share -> ringtone set.
+      // The install half is `Application Installed`, captured in main.dart -> deliberately absent from this list.
       expect(postHogAllowedEvents, <String>{
         'login_success',
         'wallpaper_applied',
         'wallpaper_shared',
         'ringtone_set',
         'trial_started',
-        // TEMPORARY (2026-08-30 sign-in diagnosis): the two picker-outcome
-        // diagnostics ride along so the cancel/failure split can be read
-        // same-day by build. Remove both here and in analytics_provider.dart
-        // when the diagnosis is done.
+        // TEMPORARY, for the sign-in diagnosis -> the two picker-outcome diagnostics ride along.
+        // They let the cancel/failure split be read same-day by build -> remove them here and in analytics_provider.dart.
         'login_cancelled',
         'login_failed',
       });
     });
 
     test('high-volume and diagnostic events stay OFF the list', () {
-      // `wallpaper_engaged` fires per dwelled card and is the one genuine volume
-      // risk in the app — cost, not style. `feed_session_ended` (its rollup),
-      // `subscription_active` and `referral_shared` came off on 2026-08-18 for a
-      // different reason: PostHog is the journey view now, and revenue truth was
-      // always Neon. The rest are attempts, failures and rare account admin —
-      // Crashlytics, GA4 and Neon questions, which would make the funnel harder
-      // to read rather than the data richer.
+      // `wallpaper_engaged` fires per dwelled card -> the one genuine volume risk in the app -> cost, not style.
+      // `feed_session_ended`, `subscription_active` and `referral_shared` came off for a different reason.
+      // PostHog is the journey view now and revenue truth was always Neon.
+      // The rest are attempts, failures and rare account admin -> Crashlytics, GA4 and Neon questions, not funnel ones.
       for (final event in <String>[
         'wallpaper_engaged',
         'feed_session_ended',
@@ -295,12 +271,9 @@ void main() {
   });
 
   group('fan-out asymmetry', () {
-    // The claim the whole default-deny design rests on: trimming the PostHog
-    // list loses NOTHING, because only PostHog is wrapped. GA4 is added to the
-    // composite unwrapped and still receives 100% of every event. If someone
-    // ever "tidies up" by wrapping the composite instead of the PostHog
-    // delegate, the app silently stops measuring most of its own behaviour —
-    // and no other test in either repo would notice.
+    // The claim default-deny rests on -> trimming the PostHog list loses NOTHING, because only PostHog is wrapped.
+    // GA4 is added to the composite UNWRAPPED and still receives 100% of every event.
+    // Wrap the composite instead of the PostHog delegate and the app silently stops measuring itself -> nothing else notices.
     late _RecordingAnalyticsService posthog;
     late _RecordingAnalyticsService ga4;
     late CompositeAnalyticsService composite;
@@ -328,10 +301,8 @@ void main() {
     });
 
     test('screen views reach neither', () {
-      // PostHog drops them (duplicate billed volume); GA4's own no-op
-      // implementation ignores them because it auto-collects screen_view. The
-      // recording double here stands in for GA4, so assert only the PostHog
-      // side is closed.
+      // PostHog drops them as duplicate billed volume -> GA4's no-op ignores them because it auto-collects screen_view.
+      // The recording double here stands in for GA4 -> assert only that the PostHog side is closed.
       composite.screen('browse');
       expect(posthog.screens, isEmpty);
     });

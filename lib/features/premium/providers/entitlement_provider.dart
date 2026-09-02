@@ -11,35 +11,23 @@ import '../../auth/providers/auth_providers.dart';
 import '../domain/entitlement.dart';
 import 'trial_conversion_catch_up.dart';
 
-/// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a
-/// cached claim and never a JWT claim, so a purchase, expiry or refund takes
-/// effect on the very next gated tap (CLAUDE.md §5).
-/// `ref.invalidate(entitlementDetailProvider)` after a purchase / cancel
-/// re-reads it.
+/// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a cached or JWT claim.
 ///
-/// `isPremium` is the SERVER's `premium` flag, computed by the one rule in
-/// workers/src/lib/entitlement.ts (statuses + debit grace + referral reward
-/// pool) — the client never re-derives it from the row (see [Entitlement] for
-/// the drift that ban exists to prevent). Without a backend (or signed out)
-/// nobody is premium — the gate fails closed, which is the correct default;
-/// the Worker's `/media/signed-url` stays the authoritative gate.
-/// The FULL entitlement — the derived `isPremium` flag AND the subscription row
-/// it came from. The Manage screen needs the row itself (status, renewal date,
-/// trial end) to say anything true about the plan, so the fetch is modelled here
-/// and [entitlementProvider] narrows it to the bool the gate wants. One provider
-/// does the network read; both consumers share the single result.
+/// So a purchase, expiry or refund takes effect on the very next gated tap (CLAUDE.md §5).
+/// `ref.invalidate(entitlementDetailProvider)` after a purchase or cancel re-reads it.
+/// `isPremium` is the SERVER's flag from workers/src/lib/entitlement.ts — never re-derived here.
+/// No backend, or signed out -> nobody is premium; the gate fails CLOSED, the correct default.
+/// The Worker's `/media/signed-url` stays the authoritative gate either way.
+/// This carries the FULL entitlement — the flag AND the row the Manage screen displays.
+/// [entitlementProvider] narrows it to the bool the gate wants -> one read, two consumers.
 final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
   if (!AppConfig.hasBackend) return const Entitlement.none();
 
-  // Read the auth service's SYNCHRONOUS currentState, not the stream's
-  // `.future`: authStateChanges is a broadcast controller that does not replay
-  // its last event to new listeners, so awaiting `.future` after the single
-  // emission has already passed hangs forever (which silently froze the
-  // apply/share gate). `currentState` always reflects the latest emission and
-  // is seeded to `unauthenticated` before the first event, so a loading moment
-  // reads as not-yet-authenticated (fail-closed) rather than bouncing a paying
-  // user — and the real gate is the Worker's /media/signed-url check anyway.
-  // We still watch the stream so entitlement re-resolves when auth changes.
+  // authStateChanges is a broadcast controller that does not replay its last event.
+  // Awaiting `.future` after the single emission passed hangs forever — it froze the apply gate.
+  // So read the SYNCHRONOUS `currentState`, which always reflects the latest emission.
+  // It is seeded `unauthenticated` -> a loading moment fails CLOSED rather than bouncing a payer.
+  // The stream is still watched, so entitlement re-resolves when auth changes.
   ref.watch(authStateStreamProvider);
   final authState = ref.read(authServiceProvider).currentState;
   if (!authState.isAuthenticated) return const Entitlement.none();
@@ -48,12 +36,9 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
       .watch(subscriptionRepositoryProvider)
       .getEntitlement(authState.userId!);
 
-  // Every entitlement read is also the moment a trial granted app-closed can
-  // be reported (TrialConversionCatchUp) — the cold-start /me, the refresh
-  // after a purchase, the Manage screen's reconcile. Idempotent per order, so
-  // running it on every read costs nothing; guarded so analytics can never
-  // fail the entitlement (a missing prefs override in a test is the only
-  // realistic throw).
+  // Every entitlement read is a chance to report a trial granted app-closed.
+  // Idempotent per order -> running it on every read costs nothing.
+  // Guarded, so analytics can never fail the entitlement.
   try {
     ref.read(trialConversionCatchUpProvider).reconcile(entitlement);
   } catch (e) {
@@ -70,13 +55,10 @@ final entitlementProvider = FutureProvider<bool>((ref) async {
   return entitlement.isPremium;
 });
 
-/// THE client gate. Call before every gated action; it is UX only — the real
-/// gate is the Worker's `/media/signed-url` live entitlement check.
+/// THE client gate. Call before every gated action — UX only; `/media/signed-url` is the real gate.
 ///
-/// It AWAITS the future rather than reading `.valueOrNull`. That is not
-/// pedantry: reading a loading snapshot would bounce a paying user to the
-/// paywall on a cold start, which is precisely the bug this signature exists to
-/// make impossible.
+/// Reading a loading snapshot bounces a paying user to the paywall on a cold start.
+/// So it AWAITS the future and never reads `.valueOrNull` — the signature exists to force that.
 Future<bool> ensurePremium(
   BuildContext context,
   WidgetRef ref, {
@@ -87,14 +69,12 @@ Future<bool> ensurePremium(
   try {
     premium = await ref.read(entitlementProvider.future);
   } catch (_) {
-    // Entitlement fetch failed (network/auth). Fall through to the paywall UX;
-    // the server-side gate still enforces the real check on the signed-url call.
+    // Fetch failed -> fall through to the paywall UX; signed-url still enforces the real check.
     premium = false;
   }
   if (premium) return true;
 
-  // `properties` lets callers attribute the block (e.g. the wallpaper id), so
-  // the funnel can say WHICH content converts — mirrors the reference gate.
+  // `properties` attributes the block (the wallpaper id) -> the funnel says WHICH content converts.
   ref
       .read(analyticsServiceProvider)
       .track('${source}_blocked_premium', properties: properties);

@@ -1,8 +1,6 @@
 /**
- * Unit tests for JWT sign/verify/rotation logic.
- * No network calls — signing and verification run against the REAL Web Crypto
- * API (vitest's workerd/node environment provides it; nothing is mocked), so a
- * failure here means the token format or HMAC actually broke.
+ * JWT sign/verify/rotation. Signing runs against the REAL Web Crypto API — nothing here is mocked.
+ * So a failure means the token format or the HMAC actually broke, not that a stub drifted
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -113,7 +111,7 @@ describe("JWT — KV denylist", () => {
     expect(callArgs[0]).toBe("jti:my-jti");
     expect(callArgs[1]).toBe("1");
     const opts = callArgs[2] as { expirationTtl: number };
-    // Should be ~7200s (with a small margin for test execution time)
+    // Assert a RANGE, not an exact value -> test execution time moves the computed TTL by a second or two
     expect(opts.expirationTtl).toBeGreaterThan(7000);
     expect(opts.expirationTtl).toBeLessThanOrEqual(7200);
   });

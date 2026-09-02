@@ -12,29 +12,19 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 
-/**
- * Sets static image wallpapers via Android's WallpaperManager.
- *
- * Adopted from the vendored flutter_wallpaper_plus ImageWallpaperManager and
- * trimmed to throw [WallpaperApplyException] on failure (instead of returning a
- * ResultPayload), which is what the Dart apply service expects.
- *
- * Design decisions retained from the vendored code (all earned on real devices):
- *  1. Primary path is setStream() (memory-efficient), with a decoded-bitmap
- *     fallback for lock-sensitive OEMs where the stream path silently no-ops.
- *  2. Pre-flight isWallpaperSupported / isSetWallpaperAllowed checks (managed
- *     and kiosk devices block wallpaper changes).
- *  3. FLAG_SYSTEM / FLAG_LOCK handled per API level (minSdk 24 ⇒ always flagged).
- *  4. "both" writes home then lock sequentially with a short gap (some OEMs drop
- *     the second write if issued back-to-back), each with the bitmap fallback.
- *  5. Sources are normalized (downscaled) first to avoid OOM on budget SoCs.
- */
+// Sets static image wallpapers via WallpaperManager -> it THROWS [WallpaperApplyException], never returns a payload.
+// The primary path is setStream(), which is memory-efficient.
+// A decoded-bitmap fallback covers lock-sensitive OEMs where the stream path silently no-ops.
+// Pre-flight isWallpaperSupported and isSetWallpaperAllowed -> managed and kiosk devices block wallpaper changes.
+// "both" writes home then lock SEQUENTIALLY with a short gap -> some OEMs drop the second write issued back-to-back.
+// Each of those writes carries the bitmap fallback too.
+// Sources are normalized and downscaled first -> that is what avoids OOM on budget SoCs.
 class ImageWallpaperManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ImageWallpaperManager"
 
-        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        /** Debug-only log -> the BuildConfig.DEBUG gate strips it from a release build. */
         private fun logd(msg: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, msg)
         }
@@ -44,11 +34,7 @@ class ImageWallpaperManager(private val context: Context) {
         ImageNormalizer(context)
     }
 
-    /**
-     * Sets [imageFile] as the wallpaper on [target] ("home" | "lock" | "both").
-     * Runs entirely on Dispatchers.IO. Throws [WallpaperApplyException] on
-     * failure; returns normally on success.
-     */
+    /** Sets [imageFile] on [target] ("home", "lock" or "both"), entirely on Dispatchers.IO. */
     suspend fun setWallpaper(imageFile: File, target: String) =
         withContext(Dispatchers.IO) {
             val wallpaperManager = WallpaperManager.getInstance(context)
@@ -129,32 +115,18 @@ class ImageWallpaperManager(private val context: Context) {
             logd("Wallpaper set successfully")
         }
 
-    /**
-     * Sets an ALREADY-DECODED [bitmap] on home AND lock, for the live-wallpaper
-     * static fallback ([WallpaperApplyChannel.handleSetVideoWallpaper]): a
-     * device that cannot run live wallpapers at all gets the clip's own first
-     * frame instead of a dead end.
-     *
-     * Deliberately NOT [setWallpaper]'s path. The frame arrives decoded, so
-     * [ImageNormalizer.normalizeIfNeeded] would only add an RGB_565 decode and
-     * a JPEG q90 re-encode to a handoff that is otherwise lossless — the OS
-     * stores a bitmap given to `setBitmap` as a PNG. Only the centre-crop is
-     * shared, so the framing matches a static apply exactly.
-     *
-     * `visibleCropHint = null` is correct HERE and nowhere else: the bitmap is
-     * already display-aspect, so the OS has no slack to hand the launcher as
-     * parallax room (docs/edge-cases.md forbids the null hint on a RAW file,
-     * which is the case that framed every subject right of centre).
-     *
-     * Home and lock in ONE write: the chooser this stands in for commits
-     * `which=3`, so the fallback matches. `setBitmap` returns the new
-     * wallpaper's id, or zero on failure — the zero is the whole verification,
-     * which is why this path needs none of [setWallpaper]'s before/after
-     * getWallpaperId diffing.
-     *
-     * The caller owns [bitmap] and must recycle it; this only recycles the
-     * cropped copy it makes itself.
-     */
+    // Sets an ALREADY-DECODED bitmap on home AND lock, for the live-wallpaper static fallback.
+    // A device that cannot run live wallpapers at all gets the clip's own first frame instead of a dead end.
+    // Deliberately NOT [setWallpaper]'s path -> the frame arrives decoded and setBitmap is stored by the OS as PNG.
+    // Routing it through [ImageNormalizer.normalizeIfNeeded] would add an RGB_565 decode and a JPEG q90 re-encode.
+    // Only the centre-crop is shared -> the framing matches a static apply exactly.
+    // `visibleCropHint = null` is correct HERE and nowhere else -> the bitmap is already display-aspect.
+    // So the OS has no slack to hand the launcher as parallax room.
+    // A null hint on a RAW file is forbidden (docs/edge-cases.md) -> that is what framed every subject right of centre.
+    // Home and lock in ONE write -> the chooser this stands in for commits which=3, so the fallback matches.
+    // setBitmap returns the new wallpaper's id, or ZERO on failure -> that zero is the whole verification.
+    // Hence this path needs none of [setWallpaper]'s before/after getWallpaperId diffing.
+    // The CALLER owns the bitmap and must recycle it -> this only recycles the cropped copy it makes itself.
     suspend fun setWallpaperFromBitmap(bitmap: Bitmap) =
         withContext(Dispatchers.IO) {
             val wallpaperManager = WallpaperManager.getInstance(context)
@@ -274,7 +246,7 @@ class ImageWallpaperManager(private val context: Context) {
         flags: Int
     ) {
         FileInputStream(imageFile).use { stream ->
-            // visibleCropHint=null → system handles cropping; allowBackup=true.
+            // visibleCropHint=null -> the system handles cropping; allowBackup is true.
             wallpaperManager.setStream(stream, null, true, flags)
         }
     }
@@ -322,7 +294,7 @@ class ImageWallpaperManager(private val context: Context) {
         which: Int,
         beforeId: Int
     ): Boolean {
-        if (beforeId <= 0) return true // can't verify reliably; assume success
+        if (beforeId <= 0) return true // cannot verify reliably -> assume success
         val afterId = safeGetWallpaperId(wallpaperManager, which)
         return afterId > 0 && afterId != beforeId
     }

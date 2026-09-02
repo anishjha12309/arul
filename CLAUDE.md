@@ -1,83 +1,129 @@
 # CLAUDE.md — Arul
 
-> Read first, every session. Behaviour contracts: [docs/edge-cases.md](docs/edge-cases.md) · Backend: [docs/architecture.md](docs/architecture.md) · Media: [docs/media-conventions.md](docs/media-conventions.md) · Data: [docs/data-model.md](docs/data-model.md) · Reminders: [docs/notifications.md](docs/notifications.md) · Ad/share links: [docs/deep-links.md](docs/deep-links.md) · Speed measurement traps: [docs/perf-measurement.md](docs/perf-measurement.md) · Cold-start surface: [docs/launch-surface.md](docs/launch-surface.md) · Open defects: [docs/known-issues.md](docs/known-issues.md).
+<!-- 8 KB cap; budgets and house style: .claude/skills/doc-update/SKILL.md. Section numbers are
+cited by hooks, rules and code comments (grep "CLAUDE.md §" before renumbering). -->
+
+Session contract: what every task needs regardless of the files it touches. Per-area invariants
+live in `.claude/rules/*.md` and load only when you read a matching file; the traps behind them are
+in `docs/` (§9). Open defects: `docs/known-issues.md`.
 
 ## 0. Sibling app — Pakiza (`c:\Anish\Pakiza`)
-Peers, not parent and child. Most shared code came from Pakiza, but fixes flow BOTH ways. Read that repo when a shared behaviour is unclear; it encodes months of on-device fixes (decoder limits, PhonePe endpoint quirks, sweep safety).
-**Fix a shared defect in BOTH repos in the same session.** Skipped one? Record it in that repo's `docs/known-issues.md`.
-**Never sync these deliberate deltas:** `DKS_` order-id prefix (Pakiza's is `PKZ_`) · category browse, never All/New tabs (`type` is a rendering hint only) · ringtone cover art · 6 locales · own theming ([docs/ui-direction.md](docs/ui-direction.md)) · category-partitioned upload keys (Pakiza's are flat). Identifiers are Arul's too: `com.hsrutility.arul`, `arul://`, `arul_*` storage keys, `Arul*` classes.
-**`android/**/wallpaper/**` is deliberately IDENTICAL to Pakiza's** (owner's call, 2026-07-30 — all 7 files byte-for-byte modulo identifiers). Every live apply opens the OS chooser; the in-place swap Arul used to keep is GONE. Do not re-add one, and keep the two in step when either changes.
-**The Earn button is the one UI exception** (owner's call, 2026-08-06): `ArulEarnButton` is a port of Pakiza's `EarnChip` — geometry, 🎁 emoji, type and wiggle are Pakiza's; only the gold is Arul's. Rebuilding it by eye was tried and rejected. Everything else on screen is still Arul's own.
+
+- Peers, not parent and child. Workers, entitlement, crons, catalog build, PhonePe, R2 conventions
+  and analytics gating are shared behaviour and fixes flow both ways: fix a shared defect in BOTH
+  repos in the same session, or add a line to that repo's `docs/known-issues.md`.
+- Never sync these deliberate deltas: `DKS_` order-id prefix (Pakiza `PKZ_`) · category browse,
+  never All/New tabs · ringtone cover art · 6 locales · Arul's own theming · category-partitioned
+  upload keys (Pakiza's are flat). Identifiers stay Arul's: `com.hsrutility.arul`, `arul://`,
+  `arul_*` storage keys, `Arul*` classes.
+- Two owner-decided exceptions: `android/**/wallpaper/**` is byte-identical to Pakiza's modulo
+  identifiers (keep them in step → `.claude/rules/wallpaper-apply.md`), and `ArulEarnButton` is a
+  port of Pakiza's `EarnChip` with only the gold changed. Everything else on screen is Arul's own.
 
 ## 1. Project
-**Arul** — Android-only (v1) South Indian wallpaper app. Flutter, Dart 3.12+. Shipping pillars: **Wallpapers** (Shorts-style feed, static + live video; the reel card is Shubh's tile — 16dp gutters, 24 radius, 25dp peek (owner's instruction 2026-08-25, `C:\prod-hsr-shubh`) — asks for 1:1.86 and is height-clamped by the reel; a live card is marked ONLY by `LiveMark` (a 24dp glass disc + play glyph, top-right on a 22dp inset that clears the corner arc — never text: the badge it replaced was untranslated English in 6 locales); geometry, its two knobs and the 9:16 crop boundary in docs/edge-cases.md §Browse, all of it in `feed_card_geometry.dart`) · **Settings** (incl. upload-your-content — **wallpapers AND ringtones**, each requiring a category from its OWN set, and local devotional **reminders**: weekly + festivals, on-device only, no push — [docs/notifications.md](docs/notifications.md)). Premium gated via PhonePe UPI Autopay. Package `com.hsrutility.arul`. Support `support@hsrutility.com`. Legal pages are Arul's OWN sub-site on the company domain and **never link to Pakiza** (the two apps serve different faiths and the site keeps them apart deliberately) — privacy `https://hsrutility.com/arul/privacy-policy/`, terms `https://hsrutility.com/arul/terms/`, refunds `https://hsrutility.com/arul/refund-policy/`, account deletion `https://hsrutility.com/arul/how-to-delete-account/`. The old shared `/privacy/` and `/terms/` pages are now the WEBSITE's own and no longer describe this app; `/privacy/` still redirects so older installed builds do not 404. **The Play listing carries its own copies — keep them in step**. Content: R2 bucket `south-indian-wallpapers` — devotional wallpapers (static + live interleaved) in 6 categories (Amman, Ayyappan, Murugan, Perumal, Sivan, Temples) plus the ringtone catalog. **Never share a bucket/KV/DB with another app — the sweep would delete the other app's media.**
-**Ringtones are LIVE.** The three-tab shell (Wallpapers · Ringtones · Settings behind the floating dock) is the app's shape, `WRITE_SETTINGS` is in the manifest, and Settings is a dock BRANCH — not a pushed route. **Ringtone categories are NOT the wallpaper ones**: the five deities (perumal·murugan·sivan·amman·ayyappan) plus **`others`** for tracks belonging to none of them (Hanuman, Ganesha, gurus) — and **no `temples`**. **Classify from LYRICS, never file names** — a name-based first pass got 5 of 30 wrong. Row art is a BUNDLED WebP (lossless) chosen by **`deity`** — a second, DISPLAY-ONLY axis (row art + subtitle); never browse: no chip filters on it, nothing orders by it. Resolution is deity → its CATEGORY's default → `fallback.webp` (`deity_art.dart`), so a null/unknown deity degrades to the right family of god instead of breaking; `vishnu`/`devi` are the generic defaults and must stay unattributed. A new deity = an insert + an app release for its WebP, never a migration. `cover_key` is still null everywhere and no cover files exist. Bulk drops go through `tools/content-import/ringtones-{plan,import}.mjs` — **incremental and idempotent**: stage 1 dedups on title against the LIVE catalog and continues `sort_order` from its high-water mark, so a re-run aborts instead of doubling the list. Dock + crossfade constraints: [docs/ui-direction.md](docs/ui-direction.md) §Dock.
 
-## 2. The One Architecture Rule
-**Media-heavy, read-heavy. Cost = media egress.**
-- **Media:** Cloudflare R2 (**zero egress**) + CDN `https://arul-cdn.hsrutility.com` — this is why it's affordable. Never serve media from the r2.dev origin: Cloudflare rate-limits it and caching/WAF do not apply there at all.
-- **Browse feed:** edge-cached catalog JSON from the `build-catalog` Worker (CMS-triggered, or the hourly cron — [docs/cron.md](docs/cron.md)). **Never hits DB.**
-- **DB (Neon Postgres via Hyperdrive):** per-user state only. Reached **only** from Workers — never the app.
-- **Authoring:** unified CMS at `api.hsrutility.com/admin` — **separate worker `hsr-cms`, separate repo** (`c:\Anish\Unified CMS`, github.com/anishjha12309/hsr-cms); manages Arul AND Pakiza from one login, reaching each app's worker via service binding + `/internal/build-catalog`. Row write + `content_version` bump in one transaction; the rebuild fires async and self-heals via the hourly cron (no purge — `?v=` does that job). Near-instant updates via `catalog/version.json` + `?v=`. **This repo's worker has no `/admin`.**
-- **No server-side transcoding.** ffmpeg locally per [docs/media-conventions.md](docs/media-conventions.md).
+- Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers
+  (static + live video feed) and ringtones; premium via PhonePe UPI Autopay.
+- Three-tab shell behind the floating dock (Wallpapers · Ringtones · Settings). **Settings is a dock
+  branch, not a pushed route.** Reminders are on-device only: no push, and no screen may promise one.
+- Content lives in the R2 bucket `south-indian-wallpapers`. **Never share a bucket, KV namespace or
+  database with another app** — the orphan sweep deletes the other app's media.
 
-## 3. Stack (decided — do NOT re-litigate; versions pinned in pubspec.yaml / workers/package.json)
-**Before implementing ANY package, fetch its pub.dev / vendor docs. Never code from memory.**
-| Concern | Choice |
-| --- | --- |
-| State / Nav | Riverpod 3 (riverpod_generator) · go_router |
-| Backend | Cloudflare Workers (Hono, TS) = API + crons at `https://arul-api.hsrutility.com` · Neon via Hyperdrive · Workers KV · R2. Code in `workers/`. |
-| Auth | Google one-tap (`google_sign_in` v7: instance → initialize → authenticate) → Worker verifies idToken (`aud` = WEB client id) → identity-only JWT (**60m access** + 60d rotating refresh) |
-| Payments | PhonePe v2 Autopay (OAuth), server calls in Workers only. One trial per user (`trial_end` = consumed-marker); repeat = ₹199 TRANSACTION setup. Endpoint facts: [docs/phonepe.md](docs/phonepe.md) — read there, never from memory. |
-| Analytics | `AnalyticsService` → Composite = PostHog (**100% of installs**, the 5-event journey ONLY + a hand-emitted `Application Installed`; SDK lifecycle autocapture OFF) + GA4/`firebase_analytics` (**every event at 100% = the complete record**; ★→`login`/`begin_checkout`) + Meta (★ only). **`trial_started`/StartTrial is the ONLY ad conversion; `purchase`/`Subscribe` are emitted NOWHERE (2026-08-26) — one conversion action must have ONE data source, and two (app SDK + server) desynced campaign attribution.** **Never call SDKs from widgets.** Revenue truth = Neon, never PostHog. Cohort rate is a knob: widening only adds installs, narrowing breaks cohorts. [docs/analytics-events.md](docs/analytics-events.md) · Ads/linkage traps: [docs/google-ads.md](docs/google-ads.md) |
-| Crash/Perf | Crashlytics + Performance behind `CrashReporter`/`PerformanceMonitor`; run in all real builds, only `flutter test` skips. Needs git-ignored `android/app/google-services.json`. |
-| Video | Native Media3 ExoPlayer texture pool (`FeedVideoPlugin` platform channel) — players REUSED across clips (setMediaItem swap, never dispose+recreate). Live MP4 from CDN. **Every card paints the `thumbs/` poster first and keeps it mounted underneath**; the texture fades in only on `onRenderedFirstFrame` — so a live card that has not decoded yet is INDISTINGUISHABLE from a static one (no shimmer, no spinner — deliberate, and the reason "nothing is moving" is normally cold-cache latency, not a broken pipeline). |
+## 2. Architecture — media-heavy, read-heavy, cost = media egress
+
+- Media: R2 (zero egress) behind the CDN custom domain.
+- Browse feed: edge-cached catalog JSON from the `build-catalog` Worker. **It never hits the DB.**
+- DB: Neon via Hyperdrive, per-user state only, reached **only** from Workers — never from the app.
+- Authoring: the unified CMS is a separate worker and repo (`hsr-cms`, `c:\Anish\Unified CMS`)
+  serving Arul and Pakiza. **This repo's worker has no `/admin`.**
+- No server-side transcoding — ffmpeg locally per `docs/media-conventions.md`.
+
+## 3. Stack — decided, do not re-litigate
+
+Versions are pinned in `pubspec.yaml` and `workers/package.json`. **Before implementing any package,
+fetch its pub.dev or vendor docs; never code an API from memory.**
+
+- State / nav: Riverpod (riverpod_generator) · go_router.
+- Backend: Cloudflare Workers (Hono, TS) in `workers/` = API + crons · Neon via Hyperdrive · KV · R2.
+- Auth: Google Credential Manager → Worker verifies the ID token and nonce → identity-only JWT.
+- Payments: PhonePe v2 Autopay (OAuth); server calls in Workers only. One trial per user; a repeat
+  is a full-price TRANSACTION setup.
+- Analytics: `AnalyticsService` → PostHog (journey allow-list) + GA4 (everything, the complete
+  record) + Meta (★ only). **Never call an SDK from a widget.** Revenue truth is Neon.
+- Crash / perf: Crashlytics + Performance behind `CrashReporter` / `PerformanceMonitor`; only
+  `flutter test` skips them. Needs a git-ignored `google-services.json`.
+- Video: native Media3 ExoPlayer texture pool over a platform channel; players are reused.
 
 ## 4. Layout
-Feature-first; Riverpod providers are the only cross-layer glue. App reaches the backend only via `lib/core/api/api_client.dart`.
 
-## 5. Premium Entitlement — THE Cross-Cutting Rule
-`isPremium` = (status ∈ {trialing, active, **cancelled**, pending} AND `current_period_end > now`) OR `users.reward_premium_until > now`, with a **6h debit grace** past period end for `trialing`/`active` ONLY (the renewal debit rides the hourly cron — a strict cutoff gated every payer at every period boundary). `pending` is in the list because a resubscribe claims the user's ONE row: days already paid for must survive the attempt, and a failed/abandoned setup RESTORES to `cancelled` while the period lives — expiring it stripped a live trial (device 2026-08-12, [docs/phonepe.md](docs/phonepe.md)). `cancelled` keeps premium until period end, NO grace; `paused`/`expired` get none. **The rule's ONE home is `premiumPredicate` (workers/src/lib/entitlement.ts)**; the app reads the `premium` flag `GET /me` computes from it and NEVER re-derives it from the row — a client copy drifted (missed `reward_premium_until`) and paywalled reward-only referrers. **Entitlement is NEVER authoritative in the JWT** — the `prm` claim is a UI hint only; gated actions live-read Neon so purchase/expiry/refund apply instantly.
-**Gated (ALL content is premium):** wallpaper apply + share ([docs/share.md](docs/share.md) — ONE attributed App Link per share, WhatsApp-first) · ringtone set. The request carries `action`; only `apply` counts toward popularity. **Always free:** browse, preview (incl. ringtone audio preview from CDN). Media keys are public BY DESIGN (soft gate); the real gate is Worker `/media/signed-url` → live entitlement check → short-lived signed URL. Client gate `ensurePremium()` must **await** `entitlementProvider.future` (a loading snapshot must never bounce a premium user), track `${action}_blocked_premium`, route STRAIGHT to `/premium?source=` — no nudge, no teaser sheet, no interstitial.
-Re-applying or re-sharing an already-cached wallpaper still calls the gate — a cache must never become a permanent licence. Offline with bytes on disk is the one allowed pass-through.
-**Onboarding clip — the TRIAL variant of `/premium` only** (owner, 2026-08-31): its script says "start your 1-day trial", which is a lie on the ₹199 sell. It REPLACES the PREMIUM/ARUL lockup (Cinzel carries no Indic glyphs, so the clip is the only localized thing the English-by-decision paywall can hold). Language = `localeProvider`, which IS the link's `lang` — no deep-link work, but WATCH it: deferred deliveries land seconds late, and the card re-opens in place. Ladder: asked → `en` → hide the card. **MP4s live on the CDN (`onboarding/<lang>.mp4`, outside the sweep's `CANONICAL_PREFIXES`), never bundled** — Play cannot language-split `flutter_assets`, so six cuts would ship to every install and one would play (+22% download, 83% waste); only the ~9.6 KB poster frames are bundled. `feature_flags.onboarding_video` (enabled/version/langs) so a re-cut or the Hindi dub is an upload plus a CMS edit.
+Feature-first; Riverpod providers are the only cross-layer glue; the app reaches the backend only
+through `lib/core/api/api_client.dart`.
 
-## 5b. Browse Model — category, never type
-`category` is THE browse axis for wallpapers AND ringtones: chips filter by category, static + live interleave inside each one. Wallpapers use six (amman·ayyappan·murugan·perumal·sivan·temples); **ringtones use a DIFFERENT six** — the same five deities, minus `temples`, plus `others`. Each tab derives its own chips from its own catalog, so the two lists differing is correct, not a bug. **Never filter/tab by static vs live** (`type` is a rendering hint). R2 keys are category-partitioned (`wallpapers/<category>/…`). Categories are free text: a new one is an insert, not a migration.
-**Order is ONE SQL CLAUSE, in `build-catalog`, numbered into `feed_rank`, which the shipped comparator (`feedOrder()`/`orderedByUse()`, both tabs) already sorts on — so it reaches installs that never update, in category chips as well as All.** `ORDER BY apply_count DESC, created_at DESC, id ASC` (`set_count` for ringtones, `NULLS LAST` on their `created_at`). Most-used first, then newest, then id. Same order on every chip so a filtered view can never contradict All — a category IS All restricted to that category; never add a per-chip rank. The trailing `id` is REQUIRED, not cosmetic: an import is one transaction so a whole batch ties on `created_at`, and at zero data everything ties on the counter too — without a unique final key Postgres may return tied rows differently on any run, which re-cuts pages between rebuilds and re-points the pager + video pool under a scrolling user. Same reason the Dart comparator keeps catalog position as its last tier (`List.sort` is not stable). Counts come from Neon via `/media/signed-url`, NEVER from analytics — sampled tools are not a ranking source. They reach users only on a rebuild, so the daily cron bumps `content_version` when a count moved.
-**No pins, no score — both were removed and neither may come back.** Hand pinning went 2026-08-25 (a lever that freezes a row at the top); the decayed merit score that replaced it went 2026-08-27. That score weighted uses by recency (30d half-life) with a stepped newcomer credit, in `apply_score`/`set_score` + `scored_at`. It worked, but the order then depended on WHEN it was computed, and three codebases — worker, CMS, app — had to agree on a formula and a clock rather than on a column; `workers/src/lib/feed-score.ts` is now only the rank numbering, still mirrored byte-for-byte into the CMS and Pakiza. `apply_count`/`set_count` (lifetime, only ever rises, shown in the CMS) are the sort key again, and the known cost is accepted: the head of the feed is sticky, because the row at slot 1 earns applies partly BECAUSE it is at slot 1. **The three retired columns still EXIST on both tables** — `apply_score`, `set_score`, `scored_at` — unread and no longer written by `/media/signed-url`. No migration drops them; do not read them, and do not re-introduce a second sort key beside the counter. The CMS ordering page is READ-ONLY, copies the ORDER BY above verbatim, and additionally offers a per-row download of the original file. The `feed_rank` COLUMN is dropped in both DBs; `feed_rank` survives only as the catalog JSON field build-catalog computes — keeping that name is what carries the order to installs that never update.
-**Catalog order is decided ENTIRELY by that ORDER BY — the category round-robin is gone (2026-08-27).** `interleaveByCategory` existed because an import is one transaction — tied `created_at`, `sort_order` left at default — so it landed as a contiguous single-category block that owned the top of the feed (2026-08-14: 20 Perumal in slots 1-20). The `id ASC` tie-breaker now does that job incidentally and for free: a tied import is separated by random v4 UUID, which shuffles it across its categories identically on every rebuild. Chips are still unaffected, and the result is still idempotent. `sort_order` no longer leads the ORDER BY either — imports own it, so leading with it meant the feed was really ordered by import sequence with popularity only breaking ties; the column is still stored and still editable in the CMS, but nothing reads it for feed order. Contracts: [docs/edge-cases.md](docs/edge-cases.md) §Browse.
+## 5. Premium entitlement
 
-## 6. Localization
-6 languages (ARB, `gen_l10n`): `en, ta, te, kn, ml, hi`. Only UI chrome localized; server content as-authored.
+**All content is premium** (wallpaper apply + share, ringtone set); browse and preview are always
+free, and media keys are public by design — the gate is the Worker's live entitlement read. The rule
+has ONE home, `premiumPredicate` in `workers/src/lib/entitlement.ts`; never re-derive it
+client-side → `docs/architecture.md` §Entitlement.
 
-## 7. Theming
-Light / Dark / System, persisted. Read colours from **`lib/theme/arul_tokens.dart` (`ArulTokens`)** by role name — `lib/app/theme/tokens.dart` (`ArulColors`) is the LEGACY ladder kept only so the ThemeData layer didn't need a big-bang rename; its values are already remapped onto the same palette, but new code must not grow it. No literal `Color(0x…)` in screens — two exceptions already in the tree and nothing else (the Google "G" is now Google's own asset, `assets/images/google_g.webp` — never redraw it): CustomPainter ARTWORK (the ringtone tile's grounds and ink, which must NOT become tokens — ui-direction.md §Drawn art) · `Color(0x00000000)` as a system-bar sentinel. Schemes are hand-specified, NOT `ColorScheme.fromSeed` (it invents its own secondary/tertiary). **Never seed from device wallpaper / dynamic color.** Palette values, type and the perf rules that shape the design: [docs/ui-direction.md](docs/ui-direction.md).
+## 5b. Browse model
 
-## 8. Known Gotchas (MUST hold — full checklist in docs/edge-cases.md)
-1. Live video files: **1024×1824 only** (w%128==0, h%32==0, fits 1088×1920 hw-decoder cap) — anything else hits the green-edge / software-decode bug class on budget SoCs.
-2. Android 12+ wallpaper-apply restart: manifest `configChanges` includes `uiMode|colorMode` + `onConfigurationChanged` + dark launch theme. Apply must never cold-restart the app.
-3. Sign-in auto-launches Google's SHEET on the first frame and the picker only when the sheet drew NOTHING — one visible surface per attempt (never over a dismissal, never as a warm-up), a pill tap goes straight to the picker, and every ID token carries the per-process nonce the Worker matches ([docs/edge-cases.md](docs/edge-cases.md) §Auth).
-4. PhonePe: notify user 24h before each debit and never execute inside that window (quarter-hour cron, ≤600 PhonePe calls per invocation — on Workers Paid the 15-min cron wall clock is the ceiling, not the subrequest cap, [docs/cron.md](docs/cron.md)); SDK order token + the working cancel path are in [docs/phonepe.md](docs/phonepe.md).
-5. Hyperdrive query caching stays OFF (caused ~60s staleness).
-6. Stale catalog ≠ cache bug: fix by rebuilding, never by purging. Cache behaviour + its traps: [docs/caching.md](docs/caching.md).
+**`category` is THE browse axis** on both tabs; `type` (static/live) is a rendering hint that never
+becomes a filter or a tab; categories are free text, so a new one is an insert, not a migration.
+Order is ONE SQL clause in `build-catalog`, numbered into the catalog's `feed_rank` so it reaches
+installs that never update. Hand pins lead it (`feed_rank ASC NULLS LAST`, NULL = unpinned), then
+lifetime uses, then recency, then `id`. No score → `docs/browse.md`.
 
-## 9. Secrets & Environment
-**Never hardcode keys.** App: `--dart-define-from-file=env/dev.json` (git-ignored; template `env.example.json`). Worker: `npx wrangler secret bulk <file.json>` — never a shell pipe: a trailing newline in `PHONEPE_ENV` once routed prod credentials to the sandbox host (that one now throws; every OTHER secret is still compared untrimmed). Local dev `workers/.dev.vars` (git-ignored, holds `DATABASE_URL` too). `.gitignore` covers `env/`, keystores, `key.properties`, `google-services.json`, `.dev.vars`. `TRIAL_TOMBSTONE_SECRET`: set once, **NEVER rotate** (rotation orphans tombstones and re-opens trial farming).
+## 6. Secrets & environment
 
-## 10. Commands
+- Never hardcode a key. App: `--dart-define-from-file=env/dev.json` (git-ignored; template
+  `env.example.json`). Worker: `npx wrangler secret bulk <file.json>`, **never a shell pipe** — a
+  trailing newline once routed production credentials to the sandbox host, and every other secret
+  is still compared untrimmed. Local dev: `workers/.dev.vars`.
+- **`TRIAL_TOMBSTONE_SECRET`: set once, never rotate** — rotation orphans every tombstone and
+  re-opens trial farming.
+- `guard-secrets.js` denies any git command that names `env/`, a keystore, `key.properties`,
+  `google-services.json` or `.dev.vars`. A denial is the hook working — unstage, don't work around.
+
+## 7. Commands
+
 ```bash
-flutter pub get && dart run build_runner watch -d     # codegen
-flutter gen-l10n && flutter analyze && flutter test
+flutter pub get && dart run build_runner watch -d      # codegen — generated files are TRACKED
+flutter analyze && flutter test
 flutter run --dart-define-from-file=env/dev.json
-cd workers && npm i && npx tsc --noEmit && npx vitest run
-npx wrangler deploy                                   # deploy IS part of done for workers/
-curl -X POST https://arul-api.hsrutility.com/internal/build-catalog -H "Authorization: Bearer $CATALOG_BUILD_SECRET"
+cd workers && npx tsc --noEmit && npx vitest run && npx wrangler deploy   # deploy IS part of done
 ```
 
-## 11. Definition of Done & Git
-Checklist: `.claude/skills/phase-completion/`. **Quick:** `flutter analyze` clean + formatted · worker `tsc`+tests green **+ deployed** · loading/empty/error states · localized edge cases · analytics fire · no secrets. One commit per phase. **Never commit before human approval** — standing exception: pubspec version bumps auto-commit via `.claude/hooks/version-commit.js`. Messages: one line, plain phrasing, no attribution trailers.
-**The `.aab` is the only guarded artifact** (it is the only one Play ever sees). Three hooks watch it — the two guards exclusively, so APK builds stay free for on-device testing: `release-flag-secure-guard.js` denies the build unless an ACTIVE `setFlags(FLAG_SECURE)` survives in `MainActivity.kt` · `release-version-guard.js` denies it when the pubspec version was already built from different source, and only an `.aab` landing consumes a bump · `release-commit-reminder.js` reminds you to commit the source a successful release build compiled (the `.aab`, or any release APK — both flutter build verbs default to release, so only `--debug`/`--profile` opts out).
+## 8. Definition of done & git
 
-## Meta — Maintaining This File
-Keep under 100 lines; no doc in `docs/` or `workers/README.md` may exceed it either — split instead, and link the split with a one-line "read this when…". Bullets, imperative, WHY (constraint) then WHAT (rule). Only rules that prevent real mistakes; update immediately when architecture or versions change. A line must encode a constraint, a contract, or a paid-for trap — never a description readable from the code or the running app, never counts/dates that rot, never a done-log.
+- Done = `flutter analyze` clean and formatted · worker `tsc` + vitest green **and deployed** ·
+  loading, empty and error states · localized edge cases · analytics fire · no secrets. Full
+  checklist: `.claude/skills/phase-completion/`.
+- One commit per phase; message one line, plain, no attribution trailers. **Never commit before
+  human approval.** The one exception is the pubspec version bump, which `version-commit.js`
+  auto-commits with `git add -A` — so land the phase commit first.
+- The `.aab` is the only guarded artifact; APK builds stay free for on-device testing →
+  `.claude/rules/hooks-release.md`.
+
+## 9. Docs — read the routed doc before touching its area
+
+The `[doc-sync]` hook names the doc for any file you edit: read it before debugging (the answer is
+usually already there) and update it through the `doc-update` skill. Each entry below is
+`docs/<name>.md`. Two are not obvious: **edge-cases** indexes every regression contract — walk it
+before a release — and **architecture** covers routes, entitlement, uploads and the catalog build.
+
+edge-cases · architecture · data-model · browse · ringtones · auth · launch-surface · phonepe ·
+autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
+analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
+notifications · ui-direction · perf-measurement
+
+## Compact instructions
+
+Preserve: the list of modified files, the outcome of every gate that ran, and the path of any ledger
+or report being written.
+
+## House style for this file and `docs/`
+
+One home per fact, pointers everywhere else. No calendar dates (git log is provenance; keep only
+durations that ARE the rule), no done-logs, nothing readable from the code or the running app.
+Budgets, house style and the rule/ROUTES contract: `.claude/skills/doc-update/`.

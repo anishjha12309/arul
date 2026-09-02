@@ -1,8 +1,8 @@
 /**
  * Typed environment bindings for the Arul Worker.
  *
- * Bindings are injected by the Cloudflare runtime; secrets are set via
- * `wrangler secret put <NAME>`.  See wrangler.toml for the full list.
+ * Bindings come from the runtime, secrets from `wrangler secret bulk` -> wrangler.toml carries the full list
+ * A field declared non-optional here is NOT enforced at deploy -> an unset secret fails at first use, not at boot
  */
 export interface Env {
   // ── Cloudflare bindings ──────────────────────────────────────────────────
@@ -14,8 +14,7 @@ export interface Env {
   R2: R2Bucket;
 
   // ── Rate limiters (see wrangler.toml [[ratelimits]]) ─────────────────────
-  // Optional so tests and any older deployment without the bindings still run —
-  // callers treat an absent limiter as "allow" (see lib/ratelimit.ts).
+  // Optional so tests and any older deployment still run -> an absent limiter reads as "allow" (lib/ratelimit.ts)
   /** /payments/initiate — keyed by user id */
   RL_PAYMENTS?: RateLimit;
   /** /auth/login + /auth/refresh — keyed by client IP */
@@ -26,7 +25,7 @@ export interface Env {
   // ── Secrets (wrangler secret put) ────────────────────────────────────────
   /** HS256 signing secret — min 32 bytes of entropy */
   JWT_SECRET: string;
-  /** Google OAuth2 Web Client ID used to verify the `aud` claim */
+  /** The WEB client id, not the Android one -> it is what `aud` on a Google id token must equal */
   GOOGLE_WEB_CLIENT_ID: string;
 
   // R2 S3-compatible credentials for presigning
@@ -56,93 +55,65 @@ export interface Env {
   PHONEPE_ENV: string;
 
   /**
-   * LOCAL-DEV-ONLY override for the PhonePe PG base URL.
+   * LOCAL-DEV-ONLY override for the PhonePe PG base URL. Harness: .claude/skills/verify-payments/
    *
-   * WHY: the autopay billing path (notify → execute → the ₹199 debit and the
-   * state transition that follows) can only be exercised end-to-end if a
-   * redemption reaches a TERMINAL state. PhonePe's UAT sandbox will not settle
-   * a redemption on demand — it holds it PENDING through its own retry cycle —
-   * so the COMPLETED and FAILED branches were, before this, unreachable
-   * without spending real money on the live gateway. Pointing this at a local
-   * stub makes both branches testable for free.
-   *
-   * IGNORED whenever PHONEPE_ENV resolves to PRODUCTION (see getPgBase), so
-   * setting it on the deployed Worker can never redirect real money. It is
-   * also never set by wrangler.toml or any secret — only by workers/.dev.vars,
-   * which is git-ignored and loaded solely by `wrangler dev`.
-   *
-   * See .claude/skills/verify-payments/ for the full harness.
+   * PhonePe's UAT sandbox never settles a redemption on demand -> it holds PENDING through its own retry cycle
+   * So the COMPLETED and FAILED branches were unreachable without spending real money -> point this at a local stub
+   * getPgBase IGNORES it whenever PHONEPE_ENV resolves to PRODUCTION -> setting it on the deployed Worker is inert
+   * Never set from wrangler.toml or a secret -> only workers/.dev.vars, git-ignored and read only by `wrangler dev`
    */
   PHONEPE_BASE_URL_OVERRIDE?: string;
 
   /**
-   * Shared secret for the SAFE internal routes: /internal/build-catalog,
-   * /internal/sweep-submissions, /internal/sweep-canonical.
+   * The SAFE internal routes only: /internal/build-catalog, /internal/sweep-submissions, /internal/sweep-canonical.
    *
-   * The CMS worker holds this one purely to trigger rebuilds, so its blast
-   * radius must stay limited to content. It deliberately does NOT authorize
-   * anything that moves money — see OPS_SECRET.
+   * hsr-cms holds this string to trigger rebuilds -> its blast radius must stay content -> it authorizes no money route
    */
   CATALOG_BUILD_SECRET: string;
 
   /**
-   * Operator-only secret for the routes that MOVE REAL MONEY:
-   * /internal/run-redemptions (can debit ₹199 from live subscribers) and
-   * /internal/refund.
+   * Operator-only, for the routes that MOVE REAL MONEY: /internal/run-redemptions (debits ₹199), /internal/refund.
    *
-   * Kept separate from CATALOG_BUILD_SECRET on purpose: that secret is
-   * distributed to the CMS worker for rebuild triggers, and a single string
-   * must never authorize both "rebuild the catalog" and "charge everybody".
-   * Never give this to the CMS or any other service.
+   * CATALOG_BUILD_SECRET is distributed to hsr-cms -> one string must never authorize "rebuild" AND "charge everybody"
+   * Never hand this to the CMS or any other service -> it fails closed when unset, so a 401 means the wrong secret
    */
   OPS_SECRET: string;
 
   /**
-   * HMAC key for trial_tombstones.google_sub_hash (delete-account trial guard).
-   * NEVER rotate — a new key orphans every tombstone and re-opens trial farming.
+   * HMAC key for trial_tombstones.google_sub_hash (the delete-account trial guard).
+   * A new key orphans every existing tombstone -> trial farming re-opens -> NEVER rotate
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
-  // ── PostHog capture (server-side first-conversion `subscription_active` —
-  //    lib/posthog.ts) ───────────────────────────────────────────────────────
+  // ── PostHog capture — the ONLY server-side analytics sink (lib/posthog.ts) ──
+  // GA4 and Meta server reporting were removed -> one conversion must have ONE data source -> never re-add them
   /**
-   * PostHog project API key (phc_…). Write-only and shipped inside the APK,
-   * but kept out of the repo: wrangler secret bulk. Optional: absent →
-   * PostHog reporting is skipped (fail-open).
+   * PostHog project API key (phc_…) — write-only and already shipped in the APK, yet kept out of the repo.
+   * Absent -> capture is skipped, never thrown -> analytics must not fail a payment (fail-open)
    */
   POSTHOG_API_KEY?: string;
   /**
-   * PostHog ingestion host. Defaults to https://us.i.posthog.com (the app's
-   * POSTHOG_HOST) when unset — set in wrangler.toml [vars], not a secret.
+   * PostHog ingestion host, defaulting to https://us.i.posthog.com when unset.
+   * Must match the app's POSTHOG_HOST dart-define -> a split host splits the funnel -> set in wrangler.toml [vars]
    */
   POSTHOG_HOST?: string;
 
   /**
-   * Comma-separated CORS allow-list for browser-based origins.
-   * e.g. "https://arul.hsrutility.com"
-   * The Flutter native app is not browser-based so CORS doesn't apply there.
-   * Nor does the CMS: hsr-cms reaches this worker over the ARUL_API service
-   * binding, which never goes through CORS. So this only matters if a real
-   * browser client is ever pointed at this API.
+   * Comma-separated CORS allow-list for browser origins, e.g. "https://arul.hsrutility.com".
+   *
+   * The Flutter app is not a browser and hsr-cms arrives over a service binding -> CORS applies to neither
+   * So this gates only a real browser client -> widening it never unblocks the app or the CMS
    */
   ALLOWED_ORIGINS: string;
 
   /**
-   * Comma-separated SHA-256 certificate fingerprints served in
-   * /.well-known/assetlinks.json, which is what lets Android verify the App Link
-   * on arul.hsrutility.com and open `/w/<id>` in the app instead of a browser.
+   * Comma-separated SHA-256 fingerprints served in /.well-known/assetlinks.json — Android's App Link proof.
    *
-   * NOT a secret — the file is public by design; set in wrangler.toml [vars].
-   *
-   * Must include the **Play App Signing** certificate (Play Console → Setup →
-   * App integrity → App signing key certificate), NOT just the upload key. Play
-   * re-signs every AAB with the app signing key, so an upload-key-only file
-   * verifies fine on a locally-built release APK and fails on every install that
-   * actually came from Play — the failure mode is silent (links just open the
-   * browser). List both so sideloaded release builds verify too.
-   *
-   * Absent → the route 503s rather than serving an empty file, so a missing
-   * config is visible in a curl instead of looking like a working, unverified app.
+   * The file is public by design -> NOT a secret -> set in wrangler.toml [vars]
+   * Play re-signs every AAB with the APP SIGNING key -> an upload-key-only list fails on every Play install
+   * It still verifies on a locally-built release APK -> list BOTH so sideloads work too
+   * App Link failure is silent (the link just opens a browser) -> read the truth off the device, not the console
+   * Absent -> the route 503s instead of serving an empty file -> a missing config shows up in a curl
    */
   ANDROID_CERT_SHA256?: string;
 }

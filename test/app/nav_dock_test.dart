@@ -1,13 +1,6 @@
-// The floating dock. Its look is a device check, but two things about the
-// redesign are worth pinning down here because they are exactly what a careless
-// edit would undo:
-//
-//   - ALL THREE tabs show an icon AND a label. The dock this replaced revealed
-//     the label only on the active side, which left two unnamed glyphs; with
-//     three destinations that is no longer readable.
-//   - The active cell is the one the shell says is active, and tapping a tab
-//     reports its own index (so Settings, now a branch rather than a pushed
-//     route, cannot silently land on the wrong one).
+// ALL THREE tabs show an icon AND a label -> two unnamed glyphs are unreadable with three destinations.
+// The active cell is whichever the shell says is active -> tapping a tab reports its OWN index.
+// Settings is a dock BRANCH, not a pushed route -> it must never silently land on the wrong index.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

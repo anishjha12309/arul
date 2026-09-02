@@ -6,23 +6,16 @@ import 'wallpaper_prefetch_provider.dart';
 
 /// App-scoped (keepAlive) [VideoPreloadController].
 ///
-/// WHY app-scoped and not viewer-owned: an apply can recreate the Activity
-/// (Android 12+ re-extracts Material You colours on a wallpaper change), and a
-/// viewer-owned controller would be tearing itself down while that happens — a
-/// `dispose()` in flight against a recreating Activity. Living for the process
-/// removes that race entirely.
-///
-/// NOTE: `prewarmFirst` on the controller is DEAD CODE — nothing calls it. The
-/// splash's own warm-up goes through the thumbnail path in `splash_screen.dart`
-/// instead (images, not MP4 decoders). Wire `prewarmFirst` or delete it — do
-/// not assume it runs.
-///
-/// Decoder budget: the controller holds at most previous/current/next (3
-/// decoders), so a back-swipe lands on a pre-decoded frame exactly like a
-/// forward swipe. It demotes itself to 2 and then 1 if the device reports
-/// decoder errors or a software fallback. Decoders are released on app
-/// background and — awaited — immediately before a native apply, so the OS
-/// wallpaper chooser finds the hardware codecs free.
+/// An apply can recreate the Activity — Android 12+ re-extracts Material You colours.
+/// A viewer-owned controller would be disposing itself against a recreating Activity.
+/// Living for the PROCESS removes that race entirely.
+/// NOTE: `prewarmFirst` on the controller is DEAD CODE — nothing calls it.
+/// The splash warms through the thumbnail path instead, images rather than MP4 decoders.
+/// Wire `prewarmFirst` or delete it — do not assume it runs.
+/// The controller holds at most previous/current/next -> a back-swipe lands pre-decoded.
+/// It demotes itself to 2 and then 1 on decoder errors or a software fallback.
+/// Decoders are released on background, and AWAITED before a native apply.
+/// So the OS wallpaper chooser finds the hardware codecs free.
 final videoPreloadControllerProvider = Provider<VideoPreloadController>((ref) {
   final controller = VideoPreloadController(
     cdnBaseUrl: AppConfig.cdnBaseUrl,

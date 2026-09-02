@@ -5,8 +5,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The six languages, native label over English name. Order and glyphs are
-/// verbatim per spec: English / தமிழ் / తెలుగు / ಕನ್ನಡ / മലയാളം / हिन्दी.
+/// The six languages, native label over English name — order and glyphs verbatim per spec.
 class _Lang {
   const _Lang(this.native, this.name);
   final String native;
@@ -22,13 +21,11 @@ const _langs = <_Lang>[
   _Lang('हिन्दी', 'Hindi'),
 ];
 
-/// The language picker sheet — spec: "Bottom sheet 'Language'; 2-col grid gap
-/// 10, 6 tiles (r16, 16/8 pad, centered): native 17px/600 over English 12px.
-/// Selected: gold 1.5px border + gold-tint bg + gold native text."
+/// The language picker sheet — 2-column grid, gap 10, six r16 tiles, native 17px over English 12px.
+/// Selected is a gold 1.5px border, gold-tint ground and gold native text.
 ///
-/// The sheet only RESOLVES the choice — it applies nothing itself: it returns
-/// the chosen English name, and the caller persists it and drives the app
-/// locale from it.
+/// The sheet only RESOLVES the choice and applies nothing — it returns the chosen English name.
+/// The caller persists it and drives the app locale from it.
 Future<String?> showLanguageSheet(BuildContext context, String current) {
   return showArulSheet<String>(
     context,
@@ -57,21 +54,35 @@ class _LanguageSheet extends StatelessWidget {
             style: ArulTokens.sheetTitle.copyWith(color: titleColor),
           ),
           const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 165 / 74, // tile ≈ 165×74 on a 428-wide frame
+          // Height comes from the CONTENT, never from the width.
+          //
+          // This was `childAspectRatio: 165 / 74`, measured on a 428dp frame. On the 360dp screen
+          // that is 54% of installs the same ratio yields a ~69dp tile, and the tile needs 74:
+          // Devanagari and the Indic scripts set taller than Latin at the same 17px, so "हिन्दी"
+          // over its caption overflowed the Column by 7.5px on the single most common phone.
+          // A ratio also shrinks the tile as the phone narrows, which is exactly backwards.
+          //
+          // The text half scales with the user's text size; the 32dp of padding does not.
+          GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            children: [
-              for (final l in _langs)
-                _LangTile(
-                  lang: l,
-                  on: l.name == current,
-                  onTap: () => Navigator.of(context).pop(l.name),
-                ),
-            ],
+            itemCount: _langs.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              // 45dp is what the tallest pairing actually measures (Devanagari 17px over a 12px
+              // caption); 48 leaves the slack that stops a one-pixel stripe. 32 is the padding.
+              mainAxisExtent: MediaQuery.textScalerOf(context).scale(48) + 32,
+            ),
+            itemBuilder: (_, i) {
+              final l = _langs[i];
+              return _LangTile(
+                lang: l,
+                on: l.name == current,
+                onTap: () => Navigator.of(context).pop(l.name),
+              );
+            },
           ),
         ],
       ),
@@ -90,9 +101,8 @@ class _LangTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Unselected surfaces mirror the dark reference; the light equivalents are an
-    // ASSUMPTION (the reference language sheet is dark-only) — white tile, maroon
-    // hairline. Selected is gold in both themes per spec.
+    // The reference sheet is dark-only -> the light unselected tile is an assumption: white, maroon.
+    // Selected is gold in both themes, per spec.
     final Color bg = on
         ? ArulTokens.goldTintFill14
         : (isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight);
@@ -108,8 +118,7 @@ class _LangTile extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // A language tile picks between discrete values — same tick as the theme
-      // rows and the category chips.
+      // A language tile picks between discrete values — the same tick as theme rows and chips.
       onTapDown: (_) => ArulHaptics.selection(),
       onTap: onTap,
       child: Container(

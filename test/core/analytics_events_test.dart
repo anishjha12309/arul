@@ -1,8 +1,6 @@
-// Pins the ★ event names. Every one is matched on the LITERAL string by an
-// external system — PostHog insights, GA4 key events, the Google Ads
-// conversion import, Meta's StartTrial mapping — so renaming a constant renames
-// the event everywhere at once, which none of them can follow. A failure here
-// means a dashboard or a bid is about to go dark.
+// Every ★ event name is matched on the LITERAL string by an external system.
+// PostHog insights, GA4 key events, the Ads conversion import and Meta's StartTrial all key on it.
+// Renaming a constant renames the event everywhere at once -> a failure here means a dashboard or a bid goes dark.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,7 +25,7 @@ void main() {
       'wallpaper_shared',
       'ringtone_set',
       'trial_started',
-      // TEMPORARY (2026-08-30 sign-in diagnosis) — see analytics_provider.dart.
+      // TEMPORARY, added for the sign-in diagnosis -> see analytics_provider.dart.
       'login_cancelled',
       'login_failed',
     });
