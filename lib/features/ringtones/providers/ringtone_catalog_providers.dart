@@ -19,17 +19,13 @@ final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
   ),
 );
 
-/// The full ringtone catalog, drained to one list — the screen filters by
-/// category client-side, mirroring the wallpaper feed (CLAUDE.md §5b: category
-/// is THE browse axis; the reference's All/New tabs are deliberately NOT
-/// ported). Sorted by `sort_order` then title, so authoring order holds.
+/// The full ringtone catalog, drained to one list — the screen filters by category client-side.
 ///
-/// No disk snapshot (unlike the wallpaper catalog): the list is a handful of
-/// tiny JSON pages and the tab is not the launch surface, so a network drain
-/// per session is fine — but it is warmed post-first-frame by [AppShell], so
-/// the drain has usually finished before the user ever reaches the tab. An
-/// empty catalog is DATA, not an error — the screen shows the designed empty
-/// state instead of a spinner or a retry wall.
+/// Category is THE browse axis (CLAUDE.md §5b); the reference's All/New tabs are NOT ported.
+/// Sorted by `sort_order` then title, so authoring order holds.
+/// NO disk snapshot: a handful of tiny pages, and this tab is not the launch surface.
+/// [AppShell] warms it post-first-frame -> the drain has usually finished before the user arrives.
+/// An empty catalog is DATA, not an error -> the designed empty state, never a spinner or a wall.
 final ringtoneCatalogProvider =
     AsyncNotifierProvider<RingtoneCatalogNotifier, List<Ringtone>>(
       RingtoneCatalogNotifier.new,
@@ -39,24 +35,16 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
   /// Guards a stale refresh() overwriting a newer one with older data.
   int _fetchSeq = 0;
 
-  /// Bounded fan-out for the page drain — same discipline (and value) as the
-  /// wallpaper [CatalogNotifier], so a big catalog never floods the radio.
+  /// Bounded fan-out for the page drain, matching the wallpaper [CatalogNotifier] -> no radio flood.
   static const _maxConcurrentPages = 4;
 
-  /// Delays between automatic re-checks while the list is parked on a network
-  /// error with nothing to show, after Riverpod's own exponential-backoff
-  /// retries (~13 s of quick [build] re-runs) are exhausted.
+  /// Delays between automatic re-checks while the list is parked on a network error, showing nothing.
   ///
-  /// Those quick retries exist for a cold-start radio/DNS blip. They do nothing
-  /// for the real-world case: a user opens the tab in a lift, a metro or a dead
-  /// zone, gets the error card, and then signal returns — the app has no
-  /// connectivity listener anywhere, so it never noticed and the card stayed
-  /// until a manual Retry. Mirrors [CatalogNotifier.offlineRecheckBackoffs];
-  /// both feeds shared the defect, so both carry the fix.
-  ///
-  /// The ladder lengthens to two minutes and then holds, so a genuinely offline
-  /// device settles into one cheap catalog fetch every two minutes rather than
-  /// spinning the radio. Empty disables it (tests).
+  /// Riverpod's own ~13 s of quick retries cover a cold-start radio or DNS blip, and nothing else.
+  /// A user in a lift gets the error card, signal returns, and no connectivity listener notices.
+  /// The card then stayed until a manual Retry -> this ladder is the fix, mirrored in both feeds.
+  /// It lengthens to two minutes and HOLDS -> an offline device settles, never spins the radio.
+  /// Empty disables it (tests).
   @visibleForTesting
   static List<Duration> offlineRecheckBackoffs = const [
     Duration(seconds: 5),
@@ -71,10 +59,8 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
 
   @override
   Future<List<Ringtone>> build() async {
-    // The provider outlives the screen, so the timer has to die with it or it
-    // keeps waking the radio after the tab is gone. Registered per build, so a
-    // rebuild (manual Retry invalidates this provider) also clears any pending
-    // re-check before the new load claims its own.
+    // The provider outlives the screen -> the timer must die with it, or it wakes the radio after.
+    // Registered per build, so a rebuild also clears any pending re-check before the new load.
     ref.onDispose(() {
       _recheckTimer?.cancel();
       _recheckTimer = null;
@@ -86,11 +72,9 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
       _recheckAttempt = 0;
       return items;
     } catch (e) {
-      // Only a NETWORK failure is worth re-checking on a timer — it is the one
-      // that fixes itself when the link comes back. A parse miss will fail
-      // identically forever and must wait for a manual retry. The ladder resets
-      // on every build() failure (Riverpod's quick retries land here too), so
-      // the first slow re-check after they give up is 5 s, not two minutes.
+      // Only a NETWORK failure is worth a timer — it is the one that fixes itself.
+      // A parse miss fails identically forever and must wait for a manual retry.
+      // The ladder resets on every build() failure -> the first slow re-check is 5 s, not two minutes.
       if (isNetworkError(e)) {
         _recheckAttempt = 0;
         _scheduleOfflineRecheck(seq);
@@ -99,9 +83,8 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
     }
   }
 
-  /// Queue the next automatic re-check after a network failure left the list
-  /// with nothing to show. The timer drives [refresh], which re-reads the
-  /// version pointer — a catalog published during the outage is picked up.
+  /// Queue the next automatic re-check after a network failure left the list with nothing to show.
+  /// The timer drives [refresh], which re-reads the version pointer -> an outage-time publish lands.
   void _scheduleOfflineRecheck(int seq) {
     _recheckTimer?.cancel();
     final ladder = offlineRecheckBackoffs;
@@ -115,12 +98,10 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
     });
   }
 
-  /// Pull-to-refresh AND the offline re-check timer's retry: re-read the
-  /// catalog version pointer (a just-published catalog is a new edge-cache
-  /// key), then reload. On failure with data on screen the current list is
-  /// kept — the indicator simply settles; the error state is reserved for a
-  /// list with nothing to show, and only THAT state keeps the re-check ladder
-  /// climbing.
+  /// Pull-to-refresh AND the offline timer's retry — re-read the version pointer, then reload.
+  /// A just-published catalog is a new edge-cache key.
+  /// On failure WITH data on screen the current list is kept and the indicator simply settles.
+  /// The error state is reserved for a list with nothing to show, and only that climbs the ladder.
   Future<void> refresh() async {
     invalidateCatalogVersion();
     final seq = ++_fetchSeq;
@@ -139,26 +120,22 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
     }
   }
 
-  /// Drains the full catalog: page 1 (which carries `total_pages`), then any
-  /// remaining pages with at most [_maxConcurrentPages] in flight, reassembled
-  /// in page order — the wallpaper [CatalogNotifier]'s pool, ported after the
-  /// original sequential drain was measured at ~5 s on the tab's first open
-  /// (8 pages × one CDN round trip each, serially). The repository maps a CDN
-  /// miss to an EMPTY page, so an absent catalog resolves to an empty LIST
-  /// (the designed empty state), while a genuine connectivity failure throws
-  /// [NetworkException] out of the client and lands in AsyncError → retry. An
-  /// empty later page means end-of-pages or a transient miss — everything
-  /// before it is served, matching the old drain's `break`.
+  /// Drains the full catalog — page 1 carries `total_pages`, then the rest, at most
+  /// [_maxConcurrentPages] in flight, reassembled in page order.
+  ///
+  /// A sequential drain measured ~5 s on first open: 8 pages, one CDN round trip each.
+  /// The repository maps a CDN miss to an EMPTY page -> an absent catalog is an empty LIST.
+  /// A genuine connectivity failure throws [NetworkException] instead -> AsyncError, then retry.
+  /// An empty later page means end-of-pages or a transient miss -> everything before it is served.
   Future<List<Ringtone>> _fetchCatalog() async {
     final repo = ref.read(ringtoneRepositoryProvider);
 
     final first = await repo.getRingtones();
     final all = [...first.items];
-    // Defensive cap against a malformed catalog advertising absurd page counts.
+    // Defensive cap against a malformed catalog advertising an absurd page count.
     final totalPages = first.totalPages.clamp(0, 500);
     if (first.hasMore && totalPages > 1) {
-      // Worker pool over pages 2..totalPages; results land slotted by page so
-      // ordering is deterministic regardless of completion order.
+      // Worker pool over pages 2..totalPages, slotted BY PAGE -> order is completion-independent.
       final slots = List<CatalogPage<Ringtone>?>.filled(totalPages - 1, null);
       var next = 2;
       Future<void> worker() async {
@@ -186,36 +163,40 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
   }
 }
 
-/// Categories derived from the ringtone catalog — never hardcoded, so a new
-/// category server-side needs no app release. Reuses [WallpaperCategory] as
-/// the chip value type so the chips row shares the wallpaper feed's contract.
+/// Categories DERIVED from the ringtone catalog -> a new category server-side needs no app release.
+/// Reuses [WallpaperCategory] as the chip value type, so the chips row shares the feed's contract.
 final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   final all = switch (ref.watch(ringtoneCatalogProvider)) {
     AsyncData(:final value) => value,
     _ => const <Ringtone>[],
   };
+  final cfg = switch (ref.watch(appConfigProvider)) {
+    AsyncData(:final value) => value,
+    _ => null,
+  };
   final labels = <String, String>{};
   for (final r in all) {
     labels.putIfAbsent(r.category, () => r.categoryLabel);
   }
-  return labels.entries
-      .map((e) => WallpaperCategory(e.key, e.value))
-      .toList(growable: false)
-    ..sort(compareRingtoneCategories);
+  // A CMS order wins OUTRIGHT here, `others` included: dragging it off the end is a
+  // deliberate act, and silently overriding it would be the CMS showing one order and
+  // the app another. With no CMS order, `others`-last still holds.
+  return orderedByCms(
+    labels.entries.map((e) => WallpaperCategory(e.key, e.value)).toList(),
+    categoryOrderFor(cfg?.categoryOrder, 'ringtones'),
+    compareRingtoneCategories,
+  );
 });
 
-/// Slug of the catch-all category — tracks belonging to none of the five
-/// deities (Hanuman, Ganesha, gurus). Ringtones only; wallpapers have no such
-/// bucket.
+/// Slug of the catch-all category — tracks belonging to none of the five deities.
+/// Ringtones only; wallpapers have no such bucket.
 const String othersCategorySlug = 'others';
 
-/// [compareBrowseCategories] (Sivan first, then alphabetical), except `others`
-/// is always LAST.
+/// [compareBrowseCategories] — Sivan first, then alphabetical — except `others` is always LAST.
 ///
-/// Plain alphabetical puts "Others" between "Murugan" and "Perumal", where it
-/// reads as one more deity in the row rather than the leftovers bucket it is.
-/// Pinning it to the end is the whole point of the category. The rest of the
-/// order is the wallpaper row's, shared so the two tabs cannot drift.
+/// Plain alphabetical puts "Others" between "Murugan" and "Perumal", reading as one more deity.
+/// Pinning it to the end is the whole point of the category.
+/// The rest of the order is the wallpaper row's, shared so the two tabs cannot drift.
 @visibleForTesting
 int compareRingtoneCategories(WallpaperCategory a, WallpaperCategory b) {
   final aOther = a.slug == othersCategorySlug;
@@ -224,8 +205,7 @@ int compareRingtoneCategories(WallpaperCategory a, WallpaperCategory b) {
   return compareBrowseCategories(a, b);
 }
 
-/// The ringtone list's OWN selected category — deliberately separate state from
-/// the wallpaper feed's, so switching tabs never cross-filters the other list.
+/// The ringtone list's OWN selected category — separate state, so a tab switch never cross-filters.
 final selectedRingtoneCategoryProvider =
     NotifierProvider<SelectedRingtoneCategory, String>(
       SelectedRingtoneCategory.new,
@@ -238,18 +218,13 @@ class SelectedRingtoneCategory extends Notifier<String> {
   void select(String slug) => state = slug;
 }
 
-/// The list the screen serves for [slug] — the ONE definition of ringtone
-/// order, the ringtone twin of `feedOrder()`: catalog filtered by category, in
-/// the three-tier order — admin pin, then most-SET, then catalog position.
+/// The list the screen serves for [slug] — the ONE definition of ringtone order.
 ///
-/// Identical rule to the wallpaper feed, through the same [orderedByUse], so the
-/// two tabs cannot drift — see it in catalog_providers.dart for why the pin is
-/// nulls-last and why the position tiebreaker is load-bearing. Every chip gets
-/// the comparator, All included: a category is All restricted to that category.
-///
-/// A deep link resolves its ringtone to a row index through this too: the
-/// index is a position in the list the tab SERVES, and raw catalog order would
-/// scroll to a different row whenever a set count has moved one.
+/// The ringtone twin of `feedOrder()`: filtered by category, then rank, then most-SET, then position.
+/// Identical rule to the wallpaper feed through the same [orderedByUse] -> the two cannot drift.
+/// See catalog_providers.dart for why rank is nulls-last and the position tiebreaker is load-bearing.
+/// EVERY chip gets the comparator, All included — a category is All restricted to that category.
+/// A deep link resolves its row index through this too: raw catalog order would scroll elsewhere.
 List<Ringtone> ringtoneFeedOrder(String slug, List<Ringtone> all) =>
     orderedByUse(
       slug == WallpaperCategory.allSlug

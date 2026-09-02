@@ -12,6 +12,15 @@ paths:
 hint and must never become a filter or a tab. Chips derive from each tab's own catalog, so the two
 lists differing is correct.
 
+**Chip ROW order is the operator's**, when they set one: the unified CMS writes `categories
+.picker_order`, `build-catalog` emits it as `app_config.category_order` keyed by SCOPE, and
+`orderedByCms` applies it. It sorts ONLY — a chip still exists because a published row carries the
+slug, so the list can neither add a category the catalog lacks nor hide one it has. Absent or empty
+(no drag yet, config not landed, an install older than the field) falls back to
+`compareBrowseCategories` / `compareRingtoneCategories`, and a PARTIAL list puts the named slugs
+first and leaves the rest to that fallback. An explicit order beats `others`-last (owner's call), so
+the CMS never shows one order while the app renders another.
+
 - **Order is ONE SQL clause in `build-catalog`** — `feed_rank ASC NULLS LAST, apply_count DESC,
   created_at DESC, id ASC` (`set_count`, plus a second `NULLS LAST` on `created_at`, for ringtones) —
   numbered into the catalog JSON's `feed_rank`, which the shipped comparator sorts on, so a new order

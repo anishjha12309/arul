@@ -168,7 +168,11 @@ async function buildCatalogLocked(
     // NEVER include a secret -> only the public subset AppConfigModel expects reaches this file
     if (appConfigRow) {
       try {
-        await writeAppConfig(env.R2 as R2Bucket, appConfigRow);
+        await writeAppConfig(
+          env.R2 as R2Bucket,
+          appConfigRow,
+          await readCategoryOrder(sql),
+        );
       } catch (err) {
         console.error("[build-catalog] Failed to write app_config.json:", err);
       }
@@ -312,6 +316,47 @@ function asJsonObject(v: unknown): unknown {
   return v ?? {};
 }
 
+/** Chip order per scope, as the app consumes it: `{ wallpapers: [...], ringtones: [...] }`. */
+export type CategoryOrder = Record<string, string[]>;
+
+/**
+ * The hand-set chip order, read from the `categories` table the unified CMS writes.
+ *
+ * This is the ONE thing that table feeds into the catalog. Everything else about a
+ * category still comes from the items themselves: a chip EXISTS because a published
+ * row carries the slug, and that stays true -> this only decides the order they sit in.
+ * So a category never appears because of this list, and never disappears without it.
+ *
+ * Only positioned rows (`picker_order > 0`) are emitted; the CMS numbers a whole kind
+ * 1..N on save, so an untouched install emits nothing and the app keeps its built-in
+ * order. A missing table is the same case -> the CMS may be deployed before the
+ * migration, and the hourly cron must not start failing over it.
+ */
+export async function readCategoryOrder(
+  sql: ReturnType<typeof getDb>,
+): Promise<CategoryOrder> {
+  try {
+    const rows = (await sql`
+      SELECT kind, slug FROM categories
+      WHERE picker_order > 0
+      ORDER BY kind, picker_order
+    `) as unknown as { kind: string; slug: string }[];
+    const out: CategoryOrder = {};
+    for (const r of rows) {
+      // CMS kinds are singular ('wallpaper'), catalog scopes plural ('wallpapers').
+      const scope = r.kind === "ringtone" ? "ringtones" : "wallpapers";
+      (out[scope] ??= []).push(r.slug);
+    }
+    return out;
+  } catch (err) {
+    // 42P01 = relation does not exist: expected before the migration lands.
+    if ((err as { code?: string } | null)?.code !== "42P01") {
+      console.error("[build-catalog] category order unreadable:", err);
+    }
+    return {};
+  }
+}
+
 /**
  * The PUBLIC subset of app_config -> snake_case, matching AppConfigModel.fromJson exactly.
  * NEVER emit content_version or any secret here -> this object is world-readable on the CDN
@@ -319,6 +364,7 @@ function asJsonObject(v: unknown): unknown {
 export async function writeAppConfig(
   r2Bucket: R2Bucket,
   cfg: Record<string, unknown>,
+  categoryOrder: CategoryOrder = {},
 ): Promise<void> {
   const publicConfig = {
     prices: asJsonObject(cfg["prices"]),
@@ -326,6 +372,7 @@ export async function writeAppConfig(
     policy_urls: asJsonObject(cfg["policy_urls"]),
     feature_flags: asJsonObject(cfg["feature_flags"]),
     min_supported_version: (cfg["min_supported_version"] as string | null) ?? null,
+    category_order: categoryOrder,
   };
   await putPublicJson(r2Bucket, "catalog/app_config.json", publicConfig);
 }

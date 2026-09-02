@@ -12,28 +12,25 @@ import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../../data/models/wallpaper.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
+import '../../ringtones/providers/ringtone_catalog_providers.dart';
+import '../../wallpapers/providers/catalog_providers.dart';
 import '../providers/upload_provider.dart';
 
 /// Upload-your-content — WALLPAPERS **and** RINGTONES.
 ///
-/// Layout: kind picker (Wallpaper / Ringtone), dashed pick zone, optional title
-/// field, the fixed categories for the CHOSEN kind (no "All"), rights checkbox,
-/// single submit. The pick zone is live — [_pickFile] runs the real
-/// [FilePicker] and validates MIME type + size against [UploadConstraints]
-/// before accepting a file — and submit stays disabled until a validated file,
-/// a category and the rights checkbox are all present.
+/// Kind picker, dashed pick zone, optional title, the chosen kind's categories, rights, submit.
 ///
-/// Upload categories are deliberately the fixed consts below, decoupled from
-/// the browse catalog's `categoriesProvider`: submissions must land in a
-/// moderator-known slug, so this list is not driven by whatever the catalog
-/// currently happens to contain. The two kinds do NOT share a list — ringtones
-/// drop `Temples` and add `Others` (CLAUDE.md §5b) — and the CMS re-checks the
-/// slug against the matching set at approve time.
-///
-/// A ringtone's `deity` (row art + subtitle) is NEVER collected here: it must be
-/// classified from LYRICS, and a submitted filename is not that. The row lands
-/// with a null deity and degrades to its category's default art.
+/// [_pickFile] validates MIME type and size against [UploadConstraints] before accepting a file.
+/// Submit stays disabled until a validated file, a category and the rights checkbox are all present.
+/// Upload categories are the LIVE ones off the browse catalog, with the shipped six as an
+/// offline fallback. A submission still lands only in a moderator-known slug: a catalog chip
+/// exists because a PUBLISHED row carries it, so a CMS draft category is never offered.
+/// The two kinds do NOT share a list — ringtones drop `temples`, add `others` (CLAUDE.md §5b).
+/// The CMS re-checks the slug against the matching set at approve time.
+/// A ringtone's `deity` is NEVER collected here — it is classified from LYRICS, not a filename.
+/// The row lands with a null deity and degrades to its category's default art.
 class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
 
@@ -42,24 +39,29 @@ class UploadScreen extends ConsumerStatefulWidget {
 }
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
-  static const _wallpaperCategories = [
-    'Amman',
-    'Ayyappan',
-    'Murugan',
-    'Perumal',
-    'Sivan',
-    'Temples',
+  /// FALLBACK ONLY — what to offer before the catalog has loaded, or offline.
+  ///
+  /// The live list comes from the catalog now (see [_categories]), so a category added
+  /// in the CMS becomes submittable as soon as it is published, with no app release.
+  /// These stay because an empty chip row would make the screen unusable on a cold,
+  /// offline start; they are the six the app shipped with.
+  static const _fallbackWallpaperCategories = [
+    'amman',
+    'ayyappan',
+    'murugan',
+    'perumal',
+    'sivan',
+    'temples',
   ];
 
-  /// NOT the wallpaper list: no `Temples`, plus `Others` for tracks belonging to
-  /// none of the five deities (Hanuman, Ganesha, gurus).
-  static const _ringtoneCategories = [
-    'Amman',
-    'Ayyappan',
-    'Murugan',
-    'Others',
-    'Perumal',
-    'Sivan',
+  /// NOT the wallpaper list — no `temples`, plus `others` for tracks belonging to no deity.
+  static const _fallbackRingtoneCategories = [
+    'amman',
+    'ayyappan',
+    'murugan',
+    'others',
+    'perumal',
+    'sivan',
   ];
 
   /// 'wallpaper' | 'ringtone' — the submitted `kind`.
@@ -77,8 +79,29 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   bool get _isRingtone => _kind == 'ringtone';
 
-  List<String> get _categories =>
-      _isRingtone ? _ringtoneCategories : _wallpaperCategories;
+  /// The categories a submission may claim — the LIVE ones, off the catalog.
+  ///
+  /// Still a closed list, and still only ever moderator-known slugs: a catalog chip
+  /// exists because a PUBLISHED row carries it, so a draft category in the CMS is not
+  /// offered here either. That was the whole point of the old hardcoded consts, kept —
+  /// what changes is that adding a category no longer needs an app release to accept
+  /// uploads into it.
+  ///
+  /// Falls back to the shipped six when the catalog has not arrived, so the screen is
+  /// never a dead end offline.
+  List<WallpaperCategory> get _categories {
+    final live = _isRingtone
+        ? ref.watch(ringtoneCategoriesProvider)
+        : ref.watch(categoriesProvider);
+    if (live.isNotEmpty) return live;
+    final slugs = _isRingtone
+        ? _fallbackRingtoneCategories
+        : _fallbackWallpaperCategories;
+    return [
+      for (final s in slugs)
+        WallpaperCategory(s, s[0].toUpperCase() + s.substring(1)),
+    ];
+  }
 
   @override
   void dispose() {
@@ -89,10 +112,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   bool get _canSubmit =>
       _filePath != null && _category != null && _rightsAccepted;
 
-  /// Switches kind, dropping the picked file AND the category. Both are
-  /// kind-scoped: the file would fail the other kind's MIME allow-list, and
-  /// `Temples`/`Others` exist in only one of the two category sets — carrying
-  /// either across would submit a value the CMS then refuses at approve.
+  /// Switches kind, dropping the picked file AND the category — both are kind-scoped.
+  /// The file would fail the other kind's MIME allow-list, and `Temples`/`Others` exist in one set.
+  /// Carrying either across submits a value the CMS then refuses at approve.
   void _selectKind(String kind) {
     if (_kind == kind) return;
     setState(() {
@@ -105,13 +127,12 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     });
   }
 
-  /// Picks media for the current kind and validates its MIME type + size against
-  /// [UploadConstraints] — rejects with a toast if it doesn't fit.
+  /// Picks media for the current kind and validates MIME and size against [UploadConstraints].
+  /// Rejects with a toast when it does not fit.
   Future<void> _pickFile() async {
     final l10n = AppLocalizations.of(context);
-    // FileType.audio for a ringtone so the picker cannot offer images/video in
-    // the first place; the allow-list below is still the enforcing check (the
-    // OS picker honours the filter loosely on some OEM builds).
+    // FileType.audio for a ringtone -> the picker cannot offer images or video in the first place.
+    // The allow-list below is still the enforcing check — some OEM pickers honour the filter loosely.
     final result = await FilePicker.pickFiles(
       type: _isRingtone ? FileType.audio : FileType.media,
     );
@@ -125,9 +146,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     if (!UploadConstraints.allowedTypes(_kind, wallpaperType).contains(mime)) {
       showArulToast(
         context,
-        // The allowed-type wording is spelled out per branch rather than
-        // interpolating a label constant — such a label is English-only and
-        // would sit untranslated in the middle of a translated sentence.
+        // Spelled out per branch, never an interpolated label constant.
+        // Such a label is English-only and would sit untranslated inside a translated sentence.
         _isRingtone
             ? l10n.uploadRejectAudio
             : wallpaperType == 'live'
@@ -159,8 +179,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context);
     if (!AppConfig.hasBackend) {
-      // Defensive: define-less local builds only — unreachable in shipped
-      // builds, which always carry API_BASE_URL.
+      // Define-less local builds only — unreachable in shipped builds, which carry API_BASE_URL.
       showArulToast(context, l10n.uploadComingSoonToast);
       return;
     }
@@ -173,8 +192,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           mimeType: _mimeType!,
           fileSize: _fileSize,
           title: _titleController.text,
-          // The Worker + moderation flow key on the lowercase slug
-          // (`wallpapers/<category>/…` or `ringtones/<category>/…` on approval).
+          // The Worker and the moderation flow key on the LOWERCASE slug, not the display label.
+          // Already a slug off the catalog; lowercased anyway so the value the
+          // CMS re-checks at approve can never depend on server casing.
           category: _category!.toLowerCase(),
         );
     if (!mounted) return;
@@ -186,9 +206,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
           kind: ToastKind.success,
         );
         ref.read(uploadProvider.notifier).reset();
-        // Someone who just contributed a wallpaper is, by definition, someone
-        // invested enough to tell a friend. Awaited before the pop so the sheet
-        // is never orphaned by this route closing under it.
+        // Someone who just contributed is, by definition, invested enough to tell a friend.
+        // Awaited before the pop -> the sheet is never orphaned by this route closing under it.
         await ShareMomentSheet.show(
           context,
           title: l10n.uploadShareMomentTitle,
@@ -255,8 +274,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    // Kind-neutral: this screen now takes both wallpapers and
-                    // ringtones, so the title can't name one of them.
+                    // Kind-neutral — this screen takes both, so the title cannot name one of them.
                     l10n.uploadTitle,
                     style: ArulTokens.screenTitle.copyWith(color: textPrimary),
                   ),
@@ -267,9 +285,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 children: [
-                  // Kind picker — the same ArulChip the categories use, so the
-                  // two rows read as one control stack rather than a borrowed
-                  // widget. Changing kind resets file + category (_selectKind).
+                  // Kind picker — the same ArulChip the categories use, so the two rows read as one.
+                  // Changing kind resets the file and the category (_selectKind).
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -423,10 +440,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                         children: [
                           for (final c in _categories)
                             ArulChip(
-                              label: c,
-                              selected: _category == c,
+                              label: c.label,
+                              selected: _category == c.slug,
                               variant: ArulChipVariant.surface,
-                              onTap: () => setState(() => _category = c),
+                              onTap: () => setState(() => _category = c.slug),
                             ),
                         ],
                       ),
@@ -476,8 +493,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Submit — disabled until file + category + rights (spec),
-                  // and while an upload is in flight (re-entrancy).
+                  // Submit — disabled until file, category and rights are all present.
+                  // Also disabled while an upload is in flight, for re-entrancy.
                   CtaButton(
                     label: l10n.uploadSubmitCta,
                     busy: ref.watch(uploadProvider) is UploadLoading,
@@ -506,10 +523,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   }
 }
 
-/// 1.5px dashed rounded-rect border for the pick zone. The spec calls for a
-/// dashed border with no dedicated package in scope, so it's a small
-/// CustomPainter: walk the rounded-rect perimeter as a [Path.computeMetrics]
-/// arc-length and stroke alternating on/off segments.
+/// 1.5px dashed rounded-rect border for the pick zone — no package is in scope for one.
+/// So a small CustomPainter walks the perimeter by [Path.computeMetrics] arc length.
+/// It then strokes alternating on and off segments.
 class _DashedRectPainter extends CustomPainter {
   const _DashedRectPainter({required this.color, required this.radius});
 

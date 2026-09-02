@@ -1,19 +1,17 @@
 /**
- * Unit tests for the exported, R2-facing halves of build-catalog:
- *   1. deleteOrphanedPages — stale page cleanup after a shrinking build
- *   2. writeAppConfig      — config payload + cache headers
+ * The exported, R2-facing halves of build-catalog: deleteOrphanedPages and writeAppConfig.
  *
- * NOT covered here: the row shaping inside buildScope() (key stripping,
- * validation, pagination, pgTextArrayToList). That logic is unexported and
- * inlined, so it is unreachable from a test. It was previously "covered" by
- * copies of the logic redefined in this file; those copies silently drifted
- * out of sync with production (the wallpaper strip-list lost five columns),
- * so they were removed rather than left to give false confidence. Export the
- * real helpers from build-catalog.ts to test them for real.
+ * NOT covered: the row shaping inside buildScope() -> that logic is unexported and inlined, so no test can reach it
+ * It was once "covered" by copies of the logic redefined here -> those copies silently drifted from production
+ * They were deleted rather than left giving false confidence -> EXPORT the real helpers to test them for real
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { writeAppConfig, deleteOrphanedPages } from "../src/cron/build-catalog.js";
+import {
+  writeAppConfig,
+  deleteOrphanedPages,
+  readCategoryOrder,
+} from "../src/cron/build-catalog.js";
 
 // ── Mock R2 bucket that supports list() + delete() for orphan-cleanup tests ───
 function makeListableR2(keys: string[]): {
@@ -58,8 +56,7 @@ function makeMockR2(): { bucket: R2Bucket; puts: PutCall[] } {
 
 describe("Orphaned page cleanup (deleteOrphanedPages)", () => {
   it("deletes a tag page whose last row was removed (the Shiddat/quran bug)", async () => {
-    // Simulate: legacy tag pages exist from a prior build, but this build only
-    // (re)wrote all_1.json.
+    // Legacy tag pages survive from a prior build, but this build only rewrote all_1.json -> the rest are orphans
     const { bucket, deleted } = makeListableR2([
       "catalog/wallpapers/all_1.json",
       "catalog/wallpapers/temples_1.json",
@@ -101,8 +98,8 @@ describe("Orphaned page cleanup (deleteOrphanedPages)", () => {
   });
 
   it("only touches the scope's own prefix, never version.json / app_config.json", async () => {
-    // Those files live at catalog/, not catalog/<scope>/, so the scope-prefixed
-    // list never returns them — but assert it explicitly as a safety net.
+    // version.json and app_config.json live at catalog/, not catalog/<scope>/ -> the scoped list cannot return them
+    // Assert it explicitly anyway -> deleting either one would break every install at once
     const { bucket, deleted } = makeListableR2([
       "catalog/version.json",
       "catalog/app_config.json",
@@ -145,12 +142,32 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
     expect(puts).toHaveLength(1);
     expect(puts[0].key).toBe("catalog/app_config.json");
     const body = puts[0].body as Record<string, unknown>;
-    // Public fields present, matching AppConfigModel.fromJson (snake_case)
+    // The public fields must match AppConfigModel.fromJson exactly -> a renamed key fails to parse on device
     expect(body.prices).toEqual({ monthly: { amount: 4900, currency: "INR" } });
     expect(body.support_email).toBe("support@hsrutility.com");
     expect(body.policy_urls).toEqual({ privacy: "https://hsrutility.com/p" });
     expect(body.feature_flags).toEqual({ ramadan_mode: true });
     expect(body.min_supported_version).toBe("1.0.0");
+  });
+
+  it("carries the hand-set chip order, keyed by SCOPE the way the app reads it", async () => {
+    const { bucket, puts } = makeMockR2();
+    await writeAppConfig(
+      bucket,
+      {},
+      { wallpapers: ["amman", "sivan"], ringtones: ["others", "murugan"] },
+    );
+    const body = puts[0].body as Record<string, unknown>;
+    expect(body.category_order).toEqual({
+      wallpapers: ["amman", "sivan"],
+      ringtones: ["others", "murugan"],
+    });
+  });
+
+  it("emits an EMPTY order when nothing is positioned -> the app keeps its built-in rule", async () => {
+    const { bucket, puts } = makeMockR2();
+    await writeAppConfig(bucket, {});
+    expect((puts[0].body as Record<string, unknown>).category_order).toEqual({});
   });
 
   it("NEVER includes content_version or other non-public columns", async () => {
@@ -162,13 +179,14 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
       policy_urls: {},
       feature_flags: {},
       min_supported_version: null,
-      // simulate a secret accidentally present on the row
+      // A secret accidentally present on the row -> writeAppConfig must drop it, not pass it through
       some_secret: "DO_NOT_LEAK",
     });
     const body = puts[0].body as Record<string, unknown>;
     expect(body).not.toHaveProperty("content_version");
     expect(body).not.toHaveProperty("some_secret");
     expect(Object.keys(body).sort()).toEqual([
+      "category_order",
       "feature_flags",
       "min_supported_version",
       "policy_urls",
@@ -190,8 +208,7 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
 
   it("parses jsonb columns delivered as raw JSON strings (Hyperdrive fetch_types:false)", async () => {
     const { bucket, puts } = makeMockR2();
-    // Under fetch_types:false (required for Hyperdrive) postgres.js returns jsonb
-    // as the raw JSON string. These must be parsed, not double-encoded.
+    // Under `fetch_types:false` postgres.js returns jsonb as the raw JSON STRING -> parse it, never double-encode
     await writeAppConfig(bucket, {
       prices: '{"monthly":{"amount":4900,"currency":"INR"}}',
       policy_urls: '{"privacy":"https://hsrutility.com/p"}',
@@ -203,22 +220,55 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
     expect(body.prices).toEqual({ monthly: { amount: 4900, currency: "INR" } });
     expect(body.policy_urls).toEqual({ privacy: "https://hsrutility.com/p" });
     expect(body.feature_flags).toEqual({});
-    // A string column stays a string (not wrapped in an object).
+    // A plain string column stays a string -> the jsonb coercion must not wrap it in an object
     expect(body.support_email).toBe("support@hsrutility.com");
   });
 });
 
 // ── Feed order ───────────────────────────────────────────────────────────────
-// There is nothing left here to unit-test, and that is the point.
-//
-// The feed order used to be two exported pure functions (`composeFeedOrder` +
-// `interleaveByCategory`) implementing a decayed merit score, and this file
-// carried ~200 lines pinning their properties — because a wrong answer there
-// built cleanly and shipped a valid catalog that was simply in the wrong order.
-//
-// On 2026-08-27 the score was retired (src/lib/feed-score.ts). The order is now
-// one ORDER BY inside buildScope(), which needs a live DB to exercise and is
-// covered by the live smoke plan instead. What remains in JS is the rank
-// NUMBERING, tested in test/feed-score.test.ts.
-//
-// If ordering logic ever moves back into JS, it belongs here again.
+// There is nothing left here to unit-test, and that is the POINT
+// The order used to be two exported pure functions implementing a decayed merit score
+// This file carried ~200 lines pinning them -> a wrong answer there built cleanly and shipped a valid, wrong order
+// The order is now one ORDER BY inside buildScope() -> it needs a live DB -> the smoke plan covers it
+// What remains in JS is the rank NUMBERING -> test/feed-score.test.ts pins that
+// If ordering logic ever moves back into JS, it belongs here again
+
+// ── the hand-set chip order (categories table -> catalog) ─────────────────────
+
+describe("readCategoryOrder", () => {
+  /** Tagged-template stub: one row set, or a throw. */
+  function sqlStub(rows: unknown[] | Error) {
+    return (() =>
+      rows instanceof Error ? Promise.reject(rows) : Promise.resolve(rows)) as never;
+  }
+
+  it("groups by scope and preserves the CMS's picker_order", async () => {
+    const order = await readCategoryOrder(
+      sqlStub([
+        { kind: "ringtone", slug: "others" },
+        { kind: "ringtone", slug: "sivan" },
+        { kind: "wallpaper", slug: "amman" },
+        { kind: "wallpaper", slug: "ayyappan" },
+      ]),
+    );
+    // Singular CMS kind -> plural catalog scope. Getting this wrong ships an
+    // order under a key the app never looks up, which fails silently.
+    expect(order).toEqual({
+      ringtones: ["others", "sivan"],
+      wallpapers: ["amman", "ayyappan"],
+    });
+  });
+
+  it("answers {} when the categories table does not exist yet", async () => {
+    const missing = Object.assign(new Error('relation "categories" does not exist'), {
+      code: "42P01",
+    });
+    expect(await readCategoryOrder(sqlStub(missing))).toEqual({});
+  });
+
+  it("answers {} on any other DB error rather than failing the whole build", async () => {
+    // A catalog build that dies over a cosmetic ordering column would withhold
+    // version.json for EVERY scope and freeze the feed.
+    expect(await readCategoryOrder(sqlStub(new Error("boom")))).toEqual({});
+  });
+});

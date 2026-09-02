@@ -29,6 +29,14 @@ which is what stops a bulk drop displacing the pinned head; curation must never 
 The same order applies on every chip, so a filtered view can never contradict All: **a category IS
 All restricted to that category.** Never add a per-chip rank.
 
+**The chip ROW's own order is a different thing entirely** and does not live here: it is the
+operator's, set by dragging on the unified CMS's Categories page, shipped as
+`app_config.category_order` and applied by `orderedByCms` (`wallpaper.dart`). It reorders the chips
+and touches nothing about the items inside one. Unlike `feed_rank` it needed an app release, because
+no shipped comparator was already reading a catalog field for it — installs older than that release
+keep `compareBrowseCategories` and are unharmed. A save in the CMS bumps `content_version` and
+rebuilds; without both the phone keeps its cached `app_config.json` and the order never arrives.
+
 - **The trailing `id` is REQUIRED, not cosmetic.** An import is one transaction, so a whole batch
   ties on `created_at`, and at zero uses everything ties on the counter too. Without a unique final
   key Postgres may return tied rows differently on any run — a different plan, a parallel scan, a
