@@ -5,16 +5,13 @@ import '../../features/referral/data/install_referrer_service.dart';
 import 'deep_link_parser.dart';
 import 'deep_link_target.dart';
 
-/// Receives deferred deep links that native Android fetched over the network —
-/// Google Ads App Campaign URLs from Google Analytics for Firebase, and Meta
-/// ad URLs from `AppLinkData.fetchDeferredAppLinkData` — and feeds them into
-/// the app's existing durable target handoff.
+/// Receives deferred deep links native Android fetched over the network — GA4F and the Meta SDK.
 ///
-/// Native buffers every link until this channel attaches, then pushes each one
-/// and also answers a pull. It does not mark a link handled until
-/// [InstallReferrerService.queueRequest] has persisted the target, so a process
-/// death cannot turn an ad click into a plain home-screen launch. Both sides
-/// validate the URL shape; Dart is the one that decides what it means.
+/// Feeds them into the app's existing durable target handoff.
+/// Native buffers every link until this channel attaches -> it then pushes each AND answers a pull.
+/// A link is not marked handled until [InstallReferrerService.queueRequest] has persisted it.
+/// So a process death cannot turn an ad click into a plain home-screen launch.
+/// Both sides validate the URL shape; Dart is the one that decides what it MEANS.
 class DeferredLinkService {
   DeferredLinkService(this._targets, {MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
@@ -25,16 +22,13 @@ class DeferredLinkService {
   final MethodChannel _channel;
   final Set<String> _seenTokens = <String>{};
 
-  /// Attach before asking for the buffered values: GA4F and the Meta SDK may
-  /// answer on either side of Flutter engine startup, and native supports both.
+  /// GA4F and the Meta SDK may answer on either side of engine startup -> attach BEFORE pulling.
   Future<void> start() async {
     _channel.setMethodCallHandler(_onNativeCall);
 
-    // Test seam: `--dart-define=DEBUG_DEFERRED_LINK=<url>` plays a deferred
-    // delivery through the SAME capture path the native bridge uses, so the
-    // whole chain (parse → persist → shell → screen → language) can be driven
-    // over adb without an ad install. Const-gated on kDebugMode, so release
-    // builds compile it away.
+    // Test seam: `--dart-define=DEBUG_DEFERRED_LINK=<url>` replays a delivery through the SAME path.
+    // So parse → persist → shell → screen → language is drivable over adb without an ad install.
+    // Const-gated on kDebugMode -> release builds compile it away.
     const debugLink = String.fromEnvironment('DEBUG_DEFERRED_LINK');
     if (kDebugMode && debugLink.isNotEmpty) {
       await _capture({
@@ -73,8 +67,7 @@ class DeferredLinkService {
     final raw = payload['url'];
     final rawToken = payload['token'];
     if (raw is! String || rawToken is! String || rawToken.isEmpty) return;
-    // Native pushes on capture AND answers the initial pull with the same
-    // payload, so seeing one delivery twice is the normal case, not an error.
+    // Native pushes on capture AND answers the initial pull -> seeing one delivery twice is NORMAL.
     if (!_seenTokens.add(rawToken)) return;
 
     final source = switch (payload['source']) {
@@ -89,9 +82,7 @@ class DeferredLinkService {
       debugPrint('[DeferredLink] ignored (not an Arul link): $raw');
     }
 
-    // ACK malformed links too. Native already validates defensively, but Dart
-    // repeats that boundary check; leaving a rejected payload pending would
-    // retry it forever on every Activity creation.
+    // A rejected payload left pending retries forever on every Activity creation -> ACK malformed too.
     if (!ack) return;
     try {
       await _channel.invokeMethod<bool>('ackDeferredDeepLink', {

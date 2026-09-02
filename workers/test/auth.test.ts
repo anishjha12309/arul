@@ -1,7 +1,6 @@
 /**
- * Unit tests for the auth route handlers (handleLogin / handleRefresh /
- * handleLogout). Google idToken verification and the DB are mocked; JWT signing,
- * the KV refresh-jti denylist, and rotation run for real.
+ * The auth route handlers. Google verification and the DB are mocked.
+ * JWT signing, the KV refresh-jti denylist and rotation all run FOR REAL -> a failure there is a real break
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -14,12 +13,12 @@ import {
   isJtiDenylisted,
 } from "../src/lib/jwt.js";
 
-// getDb(env) → injected mock sql on env._testSql
+// getDb(env) is replaced -> handlers reach the injected mock sql through env._testSql
 vi.mock("../src/lib/db.js", () => ({
   getDb: (env: { _testSql: unknown }) => env._testSql,
 }));
 
-// verifyGoogleIdToken is controlled per test.
+// verifyGoogleIdToken is controlled per test -> each case sets the claims it needs
 vi.mock("../src/lib/google.js", () => ({
   verifyGoogleIdToken: vi.fn(),
 }));
@@ -54,11 +53,10 @@ describe("POST /auth/login", () => {
     expect(res.status).toBe(400);
   });
 
-  // NOTE: the "verifyGoogleIdToken throws → 401 invalid_token" path is verified
-  // manually but omitted as an automated test: vitest's vi.fn wrapper turns the
-  // mock's throw into a rejected promise that its unhandled-rejection detector
-  // flags as a failure even though handleLogin correctly catches it and returns
-  // 401. The success path below exercises the same verifyGoogleIdToken wiring.
+  // The "verifyGoogleIdToken throws -> 401" path is deliberately NOT automated here
+  // vitest's vi.fn wrapper turns the mock's throw into a rejected promise its detector flags as a failure
+  // handleLogin catches it correctly and returns 401 -> the test would fail on the harness, not the code
+  // The success path below exercises the same verifyGoogleIdToken wiring
 
   it("returns our JWT pair + user envelope for an existing user", async () => {
     vi.mocked(verifyGoogleIdToken).mockResolvedValue({
@@ -92,13 +90,10 @@ describe("POST /auth/login", () => {
   });
 
   // ── Trial-tombstone pre-seed on re-signup ──────────────────────────────────
-  //
-  // The one part of the delete→re-signup chain that CANNOT be exercised by the
-  // verify-payments harness: it needs a real Google idToken. The harness proves
-  // the tombstone lands with the exact HMAC this branch recomputes; these two
-  // tests prove the branch acts on it. A routed mock is required — the flow is
-  // several distinct queries (the users UPDATE misses, the tombstone lookup
-  // hits) and a same-rows-for-everything mock can't express that split.
+  // The one part of the delete-then-re-signup chain the verify-payments harness CANNOT reach -> it needs a real idToken
+  // The harness proves the tombstone lands with the exact HMAC this branch recomputes -> these prove the branch acts on it
+  // A ROUTED mock is required -> the flow is several distinct queries, the users UPDATE missing and the lookup hitting
+  // A same-rows-for-everything mock cannot express that split
   function routedSql(routes: Array<{ match: RegExp; rows: unknown[] }>) {
     const calls: Array<{ text: string; values: unknown[] }> = [];
     const fn = vi.fn((...args: unknown[]) => {
@@ -139,8 +134,7 @@ describe("POST /auth/login", () => {
     const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
 
-    // The tombstone lookup must use the SAME HMAC DELETE /me wrote — recompute
-    // it independently here (WebCrypto, like lib/tombstone.ts).
+    // The lookup must use the SAME HMAC DELETE /me wrote -> recompute it INDEPENDENTLY here, not via the lib
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
       "raw", enc.encode(TOMB_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
@@ -152,9 +146,8 @@ describe("POST /auth/login", () => {
     const tombLookup = calls.find((c) => /trial_tombstones/.test(c.text));
     expect(tombLookup?.values).toContain(expectedHash);
 
-    // The pre-seed itself: status 'expired' is in the SQL text; user id and the
-    // tombstone's trial_end ride as parameters. That row is what makes the next
-    // /payments/initiate a ₹199 TRANSACTION instead of a second free trial.
+    // The pre-seed itself -> 'expired' is in the SQL text; the user id and trial_end ride as parameters
+    // That row is what makes the next /payments/initiate a ₹199 TRANSACTION instead of a second free trial
     const preSeed = calls.find((c) => /INSERT INTO subscriptions/.test(c.text));
     expect(preSeed).toBeDefined();
     expect(preSeed!.text).toContain("'expired'");
@@ -186,13 +179,11 @@ describe("POST /auth/login", () => {
     expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
   });
 
-  // ── Nonce (Google SIWG: "validate that the request and response nonces are
-  // identical") ──────────────────────────────────────────────────────────────
-  //
-  // The pair is checked, not just the request side: equal-or-nothing is what
-  // makes a nonce-bearing token unusable through an old-shaped request, and
-  // what keeps every pre-1.0.0+60 install — which sends none and whose tokens
-  // carry none — signing in.
+  // ── Nonce ──────────────────────────────────────────────────────────────────
+  // Google requires the request and response nonces be validated as IDENTICAL
+  // The PAIR is checked, not just the request side -> equal-or-nothing is the rule
+  // That is what makes a nonce-bearing token unusable through an old-shaped request
+  // And what keeps every older install — which sends none, and whose tokens carry none — signing in
   describe("nonce", () => {
     function loginWith(claimNonce: string | undefined, bodyNonce?: string) {
       vi.mocked(verifyGoogleIdToken).mockResolvedValue({
@@ -279,7 +270,7 @@ describe("POST /auth/refresh", () => {
     const body = (await res.json()) as { accessToken: string; refreshToken: string };
     expect(typeof body.accessToken).toBe("string");
 
-    // The old jti is now denylisted, and the new refresh token has a fresh jti.
+    // The old jti is now denylisted AND the new refresh token carries a fresh one -> both halves of a rotation
     expect(await isJtiDenylisted(env.KV, jti)).toBe(true);
     const newClaims = await verifyRefreshToken(body.refreshToken, JWT_SECRET);
     expect(newClaims.jti).not.toBe(jti);

@@ -1,22 +1,16 @@
-// Ringtone import — stage 2 of 2: the LIVE write.
+// Ringtone import, stage 2 of 2 -> the LIVE write.
 //
-//   R2 PUT (audio) → one Neon txn (rows + content_version bump) → build-catalog
+//   R2 PUT (audio) -> one Neon txn (rows + content_version bump) -> build-catalog
 //
-// Same contract as import.mjs: R2 first, so a failed insert leaves only benign
-// orphans (the hourly canonical sweep collects them), and the DB write is one
-// transaction. Records ringtone-import-result.json for rollback.
+// R2 goes FIRST, as in import.mjs -> a failed insert leaves only orphans the hourly canonical sweep collects.
+// The DB write is one transaction -> ringtone-import-result.json records it for rollback.
 //
 //   node ringtones-import.mjs            # live
 //   node ringtones-import.mjs --dry-run  # print what it would do, touch nothing
 //
-// MUST be run from a directory where `postgres` resolves — the staging ROOT
-// (c:/Anish/arul-import) holds the node_modules for this pipeline, so copy this
-// file there to run it, exactly as the wallpaper scripts are used.
-//
-// Objects go up through `wrangler r2 object put --remote`, NOT the S3 API: the
-// R2 S3 access keys are not on disk anywhere in this repo, while wrangler is
-// already authenticated against the account that owns the bucket. Same bytes,
-// same headers, one less credential to keep.
+// MUST run from a directory where `postgres` resolves -> the staging ROOT holds this pipeline's node_modules.
+// Objects go up through `wrangler r2 object put --remote`, never the S3 API -> those keys are not on disk in this repo.
+// wrangler is already authenticated against the account that owns the bucket -> same bytes, one less credential.
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
@@ -30,9 +24,8 @@ const CDN = "https://arul-cdn.hsrutility.com";
 const API = "https://arul-api.hsrutility.com";
 const DRY = process.argv.includes("--dry-run");
 
-// See import.mjs — media keys are content UUIDs and an object at a given key
-// never changes, so a year + immutable is correct and keeps R2 Class B
-// operations (the one part of R2 that is not free) off the hot path.
+// Media keys are content UUIDs and an object at a key NEVER changes -> a year + immutable is correct (see import.mjs).
+// It keeps R2 Class B operations, the one part of R2 that is not free, off the hot path.
 const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 function parseEnv(path) {
@@ -55,10 +48,8 @@ const plan = JSON.parse(readFileSync(join(ROOT, "ringtone-import-plan.json"), "u
 console.log(`plan: ${plan.length} ringtones${DRY ? "  (DRY RUN)" : ""}`);
 
 // ─── 1. Upload audio to R2 ───────────────────────────────────────────────────
-// A checkpoint file makes a re-run after a partial failure cheap: already-PUT
-// keys are skipped rather than re-uploaded. It is scoped to the CURRENT plan —
-// a stale checkpoint from a previous drop would otherwise mark this drop's
-// (different, freshly-minted) keys as done and skip real uploads.
+// A checkpoint file makes a re-run after a partial failure cheap -> already-PUT keys are skipped, not re-uploaded.
+// It is scoped to the CURRENT plan -> a stale checkpoint would mark this drop's fresh keys done and skip real uploads.
 const ckPath = join(ROOT, "ringtone-upload-checkpoint.json");
 const planKeys = new Set(plan.map((p) => p.audio_key));
 const done = new Set(
@@ -78,11 +69,9 @@ for (const [i, p] of plan.entries()) {
     continue;
   }
   try {
-    // `node <wrangler.js>`, not `npx wrangler`: npx is a .cmd on Windows, which
-    // Node will only spawn through a shell, and a shell re-splits every argument
-    // on whitespace — source filenames have spaces in them and so does the
-    // cache-control value, so all 30 uploads failed with "Unknown arguments".
-    // Invoking the JS entrypoint directly keeps the argv array intact.
+    // `node <wrangler.js>`, never `npx wrangler` -> npx is a .cmd on Windows and Node spawns it only through a shell.
+    // A shell re-splits every argument on whitespace -> filenames and the cache-control value have spaces.
+    // That failed every upload with "Unknown arguments" -> invoking the JS entrypoint keeps the argv array intact.
     execFileSync(
       process.execPath,
       [
@@ -125,10 +114,9 @@ let before, after, newVersion;
 try {
   before = Number((await sql`SELECT count(*)::int AS n FROM ringtones`)[0].n);
 
-  // Incremental drops are normal, so the table being non-empty is fine — what
-  // is NOT fine is re-importing a drop that already landed. Stage 1 dedups on
-  // TITLE against the live catalog; this is the last line of defence and checks
-  // the key, which is the thing that would actually collide in R2.
+  // Incremental drops are normal -> a non-empty table is fine -> re-importing a drop that already landed is not.
+  // Stage 1 dedups on TITLE against the live catalog -> this is the last line of defence and checks the KEY.
+  // The key is what would actually collide in R2 -> re-generating the plan mints fresh UUIDs.
   const keys = plan.map((p) => p.audio_key);
   const clash = await sql`SELECT audio_key FROM ringtones WHERE audio_key = ANY(${keys})`;
   if (clash.length) {
@@ -188,8 +176,7 @@ try {
 } catch (e) {
   console.error("catalog read failed:", e.message);
 }
-// GET, never HEAD — HEAD does not populate Cloudflare's cache and reports
-// DYNAMIC on a rule that is working fine (docs/known-issues.md).
+// GET, never HEAD -> HEAD does not populate Cloudflare's cache -> it reports DYNAMIC on a rule that works fine.
 for (const p of plan.slice(0, 3)) {
   const r = await fetch(`${CDN}/${p.audio_key}`);
   console.log(

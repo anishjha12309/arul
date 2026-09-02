@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- HTTPS only. Cleartext is denied outright so a misconfigured API_BASE_URL fails
-     loudly in dev instead of silently shipping plaintext auth tokens. -->
+<!-- Cleartext denied outright -> a misconfigured API_BASE_URL fails loud in dev -> plaintext auth tokens can never ship. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false"/>
 </network-security-config>

@@ -7,13 +7,10 @@ import '../data/wallpaper_apply_service.dart';
 
 /// Where to put a STATIC wallpaper (Spec > Apply sheet).
 ///
-/// Three equal cards — Home screen / Lock screen / Both (default Both) — and a
-/// single green CTA. Selecting a card only moves the selection; the CTA commits
-/// the chosen target. Live wallpapers never reach here: Android's own
-/// live-wallpaper chooser asks the same question and is the one that decides.
-///
-/// Keeps the `ApplySheet.show(context) → Future<ApplyTarget?>` contract: the
-/// future resolves to the picked target, or null if the sheet is dismissed.
+/// Three equal cards — Home / Lock / Both, defaulting to Both — and a single green CTA.
+/// Selecting a card only moves the selection; the CTA commits the target.
+/// LIVE wallpapers never reach here — Android's own chooser asks the same question and decides.
+/// `ApplySheet.show(context)` resolves to the picked target, or null when the sheet is dismissed.
 class ApplySheet {
   const ApplySheet._();
 
@@ -89,8 +86,8 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
   }
 }
 
-/// One target card (Spec > Apply sheet): r16, 26px icon + 13px label.
-/// Selected: gold 1.5px border, gold-tint fill, gold icon (both themes).
+/// One target card — r16, a 26px icon over a 13px label.
+/// Selected is a gold 1.5px border, gold-tint fill and gold icon, in both themes.
 /// Unselected follows the app theme — ivory-tint on dark, maroon-tint on light.
 class _TargetCard extends StatelessWidget {
   const _TargetCard({

@@ -1,6 +1,7 @@
 ---
 name: neon-migration
 description: Write and apply a schema migration to prod Neon Postgres for Arul. Use for ANY DB schema/data change, and for the initial schema apply. psql is NOT installed — apply via workers/tools/prod-sql.mjs.
+disable-model-invocation: true
 ---
 
 # Neon Migration
@@ -25,8 +26,10 @@ look for is a version pointer that stops moving, never a loud failure.
    against an existing table, so editing a CREATE TABLE column list alone reaches fresh installs only.
    - **New table** → new `NN_short-name.sql`. One statement, both paths correct.
    - **New column** → new `NN_short-name.sql` holding `alter table … add column if not exists …`.
-     This is the default and what `05_feed_rank.sql` / `06_popularity.sql` do: a fresh install runs
-     the CREATE then the ALTER that adds the column, a live DB runs just the ALTER — same end state.
+     This is the default and what `06_popularity.sql` does: a fresh install runs the CREATE then the
+     ALTER that adds the column, a live DB runs just the ALTER — same end state. A dropped column is
+     its own numbered file too (`11_drop_feed_rank.sql`), and the file it undoes is DELETED rather
+     than kept beside it.
    - **Index** → `create index if not exists`, idempotent anywhere. **Constraint** → Postgres has no
      idempotent `ADD CONSTRAINT`; guard it (`do $$ … if not exists (select 1 from pg_constraint
      where conname=…) …`) or apply it once by hand. It is the same trap as the trigger below.
@@ -35,9 +38,11 @@ look for is a version pointer that stops moving, never a loud failure.
      double-write at `01_identity.sql:29` + `:32` (commit `b6287c9`). One without the other ships a
      column that exists on new databases and nowhere else.
 
-   There is **no `db/migrations/` diary** — it was retired because it only ever held byte-copies of
-   schema files: the schema files ARE the source of truth. Never recreate the directory. Every
-   statement in `db/schema/` is now idempotent and every file re-applies whole. Keep it that way:
+   **`db/schema/` is the source of truth and a schema file IS the migration.** A `db/migrations/`
+   diary of byte-copied schema files was retired and must not come back. (One file lives there
+   today, a one-off `UPDATE` against already-seeded data that is neither a schema file nor a seed —
+   see `docs/known-issues.md`; it is not a precedent for schema changes.) Every statement in
+   `db/schema/` is idempotent and every file re-applies whole. Keep it that way:
    Postgres has no `IF NOT EXISTS` for triggers, so a bare `create trigger` fails on a live DB, and
    because `sql.unsafe()` sends a file as ONE simple query — Postgres runs that in a single implicit
    transaction — the failure **rolls back every other statement in the file**. Use `create or replace

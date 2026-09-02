@@ -41,10 +41,9 @@ final class NotFoundException extends AppException {
   const NotFoundException([super.message = 'Resource not found.']);
 }
 
-/// True when [error] is a connectivity-class failure (offline / unreachable
-/// host / timed-out socket) rather than a server response. Used to decide
-/// whether to surface a "check your internet" message + retry. A non-2xx HTTP
-/// *response* is NOT a network error — it means we reached the server.
+/// True when [error] is connectivity-class — offline, unreachable host, timed-out socket.
+/// Decides whether to surface a "check your internet" message plus retry.
+/// A non-2xx HTTP *response* is NOT a network error — it means the server was reached.
 bool isNetworkError(Object error) =>
     error is NetworkException ||
     error is SocketException ||

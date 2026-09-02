@@ -1,6 +1,5 @@
-// Fix — re-encode live videos whose pix_fmt != yuv420p (full-range yuvj420p) with a
-// proper full→limited range conversion, re-verify, and overwrite the SAME R2 keys.
-// No DB/catalog change (keys unchanged).
+// Re-encode live videos whose pix_fmt is full-range yuvj420p, with a proper full->limited conversion.
+// The SAME R2 keys are overwritten -> no DB or catalog change is needed.
 import { readFileSync, statSync, openSync, readSync, closeSync } from "fs";
 import { execFileSync } from "child_process";
 import { join } from "path";
@@ -47,8 +46,7 @@ console.log(`non-conformant live videos: ${bad.length}`);
 for (const p of bad) {
   const src = join(ROOT, "drive", srcOf.get(p.base));
   const out = join(ROOT, p.localMedia);
-  // MUST stay in lockstep with normalize.mjs `videoArgs` — a repaired clip that
-  // was encoded to different settings than its batch-mates is invisible drift.
+  // MUST stay in lockstep with normalize.mjs `videoArgs` -> a clip repaired at other settings is invisible drift.
   const srcW = ((ffprobe(src).streams || []).find((s) => s.codec_type === "video") || {}).width ?? 0;
   const upscaling = srcW < 1024;
   execFileSync("ffmpeg", ["-y", "-i", src,

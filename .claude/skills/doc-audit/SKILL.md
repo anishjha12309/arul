@@ -1,6 +1,7 @@
 ---
 name: doc-audit
-description: Adversarial audit of Arul docs against code, Neon schema, wrangler config, and the live API — a prover agent must evidence every claim, a denier agent tries to refute it. Use when a doc may be stale, before trusting a doc for a risky change, or on demand — /doc-audit for a full sweep, /doc-audit phonepe cron for specific docs. Read-only against prod; fixes descriptive drift in the working tree, flags contract violations.
+description: Adversarially audit Arul docs against code, Neon, wrangler and the live API — a prover evidences each claim, a denier refutes it. Use when a doc may be stale, or before trusting one for a risky change. /doc-audit sweeps all; /doc-audit phonepe picks.
+disable-model-invocation: true
 ---
 
 # Doc Audit — prover vs denier
@@ -16,9 +17,9 @@ counter-source, CONFIRMED countersigns the prover's, or the denier's own when hu
 Args name docs (`phonepe` → `docs/phonepe.md`); no args = full sweep — every tracked markdown the
 repo asks an agent to TRUST, in three tiers: the routed core (`docs/*.md`, `CLAUDE.md`,
 `workers/README.md`) · the procedures (`README.md`, `tools/content-import/*.md`) · the instructions
-that RUN (`.claude/skills/*/SKILL.md`, `.claude/agents/*.md`) — stale text in that last tier is
-EXECUTED, not merely read, so it is the highest-consequence tier and sat outside every sweep before
-2026-08-15. ~2–3 Opus runs per doc: state the cost first, and keep **≤4 subagents in flight** — wider
+that RUN (`.claude/skills/*/SKILL.md`, `.claude/agents/*.md`, `.claude/rules/*.md`) — stale text in
+that last tier is EXECUTED, not merely read, so it is the highest-consequence tier. ~2–3 Opus runs
+per doc: state the cost first, and keep **≤4 subagents in flight** — wider
 hits the session limit and kills the run mid-pair, losing unpaired dossiers.
 
 ## The claim compact (decides what a REFUTED verdict does)
@@ -72,7 +73,7 @@ what happens is the one shortcut that can do real damage — and the tier-three 
    verdicts. Exactly one round — after it, verdicts are final.
 4. Resolve verdicts:
    - `REFUTED` + DESCRIPTIVE → edit the doc now, per the doc-update skill's house style (constraints
-     only · imperative · WHY then WHAT · name the trap · 100-line cap). Replace the wrong fact with
+     only · imperative · WHY then WHAT · name the trap · the BYTE budgets). Replace the wrong fact with
      the evidenced one; keep the WHY if it survives.
    - `REFUTED` + NORMATIVE → report entry: contract, violating file:line, denier's evidence. No edit
      on either side without the user.
@@ -83,7 +84,7 @@ what happens is the one shortcut that can do real damage — and the tier-three 
      doc is evidence about the vendor, not about this repo.
    - `CONTESTED` → report entry with both citations · `UNVERIFIED` → report appendix line. No edit.
    - `ECHO-FINDINGS` → when echoes disagree, the one matching source evidence wins; fix the others as
-     DESCRIPTIVE drift (CLAUDE.md included, respecting its 100-line meta rule).
+     DESCRIPTIVE drift (CLAUDE.md and `.claude/rules/` included, respecting their byte budgets).
 5. Never commit. Never run a write against prod. Doc edits stay in the working tree for the user.
 
 ## Report

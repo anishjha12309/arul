@@ -4,15 +4,12 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// A centered confirm dialog — spec (Settings): "Centered card (24px side
-/// margins, r22, gold 35% border on #1A0B0F): title 18px/600, message 13.5px
-/// secondary, two 46px r999 buttons: Cancel (outlined ivory 25%) + confirm
-/// (solid #7A1E33, press #8D2740)."
+/// A centred confirm dialog — 24px margins, r22, gold-35% border on `#1A0B0F`.
+/// Title 18px/600, message 13.5px secondary, two 46px r999 buttons: outlined Cancel, solid confirm.
 ///
-/// The dialog only RESOLVES the answer: [showArulConfirmDialog] returns `true`
-/// when confirmed and `false` (or `null`) when cancelled/dismissed — the
-/// caller runs the real action (logout, delete account) on `true`. Entrance is
-/// translateY(24)+fade 250ms; barrier is [ArulTokens.dialogOverlay].
+/// The dialog only RESOLVES the answer — `true` on confirm, `false` or `null` on cancel.
+/// The CALLER runs the real action (logout, delete account) on `true`.
+/// Entrance is translateY(24)+fade over 250ms, behind [ArulTokens.dialogOverlay].
 Future<bool?> showArulConfirmDialog(
   BuildContext context, {
   required String title,
@@ -58,9 +55,7 @@ class _ConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Light variant (spec-unspecified) mirrors the dark one: white card with a
-    // maroon-tinted border, maroon-styled text ladder. ASSUMPTION — noted in the
-    // handoff report.
+    // The light variant is spec-unspecified -> it mirrors the dark: white card, maroon-tinted border.
     final cardColor = isDark
         ? ArulTokens.darkSheetSurface
         : ArulTokens.cardBgLight;
@@ -71,8 +66,7 @@ class _ConfirmDialog extends StatelessWidget {
     final messageColor = isDark
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
-    // Cancel outline: "ivory 25%" = rgba(250,245,236,.25), which equals
-    // [ArulTokens.grabberColorDark] exactly (the only token at that value).
+    // Cancel outline "ivory 25%" equals [ArulTokens.grabberColorDark] exactly — the only such token.
     final cancelBorder = isDark
         ? ArulTokens.grabberColorDark
         : ArulTokens.maroonBorder18;
@@ -140,8 +134,7 @@ class _ConfirmDialog extends StatelessWidget {
   }
 }
 
-/// One 46px r999 dialog button. Filled = solid maroon (press [maroonHover]);
-/// outlined = transparent with a hairline border.
+/// One 46px r999 dialog button — filled is solid maroon; outlined is transparent with a hairline.
 class _DialogButton extends StatefulWidget {
   const _DialogButton({
     required this.label,
@@ -174,9 +167,7 @@ class _DialogButtonState extends State<_DialogButton> {
         : (widget.textColor ?? ArulTokens.darkText);
 
     return GestureDetector(
-      // The filled button IS the destructive one here (sign out, delete
-      // account), so it gets the heaviest beat in the app; Cancel is an
-      // ordinary press.
+      // The FILLED button is the destructive one here -> the heaviest beat; Cancel is ordinary.
       onTapDown: (_) {
         ArulHaptics.fire(
           widget.filled ? ArulHapticStyle.heavy : ArulHapticStyle.tap,

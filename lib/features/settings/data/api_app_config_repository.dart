@@ -8,12 +8,9 @@ import '../../../data/catalog/catalog_version.dart';
 import '../../../data/models/app_config_model.dart';
 import '../domain/app_config_repository.dart';
 
-/// Reads app_config from a public CDN JSON file (preferred — no auth, free
-/// egress, cached at the edge).  Falls back to a Worker GET if the CDN file
-/// is absent (e.g. before the first build-catalog run).
-///
-/// When a [CatalogVersion] is provided, the fetch is version-stamped with `?v=`
-/// so a republished app_config propagates near-instantly (see CatalogVersion).
+/// Reads app_config from a public CDN JSON file — no auth, free egress, cached at the edge.
+/// Null before the first build-catalog run leaves the file absent.
+/// A [CatalogVersion] stamps the fetch with `?v=` -> a republished app_config propagates at once.
 class ApiAppConfigRepository implements AppConfigRepository {
   ApiAppConfigRepository({this.version});
 
@@ -22,7 +19,7 @@ class ApiAppConfigRepository implements AppConfigRepository {
 
   @override
   Future<AppConfigModel?> getAppConfig() async {
-    // Primary: public CDN JSON baked by the build-catalog Worker.
+    // Public CDN JSON, baked by the build-catalog Worker.
     final v = await version?.current();
     final base = '${AppConfig.cdnBaseUrl}/catalog/app_config.json';
     final cdnUrl = Uri.parse(v != null && v.isNotEmpty ? '$base?v=$v' : base);
@@ -39,8 +36,8 @@ class ApiAppConfigRepository implements AppConfigRepository {
       debugPrint('[ApiAppConfigRepository] CDN fetch failed: $e');
     }
 
-    // No Worker fallback route — catalog/app_config.json (build-catalog, §4) is
-    // the source; returns null only if the CDN file is absent (pre first build).
+    // NO Worker fallback route — catalog/app_config.json is the source (CLAUDE.md §4).
+    // Null only when the CDN file is absent, i.e. before the first build.
     return null;
   }
 }

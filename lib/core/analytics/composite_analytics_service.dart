@@ -2,14 +2,11 @@ import 'analytics_service.dart';
 
 /// Fans every [AnalyticsService] call out to a list of delegates.
 ///
-/// Lets us keep the SINGLE `AnalyticsService` seam (CLAUDE.md §3 — widgets never
-/// touch SDKs) while sending events to more than one backend. In practice the
-/// delegates are PostHog (full product analytics) + Meta (★ conversion events
-/// only; it filters internally). Call sites stay identical.
-///
-/// A throwing delegate must not stop the others: each call is wrapped so one
-/// SDK's failure can't swallow another's event. Delegates are already
-/// fire-and-forget internally, so this only guards synchronous throws.
+/// Several SDKs must receive the same event -> fan out HERE -> the single `AnalyticsService` seam
+/// holds (widgets never touch SDKs) and call sites stay identical. Delegates: `analyticsService`.
+/// Each delegate filters for itself -> this one never decides who gets what.
+/// One SDK throwing must not swallow another's event -> every call is wrapped; delegates are
+/// fire-and-forget internally, so this only guards SYNCHRONOUS throws.
 class CompositeAnalyticsService implements AnalyticsService {
   const CompositeAnalyticsService(this._delegates);
 
@@ -20,8 +17,8 @@ class CompositeAnalyticsService implements AnalyticsService {
       try {
         action(delegate);
       } catch (_) {
-        // Isolate delegates: a failure in one backend must not drop the event
-        // for the others (or bubble onto the UI path).
+        // Isolated on purpose -> one backend's failure never drops the event for the others, and
+        // never bubbles onto the UI path.
       }
     }
   }

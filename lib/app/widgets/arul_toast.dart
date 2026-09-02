@@ -5,17 +5,12 @@ import '../theme/tokens.dart';
 
 enum ToastKind { info, success, error }
 
-/// Branded toast. Built on ScaffoldMessenger (so it survives navigation and
-/// stacks correctly) but with the default surface stripped out.
+/// Branded toast, on ScaffoldMessenger so it survives navigation and stacks, default surface stripped.
 ///
-/// No action button by design: since Flutter 3.38 a SnackBar WITH an action no
-/// longer auto-dismisses, which turns a transient toast into a permanent bar.
-/// Anything needing a decision belongs in a sheet, not a toast.
-///
-/// Every meaningful outcome in the app lands here — wallpaper applied, share
-/// failed, name updated — so this is also the ONE place the outcome haptic
-/// fires, keyed off [kind]. Callers must not add their own; that would double up
-/// on the same beat. Pass `haptic: false` for a toast that is pure chrome.
+/// Flutter 3.38+ -> a SnackBar WITH an action no longer auto-dismisses, turning a transient toast
+/// into a permanent bar -> no action button here; anything needing a decision belongs in a sheet.
+/// Every meaningful outcome lands here -> this is the ONE place the outcome haptic fires, keyed off
+/// [kind] -> callers must never add their own; `haptic: false` marks a toast that is pure chrome.
 void showArulToast(
   BuildContext context,
   String message, {

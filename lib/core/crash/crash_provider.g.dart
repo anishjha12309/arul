@@ -8,38 +8,26 @@ part of 'crash_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// App-wide [CrashReporter]. Returns the real Crashlytics implementation in
-/// every real app build (debug, profile, release), and the no-op under
-/// `flutter test`.
+/// App-wide [CrashReporter] — real Crashlytics in every real build, the no-op under `flutter test`.
 ///
-/// Crashlytics is only initialised in `main()` when `AppConfig.firebaseEnabled`
-/// (google-services.json present + FIREBASE_ENABLED=true), so the same guard
-/// here keeps `flutter test` and unprovisioned builds from touching an
-/// uninitialised SDK. Call sites never change.
+/// `main()` only initialises Crashlytics when `AppConfig.firebaseEnabled` -> the same guard here
+/// keeps tests and unprovisioned builds off an uninitialised SDK.
 
 @ProviderFor(crashReporter)
 final crashReporterProvider = CrashReporterProvider._();
 
-/// App-wide [CrashReporter]. Returns the real Crashlytics implementation in
-/// every real app build (debug, profile, release), and the no-op under
-/// `flutter test`.
+/// App-wide [CrashReporter] — real Crashlytics in every real build, the no-op under `flutter test`.
 ///
-/// Crashlytics is only initialised in `main()` when `AppConfig.firebaseEnabled`
-/// (google-services.json present + FIREBASE_ENABLED=true), so the same guard
-/// here keeps `flutter test` and unprovisioned builds from touching an
-/// uninitialised SDK. Call sites never change.
+/// `main()` only initialises Crashlytics when `AppConfig.firebaseEnabled` -> the same guard here
+/// keeps tests and unprovisioned builds off an uninitialised SDK.
 
 final class CrashReporterProvider
     extends $FunctionalProvider<CrashReporter, CrashReporter, CrashReporter>
     with $Provider<CrashReporter> {
-  /// App-wide [CrashReporter]. Returns the real Crashlytics implementation in
-  /// every real app build (debug, profile, release), and the no-op under
-  /// `flutter test`.
+  /// App-wide [CrashReporter] — real Crashlytics in every real build, the no-op under `flutter test`.
   ///
-  /// Crashlytics is only initialised in `main()` when `AppConfig.firebaseEnabled`
-  /// (google-services.json present + FIREBASE_ENABLED=true), so the same guard
-  /// here keeps `flutter test` and unprovisioned builds from touching an
-  /// uninitialised SDK. Call sites never change.
+  /// `main()` only initialises Crashlytics when `AppConfig.firebaseEnabled` -> the same guard here
+  /// keeps tests and unprovisioned builds off an uninitialised SDK.
   CrashReporterProvider._()
     : super(
         from: null,

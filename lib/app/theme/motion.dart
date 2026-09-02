@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Motion vocabulary.
 ///
-/// `Easing` and `Durations` are Material's own M3 motion tokens and ARE in
-/// stable — use them rather than hand-rolled cubics, so timing stays consistent
-/// with the platform. (Material 3 *Expressive* — its spring-motion system and
-/// component set — is NOT in Flutter stable; Material is frozen at 3.44 and M3E
-/// is deferred to a `material_ui` package that is still a v0.0.1 placeholder. So
-/// "expressive" here is our own restraint + spring, not an M3E import.)
+/// `Easing` and `Durations` are Material's own M3 tokens and ARE in stable -> use them, not hand cubics.
+/// Material 3 *Expressive* is NOT in Flutter stable — it is deferred to a placeholder `material_ui`.
+/// So "expressive" here is our own restraint plus spring -> never import M3E.
 abstract final class Motion {
   /// Chip select, toggle, small state flips.
   static const quick = Durations.short4; // 200ms
@@ -34,12 +31,10 @@ abstract final class Motion {
   /// Splash hairline loader loop. The spec: 1.6s linear.
   static const hairlineSweep = Duration(milliseconds: 1600);
 
-  /// Press feedback on the primary CTA. A spring, not a curve — this is the one
-  /// place a physical overshoot is worth the extra controller.
-  ///
-  /// `SpringDescription.withDurationAndBounce` is the duration+bounce model
-  /// (Flutter 3.32+); drive it with a SpringSimulation via
-  /// `AnimationController.animateWith`.
+  /// Press feedback on the primary CTA — the ONE place a physical overshoot earns its controller.
+  /// `withDurationAndBounce` is the duration+bounce model -> drive it with a SpringSimulation
+  /// through `AnimationController.animateWith`.
+
   static final press = SpringDescription.withDurationAndBounce(
     duration: const Duration(milliseconds: 320),
     bounce: 0.28,

@@ -3,11 +3,10 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'subscription_model.freezed.dart';
 part 'subscription_model.g.dart';
 
-// Must cover EVERY value the Worker can put in subscriptions.status — an
-// unknown status makes fromJson throw, which errors the whole entitlement
-// fetch. `pending` in particular is real: /payments/initiate upserts the row
-// as 'pending' BEFORE the mandate completes, so an abandoned or webhook-lost
-// setup leaves a pending row that /me/subscription then serves.
+// An unknown status makes fromJson throw and errors the WHOLE entitlement fetch -> this enum must
+// cover every value the Worker can write to subscriptions.status.
+// /payments/initiate upserts the row as 'pending' BEFORE the mandate completes -> an abandoned or
+// webhook-lost setup leaves a pending row that /me/subscription serves -> `pending` is real.
 enum SubscriptionStatus {
   @JsonValue('pending')
   pending,
@@ -23,8 +22,10 @@ enum SubscriptionStatus {
   expired,
 }
 
-/// A user's subscription row (Neon `subscriptions`). Premium = status
-/// `trialing`/`active` with `currentPeriodEnd` still in the future.
+/// A user's subscription row (Neon `subscriptions`).
+///
+/// Never derive premium from these fields -> the rule's one home is `premiumPredicate` in the
+/// Worker and the app reads the `premium` flag `GET /me` computes from it.
 @freezed
 abstract class SubscriptionModel with _$SubscriptionModel {
   @JsonSerializable(fieldRename: FieldRename.snake)
@@ -36,11 +37,12 @@ abstract class SubscriptionModel with _$SubscriptionModel {
     String? phonepeSubscriptionId,
     String? merchantSubscriptionId,
 
-    /// The SETUP order id (`DKS_…`) — the same value the purchase notifier
-    /// passes to `trial_started` as `order_id`. `TrialConversionCatchUp` keys
-    /// on it to fire that event late for a trial that was granted with the
-    /// app closed, exactly once per order. Null on builds of the Worker that
-    /// predate it, which the catch-up treats as "nothing to reconcile".
+    /// The SETUP order id (`DKS_…`) — what the purchase notifier sends as `trial_started`'s
+    /// `order_id`.
+    ///
+    /// `TrialConversionCatchUp` keys on it -> a trial granted with the app closed still fires
+    /// `trial_started`, exactly once per order.
+    /// Null on Workers that predate the field -> the catch-up reads that as nothing to reconcile.
     String? merchantOrderId,
     DateTime? trialEnd,
     DateTime? currentPeriodEnd,

@@ -593,4 +593,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'Upload is coming soon.';
+
+  @override
+  String get premiumNavTitle => 'SUBSCRIPTION';
+
+  @override
+  String get premiumEyebrow => 'PREMIUM';
+
+  @override
+  String get premiumTagline => 'Divine grace, every day';
+
+  @override
+  String get premiumPerMonthCaption => 'PER MONTH';
+
+  @override
+  String get premiumTrialLeadPrefix => 'Start your 1-day FREE trial for ';
+
+  @override
+  String get premiumRefundedBadge => 'REFUNDED INSTANTLY';
+
+  @override
+  String get premiumFeatureWallpapers => 'Unlimited HD Wallpapers';
+
+  @override
+  String get premiumFeatureRingtones => 'Devotional Ringtones';
+
+  @override
+  String get premiumFeatureDaily => 'Daily New Content';
+
+  @override
+  String get premiumCtaTrial => 'Start Free Trial';
+
+  @override
+  String get premiumCtaSubscribe => 'Subscribe Now';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 verification, refunded instantly · Cancel anytime';
+
+  @override
+  String get premiumReassurancePaid =>
+      'Secured by UPI Autopay · Cancel anytime in one tap';
+
+  @override
+  String get premiumSelectedUpiApp => 'Selected UPI App';
+
+  @override
+  String get upiPickerTitle => 'Pay using';
+
+  @override
+  String get upiPickerLastUsed => 'Last used';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'Then $price/month via autopay. Cancel anytime.';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$name in $city just applied a live wallpaper 🙏';
+  }
 }

@@ -5,9 +5,8 @@ import '../theme/tokens.dart';
 
 /// Silk ground, oil-lamp glow, kolam dot lattice, gopuram skyline.
 ///
-/// `shouldRepaint => false` — rasterises once, never repaints, so animated
-/// foreground content over it costs nothing extra. Painted rather than shipped as
-/// a PNG: resolution-free, themeable, ~0 bytes of asset.
+/// `shouldRepaint => false` -> rasterises once, so animated foreground over it costs nothing extra.
+/// Painted rather than shipped as a PNG -> resolution-free, themeable, ~0 bytes of asset.
 class KolamPainter extends CustomPainter {
   const KolamPainter();
 
@@ -47,8 +46,8 @@ class KolamPainter extends CustomPainter {
       ..drawPath(centre, rim);
   }
 
-  /// Kolam pulli — the dot lattice a kolam is drawn around. Staggered, not
-  /// square, and fading downward so it never fights the skyline.
+  /// Kolam pulli — the dot lattice a kolam is drawn around.
+  /// Staggered, not square, and fading downward -> it never fights the skyline.
   void _kolamDots(Canvas canvas, Size size) {
     const spacing = 30.0;
     final paint = Paint();

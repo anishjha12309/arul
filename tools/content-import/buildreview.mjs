@@ -1,7 +1,6 @@
-// Stage E — build a self-contained local review page from review-data.json.
-// Opens via file:// (local thumbnails load directly). Each card has a category
-// dropdown (default = classifier pick, or SKIP for likely existing-dups). The
-// "Copy corrections" button yields the FINAL {base: category|"SKIP"} map.
+// Stage E -> a self-contained review page from review-data.json, opened over file:// so local thumbs load.
+// Each card's category dropdown defaults to the classifier pick, or SKIP for a likely existing dup.
+// "Copy corrections" yields the FINAL {base: category|"SKIP"} map -> that is what buildplan.mjs consumes.
 import { readFileSync, writeFileSync } from "fs";
 const ROOT = "c:/Anish/arul-import";
 const CATS = ["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"];

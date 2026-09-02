@@ -1,12 +1,11 @@
 /**
- * Tests for the hardening pass (ported from the reference app):
- *   #7  money routes gated by OPS_SECRET, not CATALOG_BUILD_SECRET
- *   #9  thumbs/ orphan reclamation (derived keys)
- *   #16 atomic refresh-token rotation
- *   #19 rate limiting (must fail OPEN)
- *   #20 refund amount cap + order-ownership check
- *
- * The monotonic-version-pointer suite lives in admin-version.test.ts.
+ * The hardening invariants, one suite each:
+ *   money routes gated by OPS_SECRET and never CATALOG_BUILD_SECRET
+ *   thumbs/ orphan reclamation off DERIVED keys, since no column stores them
+ *   atomic refresh-token rotation, and the reuse grace that keeps a retry from signing a user out
+ *   rate limiting that must fail OPEN
+ *   the refund amount cap and the order-ownership check
+ * The monotonic-version-pointer suite lives in admin-version.test.ts
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -19,8 +18,7 @@ import { handleRunRedemptions, handleRefund } from "../src/routes/internal.js";
 // ── #7 money routes require OPS_SECRET ───────────────────────────────────────
 
 describe("money routes are NOT authorized by CATALOG_BUILD_SECRET", () => {
-  // CATALOG_BUILD_SECRET is handed to the CMS worker for rebuild triggers, so it
-  // must not also authorize "charge every subscriber ₹199".
+  // CATALOG_BUILD_SECRET is handed to the CMS for rebuild triggers -> it must never also authorize a ₹199 debit
   it("run-redemptions rejects the catalog secret", async () => {
     const env = makeEnv();
     const res = await handleRunRedemptions(
@@ -68,9 +66,8 @@ describe("money routes are NOT authorized by CATALOG_BUILD_SECRET", () => {
 describe("thumb key derivation + sweep scoping", () => {
   it("derives a category-partitioned poster key from a wallpaper key", () => {
     expect(thumbKeyFor("wallpapers/murugan/abc.mp4")).toBe("thumbs/murugan/abc.jpg");
-    // Over-inclusive BY DESIGN (unlike the reference app): a static .jpg also
-    // maps — its thumb may simply not exist, and the sweep tolerates absent
-    // keys. Only non-wallpaper prefixes are excluded.
+    // Over-inclusive BY DESIGN -> a static .jpg maps too, and its thumb may simply not exist
+    // The sweep tolerates an absent key -> over-inclusion can only ever PROTECT more -> only other prefixes are excluded
     expect(thumbKeyFor("wallpapers/sivan/abc.jpg")).toBe("thumbs/sivan/abc.jpg");
     expect(thumbKeyFor("ringtones/murugan/abc.mp3")).toBeNull();
     expect(thumbKeyFor("ringtones/covers/murugan/abc.jpg")).toBeNull();
@@ -96,8 +93,7 @@ describe("thumb key derivation + sweep scoping", () => {
   it("the active-prefix scope stops one prefix judging another's keys", () => {
     const NOW = 1_700_000_000_000;
     const OLD = NOW - 13 * 60 * 60 * 1000;
-    // Sweeping wallpapers/ must ignore a thumbs/ key entirely, even though it is
-    // absent from the wallpaper reference set.
+    // Sweeping wallpapers/ must IGNORE a thumbs/ key entirely -> it is absent from that reference set by construction
     const out = selectCanonicalKeysToDelete(
       [{ key: "thumbs/murugan/x.jpg", uploadedMs: OLD }],
       new Set(["wallpapers/murugan/x.mp4"]),

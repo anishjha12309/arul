@@ -1,7 +1,6 @@
-// The native → Dart bridge for links fetched over the network after an ad
-// install (Google Ads via GA4F, Meta via the FB SDK). What is pinned: the
-// payload is persisted BEFORE it is ACKed (the ACK is the commit point), a
-// token seen twice is inert, and the source rides through to the target.
+// The native -> Dart bridge for links fetched over the network after an ad install (GA4F, the Meta SDK).
+// The payload is persisted BEFORE it is ACKed -> the ACK is the commit point.
+// A token seen twice is inert, and the source rides through to the target.
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,8 +135,7 @@ void main() {
   });
 
   test('a token already seen is not re-queued or re-ACKed', () async {
-    // Native pushes on capture AND answers the initial pull with the same
-    // payload, so seeing one delivery twice is the normal case, not an error.
+    // Native pushes on capture AND answers the initial pull with the same payload -> one delivery seen twice is normal.
     const url = 'https://arul.hsrutility.com/w/$_w';
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -164,8 +162,7 @@ void main() {
     );
     await service.start();
     ArulDeepLink.consumeWallpaper();
-    // Native still holds the delivery if its own ACK write lost a race, so a
-    // second pull returning the same payload has to be inert.
+    // Native still holds the delivery if its ACK write lost a race -> a second pull of the same payload must be inert.
     await service.start();
 
     expect(calls.where((c) => c.method == 'ackDeferredDeepLink'), hasLength(1));
@@ -177,8 +174,7 @@ void main() {
   });
 
   test('a URL that is not ours is ACKed and dropped, never queued', () async {
-    // Leaving a rejected payload pending would retry it forever on every
-    // Activity creation.
+    // Leaving a rejected payload pending would retry it forever on every Activity creation.
     final h = await start('test/deferred_link_junk', [
       {
         'url': 'https://evil.example/w/$_w',

@@ -43,51 +43,35 @@ final class WallpaperShareError extends WallpaperShareState {
     this.premiumRequired = false,
   });
 
-  /// DIAGNOSTIC ONLY -- never shown to a user (English, and can be a raw
-  /// exception). The UI localizes from [isNetwork].
+  /// DIAGNOSTIC ONLY — never shown to a user; English, and possibly a raw exception.
+  /// The UI localizes from [isNetwork].
   final String message;
   final bool isNetwork;
 
-  /// The server refused because the subscription is no longer live — route to
-  /// the paywall rather than showing a generic share failure.
+  /// The server refused because the subscription is no longer live -> route to the paywall.
   final bool premiumRequired;
 }
 
-// ─── Share-sheet launcher ─────────────────────────────────────────────────────
-
-/// Thin seam over the static [SharePlus.instance] so tests can fake the system
-/// share sheet (there is no platform channel in pure-Dart tests).
+/// Thin seam over the static [SharePlus.instance] -> tests can fake the system share sheet.
 final shareSheetLauncherProvider =
     Provider<Future<ShareResult> Function(ShareParams)>(
       (ref) =>
           (params) => SharePlus.instance.share(params),
     );
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
-
 class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   @override
   WallpaperShareState build() => const WallpaperShareIdle();
 
-  /// Downloads the media through the signed-URL gate (or reuses the cached copy
-  /// the apply flow / prefetcher already put on disk) and sends it outward:
-  /// straight to WhatsApp when it is installed, otherwise the system sheet.
+  /// Downloads the media through the signed-URL gate, or reuses a copy already on disk.
+  /// Then sends it outward — straight to WhatsApp when installed, otherwise the system sheet.
   ///
-  /// [buildCaption] renders the caption AROUND the install link, which can only
-  /// be resolved mid-flow. It is a callback rather than a plain string because
-  /// the caption is localized and this notifier has no `BuildContext`.
-  ///
-  /// It replaced a plain `message` parameter that was concatenated as
-  /// `'$message\n$link'`. That was not a style preference: the message itself
-  /// ended in a hard-coded marketing-site URL, so every shared wallpaper went out
-  /// carrying TWO links — the hard-coded one and the referral-attributed one —
-  /// and the recipient had even odds of tapping the one that credited nobody.
-  /// Putting the link INSIDE the caption makes a second one impossible to add by
-  /// accident.
-  ///
-  /// There is no "shared" success state: the sheet is the OS's, and whether the
-  /// user actually completed a share is not observable. We return to idle as
-  /// soon as it is handed off — claiming success would be a lie.
+  /// [buildCaption] renders the caption AROUND the install link, resolvable only mid-flow.
+  /// A callback, not a string, because the caption is localized and this notifier has no context.
+  /// Concatenating `'$message\n$link'` sent TWO links, one of which credited nobody.
+  /// Putting the link INSIDE the caption makes a second one impossible to add by accident.
+  /// There is NO "shared" success state — the sheet is the OS's and completion is unobservable.
+  /// Idle resumes as soon as it is handed off; claiming success would be a lie.
   Future<void> share(
     Wallpaper wallpaper, {
     required String Function(String link) buildCaption,
@@ -101,11 +85,8 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     try {
       state = const WallpaperSharePreparing();
 
-      // The SAME filename apply uses. Prefixing it `arul-` here meant apply-then-
-      // share (or share-then-apply) of one wallpaper downloaded the identical bytes
-      // twice, on a user's mobile data. The friendly name the recipient sees is a
-      // share-sheet concern, handled by `fileNameOverrides` below — not by renaming
-      // the cache entry.
+      // The SAME filename apply uses — a different prefix downloaded identical bytes TWICE.
+      // The friendly name the recipient sees is `fileNameOverrides` below, not a renamed cache entry.
       final filename = applyCacheFilename(wallpaper);
       final tmpDir = await getTemporaryDirectory();
       final cached = File('${tmpDir.path}/$filename');
@@ -114,9 +95,8 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       if (await cached.exists() && await cached.length() > 0) {
         file = cached;
       } else {
-        // Reuse the feed prefetcher's copy when it has one — for a live wallpaper
-        // being viewed, it almost always does. Looked up by the PUBLIC url (the
-        // prefetcher's cache key), never the one-shot signed url.
+        // Reuse the feed prefetcher's copy when it has one — for a live wallpaper it almost always does.
+        // Looked up by the PUBLIC url, the prefetcher's cache key, never the one-shot signed one.
         final prefetched = await ref
             .read(wallpaperPrefetchServiceProvider)
             .cachedPathOrNull(await service.resolveUrl(wallpaper));
@@ -124,35 +104,31 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
           try {
             file = await File(prefetched).copy(cached.path);
           } catch (_) {
-            // Evicted between lookup and copy — fall through to the download.
+            // Evicted between lookup and copy -> fall through to the download.
           }
         }
       }
 
       if (file != null) {
-        // The bytes are already on disk (a previous apply/share, or the feed
-        // prefetcher pulled them for playback), so the DOWNLOAD is skipped —
-        // but the gate is not. Share sends the file OFF-DEVICE, so skipping
-        // `/media/signed-url` (the only authoritative entitlement check) here
-        // let a lapsed subscriber keep sharing anything already cached,
-        // indefinitely — the same "cache became a permanent licence" hole the
-        // apply flow closed. The same fix lives in Pakiza — keep both in sync.
+        // The bytes are already on disk -> the DOWNLOAD is skipped, but the GATE is not.
+        // Share sends the file OFF-DEVICE, and `/media/signed-url` is the only real check.
+        // Skipping it let a lapsed subscriber keep sharing anything cached, indefinitely.
+        // The same "cache became a permanent licence" hole the apply flow closed.
+        // The same fix lives in Pakiza — keep both in sync.
         try {
           await service.downloadUrl(wallpaper, action: MediaUseAction.share);
         } on WallpaperApplyException catch (e) {
-          // A real 403 is the gate doing its job — surface it so the screen
-          // routes to the paywall. Any other API failure on bytes we already
-          // hold is not worth blocking a paying user over.
+          // A real 403 is the gate doing its job -> surface it and route to the paywall.
+          // Any other API failure, on bytes already held, is not worth blocking a payer over.
           if (e.premiumRequired) rethrow;
         } catch (e) {
           if (!isNetworkError(e)) rethrow;
-          // Offline, with the file already on disk from a previously-passing
-          // gate. Allow it — same trade as apply.
+          // Offline, with the file on disk from a previously-passing gate -> allow it, as apply does.
         }
       }
 
       if (file == null) {
-        // The GATED download URL (Worker signed-url when the backend exists).
+        // The GATED download URL — the Worker's signed-url when a backend exists.
         final url = await service.downloadUrl(
           wallpaper,
           action: MediaUseAction.share,
@@ -162,26 +138,21 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         });
       }
 
-      // Watermark AFTER the source resolves, still under Preparing. Output is
-      // always a NEW file — the source may be a cache entry shared with apply/
-      // prefetch and must never be mutated.
-      //
+      // Watermark AFTER the source resolves, still under Preparing.
+      // The output is always a NEW file — the source may be a cache entry apply also holds.
       // The two failure modes are deliberately NOT the same:
-      //   · CANNOT watermark (live video below API 31) → share the clean
-      //     original, silently. The device is incapable, not broken.
-      //   · CAN watermark but did not → fail the share.
-      // The second half is the one that changed. Falling through to the
-      // original on a capable device made the trace code worthless precisely
-      // where it works: an untraced copy left the phone and nothing recorded
-      // that it had. A share the user can retry is the better failure.
+      //   · CANNOT watermark (live video below API 31) -> share the clean original, silently;
+      //   · CAN watermark but did not -> FAIL the share.
+      // Falling through on a capable device made the trace code worthless where it works.
+      // An untraced copy left the phone with nothing recording that it had.
+      // A share the user can retry is the better failure.
       var shared = file;
       var watermarked = false;
       try {
         shared = await _watermarkWithRetry(wallpaper, file, tmpDir.path);
         watermarked = true;
       } on ShareWatermarkUnsupportedException catch (e) {
-        // By design, and invisible to the user — see the exception's doc for
-        // why API 31 is the line (androidx/media#2535).
+        // By design and invisible to the user — the exception's doc says why API 31 is the line.
         analytics.track(
           'share_watermark_skipped',
           properties: {
@@ -206,17 +177,13 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       final caption = buildCaption(link.url);
       final mimeType = _mimeType(shared.path);
 
-      // Idle BEFORE the hand-off: the sheet's future resolves only when it
-      // closes, so leaving Preparing set would strand the progress bar beneath
-      // it.
+      // The sheet's future resolves only when it CLOSES -> go idle before the hand-off.
+      // Otherwise the progress bar is stranded beneath it.
       state = const WallpaperShareIdle();
 
-      // WhatsApp first. It is where these wallpapers actually travel, and the
-      // chooser is a tap that loses shares — but it is attempted, never
-      // assumed: a false answer (not installed, or it refused the mime type) is
-      // routine and falls through to the sheet below. The FILE goes with it —
-      // this is a native targeted ACTION_SEND, not the text-only
-      // `whatsapp://send?text=` link the referral screen uses.
+      // WhatsApp FIRST — it is where these travel, and the chooser is a tap that loses shares.
+      // Attempted, never assumed: a false answer is routine and falls through to the sheet.
+      // The FILE goes with it — a native targeted ACTION_SEND, not the text-only referral link.
       final direct = await ref
           .read(directShareServiceProvider)
           .shareToWhatsApp(
@@ -225,19 +192,15 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
             text: caption,
           );
 
-      // `unavailable` is the honest status for the direct path: WhatsApp owns
-      // the outcome from here and never reports back, exactly as the system
-      // sheet doesn't when it is dismissed.
+      // `unavailable` is the honest status here — WhatsApp owns the outcome and never reports back.
       var status = ShareResultStatus.unavailable;
       if (!direct) {
         final result = await ref.read(shareSheetLauncherProvider)(
           ShareParams(
             files: [XFile(shared.path, mimeType: mimeType)],
-            // What the RECIPIENT sees (`arul-<title-slug>.<ext>`) instead of the
-            // R2 object key's opaque name. The cache file is named for its
-            // content, so this is where the brand goes — without forking the
-            // cache. Extension follows the SHARED file (a watermarked .webp
-            // re-encodes to .jpg), not the cache entry.
+            // What the RECIPIENT sees, instead of the R2 key's opaque name.
+            // The cache file is named for its CONTENT -> the brand goes here, forking nothing.
+            // The extension follows the SHARED file, not the cache entry — a .webp re-encodes to .jpg.
             fileNameOverrides: [_recipientFilename(wallpaper, shared.path)],
             text: caption,
           ),
@@ -253,23 +216,20 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
           'category': wallpaper.category,
           'result': status.name,
           'watermarked': watermarked,
-          // Reach telemetry. `link_attributed` false means the outgoing share
-          // carried the plain Play listing and the sender can never be credited
-          // for the install — a silent referral leak that was previously
-          // invisible. `channel` says whether skipping the chooser is earning
-          // its keep.
+          // Reach telemetry. `link_attributed` false means the sender can never be credited.
+          // That referral leak was previously invisible.
+          // `channel` says whether skipping the chooser is earning its keep.
           'link_attributed': link.attributed,
           'channel': direct ? 'whatsapp' : 'sheet',
         },
       );
     } on WallpaperApplyException catch (e, st) {
       if (e.premiumRequired) {
-        // Expected business condition, not a defect — see
-        // WallpaperApplyException.premiumRequired. No crash record; refresh the
-        // stale client snapshot so the paywall the screen opens tells the truth.
+        // An expected business condition, not a defect -> NO crash record.
+        // Refresh the stale client snapshot so the paywall the screen opens tells the truth.
         ref.invalidate(entitlementDetailProvider);
       } else {
-        // Share failures gate a core premium action — record like apply does.
+        // Share failures gate a core premium action -> record them, as apply does.
         crash.recordError(e, st, reason: 'wallpaper share failed');
       }
       state = WallpaperShareError(
@@ -287,12 +247,11 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
 
   /// One retry before a watermark failure is allowed to fail the share.
   ///
-  /// The native exporter runs a single export at a time and answers `busy` to a
-  /// second one, and a hardware codec can be briefly unavailable behind the
-  /// feed's player pool — neither is worth refusing a share over now that a
-  /// failure is fatal to it. The retry re-plans, so the second attempt gets its
-  /// own code and its own output path. An unsupported DEVICE is not retried:
-  /// that answer will never change.
+  /// The native exporter runs ONE export at a time and answers `busy` to a second.
+  /// A hardware codec can also be briefly unavailable behind the feed's player pool.
+  /// Neither is worth refusing a share over, now that a failure is fatal to it.
+  /// The retry RE-PLANS -> the second attempt gets its own code and its own output path.
+  /// An unsupported DEVICE is never retried: that answer will not change.
   Future<File> _watermarkWithRetry(
     Wallpaper wallpaper,
     File src,
@@ -308,10 +267,9 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     }
   }
 
-  /// Produces the watermarked copy for THIS share: fresh spec (fresh code —
-  /// never reused, so every outgoing copy is individually identifiable), output
-  /// `<basename>-wm-<code>.<jpg|mp4>` in the temp dir. Also sweeps `-wm-` files
-  /// older than a day: codes make every output unique, so they only accumulate.
+  /// The watermarked copy for THIS share — a fresh spec, so every outgoing copy is identifiable.
+  /// Output is `<basename>-wm-<code>.<jpg|mp4>` in the temp dir.
+  /// Codes make every output unique, so they only accumulate -> sweep `-wm-` files over a day old.
   Future<File> _watermark(Wallpaper wallpaper, File src, String tmpPath) async {
     _cleanStaleWatermarks(tmpPath);
 
@@ -321,7 +279,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       userId: _currentUserIdOrNull(),
     );
 
-    // Split on BOTH separators: Windows (tests) mixes `\` and `/` in one path.
+    // Split on BOTH separators — Windows mixes `\` and `/` in one path.
     final srcName = src.path.split(RegExp(r'[/\\]')).last;
     final dot = srcName.lastIndexOf('.');
     final stem = dot == -1 ? srcName : srcName.substring(0, dot);
@@ -333,7 +291,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         outPath: '$tmpPath/$stem-wm-${spec.code}.mp4',
       );
     }
-    // Static: always re-encoded to JPEG, whatever the source (.jpg/.webp).
+    // Static: ALWAYS re-encoded to JPEG, whatever the source.
     return wm.watermarkImage(
       src,
       spec,
@@ -358,8 +316,8 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     }).catchError((_) {});
   }
 
-  /// The signed-in user's id if it is ALREADY known — never awaited, never a
-  /// share blocker. Feeds the watermark code so a leaked copy traces to a user.
+  /// The signed-in user's id if ALREADY known — never awaited, never a share blocker.
+  /// Feeds the watermark code, so a leaked copy traces to a user.
   String? _currentUserIdOrNull() {
     try {
       return ref.read(authStateStreamProvider).value?.userId;
@@ -375,26 +333,20 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     return 'image/jpeg';
   }
 
-  /// The ONE link the share caption carries (docs/share.md): an App Link to
-  /// THIS wallpaper, referral-attributed when the user's code loads in time.
+  /// The ONE link a share caption carries (docs/share.md) — an App Link to THIS wallpaper.
+  /// Referral-attributed when the user's code loads in time.
   ///
-  /// Points at the wallpaper, not the store listing, so a recipient who already
-  /// has the app lands on the thing they were sent instead of a Play page — and
-  /// one who does not still installs, because the Worker's `/w/:id` redirects
-  /// them to Play carrying the id, which reopens on the wallpaper after install.
-  /// Same URL shape ad creatives use.
-  ///
-  /// Never blocks the share on the referral call — the file is the payload, the
-  /// link is a bonus. Reports WHICH of the two it returned, because the
-  /// difference is worth money: an unattributed link installs the app and
-  /// credits nobody, and until this was tracked there was no way to tell how
-  /// often that happened.
+  /// Points at the WALLPAPER, not the listing -> a recipient who has the app lands on it.
+  /// One who does not still installs: `/w/:id` redirects to Play carrying the id, and it reopens.
+  /// The same URL shape ad creatives use.
+  /// NEVER blocks the share on the referral call — the file is the payload, the link a bonus.
+  /// Reports WHICH of the two it returned, because an unattributed link credits nobody.
   Future<({String url, bool attributed})> _installLink(
     Wallpaper wallpaper,
   ) async {
-    // The caption goes out in the sharer's language, so a fresh install should
-    // open in it too — as `ilang`, which only survives the Play referrer, never
-    // the App Link. A recipient who already has Arul keeps their own language.
+    // The caption goes out in the sharer's language -> a fresh install should open in it.
+    // As `ilang`, which survives only the Play referrer, never the App Link.
+    // A recipient who already has Arul keeps their OWN language.
     final installLang = ref.read(localeProvider).languageCode;
     if (AppConfig.hasBackend) {
       try {
@@ -414,11 +366,10 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
           );
         }
       } catch (_) {
-        // Offline mid-flow / slow server / no code — fall through.
+        // Offline mid-flow, a slow server, or no code -> fall through.
       }
     }
-    // Still the wallpaper link, just uncredited: losing attribution must never
-    // also cost the deep link, which is the half that converts.
+    // Still the wallpaper link, uncredited — losing attribution must not also cost the deep link.
     return (
       url: InstallReferrerService.buildWallpaperLink(
         wallpaper.id,
@@ -428,8 +379,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     );
   }
 
-  /// Friendly filename shown to the recipient (`arul-<title-slug>.<ext>`),
-  /// extension taken from the file actually being shared.
+  /// Friendly filename shown to the recipient, its extension taken from the file actually shared.
   String _recipientFilename(Wallpaper wallpaper, String sharedPath) {
     final dot = sharedPath.lastIndexOf('.');
     final ext = dot == -1 ? '' : sharedPath.substring(dot);

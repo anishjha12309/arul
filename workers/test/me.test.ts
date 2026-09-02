@@ -1,13 +1,8 @@
 /**
- * Unit tests for /me route handlers.
+ * The /me route handlers, against a mocked Sql and mocked JWT verification — no network, no live DB.
  *
- * Mocks the DB (postgres.js Sql) and JWT verification. No network/live DB.
- * Verifies:
- *   - 401 when no/invalid token
- *   - correct response envelope + snake_case keys matching the Flutter models
- *   - 404 when no row (GET /me, GET /me/subscription)
- *   - { items: [...] } wrapping for submissions + referrals
- *   - queries are scoped to the verified sub
+ * The response envelopes and their snake_case keys are what the shipped Flutter models parse -> pin them
+ * Every query must be scoped to the VERIFIED sub -> a test that passes an id in the body would prove nothing
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -42,7 +37,7 @@ function makeMockSql(rows: unknown[]): { sql: unknown; result: MockSqlResult } {
   return { sql, result };
 }
 
-// Build a minimal Hono-like Context for the handler.
+// A minimal Hono-like Context -> only what the handlers actually read
 function makeCtx(opts: {
   token?: string;
   sql: unknown;
@@ -54,8 +49,7 @@ function makeCtx(opts: {
 } {
   const jsonCalls: Array<{ body: unknown; status: number }> = [];
 
-  // Patch getDb indirectly: the handlers call getDb(env), so we inject a
-  // pre-built sql via env._testSql and have a vi.mock replace getDb.
+  // getDb is patched indirectly -> handlers call getDb(env), so a pre-built sql rides on env._testSql
   const env = {
     JWT_SECRET,
     _testSql: opts.sql,
@@ -85,7 +79,7 @@ function makeCtx(opts: {
   return { ctx, jsonCalls };
 }
 
-// Mock getDb so handlers use our injected sql.
+// Mock getDb so every handler reaches the injected sql
 vi.mock("../src/lib/db.js", () => ({
   getDb: (env: { _testSql: unknown }) => env._testSql,
 }));
@@ -136,10 +130,9 @@ describe("GET /me", () => {
   });
 
   it("premium: true with subscription: null — a reward-only referrer", async () => {
-    // THE regression this field exists to prevent: the client used to derive
-    // premium from the subscription row alone, so a referrer holding only
-    // reward_premium_until credit (predicate true, no subscription row) was
-    // bounced to the paywall. The server flag must carry that case through.
+    // THE regression this field exists to prevent -> the client used to derive premium from the subscription row alone
+    // A referrer holding only reward_premium_until credit has no subscription row at all -> they were bounced to the paywall
+    // The server flag must carry that case through -> it is the only place the whole rule lives
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const { sql } = makeMockSql([
       {
@@ -184,7 +177,7 @@ describe("GET /me", () => {
         sub_trial_end: null,
         sub_current_period_end: null,
         sub_updated_at: null,
-        // no `premium` key at all
+        // No `premium` key at all -> the strict === true check must read that as FREE, never as premium
       },
     ]);
     const { ctx } = makeCtx({ token, sql });
@@ -231,7 +224,7 @@ describe("GET /me", () => {
     expect(body.subscription.plan).toBe("monthly");
     expect(body.subscription.phonepe_subscription_id).toBe("PP123");
     expect(body.subscription.merchant_subscription_id).toBe("M123");
-    // The app's trial_started catch-up keys on this — it must ride along.
+    // The app's trial_started catch-up keys on this order id -> without it a trial granted app-closed is never reported
     expect(body.subscription.merchant_order_id).toBe("DKS_ORDER_1");
     expect(body.subscription.trial_end).toBeNull();
     expect(body.subscription.current_period_end).toBe("2026-12-31T00:00:00.000Z");
@@ -305,7 +298,7 @@ describe("POST /me/profile", () => {
     const body = (await res.json()) as { user: Record<string, unknown> };
     expect(body.user.displayName).toBe("Aisha Khan");
     expect(body.user.email).toBe("aisha@example.com");
-    // The trimmed name and the verified sub are passed to the UPDATE.
+    // The TRIMMED name and the VERIFIED sub are what reach the UPDATE -> never a raw body value
     const updateArgs = result.capturedArgs[0];
     expect(updateArgs).toContain("Aisha Khan");
     expect(updateArgs).toContain(USER_ID);

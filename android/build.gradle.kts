@@ -2,7 +2,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        // PhonePe Payment SDK — required by phonepe_payment_sdk Flutter plugin
+        // phonepe_payment_sdk resolves only from PhonePe's own repo -> Maven Central does not host it -> keep this entry.
         maven {
             url = uri("https://phonepe.mycloudrepo.io/public/repositories/phonepe-intentsdk-android")
         }

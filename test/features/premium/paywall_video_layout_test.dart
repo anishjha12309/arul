@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' show ImageByteFormat;
 
+import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/upi/upi_apps.dart';
 import 'package:arul/features/premium/domain/onboarding_video.dart';
 import 'package:arul/features/premium/presentation/onboarding_video_card.dart';
@@ -11,9 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// `flutter test` ships Ahem, not the app's bundled families, so the paywall's
-/// type has to be registered by hand before anything measures it — the whole
-/// point here is real heights.
+/// `flutter test` ships Ahem, not the app's bundled families -> register the type by hand or the heights are fiction.
 Future<void> _loadPaywallFonts() async {
   const families = {
     'Cinzel': ['assets/fonts/Cinzel-Medium.ttf'],
@@ -36,12 +35,10 @@ Future<void> _loadPaywallFonts() async {
   }
 }
 
-/// Every phone shape the app actually lands on, in logical pixels.
-/// 360x640 is the floor — the smallest screen Android still ships in India.
-/// Logical pixels, and these are the sizes INSIDE SafeArea — what the paywall
-/// actually gets. The Nothing A001 is 1080x2392 at density 420, i.e. 411x911dp,
-/// of which the status bar and the gesture pill take ~50; measuring the full
-/// 911 is what hid a clipped feature label from this test once already.
+/// Every phone shape the app lands on, in logical pixels -> 360x640 is the floor Android still ships in India.
+/// These are the sizes INSIDE SafeArea -> what the paywall actually gets.
+/// A 411x911dp device gives up ~50 to the status bar and gesture pill.
+/// Measuring the full 911 is what hid a clipped feature label from this test once already.
 const _devices = <String, Size>{
   'small_360x640': Size(360, 640),
   'small_360x600_bars': Size(360, 600),
@@ -55,6 +52,10 @@ const _devices = <String, Size>{
 Widget _host(Widget child) => ProviderScope(
   child: MaterialApp(
     debugShowCheckedModeBanner: false,
+    // The paywall reads its copy from the ARBs -> without the delegates
+    // `AppLocalizations.of` resolves to null and every test here dies on its null-check.
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(body: SafeArea(child: child)),
   ),
 );
@@ -64,8 +65,7 @@ Widget _paywall({required bool withVideo}) => ArulPaywallView(
   monthlyPrice: '₹199',
   purchaseBusy: false,
   showSocialProof: true,
-  // player: null is the real pre-decode state — poster only, no platform
-  // channel, and exactly the geometry the card lays out on device.
+  // player: null is the real pre-decode state -> poster only, no platform channel, the geometry the card lays out.
   onboardingVideo: withVideo
       ? const ArulOnboardingVideoCard(
           player: null,
@@ -104,14 +104,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 1. Nothing overflowed. A RenderFlex overflow paints the yellow stripe
-      //    and is reported as an exception, which this catches for every size.
+      // 1. Nothing overflowed -> a RenderFlex overflow paints the yellow stripe and reports an exception this catches.
       expect(tester.takeException(), isNull, reason: '$name overflowed');
 
-      // 2. The clip is on the first screenful — the owner's one hard
-      //    requirement for this layout ("non-negotiable on the main visible
-      //    screen in all devices"). Measured against the CTA, because the CTA
-      //    is pinned to the bottom and everything above it is the fold.
+      // 2. The clip is on the first screenful -> the owner's one hard requirement for this layout.
+      //    Measured against the CTA -> the CTA is pinned to the bottom and everything above it is the fold.
       final clip = tester.getRect(find.byType(ArulOnboardingVideoCard));
       final cta = tester.getRect(find.text('Start Free Trial'));
       expect(
@@ -119,9 +116,8 @@ void main() {
         lessThanOrEqualTo(cta.top),
         reason: '$name: the clip runs under the pinned CTA',
       );
-      // The clip's frame keeps its full 16:9 at EVERY size — it is never
-      // cropped or scaled to buy room for the chrome (owner's call). A small
-      // screen pays out of the offer panel's padding instead.
+      // The clip's frame keeps its full 16:9 at EVERY size -> never cropped or scaled to buy chrome room (owner's call).
+      // A small screen pays out of the offer panel's padding instead.
       final frame = tester.getRect(
         find.byKey(const Key('onboarding-video-frame')),
       );
@@ -136,16 +132,12 @@ void main() {
         reason: '$name: the clip is not full width',
       );
 
-      // 3. The price is still above the clip, which is the ordering the owner
-      //    asked for (offer read first, clip as the proof under it).
+      // 3. The price is still above the clip -> the ordering the owner asked for: offer read first, clip as proof.
       final price = tester.getRect(find.byType(PriceLockup));
       expect(price.bottom, lessThanOrEqualTo(clip.top), reason: '$name order');
 
-      // 4. The feature labels are not sliced through the middle. They may sit
-      //    below the fold entirely on a short screen — they are the one block
-      //    allowed to scroll — but a label cut halfway through its second line
-      //    reads as broken chrome rather than as more content (device
-      //    2026-08-31: "Unlimited HD" with "Wallpapers" shaved off).
+      // 4. The feature labels are not sliced through the middle -> they are the one block allowed to scroll off.
+      //    A label cut halfway through its second line reads as broken chrome, not as more content.
       final label = find.text('Unlimited HD Wallpapers');
       if (label.evaluate().isNotEmpty) {
         final labelRect = tester.getRect(label);

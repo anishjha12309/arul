@@ -8,18 +8,14 @@ part of 'performance_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
-/// every real app build (debug, profile, release), and the no-op under
-/// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
-/// `crashReporterProvider`, so tests never touch an uninitialised SDK.
+/// App-wide [PerformanceMonitor] — real Firebase in every app build, the no-op under `flutter test`.
+/// The same `AppConfig.firebaseEnabled` guard as `main()` -> tests never touch an uninitialised SDK.
 
 @ProviderFor(performanceMonitor)
 final performanceMonitorProvider = PerformanceMonitorProvider._();
 
-/// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
-/// every real app build (debug, profile, release), and the no-op under
-/// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
-/// `crashReporterProvider`, so tests never touch an uninitialised SDK.
+/// App-wide [PerformanceMonitor] — real Firebase in every app build, the no-op under `flutter test`.
+/// The same `AppConfig.firebaseEnabled` guard as `main()` -> tests never touch an uninitialised SDK.
 
 final class PerformanceMonitorProvider
     extends
@@ -29,10 +25,8 @@ final class PerformanceMonitorProvider
           PerformanceMonitor
         >
     with $Provider<PerformanceMonitor> {
-  /// App-wide [PerformanceMonitor]. Returns the real Firebase implementation in
-  /// every real app build (debug, profile, release), and the no-op under
-  /// `flutter test` — same `AppConfig.firebaseEnabled` guard as `main()` and
-  /// `crashReporterProvider`, so tests never touch an uninitialised SDK.
+  /// App-wide [PerformanceMonitor] — real Firebase in every app build, the no-op under `flutter test`.
+  /// The same `AppConfig.firebaseEnabled` guard as `main()` -> tests never touch an uninitialised SDK.
   PerformanceMonitorProvider._()
     : super(
         from: null,

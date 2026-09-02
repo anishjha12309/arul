@@ -1,35 +1,16 @@
 /**
- * Server-side PostHog `subscription_active` capture.
+ * The ONLY server-side analytics sink. GA4 and Meta server reporting are deleted -> never re-add either here.
  *
- * WHY THIS EXISTS: the FIRST trial→paid conversion settles app-closed (hourly
- * cron / S2S webhook), so the PostHog journey had no paid endpoint at all —
- * `trial_started` was the last thing it ever saw. Re-adding the paid event is
- * an owner decision (2026-08-24) reversing part of the 2026-08-18 five-event
- * trim: the funnel needed its real endpoint back, and the volume is single
- * digits per day. It comes back SERVER-side only — the client allow-list
- * (`postHogAllowedEvents`, pinned by test/core/analytics_gating_test.dart) is
- * unchanged, because the client-observable `subscription_active` (repeat
- * subscriber paying at setup) is a different purchase and stays GA4/Meta-only.
- *
- * Join key: distinct_id = users.id — the app identifies PostHog with the Neon
- * user id at login (api_auth_service.dart), verified against production
- * 2026-08-24 (sampled trialing users' ids all resolve as PostHog persons).
- *
- * Contract per PostHog capture API (posthog.com/docs/api/capture, fetched
- * 2026-08-24): POST {host}/i/v0/e with api_key + event + distinct_id;
- * properties/timestamp optional; answers 200 even for events it drops, so the
- * KV mark is "call accepted", not "event ingested" — the event's presence in
- * PostHog is the real verification. `uuid` is sent deterministically from the
- * transaction id as a second dedup layer under the KV mark — BUT PostHog
- * dedupes on the whole key `[timestamp, distinct_id, event, uuid]`
- * (posthog.com/docs/cdp/troubleshooting, read 2026-08-26), so the uuid only
- * bites when the timestamp repeats too. Callers therefore pass `occurredAt` —
- * the row's `updated_at` from the transition's own RETURNING — and a fresh
- * `now()` is only the fallback for paths with no stable instant. A resend
- * stamped with the wall clock would have carried a new key every time.
- *
- * Fail-open EVERYWHERE (the pattern the deleted lib/ga4.ts set): never throw,
- * never block a billing transition; missing POSTHOG_API_KEY logs and skips.
+ * The FIRST trial->paid conversion settles app-closed (cron or S2S webhook) -> no client can ever emit it
+ * Without this the PostHog journey ended at `trial_started` -> the funnel had no paid endpoint at all
+ * SERVER-side only -> the client allow-list `postHogAllowedEvents` is unchanged, pinned by analytics_gating_test.dart
+ * Join key is distinct_id = users.id -> the app identifies PostHog with the Neon user id at login
+ * Capture API: POST {host}/i/v0/e with api_key + event + distinct_id (posthog.com/docs/api/capture)
+ * It answers 200 even for events it DROPS -> the KV mark means "call accepted", never "event ingested"
+ * PostHog dedupes on the whole key [timestamp, distinct_id, event, uuid] -> a deterministic uuid alone is not enough
+ * So callers pass `occurredAt` — the transition's own RETURNING `updated_at` -> a resend keeps the same key
+ * Stamping a resend with the wall clock would mint a new key every time -> `now()` is only the last-resort fallback
+ * Fail-open EVERYWHERE -> analytics must never throw into, or block, a billing transition
  */
 
 import type { Env } from "../env.js";
@@ -42,20 +23,16 @@ interface FirstConversion {
   transactionId: string;
   /** Paise. Falls back to ₹199 when the payload omitted it. */
   amountPaise?: number | null;
-  /** The transition's own instant (the row's `updated_at` as RETURNED by the
-   * UPDATE). Stable across a resend, which is what makes `uuid` dedupe. */
+  /** The row's `updated_at` as RETURNED by the UPDATE -> stable across a resend -> this is what makes `uuid` dedupe. */
   occurredAt?: Date | string | null;
 }
 
 const FALLBACK_AMOUNT_PAISE = 19900;
 
-/** Order ids never recur; 30 days outlives every webhook redelivery + cron
- * reconcile window. */
+/** Order ids never recur -> 30 days outlives every webhook redelivery and the cron reconcile window. */
 const DEDUPE_TTL_SECONDS = 30 * 24 * 60 * 60;
 
-/** ISO-8601 for the event `timestamp`: the caller's stable instant when it
- * has one, else now. A string that isn't a date falls through to now too —
- * a bad timestamp must never cost the event. */
+/** An unparseable timestamp falls through to now -> a bad instant must cost precision, never the event. */
 function eventTimestamp(occurredAt: Date | string | null | undefined): string {
   if (occurredAt instanceof Date && !Number.isNaN(occurredAt.getTime())) {
     return occurredAt.toISOString();
@@ -67,8 +44,7 @@ function eventTimestamp(occurredAt: Date | string | null | undefined): string {
   return new Date().toISOString();
 }
 
-/** Deterministic UUID-shaped id from (event, seed), so even a KV-eventual-
- * consistency double-send carries the same uuid into PostHog. */
+/** UUID-shaped and derived from (event, seed) -> a KV eventual-consistency double-send carries the SAME uuid. */
 async function deterministicUuid(event: string, seed: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -85,8 +61,8 @@ async function deterministicUuid(event: string, seed: string): Promise<string> {
 }
 
 /**
- * Capture one settled FIRST trial→paid debit as `subscription_active`.
- * Caller is responsible for the prior-status === 'trialing' gate.
+ * Capture one settled FIRST trial->paid debit as `subscription_active`.
+ * The prior-status === 'trialing' gate is the CALLER's -> this function does not re-check it
  */
 export async function reportPostHogFirstConversion(
   env: Env,
@@ -121,9 +97,8 @@ export async function reportPostHogFirstConversion(
         distinct_id: purchase.userId,
         uuid: await deterministicUuid("subscription_active", purchase.transactionId),
         timestamp: eventTimestamp(purchase.occurredAt),
-        // Property names match the client-side conversion convention
-        // (premium_purchase_provider._trackConversion): plan/order_id/value.
-        // $lib marks the reporter so server rows are separable in analysis.
+        // plan/order_id/value mirror the client convention -> the two sources aggregate as one event
+        // $lib marks the reporter -> server rows stay separable in analysis
         properties: {
           plan: "monthly",
           order_id: purchase.transactionId,
@@ -155,17 +130,13 @@ export async function reportPostHogFirstConversion(
   }
 }
 
-/** Why a subscription stopped. Every value is a channel that WRITES
- * status='cancelled' on a live (trialing/active/paused) row:
- *   user_cancel          POST /payments/cancel (Manage Subscription in the app)
+/** Every value is a channel that WRITES status='cancelled' onto a LIVE (trialing/active/paused) row:
+ *   user_cancel          POST /payments/cancel — Manage Subscription in the app
  *   account_deleted      DELETE /me revoked a live mandate before deleting the user
- *   revoked_at_phonepe   PhonePe reported the mandate CANCELLED/REVOKED (user did
- *                        it in their UPI app) — seen by the cron or /payments/status
- *   rejected_by_phonepe  PhonePe permanently rejected the notify (mandate unusable)
- *   webhook_revoked      subscription.revoked / subscription.cancelled webhook
- * NOT a cancel: the "restore" writes that put a still-paid row back to
- * 'cancelled' after a failed/abandoned RE-setup — the user's mandate was
- * already gone before that attempt, so nothing new was lost there. */
+ *   revoked_at_phonepe   the user revoked in their UPI app -> seen by the cron or /payments/status
+ *   rejected_by_phonepe  PhonePe permanently rejected the notify -> the mandate is unusable
+ *   webhook_revoked      a subscription.revoked / subscription.cancelled webhook
+ * A "restore" write is NOT a cancel -> the mandate was already gone before that re-setup -> nothing new was lost */
 export type SubscriptionCancelReason =
   | "user_cancel"
   | "account_deleted"
@@ -175,29 +146,25 @@ export type SubscriptionCancelReason =
 
 interface SubscriptionCancel {
   userId: string;
-  /** DKS_S_… of the mandate that ended; null only on the account-deletion
-   * path when the row had none. One event per mandate — a resubscribe mints a
-   * new id, so a later cancel of THAT mandate is a new event. */
+  /** DKS_S_… of the mandate that ended; null only when account deletion found no row.
+   * One event per MANDATE -> a resubscribe mints a new id -> cancelling that one is a new event. */
   merchantSubId: string | null;
   reason: SubscriptionCancelReason;
-  /** Row status before the write: 'trialing' | 'active' | 'paused' | … */
+  /** Row status BEFORE the write: 'trialing' | 'active' | 'paused' | … */
   priorStatus: string | null;
-  /** The cancel write's own instant (RETURNED `updated_at`) — see
-   * FirstConversion.occurredAt. Optional: account deletion has no row left. */
+  /** The cancel write's own RETURNED `updated_at` — see FirstConversion.occurredAt.
+   * Optional because account deletion leaves no row to return one. */
   occurredAt?: Date | string | null;
 }
 
-/** Statuses from which a cancel is a real loss of a live subscription. An
- * already-cancelled/expired/pending row cancelling again is not an event. */
+/** A cancel is a real loss only from these -> an already-cancelled/expired/pending row cancelling again is not an event. */
 const LIVE_STATUSES = new Set(["trialing", "active", "paused"]);
 
 /**
- * Capture `subscription_cancel` — the churn counterpart of
- * `subscription_active`, added at the owner's request (2026-08-25, "add both
- * subscription_started & subscription_cancel in posthog"). Server-side only,
- * like subscription_active: three of the five channels above fire app-closed.
- * Callers pass the row's PRIOR status; non-live priors are dropped here so no
- * call site has to remember the rule.
+ * Capture `subscription_cancel` — the churn counterpart of `subscription_active`.
+ *
+ * Three of the five channels above fire app-closed -> no client can emit this -> server-side only
+ * Non-live priors are dropped HERE -> no call site has to remember the rule -> callers just pass priorStatus
  */
 export async function reportPostHogSubscriptionCancel(
   env: Env,
@@ -237,8 +204,7 @@ export async function reportPostHogSubscriptionCancel(
           plan: "monthly",
           reason: cancel.reason,
           prior_status: cancel.priorStatus,
-          // true = the user left before ever paying ₹199 (trial churn);
-          // false = a paying subscriber stopped.
+          // true = they left before ever paying ₹199 (trial churn); false = a paying subscriber stopped
           during_trial: cancel.priorStatus === "trialing",
           merchant_subscription_id: cancel.merchantSubId,
           $lib: "arul-worker",

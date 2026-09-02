@@ -1,17 +1,8 @@
 /**
- * R2 presigned URL generation via aws4fetch.
+ * R2 presigned URLs via aws4fetch — https://developers.cloudflare.com/r2/examples/aws/aws4fetch/
  *
- * Uses AwsClient.sign() with signQuery:true to embed credentials in the
- * query string (standard S3 presigned URL pattern).
- * Reference: https://developers.cloudflare.com/r2/examples/aws/aws4fetch/
- *
- * aws4fetch runs entirely on the Web Crypto API — no Node.js required.
- * It is the Cloudflare-recommended lightweight approach for Workers.
- *
- * NOTE on Content-Type in PUT presigns:
- *   When Content-Type is included in the signed request the uploading client
- *   MUST send a matching Content-Type header. R2 will reject mismatches.
- *   We sign with Content-Type so the MIME constraint is enforced at upload time.
+ * aws4fetch is Web Crypto only -> no Node polyfill -> the Cloudflare-recommended client for Workers
+ * A PUT presign SIGNS Content-Type -> R2 rejects an upload whose header differs -> the MIME limit is enforced at upload
  */
 
 import { AwsClient } from "aws4fetch";
@@ -27,10 +18,8 @@ function makeClient(env: Env): AwsClient {
 }
 
 /**
- * URL-encode an object key for use in a request path / copy-source header while
- * keeping `/` as a real path separator. encodeURIComponent() alone turns `/`
- * into %2F, which is non-standard for S3/R2 (and breaks the CopyObject
- * x-amz-copy-source header). Encode each segment, rejoin with literal slashes.
+ * encodeURIComponent turns `/` into %2F -> non-standard for S3/R2 and it breaks x-amz-copy-source
+ * Encode each segment and rejoin with literal slashes -> the key stays a real path
  */
 function encodeKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -39,22 +28,12 @@ function encodeKey(key: string): string {
 /**
  * Where user submissions live: `user/<sub>/submissions/<name>`.
  *
- * Defined once and shared because the two sides MUST agree. sweep-submissions
- * only ever considers objects whose key contains the infix, so an object
- * accepted at any other path under `user/<sub>/` is invisible to reclamation
- * forever — no rejection, no account deletion, no cron will ever free its bytes,
- * and R2 storage is the cost model. The upload validators previously checked
- * only the `user/<sub>/` prefix, so the sweep's contract was never enforced.
+ * sweep-submissions only considers keys containing the INFIX -> validators must enforce it, not just the prefix
+ * An object accepted anywhere else under `user/<sub>/` is invisible to reclamation forever -> its bytes are billed
  */
 export const SUBMISSION_PREFIX = "user/";
 export const SUBMISSION_INFIX = "/submissions/";
 
-/**
- * Generate a presigned GET URL for a private R2 object.
- * @param env     Worker environment
- * @param key     R2 object key
- * @param ttlSecs URL validity window in seconds (default: 300 = 5 minutes)
- */
 export async function presignGet(
   env: Env,
   key: string,
@@ -70,13 +49,6 @@ export async function presignGet(
   return signed.url.toString();
 }
 
-/**
- * Generate a presigned PUT URL for a private R2 object.
- * @param env         Worker environment
- * @param key         R2 object key
- * @param contentType MIME type — included in the signature; uploader MUST match
- * @param ttlSecs     URL validity window in seconds (default: 300 = 5 minutes)
- */
 export async function presignPut(
   env: Env,
   key: string,
@@ -98,12 +70,8 @@ export async function presignPut(
 }
 
 /**
- * Write a JSON object to R2 as a public-read object (catalog pages).
- * Uses the R2 Workers binding (env.R2_BUCKET is accessed via wrangler binding).
- * This function is used by build-catalog where we have the R2 binding, not S3 API.
- *
- * NOTE: The R2 Workers binding does not support ACL. Public access is enabled
- * at the bucket level in the Cloudflare dashboard (Settings → Public access).
+ * Catalog pages, written through the R2 BINDING (build-catalog has one; the S3 API is for presigns).
+ * The binding has no ACL -> "public-read" is not settable here -> public access is a bucket-level dashboard setting
  */
 export async function putPublicJson(
   bucket: R2Bucket,
@@ -116,7 +84,6 @@ export async function putPublicJson(
   });
 }
 
-/** Read an R2 object as a string (used by build-catalog version checks). */
 export async function getJsonString(
   bucket: R2Bucket,
   key: string,

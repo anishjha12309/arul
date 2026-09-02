@@ -15,11 +15,12 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$SubscriptionModel {
 
- String get id; String get userId; SubscriptionStatus get status; String? get plan; String? get phonepeSubscriptionId; String? get merchantSubscriptionId;/// The SETUP order id (`DKS_…`) — the same value the purchase notifier
-/// passes to `trial_started` as `order_id`. `TrialConversionCatchUp` keys
-/// on it to fire that event late for a trial that was granted with the
-/// app closed, exactly once per order. Null on builds of the Worker that
-/// predate it, which the catch-up treats as "nothing to reconcile".
+ String get id; String get userId; SubscriptionStatus get status; String? get plan; String? get phonepeSubscriptionId; String? get merchantSubscriptionId;/// The SETUP order id (`DKS_…`) — what the purchase notifier sends as `trial_started`'s
+/// `order_id`.
+///
+/// `TrialConversionCatchUp` keys on it -> a trial granted with the app closed still fires
+/// `trial_started`, exactly once per order.
+/// Null on Workers that predate the field -> the catch-up reads that as nothing to reconcile.
  String? get merchantOrderId; DateTime? get trialEnd; DateTime? get currentPeriodEnd; DateTime? get updatedAt;
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
@@ -232,11 +233,12 @@ class _SubscriptionModel implements SubscriptionModel {
 @override final  String? plan;
 @override final  String? phonepeSubscriptionId;
 @override final  String? merchantSubscriptionId;
-/// The SETUP order id (`DKS_…`) — the same value the purchase notifier
-/// passes to `trial_started` as `order_id`. `TrialConversionCatchUp` keys
-/// on it to fire that event late for a trial that was granted with the
-/// app closed, exactly once per order. Null on builds of the Worker that
-/// predate it, which the catch-up treats as "nothing to reconcile".
+/// The SETUP order id (`DKS_…`) — what the purchase notifier sends as `trial_started`'s
+/// `order_id`.
+///
+/// `TrialConversionCatchUp` keys on it -> a trial granted with the app closed still fires
+/// `trial_started`, exactly once per order.
+/// Null on Workers that predate the field -> the catch-up reads that as nothing to reconcile.
 @override final  String? merchantOrderId;
 @override final  DateTime? trialEnd;
 @override final  DateTime? currentPeriodEnd;

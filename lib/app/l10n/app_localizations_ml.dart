@@ -601,4 +601,65 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'അപ്‌ലോഡ് ഉടൻ വരുന്നു.';
+
+  @override
+  String get premiumNavTitle => 'സബ്‌സ്ക്രിപ്ഷൻ';
+
+  @override
+  String get premiumEyebrow => 'പ്രീമിയം';
+
+  @override
+  String get premiumTagline => 'എന്നും ദൈവാനുഗ്രഹം';
+
+  @override
+  String get premiumPerMonthCaption => 'മാസത്തിൽ';
+
+  @override
+  String get premiumTrialLeadPrefix =>
+      'നിങ്ങളുടെ 1 ദിവസത്തെ സൗജന്യ ട്രയൽ ആരംഭിക്കൂ ';
+
+  @override
+  String get premiumRefundedBadge => 'ഉടനടി തിരികെ ലഭിക്കും';
+
+  @override
+  String get premiumFeatureWallpapers => 'പരിധിയില്ലാത്ത HD വാൾപേപ്പറുകൾ';
+
+  @override
+  String get premiumFeatureRingtones => 'ഭക്തിഗാന റിംഗ്‌ടോണുകൾ';
+
+  @override
+  String get premiumFeatureDaily => 'എന്നും പുതിയ ഉള്ളടക്കം';
+
+  @override
+  String get premiumCtaTrial => 'സൗജന്യ ട്രയൽ തുടങ്ങൂ';
+
+  @override
+  String get premiumCtaSubscribe => 'ഇപ്പോൾ സബ്‌സ്ക്രൈബ് ചെയ്യൂ';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 പരിശോധന, ഉടനടി തിരികെ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം';
+
+  @override
+  String get premiumReassurancePaid =>
+      'UPI ഓട്ടോപേ സുരക്ഷ · ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം';
+
+  @override
+  String get premiumSelectedUpiApp => 'UPI ആപ്പ്';
+
+  @override
+  String get upiPickerTitle => 'ഇതുവഴി അടയ്ക്കൂ';
+
+  @override
+  String get upiPickerLastUsed => 'അവസാനം ഉപയോഗിച്ചത്';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'പിന്നീട് മാസം $price ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-യിൽ $name ലൈവ് വാൾപേപ്പർ ഇട്ടു 🙏';
+  }
 }

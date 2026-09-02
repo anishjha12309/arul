@@ -8,14 +8,10 @@ import '../../../app/widgets/skeleton.dart';
 import '../../../theme/arul_tokens.dart';
 import 'ringtones_screen.dart';
 
-/// Loading skeleton for the ringtone list: rows in the SAME geometry the real
-/// list uses (46 cover at radius 13, one title bar, a 34 circle, a 32 pill in a
-/// 44 box), built on the theme-following sliding-gradient [Skeleton] — the
-/// app's one sanctioned loading pattern (no shimmer package, no ShaderMask;
-/// docs/ui-direction.md).
+/// Loading skeleton for the ringtone list, in the SAME geometry the real list uses.
 ///
-/// Mirroring the geometry is the point: a skeleton whose rows are a different
-/// height makes the whole list jump the moment the first page lands.
+/// Built on the sliding-gradient [Skeleton] — the one sanctioned pattern; no shimmer, no ShaderMask.
+/// A skeleton whose rows are a different height makes the list jump when the first page lands.
 class RingtonesLoading extends StatelessWidget {
   const RingtonesLoading({super.key});
 
@@ -109,13 +105,11 @@ class _SkeletonRow extends StatelessWidget {
   }
 }
 
-/// Designed empty state — reachable only when the catalog serves zero rows
-/// (an upstream build failure, or a genuinely emptied catalog), so it is a
-/// first-class branded surface, not an apology: the brand gopuram
-/// over a quiet gold note, with devotional-register copy. Scrollable so
-/// pull-to-refresh keeps working while empty, and inset at the bottom so the
-/// composition centres in the space ABOVE the floating dock rather than behind
-/// it.
+/// Designed empty state — reachable only when the catalog serves zero rows.
+///
+/// A first-class branded surface, not an apology: the gopuram over a gold note, devotional copy.
+/// Scrollable, so pull-to-refresh keeps working while empty.
+/// Bottom-inset, so the composition centres ABOVE the floating dock rather than behind it.
 class RingtonesEmpty extends StatelessWidget {
   const RingtonesEmpty({super.key});
 
@@ -139,9 +133,8 @@ class RingtonesEmpty extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // The motif: the brand gopuram flanked by fading hairlines,
-                // with a small gold note beneath — same quiet language as the
-                // feed's end-of-reel mark.
+                // The motif — the gopuram flanked by fading hairlines, a gold note beneath.
+                // The same quiet language as the feed's end-of-reel mark.
                 Opacity(
                   opacity: 0.6,
                   child: Row(
@@ -199,10 +192,9 @@ class RingtonesEmpty extends StatelessWidget {
   );
 }
 
-/// Full-body ringtone error state — same layout/tokens as the feed's
-/// [FeedError], with ringtone copy. [offline] selects the no-internet copy.
-/// Bottom-inset like [RingtonesEmpty] so the Retry button never sits under the
-/// dock.
+/// Full-body ringtone error state — the feed's [FeedError] layout and tokens, with ringtone copy.
+/// [offline] selects the no-internet copy.
+/// Bottom-inset like [RingtonesEmpty] -> the Retry button never sits under the dock.
 class RingtonesError extends StatelessWidget {
   const RingtonesError({
     super.key,

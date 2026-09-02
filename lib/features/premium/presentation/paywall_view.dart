@@ -3,23 +3,58 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../theme/arul_tokens.dart';
 import 'paywall_ornaments.dart';
 
+/// A letter-spaced display label — "SUBSCRIPTION", "PREMIUM", "PER MONTH", "REFUNDED INSTANTLY".
+///
+/// These four are the only strings on the paywall whose TREATMENT is language-dependent, which is
+/// why they route through here instead of a bare `Text`. English keeps Cinzel's or Lora's track,
+/// plus the left padding that hands back the track applied after the LAST letter so the word
+/// re-centres. Neither survives an Indic script — see [ArulTokens.paywallUntracked] — so both drop
+/// together. Dropping only one leaves the label visibly off-centre.
+class PaywallDisplayLabel extends StatelessWidget {
+  const PaywallDisplayLabel({
+    super.key,
+    required this.text,
+    required this.style,
+    this.trackCompensation = 0,
+  });
+
+  final String text;
+
+  /// The Latin style, tracking included.
+  final TextStyle style;
+
+  /// Left padding equal to [style]'s letterSpacing, given back only while the track is applied.
+  final double trackCompensation;
+
+  @override
+  Widget build(BuildContext context) {
+    final latin = Localizations.localeOf(context).languageCode == 'en';
+    return Padding(
+      padding: EdgeInsets.only(left: latin ? trackCompensation : 0),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: latin ? style : ArulTokens.paywallUntracked(style),
+      ),
+    );
+  }
+}
+
 /// THE paywall — `design_handoff_arul_premium`, "holy authenticity".
 ///
 /// One shell, two variants: the ₹199 monthly sell and the ₹2 free-trial sell.
-/// Only the shrine panel's contents and the CTA label differ, which is why
-/// [trialEligible] is the single switch and everything else is shared.
-///
-/// English-only by product decision (CLAUDE.md §5 / the handoff), so no string
-/// here goes through the ARBs — and the bundled Latin-subset paywall fonts can
-/// never be asked for a script they do not carry.
-///
-/// Owns no state beyond the social-proof rotation: entitlement, purchase and
-/// UPI selection all live in [PremiumScreen], which passes them down.
+/// Only the shrine panel's contents and the CTA label differ -> [trialEligible] is the one switch.
+/// Localised into all six -> every string here comes from the ARBs.
+/// The bundled Latin-subset faces need no guard: Flutter falls back per GLYPH, so an Indic run
+/// lands on the system stack on its own. Only the letter-SPACED labels change treatment, via
+/// [PaywallDisplayLabel] -> tracking is a Latin device and detaches Indic combining marks.
+/// Owns no state beyond the social-proof rotation — entitlement, purchase and UPI live upstream.
 class ArulPaywallView extends StatelessWidget {
   const ArulPaywallView({
     super.key,
@@ -35,8 +70,7 @@ class ArulPaywallView extends StatelessWidget {
     required this.onPurchase,
   });
 
-  /// One free trial per user. Drives the whole panel: lead line + ₹2 + badge
-  /// when true, ₹199 + "PER MONTH" when not.
+  /// One free trial per user. Drives the panel — lead line + ₹2 + badge, or ₹199 + "PER MONTH".
   final bool trialEligible;
 
   /// "₹199" — from remote config, so a price test needs no release.
@@ -47,24 +81,17 @@ class ArulPaywallView extends StatelessWidget {
   /// `feature_flags.show_social_proof`.
   final bool showSocialProof;
 
-  /// The localised onboarding clip, resolved by [PremiumScreen] from the app's
-  /// live locale — which IS the language the ad link carried.
+  /// The localised onboarding clip, resolved by [PremiumScreen] from the live locale.
+  /// That locale IS the language the ad link carried.
   ///
-  /// Non-null ONLY on the trial variant (owner's call): this screen also sells
-  /// ₹199/month to users whose trial is spent, and the clip's whole script is
-  /// "start your 1-day trial".
-  ///
-  /// When present it TAKES THE PLACE of the brand lockup rather than being
-  /// added above it — the lockup's Cinzel cannot render Indic scripts anyway,
-  /// and stacking both would push the offer below the fold. The offer panel
-  /// moves up with it, out of the scrollable middle and into the fixed header
-  /// (owner's call, 2026-08-31), so the price is read before the clip and the
-  /// clip cannot scroll off. The clip caps its own height against the screen so
-  /// that block always fits.
+  /// Non-null ONLY on the trial variant — the clip's script is "start your 1-day trial".
+  /// This screen also sells ₹199/month to a spent-trial user, where that script would be a lie.
+  /// It TAKES THE PLACE of the brand lockup, never stacks above it — both push the offer down.
+  /// The offer panel moves up with it, out of the scrollable middle -> the price is read first.
+  /// The clip caps its own height against the screen so that block always fits.
   final Widget? onboardingVideo;
 
-  /// Null when no mandate-capable UPI app is installed — the row disappears
-  /// and the CTA falls through to the hosted-page flow.
+  /// Null when no mandate-capable UPI app is installed -> the row goes, the CTA uses the hosted page.
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
 
@@ -74,19 +101,15 @@ class ArulPaywallView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Built once and placed in exactly ONE of the two branches below: above the
-    // clip in the fixed header when there is a clip, otherwise where it has
-    // always been, centred in the scrollable middle.
+    final l10n = AppLocalizations.of(context);
+    // Built once, placed in exactly ONE branch below — above the clip, or centred in the middle.
     final video = onboardingVideo;
-    // The footer sits outside the middle's LayoutBuilder, so it reads the
-    // screen rather than the viewport. Same intent: on a short phone the
-    // chrome gives back padding so the clip fits above the fold.
+    // The footer sits outside the middle's LayoutBuilder -> it reads the SCREEN, not the viewport.
+    // Same intent: on a short phone the chrome gives back padding so the clip fits above the fold.
     final denseFooter = MediaQuery.sizeOf(context).height < 700;
-    // The clip layout has two blocks to fit where the handoff had one, so the
-    // panel gives back the air it can afford: its frame, the ₹2 and the badge
-    // keep every dimension the handoff specifies — only padding tightens.
-    // `dense` tightens them again on a short screen, where the clip being on
-    // screen at rest is non-negotiable and padding is the only slack there is.
+    // The clip layout fits two blocks where the handoff had one -> the panel gives back its air.
+    // Frame, ₹2 and badge keep every handoff dimension — only padding tightens.
+    // `dense` tightens again on a short screen, where the clip at rest is non-negotiable.
     _ShrinePanel offerPanel(bool dense) => _ShrinePanel(
       padTop: trialEligible ? 24 : 26,
       compact: video != null,
@@ -98,17 +121,13 @@ class ArulPaywallView extends StatelessWidget {
     return PaywallGround(
       child: Column(
         children: [
-          // Pinned, so the way out stays reachable however far the sell
-          // scrolls.
+          // Pinned, so the way out stays reachable however far the sell scrolls.
           _NavRow(onBack: onBack),
           if (video == null) ...[
             _HeaderBlock(showSocialProof: showSocialProof),
-            // The handoff draws one ~745pt page, which is SHORTER than the
-            // phone it lands on. Rather than let that slack pool into a hole
-            // above the footer, the offer block is centred in what the two
-            // pinned ends leave. When the slack runs out (small screen, large
-            // text) it scrolls instead, which is why the CTA is pinned and not
-            // in this list.
+            // The handoff's ~745pt page is SHORTER than the phone it lands on.
+            // Rather than pool that slack above the footer, centre the offer between the pinned ends.
+            // When the slack runs out it scrolls instead -> the CTA is pinned, not in this list.
             Expanded(
               child: _ScrollableMiddle(
                 children: [offerPanel(false), const _FeatureRow()],
@@ -116,38 +135,26 @@ class ArulPaywallView extends StatelessWidget {
             ),
           ] else ...[
             // Clip layout: offer read FIRST, clip under it, features last.
-            //
-            // All three SCROLL as one block between the pinned nav and the
-            // pinned CTA. Pinning the offer and the clip instead was tried on
-            // device (2026-08-31) and fails on a small phone: at 360x640dp the
-            // pinned blocks alone exceed the screen, so the flex children got
-            // zero and BOTH the clip and the feature row vanished behind a
-            // 1px overflow stripe. Scrolling keeps the ordering promise
-            // instead — the clip is above the feature row, so it is fully on
-            // screen at rest on every size, and only the features fall below
-            // the fold when there is genuinely no room.
-            //
-            // The clip is capped at a THIRD of the viewport so it cannot crowd
-            // the price out on a short screen; on a tall one that cap is above
-            // its natural 16:9 height and does nothing.
+            // All three SCROLL as one block between the pinned nav and the pinned CTA.
+            // Pinning the offer and clip instead failed at 360x640dp — the pinned blocks alone
+            // exceed the screen.
+            // Flex children got zero and BOTH the clip and the feature row vanished behind a stripe.
+            // Scrolling keeps the ordering promise -> the clip is fully on screen at rest, every size.
+            // Only the features fall below the fold, and only when there is genuinely no room.
+            // The clip is capped at a THIRD of the viewport -> it cannot crowd the price out.
+            // On a tall screen that cap sits above its natural 16:9 height and does nothing.
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Everything between the pinned nav and the pinned CTA has
-                  // this much room. Below ~420dp of it, ornament has to give
-                  // way: the social-proof pill goes, the gaps close up and the
-                  // clip takes a bigger share, because the clip being visible
-                  // WITHOUT scrolling is a requirement on every device and
-                  // padding is the only slack left to spend.
+                  // Everything between the pinned nav and the pinned CTA has this much room.
+                  // Below ~420dp the ornament gives way: the pill goes, gaps close, the clip grows.
+                  // The clip visible WITHOUT scrolling is a requirement, and padding is the only slack.
                   final h = constraints.maxHeight;
                   final dense = h < 420;
                   // A SECOND, higher threshold, only for the feature row.
-                  // Between these two a phone has room for the social-proof
-                  // pill but not for three 48dp medallions AND two lines of
-                  // label — and a label sliced by the fold reads as broken
-                  // chrome, where the same row shrunk by 20% reads as designed.
-                  // Keeping the thresholds separate is what stops a very
-                  // common 360x800 phone from losing the pill for this.
+                  // Between the two a phone fits the pill but not three medallions AND two label lines.
+                  // A label sliced by the fold reads as broken; the same row 20% smaller reads designed.
+                  // Separate thresholds are what stop a common 360x800 phone from losing the pill.
                   final tight = h < 520;
                   return SingleChildScrollView(
                     child: ConstrainedBox(
@@ -159,17 +166,13 @@ class ArulPaywallView extends StatelessWidget {
                             showSocialProof: showSocialProof && !dense,
                             dense: dense,
                           ),
-                          // `tight`, not `dense`: the panel's padding is
-                          // cheap to give back and costs the user nothing,
-                          // where `dense` also hides the social-proof pill.
-                          // Splitting them is what lets a 360x800 phone with
-                          // system bars fit the whole feature label AND keep
-                          // the pill.
+                          // `tight`, not `dense` — the panel's padding is cheap to give back.
+                          // `dense` also hides the social-proof pill, so splitting the two lets a
+                          // 360x800 phone with system bars keep the pill AND the whole label.
                           offerPanel(tight),
-                          // No height cap: the clip renders at its own 16:9,
-                          // full width, on every screen. Capping it here is
-                          // what made a small phone show a letterbox band of
-                          // forehead — the room comes out of `dense` above.
+                          // No height cap — the clip renders at its own 16:9, full width, everywhere.
+                          // Capping here made a small phone show a letterbox band of forehead.
+                          // The room comes out of `dense` above instead.
                           video,
                           _FeatureRow(tight: tight),
                         ],
@@ -183,10 +186,12 @@ class ArulPaywallView extends StatelessWidget {
           // Pinned: the buy decision must never be the thing below the fold.
           _Footer(
             dense: video != null && denseFooter,
-            ctaLabel: trialEligible ? 'Start Free Trial' : 'Subscribe Now',
+            ctaLabel: trialEligible
+                ? l10n.premiumCtaTrial
+                : l10n.premiumCtaSubscribe,
             reassurance: trialEligible
-                ? '₹2 verification, refunded instantly · Cancel anytime'
-                : 'Secured by UPI Autopay · Cancel anytime in one tap',
+                ? l10n.premiumReassuranceTrial
+                : l10n.premiumReassurancePaid,
             busy: purchaseBusy,
             selectedUpiApp: selectedUpiApp,
             canChangeUpiApp: canChangeUpiApp,
@@ -199,9 +204,8 @@ class ArulPaywallView extends StatelessWidget {
   }
 }
 
-/// The paywall while the entitlement read is still in flight — the same shell
-/// and ground, so resolving to one of the two offers is not a flash of a
-/// different screen.
+/// The paywall while the entitlement read is in flight — the same shell and ground.
+/// So resolving to one of the two offers is never a flash of a different screen.
 class ArulPaywallLoading extends StatelessWidget {
   const ArulPaywallLoading({super.key, required this.onBack});
 
@@ -230,8 +234,6 @@ class ArulPaywallLoading extends StatelessWidget {
   }
 }
 
-// ─── Header ──────────────────────────────────────────────────────────────────
-
 /// Back ring + centred "SUBSCRIPTION", on the header ground.
 class _NavRow extends StatelessWidget {
   const _NavRow({required this.onBack});
@@ -245,18 +247,21 @@ class _NavRow extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          const Row(
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              PaywallOrnamentWing(
+              const PaywallOrnamentWing(
                 ruleWidth: ArulTokens.paywallNavOrnamentRuleWidth,
                 floretSize: ArulTokens.paywallNavFloretSize,
                 gap: ArulTokens.paywallNavOrnamentGap,
               ),
-              SizedBox(width: ArulTokens.paywallNavTitleOrnamentGap),
-              Text('SUBSCRIPTION', style: ArulTokens.paywallNavTitle),
-              SizedBox(width: ArulTokens.paywallNavTitleOrnamentGap),
-              PaywallOrnamentWing(
+              const SizedBox(width: ArulTokens.paywallNavTitleOrnamentGap),
+              PaywallDisplayLabel(
+                text: AppLocalizations.of(context).premiumNavTitle,
+                style: ArulTokens.paywallNavTitle,
+              ),
+              const SizedBox(width: ArulTokens.paywallNavTitleOrnamentGap),
+              const PaywallOrnamentWing(
                 ruleWidth: ArulTokens.paywallNavOrnamentRuleWidth,
                 floretSize: ArulTokens.paywallNavFloretSize,
                 gap: ArulTokens.paywallNavOrnamentGap,
@@ -303,10 +308,8 @@ class _NavRow extends StatelessWidget {
   }
 }
 
-/// Social-proof pill + brand lockup, closed by the gold hairline.
-/// Social-proof pill + temple divider — the part of the header both layouts
-/// share. Tightens its gaps when a clip follows, because that layout has to fit
-/// the offer panel AND the clip where the handoff drew only the brand lockup.
+/// Social-proof pill + temple divider — the part of the header both layouts share.
+/// Tightens its gaps when a clip follows: that layout fits the panel AND the clip in one space.
 class _HeaderCrest extends StatelessWidget {
   const _HeaderCrest({
     required this.showSocialProof,
@@ -391,8 +394,8 @@ class _HeaderBlock extends StatelessWidget {
   }
 }
 
-/// Centred when there is slack, scrollable when there is not. Both layouts put
-/// whatever must never be clipped through here.
+/// Centred when there is slack, scrollable when there is not.
+/// Both layouts put whatever must never be clipped through here.
 class _ScrollableMiddle extends StatelessWidget {
   const _ScrollableMiddle({required this.children});
 
@@ -427,14 +430,12 @@ class _BrandLockup extends StatelessWidget {
           children: [
             const _BrandRule(),
             const SizedBox(width: ArulTokens.paywallBrandRuleGap),
-            // Cinzel's .42em track is applied AFTER the last letter too, so the
-            // word would sit half a track right of centre. Giving that width
-            // back as left padding re-centres the ink.
-            Padding(
-              padding: const EdgeInsets.only(
-                left: 5.46, // == paywallEyebrow.letterSpacing
-              ),
-              child: Text('PREMIUM', style: ArulTokens.paywallEyebrow),
+            // Cinzel's .42em track applies AFTER the last letter too -> the word sits half right.
+            // Giving that width back as left padding re-centres the ink.
+            PaywallDisplayLabel(
+              text: AppLocalizations.of(context).premiumEyebrow,
+              style: ArulTokens.paywallEyebrow,
+              trackCompensation: 5.46, // == paywallEyebrow.letterSpacing
             ),
             const SizedBox(width: ArulTokens.paywallBrandRuleGap),
             const _BrandRule(mirrored: true),
@@ -443,11 +444,12 @@ class _BrandLockup extends StatelessWidget {
         const SizedBox(height: 4),
         Text('ARUL', style: ArulTokens.paywallWordmark),
         const SizedBox(height: ArulTokens.paywallBrandTaglineGap),
-        const PaywallLotusLabel(
+        PaywallLotusLabel(
           lotusSize: ArulTokens.paywallTaglineLotusSize,
           gap: ArulTokens.paywallTaglineOrnamentGap,
           child: Text(
-            'Divine grace, every day',
+            AppLocalizations.of(context).premiumTagline,
+            textAlign: TextAlign.center,
             style: ArulTokens.paywallTagline,
           ),
         ),
@@ -459,8 +461,7 @@ class _BrandLockup extends StatelessWidget {
 class _BrandRule extends StatelessWidget {
   const _BrandRule({this.mirrored = false});
 
-  /// The right-hand rule runs gold→transparent instead of transparent→gold, so
-  /// both rules are darkest against the word.
+  /// The right rule runs gold→transparent, not the reverse -> both rules are darkest at the word.
   final bool mirrored;
 
   @override
@@ -474,16 +475,12 @@ class _BrandRule extends StatelessWidget {
   }
 }
 
-/// The rotating social-proof pill — "`name` in `city` just applied a live
-/// wallpaper 🙏".
+/// The rotating social-proof pill — "`name` in `city` just applied a live wallpaper 🙏".
 ///
-/// Names and cities are RANDOM from a fixed pool (owner's call, 2026-08-11):
-/// no backend activity feed exists, so this must never be presented as live
-/// data anywhere else, and `feature_flags.show_social_proof` can retire it
-/// without a release.
-///
-/// Excluded from semantics — it is decoration, and a screen reader announcing
-/// fake activity every four seconds would be noise at best.
+/// Names and cities are RANDOM from a fixed pool — no backend activity feed exists.
+/// So it must never be presented as live data anywhere else (owner's call).
+/// `feature_flags.show_social_proof` can retire it without a release.
+/// Excluded from semantics — fake activity announced every four seconds is noise at best.
 class _SocialProofPill extends StatefulWidget {
   const _SocialProofPill();
 
@@ -533,27 +530,32 @@ class _SocialProofPillState extends State<_SocialProofPill> {
 
   final _rng = Random();
   Timer? _timer;
-  late String _line = _next(null);
 
-  /// A fresh line, re-rolled if it matches [prev] — the pool is small enough
-  /// to collide, and a "new" line that reads identically looks like the ticker
-  /// froze.
-  String _next(String? prev) {
-    String line;
+  /// The (name, city) PAIR, not a built sentence.
+  ///
+  /// Tamil, Telugu, Kannada and Malayalam all put the city first and attach the locative to it,
+  /// so the word order is the translation's to decide -> the sentence is assembled in [build]
+  /// from `premiumSocialProof`, never concatenated here.
+  late (String, String) _who = _next(null);
+
+  /// A fresh pair, re-rolled if it matches [prev] — the pool is small enough to collide.
+  /// A "new" line that reads identically looks like the ticker froze.
+  (String, String) _next((String, String)? prev) {
+    (String, String) pick;
     do {
-      line =
-          '${_names[_rng.nextInt(_names.length)]} in '
-          '${_cities[_rng.nextInt(_cities.length)]} '
-          'just applied a live wallpaper 🙏';
-    } while (line == prev);
-    return line;
+      pick = (
+        _names[_rng.nextInt(_names.length)],
+        _cities[_rng.nextInt(_cities.length)],
+      );
+    } while (pick == prev);
+    return pick;
   }
 
   @override
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 4), (_) {
-      setState(() => _line = _next(_line));
+      setState(() => _who = _next(_who));
     });
   }
 
@@ -565,13 +567,16 @@ class _SocialProofPillState extends State<_SocialProofPill> {
 
   @override
   Widget build(BuildContext context) {
+    final line = AppLocalizations.of(
+      context,
+    ).premiumSocialProof(_who.$1, _who.$2);
     return ExcludeSemantics(
       child: AnimatedSwitcher(
         duration: ArulTokens.chromeSettleIn,
         switchInCurve: ArulTokens.settleCurve,
         switchOutCurve: ArulTokens.settleCurve,
         child: Container(
-          key: ValueKey(_line),
+          key: ValueKey(line),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -579,9 +584,14 @@ class _SocialProofPillState extends State<_SocialProofPill> {
             borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
           ),
           child: Text(
-            _line,
-            maxLines: 1,
+            line,
+            // TWO lines, not one. The longest pairing ("Tiruchirappalli" + a Kannada verb phrase)
+            // ellipsised at 360dp, and English did the same at 1.3x text scale — a ticker that
+            // ends in "..." reads as a bug, not as chrome. The pill grows into the header's slack;
+            // in `dense` mode there is none, and the whole pill is dropped before it ever wraps.
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: ArulTokens.paywallPill,
           ),
         ),
@@ -589,8 +599,6 @@ class _SocialProofPillState extends State<_SocialProofPill> {
     );
   }
 }
-
-// ─── The shrine panel ────────────────────────────────────────────────────────
 
 /// The offer inside two crisp, parallel chamfered rules.
 class _ShrinePanel extends StatelessWidget {
@@ -604,8 +612,7 @@ class _ShrinePanel extends StatelessWidget {
   /// Short screen — see [ArulPaywallView].
   final bool dense;
 
-  /// The handoff gives the monthly panel 26px of top padding and the trial
-  /// panel 24 — the trial's extra lead line makes up the difference.
+  /// The handoff gives the monthly panel 26px of top padding and the trial 24 — its lead line pays.
   final double padTop;
 
   /// Give back the padding AROUND the panel so the clip has room beneath it.
@@ -658,10 +665,11 @@ class _MonthlyOffer extends StatelessWidget {
         PriceLockup(price: monthlyPrice),
         const SizedBox(height: 10),
         // The trailing letter-space is trimmed the same way the eyebrow's is.
-        const PaywallRuledLabel(
-          child: Padding(
-            padding: EdgeInsets.only(left: 3.92),
-            child: Text('PER MONTH', style: ArulTokens.paywallPriceCaption),
+        PaywallRuledLabel(
+          child: PaywallDisplayLabel(
+            text: AppLocalizations.of(context).premiumPerMonthCaption,
+            style: ArulTokens.paywallPriceCaption,
+            trackCompensation: 3.92,
           ),
         ),
         const _PriceDivider(),
@@ -678,17 +686,15 @@ class _MonthlyOffer extends StatelessWidget {
 
 /// Screen B — the ₹2 penny-drop, named as loudly as the design names it.
 ///
-/// Setting up a UPI mandate costs a ₹2 PENNY_DROP that PhonePe reverses
-/// immediately, but the user still SEES ₹2 leave their account, and an
-/// unexplained debit on a screen that said "free" reads as a scam.
+/// A UPI mandate setup costs a ₹2 PENNY_DROP that PhonePe reverses immediately.
+/// The user still SEES ₹2 leave -> an unexplained debit on a "free" screen reads as a scam.
 class _TrialOffer extends StatelessWidget {
   const _TrialOffer({required this.monthlyPrice, this.dense = false});
 
   final String monthlyPrice;
 
   /// Short screen: scale the price lockup down and drop the ornament under it.
-  /// Nothing contractual is touched — the lead line, the badge and the
-  /// "Then ₹199/month" line all ship verbatim at every size.
+  /// Nothing contractual moves — lead line, badge and "Then ₹199/month" ship verbatim at every size.
   final bool dense;
 
   @override
@@ -697,10 +703,9 @@ class _TrialOffer extends StatelessWidget {
       children: [
         Text.rich(
           TextSpan(
-            // 1 day, not 7: the server grants exactly TRIAL_DAYS=1
-            // (payments.ts) and debits the month at trial end. Promising more
-            // than the mandate honours is how you get chargebacks.
-            text: 'Start your 1-day FREE trial for ',
+            // 1 day, not 7 — the server grants exactly TRIAL_DAYS=1 and debits at trial end.
+            // Promising more than the mandate honours is how you get chargebacks.
+            text: AppLocalizations.of(context).premiumTrialLeadPrefix,
             children: [
               TextSpan(
                 text: monthlyPrice,
@@ -716,9 +721,8 @@ class _TrialOffer extends StatelessWidget {
           style: ArulTokens.paywallLead,
         ),
         const SizedBox(height: ArulTokens.paywallTrialLeadGap),
-        // FittedBox rather than a smaller font: PriceLockup centres the rupee
-        // sign from a per-glyph ink table, so a uniform scale keeps that maths
-        // exactly right where a type-size change would not.
+        // PriceLockup centres the rupee from a per-glyph ink table -> a uniform scale keeps that.
+        // A type-size change would not -> FittedBox, never a smaller font.
         if (dense)
           SizedBox(
             height: ArulTokens.paywallDensePriceHeight,
@@ -739,15 +743,16 @@ class _TrialOffer extends StatelessWidget {
             color: ArulTokens.paywallMaroon,
             borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
           ),
-          child: const Padding(
-            padding: EdgeInsets.only(left: 2.3),
-            child: Text('REFUNDED INSTANTLY', style: ArulTokens.paywallBadge),
+          child: PaywallDisplayLabel(
+            text: AppLocalizations.of(context).premiumRefundedBadge,
+            style: ArulTokens.paywallBadge,
+            trackCompensation: 2.3,
           ),
         ),
         if (!dense) const _PriceDivider() else const SizedBox(height: 10),
         // Contractually fixed — ships verbatim.
         Text(
-          'Then $monthlyPrice/month via autopay. Cancel anytime.',
+          AppLocalizations.of(context).premiumTrialFinePrint(monthlyPrice),
           textAlign: TextAlign.center,
           style: ArulTokens.paywallFinePrint,
         ),
@@ -772,34 +777,22 @@ class _PriceDivider extends StatelessWidget {
   );
 }
 
-/// The price, as a rupee sign set optically smaller beside the amount — and
-/// genuinely centred against it.
+/// The price — a rupee sign set optically smaller beside the amount, and genuinely centred on it.
 ///
-/// **Why this is not just a `Row` with `CrossAxisAlignment.center`.** That is
-/// what the HTML reference does (`align-items:center` over two `line-height:1`
-/// boxes) and it does NOT centre the two glyphs: a text box is positioned by
-/// the font's ascent and descent, not by where the ink actually falls. Gelasio
-/// carries Georgia's old-style figures — 1 and 2 stop at x-height, 3/5/7/9
-/// drop below the baseline — so the amount's ink sits low in its box while the
-/// full-height ₹ sits centred in its own. Centring the BOXES leaves the rupee
-/// floating ~8px high on "₹199", which is exactly how the reference renders.
-///
-/// So this aligns the baselines and then shifts the rupee by the difference
-/// between the two ink centres, measured from the real font. The result is the
-/// handoff's stated intent — "rupee glyph optically smaller, vertically
-/// centered against the digits" — rather than its HTML approximation.
-///
-/// [_gelasioInk] is the glyph table this is solved from, so the price stays
-/// centred for ANY amount remote config sends, not just ₹199 and ₹2.
+/// A text box is positioned by the font's ascent and descent, not by where the ink falls.
+/// Gelasio carries old-style figures: 1 and 2 stop at x-height, 3/5/7/9 drop below the baseline.
+/// So the amount's ink sits low in its box while the full-height ₹ sits centred in its own.
+/// Centring the BOXES floats the rupee ~8px high on "₹199" -> never a plain centre-aligned `Row`.
+/// This aligns the BASELINES, then shifts the rupee by the difference between the two ink centres.
+/// [_gelasioInk] is the glyph table it is solved from -> any amount config sends stays centred.
 class PriceLockup extends StatelessWidget {
   const PriceLockup({super.key, required this.price});
 
   /// "₹199" — a leading rupee sign followed by the amount.
   final String price;
 
-  /// Ink extents in `em`, from `assets/fonts/Gelasio-Regular.ttf` (upem 2048),
-  /// as `(yMin, yMax)` about the baseline. Regenerate with tools/build-fonts.py
-  /// if that file is ever rebuilt from a different upstream.
+  /// Ink extents in `em` from `Gelasio-Regular.ttf` (upem 2048), as `(yMin, yMax)` about the baseline.
+  /// Regenerate with tools/build-fonts.py if that file is rebuilt from a different upstream.
   static const Map<String, (double, double)> _gelasioInk = {
     '0': (-0.014160, 0.588379),
     '1': (0.000000, 0.580566),
@@ -816,9 +809,8 @@ class PriceLockup extends StatelessWidget {
     '₹': (0.000000, 0.693359),
   };
 
-  /// Where a string's ink centre sits ABOVE the baseline, in `em`. Unknown
-  /// characters are ignored; an entirely unknown string falls back to half the
-  /// rupee's height, which is the same answer box-centring would have given.
+  /// Where a string's ink centre sits ABOVE the baseline, in `em`; unknown characters are ignored.
+  /// An entirely unknown string falls back to half the rupee's height — what box-centring would give.
   static double inkCentreEm(String text) {
     double? low, high;
     for (var i = 0; i < text.length; i++) {
@@ -831,8 +823,7 @@ class PriceLockup extends StatelessWidget {
     return (low + high) / 2;
   }
 
-  /// How far the rupee must move (positive = down) for its ink centre to meet
-  /// the amount's, with both sitting on a shared baseline.
+  /// How far the rupee must move (positive = down) to meet the amount's ink centre on one baseline.
   static double rupeeOffset(String symbol, String amount) =>
       inkCentreEm(symbol) * ArulTokens.paywallRupeeSize -
       inkCentreEm(amount) * ArulTokens.paywallAmountSize;
@@ -847,16 +838,14 @@ class PriceLockup extends StatelessWidget {
     const numeral = TextStyle(
       fontFamily: ArulTokens.paywallNumeralFamily,
       color: ArulTokens.paywallMaroon,
-      // height 1 keeps each box the size of its own type, so the Row is as
-      // tall as the lockup and no stray leading pads the panel.
+      // height 1 keeps each box the size of its own type -> the Row is the lockup, no stray leading.
       height: 1,
       leadingDistribution: TextLeadingDistribution.even,
     );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
-      // Baselines first — Transform.translate below reports its child's
-      // baseline unshifted, so the offset is applied purely at paint.
+      // Baselines first — Transform.translate reports its child's baseline unshifted, so it paints.
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
@@ -877,24 +866,18 @@ class PriceLockup extends StatelessWidget {
   }
 }
 
-// ─── Feature row ─────────────────────────────────────────────────────────────
-
 class _FeatureRow extends StatelessWidget {
   const _FeatureRow({this.tight = false});
 
-  /// Short screen: 20% off the medallions and the gaps. Never the labels —
-  /// they are the content.
+  /// Short screen: 20% off the medallions and the gaps. Never the labels — they are the content.
   final bool tight;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Tighter than the handoff's 24/6. The clip below the offer panel is
-      // never allowed to shrink (owner's call), so this row is where the
-      // vertical budget comes from — and it is the block that can afford it,
-      // being three icons and two words each. Without this the second line of
-      // "Unlimited HD Wallpapers" was sliced by the fold on 360x640 and on a
-      // 360x800 phone once the system bars were taken off.
+      // Tighter than the handoff's 24/6 — the clip below may never shrink (owner's call).
+      // So this row is where the vertical budget comes from; three icons and two words afford it.
+      // Without it the second line of "Unlimited HD Wallpapers" was sliced by the fold at 360x640.
       padding: EdgeInsets.fromLTRB(24, tight ? 8 : 12, 24, 4),
       child: IntrinsicHeight(
         child: Row(
@@ -903,7 +886,7 @@ class _FeatureRow extends StatelessWidget {
             Expanded(
               child: _Feature(
                 icon: PaywallOrnament.wallpapers,
-                label: 'Unlimited HD Wallpapers',
+                label: AppLocalizations.of(context).premiumFeatureWallpapers,
                 tight: tight,
               ),
             ),
@@ -911,7 +894,7 @@ class _FeatureRow extends StatelessWidget {
             Expanded(
               child: _Feature(
                 icon: PaywallOrnament.ringtones,
-                label: 'Devotional Ringtones',
+                label: AppLocalizations.of(context).premiumFeatureRingtones,
                 tight: tight,
               ),
             ),
@@ -919,7 +902,7 @@ class _FeatureRow extends StatelessWidget {
             Expanded(
               child: _Feature(
                 icon: PaywallOrnament.daily,
-                label: 'Daily New Content',
+                label: AppLocalizations.of(context).premiumFeatureDaily,
                 tight: tight,
               ),
             ),
@@ -981,8 +964,6 @@ class _Feature extends StatelessWidget {
   }
 }
 
-// ─── Footer ──────────────────────────────────────────────────────────────────
-
 class _Footer extends StatelessWidget {
   const _Footer({
     this.dense = false,
@@ -1021,23 +1002,21 @@ class _Footer extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Flexible(
+                Flexible(
                   child: Text(
-                    'Selected UPI App',
+                    AppLocalizations.of(context).premiumSelectedUpiApp,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: ArulTokens.paywallUpiLabel,
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Flexible, not Expanded, and no Spacer between the two: a
-                // Spacer claims its share of the free space and leaves the
-                // chip ellipsising a name that had room to fit.
+                // A Spacer claims its share of the free space and ellipsises a name that fits.
+                // So Flexible, not Expanded, and NO Spacer between the two.
                 Flexible(
                   child: _UpiChip(
                     app: app,
-                    // A single installed app is a fact, not a choice — no
-                    // caret, no tap target.
+                    // A single installed app is a fact, not a choice — no caret, no tap target.
                     canChange: canChangeUpiApp && !busy,
                     onTap: onChangeUpiApp,
                   ),
@@ -1079,10 +1058,8 @@ class _Footer extends StatelessWidget {
             ornament: PaywallOrnament.footerRule,
             width: ArulTokens.paywallFooterRuleWidth,
           ),
-          // No cancel affordance during the wait ON PURPOSE: the audience is
-          // not payment-literate, so the app decides the outcome itself — the
-          // resume checkpoint in the provider resolves success or failure
-          // within ~2s of returning from the UPI app.
+          // The audience is not payment-literate -> no cancel affordance during the wait, on purpose.
+          // The provider's resume checkpoint resolves success or failure within ~2s of the UPI return.
         ],
       ),
     );
@@ -1116,8 +1093,7 @@ class _UpiChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The app's REAL mark, from PackageManager — the handoff fakes a
-            // PhonePe square because the browser has no package manager.
+            // The app's REAL mark from PackageManager — the handoff fakes one, having no PM.
             if (icon == null)
               const Icon(
                 Icons.account_balance_wallet_outlined,
@@ -1158,11 +1134,9 @@ class _UpiChip extends StatelessWidget {
   }
 }
 
-/// The buy button: a maroon gradient pill under a gold rim, lifted by its own
-/// shadow and an inner top highlight.
+/// The buy button — a maroon gradient pill under a gold rim, lifted by a shadow and a top highlight.
 ///
-/// Deliberately NOT [CtaButton] — that is the app's green primary, and this
-/// screen's whole palette is the handoff's, not the app ladder's.
+/// Deliberately NOT [CtaButton]: that is the app's green primary, and this palette is the handoff's.
 class ShrineCta extends StatefulWidget {
   const ShrineCta({
     super.key,
@@ -1218,9 +1192,8 @@ class _ShrineCtaState extends State<ShrineCta> {
               children: [
                 Container(
                   width: double.infinity,
-                  // Height comes from the 16px padding, exactly as the handoff
-                  // sizes it — and the 22px spinner is within half a pixel of the
-                  // label's line box, so the pill does not resize while busy.
+                  // Height comes from the 16px padding, exactly as the handoff sizes it.
+                  // The 22px spinner is within half a pixel of the label's box -> no resize when busy.
                   padding: const EdgeInsets.symmetric(
                     vertical: ArulTokens.paywallCtaPadding,
                   ),
@@ -1244,12 +1217,31 @@ class _ShrineCtaState extends State<ShrineCta> {
                             color: ArulTokens.paywallOnCta,
                           ),
                         )
-                      : Text(
-                          widget.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              widget.labelStyle ?? ArulTokens.paywallCtaLabel,
+                      // The buy button may NEVER ellipsise — "இலவச சோதனையைத் தொடங்…" is not a
+                      // thing anyone taps. It scales down instead of truncating or wrapping:
+                      // wrapping would change the button's height, and the busy spinner is sized
+                      // to within half a pixel of a ONE-line label so the CTA cannot resize when
+                      // tapped. `scaleDown` is a no-op whenever the label already fits, so English
+                      // renders at exactly the handoff size.
+                      : Padding(
+                          // Clears the florets pinned at both ends -> the label shrinks to the gap
+                          // between them, never underneath them.
+                          padding: const EdgeInsets.symmetric(
+                            horizontal:
+                                ArulTokens.paywallCtaOrnamentInset +
+                                ArulTokens.paywallCtaFloretSize +
+                                ArulTokens.paywallCtaLabelGap,
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              widget.label,
+                              maxLines: 1,
+                              style:
+                                  widget.labelStyle ??
+                                  ArulTokens.paywallCtaLabel,
+                            ),
+                          ),
                         ),
                 ),
                 if (!widget.busy) ...[

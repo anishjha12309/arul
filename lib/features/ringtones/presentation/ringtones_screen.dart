@@ -28,22 +28,14 @@ import 'deity_art.dart';
 import 'ringtone_states.dart';
 import 'ringtone_tile.dart';
 
-/// The Ringtones tab: a category-chip browse over a list of ringtone rows —
-/// preview free (streamed from the public CDN), "Set" premium-gated via the
-/// Worker's signed-url check.
+/// The Ringtones tab — a category-chip browse over rows; preview free, "Set" premium-gated.
 ///
-/// Two things about it are load-bearing rather than decorative:
+///   * **One value drives the whole now-playing look** — fill, border, title, button and diya all
+///     read the same `currentId`. No per-row flag can fall out of sync, and clearing it stops audio;
+///   * **The art is BUNDLED, not fetched** — the catalog carries only a `deity` slug the app maps
+///     to one of 17 PNGs. Nothing here can 404, so the list has no image loading state at all.
 ///
-///   * **One value drives the whole now-playing look.** Row fill, border, title
-///     colour, button fill/glyph and the cover-art diya all read the same
-///     `currentId` from [ringtonePreviewProvider]. There is no per-row playing
-///     flag to fall out of sync, and clearing it stops the audio.
-///   * **The art is bundled, not fetched** ([RingtoneTile] over [deityAsset]) —
-///     the catalog carries no cover images, only a `deity` slug the app maps to
-///     one of 17 bundled PNGs. Nothing here can 404, so the list has no image
-///     loading state at all, and its ground is still drawn per track so one
-///     deity's 35 tracks are not 35 identical tiles.
-///
+/// The ground is still drawn per track, so one deity's 35 tracks are not 35 identical tiles.
 /// Category is THE browse axis (CLAUDE.md §5b) — there are no All/New tabs.
 class RingtonesScreen extends ConsumerStatefulWidget {
   const RingtonesScreen({super.key});
@@ -56,26 +48,24 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   GoRouter? _router;
   VoidCallback? _routeListener;
 
-  // Cached so dispose() never touches ref (unusable there in Riverpod 3).
+  // Cached so dispose() never touches ref — unusable there in Riverpod 3.
   RingtonePreviewNotifier? _previewNotifier;
 
   /// The list's own controller, so a deep link can put its row at the top.
   final ScrollController _scroll = ScrollController();
 
-  /// The gap [_buildList] draws between rows. Part of the deep-link scroll
-  /// arithmetic, so it lives beside the row extent rather than inline.
+  /// The gap [_buildList] draws between rows — part of the deep-link scroll arithmetic.
   static const double _rowGap = 10;
 
-  /// Row a link asked for, as an index into the All list, waiting for that
-  /// list to be laid out. Consumed by [_scheduleDeepLinkScroll].
+  /// Row a link asked for, as an index into the All list, waiting for layout.
+  /// Consumed by [_scheduleDeepLinkScroll].
   int? _pendingScrollIndex;
 
   @override
   void initState() {
     super.initState();
-    // A ringtone target that lands while this screen is already built (a warm
-    // App Link, a deferred delivery) must trigger a build: _maybeOpenDeepLink
-    // runs from build() and nothing else would re-run it.
+    // _maybeOpenDeepLink runs from build() -> a target landing on an already-built screen must
+    // trigger one, or nothing re-runs it.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
   }
 
@@ -85,26 +75,19 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     });
   }
 
-  /// Open the ringtone a link asked for, if any — the ringtone twin of the
-  /// feed's `maybeOpenDeepLink`.
+  /// Open the ringtone a link asked for — the ringtone twin of the feed's `maybeOpenDeepLink`.
   ///
-  /// Always lands on **All**, never the ringtone's own category: All is the
-  /// only chip guaranteed to contain every row, and the index is resolved
-  /// through [ringtoneFeedOrder] because the pager-equivalent here is a row
-  /// position in the list the tab SERVES, not in the raw catalog. The row is
-  /// scrolled to the TOP of the list ("the first one shown"), nothing is
-  /// auto-played — preview is a tap the user makes.
-  ///
-  /// A miss is silent and normal: the ringtone may have been unpublished since
-  /// the ad was built. Takes ONLY a ringtone target; a pending wallpaper
-  /// passes through untouched for the feed.
+  /// Always lands on **All**, never the ringtone's own category — All is the only chip with every row.
+  /// The index resolves through [ringtoneFeedOrder]: a position in the list the tab SERVES.
+  /// The row scrolls to the TOP and nothing auto-plays — preview is a tap the user makes.
+  /// A miss is silent and normal: the ringtone may have been unpublished since the ad was built.
+  /// Takes ONLY a ringtone target; a pending wallpaper passes through untouched for the feed.
   void _maybeOpenDeepLink(List<Ringtone> all) {
     if (all.isEmpty) return;
     final target = ArulDeepLink.consumeRingtone();
     if (target == null) return;
 
-    // Clear the deferred copy too — it and ArulDeepLink are seeded together
-    // (main.dart) because either can win the startup race.
+    // Clear the deferred copy too — it and ArulDeepLink are seeded together, either can win the race.
     unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
 
     const allSlug = WallpaperCategory.allSlug;
@@ -122,15 +105,13 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     _pendingScrollIndex = index;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // No-op when All is already selected; otherwise the chip change rebuilds
-      // the list, and THAT build schedules the scroll.
+      // No-op when All is already selected; otherwise the chip change rebuilds and schedules it.
       ref.read(selectedRingtoneCategoryProvider.notifier).select(allSlug);
     });
   }
 
-  /// Once the All list is built, jump the pending row to the top. Every row is
-  /// the same height ([RingtoneRow.extent]) and the list has no top padding,
-  /// so the offset is arithmetic — no need to build the rows in between.
+  /// Once the All list is built, jump the pending row to the top.
+  /// Every row is [RingtoneRow.extent] tall with no top padding -> the offset is pure arithmetic.
   void _scheduleDeepLinkScroll() {
     final index = _pendingScrollIndex;
     if (index == null) return;
@@ -151,10 +132,8 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     super.didChangeDependencies();
     _previewNotifier ??= ref.read(ringtonePreviewProvider.notifier);
     if (_router == null) {
-      // Stop preview audio the moment the location leaves /ringtones — this
-      // covers BOTH a pushed route (premium paywall, refer) and a dock branch
-      // switch, where the IndexedStack keeps this screen alive and no
-      // dispose/deactivate ever fires.
+      // Stop preview audio the moment the location leaves /ringtones.
+      // Covers a pushed route AND a dock branch switch, where nothing is ever disposed.
       _router = GoRouter.of(context);
       _routeListener = () {
         final loc = _router!.routeInformationProvider.value.uri.path;
@@ -177,10 +156,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     super.dispose();
   }
 
-  /// Premium gate for "Set as ringtone". Awaits the entitlement future
-  /// (CLAUDE.md §5 — a loading snapshot must never bounce a premium user);
-  /// on a free user, ensurePremium tracks `ringtone_set_blocked_premium` and
-  /// routes `/premium?source=ringtone_set`.
+  /// Premium gate for "Set as ringtone" — AWAITS the entitlement future (CLAUDE.md §5).
+  /// A loading snapshot must never bounce a premium user.
+  /// On a free user ensurePremium tracks the block and routes `/premium?source=ringtone_set`.
   Future<void> _onSetTapped(Ringtone ringtone) async {
     if (!await ensurePremium(context, ref, source: 'ringtone_set')) return;
     // Phone ringtone only — no alarm/notification choice in Arul's UI.
@@ -199,16 +177,13 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     final l10n = AppLocalizations.of(context);
     final feed = ref.watch(ringtoneFeedProvider);
 
-    // Open any ringtone a share or ad link asked for — once the full catalog
-    // is in, since that turns an id into a row index in the list this tab
-    // serves. Re-checked on every build, like the feed's, because a target can
-    // land after the first catalog.
+    // Open any ringtone a link asked for, once the FULL catalog is in — an id needs a row index.
+    // Re-checked on every build, because a target can land after the first catalog.
     if (ref.watch(ringtoneCatalogProvider) case AsyncData(:final value)) {
       _maybeOpenDeepLink(value);
     }
 
-    // Same rationale as the feed: keep the entitlement resolved while the tab
-    // is up so the gate's await returns instantly on tap.
+    // Keep the entitlement resolved while the tab is up -> the gate's await returns instantly.
     ref.watch(entitlementProvider);
 
     // Preview failure → localized toast, once per error tick.
@@ -223,9 +198,8 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
       }
     });
 
-    // Set pipeline reactions: success toast / error toast. A missing
-    // WRITE_SETTINGS opens the system grant screen from the notifier and comes
-    // back to idle — there is nothing for the screen to show.
+    // Set-pipeline reactions: success toast, error toast.
+    // A missing WRITE_SETTINGS opens the system grant screen and returns to idle — nothing to show.
     ref.listen(ringtoneSetProvider, (prev, next) {
       switch (next) {
         case RingtoneSetSuccess():
@@ -238,9 +212,8 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
         case RingtoneSetError(:final isNetwork, :final premiumRequired):
           ref.read(ringtoneSetProvider.notifier).reset();
           if (premiumRequired && !isNetwork) {
-            // The subscription lapsed mid-session and the server's live check
-            // caught it. A toast is a dead end here — retrying fails
-            // identically — so send them to the paywall.
+            // The subscription lapsed mid-session and the server's live check caught it.
+            // A toast is a dead end — retrying fails identically -> send them to the paywall.
             ref
                 .read(analyticsServiceProvider)
                 .track('ringtone_set_blocked_premium');
@@ -275,31 +248,24 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
       child: Scaffold(
         backgroundColor: frameColor,
         body: SafeArea(
-          // The list runs full-bleed under the floating dock; its own bottom
-          // inset (AppShell.dockClearance) covers the gesture bar, so a SafeArea
-          // pad here would only double it up.
+          // The list runs full-bleed under the dock, and its own inset covers the gesture bar.
+          // A SafeArea pad here would only double that up.
           bottom: false,
           child: Column(
             children: [
-              // ── The browse frame ──────────────────────────────────────
-              // Byte-for-byte the wallpaper feed's upper portion: same title
-              // band, same chip row geometry, same gap, same hairline floor,
-              // same drop to the content below it. The tabs cross-fade, so
-              // anything that differed up here read as the screen jumping.
+              // The browse frame is byte-for-byte the wallpaper feed's upper portion.
+              // The tabs cross-fade -> anything that differed up here read as the screen jumping.
               ArulBrowseHeader(
                 title: l10n.tabRingtones,
-                // Literally the same control the wallpaper feed puts here, not
-                // a matching one — same glyph, same word, same glint, same
-                // destination. Two look-alike buttons is how they drifted
-                // apart the first time.
+                // Literally the SAME control the feed puts here, not a matching one.
+                // Two look-alike buttons is how they drifted apart the first time.
                 actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
                 chips: const _RingtoneChips(),
               ),
 
-              // In-flight set pipeline: a gold hairline progress bar + stage
-              // label, directly under the chips. Not in the handoff — the
-              // handoff draws one resting moment, and this is the only place
-              // that reports a multi-second download the user started.
+              // In-flight set pipeline — a gold hairline bar and stage label, under the chips.
+              // Not in the handoff, which draws one resting moment.
+              // This is the only place that reports a multi-second download the user started.
               if (setState_ is RingtoneSetLoading)
                 _SetProgress(state: setState_, l10n: l10n),
 
@@ -340,9 +306,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   }
 
   Widget _buildBody(List<Ringtone> items) {
-    // The dev preview's sample tracks are injected at the CATALOG, not here, so
-    // the chips and the category filter see them too — see
-    // ringtone_catalog_providers.dart.
+    // Sample tracks are injected at the CATALOG, not here -> the chips and the filter see them too.
     if (items.isEmpty) return const RingtonesEmpty();
     return _buildList(items);
   }
@@ -352,8 +316,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     return ListView.separated(
       controller: _scroll,
       physics: const AlwaysScrollableScrollPhysics(),
-      // Top padding stays ZERO: the deep-link scroll computes its offset from
-      // the row extent alone (see _scheduleDeepLinkScroll).
+      // Top padding stays ZERO — the deep-link scroll computes its offset from the row extent alone.
       padding: EdgeInsets.fromLTRB(
         ArulTokens.screenPadding,
         0,
@@ -368,11 +331,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   }
 }
 
-// ─── Chips row ────────────────────────────────────────────────────────────────
-
-/// Ringtone-scoped chip row: the handoff's browse pills, its OWN selected-
-/// category provider (tab filters never bleed across). Skeleton pills render
-/// while categories are unknown. Scrolls horizontally with no scrollbar.
+/// Ringtone-scoped chip row — the handoff's browse pills, with its OWN selected-category provider.
+/// Tab filters never bleed across.
+/// Skeleton pills render while categories are unknown; scrolls horizontally with no scrollbar.
 class _RingtoneChips extends ConsumerWidget {
   const _RingtoneChips();
 
@@ -386,9 +347,8 @@ class _RingtoneChips extends ConsumerWidget {
     final loading = ref.watch(ringtoneCatalogProvider) is AsyncLoading;
 
     if (categories.isEmpty) {
-      // Nothing to browse by: take up NO height at all rather than holding an
-      // empty 34px band, which reads as a gap the designer forgot. Sliding
-      // pills only while a catalog is genuinely on its way.
+      // Nothing to browse by -> take up NO height; an empty 34px band reads as a forgotten gap.
+      // Sliding pills only while a catalog is genuinely on its way.
       if (!loading) return const SizedBox.shrink();
       return const _ChipsSkeleton();
     }
@@ -401,9 +361,8 @@ class _RingtoneChips extends ConsumerWidget {
     return SizedBox(
       height: _height,
       child: ScrollConfiguration(
-        // The handoff's chip rail shows no scrollbar in either theme. copyWith
-        // rather than a fresh ScrollBehavior, so the platform's physics and
-        // overscroll treatment are untouched — only the bar goes.
+        // The handoff's chip rail shows no scrollbar in either theme.
+        // copyWith, not a fresh ScrollBehavior -> physics and overscroll are untouched, only the bar.
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
@@ -462,10 +421,8 @@ class _ChipsSkeleton extends StatelessWidget {
   }
 }
 
-// ─── Set progress ─────────────────────────────────────────────────────────────
-
-/// Hairline gold progress + stage caption while the set pipeline runs.
-/// Indeterminate outside the download stage (a bar parked at 0% reads stuck).
+/// Hairline gold progress and a stage caption while the set pipeline runs.
+/// Indeterminate outside the download stage — a bar parked at 0% reads stuck.
 class _SetProgress extends StatelessWidget {
   const _SetProgress({required this.state, required this.l10n});
 
@@ -510,10 +467,7 @@ class _SetProgress extends StatelessWidget {
   }
 }
 
-// ─── Ringtone row ─────────────────────────────────────────────────────────────
-
-/// One ringtone: deity art, title over deity name, a circular play/pause, and
-/// the outlined "Set" pill.
+/// One ringtone — deity art, title over deity name, a circular play/pause, the outlined "Set" pill.
 ///
 /// Public so the widget tests can find rows by type rather than by string.
 class RingtoneRow extends ConsumerWidget {
@@ -522,25 +476,21 @@ class RingtoneRow extends ConsumerWidget {
   final Ringtone ringtone;
   final VoidCallback onSet;
 
-  /// Handoff geometry, restated for the two-line row: `52 + 2×9 = 70` tall.
-  /// The art drives the height — title + subtitle stack to ~38 — so a track
-  /// with no deity makes a shorter text column, never a shorter row.
+  /// Handoff geometry for the two-line row: `52 + 2×9 = 70` tall.
+  /// The ART drives the height -> a track with no deity makes a shorter text column, not a shorter row.
   static const double coverSize = RingtoneTile.defaultSize;
   static const double _padH = 12;
   static const double _padV = 9;
   static const double _borderWidth = 1;
 
-  /// The row's laid-out height: the art, the vertical padding and the hairline
-  /// border on both edges — and NOTHING else may grow it (the text column and
-  /// both controls fit inside the art's height). The deep-link scroll
-  /// multiplies this out, so a row taller than this puts the wrong ringtone at
-  /// the top; the widget test that pins it caught the border being left out.
+  /// The row's laid-out height — art, vertical padding, and the hairline border on both edges.
+  /// NOTHING else may grow it; the text column and both controls fit inside the art's height.
+  /// The deep-link scroll multiplies this out -> a taller row puts the WRONG ringtone at the top.
   static const double extent = coverSize + 2 * _padV + 2 * _borderWidth;
 
-  /// The gap the handoff draws between the row's children. Both trailing
-  /// controls lay out in a [ArulTokens.minHitTarget]-wide/tall box with the
-  /// visual centred inside it, so the drawn gap is this plus that box's own
-  /// slack — see [_PlayButton].
+  /// The gap the handoff draws between the row's children.
+  /// Both trailing controls centre their visual in a [ArulTokens.minHitTarget] box.
+  /// So the DRAWN gap is this plus that box's own slack — see [_PlayButton].
   static const double _gap = 12;
 
   @override
@@ -559,8 +509,7 @@ class RingtoneRow extends ConsumerWidget {
     final isPlaying = preview.isPlayingId(ringtone.id);
     final isBuffering = preview.isLoadingId(ringtone.id);
 
-    // The medallion keeps its lit overlay through the buffering beat, so the
-    // tile does not flash dark → lit when the stream finally opens.
+    // The medallion keeps its lit overlay through buffering -> no dark → lit flash when it opens.
     final lit = isPlaying || isBuffering;
 
     final playSlack = (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
@@ -611,13 +560,9 @@ class RingtoneRow extends ConsumerWidget {
                         : (isDark ? ArulTokens.ivory : ArulTokens.lightText),
                   ),
                 ),
-                // The deity name, and the only place in the app that names the
-                // god a track is to. Absent rather than blank when the catalog
-                // carries no deity, so the title simply centres itself.
-                //
-                // Deliberately NOT tinted with the now-playing state: the title
-                // going gold is the signal, and a second gold line under it
-                // made the playing row read as selected-and-disabled.
+                // The deity name — the only place in the app that names the god a track is to.
+                // ABSENT rather than blank when there is no deity, so the title centres itself.
+                // Deliberately NOT tinted by now-playing: a second gold line read as disabled.
                 if (ringtone.deityLabel case final label?)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
@@ -655,9 +600,8 @@ class RingtoneRow extends ConsumerWidget {
   }
 }
 
-/// The row's preview toggle: a 34px circle whose touch target is grown to the
-/// 44px minimum by laying out in a 44px box with the circle centred — the
-/// handoff is explicit that the visual stays 34 and only the hit area grows.
+/// The row's preview toggle — a 34px circle centred in a 44px box.
+/// The handoff is explicit: the VISUAL stays 34 and only the hit area grows.
 class _PlayButton extends StatelessWidget {
   const _PlayButton({
     required this.playing,
@@ -711,9 +655,8 @@ class _PlayButton extends StatelessWidget {
               ),
               child: Center(
                 child: buffering
-                    // Not in the handoff, which draws a settled state: a
-                    // CDN stream can take a beat to open and a dead pause
-                    // glyph would read as a failed tap.
+                    // Not in the handoff, which draws a settled state.
+                    // A CDN stream takes a beat to open, and a dead pause glyph reads as a failed tap.
                     ? SizedBox.square(
                         dimension: _glyphSize,
                         child: CircularProgressIndicator(
@@ -735,8 +678,8 @@ class _PlayButton extends StatelessWidget {
   }
 }
 
-/// The play triangle / pause bars, in the handoff's 24-unit viewBox. Filled
-/// shapes, so they are not part of the stroke-only `ArulLineIcon` set.
+/// The play triangle and pause bars, in the handoff's 24-unit viewBox.
+/// FILLED shapes -> not part of the stroke-only `ArulLineIcon` set.
 class _TransportIcon extends StatelessWidget {
   const _TransportIcon({
     required this.playing,
@@ -802,8 +745,8 @@ class _TransportIconPainter extends CustomPainter {
       old.playing != playing || old.color != color;
 }
 
-/// The row's commit verb — outlined in both themes and identical whether or not
-/// the row is playing, so the eye never mistakes it for the transport control.
+/// The row's commit verb — outlined in both themes and identical whether or not the row is playing.
+/// So the eye never mistakes it for the transport control.
 /// Lays out at the 44px minimum height with the 32px pill centred inside.
 class _SetPill extends StatelessWidget {
   const _SetPill({
@@ -818,12 +761,11 @@ class _SetPill extends StatelessWidget {
 
   static const double _visualHeight = 32;
 
-  /// The widest the pill may grow. English "Set" is ~56 here, but the same
-  /// string is "സെറ്റ് ചെയ്യുക" in Malayalam and the OS font-size setting can
-  /// double it; unbounded, the pill would push the whole row off a 320dp
-  /// screen, because a Row lays its inflexible children out first and only then
-  /// hands the remainder to the title. Past this width the label ellipsises
-  /// instead — a clipped verb beats a broken row.
+  /// The widest the pill may grow.
+  ///
+  /// English "Set" is ~56, but Malayalam is far longer and the OS font size can double it.
+  /// A Row lays its inflexible children out FIRST -> unbounded, the pill pushes the row off screen.
+  /// Past this width the label ellipsises instead — a clipped verb beats a broken row.
   static const double _maxWidth = 120;
 
   @override
@@ -842,8 +784,7 @@ class _SetPill extends StatelessWidget {
       child: Opacity(
         opacity: disabled && !busy ? 0.55 : 1,
         child: GestureDetector(
-          // Setting a ringtone is a commit verb — same weight as Apply on the
-          // wallpaper feed. The outcome beat comes from the toast.
+          // Setting a ringtone is a commit verb — the same weight as Apply. The toast is the outcome.
           onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
           onTap: disabled ? null : onTap,
           behavior: HitTestBehavior.opaque,

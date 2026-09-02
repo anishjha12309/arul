@@ -1,8 +1,7 @@
-// The one parser every delivery path goes through: App Link intents, Meta's
-// fb<APP_ID>://open scheme, the deferred URLs GA4F / the Meta SDK fetch, and
-// the Play Install Referrer payload the Worker writes. Pins the two link shapes
-// the ad team pastes (docs/deep-links.md) and the validation that keeps an
-// outside string from selecting a row it should not.
+// The one parser every delivery path goes through -> App Link intents, Meta's fb<APP_ID>://open, GA4F and SDK fetches.
+// The Play Install Referrer payload the Worker writes goes through it too.
+// Pins the two link shapes the ad team pastes (docs/deep-links.md).
+// Pins the validation that stops an outside string selecting a row it should not.
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -55,8 +54,7 @@ void main() {
     });
 
     test('/r/ with no id opens the RINGTONES tab', () {
-      // A campaign for the section rather than one track. The tab is the whole
-      // point of the path — `/r/?lang=ta` landing on the feed was the bug.
+      // A campaign for the section, not one track -> the tab IS the point -> `/r/?lang=ta` landing on the feed was the bug.
       final req = _parse('https://arul.hsrutility.com/r/?lang=ta');
       expect(req?.target, const TabLinkTarget(ArulTab.ringtones));
       expect(req?.lang, 'ta');
@@ -68,8 +66,7 @@ void main() {
     });
 
     test('/w/ with no id stays language-only, and claims no tab', () {
-      // Deliberately NOT symmetric — this is the shipped language-only shape,
-      // and the feed is where the app opens anyway.
+      // Deliberately NOT symmetric -> this is the shipped language-only shape, and the feed is where the app opens.
       final req = _parse('https://arul.hsrutility.com/w/?lang=hi');
       expect(req?.target, isNull);
       expect(req?.lang, 'hi');
@@ -83,9 +80,8 @@ void main() {
     });
 
     test('ilang is IGNORED here — a share must not re-language an install', () {
-      // The whole point of the separate key: this is the tap of someone who
-      // ALREADY has Arul, and their own Settings choice outranks a friend's.
-      // Only the Play referrer honours it (the Worker folds it into `lang=`).
+      // The point of the separate key -> this is the tap of someone who ALREADY has Arul.
+      // Their own Settings choice outranks a friend's -> only the Play referrer honours it, folded into `lang=`.
       final req = _parse(
         'https://arul.hsrutility.com/w/$_w?ref=ABCD1234&ilang=ta',
       );
@@ -98,8 +94,7 @@ void main() {
     });
 
     test('the UUID is normalised and a trailing slash is tolerated', () {
-      // android.net.Uri drops empty segments, so the native validator passes a
-      // campaign URL written with a trailing slash; Dart must agree.
+      // android.net.Uri drops empty segments -> the native validator passes a trailing-slash URL -> Dart must agree.
       expect(
         _parse('https://arul.hsrutility.com/w/${_w.toUpperCase()}/')?.target,
         const WallpaperLinkTarget(_w),
@@ -189,8 +184,7 @@ void main() {
 
   group('query form on our own host', () {
     test('wallpaper_id / ringtone_id are accepted on https too', () {
-      // Belt and braces: a creative built in the reference style but on our
-      // host still resolves. The path form is what we document.
+      // A creative built in the reference style but on our host still resolves -> the path form is what we document.
       expect(
         _parse('https://arul.hsrutility.com/?wallpaper_id=$_w')?.target,
         const WallpaperLinkTarget(_w),

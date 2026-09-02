@@ -4,8 +4,8 @@ import '../theme/tokens.dart';
 
 /// A small pill label over media (category name, LIVE badge).
 ///
-/// It carries its own translucent ink fill + hairline border so it stays legible
-/// on ANY wallpaper underneath — a plain text label cannot.
+/// A plain text label cannot stay legible on an arbitrary wallpaper.
+/// So it carries its own translucent ink fill and hairline border.
 class PillTag extends StatelessWidget {
   const PillTag({super.key, required this.label, this.gold = false});
 

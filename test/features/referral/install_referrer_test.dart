@@ -1,6 +1,5 @@
-// Unit tests for InstallReferrerService — the pure parsing of a Play Install
-// Referrer payload into our referral code and deep-link request, the links it
-// builds, and the persisted handoff. No platform channel.
+// InstallReferrerService parses a Play Install Referrer payload into a referral code and a deep-link request.
+// This pins that parsing, the links it builds and the persisted handoff -> no platform channel is involved.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,7 +56,7 @@ void main() {
     test('buildShareLink embeds the code as an encoded referrer payload', () {
       final link = InstallReferrerService.buildShareLink('ABCD1234');
       expect(link, contains('id=com.hsrutility.arul'));
-      // "ref=ABCD1234" URL-encoded → "ref%3DABCD1234".
+      // "ref=ABCD1234" URL-encoded -> "ref%3DABCD1234".
       expect(link, contains('referrer=ref%3DABCD1234'));
       // Round-trips back to the same code.
       final referrer = Uri.parse(link).queryParameters['referrer'];
@@ -65,10 +64,9 @@ void main() {
     });
   });
 
-  // The deferred half of the deep link: an ad/share tap by someone WITHOUT the
-  // app. The Worker's /w/:id or /r/:id sends them to Play with
-  // `ref=<code>&w=<id>&lang=<code>` (or `r=<id>`), Play replays it on first
-  // launch, and these turn it back into what to open and in which language.
+  // The deferred half of a deep link -> an ad or share tap by someone WITHOUT the app.
+  // The Worker's /w/:id or /r/:id sends them to Play with `ref=<code>&w=<id>&lang=<code>` (or `r=<id>`).
+  // Play replays that on first launch -> these turn it back into what to open and in which language.
   group('InstallReferrerService referrer payload parsing', () {
     const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
     const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';
@@ -104,8 +102,7 @@ void main() {
     });
 
     test('is independent of the referral code — either half can be absent', () {
-      // An ad click carries no referral code; a plain Refer & Earn share carries
-      // no wallpaper. Neither may discard the other.
+      // An ad click carries no referral code and a Refer & Earn share carries no wallpaper -> neither discards the other.
       expect(InstallReferrerService.parseWallpaperTarget('w=$id'), id);
       expect(InstallReferrerService.parseReferralCode('w=$id'), isNull);
       expect(
@@ -142,14 +139,13 @@ void main() {
         id,
         code: 'ABCD1234',
       );
-      // https on OUR host is what lets Android intercept it for an installed
-      // user; a Play URL or an arul:// scheme cannot do that from an ad.
+      // https on OUR host is what lets Android intercept it for an installed user.
+      // A Play URL or an arul:// scheme cannot do that from an ad.
       expect(link, 'https://$kDeepLinkHost/w/$id?ref=ABCD1234');
     });
 
     test('buildWallpaperLink still deep-links when there is no code', () {
-      // Losing attribution must never also cost the deep link — that is the half
-      // that converts.
+      // Losing attribution must never also cost the deep link -> that is the half that converts.
       expect(
         InstallReferrerService.buildWallpaperLink(id),
         'https://$kDeepLinkHost/w/$id',
@@ -178,10 +174,9 @@ void main() {
     );
 
     test('a share stamps installLang as ilang, which the parser ignores', () {
-      // The share caption is written in the sharer's language, so a FRESH
-      // install should open in it — but a recipient who already has Arul keeps
-      // the language they chose. `ilang` survives only the Play referrer, so
-      // parsing the same URL as an App Link yields the target and no language.
+      // The share caption is in the sharer's language -> a FRESH install opens in it.
+      // A recipient who already has Arul keeps the language they chose.
+      // `ilang` survives only the Play referrer -> the same URL parsed as an App Link yields the target and no language.
       final link = InstallReferrerService.buildWallpaperLink(
         id,
         code: 'ABCD1234',
@@ -206,16 +201,14 @@ void main() {
     });
 
     test('the host matches the one the app builds links for', () {
-      // Four places must agree or verification fails silently and every link
-      // opens a browser: this constant, AndroidManifest's android:host, the
-      // wrangler.toml custom domain, and whoever serves assetlinks.json.
+      // Four places must agree or verification fails silently and every link opens a browser.
+      // This constant, AndroidManifest's android:host, the wrangler.toml custom domain, and whoever serves assetlinks.json.
       expect(kDeepLinkHost, 'arul.hsrutility.com');
     });
   });
 
-  // The durable handoff: whatever path delivered it, a target and a language
-  // are persisted (to survive the startup race and a process death) AND handed
-  // to the live app, and the two kinds never sit in prefs together.
+  // Whatever path delivered it, a target and a language are persisted -> that survives the startup race and process death.
+  // They are ALSO handed to the live app -> and the two kinds never sit in prefs together.
   group('InstallReferrerService queue + pending', () {
     const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
     const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';

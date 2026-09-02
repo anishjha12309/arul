@@ -1,9 +1,6 @@
 /**
- * Unit tests for the submission-sweep decision logic.
- *
- * sweepSubmissions() itself needs a live DB + R2 binding, so we test the pure
- * `selectKeysToDelete` core: given the objects seen, the still-pending file_keys
- * to keep, and `now`, decide which keys to delete.
+ * The submission-sweep DECISION logic.
+ * sweepSubmissions() needs a live DB and R2 binding -> only the pure `selectKeysToDelete` core is testable here
  */
 
 import { describe, it, expect } from "vitest";
@@ -47,7 +44,7 @@ describe("selectKeysToDelete", () => {
   });
 
   it("ignores keys that are not submission objects", () => {
-    // Defensive: prefix is user/ but the infix guard excludes anything else.
+    // The prefix is user/ but the INFIX guard is what actually scopes the sweep -> anything else is out of scope
     const out = selectKeysToDelete(
       [obj("user/u1/profile/avatar.png", OLD)],
       new Set(),

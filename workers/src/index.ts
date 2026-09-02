@@ -1,50 +1,9 @@
 /**
- * Arul API Worker — entry point.
+ * Arul API Worker entry point.
  *
- * Framework: Hono ^4 (Cloudflare Workers-native, ~12kB, built-in CORS + error
- * handling, TypeScript-first). Chosen over itty-router because this project
- * needs middleware (CORS, auth), typed contexts, and built-in error envelopes —
- * not just a router. Hono is also 2× faster than itty-router in benchmarks.
- * See: https://hono.dev/docs/getting-started/cloudflare-workers
- *
- * Routes:
- *   GET  /.well-known/assetlinks.json — App Links verification (public)
- *   GET  /w/:id                 — wallpaper share/ad link → Play + referrer (public)
- *   GET  /r/:id                 — ringtone ad link → Play + referrer (public)
- *   GET  /w/ · /r/ · /          — same, id-less: a language-only ad link (public)
- *   POST /auth/login
- *   POST /auth/refresh
- *   POST /auth/logout
- *   POST /media/signed-url
- *   POST /media/upload-url
- *   POST /media/confirm-upload
- *   POST /payments/initiate     — start Autopay mandate: PENNY_DROP ₹2 when
- *                                 trial-eligible, else TRANSACTION ₹199
- *   POST /payments/webhook      — PhonePe S2S callback (idempotent)
- *   POST /payments/status       — live subscription state reconciliation
- *   POST /payments/cancel       — revoke mandate (Manage Subscription)
- *   POST /payments/abandon      — release a claimed setup after SDK cancel
- *   GET  /payments/callback     — PhonePe post-mandate browser redirect
- *   GET  /me
- *   POST /me/profile            — update display name
- *   DELETE /me                  — delete account (mandate revoke + trial tombstone)
- *   GET  /me/subscription
- *   GET  /me/submissions
- *   GET  /me/referrals
- *   POST /internal/build-catalog
- *   POST /internal/sweep-submissions — reclaim orphaned R2 submission objects
- *   POST /internal/sweep-canonical  — reclaim orphaned canonical media objects
- *   POST /internal/run-redemptions  — force notify+execute (testing)
- *   POST /internal/refund           — operator/support ₹199 refund
- *
- * Scheduled handlers:
- *   "0 * * * *"   — hourly: catalog rebuild (no-op if nothing changed) +
- *                            on-change canonical-media sweep + autopay
- *                            notify/execute scan
- *   "30 21 * * *" — daily (21:30 UTC = 03:00 IST, off-peak): unconditional
- *                            canonical-media sweep + orphaned-submission sweep
- *
- * Error envelope: { "error": { "code": string, "message": string } }
+ * Hono over itty-router -> middleware, typed contexts and error envelopes are built in -> hono.dev/docs
+ * THREE cron triggers: hourly, quarter-hour (autopay only) and daily 21:30 UTC -> each detailed in scheduled() below
+ * Every error response is { "error": { "code": string, "message": string } }
  */
 
 import { Hono } from "hono";
@@ -95,8 +54,7 @@ import { runAutopayNotify } from "./cron/autopay-notify.js";
 const app = new Hono<{ Bindings: Env }>();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-// Allows requests from browser-based origins listed in ALLOWED_ORIGINS.
-// The Flutter native app is unaffected by CORS (not a browser).
+// The Flutter app is not a browser -> CORS never applies to it -> ALLOWED_ORIGINS gates web callers only
 app.use("/*", async (c, next) => {
   const allowed = (c.env.ALLOWED_ORIGINS ?? "")
     .split(",")
@@ -113,17 +71,14 @@ app.use("/*", async (c, next) => {
 });
 
 // ── Deep-link routes (PUBLIC — browsers, not the app) ─────────────────────────
-// Served on arul.hsrutility.com, the host that ships in shares and ad creatives.
-// All unauthenticated on purpose: assetlinks.json is fetched by Android's
-// verifier, and /w/ + /r/ (with or without an id) by whoever tapped the link.
-// See routes/deeplink.ts.
+// Served on arul.hsrutility.com, the host that ships in shares and ad creatives
+// Android's verifier and whoever tapped the link fetch these -> auth would break both -> PUBLIC (routes/deeplink.ts)
 app.get("/.well-known/assetlinks.json", handleAssetLinks);
 app.get("/w/:id", handleWallpaperLink);
 app.get("/r/:id", handleRingtoneLink);
-// Id-less forms: a language-only campaign link (`/w/?lang=hi`). The app already
-// matches these — its manifest filter is a pathPrefix — so the id-less half must
-// redirect rather than 404, or the same URL opens the app for one person and an
-// error page for the next. Both slash forms, because ad ops paste both.
+// `/w/?lang=hi` is a language-only campaign link and the app's pathPrefix filter already matches it
+// A 404 here -> the same URL opens the app for one person and an error page for the next -> redirect instead
+// Ad ops paste both slash forms -> register both
 app.get("/w/", handleWallpaperLink);
 app.get("/w", handleWallpaperLink);
 app.get("/r/", handleRingtoneLink);
@@ -164,8 +119,8 @@ app.post("/internal/sweep-canonical", handleSweepCanonical);
 app.post("/internal/run-redemptions", handleRunRedemptions); // testing: force notify+execute
 app.post("/internal/refund", handleRefund);                  // operator/support: ₹199 refund
 
-// Authoring lives in the unified CMS worker (hsr-cms), not here — see README.
-// It reaches this worker via the ARUL_API service binding + /internal/build-catalog.
+// Authoring lives in the unified CMS worker (hsr-cms) -> this worker has no /admin -> see README
+// hsr-cms reaches it through the ARUL_API service binding + /internal/build-catalog
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.onError((err, c) => {
@@ -199,23 +154,16 @@ const worker: WorkerType = {
   fetch: async (req, env, ctx) => app.fetch(req, env, ctx),
 
   async scheduled(event, env, ctx) {
-    // "0 * * * *" — hourly: catalog rebuild + on-change canonical sweep
-    // (autopay has its own trigger below — it must not share this invocation's
-    // 15-minute wall clock with the rebuild)
+    // "0 * * * *" -> catalog rebuild, then the canonical sweep only when a scope changed
+    // Autopay has its OWN trigger below -> it must not share this invocation's wall clock with the rebuild
     if (event.cron === "0 * * * *") {
       console.log("[cron] Running hourly catalog rebuild");
       ctx.waitUntil(
         buildCatalog(env, null).then(async (results) => {
           console.log("[cron] Catalog rebuild complete:", JSON.stringify(results));
-          // Canonical-media sweep runs strictly AFTER a rebuild that actually
-          // touched a scope — if any scope failed, its stale catalog pages may
-          // still reference a just-unreferenced object, and deleting the bytes
-          // then would break the live feed (backstop for abandoned CMS uploads
-          // + lost delete/replace cleanups). And if every scope was skipped as
-          // { skipped: "no_change" }, nothing was unreferenced this run, so
-          // there's nothing new to reclaim — the daily cron below is the
-          // backstop for everything else (this hourly sweep is purely an
-          // on-change convenience, not the safety net).
+          // A failed scope leaves pages pointing at unreferenced objects -> deleting them breaks the feed -> skip the sweep
+          // Every scope { skipped: "no_change" } -> nothing was unreferenced this run -> nothing to reclaim
+          // Catches abandoned CMS uploads and lost delete/replace cleanups -> the daily cron is the real safety net
           const anyScopeError = Object.values(results).some(
             (r) => r && typeof r === "object" && "error" in r,
           );
@@ -243,15 +191,9 @@ const worker: WorkerType = {
 
     }
 
-    // "*/15 * * * *" — autopay, in its OWN invocation every quarter hour. One
-    // invocation is capped at ~600 PhonePe calls by the 15-minute cron wall
-    // clock (Workers Paid; sequential calls at ~1 s each), so a due backlog
-    // still drains by cadence as well as by run size. Autopay used to ride the
-    // hourly trigger above, sharing that invocation with the catalog rebuild
-    // (R2 + KV + Neon) — at 04:00Z on 2026-08-25 the two together blew the
-    // then-50-subrequest cap mid-scan. Separate cron expressions get separate
-    // invocations, so minute 0 now runs catalog and autopay side by side, each
-    // with a full budget, and there is still exactly ONE autopay scan per tick.
+    // Autopay gets its OWN invocation -> sharing the hourly one blew the subrequest cap -> never fold it back in
+    // The 15-minute cron wall clock caps one run at ~600 sequential PhonePe calls -> a backlog drains by cadence too
+    // Minute 0 runs catalog and autopay side by side, each with a full budget, still ONE autopay scan per tick
     if (event.cron === "*/15 * * * *") {
       console.log("[cron] Running quarter-hour autopay scan");
       ctx.waitUntil(
@@ -261,8 +203,7 @@ const worker: WorkerType = {
       );
     }
 
-    // "30 21 * * *" — daily off-peak backstop: unconditional sweeps for
-    // everything the hourly on-change sweep and inline cleanups might miss.
+    // "30 21 * * *" -> off-peak -> unconditional sweeps for what the on-change sweep and inline cleanups miss
     if (event.cron === "30 21 * * *") {
       console.log("[cron] Running daily canonical + submission sweeps");
       ctx.waitUntil(
@@ -273,8 +214,7 @@ const worker: WorkerType = {
         }),
       );
 
-      // Reclaim orphaned user-submission objects from R2 (backstop for the
-      // inline delete-on-approve/reject). No-op when nothing is orphaned.
+      // Backstop for the inline delete-on-approve/reject -> reclaims orphaned R2 submissions, no-op when none
       ctx.waitUntil(
         sweepSubmissions(env).then((result) => {
           console.log("[cron] Submission sweep complete:", JSON.stringify(result));
@@ -283,10 +223,8 @@ const worker: WorkerType = {
         }),
       );
 
-      // Publish the day's apply/set counts by bumping content_version. The
-      // rebuild itself is left to the next hourly run 30 minutes later — it
-      // already holds the build lock and the change-detection gate, so doing it
-      // here would just be a second builder racing the first.
+      // Bumping content_version is what publishes the day's apply/set counts
+      // The next hourly run already holds the build lock and the change gate -> rebuilding here would race it
       ctx.waitUntil(
         refreshPopularityOrder(env).then((result) => {
           console.log("[cron] Popularity refresh:", JSON.stringify(result));

@@ -30,11 +30,11 @@ import 'edit_name_sheet.dart';
 import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
-/// Settings — profile card, one rows-card, muted logout, demoted delete link,
-/// faint legal line. Profile identity
-/// comes from the auth state (neutral stand-ins while it loads), edit-name
-/// persists via `POST /me/profile`, language drives the app locale, and logout /
-/// delete account run the real auth actions before routing back to sign-in.
+/// Settings — profile card, one rows-card, muted logout, demoted delete link, faint legal line.
+///
+/// Identity comes from the auth state, with neutral stand-ins while it loads.
+/// Edit-name persists via `POST /me/profile`, and language drives the app locale.
+/// Logout and delete-account run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -43,8 +43,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  /// English name ↔ locale code for the language sheet (visual labels are the
-  /// sheet's own; persistence goes through [LocaleNotifier]).
+  /// English name ↔ locale code for the language sheet — the visual labels are the sheet's own.
+  /// Persistence goes through [LocaleNotifier].
   static const _languageCodes = {
     'English': 'en',
     'Tamil': 'ta',
@@ -68,18 +68,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final themeMode = ref.watch(themeModeProvider);
 
-    // Real identity once signed in; neutral stand-ins otherwise. Watch the
-    // stream for rebuilds, but READ the service's synchronous state for the
-    // value — the broadcast stream does not replay, so emissions from the
-    // startup seed land before this screen subscribes and .asData?.value
-    // would stay null for the whole session (fallback shown to a signed-in
-    // user — the entitlement provider hit the same class of bug).
+    // The broadcast stream does not REPLAY -> a startup-seed emission lands before this subscribes.
+    // `.asData?.value` would then stay null all session, showing a signed-in user the fallback.
+    // So WATCH the stream for rebuilds, but READ the service's synchronous state for the value.
     ref.watch(authStateStreamProvider);
     final auth = ref.read(authServiceProvider).currentState;
     final authName = auth.displayName?.trim();
     final hasRealName = authName != null && authName.isNotEmpty;
-    // Neutral stand-ins while the profile is still loading (settings is only
-    // reachable signed in, so this is momentary) — never a fake person.
+    // Neutral stand-ins while the profile loads — momentary, and never a fake person.
     final name = hasRealName ? authName : l10n.settingsFallbackName;
     final authEmail = auth.email?.trim();
     final email = (authEmail != null && authEmail.isNotEmpty)
@@ -87,9 +83,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : l10n.settingsFallbackEmail;
     final language = _languageName(ref.watch(localeProvider).languageCode);
 
-    // Reads the persisted opt-in, which the reminders screen keeps reconciled
-    // against the real OS permission — so a user who revoked notifications in
-    // system settings sees "Off" here, not a stale "On".
+    // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
+    // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
     final notificationsOn = ref
         .watch(notificationSettingsProvider)
         .masterEnabled;
@@ -97,10 +92,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? l10n.settingsRemindersSubOn
         : l10n.settingsRemindersSubOff;
 
-    // Premium row subtitle reflects the REAL plan. While it resolves (or if the
-    // fetch fails) fall back to the upsell wording — the Manage screen re-reads
-    // it anyway, so a wrong-for-a-moment subtitle costs nothing, whereas
-    // claiming membership the user doesn't have would.
+    // The premium subtitle reflects the REAL plan; while it resolves, fall back to the upsell.
+    // The Manage screen re-reads it anyway -> a momentary understatement costs nothing.
+    // Claiming a membership the user does not have would.
     final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
     final premiumSub = switch (entitlement?.subscription?.status) {
       _ when entitlement?.isPremium != true => l10n.settingsPremiumSubLocked,
@@ -116,20 +110,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The shared tab header band. Settings is a dock BRANCH — never a
-            // pushed route — so it gets no back arrow. (A canPop() check here
-            // is a trap: while a sub-screen pops back OVER the shell, the
-            // departing route is still on the stack, so the arrow flashes in
-            // and then vanishes when the transition settles.)
+            // The shared tab header band. Settings is a dock BRANCH, never a push -> no back arrow.
+            // A canPop() check is a trap: a departing sub-screen is still on the stack mid-pop.
+            // The arrow would flash in and vanish as the transition settles.
             ArulScreenHeader(title: l10n.settingsTitle),
             Expanded(
               child: ListView(
-                // Settings is a dock branch in the shell, and the dock floats
-                // OVER it — so the footer owes the capsule its clearance or the
-                // policy links and the version sit under it with nothing left
-                // to scroll. AppShell.dockClearance already folds in the
-                // gesture inset; the extra 24 is the footer's own breathing
-                // room, which it had before the dock existed.
+                // The dock floats OVER this branch -> the footer owes the capsule its clearance.
+                // Without it the policy links and version sit under the dock with nothing to scroll.
+                // AppShell.dockClearance folds in the gesture inset; the extra 24 is the footer's own.
                 padding: EdgeInsets.fromLTRB(
                   16,
                   8,
@@ -140,16 +129,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _ProfileCard(
                     name: name,
                     email: email,
-                    // Brand 'A' while the stand-in shows — 'Y' (from "Your
-                    // account") would read as someone else's initial.
+                    // Brand 'A' while the stand-in shows — 'Y' would read as someone else's initial.
                     initial: hasRealName ? authName[0].toUpperCase() : 'A',
                     onEdit: () => _editName(hasRealName ? authName : ''),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
                     rows: [
-                      // First row: the plan is the most consequential thing in
-                      // Settings, and it was previously not reachable at all.
+                      // First row — the plan is the most consequential thing in Settings.
                       _RowData(
                         glyph: (color) => GopuramMark(size: 19, color: color),
                         title: l10n.premiumBrandTitle,
@@ -162,10 +149,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         sub: l10n.settingsReferSub,
                         onTap: () => context.push('/refer'),
                       ),
-                      // Deliberately NOT a second route to /refer. That screen
-                      // is about the user's own rewards; this is the act of
-                      // sharing, and making it one tap from Settings rather
-                      // than three is the whole point of having it here.
+                      // Deliberately NOT a second route to /refer — that screen is about rewards.
+                      // This is the ACT of sharing, one tap from Settings rather than three.
                       _RowData(
                         icon: Icons.ios_share_rounded,
                         title: l10n.settingsTellFriend,
@@ -186,9 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onTap: () => _pickLanguage(language),
                       ),
                       _RowData(
-                        // Follows the selection, like the sub-label beside it
-                        // — a fixed moon on a row reading "Light" was the one
-                        // stale thing in the list.
+                        // Follows the selection — a fixed moon on a row reading "Light" was stale.
                         icon: themeModeIcon(themeMode),
                         title: l10n.settingsTheme,
                         sub: themeModeLabel(l10n, themeMode),
@@ -197,8 +180,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.help_outline,
                         title: l10n.settingsNeedHelp,
-                        // No longer "& subscription" — that lives in its own row
-                        // now, and pointing at a mailto for it would be a lie.
+                        // Subscription has its own row now -> pointing a mailto at it would be a lie.
                         sub: l10n.settingsNeedHelpSub,
                         onTap: _support,
                       ),
@@ -215,16 +197,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    // Deleting an account is the app's one irreversible act, so
-                    // it gets the strongest beat on the way in as well as at the
-                    // confirm step.
+                    // Deleting is the app's one irreversible act -> the strongest beat, twice.
                     onTapDown: (_) => ArulHaptics.heavy(),
                     onTap: _delete,
-                    // Hand-drawn underline. TextDecoration.underline sits hard
-                    // on the baseline; this hairline gets 3px of air. The
-                    // text's line-height is collapsed to 1.0 first, otherwise
-                    // body's 1.5 leading pads the box and drops the rule far
-                    // below the glyphs.
+                    // TextDecoration.underline sits hard on the baseline -> a hand-drawn 3px rule.
+                    // Line-height collapses to 1.0 first, or body's 1.5 leading drops the rule away.
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -266,12 +243,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     final next = await showEditNameSheet(context, current);
     if (next == null || next.trim().isEmpty || next.trim() == current) return;
-    // Defensive: unreachable in shipped builds — nothing to persist to in a
-    // define-less local run.
+    // Unreachable in shipped builds — a define-less local run has nothing to persist to.
     if (!AppConfig.hasBackend) return;
     try {
-      // Persists via the Worker (`POST /me/profile`) and reflects reactively
-      // through authStateStreamProvider — no local copy to keep in sync.
+      // Persists via `POST /me/profile` and reflects through authStateStreamProvider — no local copy.
       await ref.read(authControllerProvider.notifier).updateDisplayName(next);
     } catch (e) {
       if (!mounted) return;
@@ -298,19 +273,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       confirmLabel: l10n.settingsLogout,
     );
     if (ok != true) return;
-    // Best-effort server logout (refresh-token denylist) + local token clear;
-    // never throws for the offline case.
+    // Best-effort server logout plus a local token clear — never throws for the offline case.
     await ref.read(authControllerProvider.notifier).signOut();
     if (mounted) context.go('/sign-in');
   }
 
   Future<void> _delete() async {
     final l10n = AppLocalizations.of(context);
-    // Deleting cancels the UPI mandate server-side and forfeits whatever is left
-    // of the paid period — and, because the trial tombstone survives deletion,
-    // signing up again does NOT hand back a second free trial. A user who bought
-    // premium is entitled to know all of that BEFORE the irreversible tap, so the
-    // warning is only shown when it is actually true of them.
+    // Deleting cancels the mandate server-side and forfeits whatever is left of the paid period.
+    // The trial tombstone survives deletion -> signing up again is NOT a second free trial.
+    // A payer is entitled to know that BEFORE the tap -> warn, but only when it is true of them.
     final entitlement = ref.read(entitlementDetailProvider).asData?.value;
     final hasPremium = entitlement?.isPremium ?? false;
 
@@ -323,15 +295,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       confirmLabel: l10n.settingsDeleteAccount,
     );
     if (ok != true) return;
-    // GA4-only (deliberately off the PostHog allow-list): account state lives in
-    // Neon, which is exact. These two exist so churn and delete FAILURES are
-    // visible in the free, unsampled record — a failing delete is a support
-    // problem we would otherwise only hear about by email.
+    // GA4-only, deliberately off the PostHog allow-list — account state lives in Neon, exactly.
+    // These exist so churn and delete FAILURES show in the free, unsampled record.
+    // A failing delete is otherwise a support problem we only hear about by email.
     final analytics = ref.read(analyticsServiceProvider);
     analytics.track('account_delete_confirmed');
     try {
       // Server-side: mandate revoke → tombstone → cascade → refresh denylist.
-      // Throws on failure — the account is intact and the session stays.
+      // Throws on failure -> the account is intact and the session stays.
       await ref.read(authControllerProvider.notifier).deleteAccount();
       if (mounted) context.go('/sign-in');
     } catch (e) {
@@ -348,19 +319,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _support() async {
-    // A blank email with an identical subject for every user is nearly useless
-    // to triage — pre-fill a diagnostics block (version, account, plan) and a
-    // prompt so the first reply already has what support needs. Every input
-    // degrades gracefully: the providers return null rather than throw, and a
-    // signed-in-only screen still guards the identity fields.
-    // Recipient read LIVE from the remote app config (brand delta: the
-    // documented fallback is support@hsrutility.com via AppConfig).
+    // A blank email with an identical subject for every user is nearly useless to triage.
+    // So pre-fill version, account and plan, plus a prompt -> the first reply already has them.
+    // Every input degrades gracefully: the providers return null rather than throw.
+    // The recipient is read LIVE from the remote app config, falling back through AppConfig.
     final l10n = AppLocalizations.of(context);
     final config = await ref
         .read(appConfigProvider.future)
         .catchError((_) => null);
 
-    // Real installed version (a failed read leaves it blank → "Unknown" below).
+    // Real installed version — a failed read leaves it blank, printing "Unknown" below.
     var version = '';
     try {
       final info = await ref.read(packageInfoProvider.future);
@@ -373,8 +341,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final userId = auth.userId;
     final email = auth.email?.trim();
 
-    // Plan status is the single most common support-triage question for a
-    // premium-gated app ("I paid but nothing unlocked") — include it.
+    // "I paid but nothing unlocked" is the commonest triage question -> include the plan status.
     final entitlement = ref.read(entitlementDetailProvider).asData?.value;
     final plan = entitlement?.isPremium != true
         ? 'Free'
@@ -388,9 +355,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final versionText = version.isEmpty ? 'Unknown' : version;
 
     // Blank lines give the user room to type ABOVE the diagnostics block.
-    // The two prose lines are localized; the diagnostics block below them is
-    // deliberately NOT — support triages on those exact labels, and a mail
-    // arriving with them in six different scripts is harder to read, not easier.
+    // The prose lines are localized; the diagnostics block deliberately is NOT.
+    // Support triages on those exact labels — six scripts would be harder to read, not easier.
     final body = StringBuffer()
       ..writeln(l10n.settingsSupportEmailPrompt)
       ..writeln()
@@ -406,11 +372,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         'User ID: ${(userId != null && userId.isNotEmpty) ? userId : 'Not signed in'}',
       );
 
-    // launchUrl THROWS (not merely returns false) when no mail client can handle
-    // the intent — the normal state of a device with no mail app. Uncaught, that
-    // swallows any feedback on tapping "Need help?".
-    // mailto: query parts need %20-encoded spaces; Uri(queryParameters:) emits
-    // '+', which mail clients render literally — hence the manual _encodeQuery.
+    // launchUrl THROWS, not merely returns false, when no mail client can take the intent.
+    // Uncaught, that swallows all feedback on tapping "Need help?".
+    // `mailto:` needs %20 spaces and `Uri(queryParameters:)` emits '+' -> the manual _encodeQuery.
     final uri = Uri(
       scheme: 'mailto',
       path: supportEmail,
@@ -436,7 +400,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ok = false;
     }
     if (!ok && mounted) {
-      // Name the address so the user can still reach us by copying it manually.
+      // Name the address, so the user can still reach us by copying it manually.
       showArulToast(
         context,
         l10n.settingsNoEmailApp(supportEmail),
@@ -445,9 +409,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  /// `mailto:` query parts need %20 for spaces — [Uri]'s default query encoding
-  /// uses '+', which mail clients show literally in the subject/body. Encode
-  /// each key/value ourselves (mirrors the Pakiza reference).
+  /// [Uri]'s default query encoding uses '+', which mail clients show literally in the subject.
+  /// `mailto:` needs %20 -> encode each key and value here instead.
   static String _encodeQuery(Map<String, String> params) => params.entries
       .map(
         (e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
@@ -455,8 +418,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       .join('&');
 }
 
-/// Silk-gradient profile card — 52px maroon avatar with a gold Marcellus initial,
-/// name 16/600 + email 13, and an edit pencil.
+/// Silk-gradient profile card — a 52px maroon avatar with a gold initial, name, email, edit pencil.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.name,
@@ -557,12 +519,11 @@ class _RowData {
   /// A Material icon — the default for the utility rows.
   final IconData? icon;
 
-  /// A custom mark, used where a Material icon would be the wrong voice.
+  /// A custom mark, for where a Material icon would be the wrong voice.
   ///
-  /// Exists for the premium row: `workspace_premium` is the same laurel badge a
-  /// hundred other apps use for "pro", and every actual premium surface (the
-  /// paywall, the sheet, Manage) already carries the brand gopuram. The row is
-  /// tinted by the theme, so the glyph builder takes the resolved colour.
+  /// `workspace_premium` is the laurel badge a hundred other apps use for "pro".
+  /// Every real premium surface already carries the brand gopuram -> the row does too.
+  /// The row is tinted by the theme, so the glyph builder takes the resolved colour.
   final Widget Function(Color color)? glyph;
 
   final String title;
@@ -622,15 +583,13 @@ class _SettingsRow extends StatelessWidget {
     final subColor = isDark
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
-    // Chevron: dark rgba(250,245,236,.4) / light rgba(43,17,22,.35) have no exact
-    // token; darkMuted / lightFaint are the nearest faint neutrals.
+    // The chevron's exact alphas have no token — darkMuted and lightFaint are the nearest neutrals.
     final chevronColor = isDark ? ArulTokens.darkMuted : ArulTokens.lightFaint;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // Every settings row presses the same, whether it pushes a screen or
-      // opens a picker sheet. The sheet itself stays silent — the tap that
-      // opened it has already answered the finger.
+      // Every settings row presses the same, push or sheet.
+      // The sheet itself stays silent — the tap that opened it already answered the finger.
       onTapDown: (_) => ArulHaptics.tap(),
       onTap: data.onTap,
       child: Padding(
@@ -679,18 +638,10 @@ class _SettingsRow extends StatelessWidget {
   }
 }
 
-/// Muted-maroon logout pill (spec): dark bg maroon 35% / border maroon 60% /
-/// text #F0C9BA; light bg maroon 8% / border maroon 35% / text maroon.
-// ─── Policy footer ────────────────────────────────────────────────────────────
-
-/// The screen's closing block: the two policy links, the DMCA trust badge, and
-/// the real installed version.
+/// The screen's closing block — the two policy links, the DMCA trust badge, the installed version.
 ///
-/// It replaced a single faint 'Privacy Policy · Terms · Copyright' line that was
-/// not tappable — three promises the user could not act on. The badge is here
-/// for the same reason it is in Pakiza: this is a wallpaper app built on
-/// devotional artwork, and saying the catalogue is protected is worth the two
-/// lines it costs.
+/// A faint untappable 'Privacy Policy · Terms · Copyright' line was three promises nobody could act on.
+/// This is a wallpaper app built on devotional artwork -> saying the catalogue is protected earns its space.
 class _PolicyFooter extends ConsumerWidget {
   const _PolicyFooter();
 
@@ -698,8 +649,7 @@ class _PolicyFooter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // The real installed version; blank until the platform read lands, and the
-    // row simply stays out until it does rather than flashing a placeholder.
+    // The real installed version — blank until the platform read lands, and the row stays out.
     final info = ref.watch(packageInfoProvider).asData?.value;
 
     return Column(
@@ -758,10 +708,8 @@ class _FooterLink extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),
-        // In-app, never the browser: the policy opens as a pushed screen with
-        // its own back arrow (reviewer, 2026-08-12). Nothing to guard against
-        // here any more — it is a route, not an intent that can find no
-        // handler.
+        // In-app, NEVER the browser — the policy is a pushed screen with its own back arrow.
+        // A route, not an intent that can find no handler, so there is nothing to guard.
         onTap: () => context.push(doc.route),
         child: Text(
           label,
@@ -775,8 +723,7 @@ class _FooterLink extends StatelessWidget {
   }
 }
 
-/// "DMCA PROTECTED" — a hairline pill in the same language as every other
-/// surface chip in the app: card fill, card border, accent glyph.
+/// "DMCA PROTECTED" — a hairline pill in every other surface chip's language: fill, border, glyph.
 class _DmcaBadge extends StatelessWidget {
   const _DmcaBadge();
 
@@ -833,6 +780,8 @@ class _DmcaBadge extends StatelessWidget {
   }
 }
 
+/// Muted-maroon logout pill — dark: maroon-35% ground, maroon-60% border, `#F0C9BA` text.
+/// Light: maroon-8% ground, maroon-35% border, maroon text.
 class _LogoutButton extends StatefulWidget {
   const _LogoutButton({required this.onTap});
 
@@ -850,21 +799,18 @@ class _LogoutButtonState extends State<_LogoutButton> {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Derived from ArulTokens.maroon (base brand token) where no pre-exposed
-    // token exists for these exact alphas; light bg is maroonTintFill08 exactly.
+    // Derived from ArulTokens.maroon where no token exposes these alphas; light is maroonTintFill08.
     final Color bg = isDark
         ? ArulTokens.maroon.withValues(alpha: _pressed ? 0.5 : 0.35)
         : ArulTokens.maroonTintFill08;
     final Color border = isDark
         ? ArulTokens.maroon.withValues(alpha: 0.6)
         : ArulTokens.maroon.withValues(alpha: 0.35);
-    // #F0C9BA has no token and isn't cleanly token-derivable — nearest is a light
-    // rose lerp of ivory→maroon. See handoff report (deviation).
+    // `#F0C9BA` has no token and is not cleanly derivable — nearest is a light ivory→maroon lerp.
     final Color text = isDark ? _logoutTextDark : ArulTokens.maroon;
 
     return GestureDetector(
-      // Signing out is deliberate but not destructive — a firm press, one step
-      // below the delete-account beat.
+      // Signing out is deliberate but not destructive — a firm press, one step below delete.
       onTapDown: (_) {
         ArulHaptics.firm();
         setState(() => _pressed = true);
@@ -895,8 +841,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
     );
   }
 
-  // Approximation of #F0C9BA built from brand tokens (ivory lightened toward
-  // maroon), since the value has no dedicated token.
+  // Approximation of `#F0C9BA` from brand tokens — ivory lightened toward maroon; no token exists.
   static final Color _logoutTextDark = Color.lerp(
     ArulTokens.ivory,
     ArulTokens.maroon,

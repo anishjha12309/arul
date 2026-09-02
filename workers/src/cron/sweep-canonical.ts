@@ -1,71 +1,48 @@
 /**
  * Canonical-media sweep cron — reclaim orphaned catalog objects from R2.
  *
- * Canonical media lives at wallpapers/<category>/…, ringtones/<category>/…
- * and ringtones/covers/<category>/…
- * Two flows can strand an object there with no DB row referencing it:
- *   - a CMS upload (presigned PUT lands the bytes BEFORE the row insert) whose
- *     form was abandoned, so the row never got created, or
- *   - a delete/replace whose old-object cleanup was skipped (rebuild failed) or
- *     lost (fire-and-forget waitUntil) — the row is gone but the bytes remain.
- * Neither is ever retried inline, so without this sweep those objects (a live
- * wallpaper can be tens of MB) accumulate forever.
- *
- * Rule: an object under wallpapers/ or ringtones/ is kept ONLY while some row
- * (published or not) references it as full_key / audio_key / cover_key. Everything else is
- * deleted — but only after a grace window, so a CMS upload whose row hasn't been
- * saved yet is never swept mid-edit. catalog/ and user/ prefixes are never touched.
+ * A CMS presigned PUT lands the bytes BEFORE the row insert -> an abandoned form strands them with no row
+ * A delete/replace whose old-object cleanup failed or was lost leaves the bytes with the row gone
+ * Neither is retried inline -> without this sweep a tens-of-MB live wallpaper accumulates forever
+ * An object is kept ONLY while a row references it as full_key / audio_key / cover_key -> draft rows count too
+ * Deletion waits out a grace window -> a CMS upload whose row is not saved yet is never swept mid-edit
+ * catalog/ and user/ are never touched -> only CANONICAL_PREFIXES are this cron's business
  */
 
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 
-/** Objects younger than this are never swept (protects in-progress CMS creates). */
+/** An object younger than this is never swept -> an in-progress CMS create has no row yet -> the grace protects it. */
 export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /**
  * The only prefixes this sweep manages.
  *
- * `thumbs/` is included even though NO DB column stores a thumb key: a live
- * wallpaper's poster key is DERIVED from its full_key (see thumbKeyFor). It
- * lives at top level rather than under wallpapers/ precisely so this sweep
- * couldn't see it as an orphan — but the consequence was that nothing reclaimed
- * it either. Thumb cleanup was CMS-inline fire-and-forget only, so every lost
- * delete leaked forever. Deriving the expected set closes that.
+ * No DB column stores a thumb key -> a poster key is DERIVED from full_key (thumbKeyFor) -> and the bucket is ours alone
+ * `thumbs/` sits at top level so this sweep could not mistake a poster for an orphan -> but nothing reclaimed it either
+ * Thumb cleanup was CMS-inline fire-and-forget only -> every lost delete leaked forever -> derive the set instead
  */
 export const CANONICAL_PREFIXES = ["wallpapers/", "ringtones/", "thumbs/"] as const;
 
 /**
- * Blast-radius cap. A sweep that wants to delete MORE than this fraction of a
- * prefix's objects is treated as evidence the reference set is wrong (a failed
- * migration, a partial query result, a renamed column) rather than as a real
- * cleanup, and the whole prefix is skipped.
+ * Blast-radius cap — wanting to delete more than this fraction of a prefix means the REFERENCE SET is wrong.
  *
- * WHY a fraction and not just "is the set empty": the old guard only aborted
- * when EVERY table came back empty, because it merged wallpaper + ringtone keys
- * into one set. If only `wallpapers` returned zero rows, the ringtone keys kept
- * the set non-empty, the guard passed, and every wallpaper object — the entire
- * media library, with no R2 versioning to undo it — was deleted. Reference sets
- * are now per-prefix (below) AND capped here.
+ * A failed migration, a partial query result or a renamed column all look like a huge legitimate cleanup
+ * So the whole prefix is skipped instead -> a wrong set must cost a missed sweep, never the library
+ * "Is the set empty" alone was not enough: a merged wallpaper+ringtone set stayed non-empty when one table returned zero
+ * The guard then passed and every wallpaper object was deleted -> R2 has no versioning to undo that
  */
 export const MAX_DELETE_FRACTION = 0.34;
 
-/**
- * Deletions at or below this count always proceed regardless of the fraction —
- * without it, a nearly-empty prefix (3 objects, 2 orphaned = 67%) could never
- * be swept at all.
- */
+/** At or below this count the fraction is ignored -> a nearly-empty prefix (2 orphans of 3 = 67%) could never sweep. */
 export const DELETE_FRACTION_FLOOR = 25;
 
 /**
- * Arul: "wallpapers/<category>/<stem>.<ext>" → "thumbs/<category>/<stem>.jpg".
+ * "wallpapers/<category>/<stem>.<ext>" -> "thumbs/<category>/<stem>.jpg".
  *
- * Deliberately maps STATIC keys too, not just mp4s. Only live videos actually
- * get a poster captured (the CMS presigns a thumb only for video/mp4), so the
- * extra entries name objects that don't exist — which is harmless. Being
- * over-inclusive here is the safe direction for a DELETE decision: it can only
- * ever protect more, never less. Must stay in sync with arulThumbKey() in the
- * CMS registry (c:\Anish\Unified CMS\src\registry.ts).
+ * Maps STATIC keys too, deliberately -> only live videos get a poster -> the extra names point at nothing, harmlessly
+ * Over-inclusive is the SAFE direction for a delete decision -> it can only ever protect more, never less
+ * Must stay in sync with arulThumbKey() in the CMS registry (c:\Anish\Unified CMS\src\registry.ts)
  */
 export function thumbKeyFor(fullKey: string): string | null {
   const m = /^wallpapers\/([^/]+)\/([^/]+)$/.exec(fullKey);
@@ -84,17 +61,13 @@ export interface CanonicalSweepResult {
   deleted: number;
   kept: number;
   errors: number;
-  /** True when ANY prefix refused to sweep (empty reference set or blast-radius cap). */
+  /** True when ANY prefix refused to sweep — an empty reference set or the blast-radius cap. */
   aborted: boolean;
-  /** Per-prefix reason for a refusal, for the cron log / operator triage. */
+  /** Per-prefix refusal reason -> it reaches the cron log -> that log is the operator's only triage surface. */
   abortedPrefixes: Record<string, string>;
 }
 
-/**
- * Blast-radius decision, kept pure so it is unit-testable without R2/Neon.
- * Returns null when the deletion set is safe to execute, or a human-readable
- * reason when it must be refused.
- */
+/** Null = safe to execute; a string = the human-readable refusal. Kept pure so it tests without R2 or Neon. */
 export function blastRadiusRefusal(
   deleteCount: number,
   scannedCount: number,
@@ -111,21 +84,16 @@ export function blastRadiusRefusal(
   );
 }
 
-/**
- * Pure decision: given the canonical objects seen, the set of keys referenced by
- * DB rows, and `now`, return the keys to delete. Kept I/O-free so it can be
- * unit-tested without R2/Neon.
- */
+/** The delete decision, kept I/O-free -> it is unit-testable without R2 or Neon -> keep every fetch out of it. */
 export function selectCanonicalKeysToDelete(
   candidates: CanonicalCandidate[],
   referencedKeys: ReadonlySet<string>,
   nowMs: number,
   graceMs: number = CANONICAL_GRACE_MS,
   /**
-   * The prefix currently being swept. When given, ONLY keys under it are
-   * considered — `referencedKeys` is now a per-prefix set, so judging a key
-   * from a different prefix against it would delete an object whose own
-   * table was never consulted. Omitted = legacy "any canonical prefix" check.
+   * The prefix being swept. Given -> ONLY keys under it are judged, because `referencedKeys` is a PER-PREFIX set.
+   * Judging another prefix's key against it would delete an object whose own table was never consulted
+   * Omitted -> the legacy "any canonical prefix" check
    */
   activePrefix?: string,
 ): string[] {
@@ -155,32 +123,27 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
   };
 
   try {
-    // EVERY row keeps its object — drafts included; publish state is irrelevant
-    // here (an unpublished row's media must survive to be re-published).
+    // EVERY row keeps its object, drafts included -> an unpublished row's media must survive to be published later
     const wpRows = (await sql`SELECT full_key FROM wallpapers`) as unknown as {
       full_key: string;
     }[];
-    // Ringtones reference TWO objects per row: the audio file and the (nullable)
-    // cover image. Both must survive the sweep while the row exists — a swept
-    // cover would leave every published ringtone with a broken artwork tile.
+    // A ringtone row references TWO objects: its audio file and a nullable cover -> both must survive the row
+    // A swept cover would leave a published ringtone with a broken artwork tile -> select both columns
     const rtRows = (await sql`SELECT audio_key, cover_key FROM ringtones`) as unknown as {
       audio_key: string;
       cover_key: string | null;
     }[];
-    // Reference sets are kept PER PREFIX, never merged: `wallpapers/` objects
-    // may only be justified by wallpaper rows and `ringtones/` objects only by
-    // ringtone rows. Merging them is what let one table's rows vouch for the
-    // other table's objects (see MAX_DELETE_FRACTION).
+    // Reference sets stay PER PREFIX, never merged -> a `wallpapers/` object may only be justified by a wallpaper row
+    // Merging them is exactly what let one table's rows vouch for the other table's objects (see MAX_DELETE_FRACTION)
     const wallpaperKeys = wpRows.map((r) => r.full_key).filter(Boolean);
     const referencedByPrefix: Record<string, Set<string>> = {
       "wallpapers/": new Set(wallpaperKeys),
-      // Ringtone covers live at ringtones/covers/<category>/… so they belong to
-      // this prefix's set alongside the audio files.
+      // Ringtone covers live at ringtones/covers/<category>/… -> same prefix as the audio -> same reference set
       "ringtones/": new Set([
         ...rtRows.map((r) => r.audio_key).filter(Boolean),
         ...rtRows.map((r) => r.cover_key).filter((k): k is string => !!k),
       ]),
-      // Derived, not stored — one expected poster per wallpaper.
+      // Derived, never stored -> one expected poster per wallpaper -> this set IS the only thing protecting them
       "thumbs/": new Set(
         wallpaperKeys
           .map((k) => thumbKeyFor(k))
@@ -192,9 +155,8 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
     for (const prefix of CANONICAL_PREFIXES) {
       const referenced = referencedByPrefix[prefix] ?? new Set<string>();
 
-      // Failsafe 1: an empty reference set marks EVERY object under this prefix
-      // for deletion. A shipped catalog never legitimately has zero rows, so
-      // treat it as a DB/config fault and refuse.
+      // Failsafe 1: an empty reference set marks EVERY object under this prefix for deletion
+      // A shipped catalog never legitimately has zero rows -> read it as a DB/config fault -> refuse the prefix
       if (referenced.size === 0) {
         const reason = "0 referenced keys for this prefix in DB";
         console.error(`[sweep-canonical] ABORT ${prefix} — ${reason} (failsafe)`);
@@ -203,9 +165,8 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
         continue;
       }
 
-      // Collect the whole prefix BEFORE deleting anything: the blast-radius cap
-      // is a property of the prefix as a whole, and the old page-at-a-time loop
-      // had already deleted earlier pages by the time a problem was visible.
+      // Collect the WHOLE prefix before deleting anything -> the blast-radius cap is a property of the prefix
+      // A page-at-a-time loop had already deleted earlier pages by the time the problem became visible
       const candidates: CanonicalCandidate[] = [];
       let cursor: string | undefined;
       do {

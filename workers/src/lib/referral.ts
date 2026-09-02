@@ -1,15 +1,7 @@
 /**
- * Referral code generation + reward logic.
+ * Referral code generation + reward logic. Plain parameterized SQL — the Worker holds full DB creds.
  *
- * generateReferralCode — random 8-char code for new users.
- * captureReferral      — on new-user signup, links the referrer + opens a
- *                        'pending' referrals row (best-effort; never blocks login).
- * grantReferralReward  — on a referred user's first paid debit, flips their
- *                        referral to 'rewarded' and credits the referrer with
- *                        REWARD_DAYS of free premium (idempotent, once per pair).
- *
- * Replaces the Supabase RPC resolve_referral_code — now plain parameterized SQL
- * in the Worker (no SECURITY DEFINER needed; Worker holds full DB creds).
+ * The reward is credited once per PAIR, on the referred friend's first PAID debit -> never on signup
  */
 
 import type postgres from "postgres";
@@ -19,7 +11,6 @@ const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O, 0, I, 1 (ambiguous
 /** Free-premium days granted to the referrer per subscribing friend. */
 export const REWARD_DAYS = 30;
 
-/** Generate a random 8-character referral code. */
 export function generateReferralCode(): string {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
@@ -28,7 +19,7 @@ export function generateReferralCode(): string {
     .join("");
 }
 
-/** Normalize a user-supplied referral code (share links may vary in case/space). */
+/** A code arrives typed or pasted from a share link -> case and spacing vary -> normalize before every lookup. */
 export function normalizeReferralCode(raw: string): string {
   return raw.trim().toUpperCase();
 }
@@ -36,14 +27,8 @@ export function normalizeReferralCode(raw: string): string {
 /**
  * Link a brand-new user to their referrer and open a pending referrals row.
  *
- * Called from /auth/login ONLY for a just-created user, so self-referral is
- * impossible (the new id can't own the code). Best-effort: any failure (unknown
- * code, race, constraint) is swallowed by the caller — a bad code must never
- * break sign-in. Returns the referrer's id when linked, else null.
- *
- * @param sql           postgres.js Sql instance
- * @param newUserId     the just-inserted user's id
- * @param rawCode       the referral code the friend arrived with
+ * Called ONLY for a just-created user -> the new id cannot own any code yet -> self-referral is impossible
+ * Best-effort: the caller swallows every failure -> an unknown code, a race or a constraint must not break sign-in
  */
 export async function captureReferral(
   sql: postgres.Sql,
@@ -74,21 +59,12 @@ export async function captureReferral(
 }
 
 /**
- * Grant the referral reward for a referred user who just made their first paid
- * debit. Idempotent and safe to call from multiple code paths (payment webhook
- * AND the autopay execute cron both transition a user to 'active'):
+ * Grant the referral reward for a user whose first paid debit just succeeded.
  *
- *   1. Flip the user's referral row 'pending'/'subscribed' → 'rewarded'
- *      (reward_days = REWARD_DAYS), guarded by `status <> 'rewarded'` so a
- *      renewal or a retried webhook never double-credits.
- *   2. ONLY if that UPDATE actually changed a row, extend the referrer's
- *      reward_premium_until by REWARD_DAYS (stacking from the later of now / the
- *      existing credit).
- *
- * No-op when the user was not referred, or the reward was already granted.
- *
- * @param sql             postgres.js Sql instance
- * @param referredUserId  the user whose first debit just succeeded
+ * Both the payment webhook and the autopay execute cron flip a user to 'active' -> this runs twice -> idempotent
+ * The `status <> 'rewarded'` guard is what makes it so -> a renewal or a retried webhook never double-credits
+ * The credit is applied ONLY when that UPDATE changed a row -> RETURNING is the idempotency test, not a convenience
+ * Credit stacks from the LATER of now and the existing expiry -> a second reward extends, it does not restart
  */
 export async function grantReferralReward(
   sql: postgres.Sql,

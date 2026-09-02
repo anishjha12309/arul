@@ -1,7 +1,6 @@
 /**
- * Unit tests for the internal build-catalog auth gate. Only the bearer-secret
- * authorization is exercised here; the success path runs buildCatalog (live DB +
- * R2) and is covered structurally by catalog.test.ts.
+ * The internal build-catalog auth gate — the bearer-secret check ONLY.
+ * The success path runs buildCatalog against a live DB and R2 -> it cannot run here -> catalog.test.ts covers its shape
  */
 
 import { describe, it, expect } from "vitest";

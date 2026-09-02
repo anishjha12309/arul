@@ -1,21 +1,15 @@
-// The deterministic ARB linter, run two ways.
-//
-//   1. On the REAL catalog — it must report zero ERRORs, forever.
-//   2. On a planted defect per rule — each rule must fire.
-//
-// (2) is the load-bearing half. The linter reported zero on the real catalog
-// the first time it ran, and a linter nobody has seen fail is indistinguishable
-// from a linter whose regex stopped matching. So every rule in `kRules` gets a
-// catalog built to break exactly it, and a rule with no such case fails the
-// suite rather than sitting in the list looking implemented.
+// The ARB linter runs two ways -> on the REAL catalog it must report zero ERRORs, forever.
+// And on a planted defect per rule, where each rule must fire -> that half is the load-bearing one.
+// A linter nobody has seen fail is indistinguishable from one whose regex stopped matching.
+// So every rule in `kRules` gets a catalog built to break exactly it.
+// A rule with no such case FAILS the suite -> it never sits in the list merely looking implemented.
 
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tools/l10n/lint_arb.dart';
 
-/// A miniature catalog in the same shape as the real one. `appName` and
-/// `premiumTitle` are the brand anchors the linter reads its canonical
-/// transliterations from, so they are always present.
+/// A miniature catalog in the same shape as the real one.
+/// `appName` and `premiumTitle` are the brand anchors the linter reads canonical transliterations from -> always present.
 ({Map<String, String> template, Map<String, Map<String, String>> byLocale})
 _catalog({
   Map<String, String> en = const {},
@@ -41,10 +35,9 @@ List<Issue> _lint({
   return lintCatalog(kArulLintConfig, c.template, c.byLocale);
 }
 
-/// The rules a defect case is deliberately allowed to trip in passing. Planting
-/// one defect often trips a second rule honestly — a Tamil string replaced by
-/// Devanagari has no Tamil in it either — and asserting "only this rule fired"
-/// would force contrived cases that test less.
+/// The rules a defect case is deliberately allowed to trip in passing.
+/// Planting one defect often trips a second rule honestly -> Devanagari in a Tamil string has no Tamil in it either.
+/// Asserting "only this rule fired" would force contrived cases that test less.
 Matcher _fires(String rule) => contains(rule);
 
 void main() {
@@ -69,8 +62,7 @@ void main() {
     });
 
     test('every locale is linted, not silently skipped', () {
-      // A config that named a locale with no ARB file would throw in readArb;
-      // one that named none would pass vacuously. Pin the count.
+      // A config naming a locale with no ARB file throws in readArb; one naming none passes vacuously -> pin the count.
       expect(kArulLintConfig.locales, hasLength(5));
       expect(
         kArulLintConfig.script.keys.toSet(),
@@ -167,8 +159,7 @@ void main() {
     });
 
     test('brand-inconsistent — a second spelling of our own product name', () {
-      // ta/premiumTitle is பிரீமியம், so a key using a different rendering is a
-      // split brand inside one language.
+      // A key rendering the brand differently from ta/premiumTitle is a split brand inside one language.
       expect(
         rules(_lint(en: {'k': 'Get Premium'}, ta: {'k': 'உயர்நிலை பெறு'})),
         _fires('brand-inconsistent'),
@@ -190,8 +181,7 @@ void main() {
     });
 
     test('whitespace-edge — a LOST gap before an inline link is an ERROR', () {
-      // `uploadRightsPrefix` ends with the space the link sits after. Dropping
-      // it runs the sentence into the link text with no space at all.
+      // `uploadRightsPrefix` ends with the space the link sits after -> dropping it runs the sentence into the link text.
       final issues = _lint(
         en: {'k': 'Uploading this violates our '},
         ta: {'k': 'இதைப் பதிவேற்றுவது எங்கள்'},
@@ -212,8 +202,7 @@ void main() {
     });
 
     test('whitespace-edge — a pure-punctuation fragment is not compared', () {
-      // English `uploadRightsSuffix` is ".", which has no word boundary; the
-      // Tamil continuation legitimately opens with a space.
+      // English `uploadRightsSuffix` is "." and has no word boundary -> the Tamil continuation legitimately opens with a space.
       final issues = _lint(en: {'k': '.'}, ta: {'k': ' ஐ மீறுகிறது.'});
       expect(issues.map((i) => i.rule), isNot(contains('whitespace-edge')));
     });
@@ -310,8 +299,8 @@ void main() {
     });
 
     test('partial-demotion — English in one locale, translated in another', () {
-      // Present in ta, absent from the other four: half the users see Tamil and
-      // half see the English back-fill. Demotion is all-or-nothing.
+      // Present in ta and absent from the other four -> half the users see Tamil and half the English back-fill.
+      // Demotion is all-or-nothing.
       expect(
         rules(_lint(en: {'k': 'Reminders'}, ta: {'k': 'நினைவூட்டல்கள்'})),
         _fires('partial-demotion'),
@@ -319,14 +308,11 @@ void main() {
     });
 
     // ── Negative cases ────────────────────────────────────────────────────
-    // A rule that fires on correct input is worse than one that never fires:
-    // it produces a wall nobody reads. Both of these were real false-positive
-    // classes in Pakiza's catalog — 222 ERRORs between them — before the rules
-    // learned the difference.
+    // A rule that fires on correct input is worse than one that never fires -> it produces a wall nobody reads.
+    // Both of these were real false-positive classes in Pakiza's catalog before the rules learned the difference.
 
     test('the Indic danda is punctuation, not Devanagari', () {
-      // A correctly punctuated Punjabi/Bengali/Hindi sentence ends in ।
-      // (U+0964), which Unicode files in the Devanagari block.
+      // A correctly punctuated Punjabi, Bengali or Hindi sentence ends in U+0964, which Unicode files as Devanagari.
       final issues = _lint(
         en: {'k': 'Something went wrong. Please try again.'},
         ta: {'k': 'ஏதோ தவறு நடந்தது। மீண்டும் முயற்சிக்கவும்।'},
@@ -339,13 +325,13 @@ void main() {
       const ta = {'langNameHi': 'हिंदी'};
       final c = _catalog(en: en, ta: ta);
 
-      // Without the exemption the endonym reads as Devanagari in a Tamil file.
+      // Without the exemption the endonym reads as Devanagari inside a Tamil file.
       expect(
         lintCatalog(kArulLintConfig, c.template, c.byLocale).map((i) => i.rule),
         contains('wrong-script'),
       );
 
-      // With it, silence — and nothing else is suppressed along the way.
+      // With it, silence -> and nothing else is suppressed along the way.
       const exempting = LintConfig(
         locales: ['ta', 'te', 'kn', 'ml', 'hi'],
         script: {

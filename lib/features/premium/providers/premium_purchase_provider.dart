@@ -16,8 +16,6 @@ import 'trial_conversion_catch_up.dart';
 
 part 'premium_purchase_provider.g.dart';
 
-// ─── Purchase state ──────────────────────────────────────────────────────────
-
 sealed class PurchaseState {
   const PurchaseState();
 }
@@ -43,12 +41,9 @@ final class PurchaseError extends PurchaseState {
   const PurchaseError(this.message, {this.cancelled = false});
   final String message;
 
-  /// True when the user backed out of the PhonePe flow themselves — the UI
-  /// shows a neutral "cancelled" toast instead of a red failure.
+  /// True when the user backed out of PhonePe themselves -> a neutral toast, never a red failure.
   final bool cancelled;
 }
-
-// ─── Notifier ─────────────────────────────────────────────────────────────────
 
 /// Manages the PhonePe Standard Checkout trial-start flow.
 ///
@@ -62,17 +57,11 @@ final class PurchaseError extends PurchaseState {
 class PremiumPurchase extends _$PremiumPurchase {
   @override
   PurchaseState build() {
-    // Captured while the ref is alive, on purpose. This notifier is
-    // autoDispose and lives exactly as long as the paywall watches it, but a
-    // checkout keeps running after the paywall is popped: the user backs out
-    // of "Processing…" (or the UPI app returns them elsewhere) while the
-    // status poll is still awaiting the server. Every `ref.read` in that
-    // continuation used to throw "Cannot use the Ref … after it has been
-    // disposed" — 671 users in 30 days (Crashlytics, 2026-08-26) — and the
-    // throw landed BEFORE `trial_started` was tracked, so a mandate that
-    // settled after the user left the paywall reached Neon and no sink. With
-    // the dependencies held here the poll finishes its job on a dead ref;
-    // only the UI writes are skipped ([_setState], [_refreshEntitlement]).
+    // Captured while the ref is ALIVE, on purpose.
+    // This notifier is autoDispose, but a checkout keeps running after the paywall is popped.
+    // Every `ref.read` in that continuation threw "Cannot use the Ref after it has been disposed".
+    // The throw landed BEFORE `trial_started` was tracked -> a late mandate reached Neon and no sink.
+    // Holding the dependencies here -> the poll finishes on a dead ref, only UI writes are skipped.
     _api = ref.read(apiClientProvider);
     _analytics = ref.read(analyticsServiceProvider);
     _catchUp = ref.read(trialConversionCatchUpProvider);
@@ -83,41 +72,30 @@ class PremiumPurchase extends _$PremiumPurchase {
   late AnalyticsService _analytics;
   late TrialConversionCatchUp _catchUp;
 
-  // ── Internal helpers ──────────────────────────────────────────────────────
-
-  /// Writes [next] only while the paywall still owns this notifier. After the
-  /// screen is popped the state has no reader and the setter throws, so the
-  /// write is dropped; the next paywall open reconciles from the server.
+  /// Writes [next] only while the paywall still owns this notifier.
+  /// After the pop the state has no reader and the setter throws -> the write is dropped.
+  /// The next paywall open reconciles from the server.
   void _setState(PurchaseState next) {
     if (ref.mounted) state = next;
   }
 
-  /// A checkout still awaiting its outcome AND someone there to see it. False
-  /// once disposed: in-flight work then only reports (conversion / failure
-  /// events), never repaints.
+  /// A checkout still awaiting its outcome AND someone there to see it.
+  /// False once disposed -> in-flight work then only reports events, never repaints.
   bool get _isProcessing => ref.mounted && state is PurchaseProcessing;
 
-  /// Re-reads entitlement so the UI flips — skipped when disposed (nothing is
-  /// watching; the paywall's open-time reconcile does it on return).
+  /// Re-reads entitlement so the UI flips — skipped when disposed; the open-time reconcile covers it.
   void _refreshEntitlement() {
     if (ref.mounted) ref.invalidate(entitlementDetailProvider);
   }
 
-  /// Tracks a ★ conversion event (`trial_started` / `subscription_active`) with
-  /// the monthly price + order id. Fans out to PostHog + GA4 + Meta via the
-  /// composite [AnalyticsService]; Meta maps trial_started to StartTrial with
-  /// the INR value. Best-effort — a missing price just omits the value.
+  /// Tracks a ★ conversion event with the monthly price and order id.
   ///
-  /// A `trial_started` is then MARKED as reported for this order — after the
-  /// track (so nothing can precede the event that makes the money) and before
-  /// every caller's `ref.invalidate(entitlementDetailProvider)`, so the refresh
-  /// that follows cannot fire the late copy [TrialConversionCatchUp] keeps for
-  /// trials granted with the app closed.
+  /// Fans out to PostHog, GA4 and Meta via the composite; a missing price just omits the value.
+  /// A `trial_started` is then MARKED reported — AFTER the track, so nothing precedes the event.
+  /// And BEFORE every caller's invalidate -> the refresh cannot fire [TrialConversionCatchUp]'s copy.
   void _trackConversion(String event, String merchantOrderId) {
-    // A poll that outlived the paywall can settle AFTER the user reopened it
-    // and the open-time reconcile already let the catch-up fire the late
-    // copy. The marker is the one record of "this order's trial_started went
-    // out", so consult it before adding a second.
+    // A poll that outlived the paywall can settle after the catch-up already fired the late copy.
+    // The marker is the one record that this order's `trial_started` went out -> consult it first.
     if (event == ArulEvents.trialStarted &&
         _catchUp.isReported(merchantOrderId)) {
       return;
@@ -137,20 +115,13 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// Fires `checkout_started` the moment the user commits to paying — BEFORE
-  /// /payments/initiate, so a server-side initiate failure still shows up as an
-  /// abandoned checkout rather than vanishing.
+  /// Fires `checkout_started` the moment the user commits — BEFORE /payments/initiate.
   ///
-  /// This is the funnel's missing middle. Everything between the paywall and
-  /// `trial_started` used to be dark, which is why the UPI-handoff loss had to
-  /// be reconstructed by hand from PhonePe + Neon. GA4 maps it to the standard
-  /// `begin_checkout` and Meta to InitiateCheckout, so both optimisers finally
-  /// see the top of the paid funnel and not just its (much rarer) endpoint.
-  ///
-  /// [method] records which handoff was ATTEMPTED, not which ran: the server
-  /// silently falls back to the SDK shape when an intent setup fails, so this
-  /// is the user's intent. `target_app` is the UPI package — the axis that
-  /// makes "which app expires the mandate" answerable.
+  /// So a server-side initiate failure still reads as an abandoned checkout rather than vanishing.
+  /// This is the funnel's missing middle; without it the UPI-handoff loss had to be rebuilt by hand.
+  /// GA4 maps it to `begin_checkout` and Meta to InitiateCheckout -> both optimisers see the top.
+  /// [method] records which handoff was ATTEMPTED, not which ran — the server may fall back itself.
+  /// `target_app` is the UPI package — the axis that makes "which app expires a mandate" answerable.
   void _trackCheckoutStarted(String method, String? targetApp) {
     _checkoutMethod = method;
     final price = _monthlyPriceRupees();
@@ -165,16 +136,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     );
   }
 
-  /// The ONE terminal-failure event, emitted through [_fail] so no error path
-  /// can be added without one. GA4-only by construction: `payment_failed` is
-  /// not on the PostHog allow-list (default-deny, analytics-events.md) and
-  /// `MetaAnalyticsService` drops anything that isn't a conversion — a failure
-  /// is a diagnostic, and feeding it to an ad optimiser trains the wrong thing.
+  /// The ONE terminal-failure event, emitted through [_fail] -> no error path can skip it.
   ///
-  /// [reason] is a short STABLE code, never the user-facing copy: that copy is
-  /// prose, it changes for wording reasons, and it would fragment the metric.
-  /// `cancelled` separates a deliberate back-out from a real failure — the same
-  /// split `login_cancelled` keeps against `login_failed`.
+  /// GA4-only by construction: off the PostHog allow-list, and Meta drops non-conversions.
+  /// A failure is a diagnostic -> feeding it to an ad optimiser trains the wrong thing.
+  /// [reason] is a short STABLE code, NEVER the user-facing copy — prose would fragment the metric.
+  /// `cancelled` separates a deliberate back-out from a real failure, as `login_cancelled` does.
   void _trackPaymentFailed(String reason, {required bool cancelled}) {
     _analytics.track(
       'payment_failed',
@@ -182,103 +149,85 @@ class PremiumPurchase extends _$PremiumPurchase {
         'reason': reason,
         'cancelled': cancelled,
         'plan': 'monthly',
-        // Which handoff was in flight when it died — the whole point of
-        // the event. Null only if a failure somehow precedes the tap.
+        // Which handoff was in flight when it died — the whole point of the event.
+        // Null only if a failure somehow precedes the tap.
         'method': ?_checkoutMethod,
       },
     );
   }
 
-  /// Terminal failure: set the error state AND report it, in that order, so
-  /// every one of this notifier's failure exits is counted exactly once.
+  /// Terminal failure — set the error state AND report it, in that order, counted exactly once.
   /// Always prefer this over assigning [PurchaseError] directly.
   void _fail(String reason, PurchaseError error) {
     _setState(error);
     _trackPaymentFailed(reason, cancelled: error.cancelled);
   }
 
-  /// Ends the flow WITHOUT a confirmed answer from the server — the mandate may
-  /// well be live. Identical to [_fail] plus an entitlement re-read.
+  /// Ends the flow WITHOUT a confirmed answer — the mandate may well be live.
+  /// Identical to [_fail] plus an entitlement re-read.
   ///
-  /// WHY the re-read: the grant can land while this screen is giving up (the
-  /// poll rides a dead radio behind the UPI app, or its budget runs out).
-  /// Without it the paywall keeps the pre-purchase snapshot and shows
-  /// "Start free trial" to a user who is already premium — not merely
-  /// cosmetic: on 2026-08-26 an owner test saw that screen over a live
-  /// mandate, concluded the payment had failed while autopay was armed, and
-  /// revoked the mandate from their UPI app. The refresh makes the screen
-  /// self-correct as soon as `/me` says premium, so nobody acts on a false
-  /// negative.
+  /// The grant can land while this screen is giving up — a dead radio, or a spent poll budget.
+  /// Without the re-read the paywall keeps its stale snapshot and offers a trial to a payer.
+  /// An owner test then concluded the payment had failed and revoked a LIVE mandate from their app.
+  /// The refresh makes the screen self-correct as soon as `/me` says premium.
   void _failUnconfirmed(String reason, PurchaseError error) {
     _fail(reason, error);
     _refreshEntitlement();
   }
 
-  /// The checkout handoff currently in flight (`upi_app` / `phonepe_sdk`), set
-  /// by [_trackCheckoutStarted] and read by [_trackPaymentFailed] so a failure
-  /// names the path that died. Survives for the attempt's lifetime.
+  /// The checkout handoff in flight (`upi_app`/`phonepe_sdk`), set at start and read on failure.
+  /// So a failure names the path that died. Survives for the attempt's lifetime.
   String? _checkoutMethod;
 
-  /// Monthly price in rupees from the remote app_config (`prices.monthly.amount`
-  /// is paise), or null if the config hasn't loaded — matches the fallback the
-  /// premium screen uses for display. Read synchronously from the already-cached
-  /// provider (the paywall watched it), so no await on the success path.
+  /// Monthly price in rupees from the remote app_config; null until it loads.
+  /// Read synchronously from the already-cached provider -> no await on the success path.
   double? _monthlyPriceRupees() => ref.mounted
       ? monthlyPriceRupees(ref.read(appConfigProvider).asData?.value) ??
             _priceAtStart
       : _priceAtStart;
 
-  /// Price captured at the tap, so a conversion reported after the paywall is
-  /// gone still carries the value the optimisers key on.
+  /// Price captured at the TAP -> a conversion reported after the paywall is gone still has a value.
   double? _priceAtStart;
 
   /// Deep-link return scheme registered in AndroidManifest.xml.
   /// PhonePe uses this to bring the app back to the foreground after payment.
   static const _appSchema = 'arul';
 
-  /// SDK-path confirmation poll: the SDK callback already said the sheet
-  /// closed with SUCCESS, so the webhook/reconcile is seconds away.
+  /// SDK-path confirmation poll — the callback already said SUCCESS, so the reconcile is seconds away.
   static const _sdkPollDelays = [1, 2, 3, 5, 8];
 
-  /// Intent-path confirmation poll: the user is off in their UPI app reading
-  /// the mandate sheet and entering a PIN — approval routinely takes a minute.
-  /// ~2 minutes total before giving up (the webhook still grants later; the
-  /// paywall's pending self-heal picks it up on reopen).
+  /// Intent-path confirmation poll — the user is entering a PIN; approval routinely takes a minute.
+  /// ~2 minutes before giving up; the webhook still grants later, and reopening self-heals.
   static const _intentPollDelays = [
     4, 4, 4, 5, 5, 6, 8, 8, 10, 10, 10, 10, 10, 10, 10, 10, //
   ];
 
-  /// The merchant order id of an intent-flow setup currently awaiting UPI-app
-  /// approval — the handle [cancelPending] needs. Null outside that window.
+  /// The merchant order id of an intent setup awaiting UPI approval — [cancelPending]'s handle.
+  /// Null outside that window.
   String? _intentOrderId;
 
-  /// Bumped to cancel a running [_confirmWithServer] loop: the loop captures
-  /// the value at entry and goes silent when it changes, so a user-tapped
-  /// cancel can own the next state without racing a late poll response.
+  /// Bumped to cancel a running [_confirmWithServer] loop — it captures the value and goes silent.
+  /// So a user-tapped cancel owns the next state without racing a late poll response.
   int _pollGeneration = 0;
-
-  // ── Public API ────────────────────────────────────────────────────────────
 
   /// Starts the 1-day free trial via PhonePe.
   ///
-  /// [targetApp] (Android package of a mandate-capable UPI app) selects the
-  /// direct UPI-intent flow: the chosen app opens straight onto its AutoPay
-  /// sheet, no hosted page. Null → the PhonePe SDK hosted-page flow.
+  /// [targetApp] selects the direct UPI-intent flow — that app opens onto its AutoPay sheet.
+  /// Null → the PhonePe SDK hosted-page flow.
   Future<void> startTrial({String? targetApp}) async {
     if (state is PurchaseLoading || state is PurchaseProcessing) return;
 
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
-    // The user has committed to paying — count the checkout BEFORE any network
-    // call, so an initiate failure reads as an abandoned checkout rather than
-    // as nothing having happened at all.
+    // The user has committed -> count the checkout BEFORE any network call.
+    // So an initiate failure reads as an abandoned checkout, not as nothing having happened.
     _trackCheckoutStarted(
       targetApp != null ? 'upi_app' : 'phonepe_sdk',
       targetApp,
     );
 
     try {
-      // ── Step 1: Initiate payment on the server ───────────────────────────
+      // Step 1: initiate payment on the server.
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
         'targetApp': ?targetApp,
@@ -286,10 +235,9 @@ class PremiumPurchase extends _$PremiumPurchase {
 
       final merchantOrderId = initResp['merchantOrderId'] as String? ?? '';
 
-      // ── Direct UPI-intent flow ───────────────────────────────────────────
-      // The server answered with an intentUrl (it falls back to the SDK shape
-      // by itself when the intent setup fails, so this branch not running IS
-      // the fallback — never re-initiate here, that would hit the claim window).
+      // Direct UPI-intent flow: the server answered with an intentUrl.
+      // It falls back to the SDK shape itself -> this branch not running IS the fallback.
+      // NEVER re-initiate here — that would hit the claim window.
       final intentUrl = initResp['intentUrl'] as String? ?? '';
       if (intentUrl.isNotEmpty && targetApp != null) {
         if (merchantOrderId.isEmpty) {
@@ -305,13 +253,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       final orderId = initResp['orderId'] as String? ?? '';
       final token = initResp['token'] as String? ?? '';
       final merchantId = initResp['merchantId'] as String? ?? '';
-      // "SANDBOX" or "PRODUCTION" — forwarded verbatim from the server, which
-      // reads it from the PHONEPE_ENV secret and hard-validates it there
-      // (workers/src/lib/phonepe.ts isProduction() throws on anything else).
-      // Deliberately NO client-side default: a missing value must fail closed.
-      // Defaulting to SANDBOX would point a production build at the preprod
-      // host, whose 401 is indistinguishable from a bad merchantId — see the
-      // symptom map in workers/README.md (PhonePe gotcha 9).
+      // "SANDBOX" or "PRODUCTION", forwarded verbatim from the server, which hard-validates it.
+      // Deliberately NO client-side default — a missing value must fail CLOSED.
+      // Defaulting to SANDBOX points a production build at preprod, whose 401 looks like a bad id.
       final environment = initResp['environment'] as String? ?? '';
 
       if (orderId.isEmpty ||
@@ -325,15 +269,10 @@ class PremiumPurchase extends _$PremiumPurchase {
         return;
       }
 
-      // ── Step 2: Initialise the PhonePe SDK ───────────────────────────────
-      // Signature (from developer.phonepe.com/payment-gateway/mobile-app-integration/
-      //            standard-checkout-mobile/flutter/sdk-setup):
-      //   PhonePePaymentSdk.init(String environment, String merchantId,
-      //                          String flowId, bool enableLogging)
-      //
-      // flowId must be alphanumeric with no special characters.
-      // We use the merchantOrderId (server-generated UUID-like value) stripped
-      // of hyphens as a per-attempt flow identifier.
+      // Step 2: initialise the PhonePe SDK.
+      //   PhonePePaymentSdk.init(String environment, String merchantId, String flowId, bool logging)
+      // flowId must be ALPHANUMERIC with no special characters.
+      // So the merchantOrderId, hyphens stripped, is the per-attempt flow identifier.
       final flowId = merchantOrderId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
       final sdkInited = await PhonePePaymentSdk.init(
@@ -351,27 +290,11 @@ class PremiumPurchase extends _$PremiumPurchase {
         return;
       }
 
-      // ── Step 3: Build the request payload and launch the SDK ─────────────
-      // Standard Checkout v2 request format
-      // (developer.phonepe.com/payment-gateway/mobile-app-integration/
-      //  standard-checkout-mobile/flutter/sdk-setup):
-      //
-      //   {
-      //     "orderId":    <server-returned orderId>,
-      //     "merchantId": <server-returned merchantId>,
-      //     "token":      <server-returned order token>,
-      //     "paymentMode": { "type": "PAY_PAGE" }
-      //   }
-      //
+      // Step 3: build the Standard Checkout v2 payload and launch the SDK.
+      //   { orderId, merchantId, token, paymentMode: { type: "PAY_PAGE" } }
       // The Flutter SDK expects this JSON-encoded directly as a String.
-      // No extra base64 wrapping at the Flutter layer — the server already
-      // handles base64 signing internally before returning `token`.
-      //
-      // NOTE: The official SDK page does NOT document a separate
-      // subscription-specific request format for the Flutter SDK; the v2
-      // PAY_PAGE flow drives both one-time and recurring mandate setup via
-      // the same payload. Confirm with the PhonePe integration team if a
-      // dedicated "SUBSCRIPTION" paymentMode key is required for Autopay.
+      // NO extra base64 wrapping here — the server signs before returning `token`.
+      // The SDK page documents no subscription-specific format; v2 PAY_PAGE drives both flows.
       final request = jsonEncode({
         'orderId': orderId,
         'merchantId': merchantId,
@@ -390,9 +313,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       );
 
       if (response == null) {
-        // User backed out before the sheet resolved. Release the server's
-        // setup claim so an immediate re-tap starts a fresh flow instead of
-        // bouncing off 409 setup_in_progress.
+        // User backed out before the sheet resolved -> release the server's setup claim.
+        // So an immediate re-tap starts a fresh flow instead of bouncing off 409 setup_in_progress.
         await _abandonSetup(merchantOrderId);
         _fail(
           'user_cancel',
@@ -405,14 +327,11 @@ class PremiumPurchase extends _$PremiumPurchase {
       final sdkError = response['error']?.toString() ?? '';
 
       if (sdkStatus != 'SUCCESS') {
-        // sdkError is a raw SDK payload (e.g. `key_txn_result:
-        // {"statusCode":"USER_CANCEL"}`) — never surface it to the user.
+        // sdkError is a raw SDK payload — NEVER surface it to the user.
         debugPrint('[PremiumPurchase] SDK failure: $sdkStatus $sdkError');
         // Release the server's setup claim so the next tap retries instantly.
-        // settled=true means the mandate actually COMPLETED at PhonePe even
-        // though the SDK reported a non-success (the stuck-webview class in
-        // docs/phonepe.md §Recovery) — confirm through the normal status poll
-        // and celebrate; expiring or erroring here would strand a paid mandate.
+        // settled=true means the mandate COMPLETED at PhonePe despite the SDK's non-success.
+        // So confirm through the normal poll — expiring or erroring here strands a PAID mandate.
         final settled = await _abandonSetup(merchantOrderId);
         if (settled) {
           await _confirmWithServer(merchantOrderId);
@@ -437,29 +356,22 @@ class PremiumPurchase extends _$PremiumPurchase {
         return;
       }
 
-      // ── Step 4: Confirm status with the server (short-backoff poll) ───────
+      // Step 4: confirm status with the server, on a short-backoff poll.
       await _confirmWithServer(merchantOrderId);
     } on ApiException catch (e) {
-      // The server refuses a second mandate while a live one exists, so this is
-      // NOT a failure — it means the user is already subscribed and our local
-      // entitlement snapshot was stale (a purchase whose confirmation poll timed
-      // out, a reinstall that raced /me, a "Try Again" tap after a success).
-      // Treat it as success and re-read entitlement so the UI flips to
-      // "Manage Subscription" instead of showing an error for a working account.
+      // The server refuses a second mandate while a live one exists -> NOT a failure.
+      // It means the user is already subscribed and our entitlement snapshot was stale.
+      // So treat it as success and re-read -> the UI flips to Manage, not an error on a live account.
       if (e.code == 'already_subscribed') {
-        // Invalidate the DETAIL provider — the narrowed entitlementProvider
-        // derives from it, so invalidating only the narrow one re-reads the
-        // stale cached detail and the UI never flips to "Manage Subscription".
+        // The narrowed entitlementProvider DERIVES from the detail one.
+        // Invalidating only the narrow one re-reads the stale detail -> the UI never flips.
         _refreshEntitlement();
         _setState(const PurchaseSuccess());
         return;
       }
-      // A setup of OUR OWN is still running (double-tap, or a retry after a
-      // client timeout whose first attempt is still at PhonePe). Emphatically
-      // NOT success: nothing is authorized yet, and reporting success here
-      // would flip the UI to "Manage Subscription" for a user with no
-      // subscription. Ask them to wait — the in-flight attempt is what will
-      // actually settle.
+      // A setup of OUR OWN is still running — a double-tap, or a retry over a live first attempt.
+      // Emphatically NOT success: nothing is authorized, and claiming it would flip the UI wrongly.
+      // Ask them to wait — the in-flight attempt is what will actually settle.
       if (e.code == 'setup_in_progress') {
         _fail(
           'setup_in_progress',
@@ -479,7 +391,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         ),
       );
     } catch (e) {
-      // Never show the raw exception — it can carry SDK/stack detail.
+      // Never show the raw exception — it can carry SDK or stack detail.
       debugPrint('[PremiumPurchase] unexpected error: $e');
       _fail(
         'unexpected_error',
@@ -488,10 +400,9 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// Direct UPI-intent flow: launch the chosen UPI app onto its AutoPay sheet
-  /// and wait for the server to observe the approval. There is no SDK callback
-  /// on this path — the confirmation poll (and the webhook behind it) IS the
-  /// completion signal, and [cancelPending] is the user's way out.
+  /// Direct UPI-intent flow — launch the chosen app onto its AutoPay sheet, then watch the server.
+  /// There is NO SDK callback here -> the confirmation poll, and the webhook behind it, is the signal.
+  /// [cancelPending] is the user's way out.
   Future<void> _startIntentFlow(
     String intentUrl,
     String targetApp,
@@ -499,8 +410,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   ) async {
     final launched = await UpiApps.launch(intentUrl, targetApp);
     if (!launched) {
-      // Nothing was authorized (the app never opened) — release the claim so
-      // the immediate retry (likely via another UPI app) starts clean.
+      // Nothing was authorized — the app never opened -> release the claim so a retry starts clean.
       await _abandonSetup(merchantOrderId);
       _fail(
         'upi_launch_failed',
@@ -518,10 +428,9 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// The one failure line the intent flow ever shows. Deliberately the
-  /// Shubh-style wording: the audience is not payment-literate, so the app
-  /// decides the outcome itself and states the refund hedge plainly — no
-  /// "cancelled vs failed vs interrupted" taxonomy, no button they must find.
+  /// The ONE failure line the intent flow ever shows.
+  /// The audience is not payment-literate -> the app decides, and states the refund hedge plainly.
+  /// No "cancelled vs failed vs interrupted" taxonomy, and no button they must find.
   static const _intentFailedCopy =
       'Payment failed. Any amount deducted will be '
       'refunded to your account within 4–5 days.';
@@ -529,21 +438,17 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
 
-  /// App-resumed checkpoint for the intent flow — the app decides, never the
-  /// user. A third-party UPI app (Paytm, GPay…) that the user cancels out of
-  /// tells PhonePe NOTHING — the order just stays PENDING — so the user
-  /// returning to Arul is itself the signal:
+  /// App-resumed checkpoint for the intent flow — the APP decides, never the user.
   ///
-  ///   1. Check the server immediately (an approval settles here).
-  ///   2. Still open → one short grace poll (settlement can lag approval by
-  ///      a few seconds).
-  ///   3. STILL open → declare the payment failed ourselves: release the
-  ///      claim (order-status-guarded — a payment that actually settled is
-  ///      granted, never discarded) and show the refund line.
+  /// A third-party UPI app the user cancels out of tells PhonePe NOTHING; the order stays PENDING.
+  /// So the user returning to Arul is itself the signal:
   ///
-  /// The residual race — approval landing AFTER the auto-release — is closed
-  /// server-side: the setup webhook resurrects an abandon-expired claim, so a
-  /// paid mandate always grants even if this screen already said failed.
+  ///   1. check the server immediately — an approval settles here;
+  ///   2. still open → one short grace poll, since settlement can lag approval by seconds;
+  ///   3. STILL open → declare it failed: release the claim, order-status-guarded, and show the line.
+  ///
+  /// A settled payment is granted, never discarded.
+  /// The residual race — approval landing AFTER the release — is closed by the setup webhook.
   Future<void> pollNowOnResume() async {
     final orderId = _intentOrderId;
     if (orderId == null || !_isProcessing || _resolvingIntent) {
@@ -552,19 +457,11 @@ class PremiumPurchase extends _$PremiumPurchase {
     _resolvingIntent = true;
     try {
       if (await _settleFromStatus(orderId)) return;
-      // NO artificial delay. There used to be a 2 s re-poll here (and before
-      // that a 14 s ladder); production tails on 2026-08-26 showed PhonePe
-      // still reporting the order PENDING at BOTH samples on every real
-      // back-out, so the wait never once changed the outcome — it only held a
-      // spinner in front of a user who had already decided.
-      //
-      // It is redundant by construction, not just empirically: the abandon
-      // below re-reads the LIVE order and answers settled:true instead of
-      // expiring when PhonePe says COMPLETED, so a payment that landed during
-      // the handoff is still caught — one call later, from a strictly fresher
-      // read than a second poll here would have been. Anything later than
-      // that belongs to the setup webhook, which resurrects an abandon-raced
-      // approval server-side. Resolution is now network-bound.
+      // NO artificial delay. Production tails showed PhonePe still PENDING at both samples of a
+      // 2 s re-poll on every real back-out -> the wait never changed an outcome, only held a spinner.
+      // Redundant by construction too: the abandon below re-reads the LIVE order and answers
+      // settled:true when PhonePe says COMPLETED, from a strictly fresher read than a second poll.
+      // Anything later than that belongs to the setup webhook. Resolution is now network-bound.
       if (!_isProcessing) return;
       await _autoResolveIntent(orderId);
     } finally {
@@ -572,14 +469,13 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// One status check. Returns true when it OWNED the outcome (granted or
-  /// failed); false when the order is still open and the caller decides.
+  /// One status check — true when it OWNED the outcome, false when the order is still open.
   Future<bool> _settleFromStatus(String orderId) async {
     try {
       final statusResp = await _api.post('/payments/status');
       final serverStatus = statusResp['status'] as String? ?? '';
-      // A cancel owned the outcome meanwhile. A DISPOSED notifier is not that
-      // case — nothing else can settle its order — so it still reports below.
+      // A cancel owned the outcome meanwhile.
+      // A DISPOSED notifier is not that case — nothing else can settle its order — so it reports.
       if (ref.mounted && state is! PurchaseProcessing) return true;
 
       if (serverStatus == 'trialing' || serverStatus == 'active') {
@@ -606,10 +502,8 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// Declares the intent-flow payment failed on the user's behalf: silences
-  /// the background poll, releases the claim (settled-guarded), shows the
-  /// refund line. The abandoned mandate can never debit — it was never
-  /// authorized, and the next initiate supersedes + revokes it regardless.
+  /// Declares the intent payment failed for the user — silence the poll, release the claim, show it.
+  /// The abandoned mandate can never debit: it was never authorized, and the next initiate revokes it.
   Future<void> _autoResolveIntent(String orderId) async {
     _pollGeneration++;
     final settled = await _abandonSetup(orderId);
@@ -620,25 +514,20 @@ class PremiumPurchase extends _$PremiumPurchase {
     _fail('intent_abandoned', const PurchaseError(_intentFailedCopy));
   }
 
-  /// Steps 4+5: short-backoff poll of /payments/status until the server
-  /// confirms the mandate (its reconcile grants even when the webhook is
-  /// lost), then fire the ★ conversion event and flip to [PurchaseSuccess].
-  /// Sets a terminal [PurchaseError] when the server reports a dead state or
-  /// the poll budget runs out. Goes silent (no state writes) if
-  /// [_pollGeneration] moves — a cancel owns the state from that moment.
+  /// Short-backoff poll of /payments/status until the server confirms the mandate.
   ///
-  /// trialing → StartTrial, active → Subscribe. Both carry the monthly price
-  /// (INR) + PhonePe merchant order id so Meta can optimise for ROAS and
-  /// dedupe. PostHog gets the same event via the composite.
+  /// Its reconcile grants even when the webhook is lost -> then fire ★ and flip to [PurchaseSuccess].
+  /// A dead server state, or a spent poll budget, sets a terminal [PurchaseError].
+  /// Goes SILENT if [_pollGeneration] moves — a cancel owns the state from that moment.
+  /// Both events carry the monthly price (INR) and the merchant order id, for ROAS and dedup.
   Future<void> _confirmWithServer(
     String merchantOrderId, {
     List<int> delays = _sdkPollDelays,
   }) async {
     final generation = _pollGeneration;
 
-    // Did ANY attempt actually get an answer out of the server? A poll that
-    // never reached it knows nothing about the mandate, so the give-up branch
-    // below must not claim the payment failed.
+    // Did ANY attempt get an answer out of the server?
+    // A poll that never reached it knows nothing -> the give-up branch must not claim failure.
     var reachedServer = false;
 
     for (final delay in delays) {
@@ -666,10 +555,9 @@ class PremiumPurchase extends _$PremiumPurchase {
         // If still pending, keep polling.
         if (serverStatus == 'pending') continue;
 
-        // 'expired' during a setup poll = the setup died at the UPI app. On
-        // the intent flow show the one standard failure+refund line (the app
-        // decides — see _intentFailedCopy); on the SDK flow the user already
-        // saw PhonePe's own screens, so a neutral cancelled toast fits.
+        // 'expired' during a setup poll = the setup died at the UPI app.
+        // Intent flow -> the one standard failure+refund line, because the app decides.
+        // SDK flow -> the user already saw PhonePe's own screens, so a neutral toast fits.
         if (serverStatus == 'expired') {
           _fail(
             'expired',
@@ -694,15 +582,10 @@ class PremiumPurchase extends _$PremiumPurchase {
         if (e.status == 404) continue;
         rethrow;
       } catch (e) {
-        // A transient network failure is the NORMAL case here, not an error:
-        // the app is backgrounded behind the UPI app and Android tears the
-        // radio down, so a poll routinely dies on
-        // `SocketException: Failed host lookup` mid-flow. This used to rethrow
-        // — one blip abandoned the whole remaining budget, surfaced
-        // "Something went wrong", and (via the finally in _startIntentFlow)
-        // nulled _intentOrderId so pollNowOnResume bailed too. The mandate
-        // then settled at PhonePe with nobody watching and the user got no
-        // premium. Reproduced on device 2026-08-11.
+        // A transient network failure is the NORMAL case here, not an error.
+        // Android tears the radio down behind the UPI app -> a poll routinely dies mid-flow.
+        // Rethrowing abandoned the whole remaining budget and nulled `_intentOrderId`.
+        // pollNowOnResume then bailed too, the mandate settled unwatched, and the user got nothing.
         debugPrint('[PremiumPurchase] poll attempt failed, retrying: $e');
         continue;
       }
@@ -710,16 +593,13 @@ class PremiumPurchase extends _$PremiumPurchase {
 
     if (generation != _pollGeneration) return;
 
-    // Every attempt died before reaching the server, so we know NOTHING about
-    // this mandate — the user may well have approved it. Neither the refund
-    // line nor an abandon is honest on that evidence (and the abandon call
-    // would fail on the same dead network anyway, leaving the claim to lapse
-    // on its own). Say confirmation is late: the setup webhook still grants
-    // server-side and the paywall's pending self-heal picks it up on reopen.
+    // Every attempt died before reaching the server -> we know NOTHING about this mandate.
+    // Neither the refund line nor an abandon is honest on that evidence.
+    // The abandon would fail on the same dead network anyway, leaving the claim to lapse.
+    // So say confirmation is LATE — the setup webhook still grants, and reopening self-heals.
     if (!reachedServer) {
-      // NOT a known failure: the mandate may well have been approved. Still
-      // counted, because the user's checkout ended without premium — the
-      // `reason` is what separates it from a real declination.
+      // NOT a known failure — the mandate may well have been approved.
+      // Still counted, because the checkout ended without premium; `reason` separates the two.
       _failUnconfirmed(
         'confirmation_unreachable',
         const PurchaseError(
@@ -730,11 +610,9 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
 
-    // Exhausted retries — server hasn't confirmed yet. Intent flow: the user
-    // most likely dismissed a third-party UPI app that told no one — resolve
-    // it FOR them (settled-guarded release + the refund line), same as the
-    // resume checkpoint. SDK flow: a SUCCESS callback fired, so a payment
-    // definitely happened and only confirmation is late — say so.
+    // Retries exhausted and the server has not confirmed.
+    // Intent flow -> most likely a dismissed third-party app that told no one, so resolve it FOR them.
+    // SDK flow -> a SUCCESS callback fired, so a payment happened and only confirmation is late.
     final intentOrderId = _intentOrderId;
     if (intentOrderId != null) {
       await _autoResolveIntent(intentOrderId);
@@ -751,20 +629,14 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// POST /payments/initiate, riding out 409 `setup_in_progress` silently.
   ///
-  /// That 409 means our own previous attempt's claim is still inside the
-  /// server's short backstop window — almost always a rapid re-tap right after
-  /// backing out, racing the abandon call that releases the claim. A
-  /// human-visible "please wait and try again" for a wait measured in seconds
-  /// reads as "payments broken" (the 90 s lockout taught that), so ride it out
-  /// under the spinner instead.
-  ///
-  /// The delays are PAIRED with SETUP_CLAIM_WINDOW_MS (4 s) server-side: they
-  /// SUM past it, so by the last retry any claim born before this call has
-  /// provably lapsed and the only 409 that can survive is a genuinely
-  /// concurrent attempt — which is exactly the one that must refuse (the
-  /// double-mandate guard is untouched; every retry is a normal initiate,
-  /// serialized server-side like any other). Change the window and these
-  /// delays together, keeping sum(delays) >= window.
+  /// That 409 means our own previous claim is still inside the server's short backstop window.
+  /// Almost always a rapid re-tap racing the abandon call that releases the claim.
+  /// "Please wait and try again" for a wait measured in seconds reads as "payments broken".
+  /// So ride it out under the spinner instead.
+  /// The delays are PAIRED with SETUP_CLAIM_WINDOW_MS server-side and SUM past it.
+  /// So by the last retry any older claim has provably lapsed, and only a concurrent attempt 409s.
+  /// That one must refuse — the double-mandate guard is untouched.
+  /// Change the window and these delays together, keeping sum(delays) >= window.
   static const _initiateRetryDelays = [
     Duration(seconds: 2),
     Duration(seconds: 2),
@@ -782,12 +654,10 @@ class PremiumPurchase extends _$PremiumPurchase {
     return _api.post('/payments/initiate', body: body);
   }
 
-  /// Tells the server the launched setup is dead so its claim is released and
-  /// the very next initiate starts fresh (no 409 wait-out). Returns true when
-  /// the server reports the mandate actually settled at PhonePe — the caller
-  /// must then confirm via [_confirmWithServer] instead of showing an error.
-  /// Best-effort: on any failure returns false and the claim simply lapses
-  /// server-side after its short window.
+  /// Tells the server the launched setup is dead -> the claim is released and the next initiate is clean.
+  /// True when the server reports the mandate actually SETTLED at PhonePe.
+  /// The caller must then confirm via [_confirmWithServer] instead of showing an error.
+  /// Best-effort — any failure returns false and the claim simply lapses after its short window.
   Future<bool> _abandonSetup(String merchantOrderId) async {
     try {
       final resp = await _api.post(
@@ -806,31 +676,26 @@ class PremiumPurchase extends _$PremiumPurchase {
     state = const PurchaseIdle();
   }
 
-  /// Reconciles subscription state with the server, then refreshes entitlement
-  /// so the UI reflects the true, current state.
+  /// Reconciles subscription state with the server, then refreshes entitlement.
   ///
-  /// Hitting /payments/status lets the Worker detect a mandate the user revoked
-  /// directly in their PhonePe/UPI app — those bank-initiated revokes usually
-  /// fire no merchant webhook, so our row can otherwise stay stale as
-  /// `active`/`trialing`. Safe to call on the Manage screen open and after any
-  /// cancel attempt (success OR failure), so state never drifts from the server.
+  /// A mandate revoked inside the user's UPI app fires no merchant webhook.
+  /// So our row can stay stale as `active`/`trialing` -> hitting /payments/status is what detects it.
+  /// Safe on the Manage screen open and after any cancel attempt, success or failure.
   Future<void> refreshStatus() async {
     try {
       await _api.post('/payments/status');
     } catch (_) {
-      // Non-fatal: fall back to whatever /me/subscription returns on invalidate.
+      // Non-fatal — fall back to whatever the invalidate re-reads.
     }
     _refreshEntitlement();
   }
 
   /// Cancels the active subscription (revokes the PhonePe mandate).
   ///
-  /// Calls POST /payments/cancel. The user keeps premium until the current
-  /// period ends — the server stops future debits but does not strip
-  /// entitlement. Returns null on success, or an error message to display.
-  ///
-  /// Kept separate from the [PurchaseState] machine: the caller (Manage
-  /// Subscription) drives its own confirm dialog + snackbar.
+  /// Calls POST /payments/cancel — the server stops future debits but does NOT strip entitlement.
+  /// The user keeps premium until the current period ends.
+  /// Returns null on success, or an error message to display.
+  /// Kept OFF the [PurchaseState] machine — the caller drives its own confirm dialog and snackbar.
   Future<String?> cancel() async {
     try {
       await _api.post('/payments/cancel');

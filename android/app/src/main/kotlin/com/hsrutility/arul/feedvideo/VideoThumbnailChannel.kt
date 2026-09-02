@@ -17,39 +17,26 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 
-/**
- * First-frame stills for live wallpapers, so the browse GRID can show a live item
- * without holding a video decoder for it.
- *
- * A grid of 9-12 tiles cannot run a player per tile: a budget MediaTek SoC has
- * only a handful of concurrent hardware AVC decoders and the rest fall back to
- * software decode, which is exactly the jank this app exists to avoid. So the
- * grid is images-only, and this is where a live item's image comes from.
- *
- * The catalog's MP4s are `+faststart`, so [MediaMetadataRetriever] fetches just
- * the header plus the bytes around the requested timestamp over HTTP — tens of
- * KB, not the whole 4 MB clip.
- *
- * Frames are cached on disk forever (content is immutable and keyed by URL), so
- * a tile costs one ranged read once per install, then nothing.
- */
+// First-frame stills for live wallpapers -> the browse GRID shows a live item without holding a decoder for it.
+// A grid of 9-12 tiles cannot run a player per tile -> a budget SoC has a handful of concurrent hardware AVC decoders.
+// The rest fall back to software decode -> exactly the jank this app exists to avoid, so the grid is images-only.
+// The catalog's MP4s are `+faststart` -> MediaMetadataRetriever fetches the header plus bytes around the timestamp.
+// That is tens of KB over HTTP, not the whole clip.
+// Frames are cached on disk forever, keyed by URL, because the content is immutable -> one ranged read per install.
 class VideoThumbnailChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
 
     companion object {
         const val CHANNEL = "com.hsrutility.arul/video_thumb"
 
-        /** Not frame 0: many clips fade in from black and frame 0 is a dead frame. */
+        /** Not frame 0 -> many clips fade in from black, so frame 0 is a dead frame. */
         private const val FRAME_US = 500_000L
 
         /** Grid tiles are ~half screen width; 720px covers that at 3x density. */
         private const val TARGET_W = 720
 
-        /**
-         * Concurrent extractions. Each is a network read plus a decode, and the
-         * grid can ask for a dozen at once while flinging. Unbounded parallelism
-         * here would stall the very scroll it is meant to feed.
-         */
+        // Each extraction is a network read plus a decode, and a fling can ask for a dozen at once.
+        // Unbounded parallelism here would stall the very scroll it is meant to feed.
         private const val MAX_CONCURRENT = 3
     }
 
@@ -71,7 +58,7 @@ class VideoThumbnailChannel(private val context: Context) :
                         withContext(Dispatchers.Main) { result.success(path) }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            // Not fatal: the caller falls back to a skeleton tile.
+                            // Not fatal -> the caller falls back to a skeleton tile.
                             result.error("THUMB_FAILED", e.message, null)
                         }
                     }
@@ -91,8 +78,7 @@ class VideoThumbnailChannel(private val context: Context) :
         try {
             retriever.setDataSource(url, emptyMap())
 
-            // getScaledFrameAtTime (API 27+) decodes straight to the target size, so
-            // a 1024x1824 frame never materializes at full size in a 2GB device's heap.
+            // getScaledFrameAtTime decodes straight to the target size -> a full-size frame never lands in a 2GB heap.
             val frame: Bitmap? =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     val h = TARGET_W * 1824 / 1024 // catalog clips are all 1024x1824
@@ -111,8 +97,7 @@ class VideoThumbnailChannel(private val context: Context) :
             val bitmap =
                 frame ?: throw IllegalStateException("no frame at ${FRAME_US}us")
 
-            // Write to a temp file and rename: a torn JPEG left by a kill mid-write
-            // would otherwise be cached forever and the tile would be permanently broken.
+            // Write to a temp file and rename -> a torn JPEG from a kill mid-write would be cached forever otherwise.
             val tmp = File(cacheDir, "${file.name}.tmp")
             tmp.outputStream().use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)

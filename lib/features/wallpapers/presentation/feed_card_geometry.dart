@@ -2,51 +2,26 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
-/// The resting size of one reel card, the peek below it, and the floor below
-/// that.
+/// The resting size of one reel card, the peek below it, and the floor below that.
 ///
-/// **Shubh's tile, on Arul's reel** (owner's call, 2026-08-25 — instructed to
-/// match the Shubh/Noor wallpaper feed tile, measured on a Nothing A001 from
-/// Shubh's own accessibility tree, `C:\prod-hsr-shubh` for the source): 16dp
-/// gutters, 24 radius, and Shubh's `viewportFraction: 0.95` pager with 8dp
-/// vertical padding, which on that phone leaves 16dp between tiles and shows
-/// ~25dp of the next one. Arul does not copy the 0.95 pager — the card is
-/// solved from the reel as before — it copies the NUMBERS that pager produces:
-/// [gutter] 16, [gap] 16, [minPeek] 25. On the A001 both apps land at
-/// 996×~1590 px (379×~605 dp); the reel test pins that frame.
+/// **Shubh's tile, on Arul's reel** (owner's call, `C:\prod-hsr-shubh` for the source).
+/// Arul does not copy Shubh's 0.95 pager — it copies the NUMBERS it produces: gutter 16, gap 16,
+/// minPeek 25, radius 24. The card is still solved from the reel.
+/// The whole reel height is spoken for — `card + gap + peek + floor` — so growth costs one of them.
+/// An ordinary phone consumes everything: floor zero, peek pinned to [minPeek] by [solve]'s clamps.
+/// So the card is HEIGHT-CLAMPED on a real phone -> read the card's own size, never [cardAspect].
+/// The catalog is 9:16, ratio 1:1.78.
+/// A REALISED aspect taller than that trims left and right — the cheap direction for devotional art.
+/// Below 1.78 the crop flips to top/bottom, and [ViewerMedia.cropAlignment]'s upward bias saves the crown.
+/// Keep that bias — it is correct in BOTH directions.
 ///
-/// The whole reel height is spoken for — `card + gap + peek + floor` — so the
-/// card can only grow if one of the other three gives way. On an ordinary phone
-/// it consumes everything: the floor is zero and the peek is squeezed to
-/// [minPeek], which is exactly what the clamps in [solve] exist to do. That
-/// also means the card is HEIGHT-CLAMPED on a real phone: [cardAspect] is the
-/// aspect it asks for, and the reel gives it less — read the card's own size,
-/// never the constant, when you need the shape actually on screen.
+/// Shapes already rejected, do not revisit:
+///  * **the DEVICE aspect** (1:2.22) — a sliver that cropped ~20% off the sides;
+///  * **Pakiza's card verbatim** (1:1.63, 18dp gutters) — too tall, too tight;
+///  * **short and wide** (1:1.40, 32dp gutters) — 21% off top and bottom, the expensive direction.
 ///
-/// ## The crop, stated plainly
-///
-/// The catalog is 9:16 (1024×1824, ratio 1:1.78). Whenever the REALISED aspect
-/// is taller than that, `BoxFit.cover` matches the height and trims the left
-/// and right margins — the cheap direction for devotional art. On a short reel
-/// the realised aspect drops below 1.78 (the A001's 605/379 = 1.60 does), the
-/// crop flips to top/bottom, and [ViewerMedia.cropAlignment]'s upward bias is
-/// what keeps the trim off the crown. Keep the bias — it is correct in both
-/// directions.
-///
-/// ## History — shapes already rejected, do not revisit
-///
-///  * **Locked to the DEVICE aspect** (1:2.22) — a sliver that cropped ~20% off
-///    the sides and crowded the Apply/Share row.
-///  * **Pakiza's card verbatim** (1:1.63, 18dp gutters) — too tall, too tight.
-///  * **Short and wide** (1:1.40, 32dp gutters) — cost 21% off the top and
-///    bottom, which is the expensive direction for devotional art.
-///  * **10dp gutters, 30dp peek** (2026-08-22 → 2026-08-25) — the previous
-///    shape; superseded by the Shubh-parity instruction above, not rejected on
-///    its own merits.
-///
-/// Extracted from `feed_screen.dart` so it can be unit-tested directly: it has
-/// been rewritten several times, and measuring a card through a full feed render
-/// is a slow and indirect way to catch a number being wrong.
+/// Extracted from `feed_screen.dart` so it can be unit-tested directly.
+/// Measuring a card through a full feed render is a slow, indirect way to catch a wrong number.
 @immutable
 class FeedCardGeometry {
   const FeedCardGeometry({
@@ -56,9 +31,8 @@ class FeedCardGeometry {
     required this.floor,
   });
 
-  /// Card margin. Horizontal only — the card is flush with the top of the
-  /// PAGER (which is itself dropped by [headroom]), and the gap below it
-  /// belongs to the page (see [pageExtent]).
+  /// Card margin, HORIZONTAL only — the card is flush with the top of the pager, dropped by [headroom].
+  /// The gap below it belongs to the page (see [pageExtent]).
   final EdgeInsets margin;
 
   final Size size;
@@ -68,49 +42,32 @@ class FeedCardGeometry {
 
   /// Frame-coloured space left over once card, gap and peek are placed.
   ///
-  /// It used to sit entirely BELOW the peek. It is now split either side of the
-  /// reel ([headroom] / [underhang]) so the card is vertically centred in the
-  /// space it has rather than hung from the top — owner's call, 2026-08-06,
-  /// alongside dropping the hairline that used to cap the reel.
-  ///
-  /// Note this is frequently ZERO: at [cardAspect] 1.86 the card consumes the
-  /// whole reel on an ordinary phone, so there is nothing to split and centring
-  /// is a no-op. It earns its keep on tall screens, where the slack is real.
+  /// SPLIT either side of the reel ([headroom]/[underhang]) -> the card is centred, not hung from top.
+  /// Frequently ZERO: at [cardAspect] 1.86 the card consumes the whole reel on an ordinary phone.
+  /// It earns its keep on tall screens, where the slack is real.
   final double floor;
 
   /// The half of [floor] that sits ABOVE the card.
   double get headroom => floor / 2;
 
-  /// The half that stays below the peek. Carries the odd pixel, so
-  /// `headroom + underhang == floor` exactly and the reel cannot drift.
+  /// The half that stays below the peek — carries the odd pixel, so the reel cannot drift.
   double get underhang => floor - headroom;
 
-  // ─── The knobs ──────────────────────────────────────────────────────────────
-
-  /// Side gutters. Tight — the artwork carries the screen, and the frame is a
-  /// hairline of breathing room rather than a mount.
+  /// Side gutters — tight; the artwork carries the screen and the frame is breathing room, not a mount.
   ///
-  /// **This is the WIDTH knob** (2026-08-11: 20 → 12; 2026-08-22: 12 → 10;
-  /// 2026-08-25: 10 → 16, Shubh parity — see the class doc). Because the card
-  /// is height-clamped by the reel, the gutter is the only thing that sets its
-  /// width, and it moves the realised aspect as it goes.
+  /// **This is the WIDTH knob.** The card is height-clamped by the reel, so the gutter sets its width.
+  /// And it moves the realised aspect as it goes.
   static const gutter = 16.0;
 
-  /// Card height ÷ width — the aspect the card ASKS for. **The one number that
-  /// controls the crop's direction** — see the class doc. 1.78 is exactly
-  /// lossless; at 1.86 the card is taller than the artwork so the trim is
-  /// horizontal.
+  /// Card height ÷ width — the aspect the card ASKS for.
   ///
-  /// On an ordinary phone [solve] cannot grant it (the reel is not that tall)
-  /// and the realised aspect lands lower — read the card's own size, never this
-  /// constant, when you need the shape actually on screen.
-  ///
-  /// Below 1.78 the crop flips to top/bottom and gets expensive fast, so treat
-  /// that as a boundary rather than a slider.
+  /// **The one number that controls the crop's direction.** 1.78 is exactly lossless.
+  /// At 1.86 the card is taller than the artwork -> the trim is horizontal.
+  /// An ordinary phone's reel cannot grant it -> read the card's own size, never this constant.
+  /// Below 1.78 the crop flips to top/bottom and gets expensive fast — a boundary, not a slider.
   static const cardAspect = 1.86;
 
-  /// Vertical gap between consecutive cards. It lives on the PAGE, so the page
-  /// extent the viewport fraction solves for is card + gap.
+  /// Vertical gap between cards. It lives on the PAGE -> the extent solved for is card + gap.
   static const gap = 16.0;
 
   /// Card corner radius.
@@ -122,33 +79,26 @@ class FeedCardGeometry {
   /// Inset of the Apply/Share row from the card's left, right and bottom edges.
   static const actionInset = 14.0;
 
-  /// How much of the next card we aim to reveal.
+  /// How much of the next card we aim to reveal — an AIM, not a promise.
   ///
-  /// An AIM, not a promise. At the current [cardAspect] the card takes more than
-  /// the whole reel, so on a normal phone this clamps all the way down to
-  /// [minPeek] and the floor is zero. The generous value still earns its keep on
-  /// an unusually tall screen, where it is reachable and keeps the reel from
-  /// ending in dead space.
+  /// At [cardAspect] the card takes more than the whole reel -> a normal phone clamps to [minPeek].
+  /// The generous value earns its keep on a tall screen, keeping the reel from ending in dead space.
   static const targetPeek = 168.0;
 
-  /// The peek will be squeezed to here before the CARD gives up any height — a
-  /// reel with no peek at all loses its only static cue that it scrolls.
+  /// The peek is squeezed to here before the CARD gives up any height.
   ///
-  /// **This is the HEIGHT knob** (2026-08-11: 44 → 40; 2026-08-22: 40 → 30;
-  /// 2026-08-25: 30 → 25, what Shubh's 0.95 pager shows of the next tile on
-  /// the A001). Every dp taken off it goes straight into the card on a normal
-  /// phone, where the peek is already pinned here. Do not take it to zero: the
-  /// sliver of the next wallpaper is the whole reason the reel reads as
-  /// scrollable at rest.
+  /// **This is the HEIGHT knob** — every dp off it goes straight into the card on a normal phone,
+  /// where the peek is already pinned here.
+  /// Never take it to zero: the sliver of the next wallpaper is why the reel reads as scrollable.
   static const minPeek = 25.0;
 
-  /// The extent of one page: the card plus the gap that follows it. With
-  /// `padEnds: false` this is what the pager's `viewportFraction` resolves to,
-  /// so snap, drag and fling geometry stay a stock PageView's.
+  /// The extent of one page — the card plus the gap that follows it.
+  /// With `padEnds: false` the pager's `viewportFraction` resolves to this.
+  /// So snap, drag and fling geometry stay a stock PageView's.
   double get pageExtent => size.height + gap;
 
-  /// The height the PAGER gets — the reel minus the floor, which is padding
-  /// outside it. `card + gap + peek` fills exactly this.
+  /// The height the PAGER gets — the reel minus the floor, which is padding outside it.
+  /// `card + gap + peek` fills exactly this.
   double pagerHeight(double reelHeight) => math.max(0.0, reelHeight - floor);
 
   /// Resolves against the live frame.
@@ -157,8 +107,7 @@ class FeedCardGeometry {
     required double reelHeight,
   }) => solve(screen: MediaQuery.sizeOf(context), reelHeight: reelHeight);
 
-  /// The pure form of [resolve] — no BuildContext, so it can be tested against a
-  /// table of real devices.
+  /// The pure form of [resolve] — no BuildContext, so it tests against a table of real devices.
   @visibleForTesting
   static FeedCardGeometry solve({
     required Size screen,
@@ -168,10 +117,9 @@ class FeedCardGeometry {
     var height = width * cardAspect;
     var peek = targetPeek;
 
-    // Everything below the card has to fit in what is left. On a tall phone
-    // there is slack and it becomes the floor; on a short one the peek gives way
-    // first, and only then the card — a card taller than its own viewport cannot
-    // snap, so it can never be allowed to overflow.
+    // Everything below the card fits in what is left — on a tall phone the slack becomes the floor.
+    // On a short one the PEEK gives way first, and only then the card.
+    // A card taller than its own viewport cannot snap -> it may never overflow.
     var floor = reelHeight - height - gap - peek;
     if (floor < 0) {
       peek = math.max(minPeek, peek + floor);

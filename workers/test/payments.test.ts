@@ -1,21 +1,12 @@
 /**
- * Route tests for the one-free-trial-per-user guard in payments.ts.
+ * Route tests for the one-free-trial-per-user guard, the claim guard, and every path that releases a claim.
  *
- * Coverage:
- *   - /payments/initiate: trial-eligible user (no row / trial_end NULL) →
- *     PENNY_DROP setup (no upfrontAmountPaise), trialEligible=true.
- *     Trial-consumed user (trial_end set) → TRANSACTION setup with ₹199
- *     upfront, trialEligible=false.
- *   - /payments/initiate claim guard: a fresh 'pending' claim blocks a second
- *     setup (409, PhonePe never called); a stale abandoned claim is retryable
- *     and the superseded mandate gets revoked.
- *   - /payments/webhook checkout.order.completed: the UPDATE branches on the
- *     row's OWN trial_end (CASE … trialing/active, COALESCE keeps the original
- *     trial_end as the consumed-marker); a repeat (paid) activation triggers
- *     the referral reward, a first trial does not.
- *
- * The DB is a queue-based tagged-template mock (one result set per query, in
- * order); PhonePe's setupSubscription is mocked, verifyCallbackAuth is real.
+ * trial_end NULL -> PENNY_DROP setup and trialEligible=true; trial_end set -> TRANSACTION with ₹199 upfront
+ * A fresh 'pending' claim must block a second setup with PhonePe NEVER called -> reaching PhonePe is already the bug
+ * A stale abandoned claim must stay retryable, and the superseded mandate must be revoked
+ * The webhook's UPDATE branches on the row's OWN trial_end, and COALESCE keeps that value as the consumed-marker
+ * The DB is a QUEUE-based mock -> one result set per query, in order -> a reordered statement changes what a test sees
+ * setupSubscription is mocked; verifyCallbackAuth runs for real
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -24,9 +15,9 @@ import type { Env } from "../src/env.js";
 import { makeEnv } from "./_ctx.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 
-// getDb(env) → injected mock sql on env._testSql. Keep the real toDate — it is
-// pure timestamptz coercion shared with the autopay cron, and stubbing it would
-// silently break every date comparison in the initiate claim guard.
+// getDb(env) is replaced -> handlers reach the injected mock sql through env._testSql
+// Keep the REAL toDate -> it is pure timestamptz coercion shared with the cron
+// Stubbing it would silently break every date comparison in the initiate claim guard
 vi.mock("../src/lib/db.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/lib/db.js")>();
   return {
@@ -35,7 +26,7 @@ vi.mock("../src/lib/db.js", async (importOriginal) => {
   };
 });
 
-// Observe paid-activation referral grants without touching a DB.
+// Observe paid-activation referral grants without touching a DB
 vi.mock("../src/lib/referral.js", () => ({
   grantReferralReward: vi.fn().mockResolvedValue(undefined),
 }));
@@ -46,9 +37,8 @@ const posthog = vi.hoisted(() => ({
 }));
 vi.mock("../src/lib/posthog.js", () => posthog);
 
-// Mock setupSubscription + revokeMandateTolerant (the latter so the superseded-
-// mandate revoke in handleInitiate never reaches PhonePe from a test); keep the
-// real ID builders + verifyCallbackAuth.
+// Mock setupSubscription and revokeMandateTolerant -> the supersede revoke must never reach PhonePe from a test
+// Keep the REAL id builders and verifyCallbackAuth -> both are contracts these tests are meant to pin
 vi.mock("../src/lib/phonepe.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/lib/phonepe.js")>();
   return {
@@ -61,8 +51,7 @@ vi.mock("../src/lib/phonepe.js", async (importOriginal) => {
       expireAt: 1234567890,
     }),
     revokeMandateTolerant: vi.fn().mockResolvedValue(true),
-    // handleAbandon asks PhonePe for the order's live state before expiring a
-    // claim; default to a not-completed order, overridden per test.
+    // handleAbandon asks PhonePe for the order's live state before expiring a claim -> default to not-completed
     getOrderStatus: vi.fn().mockResolvedValue({ state: "PENDING", orderId: "PP_ORDER_1" }),
     // Direct UPI-intent setup (subscriptions/v2/setup).
     setupSubscriptionIntent: vi.fn().mockResolvedValue({
@@ -91,10 +80,7 @@ import { grantReferralReward } from "../src/lib/referral.js";
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 
-/**
- * Tagged-template SQL mock that pops one result set per query, in order
- * (the last set repeats if more queries arrive). Captures the raw SQL text.
- */
+/** Pops one result set per query, in order; the LAST set repeats if more queries arrive. Captures the raw SQL text. */
 function makeQueueSql(results: unknown[][]) {
   const texts: string[] = [];
   let i = 0;
@@ -106,10 +92,8 @@ function makeQueueSql(results: unknown[][]) {
   });
   const sql = Object.assign(fn, {
     end: vi.fn().mockResolvedValue(undefined),
-    // handleInitiate claims the mandate slot inside a transaction so concurrent
-    // initiates serialize on the user row. The mock runs the callback against
-    // the same tagged-template fn, so every statement inside still lands in
-    // `texts` and still pops the result queue in order.
+    // handleInitiate claims the mandate slot inside a TRANSACTION -> concurrent initiates serialize on the user row
+    // The mock runs that callback against the same tagged-template fn -> statements inside still land in `texts`
     begin: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(fn)),
   });
   return { sql, texts };
@@ -133,7 +117,7 @@ function makeInitiateCtx(
   } as unknown as Context<{ Bindings: Env }>;
 }
 
-/** SHA256(username:password) hex — what PhonePe puts in Authorization. */
+/** SHA256(username:password) hex -> exactly what PhonePe puts in Authorization, with no scheme prefix. */
 async function webhookAuthHeader(username: string, password: string): Promise<string> {
   const buf = await crypto.subtle.digest(
     "SHA-256",
@@ -245,7 +229,7 @@ describe("handleInitiate — in-flight claim guard", () => {
           status: "pending",
           merchant_subscription_id: "DKS_S_INFLIGHT",
           current_period_end: null,
-          // Claimed moments ago by a request still waiting on PhonePe.
+          // Claimed moments ago by a request still waiting on PhonePe -> inside SETUP_CLAIM_WINDOW_MS
           updated_at: new Date().toISOString(),
         },
       ],
@@ -255,16 +239,15 @@ describe("handleInitiate — in-flight claim guard", () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const res = await handleInitiate(makeInitiateCtx(env, token));
 
-    // The whole point: no second mandate is ever created, so there is nothing
-    // to orphan. Reaching PhonePe at all would already be the bug.
+    // The whole point -> no second mandate is created, so there is nothing to orphan
+    // Reaching PhonePe at all would already be the bug -> assert the call count, not just the response
     expect(res.status).toBe(409);
     expect(vi.mocked(setupSubscription)).not.toHaveBeenCalled();
     expect(vi.mocked(revokeMandateTolerant)).not.toHaveBeenCalled();
 
-    // The CODE matters as much as the status: the app turns
-    // `already_subscribed` into a SUCCESS state, so answering an in-flight
-    // setup with it told a double-tapping user their purchase had gone through
-    // while no mandate existed at all.
+    // The CODE matters as much as the status -> the app turns `already_subscribed` into a SUCCESS state
+    // Answering an in-flight setup with it told a double-tapping user their purchase went through
+    // No mandate existed at all -> the two refusal reasons must stay distinguishable out to the client
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("setup_in_progress");
   });
@@ -279,8 +262,8 @@ describe("handleInitiate — in-flight claim guard", () => {
           status: "pending",
           merchant_subscription_id: "DKS_S_ABANDONED",
           current_period_end: null,
-          // Older than SETUP_CLAIM_WINDOW_MS — the user killed the app at the
-          // PhonePe sheet and came back. They must not be locked out.
+          // Older than SETUP_CLAIM_WINDOW_MS -> the user killed the app at the PhonePe sheet and came back
+          // They must not be locked out -> a claim nobody can release is worse than a second attempt
           updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
         },
       ],
@@ -350,8 +333,7 @@ describe("handleInitiate — direct UPI-intent flow", () => {
       makeInitiateCtx(env, token, { plan: "monthly", targetApp: "com.phonepe.app" }),
     );
 
-    // A second initiate would bounce off the claim window, so the fallback MUST
-    // happen inside this same request.
+    // A second initiate would bounce off the claim window -> the fallback MUST happen inside this same request
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.token).toBe("SDK_TOKEN");
@@ -437,19 +419,17 @@ describe("handleWebhook — approval racing an auto-cancelled claim", () => {
       }),
     );
 
-    // The user PAID — the grant must land even though the app already said
-    // "failed". Resurrection is scoped to the exact ids + the two post-abandon
-    // statuses: 'expired', and 'cancelled' since the restore rule (a released
-    // claim over a still-paid period goes back to 'cancelled'). The exact-id
-    // scope is what keeps a dunning-expired or genuinely-cancelled OLD
-    // subscription from riding in on it.
+    // The user PAID -> the grant must land even though the app already said "failed"
+    // Resurrection is scoped to the EXACT ids plus the two post-abandon statuses -> 'expired' and 'cancelled'
+    // 'cancelled' is in the list because of the restore rule -> a released claim over a still-paid period lands there
+    // The exact-id scope is what keeps a dunning-expired or genuinely-cancelled OLD subscription from riding in
     expect(res.status).toBe(200);
     const resurrect = texts.find((t) =>
       t.includes("AND status IN ('expired', 'cancelled')"),
     );
     expect(resurrect).toBeDefined();
     expect(resurrect).toContain("merchant_order_id");
-    // active resurrect = a real ₹199 debit → referral applies like any paid setup.
+    // An 'active' resurrect means a real ₹199 debit -> the referral reward applies exactly as on any paid setup
     expect(vi.mocked(grantReferralReward)).toHaveBeenCalled();
   });
 });
@@ -474,11 +454,9 @@ describe("handleWebhook — subscription.unpaused rearms the debit clock", () =>
     );
     expect(res.status).toBe(200);
 
-    // The cron's park nulls next_debit_at, so a status-only restore left a row
-    // the billing passes could never select again — "Active" forever, never
-    // billed, premium silently dead at period end. The rearm is the fix; the
-    // paused-only scope is what stops a stray unpaused event resurrecting a
-    // cancelled/expired row.
+    // The cron's park NULLs next_debit_at -> a status-only restore leaves a row neither pass can select again
+    // That row reads "Active" forever, is never billed, and its premium dies silently at period end
+    // The rearm is the fix -> and the paused-only scope stops a stray unpause resurrecting a cancelled row
     const unpause = texts.find((t) => t.includes("'trialing' ELSE 'active'"));
     expect(unpause).toBeDefined();
     expect(unpause).toContain("COALESCE(next_debit_at, current_period_end)");
@@ -519,9 +497,8 @@ describe("handleStatus — FAILED setup reconcile", () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const res = await handleStatus(makeAbandonCtx(env, token, "ignored"));
 
-    // The intent flow has no SDK callback: an in-app cancel at PhonePe leaves
-    // the row 'pending' forever unless this reconcile flips it — the app's
-    // poll then spun its whole budget on a row nothing would ever change.
+    // The intent flow has NO SDK callback -> an in-app cancel leaves the row 'pending' unless this reconcile flips it
+    // The app's poll then spun its whole budget on a row nothing would ever change
     expect(res.status).toBe(200);
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("expired");
@@ -569,8 +546,8 @@ describe("handleAbandon — releasing a claimed setup", () => {
     expect(body.abandoned).toBe(true);
     expect(body.settled).toBe(false);
 
-    // Scoped expire: only the caller's own still-pending row for THIS order —
-    // a late abandon must never kill a newer claim that superseded it.
+    // A SCOPED expire -> only the caller's own still-pending row for THIS order
+    // A late abandon must never kill a newer claim that superseded it
     const update = texts.find((t) => t.includes("UPDATE subscriptions"));
     expect(update).toBeDefined();
     expect(update).toContain("'expired'");
@@ -582,12 +559,10 @@ describe("handleAbandon — releasing a claimed setup", () => {
   });
 
   it("does NOT revoke when the grant landed between the read and the expire", async () => {
-    // The race that locked three live subscriptions out of premium on
-    // 2026-08-11: the row reads 'pending' and PhonePe still says PENDING, so
-    // abandon proceeds — but the grant lands before its UPDATE, which then
-    // matches zero rows. The read-time guards cannot catch this by
-    // construction; only the UPDATE's own result can. Revoking here would tear
-    // down a mandate that is now live and paid for.
+    // The race that locked three live subscriptions out of premium: the row reads 'pending' and PhonePe says PENDING
+    // Abandon proceeds, but the grant lands before its UPDATE -> that UPDATE then matches ZERO rows
+    // The read-time guards cannot catch this by construction -> only the UPDATE's own result can
+    // Revoking there would tear down a mandate that is now live and paid for
     const env = makeEnv();
     const { sql } = makeQueueSql([
       [{ status: "pending", merchant_subscription_id: "DKS_S_RACED" }],
@@ -616,8 +591,7 @@ describe("handleAbandon — releasing a claimed setup", () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const res = await handleAbandon(makeAbandonCtx(env, token, "DKS_O_PAID"));
 
-    // The one case where "the SDK said cancel" is a lie: the mandate settled.
-    // Expiring here would strand a paid mandate — the app must poll instead.
+    // The one case where "the SDK said cancel" is a LIE -> the mandate settled -> expiring strands a paid mandate
     const body = (await res.json()) as { abandoned: boolean; settled: boolean };
     expect(body.abandoned).toBe(false);
     expect(body.settled).toBe(true);
@@ -646,11 +620,9 @@ describe("handleAbandon — releasing a claimed setup", () => {
 // ── /payments/webhook — checkout.order.completed ─────────────────────────────
 
 describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under paymentFlow)", () => {
-  // PhonePe webhook-handling reference (read 2026-08-25): for every ORDER event
-  // merchantSubscriptionId + subscriptionId live under payload.paymentFlow, NOT
-  // at the top of payload. The flat fixtures elsewhere in this file are the
-  // state-change shape; reading only that shape acked every real redemption
-  // webhook with "Missing merchantSubscriptionId" (0 txn:* marks in prod).
+  // For every ORDER event, merchantSubscriptionId and subscriptionId live under payload.paymentFlow
+  // The flat fixtures elsewhere in this file are the STATE-CHANGE shape -> both must be exercised
+  // Reading only the flat shape acked every real redemption webhook as "Missing merchantSubscriptionId"
   it("grants the month from a redemption.order.completed with ids nested under paymentFlow", async () => {
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([
@@ -721,15 +693,14 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
     expect(res.status).toBe(200);
     const update = texts.find((t) => t.includes("UPDATE subscriptions"));
     expect(update).toBeDefined();
-    // PhonePe's own id must be captured from the nested home too.
+    // PhonePe's own subscription id must be captured from the NESTED home too, not only the flat one
     expect(update).toContain("phonepe_subscription_id");
   });
 
   it("acks a redemption failed event WITHOUT touching retry_count — the cron owns dunning", async () => {
-    // retry_count is the dunning ladder's index (cron/autopay-notify.ts): the
-    // cron's reconcile increments it exactly once per FAILED order and schedules
-    // the next rung. A webhook increment on the same order would advance the
-    // index without scheduling anything — a skipped rung and a shortened window.
+    // retry_count is the dunning ladder's INDEX -> the cron's reconcile increments it once per FAILED order
+    // That same reconcile schedules the next rung -> a webhook increment advances the index WITHOUT scheduling
+    // The result is a skipped rung and a shortened dunning window -> the webhook must acknowledge only
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([[]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
@@ -791,8 +762,8 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
     expect(update).toBeDefined();
     expect(update).toContain("CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END");
     expect(update).toContain("COALESCE(trial_end,");
-    // LOAD-BEARING guard — without it the webhook/status-poll race hands out a
-    // full month + referral reward off a ₹2 PENNY_DROP.
+    // A LOAD-BEARING guard -> without it the webhook/status-poll race hands out a full month off a ₹2 PENNY_DROP
+    // And a referral reward with it -> the second writer re-reads the trial_end the first just wrote
     expect(update).toContain("AND status = 'pending'");
     expect(update).toContain("RETURNING user_id, status");
   });
@@ -826,25 +797,15 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
 });
 
 // ── The RESTORE rule — every path that releases a claim ──────────────────────
-//
-// A resubscribe rides over the user's ONE subscriptions row, so at claim time a
-// still-paid row — a live trial, or days already bought — becomes 'pending'.
-// Writing a flat status='expired' when that claim is released STRIPS
-// entitlement the user still owns. It stripped three live trials in production
-// on 2026-08-11/12 (trial cancelled → Resubscribe → backed out at the UPI app),
-// each losing 10–16 h of a 24 h trial, before the CASE below landed.
-//
-// THREE surfaces release a claim and they must agree, because a user reaches
-// them by route rather than by choice: the failed-setup webhook (SDK/hosted
-// page), the /payments/status reconcile (direct UPI-intent, which has no SDK
-// callback at all), and /payments/abandon. A rule that holds on two of them is
-// the same outage for whoever hits the third.
-//
-// These assert the CONDITIONAL, not merely that 'expired' appears somewhere:
-// the pre-existing assertions matched `'expired'` as a substring, which both
-// the flat write and the CASE satisfy, so they passed throughout the incident
-// and could never have caught it. The negative assertion is the load-bearing
-// one — it is what fails if anyone reverts to an unconditional expire.
+// A resubscribe rides over the user's ONE row -> at claim time a still-paid row becomes 'pending'
+// Writing a flat status='expired' when that claim is released STRIPS entitlement the user still owns
+// It stripped three live trials in production before the CASE below landed
+// THREE surfaces release a claim and they MUST agree -> a user reaches them by route, not by choice
+// The failed-setup webhook, the /payments/status reconcile, and /payments/abandon
+// A rule that holds on two of them is the same outage for whoever hits the third
+// These assert the CONDITIONAL, not merely that 'expired' appears somewhere
+// The old assertions matched `'expired'` as a SUBSTRING, which both the flat write and the CASE satisfy
+// They passed throughout the incident -> the NEGATIVE assertion is the load-bearing one
 function expectRestoreRule(update: string | undefined, path: string): void {
   expect(update, `${path}: no release UPDATE was captured`).toBeDefined();
   const sql = (update as string).replace(/\s+/g, " ");
@@ -897,8 +858,8 @@ describe("the RESTORE rule holds on all three release paths", () => {
       state: "FAILED",
       orderId: "PP_ORDER_1",
     } as never);
-    // A resubscribe mid-trial: the claim is 'pending' but current_period_end is
-    // still ahead, which is precisely the row the incident expired.
+    // A resubscribe mid-trial -> the claim is 'pending' but current_period_end is still ahead
+    // That is precisely the row the incident expired -> it must land back on 'cancelled'
     const { sql, texts } = makeQueueSql([
       [
         {
@@ -926,8 +887,7 @@ describe("the RESTORE rule holds on all three release paths", () => {
     const res = await handleStatus(makeAbandonCtx(env, token, "ignored"));
 
     expect(res.status).toBe(200);
-    // The response must report what the DB decided, not a hardcoded guess —
-    // the app paywalls straight off this field.
+    // The response must report what the DB DECIDED, never a hardcoded guess -> the app paywalls straight off this field
     const body = (await res.json()) as { status: string };
     expect(body.status).toBe("cancelled");
     expectRestoreRule(
@@ -976,8 +936,7 @@ describe("handleCancel — subscription_cancel reporting", () => {
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(env, "DKS_S_CANCEL");
     expect(texts.find((t) => t.includes("'cancelled'"))).toBeDefined();
     expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledTimes(1);
-    // occurredAt is the UPDATE's own RETURNED instant — the stable half of
-    // PostHog's [timestamp, distinct_id, event, uuid] dedup key.
+    // occurredAt is the UPDATE's own RETURNED instant -> the stable half of PostHog's [timestamp, …, uuid] dedup key
     expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledWith(env, {
       userId: USER_ID,
       merchantSubId: "DKS_S_CANCEL",

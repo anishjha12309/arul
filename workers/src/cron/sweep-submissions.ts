@@ -1,28 +1,18 @@
 /**
- * Sweep cron — reclaim orphaned user-submission objects from R2.
+ * Sweep cron — reclaim orphaned user-submission objects from R2. Approve and reject both delete inline.
  *
- * Every user upload lands at user/<sub>/submissions/… via a presigned PUT. On
- * approve the bytes are copied to a canonical catalog key; on approve AND reject
- * the original is now deleted inline. This sweep is the backstop for the cases
- * those inline deletes can't cover:
- *   - an inline delete that was lost (fire-and-forget in waitUntil), or
- *   - an upload whose confirm-upload never landed, so NO submission row exists.
- *
- * Rule: an object under user/…/submissions/ is kept ONLY while it still backs a
- * `pending` submission row. Everything else (approved/rejected leftovers, or no
- * row at all) is deleted — but only after a grace window, so an in-flight upload
- * whose row hasn't committed yet is never swept.
- *
- * Pending rows are not immortal: before sweeping, any submission still pending
- * after PENDING_EXPIRY_DAYS is auto-rejected (reason "expired"), which releases
- * its object to this same sweep. Without that, one unmoderated pending row
- * shields its bytes from reclamation forever.
+ * The inline delete is fire-and-forget in waitUntil -> it can be lost -> this is the backstop
+ * A confirm-upload that never landed leaves bytes with NO submission row at all -> only a sweep finds those
+ * An object is kept ONLY while it still backs a `pending` row -> everything else is deleted
+ * Deletion waits out a grace window -> an upload whose row has not committed yet is never swept
+ * Pending rows are not immortal: one past PENDING_EXPIRY_DAYS is auto-rejected FIRST, releasing its object here
+ * Without that expiry, a single unmoderated pending row would shield its bytes from reclamation forever
  */
 
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 
-/** Objects younger than this are never swept (protects in-flight uploads). */
+/** An object younger than this is never swept -> an in-flight upload has no row yet -> the grace is what protects it. */
 export const SWEEP_GRACE_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /** Pending submissions older than this are auto-rejected so their bytes free up. */
@@ -44,11 +34,7 @@ export interface SweepResult {
   expired: number;
 }
 
-/**
- * Pure decision: given the submission objects seen, the set of file_keys still
- * backing a pending row, and `now`, return the keys to delete. Kept I/O-free so
- * it can be unit-tested without R2/Neon.
- */
+/** The delete decision, kept I/O-free -> it is unit-testable without R2 or Neon -> keep every fetch out of it. */
 export function selectKeysToDelete(
   candidates: SweepCandidate[],
   pendingKeys: ReadonlySet<string>,
@@ -70,9 +56,9 @@ export async function sweepSubmissions(env: Env): Promise<SweepResult> {
   const result: SweepResult = { scanned: 0, deleted: 0, kept: 0, errors: 0, expired: 0 };
 
   try {
-    // Auto-reject stale pending rows FIRST, so their objects drop out of the
-    // keep-set and are reclaimed in this same run (they are already weeks past
-    // the grace window). The row stays for the user's history / rejected tab.
+    // Auto-reject stale pending rows FIRST -> their objects leave the keep-set and are reclaimed in this same run
+    // Those objects are already weeks past the grace window -> no second pass is needed
+    // The ROW stays -> the user's history and rejected tab still show it
     const expiryReason = `Expired — not reviewed within ${PENDING_EXPIRY_DAYS} days`;
     const expiredRows = (await sql`
       UPDATE content_submissions
@@ -87,7 +73,7 @@ export async function sweepSubmissions(env: Env): Promise<SweepResult> {
       console.log(`[sweep-submissions] auto-rejected ${result.expired} expired pending submission(s)`);
     }
 
-    // The only objects worth keeping back unconditionally: still-pending uploads.
+    // Still-pending uploads are the ONLY unconditional keeps -> everything else is a leftover
     const pendingRows = (await sql`
       SELECT file_key FROM content_submissions WHERE status = 'pending'
     `) as unknown as { file_key: string }[];

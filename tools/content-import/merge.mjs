@@ -1,6 +1,5 @@
-// Stage D-merge — combine dedup-manifest.json + classifications.json into
-// review-data.json (what buildreview.mjs consumes). Classifier output is a map
-// { base: {category, confidence, reason, title} }.
+// Stage D-merge -> combine dedup-manifest.json + classifications.json into review-data.json for buildreview.mjs.
+// Classifier output is a map { base: {category, confidence, reason, title} }.
 import { readFileSync, writeFileSync } from "fs";
 const ROOT = "c:/Anish/arul-import";
 const CATS = new Set(["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"]);
@@ -14,7 +13,7 @@ const data = dedup.map((d) => {
   const c = cls[d.base] || {};
   let category = (c.category || "").toLowerCase().trim();
   if (!CATS.has(category)) {
-    // fall back to the matched existing category if it's a likely dup, else 'temples' + low conf
+    // A likely dup falls back to the matched existing category -> anything else takes 'temples' at low confidence.
     category = CATS.has(d.existMatch?.category) && d.existingDup ? d.existMatch.category : "temples";
     badCat++;
   }
@@ -28,7 +27,7 @@ const data = dedup.map((d) => {
   };
 });
 
-// sort: dups first, then low-confidence, then by category — so the review surfaces decisions
+// Sort dups first, then low-confidence, then by category -> the review surfaces the decisions first.
 const order = { high: 2, med: 1, low: 0 };
 data.sort((a, b) => (b.existingDup - a.existingDup) || (order[a.confidence] - order[b.confidence]) || a.category.localeCompare(b.category));
 

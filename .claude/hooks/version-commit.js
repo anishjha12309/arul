@@ -54,7 +54,7 @@ function run() {
   if (secrets.length) {
     report(
       `Version bump to ${working} NOT committed: secret file(s) would be staged — ` +
-        `${secrets.join(", ")}. These must be git-ignored (CLAUDE.md §9). Fix .gitignore, ` +
+        `${secrets.join(", ")}. These must be git-ignored (CLAUDE.md §6). Fix .gitignore, ` +
         `then re-run \`node .claude/hooks/version-commit.js check\`.`,
     );
     return;

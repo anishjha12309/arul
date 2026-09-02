@@ -1,9 +1,5 @@
-// The wallpaper chip row's ORDER.
-//
-// Sivan leads the row, right after the All chip (owner's instruction
-// 2026-08-27); every other category follows alphabetically. Chip order only —
-// the items inside a chip keep their merit order (CLAUDE.md §5b), so this can
-// never contradict All.
+// The wallpaper chip row's ORDER -> Sivan leads right after All (owner's instruction), the rest follow alphabetically.
+// Chip ORDER only -> items inside a chip keep their merit order (CLAUDE.md §5b) -> a chip can never contradict All.
 
 import 'package:flutter_test/flutter_test.dart';
 

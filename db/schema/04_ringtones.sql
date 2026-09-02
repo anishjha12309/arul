@@ -1,18 +1,12 @@
--- Arul — Neon Postgres schema (ringtones). Apply after 03_referral_config.sql.
---   · `category` is first-class (CLAUDE.md §5b — the browse axis, same as
---     wallpapers; never All/New tabs).
---   · `cover_key` nullable and UNUSED — every live row ships null and nothing
---     has ever been written under `ringtones/covers/`. Row art is a PNG bundled
---     in the app, picked by `deity` (07_ringtone_deity.sql); art that ships with
---     the binary cannot 404, so the list has no image failure state at all.
---   · `sort_order` matches wallpapers ordering (sort_order ASC, created_at DESC).
---   · No is_premium column: ALL content is premium-gated in the Worker
---     (/media/signed-url with kind='ringtone'), never on the row.
---
--- audio_key is the sole audio key and is PUBLIC in the catalog (preview is
--- free; setting it as the ringtone is the premium gate). Keys are
--- category-partitioned under the `ringtones/` canonical prefix so the hourly
--- sweep covers audio AND covers with one prefix:
+-- Arul — Neon ringtone catalog schema.
+-- `category` is THE browse axis here too -> chips filter by it -> never All/New tabs (CLAUDE.md §5b).
+-- Ringtone categories are NOT the wallpaper set -> five deities plus `others` -> no `temples`.
+-- cover_key is null everywhere and no cover file exists -> nothing reads it -> do not build a cover pipeline.
+-- Row art is a bundled lossless WebP picked by `deity` -> bundled art cannot 404 -> the list has no failure state.
+-- `sort_order` is stored and CMS-editable -> nothing reads it for feed order -> see 06_popularity.sql.
+-- No is_premium column -> ALL content is premium-gated in the Worker -> never add a per-row premium flag.
+-- audio_key is PUBLIC in the catalog -> preview is free -> the gate is /media/signed-url, kind='ringtone'.
+-- Keys stay under the ringtones/ prefix -> audio and covers share it -> one sweep prefix covers both.
 --   audio  ringtones/<category>/<uuid>.mp3
 --   cover  ringtones/covers/<category>/<uuid>.jpg
 create table if not exists ringtones (

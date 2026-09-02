@@ -1,12 +1,8 @@
-// The shell's half of a deep link: a pending target decides which dock branch
-// is showing. Pinned here because it is wiring a device cannot be asked about
-// later — the branch switch, the "peek, don't consume" rule for content
-// targets (the tab's screen consumes them once its catalog can resolve the
-// id), and the consume-on-switch for a tab-only link.
-//
-// A real GoRouter + StatefulShellRoute, because `goBranch` is the thing under
-// test. The branches are stand-ins: the feed and the ringtone list have their
-// own suites for what happens after the switch.
+// A pending target decides which dock branch is showing -> wiring a device cannot be asked about later.
+// Content targets follow "peek, don't consume" -> the tab's screen consumes one once its catalog can resolve the id.
+// A tab-only link consumes on switch.
+// A real GoRouter + StatefulShellRoute, because `goBranch` is the thing under test.
+// The branches are stand-ins -> the feed and the ringtone list have their own suites for what follows the switch.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,8 +21,7 @@ import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/presentation/video_preload_controller.dart';
 import 'package:arul/features/wallpapers/providers/video_preload_provider.dart';
 
-/// The real controller talks to the native decoder pool on every branch
-/// change; this one just records that the shell asked.
+/// The real controller talks to the native decoder pool on every branch change -> this one records only the ask.
 class _StubVideo extends VideoPreloadController {
   _StubVideo()
     : super(
@@ -118,8 +113,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // No onDispose: the stub must never reach the native pool, not
-          // even on teardown.
+          // No onDispose -> the stub must never reach the native pool, not even on teardown.
           videoPreloadControllerProvider.overrideWith((_) => video),
           ringtoneCatalogProvider.overrideWith(_FakeCatalog.new),
           ringtonePreviewProvider.overrideWith(_StubPreview.new),
@@ -148,8 +142,7 @@ void main() {
 
   testWidgets('a ringtone target parked before the shell mounts switches to '
       'Ringtones and is left for that tab to consume', (tester) async {
-    // The install-referrer / deferred paths seed the target before sign-in;
-    // the shell only exists after it.
+    // The install-referrer and deferred paths seed the target before sign-in -> the shell only exists after it.
     ArulDeepLink.requestTarget(const RingtoneLinkTarget('r1'));
     await pumpShell(tester);
     await tester.pump();

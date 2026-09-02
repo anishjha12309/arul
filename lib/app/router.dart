@@ -19,40 +19,20 @@ import 'theme/theme.dart';
 
 /// Routes.
 ///
-/// Splash decides imperatively: loading → stays here, unauthed → /sign-in,
-/// authed → /browse.
-///
-/// The three-tab shell is the app's shape: Wallpapers · Ringtones · Settings,
-/// each an always-alive branch behind the floating dock. Settings lives IN the
-/// dock — never a route pushed over the feed — while its sub-screens
-/// (notifications, premium, refer, upload) stay top-level pushes OVER the shell.
-///
-/// Page transitions come from the theme, not from custom pageBuilders, so every
-/// push inherits `PredictiveBackPageTransitionsBuilder` — hand-rolling a
-/// transition here would silently opt the route out of the predictive-back
-/// gesture.
+/// Splash decides imperatively: loading stays -> unauthed goes /sign-in -> authed goes /browse.
+/// Wallpapers · Ringtones · Settings are always-alive dock BRANCHES -> Settings is never a push.
+/// Their sub-screens (notifications, premium, refer, upload) stay top-level pushes OVER the shell.
+/// Transitions come from the theme -> a custom pageBuilder here opts the route out of predictive back.
 final router = GoRouter(
   initialLocation: '/',
-  // Incoming links — the installed half of every ad/share URL
-  // (docs/deep-links.md). Android hands Flutter the intent's FULL URI (scheme,
-  // host, query — verified against the engine's embedding), so this sees
-  //   https://arul.hsrutility.com/w/<id>?lang=hi          (App Link)
-  //   https://arul.hsrutility.com/r/<id>?lang=ta          (App Link)
-  //   fb<APP_ID>://open?wallpaper_id=<id>&lang=hi          (Meta's scheme)
-  // exactly as sent. A top-level redirect rather than per-route ones because
-  // Meta's form has NO path: go_router normalises it to `/`, and a route-level
-  // redirect on `/` would then run for every ordinary navigation too.
-  //
-  // Whatever it parses is parked in ArulDeepLink and the location becomes `/`:
-  // the target lives on a tab, and the tabs can only be reached through the
-  // splash's auth decision, so short-circuiting to /browse here would show the
-  // shell to a signed-out user. Every foreign-scheme URI ends at `/`, valid or
-  // not — an ad link with a typo must land on the app, never on an error page.
-  // The PhonePe `arul://` return has no scheme we parse and resolved to `/`
-  // before this existed; it still does.
-  //
-  // Internal navigations (`/browse`, `/premium?…`) carry no scheme and pass
-  // straight through — this must stay a cheap null for them.
+  // Incoming links — the installed half of every ad/share URL (docs/deep-links.md).
+  // Android hands Flutter the intent's FULL URI -> scheme, host and query arrive exactly as sent.
+  // Shapes: App Link `https://arul.hsrutility.com/{w,r}/<id>?lang=` and `fb<APP_ID>://open?...`.
+  // Meta's form has no path -> normalises to `/` -> redirect top-level, or it runs on every nav.
+  // Tabs are reachable only via the splash's auth decision -> park the target, return `/`, not /browse.
+  // An ad link with a typo must land on the app, not an error page -> every foreign scheme ends at `/`.
+  // The PhonePe `arul://` return parses to nothing and resolves to `/` -> keep it that way.
+  // Internal navigations (`/browse`, `/premium?…`) carry no scheme -> stay a cheap null for them.
   redirect: (_, state) {
     if (state.uri.scheme.isEmpty) return null;
     final request = parseDeepLinkUri(state.uri, source: DeepLinkSource.appLink);
@@ -67,14 +47,11 @@ final router = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const SplashScreen()),
     GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
-    // The App Link paths, declared so they can never surface as "no routes for
-    // location": the top-level redirect above has already parked the target
-    // and rewritten the location to `/` by the time these would match.
+    // Declared so an App Link path can never surface as "no routes for location" — the redirect ran first.
     GoRoute(path: '/w/:id', redirect: (_, _) => '/'),
     GoRoute(path: '/r/:id', redirect: (_, _) => '/'),
     StatefulShellRoute(
-      // Not .indexedStack: the branches go through ArulBranchCrossfade so a tab
-      // switch dissolves instead of cutting.
+      // Not .indexedStack -> branches go through ArulBranchCrossfade -> a tab switch dissolves, never cuts.
       navigatorContainerBuilder: (_, navigationShell, children) =>
           ArulBranchCrossfade(
             currentIndex: navigationShell.currentIndex,
@@ -117,10 +94,9 @@ final router = GoRouter(
       path: '/upload',
       builder: (_, _) => const EnglishOnly(child: UploadScreen()),
     ),
-    // Privacy / Terms, read in-app. A top-level push OVER the shell like every
-    // other sub-screen, so it works the same whether it was opened from the
-    // Settings branch or from /sign-in, which sits outside the shell entirely.
-    // Push it with `PolicyDoc.route` rather than a literal path.
+    // Privacy / Terms, read in-app.
+    // Pushed OVER the shell -> opens the same from the Settings branch and from /sign-in, outside it.
+    // Push it with `PolicyDoc.route`, never a literal path.
     GoRoute(
       path: '/policy/:doc',
       builder: (_, state) =>
@@ -128,17 +104,11 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/premium',
-      // THE premium route — paywall AND plan home in one screen; it renders
-      // whatever the user's real subscription state calls for (the old
-      // /premium/manage two-hop was folded in on 2026-08-11).
-      // `source` is the blocked verb that sent the user here (apply / share /
-      // ringtone_set / feed / settings). Tracking happens at the GATE, not
-      // here: `ensurePremium` fires `${source}_blocked_premium` before it
-      // pushes this route. PremiumScreen only displays/attributes it.
-      // Pinned LIGHT at the ROUTE level, not inside the screen: sheets and
-      // dialogs capture inherited themes from the screen's own context, which
-      // sits ABOVE anything the screen's build wraps — a Theme inside the
-      // screen left the UPI picker sheet dark over the light page.
+      // THE premium route — paywall AND plan home in one screen, rendering the real subscription state.
+      // `source` is the blocked verb that sent the user here: apply/share/ringtone_set/feed/settings.
+      // `ensurePremium` fires `${source}_blocked_premium` at the GATE before pushing -> never track here.
+      // Sheets and dialogs inherit theme from the SCREEN's context, above anything its build wraps.
+      // A Theme inside the screen left the UPI picker sheet dark -> pin LIGHT at the ROUTE level.
       builder: (_, state) => Theme(
         data: ArulTheme.light(),
         child: PremiumScreen(

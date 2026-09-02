@@ -10,8 +10,6 @@ import '../../../data/models/ringtone.dart';
 // Sentinel for copyWith nullable fields.
 const Object _absent = Object();
 
-// ─── State ────────────────────────────────────────────────────────────────────
-
 class RingtonePreviewState {
   const RingtonePreviewState({
     this.currentId,
@@ -24,8 +22,7 @@ class RingtonePreviewState {
   final String? currentId;
   final bool isPlaying;
 
-  /// True only while the audio engine is actively loading/buffering — NOT when
-  /// paused.
+  /// True only while the audio engine is actively loading or buffering — NOT when paused.
   final bool isBuffering;
 
   /// True for one state tick after playback fails; cleared by [clearError].
@@ -51,33 +48,20 @@ class RingtonePreviewState {
   );
 }
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
-
-/// One SHARED [AudioPlayer] for all preview playback (ported from the
-/// reference): starting a new track stops the old one, so two previews can
-/// never play at once, and only one decoder is ever held — this screen shares
-/// the device with the feed's video pool.
+/// One SHARED [AudioPlayer] for all preview playback — starting a track stops the old one.
+/// So two previews can never play at once, and only ONE decoder is held.
+/// This screen shares the device with the feed's video pool.
 class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   late final AudioPlayer _player;
 
-  // ── Preview audio disk cache ───────────────────────────────────────────────
-  // Nothing cached ringtone bytes: every tap re-streamed the clip from the CDN,
-  // so replaying a track heard seconds earlier paid the whole network round
-  // trip again — and a preview was impossible offline. This is the same shape
-  // as the live-wallpaper disk cache in
-  // `wallpapers/data/wallpaper_prefetch_service.dart` (same package, same
-  // stalePeriod, same LRU-by-object-count bound, same static-so-it-survives-a-
-  // remount lifetime) and the same fix Pakiza already carries for its own
-  // ringtone previews.
-  //
-  // Static for the same reason the wallpaper one is: flutter_cache_manager keys
-  // its store by the Config `key`, so a rebuilt notifier (tab remount, re-login)
-  // reads the same files — the singleton just avoids redundant managers.
+  // Uncached, every tap re-streamed the clip -> a replay paid the round trip again, offline failed.
+  // Same shape as the live-wallpaper disk cache: same package, stalePeriod, LRU bound, lifetime.
+  // STATIC for the same reason: flutter_cache_manager keys its store by the Config `key`.
+  // So a rebuilt notifier reads the same files, and the singleton just avoids redundant managers.
   static final CacheManager _audioCache = CacheManager(
     Config(
       'arulRingtonePreviews',
-      // Published audio never changes at a given key (keys are content UUIDs),
-      // so this only bounds how long an UNPLAYED clip lingers.
+      // Published audio never changes at a given key -> this only bounds how long an unplayed clip stays.
       stalePeriod: const Duration(days: 14),
       maxNrOfCacheObjects: _maxCacheObjects,
     ),
@@ -85,12 +69,10 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
 
   /// LRU bound on object COUNT — flutter_cache_manager has no byte cap.
   ///
-  /// The whole catalog is 30 clips of ~0.7 MB, so this holds it several times
-  /// over and never evicts during normal use, which is the end Pakiza reaches
-  /// via a free-storage ladder; at this size that ladder would be machinery for
-  /// nothing. Worst case here is ~84 MB, comfortably below what the live-
-  /// wallpaper cache already budgets for 120 multi-MB clips. Revisit if the
-  /// catalog ever grows past a few hundred tracks.
+  /// The whole catalog is 30 clips of ~0.7 MB -> this holds it several times over and never evicts.
+  /// A free-storage ladder would be machinery for nothing at this size.
+  /// Worst case ~84 MB, below what the live-wallpaper cache already budgets for 120 clips.
+  /// Revisit if the catalog ever grows past a few hundred tracks.
   static const _maxCacheObjects = 120;
 
   @override
@@ -100,7 +82,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     // Mirror player state changes into Riverpod state.
     _player.playerStateStream.listen((ps) {
       if (ps.processingState == ProcessingState.completed) {
-        // Track finished — return to idle so the card resets to ▶.
+        // Track finished -> return to idle so the card resets to ▶.
         state = const RingtonePreviewState();
         return;
       }
@@ -114,9 +96,8 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     return const RingtonePreviewState();
   }
 
-  /// Toggle play / pause for [ringtone]. If a different track is active, stop
-  /// it first and start this one. An empty audio key sets [hasError] so the
-  /// screen can toast "Preview not available yet".
+  /// Toggle play/pause for [ringtone]; a different active track is stopped first.
+  /// An empty audio key sets [hasError] so the screen can toast "Preview not available yet".
   Future<void> toggle(Ringtone ringtone) async {
     // Same track — toggle play / pause.
     if (state.currentId == ringtone.id) {
@@ -150,14 +131,10 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     try {
       final url = ringtone.audioUrl(AppConfig.cdnBaseUrl);
 
-      // Serve from disk when the clip is already there: a track previewed
-      // earlier starts instantly and plays offline. getSingleFile returns the
-      // cached file on a hit and downloads once on a miss, so the FIRST play
-      // fills the cache as a side effect of playing.
-      //
-      // On ANY cache-backend failure — path_provider unavailable under
-      // `flutter test`, a full disk, a corrupt store — fall back to streaming
-      // the CDN URL. Preview must never break because caching did.
+      // Serve from disk when the clip is there -> a track previewed earlier starts instantly, offline.
+      // getSingleFile hits the cache or downloads once -> the FIRST play fills it as a side effect.
+      // On ANY cache-backend failure — no path_provider, a full disk, a corrupt store — stream instead.
+      // Preview must never break because caching did.
       String? localPath;
       try {
         localPath = (await _audioCache.getSingleFile(url)).path;
@@ -165,14 +142,11 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
         debugPrint('[RingtonePreview] audio cache unavailable, streaming: $e');
       }
 
-      // A cache MISS awaits a full download, which is a much wider window than
-      // the old bare setUrl — long enough for the user to tap another row. That
-      // tap has already moved `currentId`, so completing here would start the
-      // wrong track against the new row's highlight. Drop the stale load.
+      // A cache MISS awaits a full download — a window wide enough to tap another row.
+      // That tap already moved `currentId` -> completing here starts the WRONG track. Drop it.
       if (state.currentId != ringtone.id) return;
 
-      // Names the source, so "did the cache actually engage on this device?" is
-      // answerable from logcat instead of by timing a tap.
+      // Names the source -> "did the cache engage on this device?" is answerable from logcat.
       debugPrint(
         '[RingtonePreview] ${localPath != null ? 'disk' : 'net'} $url',
       );
@@ -185,16 +159,14 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       await _player.play();
     } catch (e, st) {
       debugPrint('[RingtonePreview] error: $e\n$st');
-      // Same reasoning as the guards above: a failure belonging to a track the
-      // user has already tapped away from must not toast over the new one.
+      // A failure belonging to a track the user tapped away from must not toast over the new one.
       if (state.currentId != ringtone.id) return;
       state = const RingtonePreviewState(hasError: true);
     }
   }
 
-  /// Stop playback and reset to idle (called on tab/route change away from the
-  /// Ringtones surface — the IndexedStack keeps the screen alive, so audio must
-  /// be stopped explicitly, never left playing behind a hidden tab).
+  /// Stop playback and reset to idle, on any tab or route change away from Ringtones.
+  /// The IndexedStack keeps the screen ALIVE -> audio must be stopped explicitly, never left behind.
   Future<void> stop() async {
     await _player.stop();
     state = const RingtonePreviewState();
@@ -207,8 +179,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     }
   }
 }
-
-// ─── Provider ─────────────────────────────────────────────────────────────────
 
 final ringtonePreviewProvider =
     NotifierProvider<RingtonePreviewNotifier, RingtonePreviewState>(

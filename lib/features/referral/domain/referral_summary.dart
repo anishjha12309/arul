@@ -1,8 +1,7 @@
 import '../../../data/models/referral_model.dart';
 
-/// Everything the Refer & Earn screen needs, from a single `/me/referrals` call:
-/// the caller's own code (for the share link), their referrals, and the total
-/// free-premium days earned.
+/// Everything the Refer & Earn screen needs, from a single `/me/referrals` call.
+/// The caller's own code for the share link, their referrals, and the total free-premium days.
 class ReferralSummary {
   const ReferralSummary({
     required this.referralCode,

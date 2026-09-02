@@ -7,9 +7,8 @@ import 'package:image/image.dart' as img;
 
 import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 
-/// A tiny logo PNG generated in-memory (solid opaque gold square) so the tests
-/// never depend on bundled-asset loading inside plain `flutter test` — the
-/// service takes it through the `loadLogoBytes` constructor seam.
+/// A tiny logo PNG generated in memory -> the tests never depend on bundled-asset loading under plain `flutter test`.
+/// The service takes it through the `loadLogoBytes` constructor seam.
 Uint8List _testLogoPng() {
   final logo = img.Image(width: 64, height: 64, numChannels: 4);
   img.fill(logo, color: img.ColorRgba8(212, 160, 23, 255));
@@ -23,8 +22,7 @@ ShareWatermarkService _service({Random? random, MethodChannel? channel}) =>
       channel: channel,
     );
 
-/// Mean absolute per-channel RGB difference between the same [rect] region of
-/// two images.
+/// Mean absolute per-channel RGB difference between the same [rect] region of two images.
 double _regionDiff(img.Image a, img.Image b, ({int x, int y, int w, int h}) r) {
   var sum = 0.0;
   var n = 0;
@@ -101,7 +99,7 @@ void main() {
       final srcFile = File('${tmp.path}/src.jpg')
         ..writeAsBytesSync(img.encodeJpg(source, quality: 95));
 
-      // Fixed spec: logo top-left (0) → code bottom-right (2).
+      // Fixed spec -> logo top-left (0), code bottom-right (2).
       const spec = WatermarkSpec(logoCorner: 0, code: 'AR-TESTXY');
       final outPath = '${tmp.path}/out-wm-TESTXY.jpg';
 
@@ -164,11 +162,9 @@ void main() {
     });
 
     test('an oversized master is decoded DOWN to the share cap', () async {
-      // Guards the memory ceiling, not the look. An uncapped decode
-      // materialises w*h*4 bytes of RGBA on the UI isolate and then COPIES all
-      // of it into the encode isolate — on a low-RAM device that is how a share
-      // gets the process killed. Canonical 1080x1920 statics are unaffected
-      // (see the same-size test above); this only bites an unexpected master.
+      // Guards the memory ceiling, not the look -> an uncapped decode materialises w*h*4 bytes of RGBA on the UI isolate.
+      // It then COPIES all of it into the encode isolate -> on a low-RAM device that is how a share kills the process.
+      // Canonical 1080x1920 statics are unaffected -> this only bites an unexpected master.
       const w = 2600, h = 1300;
       final source = img.Image(width: w, height: h);
       img.fill(source, color: img.ColorRgb8(90, 90, 90));
@@ -288,9 +284,8 @@ void main() {
 
     test('below API 31 it throws Unsupported WITHOUT invoking the '
         'exporter', () async {
-      // The device cannot export at all (androidx/media#2535), so the whole
-      // pipeline must be skipped — including the 1024x1824 overlay render,
-      // which is exactly the work a low-end device can least afford to waste.
+      // The device cannot export at all (androidx/media#2535) -> the whole pipeline must be skipped.
+      // That includes the 1024x1824 overlay render -> exactly the work a low-end device can least afford to waste.
       final methods = <String>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
@@ -319,8 +314,7 @@ void main() {
     });
 
     test('an unsupported_api reply is a SKIP, not a failure', () async {
-      // Only reachable if the native gate disagrees with the probe. It must
-      // still degrade to sharing the original rather than failing the share.
+      // Only reachable if the native gate disagrees with the probe -> it must degrade to sharing the original.
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             if (call.method == 'videoWatermarkSupport') {

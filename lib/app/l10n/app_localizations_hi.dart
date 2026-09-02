@@ -588,4 +588,64 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'अपलोड जल्द आ रहा है।';
+
+  @override
+  String get premiumNavTitle => 'सदस्यता';
+
+  @override
+  String get premiumEyebrow => 'प्रीमियम';
+
+  @override
+  String get premiumTagline => 'हर दिन दिव्य कृपा';
+
+  @override
+  String get premiumPerMonthCaption => 'प्रति माह';
+
+  @override
+  String get premiumTrialLeadPrefix => 'अपना 1 दिन का मुफ़्त ट्रायल शुरू करें ';
+
+  @override
+  String get premiumRefundedBadge => 'तुरंत वापस';
+
+  @override
+  String get premiumFeatureWallpapers => 'असीमित HD वॉलपेपर';
+
+  @override
+  String get premiumFeatureRingtones => 'भक्ति रिंगटोन';
+
+  @override
+  String get premiumFeatureDaily => 'हर दिन नया कंटेंट';
+
+  @override
+  String get premiumCtaTrial => 'मुफ़्त ट्रायल शुरू करें';
+
+  @override
+  String get premiumCtaSubscribe => 'अभी सदस्यता लें';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 सत्यापन, तुरंत वापस · कभी भी रद्द करें';
+
+  @override
+  String get premiumReassurancePaid =>
+      'UPI ऑटोपे सुरक्षित · एक टैप में रद्द करें';
+
+  @override
+  String get premiumSelectedUpiApp => 'UPI ऐप';
+
+  @override
+  String get upiPickerTitle => 'इससे भुगतान करें';
+
+  @override
+  String get upiPickerLastUsed => 'पिछली बार इस्तेमाल';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'फिर $price/माह ऑटोपे से। कभी भी रद्द करें।';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city में $name ने लाइव वॉलपेपर लगाया 🙏';
+  }
 }

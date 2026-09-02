@@ -1,20 +1,11 @@
-// Widget tests for the redesigned Ringtones screen. These cover the contracts a
-// device can't be asked about later — the ones that live in wiring rather than
-// in pixels:
-//
-//   - ONE row plays at a time. Tapping a second row moves the state off the
-//     first; tapping the playing row clears it and asks the player to stop. The
-//     row's whole now-playing look derives from that single value, so the test
-//     asserts on the medallions' `playing` flags rather than on colours.
-//   - Category chips filter the list, and only the list — no All/New anywhere.
-//   - "Set" is gated: a free user never reaches setRingtone(), gets exactly one
-//     `ringtone_set_blocked_premium`, and lands on /premium?source=ringtone_set.
-//     A premium user goes straight through.
-//
-// The real RingtonePreviewNotifier owns a just_audio AudioPlayer, which needs a
-// platform. It is replaced by a stub with the SAME toggle semantics that records
-// what the screen asked it to do — the screen's wiring is what's under test, and
-// the audio engine's own behaviour is not reachable from a test host anyway.
+// The contracts a device cannot be asked about later -> the ones that live in wiring rather than in pixels.
+// ONE row plays at a time -> tapping a second moves the state off the first, tapping the playing row stops the player.
+// The whole now-playing look derives from that single value -> assert the medallions' `playing` flags, never colours.
+// Category chips filter the list and only the list -> no All/New anywhere.
+// "Set" is gated -> a free user never reaches setRingtone(), gets one `ringtone_set_blocked_premium`, lands on /premium.
+// A premium user goes straight through.
+// The real notifier owns a just_audio AudioPlayer, which needs a platform -> a stub with the SAME toggle semantics stands in.
+// The screen's wiring is what is under test -> the audio engine is not reachable from a test host anyway.
 
 import 'dart:async';
 
@@ -60,9 +51,8 @@ class _FakeCatalog extends RingtoneCatalogNotifier {
   Future<List<Ringtone>> build() async => _items;
 }
 
-/// The real notifier's toggle contract, without the audio engine: same track →
-/// pause/resume, different track → the state moves. Records every halt so the
-/// test can assert that clearing the row really did stop playback.
+/// The real notifier's toggle contract without the audio engine -> same track pauses/resumes, a different one moves state.
+/// Records every halt -> the test can assert that clearing the row really did stop playback.
 class _StubPreview extends RingtonePreviewNotifier {
   final halts = <String>[];
 
@@ -91,8 +81,7 @@ class _StubPreview extends RingtonePreviewNotifier {
   }
 }
 
-/// Records the ringtones the set pipeline was actually asked to install. If the
-/// premium gate works, a free user never adds one.
+/// Records the ringtones the set pipeline was actually asked to install -> a free user must never add one.
 class _RecordingSet extends RingtoneSetNotifier {
   final installed = <String>[];
 
@@ -127,10 +116,8 @@ void main() {
   late _RecordingAnalytics analytics;
   late List<String> paywallSources;
 
-  /// Pumps the screen inside a real GoRouter (the screen reads
-  /// `GoRouter.of(context)` for its stop-audio-on-leaving listener) with a
-  /// /premium route that records the source it was opened with — so the gate is
-  /// asserted through real navigation rather than a mock of it.
+  /// Pumps the screen inside a REAL GoRouter -> the screen reads `GoRouter.of(context)` for its stop-audio listener.
+  /// Its /premium route records the source it was opened with -> the gate is asserted through real navigation.
   Future<void> pumpScreen(
     WidgetTester tester, {
     List<Ringtone> catalog = const [],
@@ -140,8 +127,7 @@ void main() {
     setter = _RecordingSet();
     analytics = _RecordingAnalytics();
     paywallSources = [];
-    // The deep-link consume clears its persisted copy through
-    // installReferrerServiceProvider, which reads SharedPreferences.
+    // The deep-link consume clears its persisted copy through installReferrerServiceProvider, which reads prefs.
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
@@ -202,9 +188,8 @@ void main() {
     matching: find.bySemanticsLabel('Preview'),
   );
 
-  // The Set pill and the Earn chip are found through their labels rather than
-  // their semantics: a Semantics whose label duplicates a Text child leaves the
-  // label on the Text's node, so bySemanticsLabel does not match the wrapper.
+  // The Set pill and Earn chip are found by LABEL, not by semantics.
+  // A Semantics whose label duplicates a Text child leaves the label on the Text's node -> bySemanticsLabel misses the wrapper.
   Finder setPillOf(String title) => find.descendant(
     of: find.ancestor(of: find.text(title), matching: find.byType(RingtoneRow)),
     matching: find.widgetWithText(GestureDetector, 'Set'),
@@ -260,9 +245,8 @@ void main() {
       await tester.pump();
       expect(preview.state.currentId, 'r3');
 
-      // The Earn chip pushes /refer OVER this screen — the IndexedStack-style
-      // keep-alive means nothing disposes, so only the route listener can
-      // silence the audio.
+      // The Earn chip pushes /refer OVER this screen -> keep-alive means nothing disposes.
+      // So only the route listener can silence the audio.
       await tester.tap(find.widgetWithText(GestureDetector, 'Earn'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -356,8 +340,7 @@ void main() {
 
     testWidgets('the gate AWAITS the entitlement: a loading read never bounces '
         'a paying user', (tester) async {
-      // Same contract as ensure_premium_test, asserted through the real button:
-      // the gate may only answer after the entitlement read settles.
+      // Same contract as ensure_premium_test, through the real button -> the gate answers only after the read settles.
       final entitled = Completer<bool>();
       preview = _StubPreview();
       setter = _RecordingSet();
@@ -422,8 +405,7 @@ void main() {
   testWidgets('with no dock overhead, the list reserves nothing for one', (
     tester,
   ) async {
-    // The screen is pumped without an AppShell here, which is exactly the case
-    // that used to strand 120px of dead space at the bottom of a pushed route.
+    // Pumped WITHOUT an AppShell -> exactly the case that used to strand 120px of dead space on a pushed route.
     await pumpScreen(tester, catalog: _catalog);
 
     final list = tester.widget<ListView>(find.byType(ListView).last);
@@ -438,9 +420,8 @@ void main() {
   ) async {
     late double clearance;
 
-    // A real shell, because the rule is "is there an AppShell above me" and a
-    // stub would be testing the stub. This doubles as a smoke test that the
-    // shell and its dock build at all.
+    // A real shell, because the rule is "is there an AppShell above me" -> a stub would only be testing the stub.
+    // This doubles as a smoke test that the shell and its dock build at all.
     final router = GoRouter(
       initialLocation: '/a',
       routes: [
@@ -483,9 +464,8 @@ void main() {
   });
 
   // ── Deep link ──────────────────────────────────────────────────────────────
-  // A ringtone ad link (`/r/<id>`, `fb…://open?ringtone_id=`) lands here: the
-  // row is scrolled to the top of ALL, the pref copy is cleared, and the
-  // GA4-only landing event fires. Nothing auto-plays.
+  // A ringtone ad link (`/r/<id>`, `fb…://open?ringtone_id=`) lands here -> the row scrolls to the top of ALL.
+  // The pref copy is cleared and the GA4-only landing event fires -> nothing auto-plays.
 
   group('deep link', () {
     setUp(ArulDeepLink.reset);

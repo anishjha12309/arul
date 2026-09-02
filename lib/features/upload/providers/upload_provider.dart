@@ -7,15 +7,10 @@ import '../../../core/api/api_client.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../data/api_content_submission_repository.dart';
 
-// ── Constraints (single source of truth for client + server) ─────────────────
-
-/// Single source of truth for upload size/type limits, mirrored server-side in
-/// `workers/src/lib/media-constraints.ts` (and a third copy in the CMS) — keep
-/// all three in step.
+/// Single source of truth for upload size and type limits.
+/// Mirrored in `workers/src/lib/media-constraints.ts` and again in the CMS — keep all three in step.
 ///
-/// The limits are keyed on `kind` ('wallpaper' | 'ringtone'); `wallpaperType`
-/// ('static' | 'live') only narrows the wallpaper branch and is ignored for a
-/// ringtone.
+/// Keyed on `kind`; `wallpaperType` only narrows the wallpaper branch and is ignored for a ringtone.
 abstract final class UploadConstraints {
   static const int maxStaticWallpaper = 10 * 1024 * 1024; // 10 MB
   static const int maxLiveWallpaper = 50 * 1024 * 1024; // 50 MB
@@ -49,14 +44,10 @@ abstract final class UploadConstraints {
     return '${mb}MB';
   }
 
-  /// Best-effort MIME type derived from a filename extension. Unsupported types
-  /// resolve to a value the allow-list ([allowedTypes]) rejects with a clear error.
-  ///
-  /// `m4a` maps to `audio/mp4` — the server's allow-list carries BOTH that and
-  /// `audio/x-m4a`, but the presigned PUT stores whatever is sent here, and the
-  /// byte-level QC re-derives the real container from the bytes either way.
-  /// `ogg`/`wav`/`flac` are named so a user who picks one gets the authored
-  /// "choose an MP3/AAC/M4A" rejection instead of the generic octet-stream path.
+  /// Best-effort MIME from a filename extension.
+  /// An unsupported type resolves to a value [allowedTypes] rejects with a clear error.
+  /// `m4a` maps to `audio/mp4` — the server allows both, and byte-level QC re-derives the container.
+  /// `ogg`/`wav`/`flac` are NAMED so picking one gets the authored rejection, not octet-stream.
   static String mimeFromName(String name) {
     final ext = name.split('.').last.toLowerCase();
     return switch (ext) {
@@ -76,16 +67,13 @@ abstract final class UploadConstraints {
   }
 }
 
-// ── State ─────────────────────────────────────────────────────────────────────
-
-/// Upload flow state: idle → loading (per stage) → success | error.
+/// Upload flow state: idle → loading, per stage → success or error.
 sealed class UploadState {
   const UploadState();
 }
 
-/// Which step of the upload is in flight. The UI maps this to a localized
-/// label (the stage is an enum, not text, because providers have no
-/// `BuildContext` to localize against).
+/// Which step of the upload is in flight, mapped to a localized label by the UI.
+/// An ENUM, not text — a provider has no `BuildContext` to localize against.
 enum UploadStage { uploading, saving }
 
 final class UploadIdle extends UploadState {
@@ -106,19 +94,15 @@ final class UploadError extends UploadState {
   final String message;
 }
 
-// ── Notifier ─────────────────────────────────────────────────────────────────
-
 /// Drives the content upload flow and exposes its [UploadState].
 class UploadNotifier extends Notifier<UploadState> {
   @override
   UploadState build() => const UploadIdle();
 
-  /// Three-step upload: fetch a presigned R2 PUT URL from the Worker, PUT the
-  /// file bytes straight to R2, then record the submission for moderation.
-  /// [kind] is `'wallpaper'` or `'ringtone'`, and [category] is REQUIRED by the
-  /// form for BOTH — approval copies the file to `wallpapers/<category>/…` or
-  /// `ringtones/<category>/…`, and `ringtones.category` is NOT NULL. The two
-  /// kinds do NOT share a category list (ringtones drop `temples`, add `others`).
+  /// Three steps: presigned R2 PUT URL from the Worker, PUT the bytes to R2, record for moderation.
+  ///
+  /// [category] is REQUIRED for both kinds — approval copies into `<kind>s/<category>/…`.
+  /// The two kinds do NOT share a category list: ringtones drop `temples` and add `others`.
   Future<void> submit({
     required String kind,
     required String filePath,
@@ -130,10 +114,9 @@ class UploadNotifier extends Notifier<UploadState> {
   }) async {
     final apiClient = ref.read(apiClientProvider);
 
-    // Derive userId from the auth service's synchronous state — the stream
-    // provider is broadcast and does NOT replay, so its .asData is null when
-    // nothing was subscribed at emission time (e.g. a cold start straight to
-    // upload), which would bounce a signed-in user with "Not signed in".
+    // The stream provider is broadcast and does NOT replay -> `.asData` is null with no subscriber.
+    // A cold start straight to upload would then bounce a signed-in user with "Not signed in".
+    // So derive userId from the auth service's SYNCHRONOUS state.
     final authState = ref.read(authServiceProvider).currentState;
     final userId = authState.userId;
     if (userId == null) {
@@ -145,7 +128,7 @@ class UploadNotifier extends Notifier<UploadState> {
     final fileKey = 'user/$userId/submissions/${timestamp}_$fileName';
 
     try {
-      // ── 1. Get presigned PUT URL from Worker ───────────────────────────────
+      // 1. Presigned PUT URL from the Worker.
       state = const UploadLoading(stage: UploadStage.uploading);
       final urlData = await apiClient.post(
         '/media/upload-url',
@@ -163,7 +146,7 @@ class UploadNotifier extends Notifier<UploadState> {
         return;
       }
 
-      // ── 2. PUT file bytes directly to R2 ──────────────────────────────────
+      // 2. PUT the file bytes directly to R2.
       final fileBytes = await File(filePath).readAsBytes();
       final putResp = await http.put(
         Uri.parse(uploadUrl),
@@ -178,7 +161,7 @@ class UploadNotifier extends Notifier<UploadState> {
         return;
       }
 
-      // ── 3. Record submission via Worker ────────────────────────────────────
+      // 3. Record the submission via the Worker.
       state = const UploadLoading(stage: UploadStage.saving);
       final repo = ApiContentSubmissionRepository(apiClient: apiClient);
       final trimmedTitle = title?.trim();

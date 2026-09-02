@@ -4,8 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('RingtoneTileSpec', () {
     test('is a pure function of the id', () {
-      // The whole point: a tile must not change costume when a category filter
-      // re-orders the list, nor between launches, nor across an app update.
+      // A tile must not change costume when a filter re-orders the list, between launches, or across an app update.
       final a = RingtoneTileSpec.forRingtone(id: 'rt-amman-01');
       final b = RingtoneTileSpec.forRingtone(id: 'rt-amman-01');
       expect(a, b);
@@ -13,8 +12,7 @@ void main() {
     });
 
     test('no longer varies with category', () {
-      // Category used to pick the drawn motif. It does not any more — the
-      // figure comes from `deity` — so the ground must depend on the id alone.
+      // Category no longer picks the drawn motif -> the figure comes from `deity` -> the ground depends on the id alone.
       expect(
         RingtoneTileSpec.forRingtone(id: 'rt-1'),
         RingtoneTileSpec.forRingtone(id: 'rt-1'),
@@ -32,11 +30,8 @@ void main() {
     });
 
     test('spreads grounds across ids that share a long prefix', () {
-      // This is the regression the fmix32 avalanche exists for: catalog ids are
-      // short and near-identical, and plain FNV-1a put most of them on the same
-      // ground. Since the kolam ring was dropped the ground is the ONLY thing
-      // telling 35 Murugan rows apart, so a collapse here is now fully visible
-      // rather than one varying parameter among three.
+      // Catalog ids are short and near-identical -> plain FNV-1a put most on one ground -> hence the fmix32 avalanche.
+      // The kolam ring is gone -> the ground is the ONLY thing telling Murugan rows apart -> a collapse is fully visible.
       final grounds = <int>{};
       for (var i = 1; i <= 35; i++) {
         grounds.add(

@@ -36,8 +36,11 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    OTHER secret is still compared untrimmed. Full list: workers/README.md. Never echo a value.
    `OPS_SECRET` gates the money-moving internal routes (`run-redemptions`, `refund`) and fails closed
    when unset — that is the safe state, so leave it unset unless an operator run needs it.
-6. Deploying does not restart anything on the app side, but it DOES ship cron changes: both triggers
-   in `[triggers]` (`0 * * * *` hourly, `30 21 * * *` daily sweep) come from wrangler.toml, so a
-   removed line silently removes a cron. Cron behaviour: docs/cron.md.
+6. Deploying does not restart anything on the app side, but it DOES ship cron changes: all THREE
+   triggers in `[triggers]` (`0 * * * *` hourly, `*/15 * * * *` autopay, `30 21 * * *` daily sweep)
+   come from wrangler.toml, so a removed line silently removes a cron. Cron behaviour: docs/cron.md.
+7. `wrangler.toml` warns rather than failing on a misplaced key — read the `--dry-run` output.
+   `POSTHOG_HOST` and `ANDROID_CERT_SHA256` currently sit at top level with no `[vars]` table and are
+   DISCARDED (docs/known-issues.md); the deployed secret is what serves.
 
 Never deploy with failing tsc/tests.

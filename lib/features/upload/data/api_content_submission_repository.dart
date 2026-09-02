@@ -11,7 +11,7 @@ class ApiContentSubmissionRepository implements ContentSubmissionRepository {
 
   @override
   Future<List<ContentSubmissionModel>> getSubmissions(String userId) async {
-    // GET /me/submissions (Worker, architecture.md §3.5) → { items: [...] }; 404 → [].
+    // GET /me/submissions (architecture.md §3.5) -> { items: [...] }; 404 -> [].
     try {
       final data = await _api.get('/me/submissions');
       final items = data['items'] as List? ?? [];
@@ -26,8 +26,7 @@ class ApiContentSubmissionRepository implements ContentSubmissionRepository {
   }
 
   @override
-  /// Confirms an uploaded file with the Worker and returns the new (pending)
-  /// submission, inflated from the request fields for immediate display.
+  /// Confirms an uploaded file with the Worker and returns the new pending submission.
   Future<ContentSubmissionModel> createSubmission({
     required String userId,
     required String kind,
@@ -44,8 +43,7 @@ class ApiContentSubmissionRepository implements ContentSubmissionRepository {
         'category': category,
       },
     );
-    // Worker returns { "id": "...", "status": "pending" } — inflate into a
-    // full model by merging request fields so the UI can render it immediately.
+    // Worker returns only { id, status } -> merge the request fields in so the UI can render now.
     return ContentSubmissionModel.fromJson({
       'id': data['id'],
       'user_id': userId,

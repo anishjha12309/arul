@@ -20,21 +20,13 @@ import 'widgets/video_background.dart';
 
 /// The launch screen.
 ///
-/// The OS splash (Android 12+ SplashScreen API) hands off to this, both painted
-/// on the same ink ([ArulTokens.darkSurface]), so there is no seam and no white
-/// flash. The video's own darkest tone IS that ink — if they disagreed the
-/// reveal would pop, which is the one thing a splash must never do.
-///
-/// It is on screen for exactly as long as the work takes and not one frame
-/// longer — see [_SplashScreenState._decideRoute] for the beat that used to be
-/// here and why it is gone. The catalog fetch and the media warm both start
-/// here, so the reel's first frame usually already has data. The background
-/// player is SHARED with the
-/// sign-in screen ([VideoBackground]'s ref-counted singleton) — the same
-/// decoder, handed across the route — so moving between them never re-inits a
-/// MediaCodec, which on a budget SoC would drop the background back to a flat
-/// colour for a beat. This screen paints `overlayOpacity: 0` and draws its own
-/// scrim + hairline loader on top, per the design handoff.
+/// The OS splash hands off to this, both painted on the same ink -> no seam, no white flash.
+/// The video's darkest tone IS that ink — if they disagreed the reveal would pop.
+/// On screen for exactly as long as the work takes, never a frame longer — see [_decideRoute].
+/// The catalog fetch and the media warm both start here -> the reel's first frame usually has data.
+/// The background player is SHARED with sign-in ([VideoBackground]'s ref-counted singleton).
+/// The same decoder crosses the route -> no MediaCodec re-init, which on a budget SoC flattens it.
+/// This screen paints `overlayOpacity: 0` and draws its own scrim and hairline loader on top.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -47,32 +39,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   static const _tagline = 'DEVOTIONAL WALLPAPERS & RINGTONES';
   static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
 
-  /// How many leading feed thumbnails to warm once the catalog lands. Mirrors
-  /// the reference prefetch service's data window at index 0 (`_behind`=1 +
-  /// self + `_ahead`=15 → items 0..15): the same set of soon-to-be-seen items,
-  /// warmed as images instead of MP4 bytes. Thumbs beyond the in-memory cache's
-  /// LRU still land in the DISK image cache, so a later scroll re-decodes
-  /// locally instead of re-downloading.
+  /// How many leading feed thumbnails to warm once the catalog lands.
   ///
-  /// AUTHED SESSIONS ONLY. A signed-out session gets [_preAuthThumbWarmCount]
-  /// and NO MP4 bytes: the full warm (up to 16 clips × 2–5 MB, 3 concurrent)
-  /// used to start the moment the catalog landed and then fight the sign-in's
-  /// own network calls — Google's token mint, Firebase, POST /auth/login —
-  /// for the same pipe, which is where the 7–8 s first login came from
-  /// (device 2026-08-18). Post-login the feed's own VideoPreloadController
-  /// re-runs `prefetchAround` on mount, so nothing is lost — only deferred
-  /// past the moment the user is watching a spinner.
+  /// Mirrors the prefetch service's window at index 0 (items 0..15) — the same soon-to-be-seen set.
+  /// Thumbs past the in-memory LRU still land on DISK -> a later scroll re-decodes, never re-downloads.
+  /// AUTHED SESSIONS ONLY -> a signed-out session gets [_preAuthThumbWarmCount] and NO MP4 bytes.
+  /// The full warm (16 clips × 2–5 MB) fought the token mint and POST /auth/login -> a 7–8 s login.
+  /// Post-login the feed's own VideoPreloadController re-runs `prefetchAround` -> nothing is lost.
   static const _thumbWarmCount = 16;
 
-  /// The signed-out slice of the warm: the first screenful of posters, so the
-  /// feed the user lands on after sign-in shows real wallpapers instantly
-  /// (owner's call, 2026-08-18: "3–4 should be there"), at a bandwidth cost —
-  /// a few hundred KB — that cannot crowd the auth calls.
+  /// The signed-out slice — the first screenful of posters, so the post-login feed shows real art.
+  /// A few hundred KB, which cannot crowd the auth calls.
   static const _preAuthThumbWarmCount = 4;
 
-  /// The warm-up runs once per splash, on the first catalog data to land
-  /// (immediately from the disk snapshot on a warm start, or when the network
-  /// drain finishes on a cold one).
+  /// The warm-up runs once per splash, on the first catalog data to land — disk snapshot or drain.
   bool _mediaWarmed = false;
 
   late final AnimationController _hairlineController;
@@ -85,9 +65,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: ArulTokens.hairlineLoop,
     )..repeat();
 
-    // Open the connection to the API host now, so POST /auth/login — which is
-    // moments away — doesn't pay DNS + TLS + Worker cold start itself. Never
-    // awaited, never retried, never able to fail anything (ApiClient.warmUp).
+    // Open the API connection now -> POST /auth/login, moments away, pays no DNS, TLS or cold start.
+    // Never awaited, never retried, never able to fail anything (ApiClient.warmUp).
     BootTrace.mark('splash: API warm-up fired');
     unawaited(
       ref
@@ -96,9 +75,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .then((_) => BootTrace.mark('splash: API warm-up settled')),
     );
 
-    // Warm the catalog while the wordmark is on screen, and — the moment it
-    // resolves — the first screenful of feed media (reference app.dart's warm
-    // prefetch, relocated to the splash it describes).
+    // Warm the catalog while the wordmark is up, then the first screenful of feed media.
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
         unawaited(_warmFeedMedia(value));
@@ -109,19 +86,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   /// Warm the caches the reel will read first, in parallel with the auth seed:
   ///
-  ///  • LIVE bytes (authed sessions only): `prefetchAround(items, 0)` on the
-  ///    app-scoped [WallpaperPrefetchService] — the same instance the feed's
-  ///    video controller pumps, so the two share one in-flight queue and never
-  ///    double-download. Bytes only; NO player, NO decoder is touched here.
-  ///  • Posters: decode the first [_thumbWarmCount] posters (signed-out:
-  ///    [_preAuthThumbWarmCount]) into the shared image cache at the SAME
-  ///    decode width the tiles/posters use ([WallpaperTile.decodeWidthFor] —
-  ///    memCacheWidth is part of the cache key), so the feed's first paint is
-  ///    a repaint, not a refetch.
+  ///  • LIVE bytes, authed only — `prefetchAround(items, 0)` on the app-scoped service the feed's
+  ///    controller also pumps, so the two share one queue and never double-download;
+  ///    bytes ONLY, no player and no decoder is touched here;
+  ///  • Posters — decoded at the SAME width the tiles use ([WallpaperTile.decodeWidthFor], part of
+  ///    the cache key), so the feed's first paint is a repaint, not a refetch.
   ///
-  /// Awaits the auth seed first: the catalog can land (disk snapshot) before
-  /// the stored-session verdict, and deciding off the not-yet-seeded state
-  /// would give every RETURNING user the narrow signed-out warm.
+  /// The catalog can land from disk BEFORE the stored-session verdict.
+  /// Deciding off the unseeded state gives every RETURNING user the narrow warm -> await the seed.
   Future<void> _warmFeedMedia(List<Wallpaper> items) async {
     if (_mediaWarmed) return;
     _mediaWarmed = true;
@@ -132,10 +104,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .initialized
           .timeout(const Duration(seconds: 6), onTimeout: () {});
     }
-    // Screen already gone (the catalog landed after we routed): skip. The
-    // authed path re-warms via the feed's own controller; the signed-out path
-    // loads its posters when the feed builds them — a slow catalog was the
-    // bottleneck anyway.
+    // Screen already gone (the catalog landed after routing) -> skip; both paths re-warm on their own.
     if (!mounted) return;
 
     final authed =
@@ -148,22 +117,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     // Fire the poster warm NOW, while this screen is certainly mounted.
     //
-    // It used to run in a post-frame callback that bailed on `!mounted`, which
-    // was free when a fixed 1800ms beat guaranteed the splash outlived it. With
-    // the beat gone the splash routes away within a frame of the seed settling,
-    // so that callback would find itself unmounted and warm NOTHING — handing
-    // the reel a cold image cache on exactly the launch this change was meant
-    // to speed up. The work itself never needed the delay; only the MediaQuery
-    // lookup did, and by here we are past `initState` (the `initialized` await
-    // above always yields) so the lookup is legal.
-    //
-    // `precacheImage` reads the context once, synchronously, to build its
-    // ImageConfiguration; the decode it starts is owned by the app-scoped image
-    // cache and completes regardless of what happens to this screen.
-    //
-    // The one path with no await ahead of it is a define-less build
-    // ([AppConfig.hasBackend] false), which could still be inside `initState`;
-    // there the lookup would throw, so that case alone keeps the old deferral.
+    // The splash routes away within a frame of the seed settling -> a post-frame callback warms NOTHING.
+    // That handed the reel a cold image cache on exactly the launch this was meant to speed up.
+    // Only the MediaQuery lookup needed the deferral, and the await above already passed `initState`.
+    // `precacheImage` reads the context once, synchronously, to build its ImageConfiguration.
+    // The decode belongs to the app-scoped cache -> it completes whatever happens to this screen.
+    // A define-less build has no await ahead of it and may still be inside `initState`.
+    // So that one case keeps the deferral — the lookup would throw there.
     if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle &&
         SchedulerBinding.instance.schedulerPhase !=
             SchedulerPhase.postFrameCallbacks) {
@@ -175,42 +135,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _warmPosters(items, thumbCount);
   }
 
-  /// Decode the first [count] posters into the shared image cache at the same
-  /// width the tiles render them at, so the reel's first paint is a repaint.
+  /// Decode the first [count] posters at the tiles' own width -> the reel's first paint is a repaint.
   void _warmPosters(List<Wallpaper> items, int count) {
     final decodeWidth = WallpaperTile.decodeWidthFor(context);
     for (final w in items.take(count)) {
       precacheImage(
-        // resizeIfNeeded is exactly what CachedNetworkImage does with
-        // memCacheWidth, so this warms the entry the reel actually renders.
+        // resizeIfNeeded is what CachedNetworkImage does with memCacheWidth -> warms the entry used.
         ResizeImage.resizeIfNeeded(
           decodeWidth,
           null,
           CachedNetworkImageProvider(w.posterUrl(AppConfig.cdnBaseUrl)),
         ),
         context,
-        // Never throws into the framework; the tile keeps its own fallback
-        // ladder regardless.
+        // Never throws into the framework — the tile keeps its own fallback ladder regardless.
         onError: (_, _) {},
       );
     }
   }
 
-  /// Wait for the auth service to finish its stored-session check, then route
-  /// IMMEDIATELY. Sampling `currentState` on a fixed timer raced the encrypted
-  /// secure-storage read on cold start and bounced returning users to sign-in
-  /// ("session didn't persist"); awaiting [AuthService.initialized] (bounded)
-  /// is what fixes that, and it is the only thing this screen waits on.
+  /// Wait for the stored-session check to finish, then route IMMEDIATELY.
   ///
-  /// There is NO fixed brand beat any more (owner's call, 2026-08-24). It was
-  /// `Future.delayed(1800ms)` started here, and it was measured on device as
-  /// pure dead time: the auth seed settles ~375ms after `main()` entry and the
-  /// catalog is already warm by then, so the splash sat idle for the remaining
-  /// ~1.4s. It owned most of the cold start and most of the first-content gap
-  /// — both budgets in memory `arul-growth-metrics` (which keeps the measured
-  /// numbers) missed for that reason alone. Do not re-add a floor here: if the brand moment needs
-  /// more time, it has to come from work that is actually on the critical path,
-  /// not from a timer.
+  /// Sampling `currentState` on a timer raced the secure-storage read and bounced returning users.
+  /// Awaiting [AuthService.initialized], bounded, is the fix — and the only thing this screen waits on.
+  /// There is NO fixed brand beat (owner's call): the 1800ms one measured as pure dead time.
+  /// The auth seed settles ~375ms in and the catalog is warm by then -> the splash sat idle ~1.4s.
+  /// It owned most of the cold start and most of the first-content gap.
+  /// Do NOT re-add a floor — a longer brand moment must come from critical-path work, not a timer.
   Future<void> _decideRoute() async {
     BootTrace.mark('splash: _decideRoute start');
     if (AppConfig.hasBackend) {
@@ -221,21 +171,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .timeout(const Duration(seconds: 6), onTimeout: () {});
       BootTrace.mark('splash: auth seed settled');
 
-      // No stored session — ask Google NOW rather than at the sign-in screen's
-      // first frame, which is a further route away.
-      //
-      // This is the whole latency fix: measured on device the account picker
-      // landed 2.9s after launch, against a competitor's 1.25s, and nearly all
-      // of the difference was this call waiting its turn. The picker is a
-      // system Activity that covers us, so it stays off the critical path: the
-      // route below runs underneath it either way. Fired BEFORE that route on
-      // purpose — the sign-in screen's own auto-launch then finds an attempt
-      // already in flight and stands down, which is what keeps the contract of
-      // EXACTLY ONE account picker per sign-in (docs/edge-cases.md §Auth).
-      //
-      // NOT fired before the seed resolves: until the stored-session check
-      // comes back, an already-signed-in user might be behind it, and showing
-      // THEM an account picker is a worse bug than being a second slower.
+      // No stored session -> ask Google NOW, not at the sign-in screen's first frame a route away.
+      // The picker landed 2.9s after launch against a peer's 1.25s, nearly all of it waiting here.
+      // The picker is a system Activity that covers us -> the route below still runs underneath.
+      // Fired BEFORE that route -> the sign-in screen's auto-launch finds it in flight, stands down.
+      // That is what keeps the contract of EXACTLY ONE picker per sign-in (edge-cases.md §Auth).
+      // NEVER before the seed resolves — an already-signed-in user may be behind it.
+      // Showing THEM a picker is a worse bug than being a second slower.
       if (AppConfig.googleAuthConfigured &&
           !ref.read(authServiceProvider).currentState.isAuthenticated) {
         BootTrace.mark('splash: no session → auto sign-in from splash');
@@ -275,8 +217,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Video paints edge-to-edge; the veil is our own scrim below, so no
-            // built-in overlay from VideoBackground competes with it.
+            // Video paints edge-to-edge -> our own scrim below, no built-in overlay competing.
             const VideoBackground(overlayOpacity: 0),
 
             // Spec > Splash: 180deg .25 → 0 @35% → 0 @55% → .82.
@@ -284,10 +225,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
             ),
 
-            // Bottom-centered column, bottom:64, gap 10. The gopuram mark that
-            // used to head this stack is gone — the wordmark grew to carry the
-            // brand alone, and the loader keeps its 64px anchor, so the block
-            // simply reads shorter from the top.
+            // Bottom-centred column, bottom 64, gap 10 — the wordmark carries the brand alone.
             Positioned(
               left: 0,
               right: 0,
@@ -320,8 +258,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
   }
 
-  /// 120×2px gold hairline with a sliding gradient, 1.6s linear loop. No
-  /// spinner — Spec > Splash is explicit about that.
+  /// 120×2px gold hairline with a sliding gradient, 1.6s linear loop. No spinner — the spec is firm.
   Widget _buildHairlineLoader() {
     return SizedBox(
       width: ArulTokens.hairlineWidth,
@@ -331,9 +268,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         child: AnimatedBuilder(
           animation: _hairlineController,
           builder: (context, _) {
-            // CSS: background-size 200% 100%, sliding one full tile width per
-            // loop — reproduced as a translate of a double-wide gradient bar
-            // across the clipped 120px window.
+            // CSS `background-size: 200% 100%` sliding one tile per loop -> a double-wide bar moved.
             final dx =
                 -ArulTokens.hairlineWidth +
                 _hairlineController.value * (ArulTokens.hairlineWidth * 2);

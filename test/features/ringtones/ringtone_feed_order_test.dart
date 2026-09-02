@@ -1,13 +1,8 @@
-// The Ringtones tab's ORDER — the same three tiers the wallpaper feed serves
-// (CLAUDE.md §5b): feed_rank ASC nulls-last → set_count DESC → catalog position.
-//
-// The two tabs share ONE comparator (orderedByUse) precisely so they cannot
-// drift, but they reach it through separate providers and separate models. That
-// wiring is what breaks silently: a ringtone list that forgets to pass `rank:`,
-// or a category chip that skips the sort, compiles and renders perfectly and is
-// simply in the wrong order. The tier logic itself is proven in
-// test/features/wallpapers/catalog_providers_test.dart; what is pinned here is
-// that the Ringtones tab is actually wired to it.
+// The Ringtones tab's ORDER -> the same three tiers the wallpaper feed serves (CLAUDE.md §5b).
+// feed_rank ASC nulls-last -> set_count DESC -> catalog position.
+// Both tabs share ONE comparator (orderedByUse) so they cannot drift, but reach it through separate providers.
+// That wiring breaks silently -> a list that forgets `rank:`, or a chip that skips the sort, compiles and renders fine.
+// The tier logic is proven in test/features/wallpapers/catalog_providers_test.dart -> pinned here is that this tab uses it.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,9 +64,8 @@ void main() {
   });
 
   test('an unpinned track sinks below every pin — nulls LAST', () async {
-    // A null rank read as 0 would put the entire uncurated catalog above the
-    // curated head. Ringtones start with every rank null, so this is the live
-    // shape on day one, not an edge case.
+    // A null rank read as 0 would put the whole uncurated catalog above the curated head.
+    // Ringtones start with every rank null -> this is the live shape on day one, not an edge case.
     final catalog = [
       _rt('unpinned', setCount: 99),
       _rt('pinned', feedRank: 400),
@@ -105,9 +99,8 @@ void main() {
   test(
     'with nothing pinned and nothing set, the list IS catalog order',
     () async {
-      // The zero state is the intended default, not a fallback: every comparison
-      // falls through to catalog position, which build-catalog already emits
-      // newest-first and interleaved.
+      // The zero state is the intended default, not a fallback -> every comparison falls through to catalog position.
+      // build-catalog already emits that order -> nothing client-side re-derives it.
       final catalog = [
         _rt('a', category: 'amman'),
         _rt('b', category: 'sivan'),

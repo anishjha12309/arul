@@ -1,36 +1,20 @@
-/// The ringtone list's row artwork: a bundled gold deity figure on a jewel-tone
-/// ground, with an oil-lamp diya raised over it while the track previews.
+/// The ringtone row's artwork — a bundled gold deity figure on a jewel-tone ground.
+/// An oil-lamp diya is raised over it while the track previews.
 ///
 /// Three layers, bottom to top:
-///   1. a gradient ground with a hairline rim — drawn, hashed per track
-///      ([RingtoneTileSpec])
-///   2. the deity PNG ([deityAsset]) — the only fetched-from-disk part
-///   3. only while previewing, a scrim + diya whose flame sways
+///   1. a gradient ground with a hairline rim, drawn and hashed per track ([RingtoneTileSpec]);
+///   2. the deity PNG ([deityAsset]) — the only fetched-from-disk part;
+///   3. only while previewing, a scrim plus a diya whose flame sways.
 ///
-/// ── WHAT THIS FILE USED TO BE ──────────────────────────────────────────────
-/// Layer 2 was six hand-drawn `CustomPainter` motifs (vel, trishul, lotus,
-/// shankha, 18 steps, gopuram) chosen by `category`. They are gone. A motif per
-/// category can only ever be as specific as the browse axis, and the browse
-/// axis is deliberately coarse — so all 35 `perumal` tracks wore one shankha
-/// whether they were to Venkateswara, Krishna, Rama or Narasimha. The art is
-/// now keyed by `deity`, which the drawn approach had no way to express.
-///
-/// The GROUND survived on purpose: ten jewel tones hashed off the track id are
-/// what stop 35 Murugan tracks — one deity, one PNG — from being 35 identical
-/// tiles. The kolam ring did NOT survive. It framed a small centred emblem;
-/// the deity figures fill the tile edge to edge, so the dots landed on top of
-/// them and read as clutter rather than a frame. Every parameter that only
-/// existed to vary that ring (dot count, start rotation) went with it. If a
-/// ring is ever wanted back, it needs a smaller figure first — the two cannot
-/// both own the outer band.
-///
-/// ── COLOUR NOTE ────────────────────────────────────────────────────────────
-/// The ten gradient grounds, the `#EBD6A3` gold ink, the scrim and the diya's
-/// flame colours below are ARTWORK, not UI chrome. They are the palette of one
-/// drawing — they have no role anywhere else in the app and must never grow
-/// into `ArulTokens`. Every value that *is* chrome (radius, sizes, motion) does
-/// come from the tokens. The PNGs are inked in that same `#EBD6A3`, so the
-/// constant below and the asset pipeline have to move together.
+/// A motif per CATEGORY can only be as specific as the browse axis, which is deliberately coarse.
+/// So the art is keyed by `deity` instead — 35 `perumal` tracks are not all Venkateswara.
+/// The GROUND stays hashed: ten jewel tones are what stop 35 Murugan tracks being 35 identical tiles.
+/// A kolam ring is NOT viable here — the figures fill the tile edge to edge, so dots read as clutter.
+/// Any ring wants a smaller figure first; the two cannot both own the outer band.
+/// The grounds, the `#EBD6A3` ink, the scrim and the flame colours are ARTWORK, not UI chrome.
+/// They are one drawing's palette, have no role elsewhere, and must NEVER grow into `ArulTokens`.
+/// Everything that IS chrome — radius, sizes, motion — does come from the tokens.
+/// The PNGs are inked in that same `#EBD6A3` -> the constant below and the asset pipeline move together.
 library;
 
 import 'dart:math' as math;
@@ -42,19 +26,14 @@ import 'deity_art.dart';
 
 /// Everything that makes one tile's GROUND look like itself.
 ///
-/// Built by [RingtoneTileSpec.forRingtone], a PURE function of the track's id —
-/// the catalog carries no art parameters. Never seed this from a list index:
-/// the same track would change costume whenever a category filter re-ordered
-/// the list.
-///
-/// The deity figure is deliberately NOT part of this spec. It is a fact about
-/// the track, not a hashed decoration, and it comes from the catalog.
+/// Built by [RingtoneTileSpec.forRingtone], a PURE function of the track id — the catalog has no art.
+/// NEVER seed it from a list index: a category filter would then change a track's costume.
+/// The deity figure is deliberately NOT part of this spec — it is a catalog fact, not a decoration.
 @immutable
 class RingtoneTileSpec {
   const RingtoneTileSpec({required this.groundIndex});
 
-  /// Index into the ten jewel-tone grounds — now the ONLY thing that varies
-  /// between two tracks of the same deity.
+  /// Index into the ten jewel-tone grounds — the ONLY thing that varies between two same-deity tracks.
   final int groundIndex;
 
   /// How many grounds exist; also the modulus [groundIndex] is reduced by.
@@ -62,27 +41,19 @@ class RingtoneTileSpec {
 
   /// The deterministic derivation. Same id → same spec, always.
   ///
-  /// The hash is salted with `:ground` rather than taken over the bare id. It
-  /// reads as pointless with one field left, and it is not: catalog ids are
-  /// short and share long prefixes ("rt-amman-01", "rt-amman-02"), and the salt
-  /// is what the avalanche below has to chew on to keep near-identical inputs
-  /// off the same ground. Dropping it re-opens the clustering it was added for.
+  /// Catalog ids are short and share long prefixes ("rt-amman-01", "rt-amman-02").
+  /// The `:ground` salt is what the avalanche below chews on to keep near-identical inputs apart.
+  /// Dropping it re-opens the clustering it was added for.
   factory RingtoneTileSpec.forRingtone({required String id}) {
     return RingtoneTileSpec(groundIndex: _hash('$id:ground') % groundCount);
   }
 
   /// FNV-1a with a Murmur3 `fmix32` avalanche on the way out, 32-bit.
   ///
-  /// Chosen over [String.hashCode] deliberately: Dart's string hash is not
-  /// guaranteed stable across runs or SDK versions, and a tile that silently
-  /// re-rolled its ground on an app update would be a bug nobody could
-  /// reproduce.
-  ///
-  /// The avalanche is not decoration. Plain FNV-1a mixes the LAST bytes least,
-  /// so every `'$id:ground'` — which all end in the same salt — landed in a
-  /// handful of buckets, and four of eight sample tiles drew the same ground.
-  /// fmix32 spreads each input bit across the whole word before the modulus
-  /// sees it.
+  /// Dart's [String.hashCode] is not stable across runs or SDK versions.
+  /// A tile that silently re-rolled its ground on an update is a bug nobody could reproduce.
+  /// Plain FNV-1a mixes the LAST bytes least, and every input here ends in the same salt.
+  /// Four of eight sample tiles then drew the same ground -> fmix32 spreads each bit first.
   static int _hash(String s) {
     var h = 0x811C9DC5;
     for (final unit in s.codeUnits) {
@@ -108,13 +79,11 @@ class RingtoneTileSpec {
   String toString() => 'RingtoneTileSpec(ground: $groundIndex)';
 }
 
-/// One row's artwork. Pass [playing] to raise the scrim + diya over it.
+/// One row's artwork. Pass [playing] to raise the scrim and diya over it.
 ///
-/// The flame's 1100ms sway ([ArulTokens.diyaFlicker]) is driven straight into
-/// the painter through `CustomPaint.foregroundPainter.repaint`, so a playing
-/// tile repaints without ever rebuilding a widget — and the ticker only runs
-/// while this row is the playing one. `MediaQuery.disableAnimations` holds the
-/// flame still with the glow parked at 0.4.
+/// The flame's sway drives the painter through `foregroundPainter.repaint`, never a widget rebuild.
+/// The ticker runs only while this row is the playing one.
+/// `MediaQuery.disableAnimations` holds the flame still, with the glow parked at 0.4.
 class RingtoneTile extends StatefulWidget {
   const RingtoneTile({
     super.key,
@@ -132,11 +101,10 @@ class RingtoneTile extends StatefulWidget {
   final bool playing;
   final double size;
 
-  /// The row's art size. Grew from 46 with the second text line (a one-line row
-  /// balanced at 46, a title-over-subtitle stack does not), then again to 56
-  /// when the art became a detailed figure rather than a centred emblem —
-  /// crowns, mudras and attributes are what tell two standing gods apart, and
-  /// they were the first thing to dissolve at 52.
+  /// The row's art size.
+  ///
+  /// A one-line row balanced at 46; a title-over-subtitle stack does not.
+  /// Crowns, mudras and attributes are what tell two standing gods apart, and they dissolved at 52.
   static const double defaultSize = 56;
 
   @override
@@ -150,8 +118,7 @@ class _RingtoneTileState extends State<RingtoneTile>
     duration: ArulTokens.diyaFlicker,
   );
 
-  /// `ease-in-out … alternate`: the easing applies to each direction, so the
-  /// reverse curve is the same curve rather than its inverse.
+  /// `ease-in-out … alternate` — the easing applies per direction, so the reverse is the same curve.
   late final Animation<double> _flicker = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeInOut,
@@ -195,17 +162,14 @@ class _RingtoneTileState extends State<RingtoneTile>
 
   @override
   Widget build(BuildContext context) {
-    // The PNGs are authored at 512² but never drawn larger than ~180 physical
-    // pixels. Decoding them at source size would hold ~1 MB of bitmap EACH —
-    // 17 MB across the set — for a 52dp tile. cacheWidth decodes at the size
-    // actually painted; the image cache keys on it, so the 35 Murugan rows
-    // still share one decode.
+    // The PNGs are authored at 512² but never drawn larger than ~180 physical pixels.
+    // Decoding at source size holds ~1 MB of bitmap EACH — 17 MB across the set, for a 52dp tile.
+    // cacheWidth decodes at the size actually painted, and the cache keys on it -> one shared decode.
     final cachePx = (widget.size * _devicePixelRatio).round();
 
     return RepaintBoundary(
       child: CustomPaint(
-        // Ground + kolam behind the figure, diya in front of it — the scrim has
-        // to cover the art, so it cannot share a painter with the ground.
+        // Ground behind the figure, diya in front — the scrim covers the art, so it needs its own.
         painter: RingtoneTileGroundPainter(spec: widget.spec),
         foregroundPainter: RingtoneTileDiyaPainter(
           playing: widget.playing,
@@ -220,9 +184,8 @@ class _RingtoneTileState extends State<RingtoneTile>
             cacheWidth: cachePx,
             cacheHeight: cachePx,
             filterQuality: FilterQuality.medium,
-            // A bundled asset cannot 404, but a mis-typed path in the resolver
-            // would throw mid-paint and take the whole list down. An empty box
-            // leaves the ground and the title readable instead.
+            // A bundled asset cannot 404, but a mis-typed path throws mid-paint and kills the list.
+            // An empty box leaves the ground and the title readable instead.
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         ),
@@ -254,8 +217,7 @@ class RingtoneTileGroundPainter extends CustomPainter {
   /// One warm gold ink — the same value the deity PNGs are drawn in.
   static const Color _ink = Color(0xFFEBD6A3);
 
-  /// The authoring viewBox: every coordinate below is in 46-unit space and is
-  /// scaled to the real tile size, which is [RingtoneTile.defaultSize].
+  /// The authoring viewBox — every coordinate below is 46-unit space, scaled to the real tile size.
   static const double _vb = 46;
 
   @override
@@ -279,8 +241,7 @@ class RingtoneTileGroundPainter extends CustomPainter {
         ).createShader(rect),
     );
 
-    // Inset hairline rim: 0.5 in, radius 12.5, so the stroke sits just inside
-    // the tile's own corner instead of straddling it.
+    // Inset hairline rim, 0.5 in at radius 12.5 -> the stroke sits inside the corner, not across it.
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         const Rect.fromLTWH(0.5, 0.5, _vb - 1, _vb - 1),
@@ -310,8 +271,7 @@ class RingtoneTileDiyaPainter extends CustomPainter {
   final bool playing;
   final bool reduceMotion;
 
-  /// 0 → 1 → 0 over two [ArulTokens.diyaFlicker] beats. Read only while
-  /// [playing] and motion is allowed.
+  /// 0 → 1 → 0 over two [ArulTokens.diyaFlicker] beats. Read only while [playing], motion permitting.
   final Animation<double> flicker;
 
   static const Color _ink = Color(0xFFEBD6A3);
@@ -327,8 +287,7 @@ class RingtoneTileDiyaPainter extends CustomPainter {
 
   static const double _vb = 46;
 
-  /// The handoff's three flame keyframes: `rotate(-4°) scaleY(.94)` →
-  /// `rotate(2°) scaleY(1.05)` → `rotate(-2°) scaleY(.97)`, about (23, 30).
+  /// The handoff's three flame keyframes about (23, 30): rotate -4°/scaleY .94 → 2°/1.05 → -2°/.97.
   static const List<(double, double)> _flameFrames = [
     (-4, 0.94),
     (2, 1.05),
@@ -338,8 +297,7 @@ class RingtoneTileDiyaPainter extends CustomPainter {
   /// The glow's opacity on the same three keyframes.
   static const List<double> _glowFrames = [0.28, 0.5, 0.32];
 
-  /// The glow opacity when motion is suppressed — a single held value rather
-  /// than the middle of the pulse.
+  /// The glow opacity when motion is suppressed — one held value, not the middle of the pulse.
   static const double _glowStill = 0.4;
 
   @override
@@ -425,8 +383,7 @@ class RingtoneTileDiyaPainter extends CustomPainter {
       ..restore();
   }
 
-  /// CSS keyframes at 0 / 50 / 100%: the first half interpolates frame 0→1,
-  /// the second 1→2.
+  /// CSS keyframes at 0 / 50 / 100% — the first half interpolates frame 0→1, the second 1→2.
   static double _sample(List<double> frames, double t) => t < 0.5
       ? _lerp(frames[0], frames[1], t * 2)
       : _lerp(frames[1], frames[2], (t - 0.5) * 2);

@@ -1,6 +1,7 @@
 ---
 name: on-device
 description: Run and debug Arul on a real Android device — flutter run with dart-defines, adb logcat capture, the proven filters for PhonePe, video/surface, and analytics issues, and agent UI automation (tools/drive.mjs by-label taps, Dart MCP app driving).
+disable-model-invocation: true
 ---
 
 # On-Device Run & Debug
@@ -25,7 +26,7 @@ Proven filters — grep the capture, don't eyeball:
 `[boot]` (`kReleaseMode`-gated) — are all readable in **debug and profile**. Never grep
 `VideoOutput` — that was media_kit's tag, and this app ships Media3 only.
 
-**A release build is SILENT by design** (owner directive 2026-08-24): `main()` reassigns
+**A release build is SILENT by design** (owner's call): `main()` reassigns
 `debugPrint` to a no-op under `kReleaseMode`, so every Dart log — this app's and every package's —
 is gone, and `-assumenosideeffects android.util.Log` strips Kotlin `v/d/i` (`w/e` are KEPT:
 operational error diagnostics). So `--release` is the wrong build to debug on: grep it and you get

@@ -1,23 +1,11 @@
 /**
  * Google idToken verification via JWKS.
+ * Spec: https://developers.google.com/identity/sign-in/web/backend-auth · JWKS: /oauth2/v3/certs
  *
- * Spec: https://developers.google.com/identity/sign-in/web/backend-auth
- * JWKS: https://www.googleapis.com/oauth2/v3/certs
- *
- * Required checks (per Google docs):
- *   1. Signature valid against Google public JWKS
- *   2. aud == GOOGLE_WEB_CLIENT_ID
- *   3. iss == "accounts.google.com" or "https://accounts.google.com"
- *   4. exp > now  (jose handles this automatically)
- *   5. email_verified == true
- *
- * The `nonce` claim is RETURNED, not checked here: only the caller knows what
- * the request asked for. handleLogin compares the two ("ensure your
- * server-side code validates that the request and response nonces are
- * identical" — Sign in with Google implementation guide).
- *
- * jose's createRemoteJWKSet caches the keyset and respects Cache-Control
- * from Google's response, which typically has a multi-hour TTL.
+ * `aud` is the WEB client id, never the Android one -> an Android-audience token is a different app's token
+ * Google issues both bare and https `accounts.google.com` -> accept both issuers or half the tokens fail
+ * The `nonce` claim is RETURNED, not checked -> only the caller knows what it asked for -> handleLogin compares
+ * createRemoteJWKSet caches the keyset and honours Google's Cache-Control -> keep it module-level, never per-call
  */
 
 import { jwtVerify, createRemoteJWKSet } from "jose";
@@ -25,7 +13,7 @@ import { jwtVerify, createRemoteJWKSet } from "jose";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const VALID_ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
 
-// Module-level JWKS function — reused across requests in the same Worker isolate.
+// Module-level -> reused across every request in the same isolate -> one JWKS fetch, not one per login
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
 function getGoogleJWKS(): ReturnType<typeof createRemoteJWKSet> {
@@ -40,14 +28,11 @@ export interface GoogleIdTokenClaims {
   email: string;
   email_verified: boolean;
   name: string | undefined;
-  /** Present only for tokens minted against a nonce (app builds from 1.0.0+60). */
+  /** Absent on tokens minted without a nonce -> older installs still sign in -> handleLogin must tolerate undefined. */
   nonce: string | undefined;
 }
 
-/**
- * Verify a Google idToken and return its claims.
- * @throws Error with a descriptive message if verification fails.
- */
+/** Every failure THROWS with a descriptive message -> there is no falsy "invalid" return -> callers must catch. */
 export async function verifyGoogleIdToken(
   idToken: string,
   googleWebClientId: string,
@@ -59,7 +44,7 @@ export async function verifyGoogleIdToken(
     issuer: VALID_ISSUERS,
   });
 
-  // jose validates exp automatically. Check email_verified explicitly.
+  // jose already enforces exp -> the missing expiry check is not an oversight -> email_verified is the one left
   if (payload["email_verified"] !== true) {
     throw new Error("Google account email is not verified");
   }

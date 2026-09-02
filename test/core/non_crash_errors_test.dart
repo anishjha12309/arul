@@ -1,6 +1,5 @@
-// Tests for isNonCrashError — the classifier that keeps Crashlytics'
-// crash-free rate about crashes. Image-pipeline and transport failures are
-// demoted to non-fatal; every other error stays fatal.
+// isNonCrashError keeps Crashlytics' crash-free rate about CRASHES -> image-pipeline and transport failures demote.
+// Every other error stays fatal -> a wrong demotion hides a real crash.
 
 import 'dart:async';
 import 'dart:io';

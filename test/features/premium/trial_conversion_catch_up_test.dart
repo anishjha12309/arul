@@ -1,14 +1,9 @@
-// Tests for TrialConversionCatchUp — the late `trial_started` for trials that
-// were granted with the app closed. The contracts under guard:
-//   - a trialing row whose order this install never reported fires EXACTLY
-//     ONE `trial_started` (order_id, value, late: true), and never again;
-//   - an order the purchase notifier already reported (markReported before the
-//     entitlement refresh) is never re-fired;
-//   - an install that predates the catch-up grandfathers the trial it finds on
-//     first run (no fire — it may have fired on the old build), but a LATER
-//     order on the same install does fire;
-//   - a fresh install has no such history and fires on first run;
-//   - non-trialing rows fire nothing and merely initialise the marker.
+// TrialConversionCatchUp fires the late `trial_started` for trials granted with the app closed.
+// A trialing row whose order this install never reported fires EXACTLY ONE event (order_id, value, late: true).
+// An order the purchase notifier already reported, marked before the entitlement refresh, is never re-fired.
+// An install predating the catch-up grandfathers the trial it finds on first run -> it may have fired on the old build.
+// A LATER order on the same install does fire, and a fresh install fires on first run.
+// Non-trialing rows fire nothing and merely initialise the marker.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -99,8 +94,7 @@ void main() {
     () async {
       final catchUp = await build();
 
-      // The notifier marks BEFORE it invalidates the entitlement; the refresh
-      // that follows must see the mark.
+      // The notifier marks BEFORE it invalidates the entitlement -> the refresh that follows must see the mark.
       catchUp.markReported('DKS_ORDER_1');
       expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
 
@@ -110,8 +104,7 @@ void main() {
 
   test('an install that predates the catch-up grandfathers the trial it finds, '
       'then fires for a later order', () async {
-    // No marker ever written + not a fresh install = the old build may already
-    // have fired this one. Record it, do not fire.
+    // No marker written and not a fresh install -> the old build may already have fired this -> record, do not fire.
     final catchUp = await build(isFreshInstall: false);
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
     expect(analytics.events, isEmpty);

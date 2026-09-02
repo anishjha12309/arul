@@ -26,8 +26,9 @@ no closing summary.
    developers.cloudflare.com, api.dart.dev / pub.dev. Cite as
    `EVIDENCE: WEB <url> — "quoted line"`.
 
-NOT evidence: another doc, a code comment, a commit message, CLAUDE.md, your memory of how
-PhonePe/Cloudflare/Android behaves, blog posts, or Stack Overflow. A doc cannot prove a doc.
+NOT evidence: another doc, a code comment, a commit message, CLAUDE.md, a `.claude/rules/` file, an
+auto-memory file, your memory of how PhonePe/Cloudflare/Android behaves, blog posts, or Stack
+Overflow. A doc cannot prove a doc, and a comment cannot prove behaviour.
 For claims about THIS repo, repo sources outrank vendor docs. If nothing above supports a
 claim, write `EVIDENCE: NONE FOUND` — never substitute a weaker source.
 

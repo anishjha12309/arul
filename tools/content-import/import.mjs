@@ -1,5 +1,5 @@
-// Stage F — the live import. R2 PUT (media + thumbs) → one Neon txn (84 rows +
-// content_version bump) → build-catalog → verify. Records import-result.json for rollback.
+// Stage F -> the live import: R2 PUT (media + thumbs) -> one Neon txn (rows + content_version bump) -> build-catalog.
+// R2 goes FIRST -> a failed insert leaves only orphans -> import-result.json records the commit for rollback.
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { AwsClient } from "aws4fetch";
@@ -33,26 +33,12 @@ console.log(`import-plan: ${plan.length} items`);
 
 // ---- 1. upload all R2 objects (media + video thumbs) ----
 
-/**
- * Cache-Control stamped on every uploaded media object.
- *
- * WHY a year, and why `immutable`: media keys are content UUIDs
- * (`wallpapers/<category>/<uuid>.mp4`). An object at a given key NEVER changes —
- * a replacement gets a new uuid and the old key is swept — so there is nothing
- * for a client or the edge to revalidate against.
- *
- * WHY it matters at all, given `.mp4` is already cached by Cloudflare's default
- * extension list: without an origin header the edge falls back to Cloudflare's
- * (much shorter) default TTL, so objects age out and every miss costs an R2
- * Class B operation. Those operations are the one part of R2 that is NOT free,
- * and media is the highest-volume thing this app serves — see CLAUDE.md §2.
- * Verified 2026-07-29: objects imported before this carried NO Cache-Control at
- * all (checked against the raw r2.dev origin, which bypasses edge caching).
- *
- * NOTE this only fixes objects uploaded FROM HERE ON. Anything already in the
- * bucket needs a metadata rewrite (S3 CopyObject with REPLACE) or a Cache Rule
- * that supplies the TTL instead — see docs/caching.md and known-issues.md §Open.
- */
+// Media keys are content UUIDs and an object at a key NEVER changes -> a year + immutable, nothing to revalidate.
+// A replacement gets a new uuid and the old key is swept -> the key itself is never reused.
+// Without an origin header the edge falls back to Cloudflare's much shorter default TTL -> objects age out.
+// Every miss then costs an R2 Class B operation -> the one part of R2 that is NOT free (CLAUDE.md §2).
+// This only fixes objects uploaded FROM HERE ON -> older ones need an S3 CopyObject REPLACE or a Cache Rule.
+// See docs/caching.md and known-issues.md §Open.
 const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 async function put(key, bytes, ct) {

@@ -4,8 +4,7 @@ import '../../../data/models/ringtone.dart';
 import '../domain/ringtone_repository.dart';
 
 /// Reads the ringtone catalog from the edge-cached CDN JSON
-/// (`catalog/ringtones/all_{page}.json`); returns an empty page on a CDN miss.
-/// Ported from the reference's CdnRingtoneRepository.
+/// (`catalog/ringtones/all_{page}.json`).
 class CdnRingtoneRepository implements RingtoneRepository {
   const CdnRingtoneRepository({required this.catalogClient});
 
@@ -13,8 +12,8 @@ class CdnRingtoneRepository implements RingtoneRepository {
 
   @override
   Future<CatalogPage<Ringtone>> getRingtones({int page = 1}) async {
-    // Always the shared "all" catalog — category filtering is client-side over
-    // the drained list (CLAUDE.md §5b: category is THE browse axis).
+    // Category is THE browse axis but filtering is client-side over the drained list -> only ever
+    // fetch the shared "all" catalog.
     final cdnPage = await catalogClient.fetchPage(
       scope: 'ringtones',
       slug: 'all',
@@ -24,10 +23,9 @@ class CdnRingtoneRepository implements RingtoneRepository {
 
     if (cdnPage != null) return cdnPage;
 
-    // CDN miss — an empty page, never a DB fallback. The build always writes
-    // page 1 even for a zero-row scope (architecture.md §Catalog generation),
-    // so a missing page means the build failed upstream; the screen degrades
-    // to its empty state rather than erroring.
+    // The build always writes page 1 even for a zero-row scope (architecture.md §Catalog
+    // generation) -> a miss means the build failed upstream, not that there are no ringtones.
+    // Degrade to the empty state, never a DB fallback.
     return CatalogPage<Ringtone>(
       items: const [],
       page: page,

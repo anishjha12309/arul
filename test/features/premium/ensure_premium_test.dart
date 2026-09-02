@@ -1,13 +1,8 @@
-// Tests for ensurePremium() — THE client gate (CLAUDE.md §5). The contracts
-// under guard:
-//   - it AWAITS entitlementProvider.future: a still-loading entitlement must
-//     never bounce a paying user to the paywall on a cold start. The gate may
-//     only answer after the read settles.
-//   - not premium → exactly one `${source}_blocked_premium` event (with the
-//     caller's attribution properties) and a route to /premium?source=.
-//   - premium → true, no event, no navigation.
-//   - an entitlement fetch failure fails CLOSED into the paywall UX (the
-//     Worker's /media/signed-url stays the authoritative gate).
+// ensurePremium() is THE client gate (CLAUDE.md §5) -> these are the contracts it has to hold.
+// It AWAITS entitlementProvider.future -> a loading entitlement must never bounce a paying user on cold start.
+// Not premium -> exactly one `${source}_blocked_premium` event with the caller's attribution, then /premium?source=.
+// Premium -> true, no event, no navigation.
+// An entitlement fetch failure fails CLOSED into the paywall -> the Worker's /media/signed-url stays authoritative.
 
 import 'dart:async';
 
@@ -43,9 +38,8 @@ void main() {
   late BuildContext gateContext;
   late WidgetRef gateRef;
 
-  /// Pumps a tiny app whose home captures a (context, ref) pair for calling
-  /// ensurePremium, and whose /premium route records the source it was opened
-  /// with — asserting the real navigation, not a mock of it.
+  /// Pumps a tiny app whose home captures a (context, ref) pair and whose /premium route records its source.
+  /// That asserts the REAL navigation, never a mock of it.
   Future<void> pumpGateHarness(
     WidgetTester tester, {
     required FutureOr<bool> Function() entitlement,
@@ -88,8 +82,7 @@ void main() {
     'awaits the entitlement future: while the read is still loading the gate '
     'gives NO answer, and a late true never shows the paywall',
     (tester) async {
-      // The entitlement read is gated open manually — the exact cold-start
-      // moment where reading a loading snapshot would bounce a paying user.
+      // The entitlement read is gated open by hand -> the exact cold-start moment a loading snapshot would bounce a payer.
       final entitled = Completer<bool>();
       await pumpGateHarness(tester, entitlement: () => entitled.future);
 

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/features/premium/presentation/member_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +30,10 @@ Future<void> _loadPremiumFonts() async {
 
 Widget _host(Widget child, {double textScale = 1}) => MaterialApp(
   debugShowCheckedModeBanner: false,
+  // The paywall reads its copy from the ARBs -> without the delegates
+  // `AppLocalizations.of` resolves to null and every test here dies on its null-check.
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
   home: MediaQuery(
     data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
     child: Scaffold(body: SafeArea(child: child)),

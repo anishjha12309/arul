@@ -1,14 +1,11 @@
 /**
  * Safety test for the local-dev PhonePe base-URL override.
  *
- * PHONEPE_BASE_URL_OVERRIDE exists so the autopay billing path can be driven to
- * a TERMINAL redemption state locally (PhonePe's UAT sandbox holds redemptions
- * PENDING, so COMPLETED/FAILED are otherwise only reachable on the live gateway
- * with real money). That makes it a var which, if it were ever honoured in
- * production, would point real ₹199 debits at an attacker-chosen host.
- *
- * The guarantee under test: on PRODUCTION the override is not merely unused, it
- * is unreachable — the production host is returned before the var is read.
+ * PHONEPE_BASE_URL_OVERRIDE drives the billing path to a TERMINAL redemption state locally
+ * The UAT sandbox holds redemptions PENDING -> COMPLETED and FAILED are otherwise only reachable with real money
+ * So it is a var that, if ever honoured in production, would point real ₹199 debits at an attacker-chosen host
+ * The guarantee under test: on PRODUCTION it is not merely unused, it is UNREACHABLE
+ * The production host is returned BEFORE the var is read -> that ordering is the safety property
  */
 
 import { describe, it, expect } from "vitest";
@@ -67,8 +64,8 @@ describe("getPgBase — production can never be redirected", () => {
   });
 
   it("case/whitespace variants of PRODUCTION still resolve to the prod host, override ignored", () => {
-    // Arul's isProduction() trims + uppercases (a "Production" secret means
-    // production), so the override must be unreachable for those variants too.
+    // isProduction() trims and uppercases -> a "Production\n" secret still means production
+    // So the override must be unreachable for every one of those variants, not just the exact string
     expect(
       getPgBase(
         env({ PHONEPE_ENV: "Production", PHONEPE_BASE_URL_OVERRIDE: "http://127.0.0.1:8799" }),
@@ -78,8 +75,7 @@ describe("getPgBase — production can never be redirected", () => {
   });
 
   it("garbage PHONEPE_ENV throws loudly instead of silently picking a host", () => {
-    // Arul delta vs the reference app: isProduction() THROWS on anything that
-    // is not PRODUCTION/SANDBOX — a typo must fail loudly, never downgrade.
+    // isProduction() THROWS on anything that is not PRODUCTION or SANDBOX -> a typo must fail loudly, never downgrade
     expect(() => getPgBase(env({ PHONEPE_ENV: "prod" }))).toThrow(/PHONEPE_ENV/);
     expect(() => getPgBase(env({ PHONEPE_ENV: "" }))).toThrow(/PHONEPE_ENV/);
   });

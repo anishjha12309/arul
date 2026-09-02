@@ -1,12 +1,8 @@
-/// Pumps one screen at one locale in one configuration and collects EVERY
-/// finding on the frame.
-///
-/// Collector, not first-failure. `tester.takeException()` surfaces one exception
-/// and swallows the rest, and an `expect` inside the walk would stop at the
-/// first bad paragraph — either way a screen with six broken strings reports one
-/// and the next run "regresses" when you fix it. So [probeScreen] intercepts
-/// `FlutterError.onError` for the duration of the pump, walks the whole render
-/// tree afterwards, and returns everything it saw.
+/// Pumps one screen at one locale in one configuration and collects EVERY finding on the frame.
+/// A COLLECTOR, not first-failure -> `tester.takeException()` surfaces one exception and swallows the rest.
+/// An `expect` inside the walk would stop at the first bad paragraph -> six broken strings would report one.
+/// The next run then "regresses" when you fix it.
+/// So [probeScreen] intercepts `FlutterError.onError` for the pump, walks the whole tree, and returns everything.
 library;
 
 import 'package:flutter/material.dart';
@@ -28,13 +24,11 @@ class ProbeResult {
 
   final List<Finding> findings;
 
-  /// Every ARB key that actually reached a paragraph. A screen that renders
-  /// nothing produces no findings and would otherwise pass silently — this is
-  /// what the matrix asserts against, and what the ledger is built from.
+  /// Every ARB key that actually reached a paragraph -> a screen rendering nothing would otherwise pass silently.
+  /// This is what the matrix asserts against and what the ledger is built from.
   final Set<String> observedKeys;
 
-  /// Every attributed paragraph that was measured, finding or not. The
-  /// overflow findings carry no key, so this is what identifies the culprit.
+  /// Every attributed paragraph measured, finding or not -> overflow findings carry no key, so this identifies the culprit.
   final List<Measurement> measurements;
 }
 
@@ -60,10 +54,8 @@ Future<ProbeResult> probeScreen(
   final previousOnError = FlutterError.onError;
   FlutterError.onError = (details) {
     final text = details.exceptionAsString();
-    // Overflow is reported as a FlutterError whose message names the direction
-    // and the amount. Everything else on this channel (an image that cannot
-    // load in a test, a missing plugin) is not this audit's business, and
-    // failing on it would make the matrix a general-purpose smoke test.
+    // Overflow arrives as a FlutterError naming the direction and the amount.
+    // Everything else on this channel is not this audit's business -> failing on it makes the matrix a smoke test.
     if (text.contains('overflowed by')) {
       overflowErrors.add(details);
     } else {
@@ -73,24 +65,19 @@ Future<ProbeResult> probeScreen(
 
   try {
     await tester.pumpWidget(build());
-    // Bounded pumps, never pumpAndSettle: the skeleton gradient in
-    // lib/app/widgets/skeleton.dart animates forever and would hang the suite.
+    // Bounded pumps, NEVER pumpAndSettle -> the skeleton gradient animates forever and would hang the suite.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
     await tester.pump(const Duration(milliseconds: 300));
 
-    // Give every paragraph the family that matches its OWN final weight, then
-    // re-lay-out, so an overflow caused by a post-theme `copyWith(fontWeight:)`
-    // fires here rather than measuring narrow and passing.
+    // Give every paragraph the family matching its OWN final weight, then re-lay-out.
+    // So an overflow caused by a post-theme `copyWith(fontWeight:)` fires here instead of measuring narrow and passing.
     if (_realizeParagraphs(tester)) {
       await tester.pump();
-      // That pump can rebuild a widget — the skeleton gradient, an entrance
-      // animation, a progress row — and `RichText.updateRenderObject` would
-      // then put the UN-realized span back. The restored style still names a
-      // registered family (the theme supplied one), so the box-glyph guard
-      // would not notice, and a w600 label would be measured against the w400
-      // cut: narrower than the truth, i.e. a false PASS. So realize again and
-      // require it to be a no-op.
+      // That pump can rebuild a widget -> `RichText.updateRenderObject` then puts the UN-realized span back.
+      // The restored style still names a registered family -> the box-glyph guard would not notice.
+      // A w600 label would be measured against the w400 cut -> narrower than the truth, a false PASS.
+      // So realize again and require it to be a no-op.
       if (_realizeParagraphs(tester)) {
         throw StateError(
           'Spans un-realized themselves on $screen/$locale/${config.id}: a '
@@ -101,10 +88,8 @@ Future<ProbeResult> probeScreen(
       }
     }
 
-    // One overflow, one finding. The same RenderFlex re-reports on every one of
-    // the bounded pumps above (and again after the span realization), so
-    // without this a single 16px overflow lands in the report six times and
-    // makes the counts meaningless.
+    // One overflow, one finding -> the same RenderFlex re-reports on every bounded pump and again after realization.
+    // Without this a single 16px overflow lands in the report six times and makes the counts meaningless.
     final seenOverflows = <String>{};
     for (final details in overflowErrors) {
       final message = _firstLine(details.exceptionAsString());
@@ -143,8 +128,8 @@ Future<ProbeResult> probeScreen(
   );
 }
 
-/// Rewrites every laid-out paragraph's span so its style carries the real face
-/// for its own weight. Returns true when anything changed.
+/// Rewrites every laid-out paragraph's span so its style carries the real face for its own weight.
+/// Returns true when anything changed.
 bool _realizeParagraphs(WidgetTester tester) {
   var changed = false;
   for (final object in tester.binding.renderViews.expand(_descendants)) {
@@ -190,15 +175,13 @@ List<Finding> _walkParagraphs(
     if (rendered.trim().isEmpty) continue;
 
     final key = attributor.attribute(rendered);
-    // Server-authored content — a wallpaper or ringtone title in the fake data
-    // — is out of scope (CLAUDE.md §6: only UI chrome is localized). Skipping
-    // it here is why the fakes are allowed realistic-length titles.
+    // Server-authored content is out of scope -> only UI chrome is localized (CLAUDE.md §6).
+    // Skipping it here is why the fakes are allowed realistic-length titles.
     if (key == null) continue;
 
     final style = span.style;
     if (style != null && isUnrealizedStyle(style)) {
-      // Box glyphs would make this measurement fiction. Fail rather than
-      // measure — a false green is the worst outcome available.
+      // Box glyphs would make this measurement fiction -> fail rather than measure, because a false green is worst.
       throw StateError(
         'Paragraph on $screen/$locale/${config.id} rendered with an '
         'unregistered family "${style.fontFamily}": "$rendered". '
@@ -206,21 +189,17 @@ List<Finding> _walkParagraphs(
       );
     }
 
-    // Two ARB keys can share a rendered string. Attribution picks one; this
-    // marker records that the pick was a guess, so the baseline subtraction
-    // refuses to act on it (known_defects.dart).
+    // Two ARB keys can share a rendered string -> attribution picks one, and this marker records that it was a guess.
+    // The baseline subtraction then refuses to act on it (known_defects.dart).
     final ambiguity = attributor.isAmbiguous(rendered)
         ? ' $kAmbiguousMarker'
         : '';
     observedKeys.add(key);
 
-    // An UNBOUNDED incoming constraint means the parent is measuring this
-    // paragraph intrinsically and will size itself to whatever it asks for —
-    // a FittedBox(scaleDown), an intrinsic-width column, a scrollable's
-    // cross-axis. Such a paragraph cannot clip, and comparing its width against
-    // its own intrinsic width is a tautology: the dock's three labels reported
-    // "0.0% spare" on every configuration for exactly this reason, which is a
-    // harness artifact, not a headroom warning. Only maxLines still applies.
+    // An UNBOUNDED incoming constraint means the parent measures this paragraph intrinsically and sizes to it.
+    // A FittedBox(scaleDown), an intrinsic-width column, a scrollable's cross-axis -> such a paragraph cannot clip.
+    // Comparing its width against its own intrinsic width is a tautology -> the dock's labels reported "0.0% spare".
+    // That is a harness artifact, not a headroom warning -> only maxLines still applies here.
     final bounded = object.constraints.maxWidth.isFinite;
     final available = bounded ? object.constraints.maxWidth : object.size.width;
 
@@ -242,14 +221,12 @@ List<Finding> _walkParagraphs(
       final paintedHeight = painter.height;
       final lineCount = painter.computeLineMetrics().length;
 
-      // Two verdicts, deliberately. `object.didExceedMaxLines` is what Flutter
-      // ACTUALLY did to this paragraph in the frame that was just laid out —
-      // authoritative about whether an ellipsis was painted. The independent
-      // re-measure is the §3 check, and it is the one that can be wrong (a
-      // reconstructed painter is not bit-identical to the render object's).
-      // Taking the union means a reconstruction that misses a truncation cannot
-      // hide a real one, and the disagreement itself is recorded so a harness
-      // fidelity bug shows up as a note rather than as silence.
+      // Two verdicts, deliberately -> `object.didExceedMaxLines` is what Flutter ACTUALLY did in the laid-out frame.
+      // That is authoritative about whether an ellipsis was painted.
+      // The independent re-measure is the audit's own check, and it is the one that can be wrong.
+      // A reconstructed painter is not bit-identical to the render object's.
+      // Taking the UNION means a reconstruction that misses a truncation cannot hide a real one.
+      // The disagreement is recorded too -> a harness fidelity bug shows up as a note rather than as silence.
       final byRender = object.didExceedMaxLines;
       final byPainter = painter.didExceedMaxLines;
       final exceeded = byRender || byPainter;
@@ -257,9 +234,8 @@ List<Finding> _walkParagraphs(
           ? ' [re-measure disagreed: render=$byRender painter=$byPainter]'
           : '';
 
-      // What the longest line actually needs, unwrapped. For a wrapping
-      // paragraph this is naturally larger than the slot and means nothing, so
-      // it is only consulted when wrapping is off or a maxLines cap is in play.
+      // What the longest line needs, unwrapped -> for a wrapping paragraph this exceeds the slot and means nothing.
+      // So it is only consulted when wrapping is off or a maxLines cap is in play.
       painter.layout(maxWidth: double.infinity);
       final intrinsic = painter.width;
       final singleLine = !object.softWrap || object.maxLines == 1;
@@ -343,8 +319,7 @@ List<Finding> _walkParagraphs(
   return out;
 }
 
-/// The nearest few ancestors, so a failure message points at a place in the
-/// code rather than at "a Text somewhere".
+/// The nearest few ancestors -> a failure message points at a place in the code rather than at "a Text somewhere".
 String _chain(RenderObject object) {
   final parts = <String>[];
   RenderObject? node = object.parent;

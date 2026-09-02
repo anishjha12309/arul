@@ -15,8 +15,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ReferralModel {
 
- String get id; String get referrerId; String get referredUserId; ReferralStatus get status; int get rewardDays; DateTime? get createdAt;/// Friend's display label from the Worker (`/me/referrals`): their name, or a
-/// masked email fallback, or null. Never the raw email (privacy).
+ String get id; String get referrerId; String get referredUserId; ReferralStatus get status; int get rewardDays; DateTime? get createdAt;/// Friend's label from `/me/referrals`: their name, a masked email, or null — never the raw
+/// email (privacy).
  String? get referredName;
 /// Create a copy of ReferralModel
 /// with the given fields replaced by the non-null parameter values.
@@ -226,8 +226,8 @@ class _ReferralModel implements ReferralModel {
 @override final  ReferralStatus status;
 @override final  int rewardDays;
 @override final  DateTime? createdAt;
-/// Friend's display label from the Worker (`/me/referrals`): their name, or a
-/// masked email fallback, or null. Never the raw email (privacy).
+/// Friend's label from `/me/referrals`: their name, a masked email, or null — never the raw
+/// email (privacy).
 @override final  String? referredName;
 
 /// Create a copy of ReferralModel

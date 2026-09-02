@@ -7,11 +7,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../core/api/api_client.dart';
 
-// ─── Target ───────────────────────────────────────────────────────────────────
-
-/// Android RingtoneManager tone slots. Arul's UI only ever offers
-/// [RingtoneTarget.ringtone]; the enum keeps the reference's full surface so
-/// the native channel contract stays identical.
+/// Android RingtoneManager tone slots — Arul's UI only ever offers [RingtoneTarget.ringtone].
+/// The full enum is kept so the native channel contract stays identical to the reference's.
 enum RingtoneTarget { ringtone, notification, alarm }
 
 extension RingtoneTargetAndroid on RingtoneTarget {
@@ -23,31 +20,23 @@ extension RingtoneTargetAndroid on RingtoneTarget {
   };
 }
 
-// ─── Exception ────────────────────────────────────────────────────────────────
-
 class RingtoneSetException implements Exception {
   const RingtoneSetException(this.message, {this.premiumRequired = false});
   final String message;
 
   /// The Worker refused with 403 `premium_required` → route to the paywall.
   ///
-  /// Entitlement is read live from Neon on every gated call, so a subscription
-  /// that lapsed or was refunded mid-session lands here even though the client
-  /// still believed it was premium. An ordinary business condition: no crash
-  /// record, and a toast would be a dead end because retrying fails identically
-  /// forever.
+  /// Entitlement is read live from Neon -> a lapse or refund mid-session lands here.
+  /// An ordinary business condition: no crash record, and a toast would be a dead end.
   final bool premiumRequired;
 
   @override
   String toString() => message;
 }
 
-// ─── Abstract interface ───────────────────────────────────────────────────────
-
 abstract interface class RingtoneSetService {
-  /// Calls the Worker `/media/signed-url` with the ringtone [id]. The server
-  /// runs the LIVE entitlement check (the real premium gate) and resolves the
-  /// audio key to a short-lived signed URL.
+  /// Calls the Worker `/media/signed-url` with the ringtone [id].
+  /// The server runs the LIVE entitlement check and resolves the key to a short-lived signed URL.
   Future<String> fetchSignedUrl(String id);
 
   /// Streams [url] to a temp file named [filename].
@@ -67,11 +56,10 @@ abstract interface class RingtoneSetService {
 
   /// Registers [file] in MediaStore and sets it as the device [target] tone.
   ///
-  /// [title] is the human-visible name shown in the system sound picker
-  /// (sanitized natively); [mime] is the real content type registered with
-  /// MediaStore. Both come from the catalog row — the downloaded file is named
-  /// by ringtone id, which the user must never see. Throws
-  /// [RingtoneSetException] on failure.
+  /// [title] is the name shown in the system sound picker, sanitized natively.
+  /// [mime] is the real content type registered with MediaStore.
+  /// Both come from the catalog row — the file is named by ringtone id, which the user must not see.
+  /// Throws [RingtoneSetException] on failure.
   Future<void> setRingtone(
     File file,
     RingtoneTarget target, {
@@ -79,8 +67,6 @@ abstract interface class RingtoneSetService {
     required String mime,
   });
 }
-
-// ─── Android implementation ───────────────────────────────────────────────────
 
 class AndroidRingtoneSetService implements RingtoneSetService {
   AndroidRingtoneSetService({
@@ -108,9 +94,7 @@ class AndroidRingtoneSetService implements RingtoneSetService {
       return url;
     } on ApiException catch (e) {
       if (e.isPremiumRequired) {
-        // The client-side gate already ran, so reaching here means its
-        // entitlement snapshot was stale — the subscription lapsed or was
-        // refunded mid-session.
+        // The client gate already ran -> reaching here means its snapshot was stale.
         throw const RingtoneSetException(
           'Premium subscription required',
           premiumRequired: true,
@@ -183,8 +167,7 @@ class AndroidRingtoneSetService implements RingtoneSetService {
         'mime': mime,
       });
     } on PlatformException catch (e) {
-      // e.message is raw platform text (a MediaStore exception, an OEM string) —
-      // log it, but surface only the authored message.
+      // e.message is raw platform text — log it, but surface only the authored message.
       debugPrint('[RingtoneSet] ${e.code}: ${e.message}');
       throw RingtoneSetException(e.message ?? 'Failed to set ringtone');
     }

@@ -1,13 +1,8 @@
-// Reclaim the staging ROOT by deleting media that archive-index.json already records AND
-// that is confirmed live in the library. Keeps the QC/watermark mechanism untouched.
-//
-// Safe by construction — a file is deleted only when BOTH hold:
-//   1. its content hash is in archive-index.json  (the record survives the delete), and
-//   2. that record is stamped live=1              (the app has the content).
-// Anything unrecorded, or recorded but NOT in the library, is KEPT: those are the only
-// copies left. Run archive-index.mjs first, then this.
-//
-// Dry run by default. Nothing is deleted without --apply.
+// Reclaim the staging ROOT -> delete only media archive-index.json records AND that is confirmed live.
+// A file goes only when its hash is in the index (the record survives) AND that record is stamped live=1.
+// Anything unrecorded, or recorded but NOT in the library, is KEPT -> those are the only copies left.
+// Run archive-index.mjs first -> a stale index leaves a file unrecorded, which is kept, not deleted.
+// Dry run by default -> nothing is deleted without --apply.
 //
 // Usage: node archive-prune.mjs [--root c:/Anish/arul-import] [--apply]
 import { readdirSync, statSync, readFileSync, unlinkSync, rmdirSync, existsSync } from "fs";
@@ -43,8 +38,8 @@ const files = dirs.flatMap((d) => walk(join(ROOT, d)));
 
 const del = [], keep = [];
 const stemOf = (n) => n.replace(/\.[^.]+$/, "");
-// A thumbs/ file is derived from the sibling clip, so it follows that clip's verdict.
-// Its own bytes are never in the index (archive-index.mjs skips thumbs/ as derivative).
+// A thumbs/ file is derived from its sibling clip -> it follows that clip's verdict.
+// Its own bytes are never in the index -> archive-index.mjs skips thumbs/ as derivative.
 const clipVerdictForThumb = new Map();
 for (const p of files) {
   const rel = relative(ROOT, p).replace(/\\/g, "/");
@@ -59,7 +54,7 @@ for (const p of files) {
   clipVerdictForThumb.set(stemOf(rel.split("/").pop()), !reason);
   void ext; void IMG;
 }
-// thumbs follow their clip; an orphan thumb (clip already gone) is derived scratch too
+// Thumbs follow their clip -> an orphan thumb whose clip is already gone is derived scratch too.
 for (const p of files) {
   const rel = relative(ROOT, p).replace(/\\/g, "/");
   if (!rel.includes("/thumbs/")) continue;
@@ -81,10 +76,9 @@ for (const k of keep) console.log(`   ${k.rel}\n       ${k.reason}`);
 
 if (!APPLY) { console.log(`\nNothing deleted. Re-run with --apply to delete.`); process.exit(0); }
 
-// Verify every delete actually took effect. A silent no-op is possible here (a first run
-// of this tool reported 182 deletions but left 38 files on disk, all of them with a U+2026
-// ellipsis in the name), so success is confirmed by re-stat, never assumed from a
-// non-throwing call. Failures are collected and printed at the END, not interleaved.
+// unlinkSync can no-op silently -> a run once reported 182 deletions and left 38 files, all with a U+2026 in the name.
+// So confirm every delete by re-stat -> never assume it from a non-throwing call.
+// Failures are collected and printed at the END -> never interleaved with progress.
 let n = 0, freed = 0;
 const failed = [];
 for (const d of del) {
@@ -92,7 +86,7 @@ for (const d of del) {
   if (existsSync(d.p)) { failed.push([d, "still present after unlink"]); continue; }
   n++; freed += d.bytes;
 }
-// drop directories that the prune emptied; a folder still holding kept media survives
+// Drop directories the prune emptied -> a folder still holding kept media survives.
 for (const dir of dirs) {
   const full = join(ROOT, dir);
   for (const sub of ["thumbs", ""]) {

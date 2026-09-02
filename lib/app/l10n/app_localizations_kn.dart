@@ -594,4 +594,64 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get uploadComingSoonToast => 'ಅಪ್‌ಲೋಡ್ ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತದೆ.';
+
+  @override
+  String get premiumNavTitle => 'ಚಂದಾದಾರಿಕೆ';
+
+  @override
+  String get premiumEyebrow => 'ಪ್ರೀಮಿಯಂ';
+
+  @override
+  String get premiumTagline => 'ಪ್ರತಿದಿನ ದೈವಿಕ ಕೃಪೆ';
+
+  @override
+  String get premiumPerMonthCaption => 'ತಿಂಗಳಿಗೆ';
+
+  @override
+  String get premiumTrialLeadPrefix => 'ನಿಮ್ಮ 1 ದಿನದ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಿ ';
+
+  @override
+  String get premiumRefundedBadge => 'ತಕ್ಷಣ ಮರುಪಾವತಿ';
+
+  @override
+  String get premiumFeatureWallpapers => 'ಅನಿಯಮಿತ HD ವಾಲ್‌ಪೇಪರ್‌ಗಳು';
+
+  @override
+  String get premiumFeatureRingtones => 'ಭಕ್ತಿ ರಿಂಗ್‌ಟೋನ್‌ಗಳು';
+
+  @override
+  String get premiumFeatureDaily => 'ಪ್ರತಿದಿನ ಹೊಸ ವಿಷಯ';
+
+  @override
+  String get premiumCtaTrial => 'ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಿ';
+
+  @override
+  String get premiumCtaSubscribe => 'ಈಗಲೇ ಚಂದಾದಾರರಾಗಿ';
+
+  @override
+  String get premiumReassuranceTrial =>
+      '₹2 ಪರಿಶೀಲನೆ, ತಕ್ಷಣ ಮರುಪಾವತಿ · ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ';
+
+  @override
+  String get premiumReassurancePaid =>
+      'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು';
+
+  @override
+  String get premiumSelectedUpiApp => 'UPI ಆ್ಯಪ್';
+
+  @override
+  String get upiPickerTitle => 'ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ';
+
+  @override
+  String get upiPickerLastUsed => 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು';
+
+  @override
+  String premiumTrialFinePrint(String price) {
+    return 'ನಂತರ ತಿಂಗಳಿಗೆ $price ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.';
+  }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-ನಲ್ಲಿ $name ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏';
+  }
 }

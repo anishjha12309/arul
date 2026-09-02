@@ -3,20 +3,17 @@ import 'deep_link_target.dart';
 
 /// Host of the verified Android App Link.
 ///
-/// MUST stay identical to three other places or deep links silently fall back to
-/// opening a browser, with nothing logged anywhere:
+/// MUST stay identical to three other places, or links silently open a browser with nothing logged:
 ///   · the `<data android:host>` of the App Links intent-filter in AndroidManifest.xml
 ///   · the `[[routes]]` custom domain in workers/wrangler.toml
 ///   · the host serving /.well-known/assetlinks.json (the same Worker)
 const String kDeepLinkHost = 'arul.hsrutility.com';
 
-/// Host of Meta's custom-scheme deep link: `fb<APP_ID>://open?…`. The scheme's
-/// app id is baked into the manifest from `META_APP_ID`; Android only delivers
-/// intents whose scheme matches, so Dart checks the shape, not the number.
+/// Host of Meta's custom-scheme deep link, `fb<APP_ID>://open?…`; the id is baked in from `META_APP_ID`.
+/// Android only delivers intents whose scheme matches -> Dart checks the SHAPE, never the number.
 const String kMetaLinkHost = 'open';
 
-/// The two URL shapes the ad team pastes, and what every delivery path resolves
-/// to (docs/deep-links.md):
+/// The two URL shapes the ad team pastes, and what every path resolves to (docs/deep-links.md):
 ///
 /// ```text
 /// https://arul.hsrutility.com/w/<uuid>?lang=hi                 wallpaper
@@ -25,10 +22,8 @@ const String kMetaLinkHost = 'open';
 /// fb<APP_ID>://open?screen=ringtones&ringtone_id=<uuid>&lang=hi ringtone (Meta)
 /// ```
 ///
-/// The query keys are accepted on BOTH hosts and the path form on ours, so a
-/// creative built in either style resolves; the Play referrer payload the
-/// Worker writes (`ref=…&w=<uuid>&lang=hi` / `r=<uuid>`) reads the same keys
-/// through [parseReferrerPayload].
+/// Query keys work on BOTH hosts, the path form only on ours -> either creative style resolves.
+/// The Play referrer payload the Worker writes reads the same keys, via [parseReferrerPayload].
 final RegExp _uuid = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
 );
@@ -47,10 +42,8 @@ class DeepLinkRequest {
   String toString() => 'DeepLinkRequest(target: $target, lang: $lang)';
 }
 
-/// Lower-cases and validates a wallpaper/ringtone id. Every id that reaches
-/// the app from outside is validated as a UUID before it is allowed to select
-/// a row: a bare-value referrer (utm campaigns, Play's own test payloads) must
-/// resolve to null, not to a lookup that will never match.
+/// Lower-cases and validates a wallpaper/ringtone id as a UUID before it may select a row.
+/// A bare-value referrer (utm campaigns, Play's test payloads) must resolve to NULL, not a dead lookup.
 String? normalizeUuid(String? raw) {
   if (raw == null) return null;
   final v = raw.trim().toLowerCase();
@@ -59,9 +52,8 @@ String? normalizeUuid(String? raw) {
 
 /// Reduces a `lang` value to one of the six shipped codes, or null.
 ///
-/// Tolerates region tags and case (`hi-IN`, `TA`) because ad ops paste these
-/// by hand; anything outside the shipped set is dropped rather than guessed —
-/// an unknown code must never leave the app in a locale it has no strings for.
+/// Ad ops paste these by hand -> tolerate region tags and case (`hi-IN`, `TA`).
+/// An unknown code must never leave the app in a locale it has no strings for -> drop, never guess.
 String? normalizeLang(String? raw) {
   if (raw == null) return null;
   var v = raw.trim().toLowerCase();
@@ -74,9 +66,8 @@ String? normalizeLang(String? raw) {
   return null;
 }
 
-/// Parse a URI handed to the app — an App Link, Meta's scheme, or a deferred
-/// link fetched by GA4F / the Meta SDK. Returns null for a URI that is not
-/// ours, or that names nothing we can act on.
+/// Parse a URI handed to the app — an App Link, Meta's scheme, or a GA4F/Meta deferred link.
+/// Null for a URI that is not ours, or that names nothing we can act on.
 DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
   final scheme = uri.scheme.toLowerCase();
   final host = uri.host.toLowerCase();
@@ -87,9 +78,8 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
 
   DeepLinkTarget? target;
   if (ours) {
-    // Empty segments dropped so this accepts exactly what android.net.Uri's
-    // getPathSegments() does — it skips them, so a campaign App URL with a
-    // trailing slash passes the native check and must not be thrown away here.
+    // android.net.Uri.getPathSegments() SKIPS empty segments -> a trailing-slash URL passes natively.
+    // So drop them here too, or a link the native side accepted is thrown away in Dart.
     final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segments.length == 2) {
       final id = normalizeUuid(segments[1]);
@@ -101,13 +91,9 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
         };
       }
     }
-    // `/r/` names the RINGTONES section even with no id after it — a campaign
-    // for the tab rather than one track (`/r/?lang=ta`), and the landing for a
-    // `/r/<typo>` that names no row we have. `/w/` deliberately does NOT get the
-    // matching treatment: it is the shipped language-only shape (owner's call,
-    // 2026-08-27 — "only open the app in that language"), and the feed is where
-    // the app opens anyway, so claiming the tab would only yank a warm user off
-    // Ringtones for nothing.
+    // `/r/` names the RINGTONES tab even with no id — a tab campaign, or a `/r/<typo>` landing.
+    // `/w/` deliberately does NOT match: it is the shipped LANGUAGE-ONLY shape (owner's call).
+    // The feed is where the app opens anyway -> claiming the tab would yank a warm user off Ringtones.
     if (target == null && segments.isNotEmpty && segments[0] == 'r') {
       target = TabLinkTarget(ArulTab.ringtones, source: source);
     }
@@ -133,13 +119,11 @@ DeepLinkRequest? parseDeepLink(String? raw, {required DeepLinkSource source}) {
   return parseDeepLinkUri(uri, source: source);
 }
 
-/// Parse the Play Install Referrer payload the Worker's `/w/:id` and `/r/:id`
-/// redirects hand Play (`ref=<code>&w=<uuid>&lang=hi`), which Android replays
-/// to the app on the first launch after the install.
+/// Parse the Play Install Referrer payload the Worker's `/w/:id` and `/r/:id` redirects hand Play.
+/// Android replays it to the app on the first launch after the install.
 ///
-/// Independent of the referral code on purpose: an ad click carries `w=` with
-/// no `ref=`, and a plain Refer & Earn share carries `ref=` with no target.
-/// Either half missing must not discard the other.
+/// An ad click carries `w=` with no `ref=`; a Refer & Earn share carries `ref=` with no target.
+/// So either half missing must not discard the other -> the target is parsed independently.
 DeepLinkRequest? parseReferrerPayload(
   String? raw, {
   DeepLinkSource source = DeepLinkSource.installReferrer,
@@ -159,9 +143,8 @@ DeepLinkRequest? parseReferrerPayload(
   return DeepLinkRequest(target: target, lang: lang);
 }
 
-/// `wallpaper_id`/`w` beats `ringtone_id`/`r` beats a bare `screen=`: an id
-/// implies its tab, so a creative that says `screen=ringtones&ringtone_id=…`
-/// resolves to the ringtone and the tab comes with it.
+/// An id implies its tab -> `wallpaper_id`/`w` beats `ringtone_id`/`r` beats a bare `screen=`.
+/// So `screen=ringtones&ringtone_id=…` resolves to the ringtone, and the tab comes with it.
 DeepLinkTarget? _targetFromQuery(
   Map<String, String> query,
   DeepLinkSource source,

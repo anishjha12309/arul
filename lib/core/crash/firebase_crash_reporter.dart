@@ -6,12 +6,9 @@ import 'crash_reporter.dart';
 
 /// Real [CrashReporter] backed by Firebase Crashlytics.
 ///
-/// Assumes `Firebase.initializeApp()` + collection-enable already ran in
-/// `main()` (every build except `flutter test`). Selected over
-/// [NoOpCrashReporter] only when `AppConfig.firebaseEnabled` (see
-/// `crash_provider.dart`), so the SDK is never touched uninitialised. All writes
-/// are fire-and-forget — the SDK persists + uploads in the background, so we
-/// never block the UI path.
+/// `Firebase.initializeApp()` and collection-enable already ran in `main()` — every build but tests.
+/// Selected over [NoOpCrashReporter] only when `AppConfig.firebaseEnabled` -> never touched cold.
+/// The SDK persists and uploads in the background -> writes are fire-and-forget, never on the UI path.
 class FirebaseCrashReporter implements CrashReporter {
   const FirebaseCrashReporter();
 

@@ -16,17 +16,13 @@ import '../models/app_config_model.dart';
 
 part 'repository_providers.g.dart';
 
-// ─── CDN infrastructure ───────────────────────────────────────────────────────
-
-/// Shared resolver for the always-fresh catalog version pointer. A single
-/// instance is shared by the catalog client and the app-config repo so all
-/// catalog reads in a load cycle stamp the same `?v=<version>` (see
-/// CatalogVersion) — keeping a paginated drain consistent.
+/// Shared resolver for the always-fresh catalog version pointer.
+/// One instance for the catalog client and the app-config repo -> every read stamps the same `?v=`.
+/// That is what keeps a paginated drain consistent.
 final _catalogVersion = CatalogVersion(cdnBaseUrl: AppConfig.cdnBaseUrl);
 
-/// Force the catalog version pointer to be re-read on the next fetch. Call this
-/// on an explicit refresh so a just-published version is picked up immediately
-/// (otherwise the session-cached version is reused).
+/// Force the catalog version pointer to be re-read on the next fetch.
+/// Call it on an explicit refresh -> a just-published version wins over the session-cached one.
 void invalidateCatalogVersion() => _catalogVersion.invalidate();
 
 /// Shared client for the edge-cached catalog JSON (public CDN, no auth).
@@ -35,8 +31,6 @@ CatalogHttpClient catalogHttpClient(Ref ref) => CatalogHttpClient(
   cdnBaseUrl: AppConfig.cdnBaseUrl,
   version: _catalogVersion,
 );
-
-// ─── Per-user (Worker-backed) repositories ────────────────────────────────────
 
 @Riverpod(keepAlive: true)
 SubscriptionRepository subscriptionRepository(Ref ref) =>
@@ -54,9 +48,8 @@ ReferralRepository referralRepository(Ref ref) =>
 AppConfigRepository appConfigRepository(Ref ref) =>
     ApiAppConfigRepository(version: _catalogVersion);
 
-/// The singleton remote app configuration (support email, prices, policy URLs,
-/// feature flags). Null until the catalog `app_config.json` has been baked, so
-/// consumers must provide their own fallbacks.
+/// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
+/// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
 @Riverpod(keepAlive: true)
 Future<AppConfigModel?> appConfig(Ref ref) =>
     ref.watch(appConfigRepositoryProvider).getAppConfig();

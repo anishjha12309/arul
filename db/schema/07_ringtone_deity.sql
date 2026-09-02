@@ -1,21 +1,11 @@
--- Arul — ringtone deity (row artwork + subtitle). Apply after 06_popularity.sql.
+-- Arul — ringtone deity: row artwork + subtitle, a display-only second axis.
 --
--- WHY a second axis when `category` already exists: category is THE browse axis
--- and must stay coarse (CLAUDE.md §5b — six chips, `others` catching everything
--- outside the five deities). But 35 Perumal tracks span Venkateswara, Krishna,
--- Rama, Narasimha and generic Narayana, and 15 Amman tracks span six goddesses.
--- One tile per category would put Lakshmi's art on a Chamundeshwari chant.
--- `deity` is display-only — art + the row's subtitle. It is NEVER a browse axis:
--- no chip filters on it, and nothing may start ordering by it.
---
--- Free text like `category`, and nullable on purpose. A null deity is legal and
--- resolves in the APP: deity asset → the category's default asset → fallback.png
--- (lib/features/ringtones/presentation/deity_art.dart). That chain is why a row
--- authored in the CMS without a deity degrades to sensible art instead of a
--- broken tile, and why a new deity slug is an insert here plus an app release
--- for its PNG — never a migration.
+-- category stays coarse for browse -> 35 Perumal tracks span five gods -> one category tile mis-attributes art.
+-- deity is display-only (art + subtitle) -> never a browse axis -> no chips filter on it, nothing orders by it.
+-- Nullable on purpose -> art resolves deity → category default → fallback.webp -> a null degrades, never breaks.
+-- Chain lives in lib/features/ringtones/presentation/deity_art.dart.
+-- Art ships in the binary as lossless WebP -> a new deity slug needs an app release -> an insert, never a migration.
 alter table ringtones add column if not exists deity text;
 
--- Not for filtering (nothing queries by deity) — it keeps the catalog build's
--- eventual `SELECT DISTINCT deity` coverage cheap and costs one small btree.
+-- Nothing filters by deity -> the index only keeps SELECT DISTINCT cheap -> one small btree, kept on purpose.
 create index if not exists ringtones_deity_idx on ringtones (deity);

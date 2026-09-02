@@ -1,10 +1,7 @@
 /**
- * Unit tests for lib/posthog.ts — server-side subscription_active capture.
- * Mocks KV and global fetch — no network.
- *
- * The invariant under test everywhere: reportPostHogFirstConversion NEVER
- * throws. It runs inside billing state transitions (webhook + autopay cron),
- * where an analytics failure must not cost a user their paid month.
+ * lib/posthog.ts — the server-side capture, against a mocked KV and fetch.
+ * The invariant under test everywhere: it NEVER throws -> it runs INSIDE billing state transitions
+ * An analytics failure there must never cost a user their paid month -> fail-open is the contract
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -52,7 +49,7 @@ describe("reportPostHogFirstConversion", () => {
     const body = JSON.parse(init.body as string);
     expect(body.api_key).toBe("phc_test");
     expect(body.event).toBe("subscription_active");
-    // distinct_id = users.id — the same value the app identifies with at login.
+    // distinct_id = users.id -> the SAME value the app identifies PostHog with at login -> that join is the whole point
     expect(body.distinct_id).toBe("user-1");
     expect(body.uuid).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,

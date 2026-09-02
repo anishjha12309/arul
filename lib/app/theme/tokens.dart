@@ -1,37 +1,26 @@
 import 'package:flutter/material.dart';
 
-/// The ONLY place a raw colour, radius, elevation or gap literal may appear in
-/// the `lib/app/theme` layer.
+/// The ONLY place a raw colour, radius, elevation or gap literal may appear in `lib/app/theme`.
 ///
-/// ── REDESIGN NOTE ────────────────────────────────────────────────────────────
-/// The normative token source for the UI redesign is `lib/theme/arul_tokens.dart`
-/// ([ArulTokens]) — new screens read from THAT file by role name (maroon / gold /
-/// ivory / darkSurface / ctaGreen …). This class is the LEGACY ladder that the
-/// ThemeData layer (schemes.dart) and the shared widgets still consume. Its NAMES
-/// are kept stable so nothing has to be rewritten at once, but its VALUES have
-/// been remapped onto the redesign palette, so no call site renders the old
-/// rose/teal seed anymore:
+/// [ArulTokens] in `lib/theme/arul_tokens.dart` is the normative source -> new code reads THAT by role.
+/// This is the LEGACY ladder schemes.dart and the shared widgets still consume -> never grow it.
+/// Its NAMES are kept only to avoid a big-bang rename; its VALUES are already the redesign palette:
 ///
-///   * `rose*`  → maroon `#7A1E33` (the redesign primary)
-///   * `teal*`  → gold `#D4A017` (the redesign accent; there is no teal now)
-///   * `tealCta`→ ctaGreen `#1FA75A` (ALL primary CTAs are green in the redesign)
+///   * `rose*`  → maroon `#7A1E33` (the primary)
+///   * `teal*`  → gold `#D4A017` (there is no teal any more)
+///   * `tealCta`→ ctaGreen `#1FA75A` (ALL primary CTAs are green)
 ///   * `gold*`  → gold `#D4A017`
 ///   * `ink*`   → the dark surfaces `#14090C / #1A0B0F / #241014 / #2A1218`
 ///   * `ivory*` → the light surfaces `#FAF5EC / #FFFFFF …`
-///
-/// The old naming is retained only to avoid a big-bang rename; prefer
-/// [ArulTokens] in any new code.
 abstract final class ArulColors {
   // ─── Maroon — the primary (was "rose") ──────────────────────────────────────
   /// Light-mode primary. Maroon `#7A1E33`.
   static const roseDeep = Color(0xFF7A1E33);
 
-  /// Dark-mode primary. Maroon hover `#8D2740` — a touch lighter than [roseDeep]
-  /// so it does not vanish against the near-black dark surface.
+  /// Dark-mode primary, maroon hover `#8D2740` — lighter than [roseDeep] or it vanishes on dark.
   static const rose = Color(0xFF8D2740);
 
-  /// Light maroon/rose for TEXT on a dark maroon container, and the muted-logout
-  /// label. `#F0C9BA` (Spec > Settings > Logout dark text).
+  /// Light maroon `#F0C9BA` for TEXT on a dark maroon container, and the muted-logout label.
   static const roseSoft = Color(0xFFF0C9BA);
 
   static const roseTint = Color(
@@ -54,17 +43,14 @@ abstract final class ArulColors {
   static const onTealDeep = Color(0xFF14090C);
   static const onTeal = Color(0xFF14090C);
 
-  /// The commit affordance — ctaGreen `#1FA75A`. The spec: ALL primary CTAs are
-  /// green, white label. (The old teal CTA is gone; the redesign mandates green.)
+  /// The commit affordance — ctaGreen `#1FA75A`. ALL primary CTAs are green with a white label.
   static const tealCta = Color(0xFF1FA75A);
 
   // ─── Gold — temple brass / accent ───────────────────────────────────────────
-  /// Darkened gold for tertiary TEXT on ivory (raw gold is too bright as light
-  /// text). `#8A6D12`.
+  /// Darkened gold `#8A6D12` for tertiary TEXT on ivory — raw gold is too bright there.
   static const goldDeep = Color(0xFF8A6D12);
 
-  /// The brand gold `#D4A017` — highlights, selection borders, premium marks,
-  /// icons on dark.
+  /// The brand gold `#D4A017` — highlights, selection borders, premium marks, icons on dark.
   static const gold = Color(0xFFD4A017);
 
   /// Softer gold for gold TEXT on a dark ground (tagline, footnotes). `#E8CE8A`.
@@ -77,8 +63,7 @@ abstract final class ArulColors {
   static const onGold = Color(0xFF14090C);
 
   // ─── Ember — error ──────────────────────────────────────────────────────────
-  /// A warm terracotta red, distinct from both maroon and gold so a failure can
-  /// never be misread as brand chrome.
+  /// A warm terracotta red, distinct from maroon and gold -> a failure never reads as brand chrome.
   static const emberDeep = Color(0xFFA5341E); // light error
   static const ember = Color(0xFFE08A6E); // dark error
 
@@ -93,10 +78,8 @@ abstract final class ArulColors {
   // ─── Dark surface ladder (was "ink") ────────────────────────────────────────
   /// The dark surface / splash background. Maroon-black `#14090C`.
   ///
-  /// MIRRORED OUTSIDE DART: android values/colors.xml (`splash_bg`,
-  /// `ic_launcher_background`) and the `flutter_native_splash` colours in
-  /// pubspec.yaml. All three must change together or the OS splash flashes a
-  /// different black than the first Flutter frame.
+  /// MIRRORED OUTSIDE DART in android values/colors.xml and pubspec's `flutter_native_splash`.
+  /// All three must change together -> or the OS splash flashes a different black than frame one.
   static const ink = Color(0xFF14090C);
 
   /// Sheets / dialogs / toasts on the dark surface. `#1A0B0F`.
@@ -105,8 +88,7 @@ abstract final class ArulColors {
   /// Dark sheet gradient top / high-elevation surface. `#241014`.
   static const inkHigh = Color(0xFF241014);
 
-  /// Top of the dark ladder: idle chips, skeleton highlight, tile backfill.
-  /// `#2A1218` (Spec > Feed loading mid-stop).
+  /// Top of the dark ladder `#2A1218` — idle chips, skeleton highlight, tile backfill.
   static const inkVariant = Color(0xFF2A1218);
 
   /// Primary text on the dark surface `#FAF5EC`, and the secondary tier `#B9A58F`.
@@ -137,8 +119,8 @@ abstract final class ArulColors {
   static const inverseLight = Color(0xFF2B1116);
 
   // ─── Over media ─────────────────────────────────────────────────────────────
-  // Chrome that sits on an arbitrary wallpaper defends its own contrast with a
-  // translucent dark fill plus a hairline. See ArulScrims for the gradient half.
+  // Chrome on an arbitrary wallpaper defends its own contrast: translucent dark fill plus a hairline.
+  // ArulScrims owns the gradient half.
 
   /// The fill under a pill / action button / live glyph, ON TOP of a scrim.
   static const mediaFill = Color(0x9914090C); // darkSurface @ 60%
@@ -193,14 +175,11 @@ abstract final class Radii {
 
 /// Elevation.
 ///
-/// Almost everything is flat. Hierarchy comes from surface COLOUR (the ink/ivory
-/// ladders above) and a hairline outline — never a drop shadow, because a black
-/// shadow on a near-black surface is invisible and a shadow-based system would
-/// therefore only work in one of the two themes.
+/// A black shadow is invisible on a near-black surface -> a shadow system works in one theme only.
+/// So hierarchy comes from surface COLOUR and a hairline outline, never a drop shadow.
 abstract final class Elevation {
   static const flat = 0.0;
 
-  /// The one exception: an app bar with a grid scrolled under it. Rendered as an
-  /// M3 surface TINT (ColorScheme.surfaceTint), which IS visible on ink.
+  /// The one exception — an app bar with a grid scrolled under it, as an M3 surface TINT visible on ink.
   static const scrolledUnder = 3.0;
 }

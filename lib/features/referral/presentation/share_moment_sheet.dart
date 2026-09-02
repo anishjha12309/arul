@@ -12,22 +12,17 @@ import '../../premium/presentation/paywall_ornaments.dart';
 import '../../premium/presentation/paywall_view.dart';
 import '../data/tell_a_friend.dart';
 
-/// A short, dismissible invitation to pass Arul on, shown at the two moments a
-/// user has just been given something: their subscription starting, and their
-/// own wallpaper going in for review.
+/// A short, dismissible invitation to pass Arul on, at the two moments a user was just given something.
+/// Their subscription starting, and their own wallpaper going in for review.
 ///
-/// A sheet rather than an action on the toast, because [showArulToast] has no
-/// action button on purpose — since Flutter 3.38 a SnackBar with an action stops
-/// auto-dismissing, which turns a transient toast into a permanent bar. Anything
-/// asking for a decision belongs here.
-///
+/// Since Flutter 3.38 a SnackBar with an action stops auto-dismissing — a permanent bar.
+/// So [showArulToast] has no action button, and anything asking for a decision belongs here.
 /// It never blocks: dismissing is one tap, and the caller continues either way.
 class ShareMomentSheet {
   const ShareMomentSheet._();
 
-  /// Shows the sheet and resolves once it closes — whether the user shared or
-  /// dismissed. Callers `await` it before popping their own screen, so the sheet
-  /// is never orphaned by a route disappearing beneath it.
+  /// Shows the sheet and resolves once it closes, shared or dismissed.
+  /// Callers `await` it before popping -> the sheet is never orphaned by a route vanishing beneath it.
   static Future<void> show(
     BuildContext context, {
     required String title,
@@ -173,13 +168,11 @@ class _Body extends ConsumerWidget {
             haptic: ArulHapticStyle.firm,
             onPressed: () {
               final nav = Navigator.of(context);
-              // The NAVIGATOR's context, not this sheet's: popping unmounts
-              // everything below, and tellAFriend still has to resolve
-              // AppLocalizations off a live element.
+              // The NAVIGATOR's context, not this sheet's — popping unmounts everything below.
+              // tellAFriend still has to resolve AppLocalizations off a LIVE element.
               final host = nav.context;
-              // Close FIRST — the share hands off to another app, and leaving
-              // the sheet behind means the user returns to a modal they have to
-              // dismiss before they can do anything else.
+              // Close FIRST — the share hands off to another app.
+              // Leaving the sheet up means returning to a modal they must dismiss before anything else.
               nav.pop();
               unawaited(tellAFriend(host, ref, source: source));
             },

@@ -1,25 +1,12 @@
-/// The screen registry — ONE list, pumped identically by Layer 1
-/// (`test/l10n/l10n_matrix_test.dart`) and Layer 2
-/// (`integration_test/l10n_matrix_test.dart`).
-///
-/// It is shared rather than duplicated because the agreement rule only means
-/// something if both layers cover the same surfaces: two registries that drift
-/// would let a Layer 2 pass "confirm" a Layer 1 result about a different screen.
-///
-/// Deliberately NOT here:
-///
-///   * the premium paywall tree (`ArulPaywallView`, `PriceLockup`, `_Footer`,
-///     the UPI picker) — English-by-decision, CLAUDE.md §5 and the design
-///     handoff. Its bundled Cinzel/Lora/Gelasio cuts are Latin-only subsets, so
-///     there is no Indic text to overflow. Ledgered, not measured;
-///   * `PolicyScreen` — a WebView with no Flutter-rendered localized chrome
-///     beyond a back affordance;
-///   * `SplashScreen` — no localized text (wordmark + a Latin-only eyebrow).
-///
-/// Nothing here touches the network: `AppConfig.hasBackend` is false under
-/// `flutter test` and under the Layer 2 build (no dart-defines), which is what
-/// keeps sign-in from auto-launching `authenticate()` (CLAUDE.md §8.3) and the
-/// entitlement provider from reaching Neon.
+/// The screen registry -> ONE list, pumped identically by the Layer 1 and Layer 2 matrices.
+/// Shared, never duplicated -> the agreement rule only means something if both layers cover the same surfaces.
+/// Two registries that drift would let a Layer 2 pass "confirm" a Layer 1 result about a different screen.
+/// The premium paywall tree is deliberately absent -> English-by-decision (CLAUDE.md §5) with Latin-only bundled cuts.
+/// There is no Indic text to overflow there -> it is ledgered, not measured.
+/// `PolicyScreen` is absent -> a WebView with no Flutter-rendered localized chrome beyond a back affordance.
+/// `SplashScreen` is absent -> no localized text, just a wordmark and a Latin-only eyebrow.
+/// Nothing here touches the network -> `AppConfig.hasBackend` is false with no dart-defines, in both layers.
+/// That is what keeps sign-in from auto-launching `authenticate()` and the entitlement provider off Neon.
 library;
 
 import 'package:flutter/material.dart';
@@ -75,8 +62,7 @@ class ScreenEntry {
   /// Stable identifier — appears in findings, the audit JSON and the ledger.
   final String id;
 
-  /// The widget handed to `MaterialApp.home`. A sheet or dialog entry returns a
-  /// [SheetHost], which opens it on the first frame.
+  /// The widget handed to `MaterialApp.home` -> a sheet or dialog entry returns a [SheetHost], opened on the first frame.
   final Widget Function() build;
 
   final List<Override> overrides;
@@ -84,32 +70,22 @@ class ScreenEntry {
   /// Text-field surfaces owe an extra pass with the IME up.
   final bool textField;
 
-  /// A surface that deliberately carries no words — the skeletons. The matrix
-  /// otherwise treats "rendered nothing" as a failure, because that is how a
-  /// screen that silently failed to build would slip through as a pass.
+  /// A surface that deliberately carries no words, such as a skeleton.
+  /// The matrix otherwise treats "rendered nothing" as a FAILURE -> that is how a screen that failed to build slips by.
   final bool textFree;
 
-  /// A surface that is HARDCODED ENGLISH: it renders string literals instead of
-  /// reading `AppLocalizations`, so a Tamil user sees English on it.
-  ///
-  /// This is a defect, not a configuration, and the flag does not excuse it —
-  /// it pins it. The matrix asserts that such a screen attributes keys in `en`
-  /// and NONE in the other five, which is the exact signature of hardcoded
-  /// text. Localize the screen and this assertion fails, which is the point:
-  /// the flag has to be deleted in the same change.
-  ///
-  /// Found by this audit's coverage check, all three with translations already
-  /// sitting unused in the ARBs — see OVERNIGHT-L10N-REPORT.md and
-  /// docs/known-issues.md.
+  /// A surface that is HARDCODED ENGLISH -> it renders string literals instead of reading `AppLocalizations`.
+  /// A Tamil user sees English on it -> a defect, not a configuration, and this flag PINS it rather than excusing it.
+  /// The matrix asserts such a screen attributes keys in `en` and NONE in the other five -> the signature of hardcoded text.
+  /// Localize the screen and the assertion FAILS -> that is the signal to delete the flag in the same change.
+  /// Found by this audit's coverage check, with translations already sitting unused in the ARBs (docs/known-issues.md).
   final bool unlocalizedEnglish;
 }
 
 /// Overrides every entry needs, whatever it is.
-///
-/// `sharedPreferencesProvider` throws by design when it has not been overridden
-/// in `main()`, and the theme-mode, locale and notification notifiers all read
-/// it during their first build — so without this every stateful screen throws
-/// before painting a single word.
+/// `sharedPreferencesProvider` throws by design when `main()` has not overridden it.
+/// The theme-mode, locale and notification notifiers all read it during their first build.
+/// So without this every stateful screen throws before painting a single word.
 late SharedPreferences _prefs;
 List<Override> get kBaseOverrides => [
   sharedPreferencesProvider.overrideWithValue(_prefs),
@@ -121,8 +97,7 @@ Future<void> initRegistry() async {
   _prefs = await SharedPreferences.getInstance();
 }
 
-/// Opens a modal on the first frame, so a sheet or dialog can be a registry
-/// entry without the matrix having to drive taps.
+/// Opens a modal on the first frame -> a sheet or dialog can be a registry entry without the matrix driving taps.
 class SheetHost extends StatefulWidget {
   const SheetHost({super.key, required this.open});
 
@@ -147,10 +122,9 @@ class _SheetHostState extends State<SheetHost> {
 
 // ─── Fake data ───────────────────────────────────────────────────────────────
 
-/// Realistic-length titles, on purpose. A fake catalog of "a", "b", "c" gives
-/// every row acres of free space and would hide the very overflows this matrix
-/// exists to find — the row's fixed furniture (medallion, transport control,
-/// Set pill) has to be competing for width the way it does in the shipped app.
+/// Realistic-length titles ON PURPOSE -> a fake catalog of "a", "b", "c" gives every row acres of free space.
+/// That would hide the very overflows this matrix exists to find.
+/// The row's fixed furniture must compete for width the way it does in the shipped app.
 final List<Ringtone> kFakeRingtones = <Ringtone>[
   Ringtone(
     id: 'r1',
@@ -200,8 +174,7 @@ Wallpaper _wallpaper(String id, String category) => Wallpaper.fromJson({
   'height': 1920,
 });
 
-/// One per category, so every chip in the browse rail is rendered — the chips
-/// are the widest row of localized text in the app.
+/// One per category, so every chip in the browse rail renders -> the chips are the widest row of localized text.
 final List<Wallpaper> kFakeWallpapers = <Wallpaper>[
   for (final c in const [
     'amman',
@@ -226,9 +199,8 @@ class _FakeCatalog extends CatalogNotifier {
   Future<List<Wallpaper>> build() async => _items;
 }
 
-/// The real notifier owns a `just_audio` player, which needs a platform. This
-/// keeps the one-row-at-a-time contract and opens with a row PLAYING, so the
-/// now-playing row's taller layout is what gets measured.
+/// The real notifier owns a `just_audio` player, which needs a platform -> this keeps the one-row-at-a-time contract.
+/// It opens with a row PLAYING -> the now-playing row's taller layout is what gets measured.
 class _StubPreview extends RingtonePreviewNotifier {
   @override
   RingtonePreviewState build() =>
@@ -261,8 +233,7 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     id: 'feed.empty',
     unlocalizedEnglish: true,
-    // The category label is interpolated into the body copy, so it gets the
-    // longest of the six ("ayyappan") rather than a short stand-in.
+    // The category label is interpolated into the body copy -> use the LONGEST of the six, never a short stand-in.
     build: () => Scaffold(
       body: FeedEmpty(categoryLabel: 'Ayyappan', onBrowseAll: () {}),
     ),
@@ -379,8 +350,7 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
   ScreenEntry(
-    // The long-form warning a paying user gets — five sentences about a
-    // forfeited subscription, and the single longest string in the ARB.
+    // The long-form warning a paying user gets -> the single longest string in the ARB.
     id: 'settings.confirm_delete_premium',
     build: () => SheetHost(
       open: (context) async {
@@ -480,22 +450,16 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
 
 // ─── Pumping ─────────────────────────────────────────────────────────────────
 
-/// Wraps [entry] in the app's real theme, real delegates and the configuration
-/// under test.
-///
-/// The theme goes through [applyRealFonts] so every style that descends from it
-/// names a real face; the dark theme is used because the type scale is
-/// identical in both (`ArulType.scale` differs only in colour) and layout
-/// cannot depend on which one is up.
+/// Wraps [entry] in the app's real theme, real delegates and the configuration under test.
+/// The theme goes through [applyRealFonts] -> every style descending from it names a real face.
+/// The DARK theme is used because the type scale is identical in both -> layout cannot depend on which one is up.
 Widget buildHarness({
   required ScreenEntry entry,
   required String locale,
   required L10nConfig config,
 }) {
-  // MaterialApp.router, not MaterialApp: several screens call `GoRouter.of`
-  // during their first build (the Ringtones header's Earn pill, Settings' row
-  // taps, sign-in's post-auth `context.go`) and assert without a router
-  // ancestor. Giving every entry the same shell keeps one code path.
+  // MaterialApp.router, never plain MaterialApp -> several screens call `GoRouter.of` during their first build.
+  // They assert without a router ancestor -> giving every entry the same shell keeps one code path.
   final router = GoRouter(
     initialLocation: '/',
     routes: [
@@ -549,9 +513,8 @@ Widget buildHarness({
   );
 }
 
-/// Native channels the registry's screens reach for. Returning null from every
-/// one keeps the video pool, the audio preview and the platform info plugins
-/// inert without changing a line of app code.
+/// Native channels the registry's screens reach for -> returning null from every one keeps the plugins inert.
+/// That covers the video pool, the audio preview and platform info, without changing a line of app code.
 const List<String> kFakeChannels = <String>[
   'arul/feed_video',
   'arul/feed_video_events',
@@ -562,9 +525,8 @@ const List<String> kFakeChannels = <String>[
   'plugins.flutter.io/shared_preferences',
 ];
 
-/// Installs the no-op handlers. Layer 1 calls this; Layer 2 does not — on the
-/// device the real plugins exist and are harmless (nothing here initiates a
-/// network call or a sign-in).
+/// Installs the no-op handlers -> Layer 1 calls this and Layer 2 does not.
+/// On a device the real plugins exist and are harmless -> nothing here initiates a network call or a sign-in.
 void installFakeChannels(TestDefaultBinaryMessenger messenger) {
   for (final name in kFakeChannels) {
     messenger.setMockMethodCallHandler(MethodChannel(name), (_) async => null);

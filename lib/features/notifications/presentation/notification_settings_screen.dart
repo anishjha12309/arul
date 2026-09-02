@@ -12,9 +12,8 @@ import '../../../theme/arul_tokens.dart';
 import '../domain/devotional_event.dart';
 import '../providers/notification_providers.dart';
 
-/// Settings sub-screen for devotional reminders: one master switch (accepting it
-/// enables the whole set — the weekly day and every festival) plus the time they
-/// fire. No per-festival opt-ins, on purpose.
+/// Settings sub-screen for devotional reminders — one master switch plus the time they fire.
+/// Accepting it enables the WHOLE set, the weekly day and every festival; no per-festival opt-ins.
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -30,9 +29,8 @@ class _NotificationSettingsScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // The OS permission can diverge from the persisted opt-in — revoked in
-    // system settings, or granted on one install and not the next. Reconcile on
-    // open so the toggle never shows an opt-in that Android is quietly blocking.
+    // The OS permission can diverge from the persisted opt-in — revoked, or granted on one install.
+    // Reconcile on open -> the toggle never shows an opt-in Android is quietly blocking.
     ref.read(notificationSettingsProvider.notifier).syncWithSystem();
   }
 
@@ -104,8 +102,7 @@ class _NotificationSettingsScreenState
                     ),
                   ),
 
-                  // One reminder time is the ONLY remaining control — turning
-                  // the feature on turns on the whole set.
+                  // One reminder time is the ONLY other control — turning it on turns on the set.
                   if (settings.masterEnabled) ...[
                     const SizedBox(height: ArulTokens.contentGap),
                     _Card(
@@ -120,10 +117,8 @@ class _NotificationSettingsScreenState
                     const SizedBox(height: 12),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      // Says what arrives and roughly how often, so the opt-in
-                      // is informed. The wording is deliberately vague about
-                      // dates — the festival reminders fire a few days ahead
-                      // and never name one (see [kFestivalLeadDays]).
+                      // Says what arrives and roughly how often -> the opt-in is informed.
+                      // Vague about dates on purpose — festival reminders fire early, never name one.
                       child: Text(
                         l10n.remindersScheduleNote,
                         style: ArulTokens.rowSub.copyWith(
@@ -136,12 +131,9 @@ class _NotificationSettingsScreenState
                     _Card(child: _WhatYoullGet(festivals: festivalEvents)),
                   ],
 
-                  // Debug AND sideloaded release APK; never the Play build. The
-                  // gate is deliberately NOT kDebugMode: the failures these
-                  // tools catch (R8 stripping the notification icons, a channel
-                  // holding a stale sound, an alarm that silently never armed)
-                  // only happen in a RELEASE build, so tools that compiled out
-                  // of release could never have caught them.
+                  // Debug AND sideloaded release APK; never the Play build.
+                  // R8 stripping icons, a stale channel sound, an alarm never armed happen in RELEASE.
+                  // So the gate is deliberately NOT kDebugMode — such a tool could never catch them.
                   if (ref.watch(qaToolsEnabledProvider)) ...[
                     const SizedBox(height: ArulTokens.contentGap),
                     _QaTools(
@@ -192,8 +184,7 @@ class _NotificationSettingsScreenState
     }
   }
 
-  /// Reads back what is ACTUALLY armed with the OS, which is the only check here
-  /// that can fail for a reason the eye cannot see.
+  /// Reads back what is ACTUALLY armed with the OS — the only check that can fail invisibly.
   Future<void> _audit() async {
     try {
       final audit = await ref.read(notificationServiceProvider).audit();
@@ -221,8 +212,6 @@ class _NotificationSettingsScreenState
     }
   }
 }
-
-// ─── Building blocks ──────────────────────────────────────────────────────────
 
 /// The same rounded, hairline-bordered surface Settings uses for its rows card.
 class _Card extends StatelessWidget {
@@ -372,13 +361,10 @@ class _TimeRow extends StatelessWidget {
   }
 }
 
-/// The next few festivals, named. Turning on a reminder feature and being shown
-/// nothing but a switch asks the user to take the value on faith; this makes the
-/// promise concrete.
+/// The next few festivals, named — a switch alone asks the user to take the value on faith.
 ///
-/// It shows only what the table can actually back — a festival whose dates have
-/// run out is skipped here exactly as it is skipped by the scheduler, so the
-/// list can never advertise a reminder that will not arrive.
+/// Shows only what the table can back: a festival out of dates is skipped exactly as the scheduler
+/// skips it, so the list can never advertise a reminder that will not arrive.
 class _WhatYoullGet extends StatelessWidget {
   const _WhatYoullGet({required this.festivals});
 
@@ -464,18 +450,14 @@ class _WhatYoullGet extends StatelessWidget {
       '${_month(l10n, d.month)} ${d.day}';
 }
 
-/// On-device QA for the reminder system. Present in debug and in a sideloaded
-/// release APK; absent from the Play build (`qaToolsEnabled`).
+/// On-device QA for the reminder system — debug and sideloaded release APK, never Play.
 ///
 /// Three checks, each answering something the others cannot:
-///  * **Send a test** — does a notification reach the shade at all? (permission,
-///    channel, the OEM's battery policy)
-///  * **Preview all** — do the real icons, copy, accent and sound render? This
-///    is the one that catches R8 having stripped `ic_notification`, which only
-///    ever happens in a release build.
-///  * **What's armed** — did the alarms actually get scheduled? A reminder that
-///    looks perfect and was never armed is indistinguishable from a working one
-///    until the day it does not arrive.
+///  * **Send a test** — does a notification reach the shade at all (permission, channel, OEM policy);
+///  * **Preview all** — do the real icons, copy, accent and sound render? Catches R8 having stripped
+///    `ic_notification`, which only ever happens in a release build;
+///  * **What's armed** — did the alarms actually get scheduled? One that looks perfect and never
+///    armed is indistinguishable from a working one until the day it does not arrive.
 class _QaTools extends StatelessWidget {
   const _QaTools({
     required this.onTest,

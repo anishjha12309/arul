@@ -5,13 +5,10 @@ import '../theme/tokens.dart';
 
 /// Loading placeholder.
 ///
-/// Deliberately NOT the `shimmer` package, and not `ShaderMask`: both mask, and
-/// a mask forces `saveLayer()` — a full offscreen render pass, every frame, per
-/// shimmering widget. Over a video feed on a budget SoC that is exactly the
-/// wrong tax.
-///
-/// A sliding gradient FILL is visually identical on a solid block and is an
-/// ordinary paint: no mask, no offscreen buffer, no saveLayer.
+/// `shimmer` and `ShaderMask` both mask -> a mask forces `saveLayer()`, an offscreen pass per widget
+/// per frame -> never one of those over a video feed on a budget SoC.
+/// A sliding gradient FILL looks identical on a solid block and is an ordinary paint — no mask, no
+/// offscreen buffer, no saveLayer.
 class Skeleton extends StatefulWidget {
   const Skeleton({
     super.key,
@@ -21,11 +18,10 @@ class Skeleton extends StatefulWidget {
 
   final BorderRadius borderRadius;
 
-  /// True when this skeleton sits over full-bleed media (the viewer), where it
-  /// must stay dark in BOTH themes — a light skeleton would flash white against
-  /// a wallpaper. False in the grid, where it is a placeholder ON a surface and
-  /// must follow the theme: a hardcoded dark block is a hole punched in an ivory
-  /// screen.
+  /// True over full-bleed media (the viewer) -> stay dark in BOTH themes, or it flashes white
+  /// against a wallpaper.
+  /// False on a surface (the grid) -> follow the theme, or a hardcoded dark block punches a hole in
+  /// the ivory screen.
   final bool onMedia;
 
   @override
@@ -38,8 +34,8 @@ class _SkeletonState extends State<Skeleton>
     vsync: this,
     duration: Motion.skeletonSweep,
   )..repeat();
-  // TickerMode (inherited from the route) already parks this controller when the
-  // page isn't current, so a backgrounded feed page stops requesting frames.
+  // TickerMode from the route already parks this controller off-page -> a backgrounded feed page
+  // requests no frames.
 
   @override
   void dispose() {
@@ -50,9 +46,8 @@ class _SkeletonState extends State<Skeleton>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // Over media the redesign's loading fill is a dark-surface sweep
-    // (#14090C → #2A1218), never a coloured flash; on a surface the placeholder
-    // follows the theme and lifts toward the brand hue.
+    // Over media the sweep stays dark-on-dark, never a coloured flash -> on a surface it follows the
+    // theme and lifts toward the brand hue.
     final base = widget.onMedia
         ? ArulColors.ink
         : scheme.surfaceContainerHighest;

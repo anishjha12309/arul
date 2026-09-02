@@ -1,3 +1,4 @@
+import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/upi/upi_apps.dart';
 import 'package:arul/features/premium/presentation/resubscribe_view.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 const _phonePe = UpiApp(packageName: 'com.phonepe.app', label: 'PhonePe');
 
 Widget _host(Widget child, {double scale = 1}) => MaterialApp(
+  // The paywall reads its copy from the ARBs -> without the delegates
+  // `AppLocalizations.of` resolves to null and every test here dies on its null-check.
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
   home: MediaQuery(
     data: MediaQueryData(textScaler: TextScaler.linear(scale)),
     child: Scaffold(body: SafeArea(child: child)),

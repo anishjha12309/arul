@@ -1,23 +1,16 @@
-/**
- * Unit tests for entitlement logic.
- * Mocks the postgres.js Sql object — no live DB.
- */
+/** Entitlement logic against a mocked postgres.js Sql -> these assert the SQL TEXT, since no live DB runs it. */
 
 import { describe, it, expect, vi } from "vitest";
 import { isPremium, premiumPredicate } from "../src/lib/entitlement.js";
 import type postgres from "postgres";
 
 function makeMockSql(rows: unknown[]): postgres.Sql {
-  // Return a tagged-template-literal compatible mock
+  // The mock must be callable as a tagged template -> premiumPredicate composes as one
   const mock = vi.fn().mockResolvedValue(rows);
   return mock as unknown as postgres.Sql;
 }
 
-/**
- * isPremium now composes premiumPredicate as a nested tagged-template call, so
- * the SQL text is spread across the mock's calls. Join everything to assert on
- * the full statement regardless of composition.
- */
+/** isPremium composes premiumPredicate as a NESTED tagged template -> the SQL spans several mock calls -> join them all. */
 function allQueryText(mockFn: ReturnType<typeof vi.fn>): string {
   return mockFn.mock.calls
     .map((call) => ((call as unknown[])[0] as string[]).join(""))
@@ -55,8 +48,7 @@ describe("entitlement.isPremium", () => {
   });
 
   it("exposes the rule as ONE composable fragment (premiumPredicate)", async () => {
-    // Callers like /media/signed-url inline this fragment instead of copying
-    // the rule — assert the exported fragment itself carries the whole rule.
+    // /media/signed-url INLINES this fragment rather than copying the rule -> assert the fragment carries all of it
     const mockFn = vi.fn().mockResolvedValue([]);
     const sql = mockFn as unknown as postgres.Sql;
     await premiumPredicate(sql, "user-uuid-123");
@@ -70,9 +62,8 @@ describe("entitlement.isPremium", () => {
   });
 
   it("has NO allow-list bypass — premium comes solely from the DB", async () => {
-    // The former PREMIUM_TEST_USER_IDS override was removed 2026-07-01 so a
-    // declined/failed payment can never grant access. isPremium takes only
-    // (sql, userId): the DB query is the single source of truth and ALWAYS runs.
+    // There is NO test-user override -> a declined payment could otherwise grant access
+    // isPremium takes only (sql, userId) -> the DB query is the single source of truth and ALWAYS runs
     expect(isPremium.length).toBe(2);
     const mockFn = vi.fn().mockResolvedValue([]); // DB says NOT premium
     const sql = mockFn as unknown as postgres.Sql;
@@ -82,46 +73,42 @@ describe("entitlement.isPremium", () => {
   });
 
   it("also honors the referral reward pool (users.reward_premium_until)", async () => {
-    // A referrer with no subscription but unexpired reward credit is premium.
+    // A referrer with NO subscription but unexpired reward credit is premium -> the client copy missed this
     const mockFn = vi.fn().mockResolvedValue([{ ok: true }]);
     const sql = mockFn as unknown as postgres.Sql;
     const result = await isPremium(sql, "referrer-uuid");
     expect(result).toBe(true);
     const query = allQueryText(mockFn);
     expect(query).toContain("reward_premium_until");
-    // Still gates the subscription branch on the same three statuses.
+    // The subscription branch still gates on the same statuses -> the reward pool is additive, never a replacement
     expect(query).toContain("'trialing'");
     expect(query).toContain("'active'");
     expect(query).toContain("'cancelled'");
   });
 
   it("carries the DEBIT_GRACE window for trialing/active only", async () => {
-    // The renewal debit rides the HOURLY autopay cron, so a flawless payer
-    // sits past current_period_end for up to ~1h + settle time every cycle. A
-    // strict `> now()` cutoff closed the gate on the mainline path at every
-    // period boundary. The grace branch must exist, and must be scoped to the
-    // statuses a debit is actually coming for — 'cancelled' gets NO grace
-    // (period end IS the end), and dunning's flip to 'expired' ends it.
+    // The renewal debit rides the cron -> a flawless payer sits past current_period_end every cycle
+    // A strict `> now()` cutoff therefore closed the gate on the MAINLINE path at every period boundary
+    // So the grace branch must exist, scoped to the statuses a debit is actually coming for
+    // 'cancelled' gets NO grace -> period end IS the end -> and dunning's flip to 'expired' ends it
     const mockFn = vi.fn().mockResolvedValue([]);
     const sql = mockFn as unknown as postgres.Sql;
     await premiumPredicate(sql, "user-uuid-123");
     const strings = (mockFn.mock.calls[0] as unknown[])[0] as string[];
     const query = strings.join("");
     expect(query).toContain("interval '6 hours'");
-    // The grace OR-branch names only trialing/active; the strict branch is the
-    // only place 'cancelled' appears, so it occurs exactly once in the SQL.
+    // The grace branch names only trialing/active -> 'cancelled' appears in the strict branch alone, exactly once
     const cancelledMentions = query.split("'cancelled'").length - 1;
     expect(cancelledMentions).toBe(1);
-    // Grace never resurrects terminal rows.
+    // Grace must never resurrect a terminal row -> 'paused' and 'expired' appear in neither branch
     expect(query).not.toContain("'expired'");
     expect(query).not.toContain("'paused'");
   });
 
   it("keeps a still-paid period working through a 'pending' resubscribe claim", async () => {
-    // A resubscribe overwrites the user's ONE subscriptions row to 'pending'
-    // while the sheet is open. Without 'pending' in the strict branch, tapping
-    // Resubscribe instantly stripped a cancelled-but-still-paid trial (device
-    // 2026-08-12). Strict branch only — a pending attempt gets no debit grace.
+    // A resubscribe overwrites the user's ONE row to 'pending' while the sheet is open
+    // Without 'pending' in the strict branch, tapping Resubscribe instantly stripped a still-paid trial
+    // Strict branch ONLY -> a pending attempt gets no debit grace -> no debit is in flight for it
     const mockFn = vi.fn().mockResolvedValue([]);
     const sql = mockFn as unknown as postgres.Sql;
     await premiumPredicate(sql, "user-uuid-123");
@@ -139,8 +126,7 @@ describe("entitlement.isPremium", () => {
 
     await isPremium(sql, userId);
 
-    // The tagged template call passes strings + values; userId should be in
-    // values (it rides inside the premiumPredicate fragment call).
+    // A tagged template passes strings and values separately -> userId must be a VALUE, never interpolated text
     const argsStr = JSON.stringify(mockFn.mock.calls);
     expect(argsStr).toContain(userId);
   });

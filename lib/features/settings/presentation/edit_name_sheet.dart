@@ -6,10 +6,9 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The edit-name sheet — spec: "'Your name' + sub 'Shown on wallpapers you
-/// upload'; field 54px r14, 1.5px focus border (gold dark / maroon light),
-/// person icon, live counter '11 / 40' 11.5px right; green Save 50px. Max 40
-/// chars." Resolves to the trimmed new name on Save, or null on dismiss.
+/// The edit-name sheet, laid out to the mock's spec.
+///
+/// Resolves to the trimmed new name on Save -> null on dismiss.
 Future<String?> showEditNameSheet(BuildContext context, String current) {
   return showArulSheet<String>(
     context,
@@ -38,7 +37,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
   void initState() {
     super.initState();
     _controller.addListener(() => setState(() {}));
-    // Auto-focus so the caret + gold ring show immediately, matching the mock.
+    // The mock shows the field already ringed and caret-ready -> focus it on the first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
@@ -67,13 +66,11 @@ class _EditNameSheetState extends State<_EditNameSheet> {
     final fieldBg = isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight;
     final textColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final counterColor = isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint;
-    // The field carries a persistent gold/maroon ring in the mock (it is the
-    // focused state); an unfocused hairline keeps it stable if focus is lost.
+    // The mock's field is always ringed (that IS its focused state) -> hairline only if focus is lost.
     final idleBorder = isDark
         ? ArulTokens.cardBorderDark14
         : ArulTokens.cardBorderLight;
 
-    // Push the sheet above the keyboard.
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(

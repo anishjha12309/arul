@@ -1,21 +1,10 @@
 /**
- * "Me" routes — all JWT-gated, scoped to the verified `sub`.
+ * "Me" routes — all JWT-gated, every query scoped to the VERIFIED `sub`, which is users.id.
  *
- *   GET /me               — current user identity + subscription (cold-start recovery)
- *   GET /me/subscription  — current subscription row (404 if none) — kept for old clients
- *   GET /me/submissions   — caller's content_submissions { items: [...] }
- *   GET /me/referrals     — caller's referrals as referrer { items: [...] }
- *
- * Response shapes match the Flutter models exactly. Those models use
- * `@JsonSerializable(fieldRename: FieldRename.snake)`, so every JSON key is
- * snake_case (user_id, current_period_end, reward_days, file_key, ...).
- *
- * Security:
- *   - `sub` is the verified JWT subject = users.id (uuid). We NEVER read it
- *     from the request body. Every query is parameterized and scoped to `sub`.
- *   - GET /me returns users.id (uuid) so the app can recover the real user id
- *     on cold start (the JWT sub IS users.id, but we re-read to confirm the row
- *     still exists and to return current profile fields).
+ * The user id is NEVER read from a request body -> only the verified subject scopes a query here
+ * Every response shape matches the Flutter models exactly -> they rename fields to snake_case -> so must every key
+ * GET /me re-reads the row rather than trusting the token -> it confirms the row still exists and returns live fields
+ * GET /me/subscription is kept only for old clients -> GET /me already carries the same subscription object
  */
 
 import type { Context } from "hono";
@@ -34,16 +23,12 @@ import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 // ── GET /me ──────────────────────────────────────────────────────────────────
 
 /**
- * GET /me also carries the caller's subscription row (or null) in one query —
- * WHY: cold-start merge. The app reads profile + entitlement from a single
- * request on launch instead of two, halving startup Neon round trips through
- * Hyperdrive. subscriptions is a 1:0..1 relation to users, so a LEFT JOIN keeps
- * this a single-row result whether or not the user has ever subscribed.
+ * GET /me carries the caller's subscription row in the SAME query — a cold-start merge.
  *
- * The `user` object shape is UNCHANGED (old app builds parse it as before).
- * The `subscription` object, when present, matches handleMeSubscription's
- * response exactly (same keys, same toIso serialization) — see that handler
- * below, kept untouched for old clients still calling GET /me/subscription.
+ * The app reads profile and entitlement in one launch request instead of two -> half the startup Neon round trips
+ * subscriptions is 1:0..1 to users -> a LEFT JOIN stays a single-row result whether or not they ever subscribed
+ * The `user` shape is UNCHANGED -> old builds must keep parsing it -> never rename a key here
+ * The `subscription` object matches handleMeSubscription byte for byte -> same keys, same serialization
  */
 export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -52,17 +37,12 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
 
   const sql = getDb(env);
   try {
-    // Alias every joined subscriptions column (sub_*) to avoid collisions with
-    // the users columns of the same name (id, user_id doesn't exist on users
-    // but status/plan-style names could be added later — alias defensively).
-    // `premium` is the SERVER-COMPUTED entitlement (premiumPredicate — the one
-    // place the rule lives: subscription statuses + debit grace + the referral
-    // reward pool). The app's gate reads THIS flag and never re-derives the
-    // rule from the row: the client-side copy of the rule drifted (it knew
-    // nothing about reward_premium_until, so a reward-only referrer was bounced
-    // to the paywall while /media/signed-url would have signed for them).
-    // The row still ships alongside — the premium screen needs status/dates to
-    // say anything true about the plan.
+    // Alias every joined subscriptions column as sub_* -> a shared column name would silently collide with users
+    // `premium` is the SERVER-COMPUTED entitlement from premiumPredicate -> the one place the rule lives
+    // The app's gate reads THIS flag and never re-derives the rule from the row
+    // A client copy of the rule drifted once -> it knew nothing of reward_premium_until
+    // That bounced a reward-only referrer to the paywall while /media/signed-url would have signed for them
+    // The row still ships alongside -> the premium screen needs status and dates to say anything true
     const rows = await sql`
       SELECT u.id, u.display_name, u.email, u.referral_code,
              s.id AS sub_id, s.user_id AS sub_user_id, s.status AS sub_status,
@@ -83,7 +63,7 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
       return errorResponse(404, "not_found", "User not found");
     }
     const row = rows[0];
-    // No subscriptions row → the LEFT JOIN yields nulls in every s.* column.
+    // No subscriptions row -> the LEFT JOIN nulls every s.* column -> emit `subscription: null`, not an empty object
     const subscription =
       row.sub_id === null
         ? null
@@ -96,13 +76,9 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
               (row.sub_phonepe_subscription_id as string | null) ?? null,
             merchant_subscription_id:
               (row.sub_merchant_subscription_id as string | null) ?? null,
-            // The SETUP order id — the same value the app passed to
-            // `_trackConversion` as `order_id`. It is the key the app's
-            // trial_started catch-up dedupes on: a trial granted app-closed
-            // (webhook resurrect, process killed behind the UPI app) never
-            // fired the event in-session, and this is how the next launch
-            // knows WHICH trial it still owes — one event per order, never a
-            // repeat for one the purchase poll already reported.
+            // The SETUP order id — the same value the app sends as `order_id` -> the trial_started catch-up dedupes on it
+            // A trial granted app-closed never fired the event in-session -> a webhook resurrect, or a killed process
+            // This is how the next launch knows WHICH trial it still owes -> one event per order, never a repeat
             merchant_order_id: (row.sub_merchant_order_id as string | null) ?? null,
             trial_end: toIso(row.sub_trial_end),
             current_period_end: toIso(row.sub_current_period_end),
@@ -116,8 +92,7 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
         referralCode: row.referral_code as string,
       },
       subscription,
-      // Additive — old builds ignore it. Strict === true so a missing/odd
-      // value fails CLOSED (free), matching the gate's philosophy everywhere.
+      // Additive -> old builds ignore it. Strict === true -> a missing or odd value fails CLOSED, to free
       premium: row.premium === true,
     });
   } catch (err) {
@@ -130,16 +105,12 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
 
 // ── POST /me/profile ───────────────────────────────────────────────────────────
 
-/** Max display name length — must match the DB CHECK and the client counter. */
+/** Max display name length -> must match the DB CHECK and the client's counter -> three copies, change all three. */
 const MAX_DISPLAY_NAME = 200;
 
 /**
  * POST /me/profile — update the caller's editable profile fields.
- *
- * Body: { displayName: string }. The name is trimmed; it must be non-empty and
- * at most MAX_DISPLAY_NAME chars. Setting it flips display_name_custom = true so
- * the login handler stops overwriting it from Google. Scoped to the verified
- * `sub` — the user id is NEVER read from the body.
+ * Setting a name flips display_name_custom = true -> that is what stops login overwriting it from Google
  */
 export async function handleUpdateProfile(
   c: Context<{ Bindings: Env }>,
@@ -202,24 +173,16 @@ export async function handleUpdateProfile(
 // ── DELETE /me ───────────────────────────────────────────────────────────────
 
 /**
- * DELETE /me — permanently delete the caller's account.
+ * DELETE /me — permanently delete the caller's account. THE ORDER OF THE THREE STEPS IS LOAD-BEARING.
  *
- * Body (optional): { refreshToken } — revoked after successful deletion so the
- * old session dies immediately (the ≤15m access token expires on its own; all
- * gated actions read live DB state, which is gone).
- *
- * Order matters:
- *   1. Revoke any live PhonePe mandate FIRST — deleting the row while the
- *      mandate stays live would keep debiting a user we no longer know.
- *      Aborts with 502 if PhonePe still reports the mandate live.
- *   2. One transaction: write the trial tombstone (only when the free trial
- *      was consumed — see lib/tombstone.ts), then delete the users row.
- *      Everything else cascades (subscriptions, content_submissions,
- *      referrals; other users' referred_by goes NULL).
- *   3. The user's R2 submission objects become orphans and are reclaimed by
- *      the hourly sweep-submissions cron — no R2 work here. Approved content
- *      was COPIED to canonical keys at publish time and stays in the catalog
- *      (anonymous app content, no PII).
+ * 1. Revoke any live PhonePe mandate FIRST -> deleting the row first keeps debiting a user we no longer know
+ *    It aborts with 502 while PhonePe still reports the mandate live -> never delete past that
+ * 2. ONE transaction: write the trial tombstone, only when the free trial was consumed, then delete the users row
+ *    Everything else cascades -> subscriptions, submissions, referrals; another user's referred_by goes NULL
+ * 3. The user's R2 submission objects become orphans -> the sweep cron reclaims them -> no R2 work belongs here
+ *    Approved content was COPIED to canonical keys at publish -> it stays in the catalog, anonymous and PII-free
+ * The optional { refreshToken } is revoked after deletion -> the access token expires on its own
+ * That is safe because every gated action reads live DB state, and the row is gone
  */
 export async function handleDeleteAccount(
   c: Context<{ Bindings: Env }>,
@@ -233,7 +196,7 @@ export async function handleDeleteAccount(
     const body = (await c.req.json()) as { refreshToken?: unknown };
     if (typeof body.refreshToken === "string") refreshToken = body.refreshToken;
   } catch {
-    // Body is optional — deletion proceeds without a token to revoke.
+    // The body is optional -> deletion proceeds with no token to revoke -> never fail a delete over a missing one
   }
 
   const sql = getDb(env);
@@ -252,8 +215,7 @@ export async function handleDeleteAccount(
     const status = row.status as string | null;
     const merchantSubId = row.merchant_subscription_id as string | null;
 
-    // 1. A mandate may be live for any non-terminal status ('pending' included
-    //    — setup can complete at PhonePe after we read the row).
+    // 1. A mandate may be live under any non-terminal status, 'pending' included -> setup can complete after this read
     if (merchantSubId && status !== null && status !== "cancelled" && status !== "expired") {
       const revoked = await revokeMandateTolerant(env, merchantSubId);
       if (!revoked) {
@@ -263,8 +225,7 @@ export async function handleDeleteAccount(
           "Could not cancel your subscription with PhonePe. Please try again.",
         );
       }
-      // The row is about to cascade-delete with the user; report the churn
-      // now while its prior status is still known.
+      // The row is about to cascade-delete with the user -> report the churn NOW, while its prior status is still known
       await reportPostHogSubscriptionCancel(env, {
         userId: sub,
         merchantSubId,
@@ -273,7 +234,7 @@ export async function handleDeleteAccount(
       });
     }
 
-    // 2. Tombstone (trial consumed only) + cascade delete, atomically.
+    // 2. Tombstone (only when the trial was consumed) and the cascade delete, ATOMICALLY -> a split loses the guard
     const trialEnd = row.trial_end as Date | null;
     const subHash =
       trialEnd === null
@@ -281,7 +242,7 @@ export async function handleDeleteAccount(
         : await hashGoogleSub(row.google_sub as string, env.TRIAL_TOMBSTONE_SECRET);
     await sql.begin(async (tx) => {
       if (subHash !== null) {
-        // ON CONFLICT keeps the earliest tombstone — it only needs to exist.
+        // ON CONFLICT keeps the EARLIEST tombstone -> it only ever needs to exist, never to be current
         await tx`
           INSERT INTO trial_tombstones (google_sub_hash, trial_end)
           VALUES (${subHash}, ${trialEnd})
@@ -291,9 +252,8 @@ export async function handleDeleteAccount(
       await tx`DELETE FROM users WHERE id = ${sub}`;
     });
 
-    // 3. Revoke the refresh token. Best-effort: the account is already gone,
-    //    so a KV hiccup here must NOT surface as a delete failure — the token
-    //    is useless anyway (every gated read now 404s) and expires on its own.
+    // 3. Revoke the refresh token, best-effort -> the account is gone -> a KV hiccup must not read as a failed delete
+    //    The token is useless regardless -> every gated read now 404s, and it expires on its own
     if (refreshToken) {
       try {
         const claims = await verifyRefreshToken(refreshToken, env.JWT_SECRET);
@@ -337,8 +297,7 @@ export async function handleMeSubscription(
     }
 
     const row = rows[0];
-    // Match SubscriptionModel.fromJson (snake_case). Dates as ISO-8601 strings
-    // so Dart's DateTime.parse accepts them; null stays null.
+    // Match SubscriptionModel.fromJson -> dates as ISO-8601 strings for Dart's DateTime.parse, and null stays null
     return c.json({
       id: row.id as string,
       user_id: row.user_id as string,
@@ -378,7 +337,7 @@ export async function handleMeSubmissions(
       ORDER BY created_at DESC
     `;
 
-    // Match ContentSubmissionModel.fromJson (snake_case), wrapped in { items }.
+    // Match ContentSubmissionModel.fromJson, wrapped in { items } -> the app parses no bare array
     const items = rows.map((row) => ({
       id: row.id as string,
       user_id: row.user_id as string,
@@ -412,13 +371,11 @@ export async function handleMeReferrals(
 
   const sql = getDb(env);
   try {
-    // The caller's own code (for the share link) — the Refer & Earn screen reads
-    // everything it needs from this one endpoint.
+    // The caller's own code, for the share link -> the Refer and Earn screen reads everything from this ONE endpoint
     const me = await sql`SELECT referral_code FROM users WHERE id = ${sub} LIMIT 1`;
     const referralCode = (me[0]?.referral_code as string | undefined) ?? null;
 
-    // Join the referred friend for a display label. reward_days is 30 once
-    // 'rewarded', 0 otherwise, so total_reward_days = SUM(reward_days).
+    // Join the referred friend for a display label -> reward_days is only non-zero once 'rewarded' -> SUM gives the total
     const rows = await sql`
       SELECT r.id, r.referrer_id, r.referred_user_id, r.status, r.reward_days,
              r.created_at, u.display_name AS referred_name, u.email AS referred_email
@@ -428,7 +385,7 @@ export async function handleMeReferrals(
       ORDER BY r.created_at DESC
     `;
 
-    // Match ReferralModel.fromJson (snake_case), wrapped in { items }.
+    // Match ReferralModel.fromJson, wrapped in { items } -> the app parses no bare array
     let totalRewardDays = 0;
     const items = rows.map((row) => {
       const rewardDays = Number(row.reward_days);
@@ -440,7 +397,7 @@ export async function handleMeReferrals(
         status: row.status as string,
         reward_days: rewardDays,
         created_at: toIso(row.created_at),
-        // Prefer the friend's name; fall back to a masked email; else null.
+        // Prefer the friend's name, then a MASKED email, then null -> the referrer must never see a full address
         referred_name:
           (row.referred_name as string | null)?.trim() ||
           maskEmail(row.referred_email as string | null),
@@ -462,11 +419,7 @@ export async function handleMeReferrals(
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Mask an email for display in the referrer's list (privacy — the referrer
- * should not see a friend's full address). "amir@gmail.com" → "am***@gmail.com".
- * Returns null for null/blank input.
- */
+/** Mask an email for the referrer's list -> "amir@gmail.com" becomes "am***@gmail.com" -> never show a full address. */
 function maskEmail(email: string | null): string | null {
   if (!email) return null;
   const at = email.indexOf("@");
@@ -477,11 +430,11 @@ function maskEmail(email: string | null): string | null {
   return `${shown}***${domain}`;
 }
 
-/** Convert a DB timestamp value to an ISO-8601 string, or null. */
+/** A DB timestamp as ISO-8601, or null -> the Flutter models parse only that shape. */
 function toIso(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value.toISOString();
-  // postgres.js may return ISO strings already; pass through if parseable
+  // postgres.js may return an ISO string already -> pass it through when it parses, never re-wrap blindly
   const d = new Date(value as string);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }

@@ -253,16 +253,14 @@ final class AppConfigRepositoryProvider
 String _$appConfigRepositoryHash() =>
     r'92968e48a8811781d12a7a3023559f27861b555d';
 
-/// The singleton remote app configuration (support email, prices, policy URLs,
-/// feature flags). Null until the catalog `app_config.json` has been baked, so
-/// consumers must provide their own fallbacks.
+/// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
+/// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
 
 @ProviderFor(appConfig)
 final appConfigProvider = AppConfigProvider._();
 
-/// The singleton remote app configuration (support email, prices, policy URLs,
-/// feature flags). Null until the catalog `app_config.json` has been baked, so
-/// consumers must provide their own fallbacks.
+/// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
+/// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
 
 final class AppConfigProvider
     extends
@@ -272,9 +270,8 @@ final class AppConfigProvider
           FutureOr<AppConfigModel?>
         >
     with $FutureModifier<AppConfigModel?>, $FutureProvider<AppConfigModel?> {
-  /// The singleton remote app configuration (support email, prices, policy URLs,
-  /// feature flags). Null until the catalog `app_config.json` has been baked, so
-  /// consumers must provide their own fallbacks.
+  /// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
+  /// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
   AppConfigProvider._()
     : super(
         from: null,

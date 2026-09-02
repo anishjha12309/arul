@@ -6,13 +6,10 @@ import 'analytics_service.dart';
 
 /// Real [AnalyticsService] backed by PostHog.
 ///
-/// Assumes `Posthog().setup(...)` has already run in `main()` — this class only
-/// forwards events onto the configured singleton. It is selected over
-/// [NoOpAnalyticsService] only when a real project key is present (see
-/// `analytics_provider.dart`), so tests and key-less dev builds stay offline.
-///
-/// All calls are fire-and-forget: the SDK queues + batch-uploads in the
-/// background, so we never block the caller (or await on the UI path).
+/// `Posthog().setup(...)` runs in `main()` -> this class only forwards onto that singleton.
+/// Chosen over [NoOpAnalyticsService] only when a real project key is present
+/// (`analytics_provider.dart`) -> tests and key-less dev builds stay offline.
+/// The SDK queues and batch-uploads in the background -> fire-and-forget, never awaited on the UI path.
 class PostHogAnalyticsService implements AnalyticsService {
   const PostHogAnalyticsService();
 
@@ -43,9 +40,8 @@ class PostHogAnalyticsService implements AnalyticsService {
   @override
   void reset() => unawaited(Posthog().reset());
 
-  /// The SDK's maps are `Map<String, Object>` (non-null values), but our
-  /// interface allows nullable values for caller convenience. Drop null entries
-  /// and return null for an empty/absent map.
+  /// The SDK takes `Map<String, Object>` but our interface allows nulls -> drop null entries.
+  /// An empty or absent map -> `null`, never `{}`.
   Map<String, Object>? _clean(Map<String, Object?>? props) {
     if (props == null) return null;
     final out = <String, Object>{};

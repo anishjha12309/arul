@@ -5,30 +5,22 @@ import '../../theme/arul_tokens.dart';
 
 /// Which surface an [ArulChip] sits on.
 enum ArulChipVariant {
-  /// Over the feed's media (Spec > Reel feed chips). Fixed dark palette so it
-  /// stays legible on any wallpaper.
+  /// Over the feed's media — a fixed dark palette, so it stays legible on any wallpaper.
   feed,
 
-  /// On a themed surface — the Upload screen's category chips (Spec > Upload).
-  /// Follows light/dark.
+  /// On a themed surface — the Upload screen's category chips. Follows light/dark.
   surface,
 
-  /// The browse-axis chip row on a themed surface — the Ringtones screen.
-  /// Taller and flatter than [surface], and
-  /// its inactive label is the secondary text colour rather than the primary:
-  /// a browse filter should recede until it is chosen, where a form chip like
-  /// Upload's must read as an available answer. Follows light/dark.
+  /// The browse-axis chip row on a themed surface — the Ringtones screen. Follows light/dark.
+  /// A browse filter should recede until chosen, where a form chip must read as an available answer.
+  /// So this is taller and flatter than [surface], with a SECONDARY inactive label, not the primary.
   category,
 }
 
 /// The category / selection chip used by the feed row and the Upload screen.
 ///
-/// Feed (spec): pad 7×15, r999; inactive bg `rgba(20,9,12,.42)` border
-/// `rgba(250,245,236,.22)` ivory-92% 13.5/500; active SOLID gold, `#14090C`
-/// text /600.
-///
-/// Surface (Spec > Upload): unselected light = white bg, maroon-12% border;
-/// selected = solid gold on dark / solid maroon on light, with contrasting label.
+/// Feed spec: pad 7×15, r999; inactive ivory-92% on `rgba(20,9,12,.42)`; active SOLID gold on dark.
+/// Surface spec: unselected light is white on a maroon-12% border; selected is a solid brand fill.
 class ArulChip extends StatelessWidget {
   const ArulChip({
     super.key,
@@ -49,24 +41,20 @@ class ArulChip extends StatelessWidget {
     final (Color bg, Color border, Color fg) = _palette(isDark);
 
     return GestureDetector(
-      // A chip picks between values, so it gets the lightest tick rather than a
-      // button press — and on press-down, like every other control.
+      // A chip picks between values -> the lightest tick, never a button press, and on press-DOWN.
       onTapDown: onTap == null ? null : (_) => ArulHaptics.selection(),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        // The browse row is spec'd as a fixed 34 tall with 16 of side padding;
-        // the other two size themselves off the label's own line box.
+        // The browse row is a fixed 34 tall with 16 side padding; the other two size off the label.
         height: variant == ArulChipVariant.category ? _categoryHeight : null,
         alignment: variant == ArulChipVariant.category
             ? Alignment.center
             : null,
         padding: variant == ArulChipVariant.category
             ? const EdgeInsets.symmetric(horizontal: 16)
-            // 10, not the spec's 7: the label's line box lost the theme's 1.45
-            // leading when the chip styles pinned `height: 1` (see
-            // ArulTokens.chip), so the padding takes back the ~6px the box
-            // used to carry and this chip stays the size it has always been.
+            // ArulTokens.chip pins `height: 1` -> the label's box lost the theme's 1.45 leading, ~6px.
+            // So vertical padding is 10, not the spec's 7 -> the chip stays the size it always was.
             : const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
@@ -119,8 +107,7 @@ class ArulChip extends StatelessWidget {
         );
       case ArulChipVariant.category:
         if (selected) {
-          // Solid gold on dark, solid maroon on light — borderless, so the
-          // rim is the fill and the pill reads as one flat token.
+          // Solid gold on dark, solid maroon on light — borderless, so the pill reads as one token.
           final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
           final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
           return (fill, fill, fg);

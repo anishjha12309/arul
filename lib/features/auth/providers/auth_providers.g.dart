@@ -91,14 +91,12 @@ final class AuthServiceProvider
 
 String _$authServiceHash() => r'074bb2a45036bb6308c2321aae126763d18af191';
 
-/// Emits the latest [AuthUserState]. Starts as [AsyncLoading] until the stored-
-/// token check in [ApiAuthService] fires its initial event (almost immediate).
+/// Emits the latest [AuthUserState] — [AsyncLoading] until [ApiAuthService]'s token check fires.
 
 @ProviderFor(authStateStream)
 final authStateStreamProvider = AuthStateStreamProvider._();
 
-/// Emits the latest [AuthUserState]. Starts as [AsyncLoading] until the stored-
-/// token check in [ApiAuthService] fires its initial event (almost immediate).
+/// Emits the latest [AuthUserState] — [AsyncLoading] until [ApiAuthService]'s token check fires.
 
 final class AuthStateStreamProvider
     extends
@@ -108,8 +106,7 @@ final class AuthStateStreamProvider
           Stream<AuthUserState>
         >
     with $FutureModifier<AuthUserState>, $StreamProvider<AuthUserState> {
-  /// Emits the latest [AuthUserState]. Starts as [AsyncLoading] until the stored-
-  /// token check in [ApiAuthService] fires its initial event (almost immediate).
+  /// Emits the latest [AuthUserState] — [AsyncLoading] until [ApiAuthService]'s token check fires.
   AuthStateStreamProvider._()
     : super(
         from: null,
@@ -138,18 +135,15 @@ final class AuthStateStreamProvider
 
 String _$authStateStreamHash() => r'ca44de00d044b9aba236b0d9bc0ef976331e6b13';
 
-/// Exposes sign-in / sign-out actions. Consumers read state from
-/// [authStateStreamProvider] and call methods on this notifier.
+/// Sign-in / sign-out actions — consumers read state from [authStateStreamProvider].
 
 @ProviderFor(AuthController)
 final authControllerProvider = AuthControllerProvider._();
 
-/// Exposes sign-in / sign-out actions. Consumers read state from
-/// [authStateStreamProvider] and call methods on this notifier.
+/// Sign-in / sign-out actions — consumers read state from [authStateStreamProvider].
 final class AuthControllerProvider
     extends $AsyncNotifierProvider<AuthController, void> {
-  /// Exposes sign-in / sign-out actions. Consumers read state from
-  /// [authStateStreamProvider] and call methods on this notifier.
+  /// Sign-in / sign-out actions — consumers read state from [authStateStreamProvider].
   AuthControllerProvider._()
     : super(
         from: null,
@@ -171,8 +165,7 @@ final class AuthControllerProvider
 
 String _$authControllerHash() => r'c8722dc921c1caa804c4add7118340bc47d1e26d';
 
-/// Exposes sign-in / sign-out actions. Consumers read state from
-/// [authStateStreamProvider] and call methods on this notifier.
+/// Sign-in / sign-out actions — consumers read state from [authStateStreamProvider].
 
 abstract class _$AuthController extends $AsyncNotifier<void> {
   FutureOr<void> build();

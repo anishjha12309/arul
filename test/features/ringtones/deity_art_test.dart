@@ -18,8 +18,7 @@ void main() {
 
     test('the deity wins over the category', () {
       // A Rama track lives in `perumal`, whose default is the generic Vishnu.
-      // If the category ever won, every named form in the category would lose
-      // its art — which is the whole reason the column exists.
+      // If the category ever won, every named form in it would lose its art -> that is why the column exists.
       expect(
         deityAsset(deity: 'rama', category: 'perumal'),
         'assets/ringtones/rama.webp',
@@ -42,9 +41,8 @@ void main() {
     });
 
     test('a deity this release has never heard of falls to its category', () {
-      // The catalog can move ahead of the app: a bulk import can invent a slug
-      // months before the WebP ships. That row must still look like the right
-      // family of god, not like a temple.
+      // The catalog can move ahead of the app -> a bulk import can invent a slug months before the WebP ships.
+      // That row must still look like the right family of god, never like a temple.
       expect(
         deityAsset(deity: 'kartikeya', category: 'murugan'),
         'assets/ringtones/murugan.webp',
@@ -52,8 +50,7 @@ void main() {
     });
 
     test('others and temples reach the neutral fallback, never a deity', () {
-      // `others` holds gods deliberately unlike each other, so there is no
-      // honest default — a wrong face is worse than a temple.
+      // `others` holds gods deliberately unlike each other -> there is no honest default -> a wrong face is worse.
       expect(deityAsset(deity: null, category: 'others'), kFallbackDeityAsset);
       expect(deityAsset(deity: null, category: 'temples'), kFallbackDeityAsset);
     });
@@ -68,8 +65,7 @@ void main() {
     });
 
     test('slugs are matched case- and whitespace-insensitively', () {
-      // Both fields are free text off the catalog; a `Murugan` typed into the
-      // CMS must not silently drop the row to the gopuram.
+      // Both fields are free text off the catalog -> a `Murugan` typed into the CMS must not drop the row to the gopuram.
       expect(
         deityAsset(deity: 'Ganesha', category: 'others'),
         'assets/ringtones/ganesha.webp',
@@ -86,9 +82,7 @@ void main() {
   });
 
   group('bundled assets', () {
-    // The failure this guards is invisible in CI and fatal on a device: a slug
-    // in the set with no WebP behind it throws mid-paint, and only on the row
-    // that happens to use it.
+    // Invisible in CI and fatal on device -> a slug with no WebP behind it throws mid-paint, only on the row using it.
     test('every declared slug has a file on disk', () {
       for (final path in allDeityAssets) {
         expect(
@@ -115,8 +109,7 @@ void main() {
     });
 
     test('the category defaults point at real, generic art', () {
-      // vishnu and devi stand in for every unidentified track in their family,
-      // so they must exist AND must not be a named form.
+      // vishnu and devi stand in for every unidentified track in their family -> they must exist AND stay unnamed forms.
       for (final slug in ['vishnu', 'devi']) {
         expect(kDeityArtSlugs, contains(slug));
         expect(File('assets/ringtones/$slug.webp').existsSync(), isTrue);

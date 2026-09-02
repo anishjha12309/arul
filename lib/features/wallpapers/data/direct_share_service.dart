@@ -3,15 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Sends a wallpaper file straight to one app, skipping the system chooser.
 ///
-/// WhatsApp is where these wallpapers actually travel, and every tap the chooser
-/// adds is a share that does not happen. But a wallpaper share's payload is the
-/// MEDIA, and the `whatsapp://send?text=` deep link the referral screen uses
-/// carries text only — it would silently drop the file and send a naked caption.
-/// So this goes through a native targeted `ACTION_SEND` instead (see
-/// `DirectShareChannel.kt`), which keeps the file.
-///
-/// [shareToWhatsApp] returning false is ROUTINE — no WhatsApp installed, or it
-/// refused the mime type — and every caller must fall back to the system sheet.
+/// WhatsApp is where these wallpapers travel, and every chooser tap is a share that does not happen.
+/// A wallpaper share's payload is the MEDIA, and `whatsapp://send?text=` carries text only.
+/// It would silently drop the file and send a naked caption -> a native targeted `ACTION_SEND`.
+/// [shareToWhatsApp] returning false is ROUTINE — no WhatsApp, or a refused mime type.
+/// So EVERY caller must fall back to the system sheet.
 class DirectShareService {
   const DirectShareService([this._channel = _defaultChannel]);
 
@@ -21,15 +17,13 @@ class DirectShareService {
 
   final MethodChannel _channel;
 
-  /// Consumer WhatsApp first, then WhatsApp Business. Both are declared in the
-  /// manifest's `<queries>`, without which Android 11+ package visibility hides
-  /// them and every resolve returns nothing.
+  /// Consumer WhatsApp first, then WhatsApp Business.
+  /// Both are in the manifest's `<queries>` — without it Android 11+ hides them from every resolve.
   static const _whatsAppPackages = ['com.whatsapp', 'com.whatsapp.w4b'];
 
-  /// Hands [filePath] + [text] to WhatsApp. Returns whether it opened.
+  /// Hands [filePath] and [text] to WhatsApp; returns whether it opened.
   ///
-  /// Never throws: a share must degrade to the system sheet, never to an error
-  /// toast on a user who was one tap from sending a wallpaper to their family.
+  /// NEVER throws — a share degrades to the system sheet, never to an error toast one tap from done.
   Future<bool> shareToWhatsApp({
     required String filePath,
     required String mimeType,
@@ -45,8 +39,7 @@ class DirectShareService {
         });
         if (ok ?? false) return true;
       } on PlatformException {
-        // bad_input, or a channel that isn't there (tests) — try the next
-        // package, then give up to the sheet.
+        // bad_input, or no channel at all — try the next package, then give up to the sheet.
       } on MissingPluginException {
         return false;
       }

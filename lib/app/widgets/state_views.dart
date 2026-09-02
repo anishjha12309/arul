@@ -5,9 +5,8 @@ import 'arul_button.dart';
 
 /// Empty / error surfaces.
 ///
-/// Every async surface in this app must render one of these instead of a blank
-/// screen or a spinner that never ends (Definition of Done). They are one widget
-/// so that they cannot drift apart visually.
+/// Definition of Done -> no async surface may show a blank screen or an endless spinner -> each one
+/// renders a StateView, and they are ONE widget so the empty and error faces cannot drift apart.
 class StateView extends StatelessWidget {
   const StateView({
     super.key,

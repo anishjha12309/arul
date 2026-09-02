@@ -10,9 +10,8 @@ import '../domain/notification_settings.dart';
 
 /// What [NotificationService.audit] found actually armed on the device.
 ///
-/// [festivalsArmed] short of [festivalsExpected] is the interesting case and is
-/// NOT a defect: a festival whose dates have run out is skipped on purpose. It
-/// is surfaced because that skip is otherwise completely silent.
+/// [festivalsArmed] short of [festivalsExpected] is NOT a defect — a festival out of dates is skipped.
+/// It is surfaced because that skip is otherwise completely silent.
 class NotificationAudit {
   const NotificationAudit({
     required this.weeklyArmed,
@@ -40,42 +39,31 @@ class NotificationAudit {
   int get skippedFestivals => festivalsExpected - festivalsArmed;
 }
 
-/// Owns the [FlutterLocalNotificationsPlugin] and turns [NotificationSettings]
-/// into scheduled local notifications.
+/// Owns the [FlutterLocalNotificationsPlugin] and turns [NotificationSettings] into local alarms.
 ///
-/// Fully on-device: **no FCM, no network, no server**. Nothing here talks to the
-/// Worker, and no notification content ever leaves the phone — which is also why
-/// there is no push channel to promise users elsewhere in the app.
+/// Fully on-device: **no FCM, no network, no server** -> no content ever leaves the phone.
+/// That is also why there is no push channel to promise users elsewhere in the app.
 ///
-/// Scheduling model, and why the two halves differ:
-///  * **Weekly** ([weeklyDevotionalDays]) — a native recurring alarm via
-///    `DateTimeComponents.dayOfWeekAndTime`. The OS repeats it forever; we arm
-///    it once.
-///  * **Festivals** ([festivalEvents]) — one-shot alarms at the next dated
-///    occurrence. A Hindu lunisolar festival has no expressible recurrence rule,
-///    so these are re-armed on every app launch by `notificationBootstrapProvider`
-///    and simply skipped once the table runs out (see [FestivalEvent]).
+///  * **Weekly** ([weeklyDevotionalDays]) — a native recurring alarm, armed once, repeated by the OS;
+///  * **Festivals** ([festivalEvents]) — one-shot; a lunisolar festival has no recurrence rule.
+///
+/// So festivals are re-armed on every launch by `notificationBootstrapProvider`.
+/// Once the table runs out they are simply skipped (see [FestivalEvent]).
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
 
-  // ─── Ids ────────────────────────────────────────────────────────────────────
-  //
-  // Stable and non-overlapping. Derived from the event's INDEX rather than a
-  // hash so they stay small and legible in `adb shell dumpsys notification`;
-  // reordering either list therefore reshuffles ids, which is harmless (the next
-  // applySettings cancels everything first) but the keys are the identity, not
-  // these numbers.
+  // Ids are stable and non-overlapping, derived from the event INDEX rather than a hash.
+  // That keeps them small and legible in `adb shell dumpsys notification`.
+  // Reordering a list reshuffles ids — harmless, since applySettings cancels everything first.
+  // The KEYS are the identity, never these numbers.
   static const _weeklyIdBase = 1000;
   static const _festivalIdBase = 2000;
   static const _testId = 9999;
 
-  // ─── Resources ──────────────────────────────────────────────────────────────
-
-  /// Monochrome status-bar silhouette. Android tints it, so it can NOT be the
-  /// coloured launcher icon — that renders as a white square.
+  /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.
   static const _icon = 'ic_notification';
 
   /// The coloured brand mark, shown beside the text.
@@ -83,48 +71,34 @@ class NotificationService {
 
   /// Whether `res/raw/arul_bell.mp3` is present in the build.
   ///
-  /// FALSE, deliberately: the chime has not been supplied yet, and referencing a
-  /// raw resource that does not exist makes the plugin fail channel creation
-  /// outright — which would take every reminder down, not just its sound. Until
-  /// the file lands the reminders use the device's default notification tone.
-  ///
-  /// Switching it on is a two-line change (this flag + the channel-id bump that
-  /// a new sound requires) — the procedure is in `docs/notifications.md`.
+  /// FALSE deliberately — referencing a missing raw resource fails CHANNEL CREATION outright.
+  /// That takes every reminder down, not just its sound -> reminders use the device's default tone.
+  /// Switching it on is this flag plus the channel-id bump a new sound needs (docs/notifications.md).
   static const bool _kChimeBundled = false;
 
   static const _sound = RawResourceAndroidNotificationSound('arul_bell');
   static AndroidNotificationSound? get _chime => _kChimeBundled ? _sound : null;
 
-  /// Arul gold (`ArulTokens.gold`). Tints the app name and the accent line so
-  /// the notification reads as ours rather than as generic system chrome.
+  /// Arul gold (`ArulTokens.gold`) — tints the app name and accent line so the post reads as ours.
   ///
-  /// Hard-coded rather than imported from the theme on purpose: this class runs
-  /// far from the widget tree (a boot receiver can drive it with no Flutter UI
-  /// alive at all), so it must not depend on anything that needs a BuildContext.
+  /// A boot receiver can drive this class with no Flutter UI alive at all.
+  /// So it must not depend on anything needing a BuildContext -> hard-coded, never imported.
   static const _accent = Color(0xFFD4A017);
 
-  // ─── Channels ───────────────────────────────────────────────────────────────
-  //
-  // The `_v1` suffix is load-bearing for the future: a channel's SOUND is
-  // immutable once the channel exists on a device, so bundling the chime later
-  // requires a new id (and the old one added to _legacyChannelIds). See
-  // docs/notifications.md.
+  // A channel's SOUND is immutable once it exists on a device -> the `_v1` suffix is load-bearing.
+  // Bundling the chime later needs a NEW id, with the old one added to _legacyChannelIds.
   static const _weeklyChannelId = 'arul_devotional_weekly_v1';
   static const _weeklyChannelName = 'Weekly devotional reminders';
   static const _festivalChannelId = 'arul_festivals_v1';
   static const _festivalChannelName = 'Festival reminders';
 
-  /// Superseded channels, deleted on init so they don't linger as stale
-  /// duplicates in the system notification settings. Empty today — the first
-  /// entries will be the `_v1` ids above, when the chime forces a `_v2`.
+  /// Superseded channels, deleted on init -> no stale duplicates in the system notification settings.
   static const _legacyChannelIds = <String>[];
 
   bool _initialized = false;
 
-  /// In-flight (or completed) initialisation, so concurrent callers share ONE
-  /// setup instead of racing two. This matters because plugin init is deferred
-  /// off startup (see main.dart): the deferred warm-up and a bootstrap-driven
-  /// `applySettings`/`cancelAll` can both reach [initialize] at once.
+  /// In-flight or completed initialisation -> concurrent callers share ONE setup, never race two.
+  /// Plugin init is deferred off startup, so the warm-up and a bootstrap call can both land at once.
   Future<void>? _initFuture;
 
   AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
@@ -132,21 +106,17 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin
       >();
 
-  /// Set by the app once the router exists, so a notification tap can open the
-  /// feed on the right category. Null until then — a tap that arrives before the
-  /// app is ready simply opens the app, which is the correct fallback.
+  /// Set once the router exists -> a notification tap opens the feed on the right category.
+  /// Null until then — an early tap just opens the app, which is the correct fallback.
   void Function(String category)? onOpenCategory;
 
-  /// One-time setup: timezone database, plugin init, channel creation. Does NOT
-  /// prompt for any permission — that happens on opt-in ([requestPermissions]).
-  /// Single-flight via [_initFuture] so overlapping callers don't double-init.
+  /// One-time setup: timezone database, plugin init, channel creation.
+  /// Prompts for NO permission — that is opt-in ([requestPermissions]). Single-flight via [_initFuture].
   Future<void> initialize() => _initFuture ??= _doInitialize();
 
   Future<void> _doInitialize() async {
-    // The IANA tz database parse is synchronous UI-isolate work. It stays here,
-    // deferred off main()'s critical path, so it never gates the first frame.
-    // Resolving the device zone and initialising the plugin are independent, so
-    // overlap them rather than awaiting in series.
+    // The IANA tz parse is synchronous UI-isolate work -> deferred here, it never gates first frame.
+    // Zone resolution and plugin init are independent -> overlap them, never await in series.
     tzdata.initializeTimeZones();
     final tzFuture = _applyLocalTimezone();
 
@@ -158,9 +128,7 @@ class NotificationService {
     );
 
     final android = _android;
-    // The channel creates and the legacy deletes are independent Binder
-    // round-trips — fire them together with the tz resolution instead of
-    // awaiting each in turn.
+    // Channel creates and legacy deletes are independent Binder round-trips -> fire them together.
     await Future.wait<void>([
       tzFuture,
       if (android != null) ...[
@@ -191,9 +159,8 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// Resolve the device IANA zone → `tz.local`. Independent of plugin init, so
-  /// it overlaps it. An unresolvable zone (rare) leaves `tz.local` as UTC:
-  /// reminders still fire, their wall-clock time is just off for that user.
+  /// Resolve the device IANA zone → `tz.local`. Independent of plugin init, so it overlaps it.
+  /// An unresolvable zone leaves `tz.local` as UTC -> reminders still fire, at the wrong wall clock.
   Future<void> _applyLocalTimezone() async {
     try {
       final info = await FlutterTimezone.getLocalTimezone();
@@ -203,23 +170,20 @@ class NotificationService {
     }
   }
 
-  /// Routes a notification tap to the category it was about. The payload is the
-  /// category slug; anything unrecognised (or a null handler, because the app
-  /// isn't up yet) falls through to just opening the app.
+  /// Routes a tap to the category it was about — the payload is the category slug.
+  /// Anything unrecognised, or a null handler before the app is up, falls through to opening the app.
   void _onTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;
     onOpenCategory?.call(payload);
   }
 
-  /// Prompts for the runtime notification permission (Android 13+). Returns
-  /// whether notifications are allowed. Call this when the user turns the
-  /// feature on — never at launch.
+  /// Prompts for the Android 13+ runtime permission and returns whether posting is allowed.
+  /// Call it when the user turns the feature ON — never at launch.
   Future<bool> requestPermissions() {
-    // Single-flight: the OS dialog is modal, but the toggle behind it is not.
-    // A second tap while the sheet is up made the plugin throw
-    // `permissionRequestInProgress` out of an unawaited future (22 users in
-    // 30 days, Crashlytics 2026-08-26). Both taps now share the one answer.
+    // The OS dialog is modal but the toggle behind it is NOT -> a second tap threw from an
+    // unawaited future (`permissionRequestInProgress`).
+    // So single-flight — both taps share the one answer.
     return _permissionRequest ??= _requestPermissions().whenComplete(
       () => _permissionRequest = null,
     );
@@ -233,33 +197,27 @@ class NotificationService {
     try {
       return await android.requestNotificationsPermission() ?? false;
     } on PlatformException catch (e) {
-      // Defensive: a request the single-flight above did not see (a plugin
-      // re-entry from another surface). Not granted is the honest answer.
+      // Defensive — a request the single-flight did not see; "not granted" is the honest answer.
       debugPrint('[NotificationService] permission request failed: $e');
       return false;
     }
   }
 
-  /// Whether the OS currently allows this app to post notifications — the
-  /// permission can be revoked in system settings at any time, silently
-  /// invalidating the in-app opt-in.
+  /// Whether the OS currently allows posting — it can be revoked in settings at any time.
   ///
-  /// Null means UNKNOWN and callers must NOT read it as denied: on an OEM build
-  /// that can't answer, a null-means-no reading would wipe a valid opt-in.
+  /// Null means UNKNOWN, never denied -> reading it as no would wipe a valid opt-in on an OEM build.
   Future<bool?> areNotificationsEnabled() =>
       _android?.areNotificationsEnabled() ?? Future.value(null);
 
-  /// Cancels everything and re-schedules from [settings]. Idempotent — safe on
-  /// every settings change and on every launch. Accepting notifications enables
-  /// the WHOLE set; there are no per-event opt-ins.
+  /// Cancels everything and re-schedules from [settings] — idempotent, safe on every change and launch.
+  /// Accepting notifications enables the WHOLE set; there are no per-event opt-ins.
   Future<void> applySettings(NotificationSettings settings) async {
     if (!_initialized) await initialize();
     await _plugin.cancelAll();
     if (!settings.masterEnabled) return;
 
-    // Inexact scheduling, so no exact-alarm permission is needed (that one is
-    // special-access and shows on the Play listing). A few minutes' drift is
-    // immaterial for a weekly or seasonal reminder.
+    // Exact alarms need a special-access permission that shows on the Play listing -> inexact.
+    // A few minutes' drift is immaterial for a weekly or seasonal reminder.
     const mode = AndroidScheduleMode.inexactAllowWhileIdle;
 
     await _scheduleWeekly(settings, mode);
@@ -267,15 +225,11 @@ class NotificationService {
   }
 
   Future<void> cancelAll() async {
-    // Self-initialise: plugin setup is deferred off startup, so the bootstrap's
-    // disabled-path cancelAll can run before the post-frame warm-up — and
-    // cancelAll on an un-initialised plugin silently no-ops. initialize() is
-    // single-flight, so this never triggers a second setup.
+    // cancelAll on an UN-initialised plugin silently no-ops, and setup is deferred off startup.
+    // So self-initialise here; initialize() is single-flight and never triggers a second setup.
     if (!_initialized) await initialize();
     await _plugin.cancelAll();
   }
-
-  // ─── Scheduling ─────────────────────────────────────────────────────────────
 
   Future<void> _scheduleWeekly(
     NotificationSettings s,
@@ -313,18 +267,14 @@ class NotificationService {
     for (var i = 0; i < festivalEvents.length; i++) {
       final event = festivalEvents[i];
 
-      // Walk forward through this festival's dates until one whose REMINDER
-      // instant is still in the future. Simply taking the next date would skip
-      // a festival that is 2 days away when the lead is 3 — its reminder
-      // instant has already passed, so the alarm would fire immediately.
+      // Walk forward until a date whose REMINDER instant is still in the future.
+      // Taking the next date alone fires immediately for a festival 2 days out with a 3-day lead.
       tz.TZDateTime? when;
-      // Plain DateTime, not TZDateTime: this only ever indexes into the
-      // festival table, which is authored as wall-clock calendar dates.
+      // Plain DateTime, not TZDateTime — it only indexes the table, authored as wall-clock dates.
       DateTime cursor = now.subtract(const Duration(days: 1));
       while (true) {
         final date = event.nextOccurrenceAfter(cursor);
-        // Table exhausted for this festival. Skip it rather than guess: see the
-        // banner on festivalEvents.
+        // Table exhausted for this festival -> skip it rather than guess (see festivalEvents).
         if (date == null) break;
         final candidate = _reminderTime(date, s.reminderHour, s.reminderMinute);
         if (candidate.isAfter(now)) {
@@ -352,8 +302,7 @@ class NotificationService {
     }
   }
 
-  /// The reminder instant: [kFestivalLeadDays] before [eventDate], at the user's
-  /// chosen time.
+  /// The reminder instant — [kFestivalLeadDays] before [eventDate], at the user's chosen time.
   tz.TZDateTime _reminderTime(DateTime eventDate, int hour, int minute) {
     final d = eventDate.subtract(const Duration(days: kFestivalLeadDays));
     return tz.TZDateTime(tz.local, d.year, d.month, d.day, hour, minute);
@@ -370,13 +319,11 @@ class NotificationService {
       icon: _icon,
       largeIcon: const DrawableResourceAndroidBitmap(_largeIcon),
       color: _accent,
-      // Expanded layout, so the full body is readable without the user having
-      // to pull the shade open on a truncated line.
+      // Expanded layout -> the full body reads without pulling the shade open on a truncated line.
       styleInformation: body == null ? null : BigTextStyleInformation(body),
       importance: Importance.high,
       priority: Priority.high,
-      // On O+ the CHANNEL's sound wins; set here too so the intent is explicit
-      // and pre-O devices still play it.
+      // On O+ the CHANNEL's sound wins -> set here too, for explicit intent and pre-O devices.
       sound: _chime,
     ),
   );
@@ -407,33 +354,25 @@ class NotificationService {
     return scheduled;
   }
 
-  // ─── QA ─────────────────────────────────────────────────────────────────────
-  //
-  // Reachable in debug AND in a sideloaded release APK, never in the Play build
-  // — see `qaToolsEnabled`. None of this is gated on `kDebugMode`, deliberately:
-  // the failures these tools exist to catch (R8 stripping the icons, a channel
-  // that kept an old sound, an alarm that never armed) happen ONLY in a release
-  // build, so tools that compile out of release could never have caught them.
+  // QA: reachable in debug AND in a sideloaded release APK, never in Play (`qaToolsEnabled`).
+  // R8 stripping icons, a stale channel sound, an alarm that never armed happen ONLY in release.
+  // So NOT gated on `kDebugMode` — a tool compiled out of release could never catch them.
 
   /// What is actually scheduled right now, newest-armed last.
   ///
-  /// The one QA affordance that inspects reality rather than appearance:
-  /// [previewAll] proves the copy and icons render, but a notification that
-  /// looks perfect and was never armed is indistinguishable from a working one
-  /// until the day it fails to arrive. This reads the OS's own pending set.
+  /// [previewAll] proves the copy and icons render, but never that anything was ARMED.
+  /// A notification that looks perfect and never armed shows up only on the day it fails to arrive.
+  /// So this reads the OS's own pending set — reality, not appearance.
   Future<List<PendingNotificationRequest>> pending() async {
     if (!_initialized) await initialize();
     return _plugin.pendingNotificationRequests();
   }
 
-  /// A human-readable audit of the schedule for the QA card: how many reminders
-  /// are armed, and what they are.
+  /// A human-readable audit for the QA card — how many reminders are armed, and what they are.
   ///
-  /// Counts are compared against the tables rather than just reported, because
-  /// "12 armed" means nothing on its own — the number that matters is whether
-  /// any festival was SKIPPED for want of a future date (see [FestivalEvent]),
-  /// which is silent by design and would otherwise only surface as a reminder
-  /// that never came.
+  /// "12 armed" means nothing alone -> counts are COMPARED against the tables, not just reported.
+  /// The number that matters is whether a festival was SKIPPED for want of a future date.
+  /// That skip is silent by design and would otherwise surface as a reminder that never came.
   Future<NotificationAudit> audit() async {
     final armed = await pending();
     final weekly = armed.where((n) => n.id < _festivalIdBase).length;
@@ -447,9 +386,8 @@ class NotificationService {
     );
   }
 
-  /// Fires a one-off notification [delay] from now so the user can confirm
-  /// notifications actually arrive on their device. Requests the permission
-  /// first if needed.
+  /// Fires a one-off notification [delay] from now -> the user confirms reminders actually arrive.
+  /// Requests the permission first if needed.
   Future<void> scheduleTestNotification({
     Duration delay = const Duration(seconds: 5),
   }) async {
@@ -470,12 +408,9 @@ class NotificationService {
     );
   }
 
-  /// Immediately posts the real weekly + every festival notification —
-  /// production ids, channels, titles, copy, icons, accent and sound — so the
-  /// whole set can be eyeballed without waiting for the calendar.
-  ///
-  /// Deliberately the REAL notifications and not stand-ins: rendering a mock
-  /// would prove nothing about the resources the shipped ones resolve by name.
+  /// Immediately posts the real weekly and festival notifications — production ids, channels, copy.
+  /// So the whole set can be eyeballed without waiting for the calendar.
+  /// A mock would prove nothing about the resources the shipped ones resolve BY NAME.
   Future<void> previewAll() async {
     if (!_initialized) await initialize();
     await requestPermissions();

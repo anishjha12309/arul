@@ -1,12 +1,7 @@
-// The Ringtones chip row's ORDER.
-//
-// Ringtone categories are not the wallpaper ones: the five deities plus
-// `others`, the bucket for tracks belonging to none of them (Hanuman, Ganesha,
-// the Madhwa guru Raghavendra). Sorted plainly by label, "Others" lands between
-// "Murugan" and "Perumal" and reads as one more deity — so it is pinned last.
-// Sivan is pinned FIRST (owner's instruction 2026-08-27), the same rule the
-// wallpaper row runs. Both are contracts, not cosmetic choices, and nothing
-// else in the app would catch either regressing.
+// Ringtone categories are NOT the wallpaper ones -> the five deities plus `others` for tracks belonging to none.
+// Sorted plainly by label, "Others" lands between "Murugan" and "Perumal" and reads as one more deity -> pin it LAST.
+// Sivan is pinned FIRST (owner's instruction) -> the same rule the wallpaper chip row runs.
+// Both are contracts, not cosmetic choices -> nothing else in the app would catch either regressing.
 
 import 'package:flutter_test/flutter_test.dart';
 

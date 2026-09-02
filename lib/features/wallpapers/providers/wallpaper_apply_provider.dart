@@ -15,25 +15,18 @@ import '../../premium/providers/entitlement_provider.dart';
 import '../data/wallpaper_apply_service.dart';
 import 'wallpaper_prefetch_provider.dart';
 
-// ─── Pending-apply flags ──────────────────────────────────────────────────────
-//
-// Written to SharedPreferences BEFORE the native apply call. On Android 12+ a
-// wallpaper change makes the OS re-extract Material You colours and can recreate
-// our Activity (flutter#133722); the live-wallpaper chooser also opens over us.
-// These flags let the feed jump straight back to the page the user was on,
-// instead of showing a full-screen spinner — a flicker instead of a visible cold
-// restart. Set for BOTH static and live.
+// Android 12+ re-extracts Material You colours on a wallpaper change and can recreate the Activity
+// (flutter#133722), and the live chooser opens over us -> write these to SharedPreferences BEFORE
+// the native call -> the feed restores the page instead of showing a full-screen spinner.
+// Set for BOTH static and live.
 
 const appliedWallpaperPendingKey = 'applied_wallpaper_pending';
 const pendingApplyPageIndexKey = 'pending_apply_page_index';
 const pendingApplyCategoryKey = 'pending_apply_category';
 
-/// True when the pending apply was LIVE. Position is restored for both, but only
-/// static shows an "applied" confirmation: we cannot observe the live chooser's
-/// outcome, so claiming success there would be a lie.
+/// True when the pending apply was LIVE. Position restores for both kinds -> the live chooser's
+/// outcome is unobservable -> only static may show an "applied" confirmation.
 const pendingApplyIsLiveKey = 'pending_apply_is_live';
-
-// ─── State ────────────────────────────────────────────────────────────────────
 
 enum WallpaperApplyStage { preparing, downloading, applying }
 
@@ -50,8 +43,8 @@ final class WallpaperApplyLoading extends WallpaperApplyState {
 
   final WallpaperApplyStage stage;
 
-  /// 0.0–1.0 while downloading; null for the other stages (which are indefinite,
-  /// so the UI must show an indeterminate indicator, not a 0% bar).
+  /// 0.0–1.0 while downloading; null elsewhere -> those stages are indefinite -> the UI must show
+  /// an indeterminate indicator, never a 0% bar.
   final double? progress;
 }
 
@@ -62,12 +55,12 @@ final class WallpaperApplySuccess extends WallpaperApplyState {
   });
   final bool isLive;
 
-  /// A LIVE wallpaper that this device cannot run, applied as its own first
-  /// frame instead (native [LiveApplyOutcome.staticFallback]). Live apply
-  /// normally ends [WallpaperApplyIdle] with the OS chooser open, so a live
-  /// Success can ONLY mean this — and it needs its own toast: telling the user
-  /// "Wallpaper applied" while the motion they picked is silently missing reads
-  /// as a bug.
+  /// A LIVE wallpaper this device cannot run, applied as its own first frame instead (native
+  /// [LiveApplyOutcome.staticFallback]).
+  ///
+  /// Live apply normally ends [WallpaperApplyIdle] with the OS chooser open -> a live Success can
+  /// ONLY mean this -> it needs its own toast: "Wallpaper applied" while the motion the user picked
+  /// is silently missing reads as a bug.
   final bool staticFallback;
 }
 
@@ -78,50 +71,38 @@ final class WallpaperApplyError extends WallpaperApplyState {
     this.premiumRequired = false,
   });
 
-  /// DIAGNOSTIC ONLY -- never show this to a user. It can be a raw
-  /// `FileSystemException: ...`, and it is English regardless of locale. The UI
-  /// maps [isNetwork] to a localized line; this is here for logs and, later,
-  /// crash reporting.
+  /// DIAGNOSTIC ONLY -> can be a raw `FileSystemException: …` and stays English in every locale ->
+  /// never show it to a user; it exists for logs and crash reporting.
   final String message;
 
-  /// Offline, not broken. The UI says so, and offers retry.
+  /// Offline, not broken -> the UI says so and offers retry.
   final bool isNetwork;
 
-  /// The server refused this apply because the subscription is no longer live.
-  /// The screen routes to the paywall instead of showing a generic failure —
-  /// otherwise a lapsed subscriber hits an English dead end with no way to
-  /// resubscribe from where they are.
+  /// The server refused the apply: the subscription is no longer live -> a generic failure would
+  /// dead-end a lapsed subscriber in English with no way to resubscribe -> route to the paywall.
   final bool premiumRequired;
 }
 
-// ─── Shared cache filename ────────────────────────────────────────────────────
-
 /// The ONE temp-file name apply and share both use for a given wallpaper.
 ///
-/// They must agree. Share used to prefix the file `arul-…` for a friendly name in
-/// the recipient's chat — which meant applying and then sharing the same wallpaper
-/// downloaded the identical bytes TWICE. The recipient-facing name is a share-sheet
-/// concern and is set there via `fileNameOverrides`; the file on disk is a cache
-/// key and belongs to whoever fetched it first.
+/// They MUST agree -> a share-only `arul-…` prefix made apply-then-share fetch the identical bytes
+/// TWICE. The recipient-facing name is a share-sheet concern (`fileNameOverrides`) -> the file on
+/// disk is a cache key, owned by whoever fetched it first.
 String applyCacheFilename(Wallpaper w) => w.key.split('/').last;
-
-// ─── Service provider ─────────────────────────────────────────────────────────
 
 final wallpaperApplyServiceProvider = Provider<WallpaperApplyService>(
   (ref) => CdnWallpaperApplyService(apiClient: ref.watch(apiClientProvider)),
 );
 
-// ─── Notifier ─────────────────────────────────────────────────────────────────
-
 class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
   @override
   WallpaperApplyState build() => const WallpaperApplyIdle();
 
-  /// Runs the whole apply flow. [releaseVideoDecoders] is awaited immediately
-  /// before the native call so the feed's ExoPlayers give up the hardware codecs
-  /// the wallpaper engine (or the OS chooser) is about to need — on a budget SoC
-  /// there are only a handful, and not doing this is what makes an applied live
-  /// wallpaper fall back to software decode and stutter.
+  /// Runs the whole apply flow.
+  ///
+  /// A budget SoC has only a handful of hardware codecs -> the wallpaper engine (or the OS chooser)
+  /// falls back to software decode and stutters -> await [releaseVideoDecoders] immediately before
+  /// the native call so the feed's ExoPlayers give theirs up.
   Future<void> apply(
     Wallpaper wallpaper, {
     required ApplyTarget target,
@@ -129,8 +110,8 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     String? category,
     Future<void> Function()? releaseVideoDecoders,
   }) async {
-    // Re-entrancy guard: a double-tap on Apply must not start two downloads and
-    // two native calls racing to write the same temp file.
+    // Re-entrancy guard -> a double-tap must not start two downloads and two native calls racing
+    // to write the same temp file.
     if (state is WallpaperApplyLoading) return;
 
     final service = ref.read(wallpaperApplyServiceProvider);
@@ -138,18 +119,13 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     final analytics = ref.read(analyticsServiceProvider);
     final isLive = wallpaper.kind == WallpaperKind.live;
 
-    // Claim the flow BEFORE the first await. The re-entrancy check above runs
-    // ahead of `getTemporaryDirectory()` and `exists()` — two awaits — so a
-    // double-tap inside those few milliseconds previously started two downloads
-    // racing to write the same file.
+    // The guard above sits ahead of two awaits (`getTemporaryDirectory`, `exists`) -> a double-tap
+    // inside those milliseconds slips through -> claim the flow BEFORE the first await.
     state = const WallpaperApplyLoading(stage: WallpaperApplyStage.preparing);
 
-    // Set the moment `wallpaper_apply_attempt` fires, and read by the catch
-    // blocks: a failure BEFORE that line (signed-url refusal, a dead connection
-    // mid-download) has no attempt to be counted against, and reporting one
-    // would put `wallpaper_apply_failed` outside its own denominator.
-    // Everything after it is the native call or the OS — which is exactly what
-    // the failure event exists to make visible.
+    // Set when `wallpaper_apply_attempt` fires, read by the catch blocks -> a failure before that
+    // line (signed-url refusal, a connection dying mid-download) has no attempt to count against ->
+    // reporting one would put `wallpaper_apply_failed` outside its own denominator.
     var attempted = false;
 
     try {
@@ -160,17 +136,12 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       File? file;
 
       if (await cachedFile.exists() && await cachedFile.length() > 0) {
-        // Already fetched by a previous apply or share of this wallpaper — e.g.
-        // the user dismissed the OEM chooser last time.
+        // Already fetched by a previous apply or share — e.g. the user dismissed the OEM chooser.
         file = cachedFile;
       } else {
-        // The live clip the user is looking at is almost always ALREADY on disk:
-        // the feed prefetcher pulled it so the player could open a local file
-        // instead of streaming. Apply and prefetch now resolve the SAME public CDN
-        // URL, so those bytes are reusable — copying them locally beats spending
-        // another 2-15 MB of the user's mobile data re-downloading a file we have.
-        // (This was impossible in the reference: apply fetched a signed URL, so the
-        // two caches could never share a key. The port inherited the miss.)
+        // The feed prefetcher already pulled this clip so the player could open a local file, and
+        // apply and prefetch resolve the SAME public CDN URL -> those bytes are reusable -> copy
+        // them rather than spend another 2-15 MB of the user's mobile data on a file we hold.
         final prefetched = await ref
             .read(wallpaperPrefetchServiceProvider)
             .cachedPathOrNull(await service.resolveUrl(wallpaper));
@@ -178,41 +149,35 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
           try {
             file = await File(prefetched).copy(cachedFile.path);
           } catch (_) {
-            // Evicted between the lookup and the copy. Fall through and download.
+            // Evicted between the lookup and the copy -> fall through and download.
           }
         }
       }
 
       if (file != null) {
-        // The bytes are already on disk (a previous apply/share, or the feed
-        // prefetcher pulled them for playback), so the DOWNLOAD is skipped —
-        // but the gate is not.
-        //
-        // `/media/signed-url` is the only authoritative entitlement check
-        // (CLAUDE.md §5); the client-side gate ahead of it is UX. These local
-        // branches used to skip the round-trip entirely, which meant a user
-        // whose subscription had lapsed, been cancelled or been refunded could
-        // keep re-applying anything already on disk, indefinitely — the cache
-        // silently became a permanent licence.
+        // Bytes already on disk (a previous apply/share, or the prefetcher) -> the DOWNLOAD is
+        // skipped, the GATE is not.
+        // `/media/signed-url` is the only authoritative entitlement check (CLAUDE.md §5); the
+        // client-side gate ahead of it is UX.
+        // Skipping the round-trip here lets a lapsed, cancelled or refunded user re-apply anything
+        // on disk indefinitely -> a cache must never become a permanent licence.
         try {
           await service.downloadUrl(wallpaper, action: MediaUseAction.apply);
         } on WallpaperApplyException catch (e) {
-          // A real 403 is the gate doing its job — surface it so the screen
-          // routes to the paywall. Any other API failure on bytes we already
-          // hold is not worth blocking a paying user over.
+          // A real 403 is the gate doing its job -> rethrow so the screen routes to the paywall;
+          // any other API failure on bytes we already hold must not block a paying user.
           if (e.premiumRequired) rethrow;
         } catch (e) {
           if (!isNetworkError(e)) rethrow;
-          // Offline, with the file already on disk from a previously-passing
-          // gate. Allow it: stranding a paying user in a dead zone is a worse
-          // outcome than the narrow bypass this leaves open, and the bypass
-          // dies with the temp directory.
+          // Offline, with the file on disk from a previously-passing gate -> stranding a paying
+          // user in a dead zone beats the narrow bypass, which dies with the temp directory ->
+          // let it through. The one allowed pass-through.
         }
       }
 
       if (file == null) {
-        // The GATED download URL: Worker signed-url (live entitlement check)
-        // when the backend exists, public CDN before then.
+        // The GATED download URL -> Worker signed-url (live entitlement check) when the backend
+        // exists, public CDN before then.
         final url = await service.downloadUrl(
           wallpaper,
           action: MediaUseAction.apply,
@@ -232,19 +197,17 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
 
       state = const WallpaperApplyLoading(stage: WallpaperApplyStage.applying);
 
-      // Denominator of the apply funnel. The download and the authoritative
-      // entitlement gate are both behind us here, so anything that fails past
-      // this line is the native call or the OS — which is exactly the ratio
-      // `wallpaper_applied / wallpaper_apply_attempt` measures. GA4-only (not on
-      // the PostHog allow-list): attempts are volume, and volume is the thing
-      // GA4 takes at 100% for free.
+      // Denominator of the apply funnel -> download and the authoritative gate are both behind us
+      // -> what fails past this line is the native call or the OS, which is exactly the ratio
+      // `wallpaper_applied / wallpaper_apply_attempt` measures.
+      // GA4-only, off the PostHog allow-list -> attempts are volume, and GA4 takes volume at 100%.
       analytics.track(
         'wallpaper_apply_attempt',
         properties: _applyProps(wallpaper, target: target),
       );
       attempted = true;
 
-      // Persist restore state BEFORE the native call — see the flag docs above.
+      // Persist restore state BEFORE the native call -> see the flag notes at the top.
       if (feedPageIndex != null) {
         await prefs.setInt(pendingApplyPageIndexKey, feedPageIndex);
       }
@@ -255,27 +218,21 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       await prefs.setBool(appliedWallpaperPendingKey, true);
 
       if (isLive) {
-        // The OS live-wallpaper preview/chooser opens for EVERY live apply — the
-        // user makes the final "Set wallpaper" tap in an activity we cannot see,
-        // so we finish IDLE and never show a false "applied" confirmation.
-        // Hand the feed's decoders to the chooser's preview engine before it
-        // launches: the chooser creates an engine that claims a hardware
-        // MediaCodec, and on a decoder-constrained SoC a still-held feed pool
-        // would starve it into a frozen or black wallpaper.
+        // The OS chooser opens for EVERY live apply and the final "Set wallpaper" tap happens in an
+        // activity we cannot see -> finish IDLE, never a false "applied" confirmation.
+        // Its preview engine claims a hardware MediaCodec -> a still-held feed pool starves it into
+        // a frozen or black wallpaper on a decoder-constrained SoC -> release the decoders first.
         if (releaseVideoDecoders != null) await releaseVideoDecoders();
         final live = await service.applyLiveWallpaper(file, target);
 
         if (live.outcome == LiveApplyOutcome.staticFallback) {
-          // This device cannot run live wallpapers at all, so the native side
-          // already applied the clip's first frame. Nothing is pending and
-          // nothing is unobservable — so this takes the STATIC semantics
-          // wholesale, including clearing the flags (they were written with
-          // `pending_apply_is_live: true`, and leaving them would have
-          // `apply_restore.dart` treat a finished apply as a chooser still open).
-          //
-          // The tripwire for the whole feature: this event's rate against
-          // `wallpaper_apply_attempt` where type=live is what says whether the
-          // fallback ever fires on mainstream devices. It should be ~0.
+          // The device cannot run live wallpapers at all, so native already applied the clip's
+          // first frame -> nothing is pending and nothing is unobservable -> take the STATIC
+          // semantics wholesale.
+          // The flags went down with `pending_apply_is_live: true` -> leaving them has
+          // `apply_restore.dart` read a finished apply as a chooser still open -> clear them.
+          // Tripwire for the whole feature -> this event's rate against `wallpaper_apply_attempt`
+          // where type=live says whether the fallback ever fires on mainstream devices; expect ~0.
           analytics.track(
             'wallpaper_apply_live_fallback',
             properties: {
@@ -299,28 +256,27 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
         }
 
         _trackApplied(analytics, wallpaper, target: target, confirmed: false);
-        // Flags stay set: if the chooser causes a recreate, the feed restores
-        // position; if it doesn't, the feed consumes them on next resume.
+        // Flags stay set -> a chooser-caused recreate restores position; otherwise the feed
+        // consumes them on the next resume.
         state = const WallpaperApplyIdle();
         return;
       }
 
-      // Static. Awaited decoder release first — the apply can recreate the
-      // Activity, and a completed disposal cannot race Flutter teardown.
+      // Static. The apply can recreate the Activity -> await the decoder release first, so a
+      // completed disposal cannot race Flutter teardown.
       if (releaseVideoDecoders != null) await releaseVideoDecoders();
       await service.applyStaticWallpaper(file, target);
 
-      // We got here, so no OS restart happened: clear flags, confirm inline.
+      // We got here -> no OS restart happened -> clear the flags and confirm inline.
       await _clearPending(prefs);
       _trackApplied(analytics, wallpaper, target: target, confirmed: true);
       state = const WallpaperApplySuccess(isLive: false);
     } on WallpaperApplyException catch (e) {
       await _clearPending(prefs);
       if (e.premiumRequired) {
-        // Not a defect — the live entitlement check did its job on a lapsed or
-        // refunded subscription. Refresh the stale client snapshot that let the
-        // user get this far, then let the screen route to the paywall. Not a
-        // failure event either: it has its own `apply_blocked_premium`.
+        // Not a defect: the live entitlement check caught a lapsed or refunded subscription ->
+        // refresh the stale client snapshot that let the user get this far, then let the screen
+        // route to the paywall. Not a failure event either -> it has its own `apply_blocked_premium`.
         ref.invalidate(entitlementDetailProvider);
       } else if (attempted) {
         _trackFailed(
@@ -336,8 +292,8 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       );
     } catch (e) {
       await _clearPending(prefs);
-      // Offline is the common case here (the download), and it is not a bug —
-      // the UI must not print "ClientException: Failed host lookup".
+      // Offline (the download) is the common case here and is not a bug -> the UI must never print
+      // "ClientException: Failed host lookup".
       final network = isNetworkError(e);
       if (attempted) {
         _trackFailed(
@@ -351,19 +307,15 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     }
   }
 
-  /// Shared property block for the apply funnel, so attempt and completion are
-  /// joinable on the same keys.
+  /// Shared property block for the apply funnel, so attempt and completion join on the same keys.
   ///
-  /// Arul's property convention is `wallpaper_id` + `category` — category is this
-  /// app's browse axis, so "which collections convert" is answerable off these
-  /// events alone. (Pakiza has no category axis and carries only `type`. Keep
-  /// each app's own convention rather than unifying, or every saved dashboard in
-  /// both projects breaks.)
-  ///
-  /// `type` is spelled the same way `wallpaper_shared` already spells it
-  /// (`kind.name` → `image`/`live`) so the two funnels are joinable on it. It is a
-  /// rendering hint, never a browse axis (CLAUDE.md §5b) — do not group by it the
-  /// way `category` is grouped.
+  /// `wallpaper_id` + `category` is Arul's convention — category is this app's browse axis, so
+  /// "which collections convert" is answerable off these events alone.
+  /// Pakiza has no category axis and carries only `type` -> unifying the two breaks every saved
+  /// dashboard in both projects -> keep each app's own convention.
+  /// `type` is spelled as `wallpaper_shared` spells it (`kind.name` → `image`/`live`) -> the two
+  /// funnels join on it. It stays a rendering hint, never a browse axis (CLAUDE.md §5b) — never
+  /// group by it the way `category` is grouped.
   Map<String, Object?> _applyProps(
     Wallpaper wallpaper, {
     required ApplyTarget target,
@@ -374,24 +326,17 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     'target': target.name,
   };
 
-  /// Fires `wallpaper_applied` — the primary value moment, and one of the few
-  /// events PostHog is billed for.
+  /// Fires `wallpaper_applied` — the primary value moment, one of the few events PostHog is billed
+  /// for.
   ///
-  /// [confirmed] exists because static and live apply differ in observability. A
-  /// static apply returns from a native call that either worked or threw, so
-  /// success is a fact. Every live apply hands off to the OS live-wallpaper
-  /// chooser, where the user makes the final "Set wallpaper" tap in an activity
-  /// we cannot see. The event still fires there — suppressing it would silently
-  /// under-count live entirely and make the funnel non-comparable with Pakiza,
-  /// which fires on chooser-open too — but it is flagged, so filtering
-  /// `confirmed = true` recovers the strict count. Never use the unfiltered
-  /// number to claim a completion rate.
-  ///
-  /// [fallback] marks the ONE live apply that is confirmed: the device could
-  /// not run a live wallpaper, so its first frame was applied instead. Without
-  /// it, "`confirmed` is true only on a static apply" (docs/analytics-events.md)
-  /// would quietly stop being true and a confirmed live row would look like a
-  /// defect in the events rather than what it is.
+  /// Static returns from a native call that worked or threw, so success is a fact; every live apply
+  /// ends at an unobservable chooser tap -> the event fires there anyway (suppressing it under-counts
+  /// live and breaks comparison with Pakiza, which fires on chooser-open too) -> [confirmed] marks
+  /// which it was, and filtering `confirmed = true` recovers the strict count.
+  /// Never claim a completion rate off the unfiltered number.
+  /// [fallback] marks the ONE confirmed live apply — the device could not run live, so its first
+  /// frame was applied -> without it "`confirmed` is true only on a static apply"
+  /// (docs/analytics-events.md) stops being true and a confirmed live row reads as a defect.
   void _trackApplied(
     AnalyticsService analytics,
     Wallpaper wallpaper, {
@@ -409,13 +354,12 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
     );
   }
 
-  /// Fires `wallpaper_apply_failed` — the other half of the apply funnel, and
-  /// new: until it existed, `unsupported` vs `applyFailed` vs
-  /// `manufacturerRestriction` was invisible to every sink, so a device class
-  /// that can never apply anything was indistinguishable from one nobody tried.
-  /// GA4-only (not on the PostHog allow-list), like every other `*_attempt` /
-  /// failure diagnostic. [code] is the native `PlatformException.code`, or
-  /// `network`/`unknown` for the non-channel failures.
+  /// Fires `wallpaper_apply_failed` — the other half of the apply funnel.
+  ///
+  /// Without it, `unsupported` vs `applyFailed` vs `manufacturerRestriction` is invisible to every
+  /// sink -> a device class that can NEVER apply anything looks like one nobody tried.
+  /// GA4-only, off the PostHog allow-list, like every other `*_attempt` / failure diagnostic.
+  /// [code] is the native `PlatformException.code`, or `network`/`unknown` off-channel.
   void _trackFailed(
     AnalyticsService analytics,
     Wallpaper wallpaper, {

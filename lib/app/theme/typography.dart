@@ -4,35 +4,23 @@ import 'tokens.dart';
 
 /// Type scale.
 ///
-/// `fontFamily` is null everywhere = the platform stack (Roboto plus the Noto
-/// fallbacks Android already ships). That is not a cop-out, it is the only
-/// correct choice: Arul localises into Tamil, Telugu, Kannada, Malayalam and
-/// Hindi, and bundling faces for five Indic scripts would add megabytes to
-/// reproduce what the OS renders for free — and a font that covers Latin but not
-/// Tamil silently falls back mid-sentence, which looks worse than never having
-/// left the system stack.
+/// `fontFamily` is null everywhere = the platform stack (Roboto plus Android's Noto fallbacks).
+/// Bundling faces for five Indic scripts adds megabytes to reproduce what the OS renders for free.
+/// A face covering Latin but not Tamil falls back mid-sentence -> worse than never leaving the stack.
+/// So hierarchy is bought with size, weight, case, tracking and colour, and nothing else:
+///   * a real size jump per tier (40 → 26 → 21 → 18 → 15), never a 1pt nudge that reads as a mistake;
+///   * weight only ever 400 / 600 / 700 -> three steps, so each one means something;
+///   * NEGATIVE tracking on everything ≥18pt — large system type set at 0 looks loose and default;
+///   * WIDE tracking + uppercase on the 11pt eyebrow — the cheapest "considered" cue in the app;
+///   * colour as the third axis: onSurface for what you read, muted for what you glance at.
 ///
-/// So hierarchy has to be bought with size, weight, case, tracking and colour,
-/// and nothing else. The moves that do the work here:
-///   * a real size jump between tiers (40 → 26 → 21 → 18 → 15), never a 1pt
-///     nudge that reads as a mistake;
-///   * weight only ever 400 / 600 / 700 — three steps, so each one means
-///     something;
-///   * NEGATIVE tracking on everything ≥18pt (large system type set at 0 looks
-///     loose and default) and WIDE positive tracking + uppercase on the 11pt
-///     eyebrow. That eyebrow is the single cheapest "considered" cue in the whole
-///     app;
-///   * colour as the third axis: onSurface for the thing you read, muted for the
-///     thing you glance at.
-///
-/// Every slot is filled deliberately. An unset slot falls back to Material's own
-/// default TextTheme — with its default BLACK/WHITE colour, not ours — so a
-/// widget reaching for, say, titleSmall would silently paint outside the palette.
+/// An unset slot falls back to Material's own TextTheme, in its BLACK/WHITE colour rather than ours.
+/// So every slot is filled deliberately -> no widget can silently paint outside the palette.
 abstract final class ArulType {
   static const _tight = -0.4;
 
-  /// The bundled display serif. ONLY the display/headline tiers and [wordmark]
-  /// use it — Latin-only, so it must never wrap a localized string.
+  /// The bundled display serif. Latin-only -> it must never wrap a localized string.
+  /// Used by the display/headline tiers and [wordmark], nothing else.
   static const _serif = 'Marcellus';
 
   static TextTheme scale(Color ink, Color muted) => TextTheme(
@@ -119,8 +107,7 @@ abstract final class ArulType {
       color: ink,
     ),
 
-    /// Eyebrow / tagline. Wide tracking + uppercase is the one typographic move
-    /// that reads "considered" for free.
+    /// Eyebrow / tagline.
     labelSmall: TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.w600,
@@ -129,33 +116,19 @@ abstract final class ArulType {
     ),
   );
 
-  /// The scale as it must be used OVER MEDIA — inside a scrim, on an arbitrary
-  /// wallpaper.
+  /// The scale as it must be used OVER MEDIA — inside a scrim, on an arbitrary wallpaper.
   ///
-  /// The themed scale is wrong there, and not by a little: its muted tier
-  /// (#C2B7AE) is only 2.40:1 against the bottom scrim over a bright frame. The
-  /// reason is physical — in the band where the scrim is strong enough to be
-  /// worth having, even PURE WHITE tops out around 6:1, so there is simply no
-  /// luminance left to spend on "muted". Dimming text over media is a move the
-  /// scrim cannot pay for.
-  ///
-  /// So over media the second tier is a warm off-white (`ivoryText`, 6.42:1 at
-  /// the scrim's guarantee point) and the muting comes from SIZE and TRACKING
-  /// instead — which is the same lever the rest of this file already leans on.
-  ///
-  /// Valid anywhere inside ArulScrims.bottom's guaranteed band (its bottom ~45%,
-  /// which is exactly the metadata block) — see scrims.dart.
+  /// The themed muted tier (#C2B7AE) is only 2.40:1 against the bottom scrim over a bright frame.
+  /// Even PURE WHITE tops out near 6:1 in that band -> the scrim cannot pay for dimming text at all.
+  /// So the second tier is `ivoryText` (6.42:1 at the guarantee point) -> muting is SIZE and TRACKING.
+  /// Valid only inside ArulScrims.bottom's guaranteed band — its bottom ~45%, the metadata block.
   static TextTheme onMedia() => scale(Colors.white, ArulColors.ivoryText);
 
   /// The wordmark — "Arul", and ONLY "Arul".
   ///
   /// A serif at display size reads as a designed mark rather than as UI text.
-  /// This uses the bundled [Marcellus] face (assets/fonts/Marcellus-Regular.ttf).
-  ///
-  /// It must NEVER be applied to a localized string. Marcellus is Latin-only, so
-  /// a translated string set in it would fall back per-glyph and render in a
-  /// different face than the one asked for. That is why this is a separate factory
-  /// and not a TextTheme slot: reaching for it has to be a deliberate act.
+  /// Marcellus is Latin-only -> a localized string set in it falls back per glyph, in a face nobody chose.
+  /// So this is a factory and NOT a TextTheme slot -> reaching for it has to be a deliberate act.
   static TextStyle wordmark(Color color) => TextStyle(
     fontFamily: _serif,
     fontSize: 40,

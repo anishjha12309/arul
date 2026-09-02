@@ -31,15 +31,12 @@ import 'features/referral/data/install_referrer_service.dart';
 
 /// App entry point.
 ///
-/// Crash + performance telemetry (Firebase Crashlytics + Performance Monitoring)
-/// and GA4 analytics run in **every real app build — debug, profile and
-/// release** — so the dashboards receive data during development too. Two builds
-/// skip Firebase: `flutter test` (the SDK has no platform channel and would
-/// throw) and any build without android/app/google-services.json — both are
-/// captured by `AppConfig.firebaseEnabled` (FIREBASE_ENABLED define + not a
-/// test), the same guard used in `crashReporterProvider` /
-/// `performanceMonitorProvider` / `analyticsServiceProvider`, so the SDK is
-/// never touched uninitialised.
+/// Crashlytics, Performance and GA4 run in EVERY real build — debug, profile and release -> the
+/// dashboards receive data during development too.
+/// `flutter test` has no platform channel and a build without `google-services.json` has no config ->
+/// both would throw -> `AppConfig.firebaseEnabled` gates them, the same guard
+/// `crashReporterProvider` / `performanceMonitorProvider` / `analyticsServiceProvider` use, so the
+/// SDK is never touched uninitialised.
 Future<void> main() async {
   _silenceLogsInRelease();
   BootTrace.mark('main() entry');
@@ -51,31 +48,24 @@ Future<void> main() async {
     return;
   }
 
-  // Run the whole app inside a guarded zone so uncaught async errors are
-  // reported, and route Flutter framework + platform errors to Crashlytics as
-  // fatal.
+  // Guarded zone -> uncaught async errors get reported -> framework and platform errors route to
+  // Crashlytics too.
   await runZonedGuarded(
     () async {
       _maybeEnableFlutterDriver();
       WidgetsFlutterBinding.ensureInitialized();
-      // Encrypted-storage channel + keystore init, fired BEFORE Firebase so the
-      // two overlap. On a fresh install this is the longest pole on the path to
-      // the account picker (the stored-session check gates `authenticate()`,
-      // and its first read pays the keystore master-key setup); starting it
-      // after Firebase serialised the two costs (boot trace, 2026-08-22).
-      // Fire-and-forget; see ApiClient.warmSecureStorage.
+      // Encrypted-storage + keystore init is the longest pole to the account picker on a fresh install
+      // (the stored-session check gates `authenticate()`, and its first read pays master-key setup) ->
+      // fire it BEFORE Firebase so the two overlap; after Firebase serialised the costs.
+      // Fire-and-forget -> see `ApiClient.warmSecureStorage`.
       unawaited(ApiClient.warmSecureStorage());
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
-      // The three collection toggles are independent platform-channel calls —
-      // run them concurrently, not serially.
-      //
-      // GA4 analytics — the product-analytics mirror of PostHog AND the
-      // conversion source for Google Ads (link the Firebase project ↔ Google
-      // Ads account in the console; no code). Events are sent via
-      // GoogleAnalyticsService behind the AnalyticsService seam. Enabling
-      // collection (not per-event) also turns on auto-collected
-      // first_open/screen_view.
+      // The three collection toggles are independent platform-channel calls -> run them concurrently.
+      // GA4 is PostHog's mirror AND the Google Ads conversion source -> link the Firebase project ↔
+      // the Ads account in the console; no code. Events go through `GoogleAnalyticsService` behind the
+      // `AnalyticsService` seam.
+      // Enabling COLLECTION (not per-event) is also what turns on auto-collected first_open/screen_view.
       await Future.wait([
         FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
         FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
@@ -83,18 +73,13 @@ Future<void> main() async {
       ]);
       BootTrace.mark('firebase init done');
 
-      // WRAP, don't replace. Assigning `recordFlutterFatalError` straight to
-      // `FlutterError.onError` swallows the default presenter, so a layout
-      // error paints its yellow-and-black banner on screen and emits ZERO
-      // logcat output — no "A RenderFlex overflowed by N pixels", no widget
-      // tree naming the culprit. A logcat-based overflow sweep then reports a
-      // clean run on visibly broken screens. presentError first restores the
-      // console dump; Crashlytics still gets every error, so nothing is traded
-      // away for it. Same line in Pakiza (fixed there 2026-08-21).
-      //
-      // FATAL is the default; `isNonCrashError` demotes the errors the app
-      // provably survives (image loads, transport failures) to non-fatal so
-      // the crash-free rate measures crashes — see that function for why.
+      // Assigning `recordFlutterFatalError` straight to `FlutterError.onError` swallows the default
+      // presenter -> a layout error paints its banner with ZERO logcat output (no "RenderFlex
+      // overflowed", no widget tree), so a logcat overflow sweep reads clean on broken screens ->
+      // WRAP, don't replace: `presentError` first, and Crashlytics still gets every error.
+      // Same line in Pakiza.
+      // FATAL is the default -> `isNonCrashError` demotes what the app provably survives (image loads,
+      // transport failures) -> the crash-free rate measures crashes; see that function for why.
       FlutterError.onError = (details) {
         FlutterError.presentError(details);
         FirebaseCrashlytics.instance.recordFlutterError(
@@ -121,33 +106,26 @@ Future<void> main() async {
   );
 }
 
-/// Release builds ship SILENT: one assignment routes every `debugPrint` — this
-/// app's and every package's — into a no-op, so nothing a user can read with
-/// `adb logcat` leaks from a Play install. It is the whole Dart half of the
-/// release-hygiene contract; individual call sites stay as they are, which is
-/// what keeps them useful in debug and profile.
+/// Routes every `debugPrint` — this app's and every package's — into a no-op in release.
 ///
-/// Escape hatch for field triage: build a SIDELOADED release APK with
-/// `--dart-define=DIAG=true` and the logs come back. Debug and profile are
-/// untouched — `kReleaseMode` is false there, so the whole guard is dead code
-/// the compiler drops.
-///
-/// Crashlytics is the only diagnostic channel that reaches a Play install;
-/// nothing here changes that.
+/// A Play install must leak nothing readable with `adb logcat` -> one assignment is the whole Dart
+/// half of the release-hygiene contract -> call sites stay as they are and stay useful in debug.
+/// Field triage -> sideload a release APK with `--dart-define=DIAG=true` and the logs come back.
+/// `kReleaseMode` is false in debug and profile -> the compiler drops the whole guard there.
+/// Crashlytics is the only diagnostic channel that reaches a Play install; nothing here changes that.
 void _silenceLogsInRelease() {
   if (kReleaseMode && !const bool.fromEnvironment('DIAG')) {
     debugPrint = (String? message, {int? wrapWidth}) {};
   }
 }
 
-/// Agent UI automation (Dart MCP server: `dtd` discovery +
-/// `flutter_driver_command`) — workflow in the on-device skill. Opt-in per
-/// run: `flutter run --dart-define=ENABLE_FLUTTER_DRIVER=true` on top of the
-/// usual define file; the const gate compiles the extension out of every
-/// other build. Must run BEFORE ensureInitialized() on both entry paths — the
-/// extension installs its own driver binding and asserts it owns
-/// `WidgetsBinding.instance`, which a normal binding created first would make
-/// fatal.
+/// Agent UI automation — Dart MCP `dtd` discovery + `flutter_driver_command`; workflow in the
+/// on-device skill.
+///
+/// Opt-in per run with `--dart-define=ENABLE_FLUTTER_DRIVER=true` on top of the usual define file ->
+/// the const gate compiles the extension out of every other build.
+/// The extension installs its own driver binding and asserts it owns `WidgetsBinding.instance` -> a
+/// normal binding created first is fatal -> call this BEFORE `ensureInitialized()` on BOTH paths.
 void _maybeEnableFlutterDriver() {
   if (const bool.fromEnvironment('ENABLE_FLUTTER_DRIVER')) {
     enableFlutterDriverExtension();
@@ -156,22 +134,15 @@ void _maybeEnableFlutterDriver() {
 
 /// Starts the PostHog SDK, then emits the one autocaptured event worth keeping.
 ///
-/// `Application Installed` is captured by hand because disabling
-/// `captureApplicationLifecycleEvents` also unregisters the SDK integration that
-/// owns it (`PostHogAppInstallIntegration` is only added when the flag is on),
-/// and the flag cannot be narrowed to a single event. The SDK's own event NAME
-/// is reused so existing PostHog insights keep resolving across the change, and
-/// the native SDK stamps `$app_version`/`$app_build` onto every event anyway, so
-/// nothing about the event is poorer than the autocaptured one.
-///
-/// Captured on the SDK directly, NOT through AnalyticsService: it belongs to the
-/// PostHog bootstrap rather than to a `track()` call site (the allow-list only
-/// governs those), GA4 already auto-collects `first_open` for the same moment,
+/// Disabling `captureApplicationLifecycleEvents` unregisters the integration that owns
+/// `Application Installed` (`PostHogAppInstallIntegration`), and the flag cannot be narrowed to one
+/// event -> capture it by hand.
+/// Reuse the SDK's own event NAME -> existing PostHog insights keep resolving; the native SDK stamps
+/// `$app_version`/`$app_build` either way, so nothing is poorer than the autocaptured one.
+/// Captured on the SDK, NOT through `AnalyticsService` -> it is PostHog bootstrap, not a `track()`
+/// call site (the allow-list governs only those), GA4 auto-collects `first_open` for the same moment,
 /// and a name with a space is not a legal GA4 event name.
-///
-/// Awaits setup() before capturing — setup is fire-and-forget from the caller's
-/// side, and capturing into an SDK that has not finished native init drops the
-/// event.
+/// A capture before native init finishes is DROPPED -> await `setup()` first.
 Future<void> _startPostHog(PostHogConfig config) async {
   await Posthog().setup(config);
   if (!AnalyticsCohort.isFreshInstall) return;
@@ -185,87 +156,66 @@ Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
 
-  // Keep the semantics tree built in debug so `uiautomator dump` sees
-  // labelled, tappable nodes (tools/drive.mjs — on-device skill); without a
-  // client Flutter never builds semantics and a dump is one empty
-  // FlutterView. Debug-only on purpose: profile runs measure jank and must
-  // not pay the semantics cost, and release keeps stock behaviour (TalkBack
-  // and friends request it themselves). The returned handle is never
-  // disposed — semantics stays on for the whole run.
+  // Without a client Flutter never builds semantics -> `uiautomator dump` returns one empty
+  // FlutterView -> hold it open in debug so tools/drive.mjs (on-device skill) sees labelled nodes.
+  // Debug only -> profile measures jank and must not pay the semantics cost; release keeps stock
+  // behaviour, where TalkBack and friends request it themselves.
+  // The handle is never disposed -> semantics stays on for the whole run.
   if (kDebugMode) {
     SemanticsBinding.instance.ensureSemantics();
   }
 
-  // Edge-to-edge. This is already the default at targetSdk 35+ (and the OS
-  // enforces it — the immersive modes are now no-ops), but it is stated here so
-  // the intent is legible rather than inherited by accident.
+  // Edge-to-edge is already the default at targetSdk 35+ and OS-enforced (the immersive modes are
+  // no-ops) -> stated anyway so the intent is legible rather than inherited by accident.
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
 
-  // Portrait only: every asset in the catalog is 9:16. (Android 16+ ignores this
-  // on large screens by policy; phones honour it, which is the whole install base.)
+  // Every catalog asset is 9:16 -> portrait only. Android 16+ ignores this on large screens by
+  // policy; phones honour it, and phones are the whole install base.
   unawaited(
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]),
   );
 
-  // A full-screen 1080x1920 wallpaper decodes to ~8.3 MB of RGBA regardless of
-  // its file size, so Flutter's default 100 MB image cache holds only ~12 of them
-  // — enough to thrash, and on a 2 GB device enough to get OOM-killed. Cap it.
-  //
-  // 32 MB, not the default 100: measured on a MediaTek mt6878, a heavy browse
-  // (20 grid flings + 10 viewer pages) peaked at 525 MB PSS with a 48 MB cache,
-  // most of it GPU texture memory. The disk cache still holds the bytes, so a
-  // smaller memory cache costs a re-DECODE on scroll-back, never a re-download.
+  // A 1080x1920 wallpaper decodes to ~8.3 MB of RGBA whatever its file size -> Flutter's default
+  // 100 MB image cache holds only ~12 -> thrash, and an OOM kill on a 2 GB device.
+  // 32 MB, not the default 100: on a MediaTek mt6878 a heavy browse (20 grid flings + 10 viewer
+  // pages) peaked at 525 MB PSS with a 48 MB cache, most of it GPU texture memory.
+  // The disk cache still holds the bytes -> a smaller memory cache costs a re-DECODE on scroll-back,
+  // never a re-download.
   PaintingBinding.instance.imageCache
     ..maximumSizeBytes = 32 << 20
     ..maximumSize = 40;
 
-  // Meta (Facebook) App Events. The native SDK auto-initialises + auto-logs
-  // install/launch via the AndroidManifest meta-data (app id + client token
-  // baked in from dart-defines); the ★ conversion events are sent explicitly
-  // through MetaAnalyticsService. We only nudge it here when a real app id +
-  // client token are configured — `activateApp()` re-affirms the app-launch
-  // event and is a no-op/no-cost otherwise. Skipped for key-less dev builds and
-  // `flutter test` (no platform channel), mirroring the PostHog guard above and
-  // `analyticsServiceProvider`. Belongs to startup regardless of Firebase, so it
-  // lives here in the shared path.
+  // The native Meta SDK auto-initialises and auto-logs install/launch from the AndroidManifest
+  // meta-data (app id + client token baked in from dart-defines) -> `activateApp()` only re-affirms
+  // the launch event; the ★ conversions go explicitly through `MetaAnalyticsService`.
+  // Key-less dev builds and `flutter test` have no platform channel -> gate on `metaEnabled`,
+  // mirroring the PostHog guard and `analyticsServiceProvider`.
+  // Startup work regardless of Firebase -> it lives here on the shared path.
   if (AppConfig.metaEnabled) {
     unawaited(FacebookAppEvents().activateApp());
   }
 
-  // Resolved before runApp: the wallpaper-apply flow persists its restore flags
-  // on the path to a native call that can recreate the Activity, and there is no
-  // room there to await a prefs handle. (The secure-storage warm-up fires even
-  // earlier — top of main(), before Firebase — see the comment there.)
+  // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
+  // Activity, with no room there to await a handle -> resolve prefs before `runApp`.
   BootTrace.mark('SharedPreferences start');
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');
 
-  // PostHog — lean config: manual events only, and only for the analytics panel
-  // (AnalyticsCohort, currently every install). Session replay OFF and surveys
-  // OFF, and we never install PosthogObserver/PostHogWidget, so there is no
-  // element-autocapture and PostHog records no `$screen` at all.
-  //
-  // captureApplicationLifecycleEvents is OFF (owner's call, 2026-08-18: PostHog
-  // shows the journey and nothing else). The flag is all-or-nothing and its
-  // events never pass through AnalyticsService, so it is the ONLY control over
-  // them — leaving it on to keep `Application Installed` also buys
-  // `Application Opened`/`Backgrounded` on every launch and every backgrounding,
-  // which was most of the event stream and none of the funnel. So it is off and
-  // the install event is re-emitted by hand below.
-  //
-  // Two things this does NOT cost, both verified against posthog-android 3.58.3
-  // rather than assumed: sessions still work (the lifecycle observer that
-  // starts/ends them is registered either way — only the two captures inside it
-  // are gated), and GA4 still auto-collects first_open/session_start/screen_view
-  // at 100%, which is where open-the-app DAU and retention are read.
-  //
-  // The cohort check gates setup() itself rather than individual captures: a
-  // non-panel install then does zero PostHog native init, network and battery
-  // work — which also matters on the budget devices this app targets — and the
-  // SDK's own autocapture can't fire if the SDK was never started. Moved below
-  // the prefs await because the cohort draw is persisted there.
-  //
-  // Mirrored in Pakiza — keep both in sync.
+  // Lean config: manual events only, session replay and surveys OFF, and no
+  // `PosthogObserver`/`PostHogWidget` anywhere -> no element autocapture and no `$screen` at all.
+  // `captureApplicationLifecycleEvents` is OFF (owner's call: PostHog shows the journey and nothing
+  // else). The flag is all-or-nothing and its events never pass through `AnalyticsService`, so it is
+  // the ONLY control over them -> keeping `Application Installed` would also buy `Application
+  // Opened`/`Backgrounded` on every launch and backgrounding — most of the event stream and none of
+  // the funnel -> off, and the install event is re-emitted by hand below.
+  // Verified against posthog-android 3.58.3, not assumed: sessions still work (the lifecycle observer
+  // is registered either way — only the two captures inside it are gated), and GA4 still
+  // auto-collects first_open/session_start/screen_view at 100%, where DAU and retention are read.
+  // The cohort gates `setup()` itself, not individual captures -> a non-panel install pays zero
+  // native init, network and battery, which matters on the budget devices this app targets, and an
+  // SDK that never started cannot autocapture.
+  // The cohort draw is persisted in prefs -> this must stay BELOW the prefs await.
+  // Mirrored in Pakiza -> keep both in sync.
   if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
@@ -273,29 +223,22 @@ Future<void> _startApp() async {
       ..sessionReplay = false
       ..surveys = false
       ..debug = kDebugMode;
-    // Fire-and-forget, NOT awaited: setup() does native init and opens the
-    // SDK's first network work, and awaiting it here put that on the critical
-    // path to the first frame for every panel member. Nothing captures before
-    // the first user action anyway (lifecycle autocapture is off above), and
-    // this matches the fire-and-forget contract every other PostHog call in the
-    // app already uses (PostHogAnalyticsService).
+    // `setup()` does native init and opens the SDK's first network work -> awaiting it here puts that
+    // on the critical path to the first frame for every panel member -> fire-and-forget, matching the
+    // contract every other PostHog call already uses (`PostHogAnalyticsService`).
+    // Nothing captures before the first user action anyway — lifecycle autocapture is off above.
     unawaited(_startPostHog(config));
   }
 
-  // Referral attribution + deferred deep link: read the Play Install Referrer
-  // once per install. It carries the referral code for the first sign-in AND,
-  // for an ad/share tap that happened before this install existed, the
-  // wallpaper or ringtone to open and the language the ad was in. Fire-and-
-  // forget — off the critical path and a no-op without Play Services.
-  //
-  // The deep-link half is seeded from BOTH ends on purpose. captureOnce needs an
-  // async Play Services round-trip, so on the very first launch after an ad
-  // install it can land either side of the feed draining its first catalog.
-  // Seeding the already-persisted values here (before any UI exists) covers the
-  // race it loses; captureOnce seeds ArulDeepLink itself for the race it wins.
-  // The persisted copies are cleared by whoever actually consumes them (the
-  // tab that shows the target, DeepLinkLocaleSync for the language), so each
-  // is delivered exactly once however the timing falls.
+  // The Play Install Referrer is read once per install: the referral code for the first sign-in, and,
+  // for an ad/share tap that predates the install, the wallpaper or ringtone to open plus the
+  // language the ad was in. Fire-and-forget -> off the critical path, a no-op without Play Services.
+  // `captureOnce` needs an async Play Services round-trip -> on a first launch it can land either
+  // side of the feed draining its first catalog -> seed the deep link from BOTH ends: the persisted
+  // values here, before any UI exists, for the race it loses; `captureOnce` seeds `ArulDeepLink`
+  // itself for the race it wins.
+  // Whoever consumes a value clears it (the tab that shows the target, `DeepLinkLocaleSync` for the
+  // language) -> each is delivered exactly once however the timing falls.
   final referrer = InstallReferrerService(prefs);
   final deferredTarget = referrer.pendingTarget;
   if (deferredTarget != null) ArulDeepLink.requestTarget(deferredTarget);
@@ -303,12 +246,11 @@ Future<void> _startApp() async {
   if (deferredLang != null) ArulDeepLink.requestLocale(deferredLang);
   unawaited(referrer.captureOnce());
 
-  // Ad installs that Play's referrer cannot describe arrive over the network
-  // instead: Google App Campaigns hand their App URL to Google Analytics for
-  // Firebase, Meta ads hand theirs to the Meta SDK's deferred App Link fetch.
-  // Native Android buffers both across the Flutter-engine startup race; this
-  // feeds them into the SAME persisted one-shot handoff used above. Fire-and-
-  // forget so a network-delivered ad target can never delay the first frame.
+  // Ad installs Play's referrer cannot describe arrive over the network instead — Google App
+  // Campaigns hand their App URL to Analytics for Firebase, Meta ads to the SDK's deferred App Link
+  // fetch. Native Android buffers both across the Flutter-engine startup race -> they feed the SAME
+  // persisted one-shot handoff used above.
+  // Fire-and-forget -> a network-delivered ad target can never delay the first frame.
   final deferredLinks = DeferredLinkService(referrer);
   unawaited(deferredLinks.start());
 

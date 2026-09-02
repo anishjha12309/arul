@@ -1,15 +1,10 @@
-// LAYER 1 — the permanent l10n overflow matrix.
-//
-// Every localized surface, in all six locales, across the gating envelope
-// (320dp and 360dp, at text scale 1.0 and 1.3, each with real system chrome).
-// It fails on any text that overflows, truncates or clips where English does
-// not, and it joins `flutter test` forever.
-//
-// Read `support/load_real_fonts.dart` before touching anything here: these
-// numbers are only real because the real Android faces are loaded, per weight.
+// LAYER 1 -> the permanent l10n overflow matrix, part of `flutter test` forever.
+// Every localized surface, all six locales, across the gating envelope: 320dp and 360dp at text scale 1.0 and 1.3.
+// Each runs with real system chrome -> it fails on any text that overflows, truncates or clips where English does not.
+// Read `support/load_real_fonts.dart` first -> these numbers are only real because the Android faces load, per weight.
 // `font_canary_test.dart` is what stops that from rotting silently.
 //
-// Dump the raw findings (Phase 5 / Phase 7 consume exactly this):
+// Dump the raw findings:
 //
 //     L10N_AUDIT_OUT=build/l10n_audit flutter test test/l10n/l10n_matrix_test.dart
 
@@ -30,14 +25,11 @@ import 'support/registry.dart';
 final List<Finding> _all = <Finding>[];
 final List<Measurement> _measurements = <Measurement>[];
 
-/// screen id → locale → the ARB keys that actually reached a paragraph. This is
-/// what the ledger's `proven-fits` verdict is built from: a key nothing ever
-/// rendered is `unexercised`, and saying so is the difference between a matrix
-/// that covers the app and one that only covers what it happened to pump.
+/// screen id -> locale -> the ARB keys that actually reached a paragraph, which is what `proven-fits` is built from.
+/// A key nothing ever rendered is `unexercised` -> saying so separates a matrix that covers the app from one that does not.
 final Map<String, Map<String, List<String>>> _coverage = {};
 
-/// Locales to run. Defaults to all six; `L10N_ONLY=en` narrows it for the
-/// English-baseline pass without editing the file.
+/// Locales to run, all six by default -> `L10N_ONLY=en` narrows it for the English-baseline pass without an edit.
 List<String> get _locales {
   final only = Platform.environment['L10N_ONLY'];
   if (only == null || only.isEmpty) return kLocales;
@@ -47,8 +39,8 @@ List<String> get _locales {
 void main() {
   setUpAll(() async {
     await loadRealFonts();
-    // In THIS process, not just in font_canary_test.dart's — every test file
-    // gets its own isolate, so a green canary elsewhere proves nothing here.
+    // In THIS process, not just font_canary_test.dart's -> every test file gets its own isolate.
+    // A green canary elsewhere proves nothing here.
     assertRealFontsLive();
     await initRegistry();
     _assertIndexInSync();
@@ -103,13 +95,11 @@ void main() {
             );
             found.addAll(result.findings);
             _measurements.addAll(result.measurements);
-            // Coverage counts ONLY the gating configurations. The 411dp sweep
-            // is report-only, and a taller/wider frame builds more of a lazy
-            // ListView than 320dp does — five Settings rows (logout, delete
-            // account, the three policy links) were credited "proven-fits" on
-            // the strength of a config that can never produce a demotion, and
-            // were then excluded from the slot-measure fallback for the same
-            // reason. A verdict earned at 411dp is not a verdict about 320dp.
+            // Coverage counts ONLY the gating configurations -> the 411dp sweep is report-only.
+            // A taller or wider frame builds more of a lazy ListView than 320dp does.
+            // Five Settings rows were once credited "proven-fits" on a config that can never produce a demotion.
+            // They were then excluded from the slot-measure fallback for the same reason.
+            // A verdict earned at 411dp is not a verdict about 320dp.
             if (config.gating) observed.addAll(result.observedKeys);
           }
           _all.addAll(found);
@@ -117,10 +107,9 @@ void main() {
             ..sort();
 
           if (entry.unlocalizedEnglish) {
-            // The screen is hardcoded English. Pin the defect rather than
-            // excuse it: its literals coincide with the English ARB, so `en`
-            // attributes keys and no other locale does. Localizing the screen
-            // makes this fail — which is the signal to delete the flag.
+            // The screen is hardcoded English -> pin the defect rather than excuse it.
+            // Its literals coincide with the English ARB, so `en` attributes keys and no other locale does.
+            // Localizing the screen makes this FAIL -> that is the signal to delete the flag.
             expect(
               observed,
               locale == 'en' ? isNotEmpty : isEmpty,
@@ -131,10 +120,8 @@ void main() {
                   'nothing at all, it stopped building.',
             );
           } else {
-            // A screen that renders nothing produces no findings and would
-            // pass. That is the quietest way for this matrix to go false-green
-            // — a provider override that throws, a sheet that never opens, a
-            // route that bails — so silence is a failure, not a pass.
+            // A screen that renders nothing produces no findings and would pass -> the quietest false-green available.
+            // A provider override that throws, a sheet that never opens, a route that bails -> silence is a FAILURE.
             expect(
               observed,
               entry.textFree ? isEmpty : isNotEmpty,
@@ -145,8 +132,7 @@ void main() {
             );
           }
 
-          // The sweep is report-only (§3): fits-narrow-breaks-wide is a layout
-          // defect and demoting a translation would not fix it.
+          // The sweep is report-only -> fits-narrow-breaks-wide is a layout defect and demoting a translation cannot fix it.
           final gatingIds = {
             for (final c in configs)
               if (c.gating) c.id,
@@ -174,8 +160,8 @@ void main() {
   }
 }
 
-/// The generated table has to describe the ARBs on disk, or every attribution
-/// in this run points at the wrong key. Layer 1 can see the ARBs, so it checks.
+/// The generated table must describe the ARBs on disk, or every attribution points at the wrong key.
+/// Layer 1 can see the ARBs, so it checks.
 void _assertIndexInSync() {
   for (final locale in kLocales) {
     final file = File('lib/app/l10n/app_$locale.arb');
@@ -195,12 +181,10 @@ void _assertIndexInSync() {
         );
       }
     }
-    // And the other direction, which is the one this harness's own workflow
-    // breaks: `derive_demotions --apply` REMOVES keys from the five translated
-    // ARBs. A key still in the index but gone from disk leaves the attributor
-    // holding a stale translation that shadows the English the app now renders
-    // — so the paragraph attributes to nothing, is dropped from findings AND
-    // from coverage, and the suite stays green while measuring less.
+    // The other direction is the one this harness's own workflow breaks -> `derive_demotions --apply` REMOVES keys.
+    // A key still in the index but gone from disk leaves the attributor holding a stale translation.
+    // That shadows the English the app now renders -> the paragraph attributes to nothing.
+    // It is then dropped from findings AND coverage -> the suite stays green while measuring less.
     for (final key in indexed.keys) {
       if (!onDisk.containsKey(key)) {
         fail(

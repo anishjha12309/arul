@@ -4,15 +4,10 @@ import '../../theme/arul_tokens.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
 ///
-/// Spec (Apply / Theme / Language / Premium / Edit-name sheets): rounded top
-/// r24; dark surface `#1A0B0F` (optionally a `#241014 → #1A0B0F` gradient top for
-/// the premium sheet) or white on light; a 1px gold-35% top hairline on dark; a
-/// 44×4 r2 grabber; entrance translateY(24)+fade 300ms ease; barrier scrim
-/// `rgba(20,9,12,.58)`.
-///
-/// Pass [gradient] true for the gradient-top variant (premium sheet). The sheet
-/// is scroll-controlled and sizes to its content; wrap tall content in a scroll
-/// view yourself.
+/// Spec: top r24; `#1A0B0F` dark or white light; gold-35% top hairline on dark; 44×4 r2 grabber.
+/// Entrance is translateY(24)+fade over 300ms ease, behind a `rgba(20,9,12,.58)` barrier scrim.
+/// [gradient] true gives the premium sheet's `#241014 → #1A0B0F` top.
+/// Scroll-controlled and sized to its content -> wrap tall content in a scroll view yourself.
 Future<T?> showArulSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
@@ -25,19 +20,15 @@ Future<T?> showArulSheet<T>(
     context: context,
     isScrollControlled: true,
     isDismissible: isDismissible,
-    // Present ABOVE the shell so the barrier scrim + sheet cover the floating
-    // nav dock (Scaffold.bottomNavigationBar, extendBody). Without this the
-    // sheet opens on the branch navigator inside the body and the dock paints
-    // on top of the sheet's bottom edge — a visible collision, worst on the
-    // light theme where dock and sheet are both near-white.
+    // On the branch navigator the dock paints OVER the sheet's bottom edge — worst on light,
+    // where dock and sheet are both near-white.
+    // So present ABOVE the shell -> the barrier scrim and sheet cover the floating dock.
     useRootNavigator: true,
-    // ArulSheet paints its own 44×4 grabber — the theme's Material drag
-    // handle would render a second one above the sheet.
+    // ArulSheet paints its own 44×4 grabber -> the theme's drag handle would render a second one.
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
-    // Every Arul sheet follows the app theme (dark surface on dark, white on
-    // light) — ArulSheet reads Theme.of(context).brightness itself.
+    // Every Arul sheet follows the app theme — ArulSheet reads `Theme.of(context).brightness` itself.
     builder: (context) => ArulSheet(
       gradient: gradient,
       topHairline: topHairline,
@@ -47,9 +38,8 @@ Future<T?> showArulSheet<T>(
   );
 }
 
-/// The visual scaffold of an Arul bottom sheet: surface + top hairline + grabber
-/// + the translateY(24)+fade entrance. Used by [showArulSheet]; also usable
-/// directly (e.g. inside a custom route).
+/// The visual scaffold of an Arul sheet: surface, top hairline, grabber, translateY(24)+fade entrance.
+/// Used by [showArulSheet]; also usable directly, inside a custom route.
 class ArulSheet extends StatefulWidget {
   const ArulSheet({
     super.key,
@@ -64,8 +54,7 @@ class ArulSheet extends StatefulWidget {
   /// Gradient-top variant (`#241014 → #1A0B0F`) for the premium sheet.
   final bool gradient;
 
-  /// The 1px gold-35% top hairline (dark only). Off for sheets where it reads
-  /// as a stray line rather than an edge — e.g. the theme picker.
+  /// The 1px gold-35% top hairline, dark only. Off where it reads as a stray line, not an edge.
   final bool topHairline;
 
   /// Optional explicit sheet surface. Null preserves the themed default.
@@ -133,8 +122,7 @@ class _ArulSheetState extends State<ArulSheet>
           child: Stack(
             children: [
               surface,
-              // 1px gold-35% top hairline (dark only). Clipped to the rounded
-              // top by the enclosing ClipRRect.
+              // Clipped to the rounded top by the enclosing ClipRRect.
               if (isDark && widget.topHairline)
                 Positioned(
                   top: 0,
@@ -150,8 +138,7 @@ class _ArulSheetState extends State<ArulSheet>
   }
 }
 
-/// The drag grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)`
-/// light (Spec > Spacing / radii / misc).
+/// The drag grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)` light.
 class _Grabber extends StatelessWidget {
   const _Grabber();
 

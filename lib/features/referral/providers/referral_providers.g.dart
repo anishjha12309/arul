@@ -62,15 +62,13 @@ String _$installReferrerServiceHash() =>
     r'5a728569571a728f157aa4bf09faad970f6e03dc';
 
 /// The Refer & Earn screen's data: own code + referrals + total days earned.
-/// `ref.invalidate(referralSummaryProvider)` re-fetches (pull-to-refresh / the
-/// app-bar refresh button).
+/// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
 
 @ProviderFor(referralSummary)
 final referralSummaryProvider = ReferralSummaryProvider._();
 
 /// The Refer & Earn screen's data: own code + referrals + total days earned.
-/// `ref.invalidate(referralSummaryProvider)` re-fetches (pull-to-refresh / the
-/// app-bar refresh button).
+/// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
 
 final class ReferralSummaryProvider
     extends
@@ -81,8 +79,7 @@ final class ReferralSummaryProvider
         >
     with $FutureModifier<ReferralSummary>, $FutureProvider<ReferralSummary> {
   /// The Refer & Earn screen's data: own code + referrals + total days earned.
-  /// `ref.invalidate(referralSummaryProvider)` re-fetches (pull-to-refresh / the
-  /// app-bar refresh button).
+  /// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
   ReferralSummaryProvider._()
     : super(
         from: null,

@@ -19,20 +19,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/**
- * Downscales oversized wallpaper sources before handing them to WallpaperManager.
- *
- * The platform API still performs its own decode/crop work, but pre-normalizing
- * very large images (2K/4K uploads) reduces the odds of the remote wallpaper
- * service dying under memory pressure on lower-end or heavily customized devices
- * — exactly the budget hardware Arul targets.
- *
- * Adopted from the vendored flutter_wallpaper_plus package, plus ONE behaviour
- * of our own: the bitmap is CENTRE-CROPPED TO THE DISPLAY ASPECT before it is
- * handed over (see [cropToDisplayAspect]) - every source that is not already
- * display-shaped goes through the decode/write path for that reason, not only
- * oversized ones.
- */
+// Downscales oversized wallpaper sources before handing them to WallpaperManager.
+// The platform API still does its own decode and crop -> pre-normalizing a 2K or 4K upload is about MEMORY.
+// The remote wallpaper service dies under memory pressure on heavily customized budget devices.
+// The bitmap is also CENTRE-CROPPED to the display aspect before handover -> see [cropToDisplayAspect].
+// So every source that is not already display-shaped takes the decode/write path, not only oversized ones.
 class ImageNormalizer(private val context: Context) {
 
     companion object {
@@ -45,17 +36,14 @@ class ImageNormalizer(private val context: Context) {
         private const val TARGET_PIXEL_RATIO_THRESHOLD = 2L
         private const val MAX_DECODE_ATTEMPTS = 5
 
-        /**
-         * How far the source may sit from the display aspect before it is
-         * cropped. 1% is under a pixel row at 1920 and skips the decode/write for
-         * a source that already matches the screen.
-         */
+        // How far the source may sit from the display aspect before it is cropped.
+        // 1% is under a pixel row at 1920 -> it skips the decode and write for a source that already matches the screen.
         private const val ASPECT_TOLERANCE = 0.01f
 
-        /** Bumps the cache key so files written before the crop are not reused. */
+        /** Bumps the cache key -> files written before the crop existed are never reused. */
         private const val NORMALIZE_VERSION = "crop1"
 
-        /** Debug-only log; the BuildConfig.DEBUG gate strips it from release. */
+        /** Debug-only log -> the BuildConfig.DEBUG gate strips it from a release build. */
         private fun logd(msg: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, msg)
         }
@@ -124,8 +112,7 @@ class ImageNormalizer(private val context: Context) {
         try {
             writeBitmap(scaled, outputFile)
         } finally {
-            // Each stage may hand back its input unchanged, so recycle by
-            // identity, never by position.
+            // Each stage may hand back its INPUT unchanged -> recycle by identity, never by position.
             for (bitmap in listOf(scaled, cropped, oriented, decoded)) {
                 if (!bitmap.isRecycled) bitmap.recycle()
             }
@@ -274,44 +261,21 @@ class ImageNormalizer(private val context: Context) {
         return sampleSize.coerceAtLeast(1)
     }
 
-    /**
-     * Centre-crops an ALREADY-DECODED [bitmap] to the display aspect and hands
-     * it back — the same geometry [normalizeIfNeeded] gives a file source, with
-     * no decode and no re-encode.
-     *
-     * The live-wallpaper static fallback ([WallpaperApplyChannel]) hands the
-     * clip's first frame straight to setBitmap, which the OS stores as a PNG,
-     * so that path is lossless end to end; routing the frame through
-     * [normalizeIfNeeded] instead would decode RGB_565 and re-encode JPEG q90
-     * for nothing. Only the CROP is shared, and it is shared rather than
-     * copied so the static and fallback paths can never drift into two
-     * different framings.
-     *
-     * Returns [bitmap] ITSELF when it already has the display shape, so callers
-     * must compare identity before recycling the result.
-     */
+    // Centre-crops an ALREADY-DECODED bitmap to the display aspect -> same geometry as the file path, no re-encode.
+    // The live-wallpaper static fallback hands the clip's first frame straight to setBitmap, which the OS stores as PNG.
+    // That path is lossless end to end -> routing the frame through [normalizeIfNeeded] would decode 565 and re-encode q90.
+    // Only the CROP is shared, and shared rather than copied -> the static and fallback paths can never drift apart.
+    // Returns the bitmap ITSELF when it already has the display shape -> compare identity before recycling the result.
     fun cropToDisplayAspect(bitmap: Bitmap): Bitmap =
         cropToDisplayAspect(bitmap, getDisplaySize())
 
-    /**
-     * Centre-crops [bitmap] to the display aspect.
-     *
-     * WHY (measured 2026-08-25 on a Nothing A001, Android 16, from a launcher
-     * screenshot template-matched against the source): a 9:16 source on a
-     * 9:19.9 screen is scaled to cover the height and is then WIDER than the
-     * screen. With no crop hint the OS keeps that extra width as parallax room
-     * and anchors the crop at the LEFT edge of the image; the launcher pans
-     * inside that room from its own offset, so the visible window ran from
-     * source column 38 to 826 of 1080 - centre 432, not 540 - and every subject
-     * landed right of centre. Passing a crop hint still leaves the OS free to
-     * extend it for parallax; a bitmap that already has the display shape
-     * leaves it nothing to allocate, so the image is centred on every launcher
-     * by construction. The cost is the parallax pan, which 9:16 catalog art
-     * never had room for anyway.
-     *
-     * The crop is centred on BOTH axes: a source taller than the screen (a user
-     * upload) loses top and bottom equally.
-     */
+    // A 9:16 source on a 9:19.9 screen scales to cover the height and is then WIDER than the screen.
+    // With no crop hint the OS keeps that extra width as parallax room and anchors the crop at the LEFT edge.
+    // The launcher then pans inside that room from its own offset -> measured, the window ran columns 38-826 of 1080.
+    // Centre 432 instead of 540 -> every subject landed right of centre.
+    // A crop HINT still leaves the OS free to extend it for parallax -> a display-shaped bitmap leaves nothing to allocate.
+    // So the image is centred on every launcher by construction, at the cost of a parallax pan 9:16 art never had room for.
+    // The crop is centred on BOTH axes -> a source taller than the screen loses top and bottom equally.
     private fun cropToDisplayAspect(bitmap: Bitmap, display: TargetSize): Bitmap {
         if (!aspectMismatch(bitmap.width, bitmap.height, display)) return bitmap
 
@@ -348,7 +312,7 @@ class ImageNormalizer(private val context: Context) {
         return abs(sourceAspect - displayAspect) / displayAspect > ASPECT_TOLERANCE
     }
 
-    /** True when the EXIF orientation rotates by 90/270 degrees, swapping width and height. */
+    /** True when the EXIF orientation rotates by 90 or 270 degrees, swapping width and height. */
     private fun exifSwapsAxes(imageFile: File): Boolean {
         val orientation = try {
             ExifInterface(imageFile.absolutePath).getAttributeInt(

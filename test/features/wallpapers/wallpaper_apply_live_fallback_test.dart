@@ -1,17 +1,9 @@
-// The live-apply outcome branching in WallpaperApplyNotifier.
-//
-// One line of the app decides whether a live apply is a hand-off or a finished
-// apply, and the two are opposite in every way that matters:
-//   - chooser        → Idle, pending flags LEFT SET (the OS chooser is open
-//                      over us and may recreate the Activity), never a success
-//                      claim, `confirmed: false`.
-//   - staticFallback → Success(staticFallback), pending flags CLEARED (nothing
-//                      is pending; leaving `pending_apply_is_live` set would
-//                      have apply_restore treat a finished apply as a chooser
-//                      still open), `confirmed: true` + `fallback: true`, and
-//                      the over-fire tripwire event.
-// Plus `wallpaper_apply_failed`, which must carry the native code and must NOT
-// fire for a failure that happened before `wallpaper_apply_attempt` did.
+// One line decides whether a live apply is a hand-off or a finished apply -> the two are opposite in every way.
+// chooser -> Idle, pending flags LEFT SET, never a success claim, `confirmed: false`.
+// The flags stay because the OS chooser is open over us and may recreate the Activity.
+// staticFallback -> Success(staticFallback), pending flags CLEARED, `confirmed: true` plus `fallback: true`.
+// Leaving `pending_apply_is_live` set would have apply_restore treat a finished apply as a chooser still open.
+// `wallpaper_apply_failed` must carry the native code and must NOT fire before `wallpaper_apply_attempt` did.
 
 import 'dart:io';
 
@@ -44,11 +36,11 @@ class _FakeApplyService implements WallpaperApplyService {
   /// What the native channel reports for a live apply.
   final LiveApplyResult live;
 
-  /// Raised instead, standing in for a native PlatformException the service
-  /// already translated (the `code` is what the failure event reports).
+  /// Raised instead, standing in for a native PlatformException the service already translated.
+  /// Its `code` is what the failure event reports.
   final WallpaperApplyException? liveThrows;
 
-  /// Raised from the gated signed-url call — i.e. BEFORE the attempt event.
+  /// Raised from the gated signed-url call -> BEFORE the attempt event fires.
   final WallpaperApplyException? downloadThrows;
 
   int liveCalls = 0;
@@ -90,8 +82,8 @@ class _FakeApplyService implements WallpaperApplyService {
   }
 }
 
-/// The real prefetch service needs sqflite + app-support dirs that do not exist
-/// under `flutter test`; stub it so the notifier takes the plain download path.
+/// The real prefetch service needs sqflite and app-support dirs that do not exist under `flutter test`.
+/// Stub it so the notifier takes the plain download path.
 class _NoPrefetch extends WallpaperPrefetchService {
   _NoPrefetch() : super(cdnBaseUrl: 'https://cdn.example.com');
 
@@ -192,8 +184,7 @@ void main() {
         isA<WallpaperApplyIdle>(),
       );
 
-      // The chooser may recreate the Activity; the flags are how the feed gets
-      // the user back to the card they left.
+      // The chooser may recreate the Activity -> the flags are how the feed gets the user back to the card they left.
       expect(b.prefs.getBool(appliedWallpaperPendingKey), isTrue);
       expect(b.prefs.getBool(pendingApplyIsLiveKey), isTrue);
       expect(b.prefs.getInt(pendingApplyPageIndexKey), 3);
@@ -238,9 +229,8 @@ void main() {
       expect((state as WallpaperApplySuccess).isLive, isTrue);
       expect(state.staticFallback, isTrue);
 
-      // Nothing is pending: the wallpaper is already applied, and a surviving
-      // `pending_apply_is_live` would make apply_restore restore as if the OS
-      // chooser were still open.
+      // Nothing is pending -> the wallpaper is already applied.
+      // A surviving `pending_apply_is_live` would make apply_restore restore as if the chooser were still open.
       expect(b.prefs.getBool(appliedWallpaperPendingKey), isNull);
       expect(b.prefs.getBool(pendingApplyIsLiveKey), isNull);
       expect(b.prefs.getInt(pendingApplyPageIndexKey), isNull);
@@ -253,8 +243,7 @@ void main() {
         'target': 'both',
         'reason': 'featureMissing',
       });
-      // Confirmed, and flagged so "confirmed is true only on a static apply"
-      // stays readable.
+      // Confirmed, and flagged -> "confirmed is true only on a static apply" stays readable.
       expect(analytics.props['wallpaper_applied'], {
         'wallpaper_id': 'w1',
         'category': 'murugan',
@@ -338,8 +327,7 @@ void main() {
           .read(wallpaperApplyProvider.notifier)
           .apply(_live(), target: ApplyTarget.both);
 
-      // The numerator must stay inside its denominator: no attempt was
-      // recorded, so no failure may be either.
+      // The numerator must stay inside its denominator -> no attempt was recorded, so no failure may be either.
       expect(analytics.events, isNot(contains('wallpaper_apply_attempt')));
       expect(analytics.events, isNot(contains('wallpaper_apply_failed')));
       expect(service.liveCalls, 0);

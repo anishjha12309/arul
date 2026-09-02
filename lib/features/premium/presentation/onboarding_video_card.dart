@@ -11,32 +11,22 @@ import '../domain/onboarding_video.dart';
 
 /// ONE bundled shutter frame for every language.
 ///
-/// The cuts are the same footage with re-voiced audio, so their opening frames
-/// measure ~41 dB PSNR against each other — the lip-sync differences are
-/// invisible at this size, and per-language posters cost 38 KB to ship five
-/// pictures of the same thing. (The English cut is the 13.1 s master rather
-/// than a dub, so it diverges more; it still only shows until the texture
-/// reveals, which is the entire life of this image.)
+/// The cuts are the same footage re-voiced -> their opening frames measure ~41 dB PSNR apart.
+/// Per-language posters would cost 38 KB to ship five pictures of the same thing.
+/// The English cut is the master, not a dub, so it diverges more — but it only shows until reveal.
 const _poster = 'assets/images/onboarding/poster.webp';
 
 /// The onboarding clip on the trial screen — and ONLY there.
 ///
-/// It takes the place of the paywall's PREMIUM / ARUL brand lockup, which is
-/// set in Cinzel: a Latin-subset face that cannot render Tamil, Telugu, Kannada
-/// or Malayalam at all. The screen is English by decision, so this card is the
-/// only thing on it that can speak the language the ad was tapped in.
-///
-/// Plays WITH SOUND and on a LOOP (owner's calls): it is a voiceover pitch, and
-/// silent it carries no message. That makes it the one player in the app
-/// created with `audio: true` — everything in the feed stays muted and
-/// focus-free. A mute control is always on screen.
-///
-/// **This widget does not own the player.** [PremiumScreen] creates it and
-/// opens the media the instant `/premium` is entered, in parallel with the
-/// `GET /me` the screen would otherwise have waited for before this card could
-/// even mount — that round trip, plus a platform-channel `create`, plus the
-/// fetch, used to run strictly one after another, which is the whole reason the
-/// poster sat there. Here the card only attaches, plays and reveals.
+/// It replaces the PREMIUM/ARUL lockup, set in Cinzel, which renders no Indic script at all.
+/// The screen is English by decision -> this card is the only thing that speaks the ad's language.
+/// It is a voiceover pitch and carries no message silent -> plays WITH SOUND, on a LOOP.
+/// That makes it the one player created with `audio: true` — the feed stays muted and focus-free.
+/// A mute control is always on screen.
+/// **This widget does not own the player** — [PremiumScreen] creates and opens it on route entry.
+/// That runs in PARALLEL with `GET /me`, which the screen would otherwise have waited on.
+/// Serialised, the round trip plus a channel create plus the fetch is why the poster used to sit.
+/// Here the card only attaches, plays and reveals.
 class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
   const ArulOnboardingVideoCard({
     super.key,
@@ -61,8 +51,7 @@ class _ArulOnboardingVideoCardState
   bool _started = false;
 
   /// Whether this route is the visible one — see [didChangeDependencies].
-  /// Seeded true so the first callback, which always fires before a player
-  /// exists, cannot register as a change.
+  /// Seeded TRUE -> the first callback, which fires before a player exists, is not a change.
   bool _visible = true;
 
   @override
@@ -72,10 +61,9 @@ class _ArulOnboardingVideoCardState
     _attach();
   }
 
-  /// The player can arrive AFTER this card mounts (the warm-up lost the race
-  /// with `/me`), and the source can change under it when a deferred delivery
-  /// finally reports the ad's language — [PremiumScreen] re-opens the media on
-  /// the surviving player and hands the new source down here.
+  /// The player can arrive AFTER this card mounts — the warm-up lost the race with `/me`.
+  /// The source can change under it when a deferred delivery finally reports the ad's language.
+  /// [PremiumScreen] re-opens the media on the SURVIVING player and hands the new source down.
   @override
   void didUpdateWidget(ArulOnboardingVideoCard old) {
     super.didUpdateWidget(old);
@@ -97,21 +85,17 @@ class _ArulOnboardingVideoCardState
     } else {
       player.firstFrame.addListener(_onFirstFrame);
     }
-    // Opened with playWhenReady false so a warm-up can never play audio at a
-    // user who is not looking at this card (a non-trial-eligible one never sees
-    // it at all). Playing is this widget's job, and only once it is on screen.
+    // Opened with playWhenReady false -> a warm-up never plays audio at someone not looking.
+    // Playing is this widget's job, and only once the card is on screen.
     unawaited(player.setVolume(_muted ? 0 : 1));
     if (_visible) unawaited(player.play());
   }
 
   /// Pause when this route stops being the visible one.
   ///
-  /// Leaving `/premium` disposes the screen, which releases the player — but a
-  /// route pushed OVER it (the policy reader, say) leaves this mounted and a
-  /// voice talking behind a screen the user is reading. `TickerMode` is exactly
-  /// the signal: a `ModalRoute` mutes it once fully covered, and leaves it ON
-  /// for a bottom sheet, which is what the UPI picker is — the clip is still
-  /// half on screen there and should keep going.
+  /// A route pushed OVER `/premium` leaves this mounted and a voice talking behind what is read.
+  /// `TickerMode` is exactly the signal: a `ModalRoute` mutes it once FULLY covered.
+  /// It stays ON for a bottom sheet — the UPI picker — where the clip is still half on screen.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -129,12 +113,13 @@ class _ArulOnboardingVideoCardState
       case AppLifecycleState.hidden:
         unawaited(widget.player?.pause());
       case AppLifecycleState.resumed:
+        // Resumes IN PLACE (owner's call, reversing the old never-auto-resume rule).
+        // The common return here is from the UPI app mid-checkout, and a frozen frame on the way
+        // back read as broken -> a mid-sentence pickup is the accepted cost of a loop that holds.
+        // `_visible` gates it: covered by a pushed route, TickerMode owns playback, not this.
+        if (_visible) unawaited(widget.player?.play());
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
-        // Deliberately does NOT auto-resume. Unlike a muted background loop,
-        // this one talks: coming back from the UPI app or the notification
-        // shade to a voice starting again mid-sentence is worse than a paused
-        // frame the user can restart.
         break;
     }
   }
@@ -152,10 +137,8 @@ class _ArulOnboardingVideoCardState
     _track('onboarding_video_start');
   }
 
-  /// GA4 only. Not on [postHogAllowedEvents], not a Meta star event, and not a
-  /// conversion — `trial_started` remains the single source for that
-  /// (CLAUDE.md §3). There is deliberately no "completed" event: the clip
-  /// LOOPS, and a looping player never reaches `STATE_ENDED`.
+  /// GA4 only — off [postHogAllowedEvents], not a Meta ★, not a conversion (`trial_started` is).
+  /// No "completed" event: the clip LOOPS, and a looping player never reaches `STATE_ENDED`.
   void _track(String event) => ref
       .read(analyticsServiceProvider)
       .track(event, properties: {'lang': widget.source.lang});
@@ -172,9 +155,7 @@ class _ArulOnboardingVideoCardState
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.player?.firstFrame.removeListener(_onFirstFrame);
-    // The player belongs to PremiumScreen — pausing here keeps a torn-down card
-    // from leaving a voice running during the frame before the screen's own
-    // dispose releases it.
+    // The player belongs to PremiumScreen -> pause here, or a torn-down card leaves a voice running.
     unawaited(widget.player?.pause());
     super.dispose();
   }
@@ -183,21 +164,16 @@ class _ArulOnboardingVideoCardState
   Widget build(BuildContext context) {
     final player = widget.player;
     return Padding(
-      // Same gutters as the offer panel above it, so the two read as one
-      // column rather than two differently-indented blocks.
+      // Same gutters as the offer panel above -> the two read as one column, not two indents.
       padding: const EdgeInsets.fromLTRB(
         ArulTokens.paywallPanelInset,
         10,
         ArulTokens.paywallPanelInset,
         ArulTokens.paywallBrandBottomPadding,
       ),
-      // Full width at the clip's OWN 16:9, on every screen. The frame is never
-      // cropped and never scaled down to make room — owner's call, and the
-      // right one: a short screen was being paid for out of the clip, which
-      // turned a talking head into a letterbox band of forehead. Room comes
-      // from the chrome around it instead (`dense` in paywall_view.dart), so
-      // the viewer sees the same framing everywhere and only the padding, the
-      // ornament and the price lockup shrink.
+      // Full width at the clip's OWN 16:9 on every screen — never cropped, never scaled to fit.
+      // Paying for a short screen out of the clip turned a talking head into a band of forehead.
+      // Room comes from the chrome instead (`dense` in paywall_view.dart) -> one framing everywhere.
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: SizedBox(
@@ -213,8 +189,7 @@ class _ArulOnboardingVideoCardState
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // The shutter. Stays MOUNTED under the texture, so a
-                  // decoder that drops can never expose bare colour.
+                  // The shutter stays MOUNTED under the texture -> a dropped decoder shows no bare colour.
                   const Image(
                     image: AssetImage(_poster),
                     fit: BoxFit.cover,
@@ -261,8 +236,7 @@ class _ArulOnboardingVideoCardState
   }
 }
 
-/// Always visible, never a hover/idle reveal: the clip starts audible, so the
-/// way to silence it has to be on screen the moment it does.
+/// The clip starts AUDIBLE -> the way to silence it is on screen from the first frame, always.
 class _MuteButton extends StatelessWidget {
   const _MuteButton({required this.muted, required this.onTap});
 

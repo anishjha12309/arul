@@ -1,13 +1,9 @@
 #!/usr/bin/env node
-// adb-level UI automation for agent debugging — workflow in the on-device
-// skill. Reads the screen as TEXT via `uiautomator dump` (labels + tap
-// coordinates), so an agent acts by label instead of screenshot + manual
-// coordinates. In-app labels need a DEBUG build (main.dart keeps the
-// semantics tree built under kDebugMode; other builds dump one empty
-// FlutterView). System UI — the OS wallpaper chooser, permission grants, the
-// One Tap sheet — is always legible: adb operates above app scope, which is
-// exactly the layer app-scoped drivers (flutter_driver / integration_test)
-// cannot reach.
+// adb-level UI automation for agent debugging -> the workflow itself lives in the on-device skill.
+// Reads the screen as TEXT via `uiautomator dump` -> an agent acts by label, not by screenshot coordinates.
+// In-app labels need a DEBUG build -> main.dart keeps the semantics tree only under kDebugMode.
+// Other builds dump one empty FlutterView -> an empty release dump is not a broken tool.
+// System UI is always legible -> adb works above app scope, the layer flutter_driver and integration_test cannot reach.
 //
 //   node tools/drive.mjs dump [--raw]             screen as text (or full XML)
 //   node tools/drive.mjs tap <label> [--index N]  tap by text/content-desc
@@ -156,8 +152,7 @@ function swipe(dir, dist, ms) {
 
 function typeText(s) {
   if (!s) return fail('type <text>');
-  // Device-shell escaping (adb concatenates args into one sh command);
-  // `input text` renders %s as a space.
+  // adb concatenates args into ONE device sh command -> escape for that shell -> `input text` renders %s as a space.
   const esc = s
     .replace(/[\\"'`&|;<>()$*?~#[\]{}!^]/g, (c) => '\\' + c)
     .replace(/ /g, '%s');

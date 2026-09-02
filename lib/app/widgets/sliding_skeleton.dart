@@ -2,18 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
 
-/// The redesign's sliding-gradient skeleton (Spec > Feed states > Loading:
-/// `110deg #14090C 30% → #2A1218 50% → #14090C 70%`, background-size 200%,
-/// 1.8s linear loop).
+/// Sliding-gradient skeleton, per the spec: `110deg #14090C 30% → #2A1218 50% → #14090C 70%`,
+/// background-size 200%, 1.8s linear loop.
 ///
-/// Deliberately NOT a `ShaderMask` / masked shimmer: a mask forces `saveLayer()`
-/// — a full offscreen pass, every frame, per widget — which is exactly the wrong
-/// tax over a video feed on a budget SoC. This slides an ordinary gradient FILL
-/// (via [GradientTransform]); no mask, no offscreen buffer, no saveLayer.
-///
-/// Fixed dark palette in both themes — a skeleton over full-bleed media must not
-/// flash white. For an on-surface placeholder that follows the theme, use the
-/// legacy [Skeleton] in skeleton.dart.
+/// A `ShaderMask` / masked shimmer forces `saveLayer()` — a full offscreen pass, every frame, per
+/// widget -> exactly the wrong tax over a video feed on a budget SoC -> slide an ordinary gradient
+/// FILL (via [GradientTransform]) instead: no mask, no offscreen buffer, no saveLayer.
+/// Fixed dark palette in BOTH themes -> a skeleton over full-bleed media must never flash white.
+/// An on-surface placeholder that follows the theme -> use the legacy [Skeleton] in skeleton.dart.
 class SlidingSkeleton extends StatefulWidget {
   const SlidingSkeleton({super.key, this.borderRadius = BorderRadius.zero});
 
@@ -29,7 +25,7 @@ class _SlidingSkeletonState extends State<SlidingSkeleton>
     vsync: this,
     duration: ArulTokens.skeletonLoop, // 1.8s
   )..repeat();
-  // TickerMode (inherited from the route) parks this when the page isn't current.
+  // TickerMode is inherited from the route -> this parks itself when the page isn't current.
 
   @override
   void dispose() {
@@ -64,8 +60,8 @@ class _SlidingSkeletonState extends State<SlidingSkeleton>
   }
 }
 
-/// Slides the gradient across the box: -1 (fully left) → 2 (fully past right),
-/// giving the background-size:200% travel the design specifies.
+/// Slides the gradient -1 (fully left) → 2 (fully past right) -> the background-size:200% travel the
+/// spec calls for.
 class _Sweep extends GradientTransform {
   const _Sweep(this.t);
 

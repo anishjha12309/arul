@@ -12,14 +12,10 @@ class ApiSubscriptionRepository implements SubscriptionRepository {
 
   @override
   Future<Entitlement> getEntitlement(String userId) async {
-    // GET /me returns `{ user, subscription, premium }` in one call. Cold
-    // start already fires /me for the auth upgrade, so folding entitlement in
-    // means one Neon-backed request instead of two (ApiClient coalesces the
-    // in-flight GETs, so this doesn't even double the HTTP call).
-    //
-    // `premium` is the Worker-computed flag — the ONLY source of the premium
-    // decision (see Entitlement). Strict == true so anything missing or odd
-    // fails CLOSED to free; the Worker's /media/signed-url stays the real gate.
+    // Cold start already fires /me for the auth upgrade -> folding entitlement into its
+    // `{user, subscription, premium}` adds no Neon request (ApiClient coalesces in-flight GETs).
+    // `premium` is the Worker-computed flag and the ONLY source of the decision (see Entitlement) ->
+    // strict `== true` fails CLOSED to free -> the Worker's /media/signed-url stays the real gate.
     try {
       final data = await _api.get('/me');
       final sub = data['subscription'] as Map<String, dynamic>?;
@@ -28,9 +24,8 @@ class ApiSubscriptionRepository implements SubscriptionRepository {
         subscription: sub == null ? null : SubscriptionModel.fromJson(sub),
       );
     } on ApiException catch (e) {
-      // 404 = the users row itself is gone (account deleted from another
-      // device while this session's access token was still live). The
-      // entitlement must degrade to free, not error.
+      // 404 = the users row is gone (deleted on another device while this access token was live) ->
+      // degrade to free, never error.
       if (e.status == 404) return const Entitlement.none();
       rethrow;
     }

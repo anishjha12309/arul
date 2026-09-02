@@ -1,10 +1,9 @@
-// Stage B-ref — perceptual-hash (dHash) every EXISTING R2 object so new imports can
-// be checked against them. static → full_key jpg; live → thumbs/<cat>/<stem>.jpg.
-// Writes refhashes.json. Robust to the re-encode gap (dHash ignores exact bytes).
+// Stage B-ref -> dHash every EXISTING R2 object so new imports can be checked against them.
+// static hashes full_key's jpg, live hashes thumbs/<cat>/<stem>.jpg -> writes refhashes.json.
+// dHash ignores exact bytes -> the index survives a re-encode of the same content.
 import { writeFileSync } from "fs";
 import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout (the in-repo cms/ folder this
-// used to point at was removed on 2026-07-20).
+// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 

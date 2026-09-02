@@ -1,44 +1,26 @@
-/// The devotional calendar Arul notifies on: a weekly rhythm that repeats
-/// forever, and an annual festival table that does not.
+/// The devotional calendar Arul notifies on — a weekly rhythm that repeats, and a table that does not.
 ///
-/// ## Why the festivals are a table and not a computation
+/// Hindu festivals are LUNISOLAR: their dates ride the tithi or nakshatra at sunrise at a place.
+/// That is astronomy, and no Dart package computes it to a standard worth showing a devotee.
+/// A festival wrong by a week is worse than saying nothing -> the dates are DATA, never computed.
 ///
-/// Pakiza derives its eight Islamic events from the Hijri calendar with the
-/// `hijri` package: the Hijri year is purely lunar, so a month/day pair is a
-/// complete definition and the Gregorian date falls out of arithmetic. The Hindu
-/// festivals here are lunisolar. Their dates depend on the *tithi* or the
-/// *nakshatra* prevailing at sunrise at a given place, which is astronomy, not
-/// arithmetic — and there is no Dart package that computes it to a standard I
-/// would put in front of a devotee. Getting a festival wrong by a week in a
-/// devotional app is worse than saying nothing at all.
+///  * **It fails silent, never wrong** — [FestivalEvent.nextOccurrenceAfter] returns null once the
+///    table runs out, and the scheduler skips that festival;
+///  * **It has to be refreshed** — the table runs to the end of 2031 (docs/notifications.md).
 ///
-/// So the dates are DATA. Two consequences follow, both deliberate:
-///
-///  * **It fails silent, never wrong.** [FestivalEvent.nextOccurrenceAfter]
-///    returns null once the table runs out, and the scheduler simply skips that
-///    festival. An expired table degrades to "no festival reminders", never to a
-///    reminder on the wrong day.
-///  * **It has to be refreshed.** The table below runs to the end of 2031. See
-///    `docs/notifications.md` for how to extend it.
-///
-/// Reminders also fire [kFestivalLeadDays] days AHEAD and never name a date, so
-/// the ±1-day disagreement between panchangams is invisible to the user.
+/// Reminders fire [kFestivalLeadDays] days AHEAD and never name a date.
+/// So the ±1-day disagreement between panchangams is invisible to the user.
 library;
 
 /// How many days before a festival its reminder fires.
 ///
-/// Three, matching Pakiza. Far enough ahead that the copy can honestly say "is
-/// near" and a one-day difference between almanacs never shows, and close enough
-/// that the user still has time to change their wallpaper for it.
+/// Far enough ahead that the copy can honestly say "is near" and an almanac's day never shows.
+/// Close enough that the user still has time to change their wallpaper for it.
 const int kFestivalLeadDays = 3;
-
-// ─── Weekly ───────────────────────────────────────────────────────────────────
 
 /// A weekday that carries devotional weight, surfaced as a recurring reminder.
 ///
-/// This is Arul's analogue of Pakiza's weekly Jummah notification: the one
-/// dependable beat in the week. Unlike the festivals it needs no table — the OS
-/// repeats it natively via `DateTimeComponents.dayOfWeekAndTime`.
+/// Unlike the festivals it needs NO table — the OS repeats it natively via `dayOfWeekAndTime`.
 class WeeklyDevotionalDay {
   const WeeklyDevotionalDay({
     required this.key,
@@ -49,16 +31,15 @@ class WeeklyDevotionalDay {
     required this.body,
   });
 
-  /// Stable identifier. Feeds the notification id — **never change it once
-  /// shipped**, or an old scheduled notification is orphaned instead of replaced.
+  /// Stable identifier feeding the notification id — **never change it once shipped**.
+  /// A changed key orphans the old scheduled notification instead of replacing it.
   final String key;
 
   /// `DateTime.monday` … `DateTime.sunday`.
   final int weekday;
 
-  /// The catalog category this day belongs to, so tapping the reminder can open
-  /// the feed already filtered to it. Must match a slug in the catalog
-  /// (CLAUDE.md §5b).
+  /// The catalog category this day belongs to -> a tap opens the feed already filtered to it.
+  /// Must match a slug in the catalog (CLAUDE.md §5b).
   final String category;
 
   final String emoji;
@@ -68,14 +49,9 @@ class WeeklyDevotionalDay {
 
 /// The weekly reminders.
 ///
-/// Deliberately ONE, on Friday. Velli kizhamai is the most widely observed
-/// weekly devotional day in Tamil practice, and one-a-week matches Pakiza's
-/// cadence exactly — which keeps the two apps' notification volume comparable
-/// (~1 weekly + ~1/month seasonal) instead of Arul quietly becoming the noisier
-/// of the pair.
-///
-/// Adding Monday (Sivan), Tuesday (Murugan) or Saturday (Perumal) is a one-entry
-/// change here and nothing else: ids, channels and scheduling are all derived.
+/// Deliberately ONE, on Friday — velli kizhamai is the most widely observed day in Tamil practice.
+/// One a week keeps volume comparable to Pakiza's, instead of Arul becoming the noisier of the pair.
+/// Adding Monday, Tuesday or Saturday is a one-entry change — ids, channels and scheduling derive.
 /// Weigh it against the volume note above before doing so.
 const weeklyDevotionalDays = <WeeklyDevotionalDay>[
   WeeklyDevotionalDay(
@@ -90,10 +66,7 @@ const weeklyDevotionalDays = <WeeklyDevotionalDay>[
   ),
 ];
 
-// ─── Annual ───────────────────────────────────────────────────────────────────
-
-/// One festival in the table: stable identity + copy, and the explicit Gregorian
-/// dates it falls on.
+/// One festival in the table — stable identity, copy, and the explicit Gregorian dates it falls on.
 class FestivalEvent {
   const FestivalEvent({
     required this.key,
@@ -116,20 +89,16 @@ class FestivalEvent {
   /// Headline, shown after [emoji].
   final String title;
 
-  /// Body copy. Written to fire [kFestivalLeadDays] days EARLY, so it must speak
-  /// in the near future ("is near", "approaches") and must never name a date.
+  /// Body copy. It fires [kFestivalLeadDays] days EARLY -> speak in the near future, never name a date.
   final String body;
 
-  /// The Gregorian dates this festival falls on, ascending. Verified against a
-  /// panchangam — see the banner on [festivalEvents].
+  /// The Gregorian dates this festival falls on, ascending — verified against a panchangam.
   final List<DateTime> dates;
 
-  /// The first date strictly after [from], or null when the table has run out
-  /// for this festival.
+  /// The first date strictly after [from], or null when the table has run out for this festival.
   ///
-  /// Null is the safe answer and the caller must treat it as "do not schedule".
-  /// Guessing the next occurrence by adding 365 days would put a lunisolar
-  /// festival up to a fortnight wrong.
+  /// Null is the SAFE answer -> the caller must treat it as "do not schedule".
+  /// Adding 365 days to guess would put a lunisolar festival up to a fortnight wrong.
   DateTime? nextOccurrenceAfter(DateTime from) {
     final floor = DateTime(from.year, from.month, from.day);
     for (final date in dates) {
@@ -142,22 +111,15 @@ class FestivalEvent {
   DateTime? get coverageEnd => dates.isEmpty ? null : dates.last;
 }
 
-/// Dates are DATA, verified by hand against a published Tamil panchangam —
-/// never computed (lunisolar dates are astronomy no Dart package computes to a
-/// standard worth putting in front of a devotee). The list is laid out one
-/// date per line, weekday in the comment, precisely so it can be eyeballed —
-/// when EXTENDING coverage (the test starts failing from 2030), verify the new
-/// rows against a panchangam the same way before shipping; the solar entries
-/// (Pongal, Makaravilakku, Puthandu, Aadi Perukku) follow fixed Tamil-calendar
-/// rules, everything tithi/nakshatra-based must be checked.
+/// Dates are DATA, verified by hand against a published Tamil panchangam — never computed.
 ///
-/// The design also contains any residual error: reminders fire
-/// [kFestivalLeadDays] days early and never name a date, so a ±1-day slip is
-/// invisible; and a festival with no future date is skipped outright rather
-/// than guessed at.
-///
-/// Ordered by the Tamil year (Chithirai → Panguni). Every one of the six catalog
-/// categories is represented.
+/// One date per line with the weekday in a comment, precisely so it can be eyeballed.
+/// When EXTENDING coverage (the test starts failing from 2030), verify the new rows the same way.
+/// The solar entries (Pongal, Makaravilakku, Puthandu, Aadi Perukku) follow fixed Tamil rules.
+/// Everything tithi- or nakshatra-based must be checked against a panchangam.
+/// Residual error is contained by design: reminders fire early and never name a date.
+/// A festival with no future date is skipped outright rather than guessed at.
+/// Ordered by the Tamil year (Chithirai → Panguni); all six catalog categories are represented.
 final festivalEvents = <FestivalEvent>[
   FestivalEvent(
     key: 'puthandu',
@@ -264,10 +226,8 @@ final festivalEvents = <FestivalEvent>[
   FestivalEvent(
     key: 'navaratri',
     category: 'amman',
-    // NOT the dancing figure: it reads as nightclub shorthand rather than
-    // Navaratri, and putting it on a notification about the Goddess would land
-    // as flippant for the audience this app is built for. The rosette carries
-    // the festive register without depicting anyone.
+    // NOT the dancing figure — it reads as nightclub shorthand, flippant on a post about the Goddess.
+    // The rosette carries the festive register without depicting anyone.
     emoji: '🏵️',
     title: 'Navaratri',
     body:

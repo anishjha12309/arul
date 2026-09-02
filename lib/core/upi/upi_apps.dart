@@ -4,9 +4,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'upi_apps.g.dart';
 
-/// One installed, mandate-capable UPI app (from `UpiIntentChannel.kt`'s
-/// allowlist — PhonePe's Autopay docs name which apps can approve a mandate,
-/// so a generic upi:// resolver is deliberately never offered).
+/// One installed, mandate-capable UPI app, from `UpiIntentChannel.kt`'s allowlist.
+/// PhonePe's docs name which apps can approve a mandate -> a generic upi:// resolver is never offered.
 class UpiApp {
   const UpiApp({required this.packageName, required this.label, this.icon});
 
@@ -22,8 +21,7 @@ class UpiApps {
   static const _channel = MethodChannel('com.hsrutility.arul/upi_intent');
 
   /// Installed mandate-capable UPI apps, in the channel's preference order.
-  /// Best-effort: any failure returns an empty list, and the paywall then
-  /// simply offers the hosted-page flow with no picker.
+  /// Best-effort -> any failure returns an empty list and the paywall offers the hosted page, no picker.
   static Future<List<UpiApp>> installed() async {
     try {
       final raw = await _channel.invokeListMethod<dynamic>('listUpiApps');
@@ -45,9 +43,8 @@ class UpiApps {
     }
   }
 
-  /// Fires [intentUrl] as an ACTION_VIEW aimed at [packageName]. False when
-  /// the app can't take the intent — callers must abandon the claimed setup
-  /// and surface a clean error, since nothing was authorized.
+  /// Fires [intentUrl] as an ACTION_VIEW aimed at [packageName]; false when the app cannot take it.
+  /// Nothing was authorized then -> the caller MUST abandon the claimed setup and show a clean error.
   static Future<bool> launch(String intentUrl, String packageName) async {
     try {
       final ok = await _channel.invokeMethod<bool>('launch', {
@@ -62,8 +59,7 @@ class UpiApps {
   }
 }
 
-/// Installed mandate-capable UPI apps for the paywall picker. keepAlive: the
-/// installed-apps set changes only when the user installs/uninstalls a UPI app
-/// — re-querying PackageManager per paywall open buys nothing.
+/// Installed mandate-capable UPI apps for the paywall picker.
+/// The set changes only on an install or uninstall -> keepAlive; re-querying per open buys nothing.
 @Riverpod(keepAlive: true)
 Future<List<UpiApp>> installedUpiApps(Ref ref) => UpiApps.installed();

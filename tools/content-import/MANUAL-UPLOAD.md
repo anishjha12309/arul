@@ -40,8 +40,7 @@ only gate for them:
 
 - **`yuvj420p` (full JPEG range) ships washed out.** `-pix_fmt yuv420p` alone does not
   convert a full-range source — the filter chain needs `out_range=tv` *and* a trailing
-  `format=yuv420p`. 7 of 63 files in the 2026-08-12 drop came out full-range before
-  `clean-batch.mjs` was fixed — that one lives in the staging ROOT (`c:/Anish/arul-import/`),
+  `format=yuv420p`. 7 of 63 files in one drop came out full-range before `clean-batch.mjs` was fixed — that one lives in the staging ROOT (`c:/Anish/arul-import/`),
   outside this repo and outside git. `fix.mjs` repairs it in place (same R2 key, no DB change).
 - Live wallpapers must carry **no audio stream** — social/phone sources almost always do.
 
@@ -54,8 +53,8 @@ only gate for them:
   broken watcher.
 - **`wrangler tail` sessions expire** and the CLI exits 0, which reads as a clean shutdown.
   An expired tail during an upload is worse than none: the log stays quiet and looks like
-  success. `cms-watch.mjs` respawns and says so loudly; it still missed one create POST on
-  2026-08-12 during the restart gap. **Verify landings in the DB, never from tail silence.**
+  success. `cms-watch.mjs` respawns and says so loudly, but it has still missed a create POST
+  during its own restart gap. **Verify landings in the DB, never from tail silence.**
 
 ## After the batch
 

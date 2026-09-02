@@ -7,55 +7,33 @@ import '../../../data/models/wallpaper.dart';
 import 'video_preload_controller.dart';
 import 'wallpaper_tile.dart';
 
-/// The media layer of one viewer page.
+/// The media layer of one page: poster below, full image or ExoPlayer texture faded in above.
 ///
-/// Layered, bottom to top:
-///   1. the **poster** — the same 720px thumbnail the grid tile already decoded,
-///      so opening a wallpaper is a repaint, not a refetch. It appears instantly.
-///   2. for a static wallpaper, the full-resolution image, faded in over it.
-///      for a live one, the native ExoPlayer texture, faded in on its first frame.
-///
-/// The poster stays mounted underneath for the whole life of the page. That is
-/// the point: if the decode stalls, the network dies, or the clip errors, the
-/// user keeps seeing a perfectly good image of the wallpaper they chose — never a
-/// black frame, never a spinner, never a broken-image glyph. There is no
-/// "waiting for video" state, because there is nothing worth waiting for.
-///
-/// **The cost of that, and it is the thing to know before debugging this:** a
-/// live wallpaper whose texture has not revealed yet is PIXEL-IDENTICAL to a
-/// static one. No shimmer, no spinner, no badge. So "none of the live wallpapers
-/// are moving" is what a cold prefetch cache looks like (players stream ~5MB
-/// each before the first frame) — it is not, on its own, evidence of a broken
-/// pipeline. Check the pool, not the catalog.
+/// Poster stays mounted for the page's whole life -> a stalled decode, dead network or clip error
+/// still shows the chosen wallpaper -> never a black frame, a spinner or a broken-image glyph.
+/// An unrevealed live texture is pixel-identical to a static card -> "nothing is moving" is a cold
+/// prefetch cache (~5MB per clip before frame one) -> check the pool, not the catalog.
 class ViewerMedia extends StatelessWidget {
   const ViewerMedia({super.key, required this.wallpaper, this.slot});
 
   /// Where the visible window sits when `cover` has to crop.
   ///
-  /// At the current card shape (1:1.86 vs the artwork's 9:16) the card is
-  /// slightly TALLER than the source, so cover overflows horizontally and trims
-  /// ~4.4% off the left and right. The `x: 0` here is what matters: a
-  /// composition is centred, so an even trim off both margins is the right
-  /// answer, and there is no vertical overflow for the `y` to act on.
-  ///
-  /// The `y: -0.45` is therefore dormant — and deliberately kept. It is load
-  /// bearing the moment `FeedCardGeometry.cardAspect` drops below 1.78, where
-  /// the crop flips to top/bottom: centred, a squarer card takes half its loss
-  /// off the TOP, and on devotional art the top is the crown, the kireedam, the
-  /// arch of the gopuram, while the bottom is skirt, plinth or background.
-  /// Biasing the window up puts roughly three quarters of that loss below the
-  /// subject instead. One constant, correct in both directions.
-  ///
-  /// Applies to every layer, and they must agree: the poster and the full image
-  /// (or the video texture) are stacked, so a mismatch would visibly shift the
-  /// frame the instant the real media faded in.
+  /// The reel height-clamps the card BELOW the 1.78 source ratio -> cover trims top/bottom, not the
+  /// sides -> `y: -0.45` is LIVE on real phones (feed_card_geometry_test.dart), never dormant.
+  /// Centred, a squarer card loses half its height off the TOP — crown, kireedam, gopuram arch ->
+  /// bias up so ~3/4 of the loss falls on skirt and plinth instead.
+  /// `x: 0` is the other direction: a tall enough screen grants 1.86 and the trim flips to the
+  /// margins, where an even cut suits a centred composition. One constant, correct both ways.
+  /// Poster, full image and texture are stacked -> a mismatch shifts the frame on fade-in -> every
+  /// layer uses this one alignment.
   static const cropAlignment = Alignment(0, -0.45);
 
   final Wallpaper wallpaper;
 
-  /// The pooled player serving this page, when it is live AND inside the preload
-  /// window. Null for a static wallpaper, and null for a live one that is outside
-  /// the window — an off-window page holds no decoder. That IS the decoder budget.
+  /// The pooled player for this page, when live AND inside the preload window.
+  ///
+  /// Null for a static wallpaper and for an off-window live one -> that page holds no decoder ->
+  /// this nullability IS the decoder budget.
   final LiveVideoSlot? slot;
 
   @override
@@ -64,29 +42,22 @@ class ViewerMedia extends StatelessWidget {
     final fullWidth = (MediaQuery.sizeOf(context).width * dpr).round();
 
     return ColoredBox(
-      // Behind the poster, for the frames before it decodes and in the letterbox
-      // of any wallpaper that is not exactly the screen's aspect ratio.
+      // Shows before the poster decodes and in any letterbox -> ink, never white.
       color: ArulColors.ink,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Poster. Same URL ([Wallpaper.posterUrl]) AND the same decode width
-          // as the grid tile, which makes this a cache HIT rather than a second
-          // decode: memCacheWidth is part of the cache key, so decoding the same
-          // poster at a different width would store a second copy of every
-          // wallpaper the user opens.
-          // The tile the user tapped is already decoded — this just repaints it.
-          // It is briefly upscaled to full-bleed, which is fine: it is a poster
-          // that lives for ~180ms until the real media fades in over it.
+          // memCacheWidth is part of the cache key -> a different width stores a second copy of
+          // every opened wallpaper -> match the grid tile's URL and decode width exactly, for a hit.
+          // Upscaling to full-bleed is fine: this poster lives ~180ms until the real media lands.
           CachedNetworkImage(
             imageUrl: wallpaper.posterUrl(AppConfig.cdnBaseUrl),
             fit: BoxFit.cover,
             alignment: cropAlignment,
             memCacheWidth: WallpaperTile.decodeWidthFor(context),
             fadeInDuration: Duration.zero,
-            // No placeholder and no errorWidget: if the poster is missing, the
-            // layer above covers this anyway. An error glyph here would flash
-            // under a perfectly good full image.
+            // The layer above covers a missing poster -> an error glyph would flash under a good
+            // full image -> no placeholder and no error widget here.
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
 
@@ -96,8 +67,8 @@ class ViewerMedia extends StatelessWidget {
               imageUrl: wallpaper.url(AppConfig.cdnBaseUrl),
               fit: BoxFit.cover,
               alignment: cropAlignment,
-              // A 1080x1920 wallpaper decodes to ~8.3 MB of RGBA regardless of its
-              // file size, so it is decoded at the screen's width, not its own.
+              // RGBA decode cost ignores file size (~8.3 MB at 1080x1920) -> decode at the screen's
+              // width, never the image's own.
               memCacheWidth: fullWidth,
               fadeInDuration: const Duration(milliseconds: 180),
               placeholder: (_, _) => const SizedBox.shrink(),
@@ -119,17 +90,13 @@ class _LiveTexture extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keyed by the POOLED PLAYER, not the page index. The pool reassigns a
-    // physical player — and therefore its textureId and its notifiers — across
-    // indices over a session. Keying by playerId forces a fresh element bound to
-    // the new player whenever the player behind this page changes; keying by
-    // index would leave a stale element pointed at another page's texture.
+    // The pool reassigns a player (with its textureId and notifiers) across indices -> keying by
+    // index leaves a stale element on another page's texture -> key by playerId.
     return RepaintBoundary(
       key: ValueKey('viewer_video_${slot.playerId}'),
       child: ValueListenableBuilder<bool>(
-        // Subscribe ONLY to this page's own first-frame flag, so a reveal
-        // rebuilds this page and never its siblings — the thing that keeps a
-        // swipe smooth while two or three players are in flight.
+        // A shared listenable would rebuild siblings on every reveal -> jank while 2-3 players are
+        // in flight -> subscribe only to this page's own first-frame flag.
         valueListenable: slot.ready,
         builder: (context, ready, child) => AnimatedOpacity(
           opacity: ready ? 1 : 0,
@@ -142,15 +109,13 @@ class _LiveTexture extends StatelessWidget {
             if (size == null || size.width <= 0 || size.height <= 0) {
               return const SizedBox.shrink();
             }
-            // A raw Texture stretches to its box and does NOT cover-fit itself,
-            // so wrap it: FittedBox(cover) around a SizedBox at the video's
-            // intrinsic size scales and crops it to fill the page.
+            // A raw Texture stretches to its box and never cover-fits itself -> wrap it in
+            // FittedBox(cover) over a SizedBox at the video's intrinsic size.
             return ClipRect(
               child: FittedBox(
                 fit: BoxFit.cover,
-                // Same bias as the static path — see [ViewerMedia.cropAlignment].
-                // A live clip whose crop disagreed with its own poster would jump
-                // the moment the first frame landed.
+                // A clip cropped differently from its own poster jumps on first frame -> same bias
+                // as the static path, [ViewerMedia.cropAlignment].
                 alignment: ViewerMedia.cropAlignment,
                 clipBehavior: Clip.hardEdge,
                 child: SizedBox(

@@ -9,14 +9,13 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/theme_mode_provider.dart';
 
-/// The theme picker sheet — spec: "Bottom sheet 'Theme'; 3 rows (r14, 12px
-/// pad): System default / Light / Dark. Selected: gold-tint bg, gold icon+title,
-/// gold check_circle." This one is FUNCTIONAL: selecting a row drives
-/// [themeModeProvider] (real theme switching), then closes the sheet.
+/// The theme picker sheet, laid out to the mock's spec.
+///
+/// FUNCTIONAL, not a mock -> a row drives [themeModeProvider] (real switching), then closes.
 Future<void> showThemeSheet(BuildContext context) {
   return showArulSheet<void>(
     context,
-    // The gold edge reads as a stray line over this small sheet — off here.
+    // The gold edge reads as a stray line on a sheet this small -> off here.
     topHairline: false,
     builder: (_) => const _ThemeSheet(),
   );
@@ -29,17 +28,13 @@ String themeModeLabel(AppLocalizations l10n, ThemeMode mode) => switch (mode) {
   ThemeMode.dark => l10n.themeDark,
 };
 
-/// Glyph for a [ThemeMode] — the ONE mapping, read by the sheet's own options
-/// and by the Settings row that opens it.
+/// Glyph for a [ThemeMode] — the ONE mapping, read by the sheet's own options and by the Settings
+/// row that opens it.
 ///
-/// The row used to hardcode [Icons.dark_mode], so it sat there showing a
-/// crescent moon while its own sub-label read "Light": the glyph is the thing
-/// the eye checks first in a list of rows, and it was the one part of the row
-/// that never moved. It answers to the selection now, and because the sheet
-/// reads the same function the row's icon is always the chosen option's icon.
+/// The glyph is what the eye checks first in a list of rows -> a row with its own hardcoded icon
+/// shows a crescent moon beside a "Light" sub-label -> both sites read THIS.
 IconData themeModeIcon(ThemeMode mode) => switch (mode) {
-  // Not a sun-and-moon composite: "follow the device" is a rule, not a
-  // brightness, and the sheet has always drawn it as one.
+  // "Follow the device" is a rule, not a brightness -> a gear, never a sun-and-moon composite.
   ThemeMode.system => Icons.settings_suggest,
   ThemeMode.light => Icons.light_mode,
   ThemeMode.dark => Icons.dark_mode,
@@ -85,15 +80,11 @@ class _ThemeSheet extends ConsumerWidget {
             _ThemeRow(
               option: o,
               on: selected == o.mode,
-              // Flip the theme and close in the SAME frame, so the sheet slides
-              // away already wearing the new theme.
-              //
-              // `select` applies the mode synchronously and only then awaits the
-              // SharedPreferences write, so awaiting it here parked the pop
-              // behind a disk round-trip: the theme changed, the sheet sat there
-              // for however long the write took, and only then began to dismiss.
-              // That gap is what made the switch feel like it stuttered. The
-              // write is fire-and-forget — nothing on screen is waiting on it.
+              // Flip the theme and close in the SAME frame -> the sheet slides away already wearing
+              // the new theme.
+              // `select` applies the mode synchronously and only THEN awaits the prefs write ->
+              // awaiting it here parks the pop behind a disk round-trip, which reads as a stutter ->
+              // fire-and-forget; nothing on screen waits on the write.
               onTap: () {
                 unawaited(ref.read(themeModeProvider.notifier).select(o.mode));
                 Navigator.of(context).pop();
@@ -129,8 +120,7 @@ class _ThemeRow extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // Picking a theme moves between discrete values, so it ticks rather than
-      // presses — same beat as a radio or a chip.
+      // Picking a theme moves between discrete values -> it ticks, not presses; a radio's beat.
       onTapDown: (_) => ArulHaptics.selection(),
       onTap: onTap,
       child: Container(

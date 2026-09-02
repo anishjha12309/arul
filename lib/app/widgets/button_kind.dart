@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/tokens.dart';
 
 enum ArulButtonKind {
-  /// The commit action. Green, because neither maroon nor gold can be an
-  /// unambiguous "go" without competing with the brand chrome around it.
+  /// The commit action, green -> maroon and gold compete with the brand chrome -> neither reads "go".
   primary,
 
   /// Brand action on a dark/silk surface (sign-in, unlock).

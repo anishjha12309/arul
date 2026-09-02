@@ -21,7 +21,7 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 | POST | /auth/refresh · /auth/logout | —/Bearer | Rotate (old jti denylisted) · denylist refresh jti |
 | POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET (apply/share gate); kind ∈ {wallpaper, ringtone}; one DB round-trip |
 | POST | /media/upload-url | Bearer | Presigned PUT, `user/<sub>/submissions/…` only |
-| POST | /media/confirm-upload | Bearer | Record submission — kind = `wallpaper` only, HEAD-verified, ≤10 pending/user, upsert on unique file_key |
+| POST | /media/confirm-upload | Bearer | Record submission — kind `wallpaper` or `ringtone`, byte-QC'd against THAT kind's role, ≤10 pending/user, upsert on unique file_key |
 | POST | /payments/{initiate,status,cancel,abandon} | Bearer | Autopay mandate lifecycle; initiate 409s `setup_in_progress` vs `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback; idempotent via KV orderId dedupe |
 | GET | /payments/callback | — | Post-mandate browser redirect |
@@ -62,16 +62,16 @@ scope, `kind='ringtone'`, and the `ringtones/` sweep prefix regardless of what t
 
 ## Secrets (`npx wrangler secret bulk <file.json>` — fresh values, NEVER reuse another app's)
 ```
-JWT_SECRET  GOOGLE_WEB_CLIENT_ID
+JWT_SECRET  GOOGLE_WEB_CLIENT_ID  ANDROID_CERT_SHA256(assetlinks fingerprints, comma-separated)
 R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
 PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 PHONEPE_ENV(SANDBOX|PRODUCTION)  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(set once, NEVER rotate)  ALLOWED_ORIGINS
-OPS_SECRET(money-moving internal routes; unset = they refuse, which is the safe default)
+POSTHOG_API_KEY  OPS_SECRET(money-moving internal routes; unset = they refuse, the safe default)
 ```
 Use `secret bulk`, never a shell pipe: a trailing newline in `PHONEPE_ENV` once routed production
 credentials to the sandbox host. `isProduction()` now trims and throws; every OTHER secret is still
-compared untrimmed. `CF_ZONE_ID`/`CF_PURGE_TOKEN` are gone from `env.ts` and set nowhere — there is no purge step anywhere, hsr-cms included; `?v=` does that job.
+compared untrimmed. `CF_ZONE_ID`/`CF_PURGE_TOKEN` are gone from `env.ts` and set nowhere — there is no purge step anywhere, hsr-cms included; `?v=` does that job. There are no `GA4_*`/`META_*` secrets either: server-side conversion reporting was removed ([docs/analytics-events.md](../docs/analytics-events.md)).
 
 ## Dev / deploy
 ```bash
@@ -87,9 +87,14 @@ even then). Both read the connection string from `.dev.vars`, never the CLI, so 
 shell history. `tools/prod-webhook.mjs` hardcodes `/payments/webhook`, refuses non-`DKS_` ids, and
 cannot be pointed at a money-moving route.
 
-Two traps that silently return the wrong answer rather than erroring:
+Three traps that silently return the wrong answer rather than erroring:
 - `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]` — add `--remote`.
 - `wallpapers` / `ringtones` use **`is_published`**, not `published`.
+- **In `wrangler.toml`, a key's POSITION decides whether it deploys at all**, and wrangler only warns.
+  A bare key under a `[table]` header is captured by that table (`workers_dev` under `[triggers]`
+  once killed every installed build); a key that belongs in `[vars]` needs that header to exist, and
+  without it is DISCARDED — which is the state `POSTHOG_HOST` and `ANDROID_CERT_SHA256` are in today
+  (`docs/known-issues.md`). Read `npx wrangler deploy --dry-run`'s output.
 
 ## Security invariants
 Access token carries only `sub` (plus a non-authoritative `prm` UI hint); entitlement is ALWAYS

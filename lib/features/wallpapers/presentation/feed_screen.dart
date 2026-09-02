@@ -35,14 +35,10 @@ import 'premium_gate_action.dart';
 import 'video_preload_controller.dart';
 import 'viewer_media.dart';
 
-/// The home surface: a Shorts-style vertical reel of wallpapers, one full-bleed
-/// page each (Spec > Reel feed). The old grid + separate viewer are gone —
-/// this pager IS the browse experience.
+/// The home surface: a Shorts-style vertical reel of wallpapers, one page each (Spec > Reel feed).
 ///
-/// Chromeless by design: category chips float on the top scrim, an icon-only
-/// action rail hugs the right edge, and the current item's meta sits bottom-left.
-/// All three recede on a swipe and settle back on rest. Browse and preview are
-/// free; Apply and Share are premium-gated.
+/// Chips ride the shared header; everything else is parented to the CARD, not the screen — see
+/// [_CardChrome]. Browse and preview are free -> Apply and Share are premium-gated (CLAUDE.md §5).
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
@@ -52,14 +48,12 @@ class FeedScreen extends ConsumerStatefulWidget {
 
 class _FeedScreenState extends ConsumerState<FeedScreen>
     with ApplyRestore, WidgetsBindingObserver {
-  /// Built lazily from the measured geometry rather than in initState:
-  /// `viewportFraction` is final on PageController, and the fraction can only be
-  /// solved once the reel's real height is known.
+  /// `viewportFraction` is final on PageController and needs the reel's measured height -> build
+  /// lazily in [_pagerFor], never in initState.
   ///
-  /// With `padEnds: false` the fraction IS the page extent as a share of the
-  /// viewport, so `pageExtent / height` pins each snapped page flush to the top
-  /// and leaves the remainder showing as the next card's peek. Stock PageView
-  /// throughout — snap, drag and fling geometry are untouched.
+  /// With `padEnds: false` the fraction IS the page extent as a share of the viewport ->
+  /// `pageExtent / height` pins a snapped page flush to the top and leaves the rest as the peek.
+  /// Stock PageView throughout — snap, drag and fling geometry are untouched.
   PageController? _pager;
   double? _pagerFraction;
 
@@ -71,37 +65,30 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final previous = _pager;
     _pagerFraction = fraction;
     _pager = PageController(initialPage: _index, viewportFraction: fraction);
-    // The outgoing controller is still attached to the PageView being replaced
-    // this frame; disposing it inline would throw. Let the frame land first.
+    // The outgoing controller is still attached to the PageView being replaced this frame ->
+    // disposing it inline throws -> let the frame land, then dispose.
     if (previous != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
     }
     return _pager!;
   }
 
-  /// Captured in initState, NOT read lazily via `ref.read`: `ref` is unusable
-  /// from `dispose()` in Riverpod 3, so a `ref.read` there silently fails to
-  /// reach the controller — exactly how `detach()` never runs and the pool keeps
-  /// a populated list after the feed closes. Hold the reference.
+  /// `ref` is unusable from `dispose()` in Riverpod 3 -> a `ref.read` there silently fails and
+  /// `detach()` never runs, leaving the pool populated -> capture the controller in initState.
   late final VideoPreloadController _video;
 
-  /// Held from initState for the same reason as [_video]: the feed-session
-  /// summary is flushed from `dispose()`, where `ref` is unusable in Riverpod 3.
+  /// Held from initState for the same reason as [_video] — the feed-session summary is flushed from
+  /// `dispose()`, where `ref` is unusable.
   late final AnalyticsService _analytics;
 
   int _index = 0;
 
-  // ── Feed-session counters ──────────────────────────────────────────────────
-  //
-  // Rolled up into ONE `feed_session_ended` event instead of one PostHog event
-  // per card. PostHog bills per event and NOT per property, so a single event
-  // carrying counts answers the same questions (scroll depth, live/static mix,
-  // session length) at a small fraction of the billed volume. The per-card
-  // `wallpaper_engaged` still fires for GA4, which is free and unsampled.
+  // PostHog bills per EVENT, not per property -> one `feed_session_ended` carrying counts answers
+  // depth/mix/length for a fraction of the volume -> never one PostHog event per card.
+  // Per-card `wallpaper_engaged` still fires for GA4, which is free and unsampled.
 
-  /// A card counts as engaged only after the user has dwelled on it for
-  /// [_dwellThreshold] — a swipe that passes through is not engagement. Reset on
-  /// every page change.
+  /// A swipe passing through is not engagement -> a card counts as engaged only after it dwells for
+  /// [_dwellThreshold] -> reset the timer on every page change.
   Timer? _dwellTimer;
   static const _dwellThreshold = Duration(seconds: 2);
 
@@ -110,21 +97,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
   int _maxDepth = 0;
   DateTime? _feedSessionStart;
 
-  /// The filtered list currently handed to the pager + video pool. Compared by
-  /// CONTENT (ordered item ids), not identity: feedProvider re-emits a NEW list
-  /// identity on every catalogProvider change (a background revalidate or
-  /// pull-refresh), and an identity-only check reset the browse position on each
-  /// of those. A resync only jumps/re-points when the items actually change.
+  /// The filtered list currently handed to the pager + video pool.
+  ///
+  /// feedProvider re-emits a NEW identity on every catalogProvider change (revalidate, pull-refresh)
+  /// -> an identity check reset the browse position on each -> compare by CONTENT (ordered ids).
   List<Wallpaper>? _servedList;
 
-  /// Set by [restoreFeedTo] after an apply-driven cold restart: the page to jump
-  /// to once the restored category's list lands. Consumed by [_syncFeed].
+  /// The page to jump to after an apply-driven cold restart -> set by [restoreFeedTo] once the
+  /// restored category's list lands, consumed by [_syncFeed].
   int? _pendingRestoreIndex;
 
-  /// The gate AWAITS `entitlementProvider.future` (CLAUDE.md §5): a loading
-  /// snapshot must never bounce a premium user to the paywall on a cold start.
-  /// A failed fetch gates closed — the Worker's signed-url check remains the
-  /// authoritative gate either way.
+  /// A loading snapshot must never bounce a premium user to the paywall -> AWAIT
+  /// `entitlementProvider.future`, never read a snapshot (CLAUDE.md §5).
+  /// A failed fetch gates closed -> the Worker's signed-url check stays authoritative either way.
   Future<bool> _isPremium() async {
     try {
       return await ref.read(entitlementProvider.future);
@@ -139,38 +124,27 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     _video = ref.read(videoPreloadControllerProvider);
     _analytics = ref.read(analyticsServiceProvider);
     _feedSessionStart = DateTime.now();
-    // This screen lives in a StatefulShellRoute.indexedStack, so it is kept
-    // alive across tab switches and in practice only disposes when the app dies
-    // — dispose() alone would almost never flush the summary. Backgrounding is
-    // the real end-of-session signal, so observe it.
+    // StatefulShellRoute.indexedStack keeps this screen alive across tab switches -> dispose()
+    // almost never runs -> backgrounding is the real end-of-session signal, so observe it.
     WidgetsBinding.instance.addObserver(this);
 
-    // Pay the CDN's DNS + TCP + TLS now, so the paywall's onboarding clip does
-    // not. Cold, that handshake was 1189ms of the 1499ms the clip took to show
-    // its first frame; with the connection already pooled it reached it in
-    // 312ms (device 2026-08-31).
+    // A cold CDN handshake was 1189ms of the 1499ms the paywall clip took to first frame; pooled it
+    // reached 312ms -> pay DNS + TCP + TLS here so the clip does not.
     //
-    // HERE, and not earlier, for two reasons. It must be POST-AUTH: the splash
-    // is where the media warm once fought Google's token mint and
-    // POST /auth/login for the same pipe and made first login 7-8s
-    // (splash_screen.dart), and this screen is only reachable signed in. And it
-    // must not be the entitlement read, which is lazy — tried there first, it
-    // resolved 18s AFTER the paywall had already opened and warmed nothing.
+    // Must be POST-AUTH: warming on the splash fought Google's token mint and POST /auth/login for
+    // the same pipe and made first login 7-8s (splash_screen.dart) -> warm here, signed in.
+    // Not on the entitlement read either — it is lazy, and resolved 18s AFTER the paywall opened.
     //
-    // Issued from the NATIVE stack because ExoPlayer is on HttpURLConnection
-    // and only that pool is the one it will find warm. Language is irrelevant:
-    // a pooled connection is per HOST, so whichever cut the link asks for
-    // reuses this one. Two bytes, once per feed mount, off the critical path.
+    // ExoPlayer is on HttpURLConnection -> only the NATIVE pool is one it finds warm -> issue from
+    // there. A pooled connection is per HOST -> the clip's language is irrelevant; any cut reuses it.
     unawaited(
       FeedVideoPlayerPool.warmConnection(
         '${AppConfig.cdnBaseUrl}/onboarding/en.mp4',
       ).catchError((_) {}),
     );
 
-    // A link target that lands while this screen is already built (a warm App
-    // Link, a deferred delivery) must trigger a build, because
-    // maybeOpenDeepLink runs from build() and nothing else would re-run it —
-    // least of all when the feed is parked offstage behind the Ringtones tab.
+    // maybeOpenDeepLink runs from build() -> a target landing on an already-built screen (warm App
+    // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
   }
 
@@ -185,39 +159,34 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     _dwellTimer?.cancel();
     ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     WidgetsBinding.instance.removeObserver(this);
-    // Backstop for the rare path where the screen really is torn down without
-    // the app being backgrounded first.
+    // Backstop for the rare teardown that happens without a backgrounding first.
     _flushFeedSession();
     _pager?.dispose();
-    // Do NOT dispose the controller — it is app-scoped, and disposing here would
-    // race the Android 12+ Activity recreate a wallpaper apply can trigger.
-    // detach() returns the decoders AND clears the list so a later
-    // background/resume cannot spin the pool up behind a screen with no video.
+    // The controller is app-scoped -> disposing here races the Android 12+ Activity recreate an
+    // apply can trigger -> never dispose it, detach().
+    // detach() returns the decoders AND clears the list -> a later background/resume cannot spin
+    // the pool up behind a screen with no video.
     _video.detach();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // `paused` (and `hidden` on the newer lifecycle) is the last callback we are
-    // guaranteed before the process can be killed, so it is the only reliable
-    // place to close out a feed session.
+    // `paused` (and `hidden`) is the last callback guaranteed before the process can be killed ->
+    // it is the only reliable place to close out a feed session.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       _flushFeedSession();
     } else if (state == AppLifecycleState.resumed) {
-      // Returning to the foreground starts a NEW session rather than resuming
-      // the closed one, so the `seconds` property stays meaningful.
+      // Foregrounding starts a NEW session, never resumes the closed one -> `seconds` stays real.
       _feedSessionStart = DateTime.now();
     }
   }
 
   /// Emits one `feed_session_ended` summary and resets the counters.
   ///
-  /// Silent when the user never dwelled on a card, so opening the tab and
-  /// swiping straight back out does not register as a session. Resetting after
-  /// the emit makes this safe to call more than once (background → foreground →
-  /// background) without double-counting.
+  /// Silent when no card was ever dwelled on -> opening the tab and leaving is not a session.
+  /// Resetting after the emit -> safe to call repeatedly across background/foreground, no doubles.
   void _flushFeedSession() {
     if (_engagedCount == 0) return;
     final start = _feedSessionStart;
@@ -239,9 +208,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     _feedSessionStart = DateTime.now();
   }
 
-  /// Starts the dwell clock for the card that just landed. Fires the per-card
-  /// `wallpaper_engaged` (GA4-only — it is not on the PostHog allow-list) and
-  /// folds the card into the session counters that `feed_session_ended` reports.
+  /// Starts the dwell clock for the card that just landed -> fires per-card `wallpaper_engaged`
+  /// (GA4-only, not on the PostHog allow-list) and folds it into `feed_session_ended`'s counters.
   void _onCardSettled(int index, Wallpaper wallpaper) {
     _dwellTimer?.cancel();
     _dwellTimer = Timer(_dwellThreshold, () {
@@ -254,29 +222,25 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         properties: {
           'wallpaper_id': wallpaper.id,
           'category': wallpaper.category,
-          // Spelled as `wallpaper_shared` / `wallpaper_applied` spell it, so the
-          // engagement → apply funnel is joinable on the same key.
+          // Spelled as `wallpaper_shared`/`wallpaper_applied` spell it -> the engagement→apply
+          // funnel joins on one key.
           'type': wallpaper.kind.name,
         },
       );
     });
   }
 
-  // ─── List sync ─────────────────────────────────────────────────────────────
-
-  /// Re-point the pager + video pool at [items] whenever the filtered list
-  /// changes (category switch, first data, or an apply-restore jump).
+  /// Re-point the pager + video pool at [items] whenever the filtered list changes — category
+  /// switch, first data, or an apply-restore jump.
   void _syncFeed(List<Wallpaper> items) {
     final previous = _servedList;
 
-    // Defect E: a background revalidate (cache-first startup path) or a
-    // pull-refresh that returns EQUIVALENT content re-emits a new list identity
-    // with the same items. Detecting change by identity reset _index to 0,
-    // jumped the pager, and re-pointed the video pool mid-browse. When the items
-    // are unchanged, keep the user exactly where they are — just hand the pool
-    // the fresh objects so a same-id item whose URL changed still re-opens
-    // (reconcile is a no-op when nothing changed, so there is no flicker). Never
-    // when an apply-restore jump is pending: that must still land on its index.
+    // A revalidate or pull-refresh returning EQUIVALENT content re-emits a new list identity ->
+    // detecting change by identity reset _index, jumped the pager and re-pointed the pool
+    // mid-browse -> on unchanged items keep the user where they are.
+    // Still hand the pool the fresh objects -> a same-id item whose URL changed re-opens (reconcile
+    // is a no-op otherwise, so no flicker).
+    // Never take this path with an apply-restore pending -> that jump must still land on its index.
     if (previous != null &&
         _pendingRestoreIndex == null &&
         _sameContent(previous, items)) {
@@ -303,23 +267,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       if (!mounted) return;
       final pager = _pager;
       if (pager != null && pager.hasClients) pager.jumpToPage(target);
-      // reclaim: the pool may hold no decoders (released by a prior apply); the
-      // index goes in WITH the list so the pool opens the right clip first.
+      // The pool may hold no decoders (released by a prior apply) -> reclaim first; the index goes
+      // in WITH the list so the pool opens the right clip first.
       _video
         ..reclaimDecoders()
         ..setWallpapers(items, initialIndex: target)
         ..onPageChanged(target);
-      // Start the dwell clock for the card the user LANDS on. onPageChanged only
-      // fires on a swipe, so without this the first card of every session — the
-      // one card guaranteed to be seen — would never count as engaged, and a
-      // session spent on it alone would emit nothing at all.
+      // onPageChanged only fires on a swipe -> the first card of a session, the one guaranteed to
+      // be seen, would never count as engaged -> start its dwell clock here.
       if (target < items.length) _onCardSettled(target, items[target]);
     });
   }
 
-  /// Whether two filtered feeds hold the same items in the same order (by id).
-  /// A category switch, or a catalog rebuild that added/removed/reordered items,
-  /// changes this; a revalidate that re-fetched the identical catalog does not.
+  /// Whether two filtered feeds hold the same items in the same order (by id) -> a category switch
+  /// or a rebuild that added/removed/reordered changes this; a re-fetch of the same catalog does not.
   static bool _sameContent(List<Wallpaper> a, List<Wallpaper> b) {
     if (identical(a, b)) return true;
     if (a.length != b.length) return false;
@@ -347,26 +308,26 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   @override
   void jumpFeedTo({required int index}) {
-    // The category was already selected by the mixin; its list recompute drives
-    // _syncFeed, which will land on this index.
+    // The mixin already selected the category -> its list recompute drives _syncFeed -> that lands
+    // on this index.
     setState(() => _pendingRestoreIndex = index);
   }
 
-  /// Pull-to-refresh: an authoritative network reload. `refresh()` re-reads
-  /// the version pointer and BYPASSES the serve-cached-first fast path (a bare
-  /// invalidate would re-emit the disk snapshot instantly and the indicator
-  /// would settle without fresh data). It never throws: on failure with data
-  /// on screen the current feed is kept; the AsyncError branch renders retry
-  /// only when there is nothing to show. Fresh data cascades to feedProvider.
+  /// Pull-to-refresh: an authoritative network reload, cascading to feedProvider.
+  ///
+  /// A bare invalidate re-emits the disk snapshot instantly and settles the indicator with no fresh
+  /// data -> `refresh()` re-reads the version pointer and BYPASSES the serve-cached-first path.
+  /// Never throws -> a failure with data on screen keeps the current feed; AsyncError renders retry
+  /// only when there is nothing to show.
   Future<void> _refreshCatalog() =>
       ref.read(catalogProvider.notifier).refresh();
 
-  /// Ported from the reference feed: warm the NEXT item's full image when it
-  /// is static, so a static→static swipe paints from cache instead of
-  /// showing only the poster through the whole download. Live items are prefetched as bytes
-  /// ahead of time by the prefetch service's data window, not here. Same URL
-  /// AND the same decode width as [ViewerMedia]'s full-resolution layer, so
-  /// this precache and the page's render share ONE image-cache entry.
+  /// Warms the NEXT item's full image when it is static -> a static→static swipe paints from cache
+  /// instead of showing only the poster for the whole download.
+  ///
+  /// Live items are prefetched as bytes by the prefetch service's data window, not here.
+  /// Same URL AND decode width as [ViewerMedia]'s full-resolution layer -> this precache and the
+  /// page's render share ONE image-cache entry.
   void _precacheNextStatic(List<Wallpaper> items, int index) {
     final next = index + 1;
     if (next >= items.length || items[next].kind != WallpaperKind.image) {
@@ -381,13 +342,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         CachedNetworkImageProvider(items[next].url(AppConfig.cdnBaseUrl)),
       ),
       context,
-      // Never throws into the framework; the real render path keeps its own
-      // self-healing retry regardless.
+      // Never throw into the framework -> the render path keeps its own self-healing retry anyway.
       onError: (_, _) {},
     );
   }
-
-  // ─── Premium gate ────────────────────────────────────────────────────────────
 
   Future<void> _onAction(PremiumGateAction action, Wallpaper w) async {
     final prem = await _isPremium();
@@ -401,16 +359,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       return;
     }
     if (!mounted) return;
-    // Free user: STRAIGHT to the paywall (owner's call, 2026-08-11). A gated tap
-    // is already an intent to act, and the premium SCREEN is the only surface
-    // that can satisfy it — so the two soft steps that used to stand in the way
-    // (a nudge pill on the first tap of a session, a teaser bottom sheet on
-    // every one after) are gone, and every gated verb in the app now behaves
-    // like `ensurePremium`: track, then push. Do not re-introduce an interstitial
-    // here without re-deciding that.
-    //
-    // The blocked verb is still tracked, with the wallpaper attributed
-    // (docs/edge-cases.md).
+    // A gated tap is already an intent to act, and only the premium SCREEN can satisfy it (owner's
+    // call) -> track the blocked verb, then push STRAIGHT to /premium — every gated verb behaves
+    // like `ensurePremium`. Never re-introduce a nudge, teaser sheet or interstitial here.
+    // The wallpaper is attributed on the blocked event (docs/edge-cases.md).
     ref
         .read(analyticsServiceProvider)
         .track(
@@ -420,13 +372,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     unawaited(context.push('/premium?source=${action.source}'));
   }
 
-  // ─── Apply / share (ported plumbing) ─────────────────────────────────────────
-
   Future<void> _doApply(Wallpaper w) async {
     final l10n = AppLocalizations.of(context);
 
-    // Live wallpapers skip our target sheet: Android's live-wallpaper chooser
-    // asks Home/Lock/Both itself and is the one that decides.
+    // Android's live-wallpaper chooser asks Home/Lock/Both itself and decides -> live skips our
+    // target sheet.
     final ApplyTarget target;
     if (w.kind == WallpaperKind.live) {
       target = ApplyTarget.both;
@@ -443,8 +393,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           target: target,
           feedPageIndex: _index,
           category: w.category,
-          // The wallpaper engine / chooser preview is about to need the hardware
-          // decoders the feed holds; on a budget SoC there are only a handful.
+          // The wallpaper engine / chooser preview needs the hardware decoders the feed holds ->
+          // a budget SoC has only a handful -> release them for the duration.
           releaseVideoDecoders: _video.releaseDecoders,
         );
 
@@ -917,7 +867,7 @@ class _CardChrome extends StatelessWidget {
   ///
   /// NOT [_barInsetH]. The action row can sit on 14 because it runs the width
   /// of the card and reads as a bar; a lone 24dp disc at 14 reads as jammed
-  /// into the corner, because [FeedCardGeometry.radius] (26) is curving away
+  /// into the corner, because [FeedCardGeometry.radius] (24) is curving away
   /// directly behind it. 22 puts the disc's outer edge clear of that arc, so it
   /// sits ON the wallpaper rather than on its rim — while staying far enough in
   /// from the centre that it never lands on a face or a crown.

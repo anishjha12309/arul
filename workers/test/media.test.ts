@@ -1,15 +1,10 @@
 /**
- * Unit tests for the media route handlers. The DB is mocked; R2 presigning runs
- * for real (aws4fetch / Web Crypto). These cover validation, lookup, and the
- * premium-gated signed URL path. ALL content requires premium to
- * apply/set/save. /media/signed-url answers the content lookup AND the
- * entitlement check in ONE combined query (private_key + is_premium in a
- * single row), so the mock row carries both columns — the 403-deny path is
- * covered here with is_premium: false (the CMS repo's live smoke plan,
- * c:\Anish\Unified CMS\test\LIVE-SMOKE-PLAN.md, also exercises it against the
- * deployed worker). (There is no PREMIUM_TEST_USER_IDS
- * bypass — it was removed; premium comes solely from a live Neon subscription
- * row.)
+ * The media route handlers. The DB is mocked; R2 presigning runs FOR REAL on aws4fetch and Web Crypto.
+ *
+ * ALL content requires premium to apply/set/save -> there is no per-row flag and no test-user bypass
+ * /media/signed-url answers the content lookup AND the entitlement check in ONE combined query
+ * So the mock row carries both columns -> the 403-deny path sets the entitlement half false
+ * The CMS repo's live smoke plan exercises the same path against the deployed worker
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -83,8 +78,7 @@ describe("POST /media/signed-url", () => {
   });
 
   it("returns a 300s signed URL for a premium user", async () => {
-    // The combined query returns the content key and the live entitlement in
-    // one row — the mock row mirrors that shape.
+    // The combined query returns the content key and the live entitlement in ONE row -> the mock mirrors that shape
     const { env } = envWithSql([
       { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
     ]);
@@ -99,9 +93,8 @@ describe("POST /media/signed-url", () => {
   });
 
   it("403 premium_required when the live entitlement read says not premium", async () => {
-    // The key exists and is published, but the entitlement half of the combined
-    // row is false — entitlement is read live from Neon, never from the JWT, so
-    // a lapsed/refunded user is refused even with a valid token.
+    // The key exists and is published, but the entitlement half of the row is false
+    // Entitlement is read LIVE from Neon, never from the JWT -> a lapsed or refunded user is refused with a valid token
     const { env } = envWithSql([
       { private_key: "wallpapers/murugan/live.mp4", is_premium: false },
     ]);
@@ -114,17 +107,14 @@ describe("POST /media/signed-url", () => {
     );
   });
 
-  // ── Popularity counter (db/schema/06_popularity.sql) ──────────────────────
-  // This route is the ONLY source of the counts that order the All feed, so
-  // what it does and does not increment is a product contract, not plumbing.
+  // ── Popularity counter ─────────────────────────────────────────────────────
+  // This route is the ONLY source of the counts that order the feed
+  // So what it does and does not increment is a product contract, not plumbing
   describe("popularity counter", () => {
     /**
      * Everything this request handed the sql tag, as one searchable blob.
-     *
-     * Flattened rather than read per-statement because dynamic identifiers go
-     * through `sql(table)` / `sql(col)`, which the mock records as their OWN
-     * calls — so the column being incremented never appears inside the template
-     * strings of the UPDATE itself.
+     * Flattened, not read per-statement -> dynamic identifiers go through `sql(table)`, recorded as their OWN calls
+     * So the incremented column never appears inside the UPDATE's own template strings
      */
     const sqlText = (capturedArgs: unknown[][]) =>
       capturedArgs
@@ -149,8 +139,7 @@ describe("POST /media/signed-url", () => {
     });
 
     it("does NOT increment for a SHARE", async () => {
-      // The same route serves apply and share. Counting a share would rank a
-      // wallpaper nobody kept to the top of the All feed.
+      // The same route serves apply AND share -> counting a share ranks a wallpaper nobody kept to the top
       const { env, capturedArgs } = envWithSql([
         { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
       ]);
@@ -165,8 +154,7 @@ describe("POST /media/signed-url", () => {
     });
 
     it("does NOT increment when the request carries no action", async () => {
-      // Builds shipped before the action field send none. Counting those would
-      // fold every share into apply_count for as long as they stay installed.
+      // Older builds send no action at all -> counting those folds every share into apply_count while they stay installed
       const { env, capturedArgs } = envWithSql([
         { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
       ]);
@@ -189,8 +177,7 @@ describe("POST /media/signed-url", () => {
     });
 
     it("does NOT increment when entitlement refuses the grant", async () => {
-      // The count means "a premium user was handed this file". Incrementing on a
-      // 403 would let a signed-out crowd rank the feed.
+      // The count means "a premium user was handed this file" -> incrementing on a 403 lets a signed-out crowd rank the feed
       const { env, capturedArgs } = envWithSql([
         { private_key: "wallpapers/murugan/live.mp4", is_premium: false },
       ]);
@@ -207,8 +194,7 @@ describe("POST /media/signed-url", () => {
   });
 
   it("resolves kind=ringtone via audio_key and returns a signed URL for a premium user", async () => {
-    // Same combined-row shape as the wallpaper success path: the ringtones
-    // lookup surfaces audio_key AS private_key next to the live entitlement.
+    // The same combined-row shape as the wallpaper path -> the ringtones lookup surfaces audio_key AS private_key
     const { env } = envWithSql([
       { private_key: "ringtones/murugan/abc.mp3", is_premium: true },
     ]);
@@ -268,9 +254,8 @@ describe("POST /media/upload-url", () => {
       makeCtx({
         env,
         token: await token(),
-        // Valid owner prefix, wrong shape — sweep-submissions only reclaims
-        // objects containing "/submissions/", so accepting this would strand
-        // the bytes in R2 forever.
+        // A valid owner prefix but the wrong SHAPE -> sweep-submissions only reclaims keys containing the infix
+        // Accepting this would strand the bytes in R2 forever -> no cron would ever see them
         jsonBody: { key: `user/${USER_ID}/x.jpg`, contentType: "image/jpeg" },
       }),
     );
@@ -387,9 +372,8 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("too_many_pending once the per-user pending cap is reached", async () => {
-    // The shared mock returns the same rows for every query, so the pending
-    // count reads n=10 — at the cap — and the handler must refuse before insert.
-    // The object must pass QC first, or the 400 arrives before the cap check.
+    // The shared mock returns the same rows for every query -> the pending count reads at the cap
+    // The object must pass QC FIRST, or the 400 arrives before the cap check and this proves nothing
     const { bucket } = makeQcR2({
       [`user/${USER_ID}/submissions/x.jpg`]: { bytes: jpegFixture(), contentType: "image/jpeg" },
     });
@@ -474,8 +458,7 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("auto-rejects a non-H.264 video (bad_codec) and deletes the object", async () => {
-    // Right geometry, wrong codec: budget-SoC fleets only hw-decode avc1/avc3;
-    // an HEVC clip would force permanent software decode (CLAUDE.md gotcha 1).
+    // Right geometry, WRONG codec -> budget SoCs only hw-decode avc1/avc3 -> an HEVC clip forces permanent software decode
     const key = `user/${USER_ID}/submissions/clip.mp4`;
     const { bucket, deletes } = makeQcR2({
       [key]: { bytes: mp4Fixture({ codec: "hev1" }), contentType: "video/mp4" },
@@ -508,9 +491,8 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("auto-rejects an object whose REAL size exceeds the per-mime cap (too_large)", async () => {
-    // The presign endpoint only validates the CLAIMED size; the QC gate is the
-    // first place the actual byte count is checked. Simulate a 11MB jpeg by
-    // inflating the head() report rather than allocating 11MB of fixture.
+    // The presign endpoint validates only the CLAIMED size -> the QC gate is the first check of the real byte count
+    // Inflate the head() report rather than allocating a real oversize fixture
     const key = `user/${USER_ID}/submissions/huge.jpg`;
     const { bucket, deletes } = makeQcR2({
       [key]: { bytes: jpegFixture(), contentType: "image/jpeg" },
@@ -530,8 +512,8 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("accepts a canonical clip with moov AFTER mdat (non-faststart layout)", async () => {
-    // Phone encoders commonly emit moov at the end; the box walk must skip the
-    // multi-MB mdat and still find it, or every such upload is a false reject.
+    // Phone encoders commonly emit moov at the END -> the box walk must skip the multi-MB mdat and still find it
+    // Otherwise every non-faststart upload is a false reject
     const key = `user/${USER_ID}/submissions/clip.mp4`;
     const { bucket } = makeQcR2({
       [key]: { bytes: mp4Fixture({ moovAtEnd: true }), contentType: "video/mp4" },
@@ -544,10 +526,9 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("a retried confirm is idempotent: the insert upserts on file_key and returns the row", async () => {
-    // One object = one submission row (edge-cases §Upload). Postgres enforces
-    // this via the unique file_key index; the unit-level guarantee is that the
-    // insert really is an ON CONFLICT upsert with RETURNING, and that a repeat
-    // confirm answers 200 with the same row instead of erroring.
+    // One object = one submission row -> Postgres enforces it through the unique file_key index
+    // The unit-level guarantee is that the insert really is an ON CONFLICT upsert with RETURNING
+    // And that a repeat confirm answers 200 with the SAME row rather than erroring
     const key = `user/${USER_ID}/submissions/x.jpg`;
     const { bucket } = makeQcR2({
       [key]: { bytes: jpegFixture(), contentType: "image/jpeg" },
@@ -615,12 +596,10 @@ describe("POST /media/confirm-upload", () => {
   });
 
   it("auto-rejects a VIDEO renamed as a ringtone (m4a container carrying a video track)", async () => {
-    // The one abuse the audio branch exists to catch: an .m4a-labelled MP4 whose
-    // tracks include video would otherwise be published as a "ringtone".
+    // The one abuse the audio branch exists to catch -> an .m4a-labelled MP4 carrying video would ship as a "ringtone"
     const key = `user/${USER_ID}/submissions/clip.m4a`;
     const { bucket, deletes } = makeQcR2({
-      // withAudio: a real renamed video carries BOTH tracks, so it clears the
-      // "has an audio track" check and must be caught by the video-track rule.
+      // withAudio -> a real renamed video carries BOTH tracks -> it clears "has an audio track" and only the video rule stops it
       [key]: { bytes: mp4Fixture({ withAudio: true }), contentType: "audio/mp4" },
     });
     const { env, capturedArgs } = envWithSql([], { R2: bucket });

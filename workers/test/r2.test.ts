@@ -1,7 +1,4 @@
-/**
- * Unit tests for R2 presigned URL generation (aws4fetch, Web Crypto only).
- * No network — sign() computes the URL locally.
- */
+/** R2 presigned URL generation — aws4fetch signs locally on Web Crypto, so these tests need no network. */
 
 import { describe, it, expect } from "vitest";
 import { presignGet, presignPut } from "../src/lib/r2.js";
@@ -37,8 +34,8 @@ describe("presignGet", () => {
     const path = new URL(url).pathname;
     expect(path).toContain("%20"); // space within a segment is encoded
     expect(path).not.toContain("abc def");
-    // slashes must remain literal (not %2F) in the PATH so S3/R2 sees real
-    // separators (the X-Amz-Credential query value legitimately contains %2F).
+    // Slashes must stay literal in the PATH, never %2F -> S3/R2 needs real separators there
+    // The X-Amz-Credential QUERY value legitimately contains %2F -> assert on the path, not the whole URL
     expect(path.toLowerCase()).not.toContain("%2f");
     expect(path).toBe("/south-indian-wallpapers/user/abc%20def/file.jpg");
   });

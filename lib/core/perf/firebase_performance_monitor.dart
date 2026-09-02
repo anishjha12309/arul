@@ -4,9 +4,8 @@ import 'performance_monitor.dart';
 
 /// Real [PerformanceMonitor] backed by Firebase Performance Monitoring.
 ///
-/// Assumes Firebase was initialised + perf collection enabled in `main()`
-/// (every build except `flutter test`). Selected over [NoOpPerformanceMonitor]
-/// only when `AppConfig.firebaseEnabled` (see `performance_provider.dart`).
+/// Firebase and perf collection were initialised in `main()` — every build except `flutter test`.
+/// Selected over [NoOpPerformanceMonitor] only when `AppConfig.firebaseEnabled`.
 class FirebasePerformanceMonitor implements PerformanceMonitor {
   const FirebasePerformanceMonitor();
 

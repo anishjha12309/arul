@@ -8,24 +8,22 @@ enum FindingKind {
   /// A RenderFlex / render-box overflow error fired while the frame was built.
   overflow,
 
-  /// The paragraph ran past the maxLines it was given — Flutter painted an
-  /// ellipsis, faded it, or clipped it.
+  /// The paragraph ran past the maxLines it was given -> Flutter painted an ellipsis, faded it, or clipped it.
   truncated,
 
   /// The paragraph's own longest line is wider than the box it was laid out in.
   clipped,
 
-  /// Fits, but with less than [kHeadroomFraction] of the slot to spare. Never a
-  /// demotion — insurance against OEM Latin font substitution.
+  /// Fits, but with less than [kHeadroomFraction] of the slot to spare -> never a demotion.
+  /// It is insurance against OEM Latin font substitution.
   headroom,
 
-  /// A string the matrix could not reach by pumping, measured directly against
-  /// its real slot width instead.
+  /// A string the matrix could not reach by pumping -> measured directly against its real slot width instead.
   slotMeasured,
 }
 
-/// One recorded observation. Immutable and JSON-round-trippable, because Phase 7
-/// re-derives verdicts from the dumped artifacts rather than trusting this run.
+/// One recorded observation, immutable and JSON-round-trippable.
+/// The verdict re-deriver reads the dumped artifacts rather than trusting this run.
 class Finding {
   const Finding({
     required this.kind,
@@ -48,14 +46,12 @@ class Finding {
   /// The offending string as rendered.
   final String text;
 
-  /// The ARB key it was attributed to, or null when attribution failed (which
-  /// is itself reportable — see the ledger).
+  /// The ARB key it was attributed to, or null when attribution failed -> a failure is itself reportable.
   final String? key;
 
   final String widgetChain;
 
-  /// What the text needs, and what it got. `neededPx - availablePx` is the
-  /// overflow in logical pixels.
+  /// What the text needs and what it got -> `neededPx - availablePx` is the overflow in logical pixels.
   final double neededPx;
   final double availablePx;
 
@@ -92,9 +88,7 @@ class Finding {
     detail: (j['detail'] as String?) ?? '',
   );
 
-  /// The line that goes in a failing test's message. Everything a human needs to
-  /// reproduce it by hand: which screen, which locale, which configuration,
-  /// which string, and by how much.
+  /// The line a failing test prints -> screen, locale, configuration, string and margin, enough to reproduce by hand.
   String describe() {
     final where = '$screen · $locale · $config';
     final what = key == null ? '"${_clip(text)}"' : '$key = "${_clip(text)}"';
@@ -117,12 +111,10 @@ class Finding {
 }
 
 /// One measured paragraph, finding or not.
-///
-/// The overflow findings carry no ARB key — a `RenderFlex overflowed by 19
-/// pixels on the bottom` names a box, not a string. These records are how the
-/// culprit is identified without guessing: the key responsible for a locale-only
-/// overflow is the one whose translation grew most against the English
-/// measurement of the SAME key, on the same screen, at the same configuration.
+/// Overflow findings carry no ARB key -> `RenderFlex overflowed by 19 pixels` names a box, not a string.
+/// These records identify the culprit without guessing.
+/// The key responsible is the one whose translation grew most against the English measurement of the SAME key.
+/// Same screen, same configuration.
 class Measurement {
   const Measurement({
     required this.key,
@@ -146,8 +138,7 @@ class Measurement {
   /// The slot it was given.
   final double laidOutWidth;
 
-  /// Painted height in the slot, and how many lines it took to get there —
-  /// a translation that gains a line is what pushes a sheet past the screen.
+  /// Painted height in the slot, and how many lines it took -> a translation that gains a line pushes a sheet off screen.
   final double height;
   final int lines;
 
@@ -170,8 +161,7 @@ String encodeMeasurements(List<Measurement> m) =>
       'measurements': m.map((e) => e.toJson()).toList(),
     });
 
-/// Serializes a run for `build/l10n_audit/`. Phase 7's verdict re-deriver reads
-/// exactly this and nothing else.
+/// Serializes a run for `build/l10n_audit/` -> the verdict re-deriver reads exactly this and nothing else.
 String encodeFindings(List<Finding> findings) =>
     const JsonEncoder.withIndent('  ').convert({
       'count': findings.length,

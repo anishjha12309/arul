@@ -1,15 +1,12 @@
--- Arul — Neon Postgres schema (identity + subscription). PG 16+.
--- Apply db/schema/*.sql in filename order, then ../seed.sql (neon-migration skill).
--- NO RLS by design: authorization is enforced entirely in the Cloudflare Worker —
--- every query parameterized and scoped to the verified JWT `sub`. No client
--- connects to Neon directly.
+-- Arul — Neon identity + subscription schema (PG 16+).
+-- Schema files ARE the migration -> a fresh DB replays them -> apply in filename order, ../seed.sql last.
+-- Only the Worker reaches Neon, scoped to the verified JWT `sub` -> no client connects -> no RLS by design.
 
--- Shared trigger: bump updated_at on UPDATE.
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end;
 $$;
 
--- users — Google identity (google_sub) is the anchor; Worker upserts on /auth/login.
+-- users — google_sub is the identity anchor -> the Worker upserts on /auth/login.
 create table if not exists users (
   id                  uuid        primary key default gen_random_uuid(),
   google_sub          text        unique not null,
@@ -18,14 +15,10 @@ create table if not exists users (
   display_name_custom boolean     not null default false,  -- true once user edits; login stops syncing from Google
   referral_code       text        unique not null,
   referred_by         uuid        references users(id) on delete set null,
-  -- Referral reward credit — decoupled from subscriptions so it stacks with (and
-  -- outlives) any PhonePe state. Read by isPremium().
+  -- Referral credit, independent of subscriptions -> outlives any PhonePe state -> premiumPredicate ORs it in.
   reward_premium_until timestamptz,
-  -- Firebase Analytics app_instance_id (32 hex chars) — the join key GA4's
-  -- Measurement Protocol needs so the Worker can log `purchase` for debits that
-  -- settle with the app closed (trial→paid, renewals). Uploaded by the app on
-  -- /auth/login and /payments/initiate; read by lib/ga4.ts. Nullable: absent
-  -- until a build that sends it logs in.
+  -- Dead since the GA4 Measurement Protocol reporter was deleted -> nothing reads or writes app_instance_id.
+  -- Dropping it would be a migration -> not worth the churn -> the column stays, unread; do not revive it.
   app_instance_id     text,
   created_at          timestamptz not null default now()
 );
@@ -57,10 +50,7 @@ create index if not exists subscriptions_phonepe_id_idx    on subscriptions (pho
 create index if not exists subscriptions_merchant_id_idx   on subscriptions (merchant_subscription_id);
 create index if not exists idx_subscriptions_next_debit_at on subscriptions (next_debit_at) where status in ('trialing','active');
 create index if not exists idx_subscriptions_notified_at   on subscriptions (notified_at)   where notified_at is not null;
--- `or replace`, not a bare create: this file is re-applied WHOLE (the migration
--- workflow puts the END STATE here), prod already holds the trigger, and
--- sql.unsafe() sends the file as ONE simple query, which Postgres runs in a
--- single implicit transaction — so a bare create aborts every other statement in
--- the file with it. PG 14+; this schema declares 16+.
+-- Re-applied WHOLE onto a live DB -> a bare create trigger hits the existing one -> use `or replace` (PG 14+).
+-- Sent as ONE simple query -> one implicit transaction -> one failure rolls back every statement in the file.
 create or replace trigger subscriptions_set_updated_at before update on subscriptions
   for each row execute function set_updated_at();
