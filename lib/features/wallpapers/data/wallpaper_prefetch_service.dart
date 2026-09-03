@@ -12,30 +12,32 @@ import '../../../data/models/wallpaper.dart';
 /// The **data window** half of the feed's two-window strategy, decoupled from the DECODER window.
 /// Prefetching downloads bytes only — NO ExoPlayer, NO decoder -> many items ahead cost no decoders.
 /// Conflating the two is what made a 3-player preload pool choke budget SoCs: a decoder per slot.
-/// Prefetching on ANY connection favours scroll smoothness over mobile-data thrift, deliberately.
-/// Live previews are small (≤15 MB, typically 2–5 MB) and [_maxCacheObjects] bounds total disk use.
+/// Prefetching on ANY connection favours scroll smoothness over mobile-data thrift, deliberately —
+/// but the window depth is the DATA-PLAN budget: a clip averages ~4.5 MB, so every card the window
+/// reaches costs that whether or not the user ever gets there. [_maxCacheObjects] bounds disk use.
 class WallpaperPrefetchService {
   WallpaperPrefetchService({required this.cdnBaseUrl});
 
   /// CDN base for the public stream URL. MUST match the URL the player opens, or the key misses.
   final String cdnBaseUrl;
 
-  /// How many items AHEAD of the current index to pull to disk. Deliberately large.
+  /// How many items AHEAD of the current index to pull to disk. Deliberately SHALLOW.
   ///
-  /// Prefetch is bytes-only -> a deep window costs network and disk, never the decoder budget.
-  /// The decoder budget is the only thing that actually janks the feed.
-  /// Nearest-first ordering plus capped concurrency -> a deep window never delays the nearest item.
-  /// The cap on real perf cost is [_maxConcurrent], not this number.
-  static const _ahead = 15;
+  /// Prefetch is bytes-only -> the window costs network and disk, never the decoder budget, and
+  /// nearest-first ordering plus [_maxConcurrent] keep the nearest item from waiting. But depth is
+  /// what turns scrolling into data: at 15 the queue never drained while the user swiped, so the
+  /// pipe ran flat out for the whole scroll — ~5 MB/s, 505 MB in 90 s of flinging on a 3 GB Vivo.
+  /// Three covers the next swipe or two and then lets the pipe IDLE until the next page settles,
+  /// so bytes track cards actually reached (~one clip per swipe), not time spent scrolling.
+  static const _ahead = 3;
 
   /// The ahead-window the FIRST pass of a process uses, until [_widened].
   ///
-  /// On a cold sign-in nothing is cached -> the full window enqueued ~40 MB the instant it mounted.
-  /// Three of those downloaded at once, against the one clip the user is staring at.
-  /// That clip waits for bandwidth and paints late — which reads as "the app opened on a still".
-  /// Four ahead keeps the pipe busy for the next swipe or two without crowding the current card.
-  /// The full depth arrives via [widenWindow], by which point the current card has painted.
-  static const _aheadCold = 4;
+  /// On a cold sign-in nothing is cached, and whatever is enqueued downloads against the one clip
+  /// the user is staring at. If that clip waits for bandwidth it paints late — which reads as
+  /// "the app opened on a still". Two ahead keeps the pipe busy for the next swipe without
+  /// crowding the current card. The full depth arrives via [widenWindow], once it has painted.
+  static const _aheadCold = 2;
 
   /// Safety net for [widenWindow] — the widen signal is a first painted FRAME.
   /// A feed whose first item is STATIC never produces one -> the first pass widens on its own.
@@ -52,7 +54,8 @@ class WallpaperPrefetchService {
   static const _maxConcurrent = 3;
 
   /// LRU bound on object COUNT — flutter_cache_manager has no byte cap.
-  /// Scaled with the window so the full look-ahead set survives; the current index's items always do.
+  /// Deliberately far deeper than the window: this cache is what makes a cached cold start open
+  /// every recent card from a local file, so a shallower window must not shrink it.
   static const _maxCacheObjects = 120;
 
   /// Shared across controller re-creations -> the on-disk cache and its LRU survive an apply recreate.
