@@ -79,7 +79,8 @@ lifetime uses, then recency, then `id`. No score → `docs/browse.md`.
 - Never hardcode a key. App: `--dart-define-from-file=env/dev.json` (git-ignored; template
   `env.example.json`). Worker: `npx wrangler secret bulk <file.json>`, **never a shell pipe** — a
   trailing newline once routed production credentials to the sandbox host, and every other secret
-  is still compared untrimmed. Local dev: `workers/.dev.vars`.
+  is still compared untrimmed. Local dev: `workers/.dev.vars`, whose Hyperdrive string points at the
+  Neon `debug` branch, never prod.
 - **`TRIAL_TOMBSTONE_SECRET`: set once, never rotate** — rotation orphans every tombstone and
   re-opens trial farming.
 - `guard-secrets.js` denies any git command that names `env/`, a keystore, `key.properties`,

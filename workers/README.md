@@ -76,7 +76,7 @@ compared untrimmed. `CF_ZONE_ID`/`CF_PURGE_TOKEN` are gone from `env.ts` and set
 ## Dev / deploy
 ```bash
 npm install
-npm run dev      # wrangler dev — needs .dev.vars (DATABASE_URL + WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE)
+npm run dev      # wrangler dev — needs .dev.vars; its WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE points at the Neon `debug` branch, never prod
 npm run build && npm test
 npx wrangler deploy   # deploy IS part of "done" (CF login admin@hsrutility.com; see deploy-worker skill)
 ```

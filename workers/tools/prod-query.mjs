@@ -15,9 +15,12 @@
 import fs from "node:fs";
 import postgres from "postgres";
 
-const raw = process.argv[2];
+const args = process.argv.slice(2);
+// `--debug` targets the `debug` Neon branch (DEBUG_DATABASE_URL) instead of production (DATABASE_URL).
+const useDebug = args.includes("--debug");
+const raw = args.filter((a) => a !== "--debug")[0];
 if (!raw || !raw.trim()) {
-  console.error("usage: node tools/prod-query.mjs \"SELECT …\"");
+  console.error('usage: node tools/prod-query.mjs [--debug] "SELECT …"');
   process.exit(2);
 }
 
@@ -43,15 +46,18 @@ if (/\b(insert|update|delete|drop|truncate|alter|create|grant|revoke|copy)\b/i.t
   process.exit(1);
 }
 
+// Named variable, not "the first postgres:// in the file" — .dev.vars holds several, and the debug
+// branch must never be reachable by accident from a prod command or the other way round.
+const key = useDebug ? "DEBUG_DATABASE_URL" : "DATABASE_URL";
 const m = fs
   .readFileSync(new URL("../.dev.vars", import.meta.url), "utf8")
-  .match(/postgres(?:ql)?:\/\/[^\s"']+/);
+  .match(new RegExp(`^${key}=\\s*"?(postgres(?:ql)?:\\/\\/[^\\s"']+)`, "m"));
 if (!m) {
-  console.error("No postgres connection string found in workers/.dev.vars");
+  console.error(`No ${key} in workers/.dev.vars`);
   process.exit(1);
 }
 
-const sql = postgres(m[0], { ssl: "require", prepare: false, connect_timeout: 10 });
+const sql = postgres(m[1], { ssl: "require", prepare: false, connect_timeout: 10 });
 try {
   console.log(JSON.stringify(await sql.unsafe(stripped), null, 2));
 } finally {
