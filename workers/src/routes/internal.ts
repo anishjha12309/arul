@@ -106,9 +106,12 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
     );
   }
 
+  // `?dry_run=1` -> decide everything, delete nothing, return `wouldDelete` -> read it BEFORE the real call
+  // R2 has no versioning -> this is the only preview an operator gets of the one action with no undo
+  const dryRun = c.req.query("dry_run") === "1";
   try {
-    const result = await sweepCanonical(env);
-    return c.json({ ok: true, result });
+    const result = await sweepCanonical(env, { dryRun });
+    return c.json({ ok: true, dryRun, result });
   } catch (err) {
     console.error("[internal/sweep-canonical] error:", err);
     return Response.json(

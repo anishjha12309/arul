@@ -49,6 +49,17 @@ The unconditional backstop for whatever the on-change hourly sweep missed.
    Daily and not hourly: popularity is a sort key, and refreshing it hourly would re-download the
    whole catalog on every client 24× a day. A quiet day is a no-op rather than a forced re-download.
 
+## Rehearse a cron change before it ships
+
+`node tools/cron-rehearse.mjs hourly|daily|autopay` fires ONE trigger through a local `wrangler dev
+--test-scheduled` against the Neon `debug` branch with local KV/R2 and PostHog blackholed, so nothing
+it does can reach production. It refuses `--remote`, refuses to run unless the local Hyperdrive string
+is the debug branch, and refuses autopay unless `.dev.vars` says `PHONEPE_ENV=SANDBOX` and
+`--allow-autopay` is passed — autopay talks to PhonePe. The scheduled handler answers `/__scheduled`
+at once and works in `ctx.waitUntil` -> read the `[cron] … complete` lines it streams afterwards,
+not the HTTP status. The canonical sweep has a preview for the same reason: `POST
+/internal/sweep-canonical?dry_run=1` returns `wouldDelete` and deletes nothing.
+
 ## Sweep failsafes — do not weaken either
 
 - **Zero referenced keys ABORTS that prefix** rather than reading "no references" as "delete

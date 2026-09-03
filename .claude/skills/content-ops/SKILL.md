@@ -86,10 +86,16 @@ transaction that puts the bytes in reach of it. The bucket's `catalog/catalog.js
 one-time import manifest) sits outside the swept prefixes and survives; the app never reads it.
 
 ## Orphan sweeps (manual)
+**Dry run FIRST, always.** R2 has no versioning, so a canonical sweep is the one action with no undo.
+`?dry_run=1` makes the same decision with the same failsafes and returns `wouldDelete` instead of
+deleting. Read that list — every key on it is gone after the real call — and only then run it.
 ```bash
-curl -X POST $API/internal/sweep-canonical   -H "Authorization: Bearer $CATALOG_BUILD_SECRET"
+curl -X POST "$API/internal/sweep-canonical?dry_run=1" -H "Authorization: Bearer $CATALOG_BUILD_SECRET"   # preview
+curl -X POST $API/internal/sweep-canonical   -H "Authorization: Bearer $CATALOG_BUILD_SECRET"           # real
 curl -X POST $API/internal/sweep-submissions -H "Authorization: Bearer $CATALOG_BUILD_SECRET"
 ```
+A preview whose `result.aborted` is true names the refusing prefix in `abortedPrefixes` — fix the
+cause, never the failsafe. The crons never dry-run; the door is for operators.
 `sweep-canonical` covers **three** prefixes — `wallpapers/`, `ringtones/` and `thumbs/` — keeping an
 object only while a row references it. `thumbs/` is the dangerous one: no column stores a poster key,
 so its references are DERIVED from `full_key`, and a poster whose wallpaper row is gone is deleted.
