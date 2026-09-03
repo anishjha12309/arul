@@ -12,17 +12,66 @@ const _channel = MethodChannel('com.hsrutility.arul/build_info');
 /// is the runtime proxy -> only a Play install reports `com.android.vending`.
 /// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
 /// -> the two can never disagree.
-/// **Fails CLOSED**: an unresolvable installer answers `true` -> every caller hides something that
-/// must be absent from the store build.
+///
+/// ONE probe per process, shared by every caller ([PlayInstall]) -> the QA-tools gate and the
+/// PostHog gate can never answer differently about the same build.
 @Riverpod(keepAlive: true)
-Future<bool> isPlayInstall(Ref ref) async {
-  try {
-    return await _channel.invokeMethod<bool>('isPlayInstall') ?? true;
-  } on MissingPluginException {
-    // No platform channel -> `flutter test` or a host build -> not a store build.
-    return false;
-  } on PlatformException {
-    return true;
+Future<bool> isPlayInstall(Ref ref) => PlayInstall.resolved;
+
+/// The Play-install answer, asked once and cached for the process.
+///
+/// Two callers need it in two shapes: [qaToolsEnabled] can await it, and the analytics assembly
+/// cannot — it is a synchronous provider that runs on the first `track()`. So the probe is kicked
+/// off in `main()` and its verdict parked in [isPlay], the same shape `AnalyticsCohort.isMember`
+/// already uses for the same reason.
+///
+/// **Fails toward PLAY.** An unresolvable installer or a platform error answers `true`: the two
+/// consumers want opposite safety, and the one that matters more is the analytics gate — a real
+/// user's events must never be dropped because a channel hiccuped. The QA tools read `== false`, so
+/// the same answer hides them, which is also the safe direction there.
+/// A MISSING channel is different from a failing one: no platform at all is `flutter test` or a host
+/// build, which is not a store build and must stay silent.
+abstract final class PlayInstall {
+  static Future<bool>? _probe;
+
+  /// The verdict, defaulting to Play until the probe lands. Read synchronously by the analytics
+  /// assembly; `main()` awaits [resolved] before the SDK starts, so no event is ever gated on the
+  /// default in a shipped build.
+  static bool get isPlay => _isPlay;
+  static bool _isPlay = true;
+
+  /// The probe, started once. Later callers get the same future.
+  static Future<bool> get resolved => _probe ??= _ask();
+
+  static Future<bool> _ask() async {
+    final play = await _invoke();
+    _isPlay = play;
+    return play;
+  }
+
+  static Future<bool> _invoke() async {
+    try {
+      return await _channel.invokeMethod<bool>('isPlayInstall') ?? true;
+    } on MissingPluginException {
+      // No platform channel -> `flutter test` or a host build -> not a store build.
+      return false;
+    } on PlatformException {
+      return true;
+    }
+  }
+
+  /// Pins the answer without a channel, for tests that assert the gate rather than the probe.
+  @visibleForTesting
+  static void debugSetIsPlay(bool value) {
+    _isPlay = value;
+    _probe = Future<bool>.value(value);
+  }
+
+  /// Drop the cached answer so a test can re-probe under a different mock.
+  @visibleForTesting
+  static void resetForTesting() {
+    _isPlay = true;
+    _probe = null;
   }
 }
 

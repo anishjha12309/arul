@@ -39,18 +39,67 @@ class AppLocalizationsMl extends AppLocalizations {
   String get errorGeneric => 'എന്തോ കുഴപ്പം സംഭവിച്ചു.';
 
   @override
-  String get signInHeadline => 'ഉണരാൻ കൊതിപ്പിക്കുന്ന വാൾപേപ്പറുകൾ';
+  String get signInCaption => 'ദൈവികത നിങ്ങളുടെ വീട്ടിൽ';
 
   @override
-  String get signInBody =>
-      'പ്രയോഗിക്കാനും പങ്കിടാനും നിങ്ങളുടെ ശേഖരം സൂക്ഷിക്കാനും സൈൻ ഇൻ ചെയ്യുക.';
+  String get signInGoogle => 'Google വഴി തുടരുക';
 
   @override
-  String get signInGoogle => 'Google ഉപയോഗിച്ച് തുടരുക';
+  String get signInSubtitleIdle => 'അക്കൗണ്ട് തിരഞ്ഞെടുക്കുക';
 
   @override
-  String get signInTerms =>
-      'തുടരുന്നതിലൂടെ ഞങ്ങളുടെ നിബന്ധനകളും സ്വകാര്യതാ നയവും അംഗീകരിക്കുന്നു.';
+  String get signInSubtitleExchanging => 'സൈൻ ഇൻ ചെയ്യുന്നു…';
+
+  @override
+  String get signInNudgeBackedOutQuick => 'നടന്നില്ലേ? വീണ്ടും ടാപ്പ് ചെയ്യൂ';
+
+  @override
+  String get signInNudgeBackedOutSlow => 'ഒറ്റ ടാപ്പ്, Google-നെ കാക്കുക';
+
+  @override
+  String get signInNudgeNeverOpened => 'Google തുറന്നില്ല, ടാപ്പ് ചെയ്യൂ';
+
+  @override
+  String get signInNudgeAddAccount => 'ഉള്ള അക്കൗണ്ട് എടുക്കുക';
+
+  @override
+  String get signInNudgeReauth => 'അക്കൗണ്ട് വീണ്ടും എടുക്കുക';
+
+  @override
+  String get signInNudgeActivityClosed => 'നേരത്തെ അടച്ചു, വീണ്ടും ടാപ്പ്';
+
+  @override
+  String get signInNudgeNoProvider => 'Google Play അപ്ഡേറ്റ് ചെയ്യൂ';
+
+  @override
+  String get signInFixBackedOutSlow => 'ഈ ഫോണിൽ Google അൽപ്പം സമയമെടുക്കുന്നു.';
+
+  @override
+  String get signInFixAddAccount =>
+      'പുതിയ അക്കൗണ്ട് വേണ്ട. ഈ ഫോണിൽ ഇപ്പോൾ ഉള്ള ഏത് Google അക്കൗണ്ടും മതി.';
+
+  @override
+  String get signInFixReauth =>
+      'ആ അക്കൗണ്ട് Google-ന് പരിശോധിക്കാനായില്ല. ഫോൺ ക്രമീകരണങ്ങളിൽ Google-ൽ വീണ്ടും സൈൻ ഇൻ ചെയ്യുക.';
+
+  @override
+  String get signInFixActivityClosed =>
+      'Google Play സേവനങ്ങൾ സൈൻ ഇൻ വിൻഡോ അടച്ചു.';
+
+  @override
+  String get signInLinkAccountSettings => 'അക്കൗണ്ട് ക്രമീകരണം തുറക്കുക';
+
+  @override
+  String get signInLinkPlayServices => 'Google Play സേവനങ്ങൾ നോക്കുക';
+
+  @override
+  String get signInLinkPlayStore => 'Play Store-ൽ അപ്ഡേറ്റ് ചെയ്യുക';
+
+  @override
+  String get signInTermsLink => 'നിബന്ധനകൾ';
+
+  @override
+  String get signInPrivacyLink => 'സ്വകാര്യത';
 
   @override
   String get premiumTitle => 'പ്രീമിയം';

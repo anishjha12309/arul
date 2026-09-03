@@ -43,24 +43,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  /// English name ↔ locale code for the language sheet — the visual labels are the sheet's own.
-  /// Persistence goes through [LocaleNotifier].
-  static const _languageCodes = {
-    'English': 'en',
-    'Tamil': 'ta',
-    'Telugu': 'te',
-    'Kannada': 'kn',
-    'Malayalam': 'ml',
-    'Hindi': 'hi',
-  };
-
-  String _languageName(String code) => _languageCodes.entries
-      .firstWhere(
-        (e) => e.value == code,
-        orElse: () => _languageCodes.entries.first,
-      )
-      .key;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -81,7 +63,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final email = (authEmail != null && authEmail.isNotEmpty)
         ? authEmail
         : l10n.settingsFallbackEmail;
-    final language = _languageName(ref.watch(localeProvider).languageCode);
+    // The EFFECTIVE language, so a phone-language default shows here as what the user is reading.
+    final language = appLanguageName(ref.watch(localeProvider).languageCode);
 
     // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
     // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
@@ -259,7 +242,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _pickLanguage(String current) async {
     final next = await showLanguageSheet(context, current);
-    final code = _languageCodes[next];
+    final code = next == null ? null : appLanguageCodeFor(next);
     if (code == null) return;
     await ref.read(localeProvider.notifier).setLocale(Locale(code));
   }

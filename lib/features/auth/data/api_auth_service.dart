@@ -13,6 +13,8 @@ import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
+import '../domain/sign_in_outcome.dart';
+import 'sign_in_surface_clock.dart';
 
 /// [AuthService] implementation backed by the Cloudflare Worker API.
 ///
@@ -37,8 +39,10 @@ class ApiAuthService implements AuthService {
     InstallReferrerService? installReferrer,
     this._appLanguage,
     this._freshInstall = false,
+    SignInSurfaceClock? surfaceClock,
   }) : _api = apiClient,
-       _referral = installReferrer {
+       _referral = installReferrer,
+       _surfaceClock = surfaceClock ?? BindingSignInSurfaceClock() {
     // The encrypted secure-storage read can outrun a fixed brand-beat on a cold start -> sampling
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
     // `_initialized`, which completes when this seed does.
@@ -65,6 +69,10 @@ class ApiAuthService implements AuthService {
   /// Optional — supplies a pending Play Install Referrer code, attached to the FIRST login -> the
   /// Worker can attribute the install.
   final InstallReferrerService? _referral;
+
+  /// Times how long Google's own surface took to come up, per attempt (see [SignInSurfaceClock]).
+  /// Injectable so tests can hand in a fixed reading instead of driving the lifecycle.
+  final SignInSurfaceClock _surfaceClock;
 
   final _controller = StreamController<AuthUserState>.broadcast();
 
@@ -324,6 +332,19 @@ class ApiAuthService implements AuthService {
   /// see [_msSinceAuthenticate].
   Stopwatch? _authClock;
 
+  /// Wall-clock from the attempt's `authenticate()` to the FIRST inactive/paused/hidden — Google's
+  /// own surface coming up over ours. Null means no surface was ever seen (see
+  /// [SignInSurfaceClock]). This is the split `ms_since_authenticate` cannot make: it separates the
+  /// PHONE'S wait (Google slow to draw) from the PERSON'S (a picker sat on and dismissed).
+  int? get _msToSurface => _surfaceClock.msToSurface;
+
+  /// What the attempt actually did, for the nudge and for `login_cancelled.nudge`.
+  SignInOutcome _outcomeFor(String? description) => classifySignInOutcome(
+    description: description,
+    msSinceAuthenticate: _msSinceAuthenticate,
+    msToSurface: _msToSurface,
+  );
+
   /// Properties for every `login_cancelled` emission, so all three call sites
   /// carry the same shape.
   ///
@@ -334,10 +355,18 @@ class ApiAuthService implements AuthService {
   /// time cannot split them: measured on device (2026-08-31), a deliberate
   /// dismissal and a mid-flow failure both land 5–30s after the auto-launched
   /// `authenticate()`, because the clock starts at launch, not at the sheet.
-  Map<String, Object?> _cancelProperties({String? description}) => {
+  ///
+  /// `nudge` is the LINE THE USER WAS SHOWN for this event, so the funnel reads the copy and the
+  /// outcome as one row instead of joining a message string to a screen state after the fact.
+  Map<String, Object?> _cancelProperties({
+    String? description,
+    SignInOutcome? outcome,
+  }) => {
     'provider': 'google',
     'surface': ?_surface,
     'ms_since_authenticate': ?_msSinceAuthenticate,
+    'ms_to_surface': ?_msToSurface,
+    'nudge': (outcome ?? _outcomeFor(description)).name,
     'description': ?_trimForAnalytics(description),
   };
 
@@ -467,6 +496,9 @@ class ApiAuthService implements AuthService {
     // surface, and a fresh attempt never inherits a stale pill subtitle.
     _authClock = null;
     _surface = null;
+    // Drops any reading a previous attempt left behind -> a config-guard failure here can never
+    // report the last attempt's wait for Google.
+    _surfaceClock.endAttempt();
     SignInPhase.exchanging.value = false;
     try {
       // v7: use the singleton. `initialize()` is STARTED in main() but no
@@ -503,6 +535,9 @@ class ApiAuthService implements AuthService {
       // failure later in the flow (token exchange, POST /auth/login) reports
       // its own real elapsed time rather than freezing at the surface's.
       _authClock = Stopwatch()..start();
+      // Same zero as [_authClock]; it stops at the first inactive/paused/hidden, which is Google's
+      // surface arriving over ours -> the only signal the app gets that the sheet is up.
+      _surfaceClock.startAttempt();
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
         sheet: useSheet
             ? () => GoogleSignIn.instance.attemptLightweightAuthentication(
@@ -664,6 +699,9 @@ class ApiAuthService implements AuthService {
           // the pair that says whether sheet-first is working.
           'surface': ?_surface,
           'ms_since_authenticate': ?_msSinceAuthenticate,
+          // The same wait the nudges split cancels on, on the outcome that WORKED — without it
+          // "Google is slow on this phone" has no denominator.
+          'ms_to_surface': ?_msToSurface,
           // Present only when the exchange was saved by the network retry —
           // the field readout for whether the retry earns its keep.
           if (exchangeRetried) 'exchange_retried': true,
@@ -680,15 +718,29 @@ class ApiAuthService implements AuthService {
       debugPrint(
         '[ApiAuthService] GoogleSignInException ${e.code.name}: ${e.description}',
       );
-      final result = mapGoogleSignInException(e);
-      switch (result) {
+      final mapped = mapGoogleSignInException(e);
+      // The outcome the screen will speak to, classified ONCE and carried on the result — the
+      // event and the line the user reads must never be able to disagree.
+      var result = mapped;
+      switch (mapped) {
         case AuthCancelled():
           // No error toast (the user may genuinely have closed the sheet) but
           // tracked WITH the plugin's description — see _cancelProperties for
           // why the message text is the dismissal-vs-GMS-failure split.
+          final outcome = _outcomeFor(e.description);
+          // Field triage: the classifier's verdict and the two clocks behind it, in one line.
+          // Silenced in a Play release like every other debugPrint; a DIAG sideload gets it back.
+          debugPrint(
+            '[ApiAuthService] cancel outcome=${outcome.name} '
+            'ms_to_surface=$_msToSurface ms_since_authenticate=$_msSinceAuthenticate',
+          );
+          result = AuthCancelled(outcome: outcome);
           _analytics.track(
             'login_cancelled',
-            properties: _cancelProperties(description: e.description),
+            properties: _cancelProperties(
+              description: e.description,
+              outcome: outcome,
+            ),
           );
         case AuthFailure(:final kind, :final message):
           _googleFailure(
@@ -725,11 +777,17 @@ class ApiAuthService implements AuthService {
       }
       final msg = e.toString().toLowerCase();
       if (msg.contains('cancel') || msg.contains('user_cancelled')) {
+        // A raw exception's `toString()` is never one of the Credential Manager messages, so the
+        // classifier lands on the plain retry line — which is the truth here: we do not know.
+        final outcome = _outcomeFor(e.toString());
         _analytics.track(
           'login_cancelled',
-          properties: _cancelProperties(description: e.toString()),
+          properties: _cancelProperties(
+            description: e.toString(),
+            outcome: outcome,
+          ),
         );
-        return const AuthCancelled();
+        return AuthCancelled(outcome: outcome);
       }
       debugPrint('[ApiAuthService] unexpected error: $e');
       return _googleFailure(
@@ -739,8 +797,12 @@ class ApiAuthService implements AuthService {
       );
     } finally {
       // Identity-checked like every other side effect here: a zombie finishing
-      // late must not reset the pill of the attempt that replaced it.
-      if (attempt == _attemptSeq) SignInPhase.exchanging.value = false;
+      // late must not reset the pill — or unhook the surface clock — of the
+      // attempt that replaced it.
+      if (attempt == _attemptSeq) {
+        SignInPhase.exchanging.value = false;
+        _surfaceClock.endAttempt();
+      }
     }
   }
 

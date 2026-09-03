@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../config/app_config.dart';
+import '../config/build_info.dart';
 import 'allowlisted_analytics_service.dart';
 import 'analytics_cohort.dart';
 import 'analytics_events.dart';
@@ -56,8 +57,9 @@ const postHogAllowedEvents = <String>{
 
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
-///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+///   * PostHog — [postHogAllowedEvents] only, for [AnalyticsCohort] members, and **only from a PLAY
+///     install** ([PlayInstall]). SDK lifecycle autocapture is OFF -> the one event outside this
+///     list is `Application Installed`;
 ///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
 ///   * Meta App Events — ★ conversion events only.
 ///
@@ -67,8 +69,17 @@ const postHogAllowedEvents = <String>{
 AnalyticsService analyticsService(Ref ref) {
   // Cohort membership is resolved in main() before `Posthog().setup()`, and defaults to FALSE.
   // So a build that never called `AnalyticsCohort.resolve` sends nothing, rather than everything.
+  //
+  // NO SIDELOADED BUILD REPORTS TO POSTHOG (owner's rule). A release APK on a developer's phone and
+  // a Play install are the same `release` binary, so without this gate every on-device pass writes
+  // itself into the product funnel — the panel then measures the people building the app.
+  // `PlayInstall` is probed once in main() before the SDK starts; it fails toward Play, so a channel
+  // hiccup never costs a real user's events. GA4, Meta and Crashlytics are deliberately NOT gated
+  // here: GA4 is the complete record and the ads source, and a crash from a test build is wanted.
   final services = <AnalyticsService>[
-    if (AppConfig.posthogEnabled && AnalyticsCohort.isMember)
+    if (AppConfig.posthogEnabled &&
+        AnalyticsCohort.isMember &&
+        PlayInstall.isPlay)
       const AllowlistedAnalyticsService(
         PostHogAnalyticsService(),
         allowed: postHogAllowedEvents,

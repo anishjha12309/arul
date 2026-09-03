@@ -25,8 +25,10 @@ import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/data/models/wallpaper.dart';
+import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
 import 'package:arul/features/notifications/presentation/notification_settings_screen.dart';
+import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/referral/presentation/refer_screen.dart';
@@ -418,11 +420,15 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ),
 
   // ── Auth ───────────────────────────────────────────────────────────────
-  ScreenEntry(
-    id: 'signin.screen',
-    unlocalizedEnglish: true,
-    build: () => const SignInScreen(),
-  ),
+  // Idle plus every failure the screen can speak to -> the nudge lines are the ONE place the app
+  // writes a different sentence per outcome, so a translation that only fits in the idle state
+  // would ship unmeasured. `debugOutcome` renders one without running an attempt.
+  ScreenEntry(id: 'signin.screen', build: () => const SignInScreen()),
+  for (final outcome in SignInOutcome.values)
+    ScreenEntry(
+      id: 'signin.${outcome.name}',
+      build: () => SignInScreen(debugOutcome: outcome),
+    ),
 
   // ── The dock ───────────────────────────────────────────────────────────
   ScreenEntry(
@@ -482,7 +488,14 @@ Widget buildHarness({
   );
 
   return ProviderScope(
-    overrides: [...kBaseOverrides, ...entry.overrides],
+    overrides: [
+      ...kBaseOverrides,
+      // The app resolves its own locale from the PHONE when nothing is persisted, and screens that
+      // show the current language (the sign-in trigger) read that, not `MaterialApp.locale`.
+      // Without this the Tamil run would render an English trigger and measure the wrong string.
+      platformLocalesProvider.overrideWithValue([Locale(locale)]),
+      ...entry.overrides,
+    ],
     child: MaterialApp.router(
       debugShowCheckedModeBanner: false,
       locale: Locale(locale),

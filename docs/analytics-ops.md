@@ -77,6 +77,25 @@ The privacy policy must disclose Meta, Google/Firebase and advertiser-ID collect
 pages are its own and are not shared with Pakiza, so a change there lands in this app alone
 (CLAUDE.md §1).
 
+## Only a PLAY install reports to PostHog
+
+**No sideloaded build — release APK or debug — may reach PostHog** (owner's rule). A release APK on a
+developer's phone and a store install are the same `release` binary, so without a gate every
+on-device pass writes itself into the funnel and the panel starts measuring the people building the
+app. `PlayInstall` (`core/config/build_info.dart`) asks the native installer check FLAG_SECURE
+already rides, ONCE per process, in `main()` before `Posthog().setup()`; the verdict is cached and
+read synchronously when the sink is assembled, so the first event is already gated.
+
+- **It fails toward PLAY.** A platform error or an unresolvable installer answers "Play": dropping a
+  real user's events costs more than admitting a developer's. A MISSING channel is different — no
+  platform at all is `flutter test` or a host build, which reports nothing.
+- **GA4, Meta and Crashlytics are NOT gated.** GA4 is the complete record and the only Google Ads
+  conversion source, and a crash from a test build is wanted. Changing that is the owner's call.
+- Under `--dart-define=DIAG=true` startup logs one line naming the decision, so a device pass can
+  tell at a glance whether it is being counted.
+- **The consequence when reading PostHog:** a sideloaded build is invisible there, so an on-device
+  walkthrough proves nothing about the funnel — check GA4 for it.
+
 ## Reading the data — rules that prevent wrong conclusions
 
 Event definitions are in [analytics-events.md](analytics-events.md); these are the traps in

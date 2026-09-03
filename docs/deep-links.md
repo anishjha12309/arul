@@ -38,9 +38,15 @@ All**, and `DeepLinkLocaleSync` (above `MaterialApp`) applies the language live.
 | Not installed, Google App Campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
 | Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
 
-**The link's language ALWAYS wins** (owner's call) — over the device default and over a language the
-user picked in Settings. It goes through `LocaleNotifier.setLocale`, so Settings shows it as the
-current choice. The GA4-only event `deep_link_opened` (`kind`, `source`, id) fires on every landing;
+**Language precedence: an explicit pick > the link > the PHONE > English.** A link's language always
+wins over what the user picked earlier (owner's call) because it goes through
+`LocaleNotifier.setLocale`, which PERSISTS — so it is an explicit pick from then on, and Settings
+shows it as the current choice. With nothing persisted the app follows the phone's own locale order,
+first supported LANGUAGE only (`ta-MY` is Tamil). **That phone fallback is never written to
+`arul_locale`**: persisting it would freeze the app to whatever the phone said on the first launch,
+so a later phone-language change would stop moving the app, and Settings would show a language nobody
+chose as if they had. Every screen that names the current language reads the resolved value, never
+the stored one. The GA4-only event `deep_link_opened` (`kind`, `source`, id) fires on every landing;
 it is deliberately NOT on the PostHog allow-list and not a Meta ★ event
 ([analytics-events.md](analytics-events.md)).
 

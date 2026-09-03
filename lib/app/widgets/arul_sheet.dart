@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
+import '../theme/theme.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
 ///
 /// Spec: top r24; `#1A0B0F` dark or white light; gold-35% top hairline on dark; 44×4 r2 grabber.
 /// Entrance is translateY(24)+fade over 300ms ease, behind a `rgba(20,9,12,.58)` barrier scrim.
 /// [gradient] true gives the premium sheet's `#241014 → #1A0B0F` top.
+/// [brightness] pins the sheet to one form instead of the app theme -> for a caller whose own
+/// surface does not follow that theme (the sign-in wall is always dark over video, so its sheet
+/// follows the DEVICE instead). It goes on as a `Theme` ABOVE [ArulSheet], not inside the builder:
+/// the scaffold reads `Theme.of` for its surface, grabber and hairline before the child ever builds.
 /// Scroll-controlled and sized to its content -> wrap tall content in a scroll view yourself.
 Future<T?> showArulSheet<T>(
   BuildContext context, {
@@ -14,6 +19,7 @@ Future<T?> showArulSheet<T>(
   bool gradient = false,
   bool isDismissible = true,
   bool topHairline = true,
+  Brightness? brightness,
   Color? surfaceColor,
 }) {
   return showModalBottomSheet<T>(
@@ -29,12 +35,21 @@ Future<T?> showArulSheet<T>(
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
     // Every Arul sheet follows the app theme — ArulSheet reads `Theme.of(context).brightness` itself.
-    builder: (context) => ArulSheet(
-      gradient: gradient,
-      topHairline: topHairline,
-      surfaceColor: surfaceColor,
-      child: builder(context),
-    ),
+    builder: (context) {
+      final sheet = ArulSheet(
+        gradient: gradient,
+        topHairline: topHairline,
+        surfaceColor: surfaceColor,
+        child: Builder(builder: builder),
+      );
+      if (brightness == null) return sheet;
+      return Theme(
+        data: brightness == Brightness.dark
+            ? ArulTheme.dark()
+            : ArulTheme.light(),
+        child: sheet,
+      );
+    },
   );
 }
 

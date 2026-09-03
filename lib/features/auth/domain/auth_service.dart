@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'sign_in_outcome.dart';
+
 /// The auth providers the app supports — never put provider-specific logic in widgets or the router.
 enum AuthProvider { google }
 
@@ -14,7 +16,13 @@ final class AuthSuccess extends AuthResult {
 }
 
 final class AuthCancelled extends AuthResult {
-  const AuthCancelled();
+  const AuthCancelled({this.outcome = SignInOutcome.backedOutQuick});
+
+  /// What the attempt actually did, so the screen can say something TRUE about it.
+  ///
+  /// Defaults to the plain retry line: the quiet internal drops (a zombie attempt the stall guard
+  /// already abandoned) have no evidence to classify from and must claim nothing.
+  final SignInOutcome outcome;
 }
 
 final class AuthFailure extends AuthResult {

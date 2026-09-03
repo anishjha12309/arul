@@ -166,17 +166,11 @@ abstract class AppLocalizations {
   /// **'Something went wrong.'**
   String get errorGeneric;
 
-  /// No description provided for @signInHeadline.
+  /// No description provided for @signInCaption.
   ///
   /// In en, this message translates to:
-  /// **'Wallpapers worth waking up to'**
-  String get signInHeadline;
-
-  /// No description provided for @signInBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in to apply, share and keep your collection across devices.'**
-  String get signInBody;
+  /// **'Bring the divine home'**
+  String get signInCaption;
 
   /// No description provided for @signInGoogle.
   ///
@@ -184,11 +178,113 @@ abstract class AppLocalizations {
   /// **'Continue with Google'**
   String get signInGoogle;
 
-  /// No description provided for @signInTerms.
+  /// No description provided for @signInSubtitleIdle.
   ///
   /// In en, this message translates to:
-  /// **'By continuing you agree to our Terms and Privacy Policy.'**
-  String get signInTerms;
+  /// **'Choose an account to start'**
+  String get signInSubtitleIdle;
+
+  /// No description provided for @signInSubtitleExchanging.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing you in…'**
+  String get signInSubtitleExchanging;
+
+  /// No description provided for @signInNudgeBackedOutQuick.
+  ///
+  /// In en, this message translates to:
+  /// **'Didn\'t go through? Tap again'**
+  String get signInNudgeBackedOutQuick;
+
+  /// No description provided for @signInNudgeBackedOutSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap once and wait for Google'**
+  String get signInNudgeBackedOutSlow;
+
+  /// No description provided for @signInNudgeNeverOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Google didn\'t open. Tap again'**
+  String get signInNudgeNeverOpened;
+
+  /// No description provided for @signInNudgeAddAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an account on this phone'**
+  String get signInNudgeAddAccount;
+
+  /// No description provided for @signInNudgeReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap again and pick an account'**
+  String get signInNudgeReauth;
+
+  /// No description provided for @signInNudgeActivityClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in closed early. Tap again'**
+  String get signInNudgeActivityClosed;
+
+  /// No description provided for @signInNudgeNoProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Update Google Play services'**
+  String get signInNudgeNoProvider;
+
+  /// No description provided for @signInFixBackedOutSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Google is taking a while on this phone.'**
+  String get signInFixBackedOutSlow;
+
+  /// No description provided for @signInFixAddAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'No new account needed. Any Google account already on this phone works.'**
+  String get signInFixAddAccount;
+
+  /// No description provided for @signInFixReauth.
+  ///
+  /// In en, this message translates to:
+  /// **'Google couldn\'t verify that account. Re-sign in to Google in phone settings.'**
+  String get signInFixReauth;
+
+  /// No description provided for @signInFixActivityClosed.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Play services closed the sign-in window.'**
+  String get signInFixActivityClosed;
+
+  /// No description provided for @signInLinkAccountSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open account settings'**
+  String get signInLinkAccountSettings;
+
+  /// No description provided for @signInLinkPlayServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Check Google Play services'**
+  String get signInLinkPlayServices;
+
+  /// No description provided for @signInLinkPlayStore.
+  ///
+  /// In en, this message translates to:
+  /// **'Update in Play Store'**
+  String get signInLinkPlayStore;
+
+  /// No description provided for @signInTermsLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms'**
+  String get signInTermsLink;
+
+  /// No description provided for @signInPrivacyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy'**
+  String get signInPrivacyLink;
 
   /// No description provided for @premiumTitle.
   ///

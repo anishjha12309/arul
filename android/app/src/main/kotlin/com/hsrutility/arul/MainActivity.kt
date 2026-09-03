@@ -39,6 +39,11 @@ class MainActivity : FlutterFragmentActivity() {
 
         private const val RINGTONE_CHANNEL = "com.hsrutility.arul/ringtone_set"
 
+        // The sign-in screen's "Open account settings" nudge, for an account Google will not
+        // re-verify. url_launcher builds an ACTION_VIEW from a URI and has no Intent.parseUri, so a
+        // Settings ACTION is out of its reach -> this channel, not a link.
+        private const val SIGN_IN_HELP_CHANNEL = "com.hsrutility.arul/sign_in_help"
+
         // Request code for the pre-Android-10 WRITE_EXTERNAL_STORAGE grant a custom ringtone needs there.
         private const val STORAGE_PERMISSION_REQUEST = 5001
 
@@ -238,6 +243,23 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
+
+        // One method: the phone's Google account screen, for a sign-in Google refused to re-verify.
+        // Best-effort by contract -> the nudge above the link already said what went wrong, and a
+        // second error about an unreachable settings screen teaches the user nothing.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SIGN_IN_HELP_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openAccountSettings" -> {
+                    openAccountSettingsScreen()
+                    result.success(null)
+                }
+
+                else -> result.notImplemented()
+            }
+        }
 
         // Ringtone set -> WRITE_SETTINGS check and deep-link, MediaStore register, then the default-tone set.
         MethodChannel(
@@ -440,6 +462,27 @@ class MainActivity : FlutterFragmentActivity() {
         runOnUiThread {
             for (payload in payloads) channel.invokeMethod("onDeferredDeepLink", payload)
         }
+    }
+
+    // ACTION_SYNC_SETTINGS is the accounts screen on stock Android, but several OEM builds ship no
+    // activity for it -> walk the same kind of chain as the WRITE_SETTINGS deep link below:
+    // accounts -> add-account -> the settings root, which resolves everywhere.
+    // Every intent failing is a silent no-op, which is the contract for a help link.
+    private fun openAccountSettingsScreen() {
+        val candidates = listOf(
+            Intent(Settings.ACTION_SYNC_SETTINGS),
+            Intent(Settings.ACTION_ADD_ACCOUNT),
+            Intent(Settings.ACTION_SETTINGS),
+        )
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "account-settings intent unresolvable, trying fallback", e)
+            }
+        }
+        Log.e(TAG, "No settings screen resolvable for the sign-in account nudge")
     }
 
     // The per-package ACTION_MANAGE_WRITE_SETTINGS is unresolvable on some OEM builds -> startActivity throws there.

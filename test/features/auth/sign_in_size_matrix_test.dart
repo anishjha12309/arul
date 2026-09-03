@@ -1,0 +1,256 @@
+// The sign-in wall on the phones people actually hold, in all six languages.
+//
+// The l10n matrix gates on the NARROW envelope (320dp/360dp) and one screen state. This one is the
+// other axis: the eight logical sizes that cover most of the install base, every outcome the nudge
+// can show, and the OS text scale on top. What it pins:
+//
+//   * **at text scale 1.0 the COPY FITS** — the title needs no scaling at all and the subtitle sets
+//     on ONE line, in all six scripts. Neither is ever shrunk to make a translation fit: at 12px a
+//     scaled Tamil or Malayalam subtitle lands near 10px, on exactly the phones this nudge is for.
+//     Shorten the copy instead; the failure message says which string and by how much.
+//   * **at 1.3 nothing truncates and nothing overflows** — the subtitle may take a second line and
+//     the pill grows to hold it. A nudge the user cannot finish reading is not a nudge, and half of
+//     these lines end in the verb.
+//   * the language chip keeps its 48dp target and never comes within [kFooterGapDp] of the silk
+//     panel — the two are the only things on this screen that can collide, and the panel grows with
+//     the copy and the text size while the chip is pinned to the bottom inset. These EIGHT sizes are
+//     the bar; the l10n envelope's 320x569@1.3 frame is an accepted overlap, recorded and reasoned in
+//     `test/l10n/support/known_defects.dart` (`kAcceptedSignInChipOverlap`).
+//
+// Real fonts, per weight, or every width here is fiction: `flutter test` renders one flat box glyph
+// per character, which measures English ~2x too wide and Indic conjuncts at an advance they never
+// take — a false PASS in both directions. See test/l10n/support/load_real_fonts.dart.
+
+import 'package:arul/features/auth/domain/sign_in_outcome.dart';
+import 'package:arul/features/auth/presentation/sign_in_screen.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../l10n/support/envelope.dart';
+import '../../l10n/support/inline_canary.dart';
+import '../../l10n/support/load_real_fonts.dart';
+import '../../l10n/support/real_font_theme.dart';
+import '../../l10n/support/registry.dart';
+
+/// The top eight phone sizes in the install base, in logical dp.
+/// Narrowest first — 360dp leaves the pill's two lines 180dp, and that is the binding case.
+const _sizes = <(double, double)>[
+  (360, 724),
+  (360, 730),
+  (360, 800),
+  (360, 820),
+  (384, 786),
+  (384, 832),
+  (384, 853),
+  (392, 809),
+];
+
+/// 1.0 and 1.3 — the OS font sizes people actually run, same pair the l10n envelope gates on.
+const _scales = <double>[1.0, 1.3];
+
+/// The clearance the language footer must keep from the silk panel above it, in logical dp.
+/// Below this they read as one block and the footer stops looking like a footer.
+const double kFooterGapDp = 12;
+
+/// Idle plus every failure the screen speaks to. `null` is idle.
+const _states = <SignInOutcome?>[null, ...SignInOutcome.values];
+
+void main() {
+  setUpAll(() async {
+    await loadRealFonts();
+    assertRealFontsLive();
+    await initRegistry();
+  });
+
+  for (final locale in kLocales) {
+    testWidgets(locale, (tester) async {
+      installFakeChannels(tester.binding.defaultBinaryMessenger);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final failures = <String>[];
+
+      for (final state in _states) {
+        final entry = ScreenEntry(
+          id: 'signin.${state?.name ?? 'idle'}',
+          build: () => SignInScreen(debugOutcome: state),
+        );
+        for (final (width, height) in _sizes) {
+          for (final scale in _scales) {
+            final config = L10nConfig(
+              id: '${width.toInt()}x${height.toInt()}@$scale',
+              width: width,
+              height: height,
+              textScale: scale,
+              gating: true,
+            );
+            final where = '${entry.id} · $locale · ${config.id}';
+            tester.view.physicalSize = Size(width, height);
+
+            final overflows = <String>[];
+            final previousOnError = FlutterError.onError;
+            FlutterError.onError = (details) {
+              final text = details.exceptionAsString();
+              if (text.contains('overflowed by')) {
+                overflows.add(_firstLine(text));
+              } else {
+                previousOnError?.call(details);
+              }
+            };
+            try {
+              await tester.pumpWidget(
+                buildHarness(entry: entry, locale: locale, config: config),
+              );
+              // Bounded pumps, never pumpAndSettle -> the background player's placeholder animates.
+              await tester.pump();
+              await tester.pump(const Duration(milliseconds: 32));
+              // Give every paragraph the face carrying its own weight, then re-lay-out, so a w600
+              // title is not measured against the w400 cut.
+              if (_realizeParagraphs(tester)) await tester.pump();
+            } finally {
+              FlutterError.onError = previousOnError;
+            }
+
+            for (final message in overflows.toSet()) {
+              failures.add('$where — $message');
+            }
+
+            // ── The title: one line, and at 1.0 never scaled ───────────────────────────
+            final titleBox = tester.renderObject<RenderBox>(
+              find.byKey(kSignInTitleKey),
+            );
+            final title = _descendants(
+              titleBox,
+            ).whereType<RenderParagraph>().single;
+            final slot = titleBox.constraints.maxWidth;
+            if (scale == 1.0 && title.size.width > slot + 0.01) {
+              failures.add(
+                '$where — the pill TITLE needs '
+                '${title.size.width.toStringAsFixed(1)}dp of a '
+                '${slot.toStringAsFixed(0)}dp slot at 15px, so the safety net had to scale it: '
+                '"${title.text.toPlainText()}". Shorten the title.',
+              );
+            }
+            if (title.didExceedMaxLines) {
+              failures.add(
+                '$where — the pill title was truncated: '
+                '"${title.text.toPlainText()}"',
+              );
+            }
+
+            // ── The subtitle: one line at 1.0, at most two at 1.3, never an ellipsis ────
+            final subtitle = tester.renderObject<RenderParagraph>(
+              find.byKey(kSignInSubtitleKey),
+            );
+            if (subtitle.didExceedMaxLines) {
+              failures.add(
+                '$where — the pill subtitle was truncated: '
+                '"${subtitle.text.toPlainText()}"',
+              );
+            }
+            final lines = _lineCount(subtitle);
+            if (scale == 1.0 && lines != 1) {
+              final painter = TextPainter(
+                text: subtitle.text,
+                textDirection: subtitle.textDirection,
+                textScaler: subtitle.textScaler,
+              )..layout();
+              final need = painter.width;
+              painter.dispose();
+              failures.add(
+                '$where — the subtitle wrapped to $lines lines at 12px: it needs '
+                '${need.toStringAsFixed(1)}dp of a '
+                '${subtitle.constraints.maxWidth.toStringAsFixed(0)}dp slot: '
+                '"${subtitle.text.toPlainText()}". Shorten the line.',
+              );
+            }
+
+            // ── The language footer: 48dp target, clear of the panel ──────────────────
+            final trigger = tester.getRect(
+              find.byKey(kSignInLanguageTriggerKey),
+            );
+            final panel = tester.getRect(find.byKey(kSignInPanelKey));
+            final gap = trigger.top - panel.bottom;
+            if (gap < kFooterGapDp) {
+              failures.add(
+                '$where — the language footer starts at '
+                '${trigger.top.toStringAsFixed(1)}dp, only '
+                '${gap.toStringAsFixed(1)}dp under a silk panel ending at '
+                '${panel.bottom.toStringAsFixed(1)}dp (needs ${kFooterGapDp.toStringAsFixed(0)})',
+              );
+            }
+            if (trigger.height < 48) {
+              failures.add(
+                '$where — the language footer is ${trigger.height.toStringAsFixed(1)}dp tall, '
+                'under the 48dp touch target',
+              );
+            }
+            if (trigger.left < 20 - 0.01) {
+              failures.add(
+                '$where — the language footer starts at x='
+                '${trigger.left.toStringAsFixed(1)}dp, inside the 20dp margin',
+              );
+            }
+          }
+        }
+      }
+
+      expect(
+        failures,
+        isEmpty,
+        reason:
+            '\n${failures.length} sign-in size finding(s):\n\n'
+            '${failures.join('\n')}\n',
+      );
+    });
+  }
+}
+
+/// How many lines the paragraph actually took in its own slot.
+/// `RenderParagraph` does not expose its line metrics, so re-lay-out its exact span at the width it
+/// was given — the same re-measure the l10n probe does, for the same reason.
+int _lineCount(RenderParagraph paragraph) {
+  final painter = TextPainter(
+    text: paragraph.text,
+    textAlign: paragraph.textAlign,
+    textDirection: paragraph.textDirection,
+    textScaler: paragraph.textScaler,
+    maxLines: paragraph.maxLines,
+    locale: paragraph.locale,
+    strutStyle: paragraph.strutStyle,
+    textWidthBasis: paragraph.textWidthBasis,
+    textHeightBehavior: paragraph.textHeightBehavior,
+  )..layout(maxWidth: paragraph.constraints.maxWidth);
+  final lines = painter.computeLineMetrics().length;
+  painter.dispose();
+  return lines;
+}
+
+/// Rewrites every laid-out paragraph's span so its style carries the real face for its own weight.
+/// Returns true when anything changed. Same trick as the l10n probe, for the same reason.
+bool _realizeParagraphs(WidgetTester tester) {
+  var changed = false;
+  for (final object in tester.binding.renderViews.expand(_descendants)) {
+    if (object is! RenderParagraph) continue;
+    final next = realizeSpan(object.text);
+    if (next != null) {
+      object.text = next;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+Iterable<RenderObject> _descendants(RenderObject root) sync* {
+  yield root;
+  final children = <RenderObject>[];
+  root.visitChildren(children.add);
+  for (final child in children) {
+    yield* _descendants(child);
+  }
+}
+
+String _firstLine(String s) {
+  final i = s.indexOf('\n');
+  return i < 0 ? s : s.substring(0, i);
+}

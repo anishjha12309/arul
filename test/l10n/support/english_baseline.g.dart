@@ -14,9 +14,6 @@ library;
 const Set<String> kEnglishBaseline = <String>{
   'truncated|refer.screen|320x569@1.3|referShareWhatsapp',
   'truncated|settings.screen|320x569@1.3|settingsFallbackEmail',
-  'truncated|signin.screen|320x569@1.0|signInGoogle',
-  'truncated|signin.screen|320x569@1.3|signInGoogle',
-  'truncated|signin.screen|360x640@1.3|signInGoogle',
 };
 
 /// How far English overflowed, by `screen|config|side`.
@@ -25,9 +22,5 @@ const Set<String> kEnglishBaseline = <String>{
 /// than English at the same frame. Anything larger is
 /// translation-induced, however small English's own overflow.
 const Map<String, double> kEnglishOverflowPx = <String, double>{
-  'settings.language_sheet|320x569@1.0|bottom': 16.0,
-  'settings.language_sheet|320x569@1.3|bottom': 28.0,
-  'settings.language_sheet|360x640@1.0|bottom': 7.5,
-  'settings.language_sheet|360x640@1.3|bottom': 19.0,
   'upload.screen|320x569@1.3|right': 29.0,
 };

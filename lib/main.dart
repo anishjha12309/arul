@@ -22,6 +22,7 @@ import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
 import 'core/providers/shared_preferences_provider.dart';
@@ -216,7 +217,17 @@ Future<void> _startApp() async {
   // SDK that never started cannot autocapture.
   // The cohort draw is persisted in prefs -> this must stay BELOW the prefs await.
   // Mirrored in Pakiza -> keep both in sync.
-  if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
+  // No SIDELOADED build reports to PostHog (owner's rule) -> resolve the installer BEFORE the SDK
+  // starts, so the very first event is already gated and a developer's on-device pass never lands
+  // in the product funnel. One probe per process; every later reader gets the cached verdict.
+  await PlayInstall.resolved;
+  debugPrint(
+    '[Analytics] PostHog sink: ${PlayInstall.isPlay ? "on (Play install)" : "OFF (sideloaded)"}',
+  );
+
+  if (AppConfig.posthogEnabled &&
+      PlayInstall.isPlay &&
+      AnalyticsCohort.resolve(prefs)) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
       ..captureApplicationLifecycleEvents = false

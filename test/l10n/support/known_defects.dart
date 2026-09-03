@@ -21,6 +21,15 @@ import 'finding.dart';
 /// The two layers measured the same upload-screen overflow as 29px and 28px.
 const double kOverflowTolerancePx = 1.5;
 
+/// ACCEPTED, not subtracted: on `320x569@1.3` the sign-in silk panel can overlap the language chip
+/// by ~17dp — narrow phone AND large text AND the `reauthFailed` nudge (its fix line plus link is
+/// the tallest panel) AND Tamil or Malayalam. Owner's call: the fix was a panel clamp that would
+/// move the layout on every phone to buy that corner, and the layout is signed off as it stands.
+/// The chip's clearance is asserted on the eight real PostHog sizes in
+/// `test/features/auth/sign_in_size_matrix_test.dart`; this frame is deliberately outside it.
+/// Neither layer detects overlap, so there is nothing to subtract — this records WHY it is absent.
+const String kAcceptedSignInChipOverlap = 'signin.reauthFailed|320x569@1.3';
+
 /// True when [f] also fires in English on the same screen and configuration -> and, for an overflow, no less severely.
 bool isKnownDefect(Finding f) {
   // An ambiguous attribution is NEVER subtracted -> two ARB keys share the rendered string.

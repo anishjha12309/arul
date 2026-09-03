@@ -39,18 +39,68 @@ class AppLocalizationsTe extends AppLocalizations {
   String get errorGeneric => 'ఏదో తప్పు జరిగింది.';
 
   @override
-  String get signInHeadline => 'మేల్కొనేలా చేసే వాల్‌పేపర్లు';
-
-  @override
-  String get signInBody =>
-      'వర్తింపజేయడానికి, పంచుకోవడానికి, మీ సేకరణను ఉంచడానికి సైన్ ఇన్ చేయండి.';
+  String get signInCaption => 'దైవత్వం మీ ఇంటిలో';
 
   @override
   String get signInGoogle => 'Googleతో కొనసాగించండి';
 
   @override
-  String get signInTerms =>
-      'కొనసాగించడం ద్వారా మా నిబంధనలు మరియు గోప్యతా విధానాన్ని అంగీకరిస్తున్నారు.';
+  String get signInSubtitleIdle => 'ప్రారంభించడానికి ఖాతాను ఎంచుకోండి';
+
+  @override
+  String get signInSubtitleExchanging => 'సైన్ ఇన్ చేస్తోంది…';
+
+  @override
+  String get signInNudgeBackedOutQuick => 'పూర్తి కాలేదా? మళ్లీ నొక్కండి';
+
+  @override
+  String get signInNudgeBackedOutSlow => 'ఒకసారి నొక్కి Google కోసం ఆగండి';
+
+  @override
+  String get signInNudgeNeverOpened => 'Google తెరవలేదు, మళ్లీ నొక్కండి';
+
+  @override
+  String get signInNudgeAddAccount => 'ఈ ఫోన్‌లోని ఖాతాను వాడండి';
+
+  @override
+  String get signInNudgeReauth => 'మళ్లీ నొక్కి ఖాతాను ఎంచుకోండి';
+
+  @override
+  String get signInNudgeActivityClosed => 'సైన్ ఇన్ ముందే మూసింది, నొక్కండి';
+
+  @override
+  String get signInNudgeNoProvider => 'Google Play సేవలను నవీకరించండి';
+
+  @override
+  String get signInFixBackedOutSlow =>
+      'ఈ ఫోన్‌లో Google కొంత సమయం తీసుకుంటోంది.';
+
+  @override
+  String get signInFixAddAccount =>
+      'కొత్త ఖాతా అవసరం లేదు. ఈ ఫోన్‌లో ఇప్పటికే ఉన్న ఏ Google ఖాతా అయినా పని చేస్తుంది.';
+
+  @override
+  String get signInFixReauth =>
+      'ఆ ఖాతాను Google ధృవీకరించలేకపోయింది. ఫోన్ సెట్టింగ్‌లలో Googleకి మళ్లీ సైన్ ఇన్ చేయండి.';
+
+  @override
+  String get signInFixActivityClosed =>
+      'Google Play సేవలు సైన్ ఇన్ విండోను మూసివేశాయి.';
+
+  @override
+  String get signInLinkAccountSettings => 'ఖాతా సెట్టింగ్‌లు తెరవండి';
+
+  @override
+  String get signInLinkPlayServices => 'Google Play సేవలను చూడండి';
+
+  @override
+  String get signInLinkPlayStore => 'Play Storeలో నవీకరించండి';
+
+  @override
+  String get signInTermsLink => 'నిబంధనలు';
+
+  @override
+  String get signInPrivacyLink => 'గోప్యత';
 
   @override
   String get premiumTitle => 'ప్రీమియం';

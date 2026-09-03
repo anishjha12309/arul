@@ -3,22 +3,23 @@ import 'package:flutter/material.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The six languages, native label over English name — order and glyphs verbatim per spec.
+/// One row: the native label over the English name. Both come from `locale_provider.dart`, the one
+/// home for the language tables -> the sheet, Settings and the sign-in trigger cannot drift apart.
 class _Lang {
   const _Lang(this.native, this.name);
   final String native;
   final String name;
 }
 
-const _langs = <_Lang>[
-  _Lang('English', 'English'),
-  _Lang('தமிழ்', 'Tamil'),
-  _Lang('తెలుగు', 'Telugu'),
-  _Lang('ಕನ್ನಡ', 'Kannada'),
-  _Lang('മലയാളം', 'Malayalam'),
-  _Lang('हिन्दी', 'Hindi'),
+final _langs = <_Lang>[
+  for (final locale in supportedAppLocales)
+    _Lang(
+      appLanguageNativeName(locale.languageCode),
+      appLanguageName(locale.languageCode),
+    ),
 ];
 
 /// The language picker sheet — 2-column grid, gap 10, six r16 tiles, native 17px over English 12px.
@@ -26,9 +27,16 @@ const _langs = <_Lang>[
 ///
 /// The sheet only RESOLVES the choice and applies nothing — it returns the chosen English name.
 /// The caller persists it and drives the app locale from it.
-Future<String?> showLanguageSheet(BuildContext context, String current) {
+/// [brightness] pins the sheet's form instead of following the app theme -> the sign-in screen is
+/// always dark over video whatever the user picked, so its picker follows the DEVICE instead.
+Future<String?> showLanguageSheet(
+  BuildContext context,
+  String current, {
+  Brightness? brightness,
+}) {
   return showArulSheet<String>(
     context,
+    brightness: brightness,
     builder: (_) => _LanguageSheet(current: current),
   );
 }

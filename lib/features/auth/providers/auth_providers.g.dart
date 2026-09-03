@@ -50,6 +50,56 @@ final class ApiClientProvider
 
 String _$apiClientHash() => r'90c807f03b90249684265cc91739139c2c89eeb9';
 
+/// The out-of-app help targets the sign-in nudges can offer. Overridden in widget tests so a link
+/// tap is observable without a platform.
+
+@ProviderFor(signInHelpLinks)
+final signInHelpLinksProvider = SignInHelpLinksProvider._();
+
+/// The out-of-app help targets the sign-in nudges can offer. Overridden in widget tests so a link
+/// tap is observable without a platform.
+
+final class SignInHelpLinksProvider
+    extends
+        $FunctionalProvider<SignInHelpLinks, SignInHelpLinks, SignInHelpLinks>
+    with $Provider<SignInHelpLinks> {
+  /// The out-of-app help targets the sign-in nudges can offer. Overridden in widget tests so a link
+  /// tap is observable without a platform.
+  SignInHelpLinksProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'signInHelpLinksProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$signInHelpLinksHash();
+
+  @$internal
+  @override
+  $ProviderElement<SignInHelpLinks> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  SignInHelpLinks create(Ref ref) {
+    return signInHelpLinks(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(SignInHelpLinks value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<SignInHelpLinks>(value),
+    );
+  }
+}
+
+String _$signInHelpLinksHash() => r'7a07db6d66492f06b031769a63e208720c7594bd';
+
 @ProviderFor(authService)
 final authServiceProvider = AuthServiceProvider._();
 

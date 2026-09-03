@@ -39,18 +39,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorGeneric => 'Something went wrong.';
 
   @override
-  String get signInHeadline => 'Wallpapers worth waking up to';
-
-  @override
-  String get signInBody =>
-      'Sign in to apply, share and keep your collection across devices.';
+  String get signInCaption => 'Bring the divine home';
 
   @override
   String get signInGoogle => 'Continue with Google';
 
   @override
-  String get signInTerms =>
-      'By continuing you agree to our Terms and Privacy Policy.';
+  String get signInSubtitleIdle => 'Choose an account to start';
+
+  @override
+  String get signInSubtitleExchanging => 'Signing you in…';
+
+  @override
+  String get signInNudgeBackedOutQuick => 'Didn\'t go through? Tap again';
+
+  @override
+  String get signInNudgeBackedOutSlow => 'Tap once and wait for Google';
+
+  @override
+  String get signInNudgeNeverOpened => 'Google didn\'t open. Tap again';
+
+  @override
+  String get signInNudgeAddAccount => 'Use an account on this phone';
+
+  @override
+  String get signInNudgeReauth => 'Tap again and pick an account';
+
+  @override
+  String get signInNudgeActivityClosed => 'Sign-in closed early. Tap again';
+
+  @override
+  String get signInNudgeNoProvider => 'Update Google Play services';
+
+  @override
+  String get signInFixBackedOutSlow =>
+      'Google is taking a while on this phone.';
+
+  @override
+  String get signInFixAddAccount =>
+      'No new account needed. Any Google account already on this phone works.';
+
+  @override
+  String get signInFixReauth =>
+      'Google couldn\'t verify that account. Re-sign in to Google in phone settings.';
+
+  @override
+  String get signInFixActivityClosed =>
+      'Google Play services closed the sign-in window.';
+
+  @override
+  String get signInLinkAccountSettings => 'Open account settings';
+
+  @override
+  String get signInLinkPlayServices => 'Check Google Play services';
+
+  @override
+  String get signInLinkPlayStore => 'Update in Play Store';
+
+  @override
+  String get signInTermsLink => 'Terms';
+
+  @override
+  String get signInPrivacyLink => 'Privacy';
 
   @override
   String get premiumTitle => 'Premium';
