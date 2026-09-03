@@ -55,10 +55,11 @@ brown-screen duration fell in two steps, to zero only once both were in.
   `!mounted` bail warmed nothing.
 - **Low-memory phones get the poster ONLY — no auth video player.** `VideoBackground` asks
   `DeviceMemory.isLow` (the Android Go flag, OR under 4.5 GiB total RAM so every 4 GB phone
-  qualifies, OR the OS's own `lowMemory` pressure flag; the native side owns the rule) BEFORE
-  acquiring the shared player, so no MediaCodec is ever created for the splash or the sign-in
-  screen. Total RAM, not free RAM: Android keeps free memory low on purpose, so a free-memory rule
-  flips between launches of the same phone. The probe fails OPEN to the video: a missing channel or
+  qualifies; the native side owns the rule) BEFORE acquiring the shared player, so no MediaCodec is
+  ever created for the splash or the sign-in screen. Total RAM, not free RAM, and NOT the OS's
+  `lowMemory` pressure flag: Android keeps free memory low on purpose and 4–6 GB Android 13/14 phones
+  trip `lowMemory` at a cold start right after install, so either rule flips between launches of
+  the same phone and leaves the poster population unidentifiable (owner's call after build 62). The probe fails OPEN to the video: a missing channel or
   a platform error must never leave a bare background. To test the poster path on a capable phone:
   sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
   per process), then `settings delete global arul_force_low_ram`. The override is gated on

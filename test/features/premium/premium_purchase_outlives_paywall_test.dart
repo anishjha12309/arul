@@ -170,8 +170,15 @@ void main() {
 
       expect(api.statusCalls, 3, reason: 'settled on the third poll, stopped');
       expect(api.abandons, 0);
+      // The SAME process ran the checkout -> the conversion names the handoff it came through.
       expect(eventsNamed('trial_started'), [
-        {'plan': 'monthly', 'order_id': 'DKS_ORDER_1', 'value': 199.0},
+        {
+          'plan': 'monthly',
+          'order_id': 'DKS_ORDER_1',
+          'value': 199.0,
+          'method': 'upi_app',
+          'target_app': 'com.phonepe.app',
+        },
       ]);
       expect(prefs.getString(TrialConversionCatchUp.prefsKey), 'DKS_ORDER_1');
       expect(eventsNamed('checkout_started'), hasLength(1));

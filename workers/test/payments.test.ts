@@ -314,6 +314,11 @@ describe("handleInitiate — direct UPI-intent flow", () => {
     expect(intentArgs.targetApp).toBe("com.phonepe.app");
     expect(intentArgs.upfrontAmountPaise).toBeUndefined();
     expect(vi.mocked(setupSubscription)).not.toHaveBeenCalled();
+
+    // The row remembers which UPI app took the mandate -> read back at the first paid settle
+    const sqlCalls = (sql as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(sqlCalls.some((call) => call.slice(1).includes("com.phonepe.app"))).toBe(true);
+    expect(sqlCalls.some((call) => call.slice(1).includes("phonepe_page"))).toBe(false);
   });
 
   it("falls back to the SDK page on intent-setup failure, reusing the same claimed ids", async () => {
@@ -340,6 +345,10 @@ describe("handleInitiate — direct UPI-intent flow", () => {
     expect(body.intentUrl).toBeUndefined();
     const sdkArgs = vi.mocked(setupSubscription).mock.calls[0][1];
     expect(sdkArgs.merchantOrderId).toBe(body.merchantOrderId);
+
+    // The row must name the flow that RAN, not the one that was asked for -> the fallback re-stamps it
+    const sqlCalls = (sql as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(sqlCalls.some((call) => call.slice(1).includes("phonepe_page"))).toBe(true);
   });
 
   it("ignores a malformed targetApp and uses the SDK path directly", async () => {

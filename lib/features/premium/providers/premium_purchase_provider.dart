@@ -108,6 +108,11 @@ class PremiumPurchase extends _$PremiumPurchase {
         'order_id': merchantOrderId,
         // Null-aware element: omitted entirely when the price hasn't loaded.
         'value': ?price,
+        // Which handoff carried this mandate — the same keys `checkout_started` set at the tap, so
+        // "which UPI app starts a trial" reads off PostHog the day it ships. Both omitted when the
+        // conversion is a late catch-up: the process that knew the path is gone, and a guess is worse.
+        'method': ?_checkoutMethod,
+        'target_app': ?_checkoutTargetApp,
       },
     );
     if (event == ArulEvents.trialStarted) {
@@ -124,6 +129,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// `target_app` is the UPI package — the axis that makes "which app expires a mandate" answerable.
   void _trackCheckoutStarted(String method, String? targetApp) {
     _checkoutMethod = method;
+    _checkoutTargetApp = targetApp;
     final price = _monthlyPriceRupees();
     _analytics.track(
       'checkout_started',
@@ -178,6 +184,9 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// The checkout handoff in flight (`upi_app`/`phonepe_sdk`), set at start and read on failure.
   /// So a failure names the path that died. Survives for the attempt's lifetime.
   String? _checkoutMethod;
+
+  /// The UPI package the handoff targeted, when [_checkoutMethod] is `upi_app`; null otherwise.
+  String? _checkoutTargetApp;
 
   /// Monthly price in rupees from the remote app_config; null until it loads.
   /// Read synchronously from the already-cached provider -> no await on the success path.

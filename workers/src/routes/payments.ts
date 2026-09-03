@@ -186,10 +186,11 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
       await tx`
         INSERT INTO subscriptions (
-          user_id, status, plan, merchant_subscription_id, merchant_order_id
+          user_id, status, plan, merchant_subscription_id, merchant_order_id, upi_target_app
         )
         VALUES (
-          ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId}
+          ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
+          ${targetApp ?? "phonepe_page"}
         )
         ON CONFLICT (user_id)
         DO UPDATE SET
@@ -197,6 +198,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           plan                     = EXCLUDED.plan,
           merchant_subscription_id = EXCLUDED.merchant_subscription_id,
           merchant_order_id        = EXCLUDED.merchant_order_id,
+          upi_target_app           = EXCLUDED.upi_target_app,
           phonepe_order_id         = NULL,
           updated_at               = now()
       `;
@@ -230,10 +232,13 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     // Attach PhonePe's order id to the row already claimed above, SCOPED to the claimed merchant_order_id
     // A later initiate may have superseded this claim while PhonePe answered -> this must not stamp the newer mandate
     // Zero rows updated is the CORRECT outcome there -> the newer request owns the row
-    const attachPhonePeOrder = async (phonepeOrderId: string) => {
+    // `upiTargetApp` is re-stamped here because the flow can CHANGE after the claim: an intent setup
+    // that fails falls back to the hosted page, and the row must say which one actually ran.
+    const attachPhonePeOrder = async (phonepeOrderId: string, upiTargetApp: string) => {
       await sql`
         UPDATE subscriptions
         SET phonepe_order_id = ${phonepeOrderId},
+            upi_target_app   = ${upiTargetApp},
             updated_at       = now()
         WHERE user_id = ${sub}
           AND merchant_order_id = ${merchantOrderId}
@@ -279,7 +284,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           targetApp,
           upfrontAmountPaise: trialEligible ? undefined : MONTHLY_PRICE_PAISE,
         });
-        await attachPhonePeOrder(intent.orderId);
+        await attachPhonePeOrder(intent.orderId, targetApp);
         revokeSuperseded();
         console.log(
           `[payments/initiate] env=${env.PHONEPE_ENV} flow=intent target=${targetApp} ` +
@@ -335,7 +340,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         `trialEligible=${trialEligible}`,
     );
 
-    await attachPhonePeOrder(ppResult.orderId);
+    await attachPhonePeOrder(ppResult.orderId, "phonepe_page");
     revokeSuperseded();
 
     // The Flutter SDK's startTransaction needs the SDK order token, returned as
@@ -638,7 +643,12 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
 
       const activated = await sql<
-        { user_id: string; prior_status: string; updated_at?: Date | string | null }[]
+        {
+          user_id: string;
+          prior_status: string;
+          updated_at?: Date | string | null;
+          upi_target_app?: string | null;
+        }[]
       >`
         UPDATE subscriptions AS s
         SET status                  = 'active',
@@ -651,7 +661,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         FROM subscriptions AS prior
         WHERE s.merchant_subscription_id = ${merchantSubId}
           AND prior.id = s.id
-        RETURNING s.user_id, prior.status AS prior_status, s.updated_at
+        RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.upi_target_app
       `;
 
       console.log(`[payments/webhook] Active for sub ${merchantSubId}, period_end=${nextEnd.toISOString()}`);
@@ -672,6 +682,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
             amountPaise: typeof pp.amount === "number" ? pp.amount : null,
             occurredAt: activated[0].updated_at ?? null,
+            targetApp: activated[0].upi_target_app ?? null,
           });
         }
       }

@@ -306,7 +306,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         retry_count,
         next_debit_at,
         notified_at,
-        current_period_end
+        current_period_end,
+        upi_target_app
       FROM subscriptions
       WHERE notified_at IS NOT NULL
         AND notified_at <= ${new Date(now.getTime() - EXECUTE_AFTER_NOTIFY_MS).toISOString()}
@@ -372,6 +373,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         // 'trialing' at settle time = the FIRST trial->paid conversion; 'active' = a renewal
         // Read from the SAME SELECT as the row -> a webhook racing this scan is harmless -> the KV marks dedupe
         priorStatus: row.status as string,
+        // Which UPI app took the mandate at initiate -> rides to `subscription_active`; null predates the column
+        upiTargetApp: (row.upi_target_app as string | null | undefined) ?? null,
         // The dunning ladder's anchor -> NULL falls back to the due date -> an anchorless row still moves forward
         periodEnd: toDate(row.current_period_end) ?? toDate(row.next_debit_at),
       };
@@ -545,6 +548,7 @@ async function reconcileFromOrder(
     merchantSubId: string;
     redemptionOrderId: string;
     priorStatus: string;
+    upiTargetApp?: string | null;
     periodEnd: Date | null;
   },
   overdueMs: number,
@@ -608,6 +612,7 @@ async function applyDebitOutcome(
     merchantSubId: string;
     redemptionOrderId: string;
     priorStatus: string;
+    upiTargetApp?: string | null;
     periodEnd: Date | null;
   },
 ): Promise<boolean> {
@@ -640,6 +645,7 @@ async function applyDebitOutcome(
         transactionId: row.redemptionOrderId,
         amountPaise: 19900,
         occurredAt: settled[0]?.updated_at ?? null,
+        targetApp: row.upiTargetApp ?? null,
       });
     }
     return true;

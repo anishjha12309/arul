@@ -148,10 +148,12 @@ class MainActivity : FlutterFragmentActivity() {
             // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
             // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
             val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
-            // `lowMemory` is the OS's own pressure flag (about to kill background processes) ->
-            // a bigger phone that is choked right now also skips the decoration.
+            // NOT `info.lowMemory`: that is the OS's moment-in-time pressure flag, and 4–6 GB
+            // Android 13/14 phones trip it at a cold start right after install -> capable phones got
+            // the poster at random and the population that took the path could not be identified.
+            // Only the two stable facts about the hardware decide (owner's call).
             (!isPlayInstall() && forced) ||
-                am.isLowRamDevice || info.totalMem < LOW_RAM_TOTAL_BYTES || info.lowMemory
+                am.isLowRamDevice || info.totalMem < LOW_RAM_TOTAL_BYTES
         } catch (e: Exception) {
             false
         }

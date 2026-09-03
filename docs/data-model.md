@@ -15,7 +15,10 @@ status(pending|trialing|active|paused|cancelled|expired) · plan · phonepe_subs
 NULL** when the webhook is lost and only status-reconcile runs; harmless, the cron addresses PhonePe
 by our `merchant_subscription_id`) · merchant_subscription_id · merchant_order_id · phonepe_order_id ·
 redemption_order_id · trial_end (**one-trial consumed-marker — written once, never cleared**) ·
-current_period_end · next_debit_at · notified_at · retry_count · updated_at
+current_period_end · next_debit_at · notified_at · retry_count · updated_at · upi_target_app (the UPI
+package the mandate was handed to at initiate, or `phonepe_page` for the SDK/hosted page; re-stamped
+when an intent setup falls back, so it names the flow that RAN; NULL predates the column → PostHog
+`subscription_active` reports `unknown`)
 
 **wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) ·
 **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text plus

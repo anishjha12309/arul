@@ -31,7 +31,8 @@ undercounted. **`trial_started`/StartTrial is the ONLY event campaigns bid on** 
 in-session, one source. **Accepted cost: no revenue or ROAS signal on
 either platform. Revenue truth is Neon**, and now the only revenue record.
 
-`trial_started` carries `plan`, `order_id` and `value`. It fires from the purchase poll — or, for a
+`trial_started` carries `plan`, `order_id`, `value`, and — when the SAME process ran the checkout —
+`method` and `target_app`; a late catch-up copy omits both rather than guess. It fires from the purchase poll — or, for a
 trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget out),
 late from `TrialConversionCatchUp` on the next `GET /me` showing `trialing` for an order this install
 never reported (`late: true`, once per order). The catch-up marks BEFORE invalidating entitlement and
@@ -39,7 +40,9 @@ installs predating it grandfather the trial they find, so an update cannot doubl
 SDK, one source — never a server copy.**
 
 `subscription_active` reaches **PostHog only** (server, first trial→paid settle) — product analytics
-is not an attribution source; renewals reach nothing. `subscription_cancel` is server-only too:
+is not an attribution source; renewals reach nothing. It carries `target_app` from the row's
+`upi_target_app` (`unknown` for rows older than the column) — the SAME key `checkout_started` and
+`trial_started` carry, so "which UPI app starts, completes and expires a mandate" is one axis. `subscription_cancel` is server-only too:
 one event per mandate from every channel that ends a LIVE row, carrying `reason`, `prior_status` and
 `during_trial`. Restore-to-cancelled writes after a failed re-setup are NOT cancels.
 
