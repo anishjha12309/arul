@@ -88,11 +88,15 @@ line asks for patience, not another tap.
   three-line cap is for the 320 dp frame, where the slot is 140 dp and wrapping is word-bounded.
   `sign_in_size_matrix_test.dart` enforces it, and the chip's clearance from the panel.
 - **The language trigger is not part of the attempt.** The only way out of a language the user
-  cannot read, on the screen where being stuck is terminal — a 32 dp chip at the bottom LEFT, on the
+  cannot read, on the screen where being stuck is terminal — a 36 dp chip at the bottom LEFT, on the
   bottom safe-area inset plus 16 dp, never a constant (a gesture bar and a 3-button nav are 24 dp
-  apart; a fixed number buries it under one). It wears the pill's fill and gold border so the two
-  tappable things read as one family, and carries the language CODE: two Latin capitals measure the
-  same in every language, so it never resizes. It stays live during an attempt but never starts,
+  apart; a fixed number buries it under one). Its label is the pill title's own style, unshadowed,
+  and its fill is matched to the pill's interior AS MEASURED on device, not to the pill's paint: the
+  pill's `.55` sits over the panel in the bright middle of the artwork, the chip over the scrim's
+  darkest band, so the same paint (alone or over the panel's layers) read as a solid block beside a
+  translucent pill. Glyphs take no shadows — an Icon shadow ghosts a second glyph under Impeller. It
+  carries the language CODE: two Latin capitals measure the same in every language, so it never
+  resizes. It stays live during an attempt but never starts,
   joins or cancels one. **Its sheet follows the DEVICE's light/dark mode**, not the app's saved
   theme: this wall is always dark over video whichever the user picked, so that setting says nothing
   about a sheet rising out of it. A session landing with the sheet open

@@ -350,12 +350,14 @@ const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 /// as fast as "മലയാളം" at a glance. Its label is the PILL TITLE'S style — [kSignInTitleStyle], the
 /// same object, so the two cannot drift.
 ///
-/// **The ground is the pill's, composed the same way, not a colour that looks like it.** The pill
-/// sits on the silk panel, so what the eye reads as "pill" is three layers: [ArulTokens
-/// .mediaFillStrong], then [ArulTokens.silkDark], then the `rgba(20,9,12,.55)` fill. This chip has
-/// only the scrim behind it, so painting the .55 alone came out visibly lighter than the pill on the
-/// same screen. It therefore paints the whole stack itself, clipped to the same radius under the
-/// same gold-50% border.
+/// **The ground is matched to the pill's INTERIOR AS MEASURED, not to the pill's paint.** The pill
+/// paints `rgba(20,9,12,.55)` over the silk panel in the bright middle of the artwork and its
+/// interior reads ≈ rgb(44,27,21) on device. This chip sits on the scrim's darkest band, so the same
+/// paint — alone, or with the panel's two layers under it — measured 7–9 luminance points darker and
+/// read as a solid block beside a translucent pill (both tried on device). [_fill] is the 70% fill
+/// that lands on the pill's interior over that band, measured 31 against the pill's 30 with the
+/// water still faintly visible through it, exactly as the poster shows through the pill. Same
+/// radius, same gold-50% border.
 ///
 /// **The GLYPHS take no `shadows`.** `Icon` accepts them, and on device Impeller mis-offsets a
 /// shadow drawn from an icon FONT: it painted a second dark `translate` mark ~13dp to the left of
@@ -373,8 +375,8 @@ class _LanguageTrigger extends StatelessWidget {
   final String semanticsLabel;
   final VoidCallback onTap;
 
-  /// The pill's own fill, the last of the three layers below the label.
-  static const _pillFill = Color.fromRGBO(20, 9, 12, 0.55);
+  /// Solved on device for the pill's measured interior over the scrim's bottom band (class doc).
+  static const _fill = Color.fromRGBO(50, 22, 11, 0.70);
 
   static final _shape = BorderRadius.circular(ArulTokens.pillRadius);
 
@@ -390,50 +392,31 @@ class _LanguageTrigger extends StatelessWidget {
         // None on the left, so the chip's own edge lands on the 20dp margin the silk panel uses.
         child: Padding(
           padding: const EdgeInsets.fromLTRB(0, 6, 12, 6),
-          child: ClipRRect(
-            borderRadius: _shape,
-            child: DecoratedBox(
-              // Layer 1 and 3 of the pill's ground; layer 2 (the silk gradient) sits between them.
-              decoration: BoxDecoration(color: ArulTokens.mediaFillStrong),
-              child: DecoratedBox(
-                decoration: const BoxDecoration(gradient: ArulTokens.silkDark),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.fromLTRB(12, 0, 10, 0),
-                  decoration: BoxDecoration(
-                    color: _pillFill,
-                    borderRadius: _shape,
-                    border: Border.all(
-                      color: ArulTokens.goldBorder50,
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.translate,
-                        size: 20,
-                        color: ArulTokens.ivory,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        style: kSignInTitleStyle.copyWith(
-                          shadows: ArulTokens.overMediaShadow,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(
-                        Icons.keyboard_arrow_down,
-                        size: 18,
-                        color: ArulTokens.gold,
-                      ),
-                    ],
-                  ),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.fromLTRB(12, 0, 10, 0),
+            decoration: BoxDecoration(
+              color: _fill,
+              borderRadius: _shape,
+              border: Border.all(color: ArulTokens.goldBorder50, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Sized to the 15px label, not to the G mark's disc -> the glyph reads as part of
+                // the word, the way the pill's title and subtitle read as one block.
+                const Icon(Icons.translate, size: 16, color: ArulTokens.ivory),
+                const SizedBox(width: 6),
+                // The pill title's style, UNSHADOWED like the pill title: the ground is matched to
+                // the pill's, so a media shadow here only fattened the glyphs against it.
+                Text(label, maxLines: 1, style: kSignInTitleStyle),
+                const SizedBox(width: 2),
+                const Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: ArulTokens.gold,
                 ),
-              ),
+              ],
             ),
           ),
         ),
