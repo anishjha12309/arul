@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -24,6 +24,33 @@ Future<bool> isPlayInstall(Ref ref) async {
   } on PlatformException {
     return true;
   }
+}
+
+/// Whether this phone is a low-memory device — the Android Go flag, under 4.5 GiB of total RAM, or
+/// the OS's own memory-pressure flag (the native side owns the rule, [MainActivity.isLowRamDevice]).
+///
+/// The auth screens read it to show the splash's still poster instead of the looping video.
+/// One answer per process -> asked once, cached; every later caller gets the same future.
+/// **Fails OPEN** to `false`: no channel (`flutter test`), a platform error, anything unexpected ->
+/// the phone is treated as ordinary and gets the video, never a missing background.
+abstract final class DeviceMemory {
+  static Future<bool>? _isLow;
+
+  static Future<bool> get isLow => _isLow ??= _probe();
+
+  static Future<bool> _probe() async {
+    try {
+      return await _channel.invokeMethod<bool>('isLowRamDevice') ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Drop the cached answer so a test can re-probe under a different mock.
+  @visibleForTesting
+  static void resetForTesting() => _isLow = null;
 }
 
 /// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect

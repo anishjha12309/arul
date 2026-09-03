@@ -1,7 +1,9 @@
 package com.hsrutility.arul
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.ContentUris
+import android.content.Context
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
@@ -42,6 +44,14 @@ class MainActivity : FlutterFragmentActivity() {
 
         // Exposes isPlayInstall() to Dart -> the reminders screen gates its QA tools on it.
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
+
+        // Below this the phone is "low memory" for the auth video: a 4 GB phone reports ~3.6 GiB
+        // and a 6 GB phone ~5.5 GiB -> 4.5 GiB puts every 4 GB phone on the poster. Half of the
+        // handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
+        private const val LOW_RAM_TOTAL_BYTES = 4608L * 1024 * 1024
+
+        // QA-only override for the rule above -> honoured on sideloads only (see isLowRamDevice).
+        private const val FORCE_LOW_RAM_SETTING = "arul_force_low_ram"
 
         // Firebase's documented deferred-deep-link storage -> the SDK may write it before OR after Flutter attaches.
         // So onCreate buffers the value and the channel serves both an initial pull and a later push.
@@ -121,6 +131,27 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    // The auth screens' looping video background is skipped on phones this answers true for.
+    // `isLowRamDevice` alone is the Android Go flag -> a 2–3 GB non-Go phone reports false, and those
+    // are exactly the handsets where Google's sign-in step measured 2–3× slower -> total RAM decides too.
+    private fun isLowRamDevice(): Boolean {
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(info)
+            // QA seam: a capable phone cannot be made low-RAM, so `adb shell settings put global
+            // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
+            // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
+            val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
+            // `lowMemory` is the OS's own pressure flag (about to kill background processes) ->
+            // a bigger phone that is choked right now also skips the decoration.
+            (!isPlayInstall() && forced) ||
+                am.isLowRamDevice || info.totalMem < LOW_RAM_TOTAL_BYTES || info.lowMemory
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -189,6 +220,7 @@ class MainActivity : FlutterFragmentActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isPlayInstall" -> result.success(isPlayInstall())
+                "isLowRamDevice" -> result.success(isLowRamDevice())
                 else -> result.notImplemented()
             }
         }

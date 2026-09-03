@@ -47,11 +47,22 @@ brown-screen duration fell in two steps, to zero only once both were in.
 
 ## The splash's own decisions
 
-- **Splash media warm is AUTH-GATED.** A signed-out session warms a handful of posters and ZERO live
-  MP4 bytes; the full warm fighting the sign-in's own network calls (Google token mint, Firebase id,
-  `POST /auth/login`) for one pipe WAS the slow first login. Nothing is lost: the feed's
-  `VideoPreloadController` re-runs the full `prefetchAround` on mount. It runs INLINE, because with
-  the brand beat gone its old post-frame `!mounted` bail warmed nothing.
+- **Splash media warm is AUTH-GATED.** A signed-out session warms ONE poster and ZERO live MP4
+  bytes; the full warm fighting the sign-in's own network calls (Google token mint, Firebase id,
+  `POST /auth/login`) for one pipe WAS the slow first login, and Google's own credential step is
+  slowest on entry-level phones. Nothing is lost: the feed's `VideoPreloadController` re-runs the
+  full `prefetchAround` on mount. It runs INLINE, because with the brand beat gone its old post-frame
+  `!mounted` bail warmed nothing.
+- **Low-memory phones get the poster ONLY — no auth video player.** `VideoBackground` asks
+  `DeviceMemory.isLow` (the Android Go flag, OR under 4.5 GiB total RAM so every 4 GB phone
+  qualifies, OR the OS's own `lowMemory` pressure flag; the native side owns the rule) BEFORE
+  acquiring the shared player, so no MediaCodec is ever created for the splash or the sign-in
+  screen. Total RAM, not free RAM: Android keeps free memory low on purpose, so a free-memory rule
+  flips between launches of the same phone. The probe fails OPEN to the video: a missing channel or
+  a platform error must never leave a bare background. To test the poster path on a capable phone:
+  sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
+  per process), then `settings delete global arul_force_low_ram`. The override is gated on
+  `!isPlayInstall()` like the QA tools — armed on a Play build it does nothing, verified on device.
 - **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
   may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
   the first-content gap).

@@ -48,9 +48,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// Post-login the feed's own VideoPreloadController re-runs `prefetchAround` -> nothing is lost.
   static const _thumbWarmCount = 16;
 
-  /// The signed-out slice — the first screenful of posters, so the post-login feed shows real art.
-  /// A few hundred KB, which cannot crowd the auth calls.
-  static const _preAuthThumbWarmCount = 4;
+  /// The signed-out slice — ONE poster, so the post-login feed's first card shows real art.
+  /// Tens of KB at most: nothing to crowd Google's sign-in step or the auth calls, which measured
+  /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
+  static const _preAuthThumbWarmCount = 1;
 
   /// The warm-up runs once per splash, on the first catalog data to land — disk snapshot or drain.
   bool _mediaWarmed = false;

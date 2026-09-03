@@ -59,8 +59,18 @@ The unconditional backstop for whatever the on-change hourly sweep missed.
 
 ## Cold-connection hazard — the crons' one real failure mode
 
-This Worker idles for hours (browse never touches the DB), so Neon suspends and Hyperdrive's pooled
-connection goes stale. The first query of a cron run then lands on a severed socket, and postgres.js
+**Arul's Neon endpoint never scales to zero** (`suspend_timeout_seconds = -1`, owner's call): the
+compute was already awake ~95% of the month, so always-on costs under a dollar over the 0.25 CU floor
+and removes the 1–2 s wake from the last few percent of first logins. **The autoscaling ceiling is
+1 CU** (owner's call): the compute averages ~0.33 CU while awake and browse never touches the DB, so
+the ceiling is the only setting that can blow the budget — at 8 CU a runaway cron bills ~$620/month,
+at 1 CU ~$77 worst case. Raise it only on evidence from `pg_stat_statements` (installed) that queries
+queue at 1 CU. Pakiza's endpoint still suspends and still carries the 8 CU ceiling — its traffic is
+too thin to pay for always-on. The defences below stay load-bearing: Neon's weekly maintenance window restarts the
+compute and severs the pooled socket exactly like a suspend did.
+
+Before that, this Worker idled for hours (browse never touches the DB), so Neon suspended and
+Hyperdrive's pooled connection went stale. The first query of a cron run then lands on a severed socket, and postgres.js
 defaults `connect_timeout` to **30 s** — longer than a scheduled invocation can afford — so the run
 hangs for its full budget and is killed by the runtime, taking the rebuild AND the renewal scan with
 it. Observed in Pakiza: killed the hourly cron for hours before anyone noticed, because a dead cron

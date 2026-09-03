@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/tokens.dart';
+import '../../../../core/config/build_info.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
 /// Full-screen looping video background, playing `splash.mp4`.
 ///
 /// Shows a solid dark colour until the first frame renders -> no blank-white flash on first paint.
+/// On a low-memory phone ([DeviceMemory.isLow]) it is the still poster only — no player, no decoder.
 /// Backed by the same Media3 texture pool as the feed's live previews -> ONE video stack in the app.
 /// All mounts share ONE native player via [_SharedAuthVideoPlayer].
 /// Recreating a MediaCodec per screen swap is slow on budget SoCs -> the fallback would sit visible.
@@ -75,6 +77,11 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 
   Future<void> _init() async {
+    // A low-memory phone never gets a decoder here: the poster below IS the background.
+    // Google's sign-in step measured 2–3× slower on these handsets, and the looping video was
+    // competing with it for the same CPU and RAM on exactly the launch the funnel lives on.
+    // Decided BEFORE acquire -> no native player is ever created, not just left unpainted.
+    if (await DeviceMemory.isLow || !mounted) return;
     final shared = _SharedAuthVideoPlayer.acquire();
     _shared = shared;
     final player = await shared.player;
