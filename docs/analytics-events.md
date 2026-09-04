@@ -24,12 +24,11 @@ are gone from BOTH sides — client mappings, the Worker's GA4-MP and Meta-CAPI 
 `app_instance_id`/`meta_anon_id` uploads, and the `GA4_*`/`META_*` secrets.
 
 **Why it must not come back:** `purchase` had TWO source types — the app SDK for the app-open setup,
-and the server (GA4 Measurement Protocol; Meta CAPI `system_generated`, filed as a WEBSITE event) for
-the app-closed settle. They reconcile on different schedules, so two sources desynchronise
-attribution: GA4's raw counts stayed correct while the Ads CAMPAIGN column ran a day behind and
-undercounted. **`trial_started`/StartTrial is the ONLY event campaigns bid on** — app SDK,
-in-session, one source. **Accepted cost: no revenue or ROAS signal on
-either platform. Revenue truth is Neon**, and now the only revenue record.
+the server (GA4 MP; Meta CAPI, filed as a WEBSITE event) for the app-closed settle — reconciling on
+different schedules, so the Ads CAMPAIGN column ran a day behind and undercounted while GA4's raw
+counts stayed right. **`trial_started`/StartTrial is the ONLY event campaigns bid on** — app SDK,
+in-session, one source. **Accepted cost: no revenue or ROAS signal on either platform. Revenue truth
+is Neon.**
 
 `trial_started` carries `plan`, `order_id`, `value`, and — when the SAME process ran the checkout —
 `method` and `target_app`; a late catch-up copy omits both rather than guess. It fires from the purchase poll — or, for a
@@ -78,17 +77,15 @@ outcome) and covers EVERY terminal exit of the purchase notifier through one `_f
 path cannot silently skip it. **`reason` is a short stable code, NEVER the user-facing copy**, which
 is prose and would fragment the metric.
 
-The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES are constants in
-`analytics_events.dart` and the PostHog allow-list is an exact set, both pinned by tests, because
-every sink matches the literal and a typo would drop silently.
+The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES and the PostHog
+allow-list are exact sets pinned by tests: every sink matches the literal, a typo drops silently.
 
 ## PostHog is the journey view — and the gates that keep it that way
 
 Two different reasons trim this stream; confusing them leads to the wrong fix. **Cost sets the
-COHORT** — PostHog bills per event on a 1M/month free tier, and there is no cost to control until the
-install base produces one. **Readability sets the LIST** — the journey list is far inside the tier;
-it is short because install → login → trial → apply/share → ringtone set answers the only questions
-PostHog is asked here. Re-adding an event is a decision, not a cleanup.
+COHORT** (PostHog bills per event, 1M/month free). **Readability sets the LIST** — install → login →
+trial → apply/share → ringtone set answers the only questions PostHog is asked here. Re-adding an
+event is a decision, not a cleanup.
 
 - **NO SIDELOADED BUILD REPORTS TO POSTHOG** (owner's rule) — `PlayInstall` gates the sink, GA4/Meta/
   Crashlytics deliberately not. Why and how it fails: [analytics-ops.md](analytics-ops.md).
@@ -98,25 +95,21 @@ PostHog is asked here. Re-adding an event is a decision, not a cleanup.
   whose draw exceeds the new rate and makes any cohort spanning the change discontinuous. If it must
   narrow, prefer user-level over event-level sampling — event-level silently corrupts funnels (a 10%
   numerator over a 100% denominator is meaningless).
-- **`captureApplicationLifecycleEvents = false`** — the SDK's native lifecycle events bypass
-  `AnalyticsService` entirely, so this flag is the ONLY control over them and it is all-or-nothing:
-  keeping `Application Installed` also buys `Application Opened`/`Backgrounded` on every launch,
-  which was most of the stream and none of the funnel. So it is off, and `main.dart` re-emits
-  `Application Installed` under the SDK's own event name (reused so existing insights keep
-  resolving), once per install, gated on the persisted cohort draw — which doubles as the
-  first-launch marker, so installs predating the flag cannot be back-dated into a spike. The flag
-  unregisters the install integration but **not** the lifecycle observer, so `$session_id` still
-  works. The cost is one-directional: PostHog now sees a user only when they do one of the journey
-  things, so DAU there means "did something that matters", not "opened the app" — GA4's auto
+- **`captureApplicationLifecycleEvents = false`** — the SDK's lifecycle events bypass
+  `AnalyticsService`, and the flag is all-or-nothing: keeping `Application Installed` also buys
+  `Opened`/`Backgrounded` on every launch (most of the stream, none of the funnel). So it is off and
+  `main.dart` re-emits `Application Installed` under the SDK's own name (existing insights keep
+  resolving), once per install, gated on the persisted cohort draw — the first-launch marker, so old
+  installs cannot be back-dated into a spike. The flag leaves the lifecycle observer, so `$session_id`
+  still works. PostHog DAU therefore means "did a journey thing", not "opened the app" — GA4's auto
   `first_open`/`session_start` remain that record.
 - **`Posthog().setup()` is not awaited** — native init must not sit on the path to first frame.
-  `sessionReplay` and `surveys` stay off and no observer is installed, so there is no `$screen`.
+  `sessionReplay`/`surveys` off, no observer, so there is no `$screen`.
 - **Feed engagement is GA4-only.** `wallpaper_engaged` fires once per dwelled card — the one genuine
   volume risk in the app, and the thing that must never land in PostHog. `deep_link_opened` is
   GA4-only for the same reason and must never feed an optimiser.
-- Attempts, failures and rare account admin stay off — Crashlytics/GA4/Neon questions that would
-  make the funnel harder to read, not richer. **Default-deny:** a new `track()` call
-  site costs nothing until it is on `postHogAllowedEvents`.
+- Failures and rare account admin stay off — Crashlytics/GA4/Neon questions. **Default-deny:** a new
+  `track()` call site costs nothing until it is on `postHogAllowedEvents`.
 - **Analytics is never a ranking source.** The feed is ordered by counters counted server-side in
   `/media/signed-url` ([browse.md](browse.md)), never by `wallpaper_applied` — a sampled,
   client-reported event cannot order a feed.

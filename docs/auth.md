@@ -90,21 +90,15 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   three-line cap is for the 320 dp frame, where the slot is 140 dp and wrapping is word-bounded.
   `sign_in_size_matrix_test.dart` enforces it, and the chip's clearance from the panel.
 - **The language trigger is not part of the attempt.** The only way out of a language the user
-  cannot read, on the screen where being stuck is terminal — a 36 dp chip at the bottom LEFT, on the
-  bottom safe-area inset plus 16 dp, never a constant (a gesture bar and a 3-button nav are 24 dp
-  apart; a fixed number buries it under one). Its label is the pill title's own style, unshadowed,
-  and its fill is matched to the pill's interior AS MEASURED on device, not to the pill's paint: the
-  pill's `.55` sits over the panel in the bright middle of the artwork, the chip over the scrim's
-  darkest band, so the same paint (alone or over the panel's layers) read as a solid block beside a
-  translucent pill. Glyphs take no shadows — an Icon shadow ghosts a second glyph under Impeller. It
-  carries the language CODE: two Latin capitals measure the same in every language, so it never
-  resizes. It stays live during an attempt but never starts,
-  joins or cancels one. **Its sheet follows the DEVICE's light/dark mode**, not the app's saved
-  theme: this wall is always dark over video whichever the user picked, so that setting says nothing
-  about a sheet rising out of it. A session landing with the sheet open
-  still routes — `context.go` replaces the stack its route sits on, so the feed cannot arrive with a
-  picker over it. Wordmark and eyebrow stay English. **Its glyphs take NO `shadows`:** Impeller
-  mis-offsets a shadow from an icon FONT and paints a second mark beside it; text shadows are fine.
+  cannot read — a 36 dp chip bottom LEFT, on the safe-area inset plus 16 dp, never a constant (a
+  gesture bar and 3-button nav are 24 dp apart). Its fill is matched to the pill's interior AS
+  MEASURED on device, not to the pill's paint — the same paint over the scrim's darkest band read as
+  a solid block beside a translucent pill. It carries the language CODE (two Latin capitals never
+  resize). It stays live during an attempt but never starts, joins or cancels one. **Its sheet follows
+  the DEVICE's light/dark mode**, not the app's saved theme — the wall is always dark over video. A
+  session landing with the sheet open still routes: `context.go` replaces the stack, so the feed
+  cannot arrive with a picker over it. Wordmark and eyebrow stay English. **Icon glyphs take NO
+  `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text shadows are fine.
 
 ## Failure handling
 
@@ -120,7 +114,7 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   RESTARTS the clock. Without that, a user who sat in the sheet past the budget had a live exchange
   abandoned milliseconds before it landed: `login_success` fired while the screen said "taking too
   long", a tap from a second picker over a live session.
-- A cancel stays TOAST-less but is not a silent bounce: the subtitle names what happened. **Never
+- A cancel stays TOAST-less; the retry line under the pill is the only feedback. **Never
   auto-relaunch on a cancel.**
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
