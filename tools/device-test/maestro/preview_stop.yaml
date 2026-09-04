@@ -1,0 +1,16 @@
+appId: com.hsrutility.arul
+name: preview_stop
+# The other half of `preview_focus.yaml`. Stops the preview and returns to the feed, so the wrapper
+# can re-read `dumpsys audio` and see the focus ABANDONED — every path back to idle has to call
+# setActive(false) itself (ringtones.md), and a leaked focus is invisible until you look here.
+---
+- tapOn:
+    id: "arul_ringtone_preview"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "arul_ringtone_preview"
+      checked: false
+    timeout: 20000
+- tapOn:
+    id: "arul_tab_wallpapers"

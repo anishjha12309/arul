@@ -54,17 +54,15 @@ brown-screen duration fell in two steps, to zero only once both were in.
   full `prefetchAround` on mount. It runs INLINE, because with the brand beat gone its old post-frame
   `!mounted` bail warmed nothing.
 - **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
-  `DeviceMemory.isLow` (the Android Go flag, OR under 4 GiB total RAM — a 4 GB phone reports ~3.6,
-  a 6 GB phone ~5.5, so every 4 GB phone qualifies and no 6 GB phone does — OR Android 12 and
-  older; the native side owns the rule) BEFORE acquiring the shared
-  player, so no MediaCodec is ever created for the splash or the sign-in screen. Total RAM, not free
-  RAM, and NOT the OS's `lowMemory` pressure flag: Android keeps free memory low on purpose and
-  4–6 GB Android 13/14 phones trip `lowMemory` at a cold start right after install, so that rule
-  flips between launches of the same phone and leaves the poster population unidentifiable (owner's
-  call after build 62). **OS version stands in for the flag's one real effect**: the build that
-  carried it put far more old 6 GB phones on the poster and their sign-in rose ~66% → ~79%, while
-  the same flag cost Android 13/14 six points; the build without it returned old phones to baseline.
-  Three stable facts decide, never a moment-in-time one. The probe fails OPEN to the video: a missing channel or
+  `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
+  splash or the sign-in screen. The native rule is three stable facts OR one moment-in-time one: the
+  Android Go flag, under 4.5 GiB total RAM (a 4 GB phone reports ~3.6, a 6 GB ~5.5, so every 4 GB
+  phone qualifies and no 6 GB phone does), Android 12 and older, OR the OS's `lowMemory` pressure
+  flag at this launch. The stable facts name the population in analytics; the flag catches any phone
+  squeezed at the launch the funnel lives on. The one build that carried the flag had the best
+  old-phone sign-in and the build that dropped it lost ten points there, so it stays (owner's call
+  after build 66). Read the poster's effect off the stable facts, never off the flag — a flag phone
+  cannot be identified afterwards. The probe fails OPEN to the video: a missing channel or
   a platform error must never leave a bare background. To test the poster path on a capable phone:
   sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
   per process), then `settings delete global arul_force_low_ram`. The override is gated on

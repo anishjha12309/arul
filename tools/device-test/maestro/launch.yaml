@@ -1,0 +1,16 @@
+appId: com.hsrutility.arul
+name: launch
+# A signed-in cold launch reaches the feed and never shows the wall.
+# Contract: launch-surface.md — route on readiness, no timer floor; auth.md — no silent check.
+---
+- runFlow: _feed.yaml
+# The dock is a three-tab shell, and Settings is a BRANCH of it, never a pushed route.
+- assertVisible:
+    id: "arul_tab_ringtones"
+- assertVisible:
+    id: "arul_tab_settings"
+# Chips are the browse axis and All always exists (browse.md §5b).
+- assertVisible:
+    id: "arul_chip_all"
+- assertVisible:
+    id: "arul_feed_share"

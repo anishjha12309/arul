@@ -15,6 +15,7 @@ class StateView extends StatelessWidget {
     this.message,
     this.actionLabel,
     this.onAction,
+    this.actionIdentifier,
   });
 
   const StateView.empty({
@@ -23,6 +24,7 @@ class StateView extends StatelessWidget {
     this.message,
     this.actionLabel,
     this.onAction,
+    this.actionIdentifier,
   }) : icon = Icons.auto_awesome_outlined;
 
   const StateView.error({
@@ -31,6 +33,7 @@ class StateView extends StatelessWidget {
     this.message,
     this.actionLabel,
     this.onAction,
+    this.actionIdentifier,
   }) : icon = Icons.cloud_off_rounded;
 
   final IconData icon;
@@ -38,6 +41,10 @@ class StateView extends StatelessWidget {
   final String? message;
   final String? actionLabel;
   final VoidCallback? onAction;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String? actionIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +75,7 @@ class StateView extends StatelessWidget {
               ArulButton(
                 label: actionLabel!,
                 onPressed: onAction,
+                identifier: actionIdentifier,
                 kind: ArulButtonKind.quiet,
                 expand: false,
               ),

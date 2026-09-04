@@ -18,6 +18,7 @@ class CtaButton extends StatefulWidget {
     this.expand = true,
     this.busy = false,
     this.haptic = ArulHapticStyle.tap,
+    this.identifier,
   });
 
   final String label;
@@ -37,6 +38,10 @@ class CtaButton extends StatefulWidget {
 
   final bool expand;
   final bool busy;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String? identifier;
 
   @override
   State<CtaButton> createState() => _CtaButtonState();
@@ -87,6 +92,7 @@ class _CtaButtonState extends State<CtaButton> {
       button: true,
       enabled: _enabled,
       label: widget.label,
+      identifier: widget.identifier,
       child: GestureDetector(
         // The haptic rides press-DOWN -> it lands in step with the scale dip and the colour swap.
         onTapDown: _enabled

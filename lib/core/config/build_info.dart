@@ -75,8 +75,9 @@ abstract final class PlayInstall {
   }
 }
 
-/// Whether this phone takes the poster path — the Android Go flag, under 4 GiB of total RAM, or
-/// Android 12 and older (the native side owns the rule, [MainActivity.isLowRamDevice]).
+/// Whether this phone takes the poster path — the Android Go flag, under 4.5 GiB of total RAM,
+/// Android 12 and older, or the OS reporting memory pressure at this launch (the native side owns
+/// the rule, [MainActivity.isLowRamDevice]).
 ///
 /// The auth screens read it to show the splash's still poster instead of the looping video.
 /// One answer per process -> asked once, cached; every later caller gets the same future.

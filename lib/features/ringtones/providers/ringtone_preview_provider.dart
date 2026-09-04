@@ -1,4 +1,9 @@
+import 'dart:async';
+
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'
+    show AppLifecycleListener, AppLifecycleState;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
@@ -54,6 +59,13 @@ class RingtonePreviewState {
 class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   late final AudioPlayer _player;
 
+  /// Single-flight session setup, awaited before the first play so the focus
+  /// request cannot race it — unconfigured, `setActive` falls back to
+  /// [AudioSessionConfiguration.music], which is the permanent gain we are avoiding.
+  Future<void>? _sessionReady;
+
+  AppLifecycleListener? _lifecycle;
+
   // Uncached, every tap re-streamed the clip -> a replay paid the round trip again, offline failed.
   // Same shape as the live-wallpaper disk cache: same package, stalePeriod, LRU bound, lifetime.
   // STATIC for the same reason: flutter_cache_manager keys its store by the Config `key`.
@@ -78,11 +90,25 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   @override
   RingtonePreviewState build() {
     _player = AudioPlayer();
+    _sessionReady = _configureSession();
+
+    // HOME must silence the preview: the IndexedStack keeps the screen alive and
+    // just_audio never abandons focus on its own, so a backgrounded app would
+    // keep playing AND keep holding the user's music down.
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (lifecycle) {
+        if (lifecycle == AppLifecycleState.paused ||
+            lifecycle == AppLifecycleState.hidden) {
+          unawaited(stop());
+        }
+      },
+    );
 
     // Mirror player state changes into Riverpod state.
     _player.playerStateStream.listen((ps) {
       if (ps.processingState == ProcessingState.completed) {
         // Track finished -> return to idle so the card resets to ▶.
+        unawaited(_releaseFocus());
         state = const RingtonePreviewState();
         return;
       }
@@ -92,8 +118,46 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       state = state.copyWith(isPlaying: ps.playing, isBuffering: buffering);
     });
 
-    ref.onDispose(_player.dispose);
+    ref.onDispose(() {
+      _lifecycle?.dispose();
+      unawaited(_releaseFocus());
+      _player.dispose();
+    });
     return const RingtonePreviewState();
+  }
+
+  /// TRANSIENT focus, not the `music()` default GAIN.
+  ///
+  /// A preview is a few seconds of audition, so it must borrow the output and hand it
+  /// back: `GAIN_TRANSIENT` pauses the user's music and Android resumes it the moment
+  /// focus is abandoned, where a permanent gain kills it for the rest of the session.
+  /// Attributes stay media/music — the clip rides the media volume the user expects.
+  Future<void> _configureSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(
+        const AudioSessionConfiguration(
+          androidAudioAttributes: AndroidAudioAttributes(
+            contentType: AndroidAudioContentType.music,
+            usage: AndroidAudioUsage.media,
+          ),
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient,
+        ),
+      );
+    } catch (e) {
+      // A session we could not configure still plays — never fail a preview on it.
+      debugPrint('[RingtonePreview] audio session unavailable: $e');
+    }
+  }
+
+  /// Hand the output back. just_audio takes focus on play and NEVER abandons it,
+  /// so every path to idle has to, or the transient gain never ends.
+  Future<void> _releaseFocus() async {
+    try {
+      await (await AudioSession.instance).setActive(false);
+    } catch (e) {
+      debugPrint('[RingtonePreview] focus release failed: $e');
+    }
   }
 
   /// Toggle play/pause for [ringtone]; a different active track is stopped first.
@@ -103,6 +167,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     if (state.currentId == ringtone.id) {
       if (state.isPlaying) {
         await _player.pause();
+        await _releaseFocus();
       } else {
         await _player.play();
       }
@@ -111,9 +176,11 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
 
     // New track — stop whatever is playing and load.
     await _player.stop();
+    await _sessionReady;
     state = RingtonePreviewState(currentId: ringtone.id, isBuffering: true);
 
     if (ringtone.audioKey.isEmpty) {
+      await _releaseFocus();
       state = const RingtonePreviewState(hasError: true);
       return;
     }
@@ -161,6 +228,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       debugPrint('[RingtonePreview] error: $e\n$st');
       // A failure belonging to a track the user tapped away from must not toast over the new one.
       if (state.currentId != ringtone.id) return;
+      await _releaseFocus();
       state = const RingtonePreviewState(hasError: true);
     }
   }
@@ -169,6 +237,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   /// The IndexedStack keeps the screen ALIVE -> audio must be stopped explicitly, never left behind.
   Future<void> stop() async {
     await _player.stop();
+    await _releaseFocus();
     state = const RingtonePreviewState();
   }
 

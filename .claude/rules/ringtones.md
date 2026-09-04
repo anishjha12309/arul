@@ -4,8 +4,8 @@ paths:
   - "lib/features/ringtones/**"
 ---
 
-- **Ringtone categories are NOT the wallpaper ones**: the five deities plus **`others`**, and **no
-  `temples`**. Each tab derives its chips from its own catalog.
+- **Ringtone categories are NOT the wallpaper ones**: the five deities and **no `temples`**; `others`
+  is retired — never offer it, keep its sort/art fallbacks. Chips derive from each tab's catalog.
 - **`deity` is a second, DISPLAY-ONLY axis** — row art and subtitle, never browse. Resolution is
   deity → its category's default → `fallback.webp`, so a null degrades to the right family of god.
   A new deity is an insert plus an app release for its WebP, never a migration. **Classify from

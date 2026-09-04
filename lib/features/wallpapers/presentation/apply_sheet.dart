@@ -32,10 +32,10 @@ class _ApplySheetBody extends StatefulWidget {
 class _ApplySheetBodyState extends State<_ApplySheetBody> {
   ApplyTarget _target = ApplyTarget.both; // Spec: default Both
 
-  static const _cards = <(ApplyTarget, IconData, String)>[
-    (ApplyTarget.home, Icons.home_rounded, 'Home screen'),
-    (ApplyTarget.lock, Icons.lock_rounded, 'Lock screen'),
-    (ApplyTarget.both, Icons.smartphone_rounded, 'Both'),
+  static const _cards = <(ApplyTarget, IconData, String, String)>[
+    (ApplyTarget.home, Icons.home_rounded, 'Home screen', 'arul_apply_home'),
+    (ApplyTarget.lock, Icons.lock_rounded, 'Lock screen', 'arul_apply_lock'),
+    (ApplyTarget.both, Icons.smartphone_rounded, 'Both', 'arul_apply_both'),
   ];
 
   @override
@@ -64,6 +64,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
                   child: _TargetCard(
                     icon: _cards[i].$2,
                     label: _cards[i].$3,
+                    identifier: _cards[i].$4,
                     selected: _target == _cards[i].$1,
                     onTap: () => setState(() => _target = _cards[i].$1),
                   ),
@@ -75,6 +76,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
 
           CtaButton(
             label: 'Apply wallpaper',
+            identifier: 'arul_apply_confirm',
             icon: Icons.wallpaper_rounded,
             height: ArulTokens.ctaHeight50,
             fontSize: 15.5,
@@ -95,12 +97,17 @@ class _TargetCard extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    required this.identifier,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String identifier;
 
   @override
   Widget build(BuildContext context) {
@@ -116,38 +123,43 @@ class _TargetCard extends StatelessWidget {
         : ArulTokens.lightSecondary;
     final labelColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
-        decoration: BoxDecoration(
-          color: selected ? ArulTokens.goldTintFill14 : unselectedFill,
-          borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
-          border: Border.all(
-            color: selected ? ArulTokens.gold : unselectedBorder,
-            width: selected ? 1.5 : 1,
+    return Semantics(
+      container: true,
+      identifier: identifier,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
+          decoration: BoxDecoration(
+            color: selected ? ArulTokens.goldTintFill14 : unselectedFill,
+            borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
+            border: Border.all(
+              color: selected ? ArulTokens.gold : unselectedBorder,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 26,
-              color: selected ? ArulTokens.gold : unselectedIcon,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: labelColor,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 26,
+                color: selected ? ArulTokens.gold : unselectedIcon,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: labelColor,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

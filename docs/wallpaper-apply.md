@@ -6,6 +6,14 @@ Read before touching `android/**/wallpaper/**` or `wallpaper_apply_provider.dart
 identifiers). Keep the two in step when either changes, and do not re-add the in-place live swap Arul
 used to carry.
 
+**The download streams into `<name>.part` and renames only on success, and the `.part` is KEPT on
+failure.** The rename is atomic, so the final name is never a truncated file the "exists and
+non-empty" cache check would then accept forever. The surviving `.part` is what the next attempt
+resumes from with `Range: bytes=N-` — a `200` means the server ignored the range, so truncate and
+start over; a `416` means the part is already object-length and can never be a prefix, so drop it;
+every other status keeps it, because an expired signed URL is a new grant away. Never re-add the
+delete-on-failure. Same shape in `ringtone_set_service.dart` ([ringtones.md](ringtones.md) §Set).
+
 ## Static apply
 
 **Hand the OS a bitmap ALREADY centre-cropped to the display aspect** (`ImageNormalizer
@@ -27,6 +35,19 @@ measured on device. Stop re-deriving it.
   roughly a quarter of vertical stretch on a tall panel. **Never derive it from display metrics:**
   the native window applies it to whatever surface the engine hands over, so it re-derives itself on
   every device and on rotation.
+- **A rebuilt decoder is a RESTARTED clip, and the user reads the restart as a stretch.** The engine
+  frees its decoder whenever the wallpaper goes invisible (right for the budget), so every return to
+  the home screen rebuilt the player at position 0 and replayed the clip's opening; generated clips
+  often open on a wide shot and zoom in, which looked like the wallpaper "stretching in, then out"
+  on every app switch and once on first apply (the home engine started at 0 while the chooser's
+  preview engine was mid-clip). `VideoRenderer` keeps the last position per ADOPTED SOURCE path,
+  process-wide, and passes it as `setMediaItem(item, startMs)` on every rebuild — the key is the
+  source, not the engine's private copy, so the preview→home hand-off continues too. Verify with a
+  10 fps screen recording across a HOME press: the first home frame must match the clip's phase,
+  not its opening shot. The codec's scaling mode was NOT the cause: the recorded frames were
+  aspect-true. Passing `android._video-scaling` in the configure `MediaFormat` is dead weight —
+  MediaCodec overwrites it and `CCodec` still logs `= 1`. Start the renderer from the first non-zero
+  `onSurfaceChanged`, never from `onSurfaceCreated`: only the former carries the engine's geometry.
 - **A wallpaper engine surface gets NO aspect handling for free.** Media3 documents
   `setVideoScalingMode` as `SurfaceView`-only; on an engine surface it works anyway, and
   `dumpsys SurfaceFlinger` still reports the pre-fix scale factors — only a screenshot correlated

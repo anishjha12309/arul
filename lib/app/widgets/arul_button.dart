@@ -21,6 +21,7 @@ class ArulButton extends StatefulWidget {
     this.busy = false,
     this.expand = true,
     this.haptic = ArulHapticStyle.tap,
+    this.identifier,
   });
 
   final String label;
@@ -33,6 +34,10 @@ class ArulButton extends StatefulWidget {
   /// The impulse fired as the finger lands.
   /// [ArulHapticStyle.firm] for a committing press; [ArulHapticStyle.none] where a toast covers the beat.
   final ArulHapticStyle haptic;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String? identifier;
 
   @override
   State<ArulButton> createState() => _ArulButtonState();
@@ -62,6 +67,7 @@ class _ArulButtonState extends State<ArulButton>
       button: true,
       enabled: _enabled,
       label: widget.label,
+      identifier: widget.identifier,
       child: GestureDetector(
         // Haptic on press-DOWN, in step with the spring dip -> the phone answers before the animation.
         // A disabled button is silent, and a press that turns into a scroll never reaches here.

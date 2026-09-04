@@ -1,0 +1,34 @@
+appId: com.hsrutility.arul
+name: set_ringtone
+# PREMIUM ACCOUNT. One Set writes ONE tone to EVERY SIM row (ringtones.md); the wrapper is what
+# reads `settings get system ringtone` on both sides of this flow.
+#
+# WRITE_SETTINGS: a `canWrite()` false goes STRAIGHT to ACTION_MANAGE_WRITE_SETTINGS with no
+# explainer, and the request is PARKED for the next resume. The wrapper grants the appop up front
+# and restores it afterwards, so this flow tests the SET, not the grant deep-link.
+---
+- runFlow: _feed.yaml
+- tapOn:
+    id: "arul_tab_ringtones"
+# The tab renders NOTHING until the whole catalog drains, so the first row is the readiness signal.
+- extendedWaitUntil:
+    visible:
+      id: "arul_ringtone_set"
+    timeout: 60000
+- assertVisible:
+    id: "arul_chip_all"
+- tapOn:
+    id: "arul_ringtone_set"
+    index: 0
+# fetch signed url -> download to .part -> rename -> MediaStore -> every ringtone row.
+- extendedWaitUntil:
+    visible:
+      id: "arul_ringtone_set"
+      enabled: true
+    timeout: 120000
+# Set has a re-entrancy guard: a second tap while one is in flight must not start a second flow.
+# Here the pill is idle again, so the row is back to a tappable, non-busy state.
+- assertVisible:
+    id: "arul_ringtone_preview"
+- tapOn:
+    id: "arul_tab_wallpapers"

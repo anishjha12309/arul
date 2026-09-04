@@ -35,11 +35,12 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
         //
         // The HEAD of this list is also the DEFAULT: `_resolvedUpiPackage` falls back to `upiApps.first`
         // for every user who never opens the picker, so re-ordering here re-targets those mandates too.
-        // Owner's order (NOT market share -> PhonePe moves 49% of UPI volume and is our own PSP).
+        // Owner's order: PhonePe leads as both the default and the first chip -> it is our own PSP
+        // and moves 49% of UPI volume, so its mandate sheet is the one most users already trust.
         // Decouple display order from the default by giving `_resolvedUpiPackage` its own constant.
         private val MANDATE_APPS = listOf(
-            "net.one97.paytm",
             "com.phonepe.app",
+            "net.one97.paytm",
             "com.google.android.apps.nbu.paisa.user",
             "in.org.npci.upiapp",
             "com.dreamplug.androidapp",

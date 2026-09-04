@@ -41,6 +41,9 @@ abstract interface class RingtoneSetService {
 
   /// Streams [url] to a temp file named [filename].
   /// [onProgress] receives values 0.0–1.0 as bytes arrive.
+  ///
+  /// RESUMABLE: a failed attempt leaves its `.part` behind and the next one asks for the rest with
+  /// a `Range` header, so [onProgress] can legitimately start above 0.
   Future<File> downloadFile(
     String url,
     String filename,
@@ -110,21 +113,45 @@ class AndroidRingtoneSetService implements RingtoneSetService {
     String filename,
     void Function(double) onProgress,
   ) async {
+    final tmpDir = await getTemporaryDirectory();
+    final file = File('${tmpDir.path}/$filename');
+
+    // Same shape as the wallpaper twin (`wallpaper_apply_service.dart`): stream into a `.part` and
+    // rename only on SUCCESS, so the final name never holds a truncated tone MediaStore would
+    // register. The `.part` SURVIVES a failure -> its length is the first byte still owed, and a
+    // drop on cellular resumes instead of re-downloading what is already there.
+    final part = File('${file.path}.part');
+    var have = await part.exists() ? await part.length() : 0;
+
     final request = http.Request('GET', Uri.parse(url));
+    if (have > 0) request.headers['Range'] = 'bytes=$have-';
     final response = await _http.send(request);
 
-    if (response.statusCode != 200) {
+    // 206 -> the range was honoured, append. 200 -> the server ignored it and is sending the WHOLE
+    // object, so what is on disk is not a prefix of this body: truncate and start over.
+    final resuming = have > 0 && response.statusCode == 206;
+    if (response.statusCode != 200 && !resuming) {
+      // 416 means the `.part` is already as long as the object -> it can never be a prefix of a
+      // future body, so drop it. Every other status keeps it: an expired signed URL is a new grant
+      // away, not a reason to throw the bytes out.
+      if (response.statusCode == 416 && await part.exists()) {
+        await part.delete();
+      }
       throw RingtoneSetException(
         'Download failed (HTTP ${response.statusCode})',
       );
     }
+    if (!resuming) have = 0;
 
-    final total = response.contentLength;
-    int received = 0;
+    // `contentLength` is the BODY -> on a 206 that is only what is left, so the object is it plus
+    // what is already on disk. Progress counts the same way, or a resume would restart the bar.
+    final body = response.contentLength;
+    final total = body == null ? null : body + have;
+    var received = have;
 
-    final tmpDir = await getTemporaryDirectory();
-    final file = File('${tmpDir.path}/$filename');
-    final sink = file.openWrite();
+    final sink = part.openWrite(
+      mode: resuming ? FileMode.append : FileMode.write,
+    );
 
     try {
       await response.stream.listen((List<int> chunk) {
@@ -134,12 +161,24 @@ class AndroidRingtoneSetService implements RingtoneSetService {
           onProgress(received / total);
         }
       }, cancelOnError: true).asFuture<void>();
-    } finally {
       await sink.flush();
       await sink.close();
-    }
 
-    return file;
+      // A cut mid-body still delivers a 200 and a short stream -> trust the LENGTH, not the status.
+      if (total != null && total > 0 && received < total) {
+        throw const RingtoneSetException('Download incomplete');
+      }
+
+      await part.rename(file.path);
+      return file;
+    } catch (_) {
+      try {
+        await sink.close();
+      } catch (_) {
+        // Already closed by the success path, or dead — either way the .part is what matters.
+      }
+      rethrow;
+    }
   }
 
   @override

@@ -160,6 +160,14 @@ class _NotificationSettingsScreenState
     if (!mounted) return;
     if (value && !granted) {
       showArulToast(context, l10n.remindersPermissionToast);
+      // Refused twice and Android stops offering its dialog -> the toast would name a
+      // screen with no way to reach it. Same deep-link shape as Set's WRITE_SETTINGS.
+      // The toggle is NOT parked: granting there and coming back leaves it off until
+      // the next tap, which then succeeds — the permission is already held.
+      final service = ref.read(notificationServiceProvider);
+      if (await service.notificationsBlocked()) {
+        await service.openNotificationSettings();
+      }
     }
   }
 
@@ -296,10 +304,14 @@ class _ToggleRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: accent,
+          Semantics(
+            container: true,
+            identifier: 'arul_reminders_toggle',
+            child: Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: accent,
+            ),
           ),
         ],
       ),

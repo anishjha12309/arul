@@ -203,6 +203,36 @@ class NotificationService {
     }
   }
 
+  /// The same MainActivity channel shape the ringtone Set uses for `WRITE_SETTINGS`:
+  /// ask whether the grant screen is the only route left, then deep-link to it.
+  static const _settingsChannel = MethodChannel(
+    'com.hsrutility.arul/notification_settings',
+  );
+
+  /// True when the permission is refused AND Android will no longer show its dialog.
+  /// Only meaningful right after a [requestPermissions] that came back false.
+  Future<bool> notificationsBlocked() async {
+    try {
+      return await _settingsChannel.invokeMethod<bool>(
+            'notificationsBlocked',
+          ) ??
+          false;
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] blocked check failed: $e');
+      return false;
+    }
+  }
+
+  /// Opens Android's notification page for Arul — the toast names phone settings,
+  /// so the tap has to land there rather than leaving the user to find it.
+  Future<void> openNotificationSettings() async {
+    try {
+      await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] open settings failed: $e');
+    }
+  }
+
   /// Whether the OS currently allows posting — it can be revoked in settings at any time.
   ///
   /// Null means UNKNOWN, never denied -> reading it as no would wipe a valid opt-in on an OEM build.

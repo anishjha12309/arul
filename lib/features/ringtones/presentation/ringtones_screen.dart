@@ -377,6 +377,7 @@ class _RingtoneChips extends ConsumerWidget {
               label: c.label,
               selected: c.slug == selected,
               variant: ArulChipVariant.category,
+              identifier: 'arul_chip_${c.slug}',
               onTap: () => ref
                   .read(selectedRingtoneCategoryProvider.notifier)
                   .select(c.slug),
@@ -637,6 +638,7 @@ class _PlayButton extends StatelessWidget {
       button: true,
       toggled: playing,
       label: semanticLabel,
+      identifier: 'arul_ringtone_preview',
       child: GestureDetector(
         onTapDown: (_) => ArulHaptics.tap(),
         onTap: onTap,
@@ -781,6 +783,7 @@ class _SetPill extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
+      identifier: 'arul_ringtone_set',
       child: Opacity(
         opacity: disabled && !busy ? 0.55 : 1,
         child: GestureDetector(

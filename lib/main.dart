@@ -62,17 +62,13 @@ Future<void> main() async {
       unawaited(ApiClient.warmSecureStorage());
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
-      // The three collection toggles are independent platform-channel calls -> run them concurrently.
+      // The three collection toggles are re-affirmations: Crashlytics, Performance and Analytics all
+      // collect BY DEFAULT and their native SDKs start from the manifest before Dart runs (the app-start
+      // trace and first_open are native). Awaiting them here put three Binder round trips ahead of the
+      // first frame for nothing -> they run after the first frame (see `_affirmCollection`).
       // GA4 is PostHog's mirror AND the Google Ads conversion source -> link the Firebase project ↔
       // the Ads account in the console; no code. Events go through `GoogleAnalyticsService` behind the
       // `AnalyticsService` seam.
-      // Enabling COLLECTION (not per-event) is also what turns on auto-collected first_open/screen_view.
-      await Future.wait([
-        FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
-        FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
-        FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true),
-      ]);
-      BootTrace.mark('firebase init done');
 
       // Assigning `recordFlutterFatalError` straight to `FlutterError.onError` swallows the default
       // presenter -> a layout error paints its banner with ZERO logcat output (no "RenderFlex
@@ -185,16 +181,6 @@ Future<void> _startApp() async {
   PaintingBinding.instance.imageCache
     ..maximumSizeBytes = 32 << 20
     ..maximumSize = 40;
-
-  // The native Meta SDK auto-initialises and auto-logs install/launch from the AndroidManifest
-  // meta-data (app id + client token baked in from dart-defines) -> `activateApp()` only re-affirms
-  // the launch event; the ★ conversions go explicitly through `MetaAnalyticsService`.
-  // Key-less dev builds and `flutter test` have no platform channel -> gate on `metaEnabled`,
-  // mirroring the PostHog guard and `analyticsServiceProvider`.
-  // Startup work regardless of Firebase -> it lives here on the shared path.
-  if (AppConfig.metaEnabled) {
-    unawaited(FacebookAppEvents().activateApp());
-  }
 
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.
@@ -316,5 +302,28 @@ Future<void> _startApp() async {
   // would cost latency, never correctness.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(notificationService.initialize().catchError((Object _) {}));
+    unawaited(_affirmCollection());
   });
+}
+
+/// Re-affirms the collection defaults AFTER the first frame, off the sign-in's critical path.
+///
+/// Every SDK here already collects by default and starts natively from the manifest, so nothing is
+/// lost by the wait: crashes before this point are still caught by the native SDK, the app-start
+/// trace and `first_open` are native, and the Meta SDK auto-logs the install and launch itself
+/// (`activateApp()` only re-affirms the launch event; the ★ conversions go through
+/// `MetaAnalyticsService`). What the wait buys is four Binder round trips out of the window between
+/// process start and Google's account sheet, on exactly the phones where that window is longest.
+/// Key-less dev builds and `flutter test` have no platform channel -> the same gates as before.
+Future<void> _affirmCollection() async {
+  if (AppConfig.firebaseEnabled) {
+    await Future.wait([
+      FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
+      FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
+      FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true),
+    ]).catchError((Object _) => <void>[]);
+  }
+  if (AppConfig.metaEnabled) {
+    await FacebookAppEvents().activateApp().catchError((Object _) {});
+  }
 }

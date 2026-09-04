@@ -46,7 +46,12 @@ class ArulVideoWallpaperService : WallpaperService() {
         /** The prefs source the private copy was adopted from -> the staleness check reads it. */
         private var adoptedSourcePath: String? = null
 
-        private var surfaceCreated = false
+        // Set by the first onSurfaceChanged carrying a non-zero size, cleared when the surface goes.
+        // Nothing decodes before it: the engine's final width and height arrive with onSurfaceChanged,
+        // never with onSurfaceCreated, and a frame rendered into not-yet-final geometry is the visible
+        // rescale. The framework always dispatches onSurfaceChanged in the same pass as onSurfaceCreated,
+        // so waiting for it costs no start-up time.
+        private var surfaceSized = false
 
         private val prefs: SharedPreferences by lazy {
             applicationContext.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -84,8 +89,7 @@ class ArulVideoWallpaperService : WallpaperService() {
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
-            surfaceCreated = true
-            startRenderer(holder)
+            // Deliberately does NOT start the renderer -> onSurfaceChanged owns that, once it has geometry.
         }
 
         private fun startRenderer(holder: SurfaceHolder) {
@@ -102,7 +106,8 @@ class ArulVideoWallpaperService : WallpaperService() {
                 videoRenderer = VideoRenderer(applicationContext).apply {
                     audioEnabled = enableAudio
                     loopEnabled = loop
-                    initialize(videoPath, holder)
+                    // Resume key = the adopted SOURCE -> the home engine continues where the chooser's preview engine was.
+                    initialize(videoPath, holder, adoptedSourcePath ?: videoPath)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting renderer", e)
@@ -127,10 +132,10 @@ class ArulVideoWallpaperService : WallpaperService() {
                 File(stalePrivate).delete()
             }
 
-            if (!surfaceCreated) return // next onSurfaceCreated picks it up
+            if (!surfaceSized) return // the next sized onSurfaceChanged picks it up
             val renderer = videoRenderer
             if (renderer != null) {
-                renderer.swapVideo(newPrivate, surfaceHolder)
+                renderer.swapVideo(newPrivate, surfaceHolder, adoptedSourcePath ?: newPrivate)
             } else {
                 // The first apply landed on a blank-surface engine -> there was no video at start.
                 startRenderer(surfaceHolder)
@@ -205,7 +210,11 @@ class ArulVideoWallpaperService : WallpaperService() {
         ) {
             super.onSurfaceChanged(holder, format, width, height)
             try {
-                videoRenderer?.onSurfaceChanged(holder)
+                // A zero-sized pass is geometry that has not settled -> keep waiting, decode nothing.
+                if (width <= 0 || height <= 0) return
+                surfaceSized = true
+                val renderer = videoRenderer
+                if (renderer == null) startRenderer(holder) else renderer.onSurfaceChanged(holder)
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onSurfaceChanged", e)
             }
@@ -221,7 +230,7 @@ class ArulVideoWallpaperService : WallpaperService() {
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
-            surfaceCreated = false
+            surfaceSized = false
             try {
                 videoRenderer?.onSurfaceDestroyed()
             } catch (e: Exception) {

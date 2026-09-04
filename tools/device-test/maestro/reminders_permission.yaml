@@ -1,0 +1,98 @@
+appId: com.hsrutility.arul
+name: reminders_permission
+# Reminders are LOCAL ONLY — no push channel, and no screen may promise one (notifications.md).
+# Permission is asked on OPT-IN, never at launch. Refused twice, Android stops showing its dialog,
+# so the toggle deep-links to ACTION_APP_NOTIFICATION_SETTINGS instead. The toggle is NOT parked:
+# granting there costs one more tap on return, and that is the designed behaviour, not a bug.
+#
+# The OS dialog's buttons are system text. They are parameters with AOSP defaults; pass new values
+# rather than editing this file if the phone words them differently.
+#
+# The wrapper records the original POST_NOTIFICATIONS state and restores it, and leaves reminders
+# OFF at the end of the pass.
+env:
+  DENY_LABEL: "Don't allow|Deny|DENY"
+  ALLOW_LABEL: "Allow|ALLOW"
+---
+# Start denied but NOT user-fixed, so Android still draws its dialog.
+- launchApp:
+    stopApp: true
+    permissions:
+      notifications: deny
+- extendedWaitUntil:
+    visible:
+      id: "arul_tab_wallpapers"
+    timeout: 60000
+- tapOn:
+    id: "arul_tab_settings"
+- tapOn:
+    id: "arul_settings_reminders"
+- extendedWaitUntil:
+    visible:
+      id: "arul_reminders_toggle"
+    timeout: 20000
+
+# --- refusal 1
+- tapOn:
+    id: "arul_reminders_toggle"
+- extendedWaitUntil:
+    visible: "${DENY_LABEL}"
+    timeout: 20000
+- tapOn: "${DENY_LABEL}"
+# syncWithSystem() flips the toggle back off — a refused opt-in must never read as on.
+- assertVisible:
+    id: "arul_reminders_toggle"
+    checked: false
+
+# --- refusal 2: Android's last dialog
+- tapOn:
+    id: "arul_reminders_toggle"
+- tapOn:
+    text: "${DENY_LABEL}"
+    optional: true
+- assertVisible:
+    id: "arul_reminders_toggle"
+    checked: false
+
+# --- third tap: no dialog left, so the toggle leaves for the OS notification settings
+- tapOn:
+    id: "arul_reminders_toggle"
+- extendedWaitUntil:
+    notVisible:
+      id: "arul_reminders_toggle"
+    timeout: 20000
+- back
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# --- granted: the toggle turns on and stays on
+- launchApp:
+    stopApp: true
+    permissions:
+      notifications: allow
+- extendedWaitUntil:
+    visible:
+      id: "arul_tab_wallpapers"
+    timeout: 60000
+- tapOn:
+    id: "arul_tab_settings"
+- tapOn:
+    id: "arul_settings_reminders"
+- extendedWaitUntil:
+    visible:
+      id: "arul_reminders_toggle"
+    timeout: 20000
+- tapOn:
+    id: "arul_reminders_toggle"
+- assertVisible:
+    id: "arul_reminders_toggle"
+    checked: true
+# Leave the phone as we found it: reminders off, alarms disarmed.
+- tapOn:
+    id: "arul_reminders_toggle"
+- assertVisible:
+    id: "arul_reminders_toggle"
+    checked: false
+- back
+- tapOn:
+    id: "arul_tab_wallpapers"

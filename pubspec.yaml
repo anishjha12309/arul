@@ -42,6 +42,8 @@ dependencies:
   share_plus: ^13.2.0           # share a wallpaper file
   just_audio: ^0.10.6           # ringtone preview — ONE shared AudioPlayer
                                 # (ringtone_preview_provider), streamed from CDN
+  audio_session: ^0.2.4         # just_audio's own dep, made DIRECT so the
+                                # preview can ask for TRANSIENT audio focus
   image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
 
   # ── Local notifications (devotional reminders). Fully on-device: no FCM, no

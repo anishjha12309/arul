@@ -112,6 +112,7 @@ class _ConfirmDialog extends StatelessWidget {
                         filled: false,
                         borderColor: cancelBorder,
                         textColor: cancelText,
+                        identifier: 'arul_confirm_cancel',
                         onTap: () => Navigator.of(context).pop(false),
                       ),
                     ),
@@ -120,6 +121,7 @@ class _ConfirmDialog extends StatelessWidget {
                       child: _DialogButton(
                         label: confirmLabel,
                         filled: true,
+                        identifier: 'arul_confirm_ok',
                         onTap: () => Navigator.of(context).pop(true),
                       ),
                     ),
@@ -140,6 +142,7 @@ class _DialogButton extends StatefulWidget {
     required this.label,
     required this.filled,
     required this.onTap,
+    required this.identifier,
     this.borderColor,
     this.textColor,
   });
@@ -149,6 +152,10 @@ class _DialogButton extends StatefulWidget {
   final VoidCallback onTap;
   final Color? borderColor;
   final Color? textColor;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String identifier;
 
   @override
   State<_DialogButton> createState() => _DialogButtonState();
@@ -166,35 +173,40 @@ class _DialogButtonState extends State<_DialogButton> {
         ? ArulTokens.ivory
         : (widget.textColor ?? ArulTokens.darkText);
 
-    return GestureDetector(
-      // The FILLED button is the destructive one here -> the heaviest beat; Cancel is ordinary.
-      onTapDown: (_) {
-        ArulHaptics.fire(
-          widget.filled ? ArulHapticStyle.heavy : ArulHapticStyle.tap,
-        );
-        setState(() => _pressed = true);
-      },
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: Container(
-        height: ArulTokens.dialogButtonHeight, // 46
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: bg,
-          border: widget.filled
-              ? null
-              : Border.all(
-                  color: widget.borderColor ?? ArulTokens.grabberColorDark,
-                ),
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-        ),
-        child: Text(
-          widget.label,
-          style: ArulTokens.button.copyWith(
-            fontSize: 14.5,
-            fontWeight: widget.filled ? FontWeight.w600 : FontWeight.w500,
-            color: textColor,
+    return Semantics(
+      button: true,
+      label: widget.label,
+      identifier: widget.identifier,
+      child: GestureDetector(
+        // The FILLED button is the destructive one here -> the heaviest beat; Cancel is ordinary.
+        onTapDown: (_) {
+          ArulHaptics.fire(
+            widget.filled ? ArulHapticStyle.heavy : ArulHapticStyle.tap,
+          );
+          setState(() => _pressed = true);
+        },
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: Container(
+          height: ArulTokens.dialogButtonHeight, // 46
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: bg,
+            border: widget.filled
+                ? null
+                : Border.all(
+                    color: widget.borderColor ?? ArulTokens.grabberColorDark,
+                  ),
+            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+          ),
+          child: Text(
+            widget.label,
+            style: ArulTokens.button.copyWith(
+              fontSize: 14.5,
+              fontWeight: widget.filled ? FontWeight.w600 : FontWeight.w500,
+              color: textColor,
+            ),
           ),
         ),
       ),

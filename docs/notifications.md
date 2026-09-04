@@ -6,7 +6,10 @@ and no screen may promise a push channel.**
 ## Deliberate decisions that look wrong — do not "fix"
 
 - Permission is requested **on opt-in only**, never at launch; `syncWithSystem()` flips the toggle
-  off if the user revokes it in system settings.
+  off if the user revokes it in system settings. Refused twice, Android stops showing its dialog, so
+  the toggle deep-links to `ACTION_APP_NOTIFICATION_SETTINGS` — same MainActivity-channel shape as
+  Set's `WRITE_SETTINGS`, gated on `shouldShowRequestPermissionRationale` being false after a request
+  came back denied. The toggle is NOT parked: granting there costs one more tap on return.
 - **Festival dates are DATA, not computation** — lunisolar dates are astronomy no Dart package
   computes to a standard worth putting in front of a devotee. When the table runs out
   `nextOccurrenceAfter` returns null and the festival is **skipped**: it degrades to "no reminders",

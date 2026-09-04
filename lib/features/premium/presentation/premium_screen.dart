@@ -609,11 +609,14 @@ class _UpiPickerSheet extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                for (final app in apps)
+                for (final (i, app) in apps.indexed)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _UpiOptionRow(
                       app: app,
+                      // The INDEX is the identifier: row 0 is the head of the
+                      // channel's preference order, which is what the rig asserts.
+                      identifier: 'arul_upi_option_$i',
                       selected: app.packageName == selectedPackage,
                       lastUsed: app.packageName == rememberedPackage,
                       onTap: () => Navigator.of(context).pop(app.packageName),
@@ -641,6 +644,7 @@ class _UpiOptionRow extends StatelessWidget {
     required this.selected,
     required this.lastUsed,
     required this.onTap,
+    required this.identifier,
   });
 
   final UpiApp app;
@@ -648,71 +652,81 @@ class _UpiOptionRow extends StatelessWidget {
   final bool lastUsed;
   final VoidCallback onTap;
 
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String identifier;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => ArulHaptics.tap(),
-      onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected
-              ? ArulTokens.paywallMedallionFill
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
+    return Semantics(
+      container: true,
+      identifier: identifier,
+      label: app.label,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
             color: selected
-                ? ArulTokens.paywallGold600
-                : ArulTokens.paywallBorderSoft,
-            width: selected ? 1.5 : 1,
+                ? ArulTokens.paywallMedallionFill
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? ArulTokens.paywallGold600
+                  : ArulTokens.paywallBorderSoft,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Padding(
-          // Compensates the thicker selected border -> the icon never shifts between states.
-          padding: EdgeInsets.all(selected ? 10.5 : 11),
-          child: Row(
-            children: [
-              // Never shrinks: the launcher icon is the row's recognition cue and the only
-              // locale-invariant thing in it -> everything else reflows around it.
-              _UpiAppIcon(app: app, size: 44),
-              const SizedBox(width: 13),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) => Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      // The label is the OS's own, already in the user's locale -> never an ARB key.
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: constraints.maxWidth,
-                        ),
-                        child: Text(
-                          app.label,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: ArulTokens.paywallUpiName.copyWith(
-                            fontSize: 14.5,
-                            height: 1.25,
-                            color: selected
-                                ? ArulTokens.paywallMaroon
-                                : ArulTokens.paywallInkUpi,
-                          ),
-                        ),
-                      ),
-                      if (lastUsed)
+          child: Padding(
+            // Compensates the thicker selected border -> the icon never shifts between states.
+            padding: EdgeInsets.all(selected ? 10.5 : 11),
+            child: Row(
+              children: [
+                // Never shrinks: the launcher icon is the row's recognition cue and the only
+                // locale-invariant thing in it -> everything else reflows around it.
+                _UpiAppIcon(app: app, size: 44),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        // The label is the OS's own, already in the user's locale -> never an ARB key.
                         ConstrainedBox(
                           constraints: BoxConstraints(
                             maxWidth: constraints.maxWidth,
                           ),
-                          child: const _LastUsedBadge(),
+                          child: Text(
+                            app.label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: ArulTokens.paywallUpiName.copyWith(
+                              fontSize: 14.5,
+                              height: 1.25,
+                              color: selected
+                                  ? ArulTokens.paywallMaroon
+                                  : ArulTokens.paywallInkUpi,
+                            ),
+                          ),
                         ),
-                    ],
+                        if (lastUsed)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth,
+                            ),
+                            child: const _LastUsedBadge(),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

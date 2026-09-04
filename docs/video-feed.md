@@ -19,6 +19,32 @@ never with an error.
 - **Never query decoder capability and assume.** `getMaxSupportedInstances` lies in both directions.
   Attempt and degrade; the try IS the probe.
 
+## The feed opens FILES. A CDN stream is a failure path, never the plan
+
+`_setupAndOpen` awaits `ensureCached` and opens the local path; the poster covers the wait, and the
+http(s) URL is reached only when that transfer failed. Streaming looked cheaper — a first frame after
+250 ms instead of a whole download — and is unusable here for three reasons that compound:
+
+- Clips run **1.3–9.8 Mbit/s** (the ceiling is 15 MB, not a bitrate), so any pipe under the clip's
+  own rate under-runs within a second.
+- **`REPEAT_MODE_ONE` re-reads the media from zero on every lap** — `DefaultLoadControl`'s back
+  buffer is 0 — so a looping stream re-downloads the whole clip once per lap, for as long as the
+  card is on screen, and never consults the copy the prefetcher has since written to disk. Parked on
+  one card for three minutes: **310 MB streamed against 0.1 MB from a warm file.**
+- The prefetcher is fetching the SAME url through `dart:io` at the same time. Two clients, two
+  transfers, no sharing.
+
+An under-run freezes the texture on the clip's opening frame, which IS the poster image — so the
+card reads as "the poster came back, then the video returned", every lap. **A rebuffer is not what
+hides a texture; only a re-`open()` is**, and the one that fires mid-play is `_onPlayerError`'s
+non-decoder branch: it must leave an already-painted card alone, or a network blip restarts the clip
+from zero in front of the user. The decoder-error retry and budget demotion are a different class and
+stay as they are.
+
+The current card jumps every queue (`ensureCached(priority:)`): while its bytes are landing, the two
+window neighbours and the whole look-ahead queue hold. Without that a neighbour's clip painted seven
+seconds before the card the user was looking at.
+
 ## The data window is the data-plan budget
 
 `WallpaperPrefetchService` pulls upcoming MP4 BYTES to disk, no decoders, so depth never janks —

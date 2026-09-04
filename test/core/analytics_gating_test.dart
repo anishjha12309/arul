@@ -131,37 +131,31 @@ void main() {
       );
     });
 
-    test(
-      'the draw persists, so membership is stable across launches',
-      () async {
-        final prefs = await SharedPreferences.getInstance();
-        AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.01));
-        AnalyticsCohort.debugReset();
+    test('the draw persists, so membership is stable across launches', () async {
+      final prefs = await SharedPreferences.getInstance();
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.01));
+      AnalyticsCohort.debugReset();
 
-        // A second launch draws a number that WOULD exclude this install -> the persisted draw wins.
-        // Otherwise a user drifts in and out of the panel -> every retention curve built on it would be wrong.
-        expect(
-          AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.99)),
-          isTrue,
-        );
-      },
-    );
+      // A second launch draws a number that WOULD exclude this install -> the persisted draw wins.
+      // Otherwise a user drifts in and out of the panel -> every retention curve built on it would be wrong.
+      expect(
+        AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.99)),
+        isTrue,
+      );
+    });
 
-    test(
-      'the DRAW is stored, not the boolean — which is what makes widening the '
-      'rate additive',
-      () async {
-        // The property the design rests on, and the one a stored boolean would lose -> each install keeps its RAW draw.
-        // So raising the rate only ADDS installs and never drops one already reporting -> retention curves stay continuous.
-        // A stored boolean would force a fresh draw per install -> every cohort spanning the change would break.
-        final prefs = await SharedPreferences.getInstance();
-        AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.07));
-        expect(prefs.getDouble('analytics_posthog_cohort_draw_v1'), 0.07);
+    test('the DRAW is stored, not the boolean — which is what makes widening the '
+        'rate additive', () async {
+      // The property the design rests on, and the one a stored boolean would lose -> each install keeps its RAW draw.
+      // So raising the rate only ADDS installs and never drops one already reporting -> retention curves stay continuous.
+      // A stored boolean would force a fresh draw per install -> every cohort spanning the change would break.
+      final prefs = await SharedPreferences.getInstance();
+      AnalyticsCohort.resolve(prefs, random: const _FixedRandom(0.07));
+      expect(prefs.getDouble('analytics_posthog_cohort_draw_v1'), 0.07);
 
-        // Anyone inside a 5% panel is still inside every wider one.
-        expect(0.07 < AnalyticsCohort.debugRate, AnalyticsCohort.isMember);
-      },
-    );
+      // Anyone inside a 5% panel is still inside every wider one.
+      expect(0.07 < AnalyticsCohort.debugRate, AnalyticsCohort.isMember);
+    });
   });
 
   group('AnalyticsCohort.isFreshInstall', () {
@@ -235,6 +229,7 @@ void main() {
         // They let the cancel/failure split be read same-day by build -> remove them here and in analytics_provider.dart.
         'login_cancelled',
         'login_failed',
+        'login_attempt',
       });
     });
 

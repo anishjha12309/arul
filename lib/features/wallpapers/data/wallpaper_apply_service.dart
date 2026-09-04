@@ -104,6 +104,9 @@ abstract class WallpaperApplyService {
   Future<String> downloadUrl(Wallpaper w, {required MediaUseAction action});
 
   /// Downloads [url] to a temp file named [filename]. [onProgress] gets 0.0→1.0.
+  ///
+  /// RESUMABLE: a failed attempt leaves its `.part` behind and the next one asks for the rest with
+  /// a `Range` header, so [onProgress] can legitimately start above 0.
   Future<File> downloadFile(
     String url,
     String filename,
@@ -193,18 +196,6 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     String filename,
     void Function(double) onProgress,
   ) async {
-    final request = http.Request('GET', Uri.parse(url));
-    final response = await _http.send(request);
-
-    if (response.statusCode != 200) {
-      throw WallpaperApplyException(
-        'Download failed (HTTP ${response.statusCode})',
-      );
-    }
-
-    final total = response.contentLength;
-    int received = 0;
-
     final tmpDir = await getTemporaryDirectory();
     final file = File('${tmpDir.path}/$filename');
 
@@ -215,8 +206,42 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     // A static apply failed to decode every time; a live apply handed the service a broken MP4.
     // Its error recovery re-prepares without bound — an infinite loop on the user's home screen.
     // The rename is ATOMIC -> the final name only ever exists as a complete file.
+    //
+    // The `.part` SURVIVES a failure, so its length is the first byte still owed -> a drop on
+    // cellular resumes instead of re-paying for the megabytes already on disk.
     final part = File('${file.path}.part');
-    final sink = part.openWrite();
+    var have = await part.exists() ? await part.length() : 0;
+
+    final request = http.Request('GET', Uri.parse(url));
+    if (have > 0) request.headers['Range'] = 'bytes=$have-';
+    final response = await _http.send(request);
+
+    // 206 -> the range was honoured, append. 200 -> the server ignored it and is sending the WHOLE
+    // object, so what is on disk is not a prefix of this body: truncate and start over.
+    final resuming = have > 0 && response.statusCode == 206;
+    if (response.statusCode != 200 && !resuming) {
+      // 416 means the `.part` is already as long as the object -> it can never be a prefix of a
+      // future body, so drop it rather than ask for the same impossible range forever.
+      // Every other status keeps the `.part`: an expired signed URL is a new grant away, not a
+      // reason to throw the bytes out.
+      if (response.statusCode == 416 && await part.exists()) {
+        await part.delete();
+      }
+      throw WallpaperApplyException(
+        'Download failed (HTTP ${response.statusCode})',
+      );
+    }
+    if (!resuming) have = 0;
+
+    // `contentLength` is the BODY -> on a 206 that is only what is left, so the object is it plus
+    // what is already on disk. Progress counts the same way, or a resume would restart the bar.
+    final body = response.contentLength;
+    final total = body == null ? null : body + have;
+    var received = have;
+
+    final sink = part.openWrite(
+      mode: resuming ? FileMode.append : FileMode.write,
+    );
 
     try {
       await response.stream.listen((List<int> chunk) {
@@ -240,9 +265,8 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
       try {
         await sink.close();
       } catch (_) {
-        // Already closed by the success path, or dead — either way the .part below is what matters.
+        // Already closed by the success path, or dead — either way the .part is what matters.
       }
-      if (await part.exists()) await part.delete();
       rethrow;
     }
   }

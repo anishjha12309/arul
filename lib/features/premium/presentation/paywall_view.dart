@@ -1081,53 +1081,58 @@ class _UpiChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = app.icon;
-    return GestureDetector(
-      onTap: canChange ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: ArulTokens.paywallBorderControl),
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The app's REAL mark from PackageManager — the handoff fakes one, having no PM.
-            if (icon == null)
-              const Icon(
-                Icons.account_balance_wallet_outlined,
-                size: 18,
-                color: ArulTokens.paywallInkMuted,
-              )
-            else
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.memory(
-                  icon,
-                  width: 20,
-                  height: 20,
-                  gaplessPlayback: true,
+    return Semantics(
+      container: true,
+      identifier: 'arul_paywall_upi_chip',
+      label: app.label,
+      child: GestureDetector(
+        onTap: canChange ? onTap : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: ArulTokens.paywallBorderControl),
+            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // The app's REAL mark from PackageManager — the handoff fakes one, having no PM.
+              if (icon == null)
+                const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 18,
+                  color: ArulTokens.paywallInkMuted,
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.memory(
+                    icon,
+                    width: 20,
+                    height: 20,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  app.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: ArulTokens.paywallUpiName,
                 ),
               ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                app.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: ArulTokens.paywallUpiName,
-              ),
-            ),
-            if (canChange) ...[
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.arrow_drop_down,
-                size: 16,
-                color: ArulTokens.paywallInkMuted,
-              ),
+              if (canChange) ...[
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.arrow_drop_down,
+                  size: 16,
+                  color: ArulTokens.paywallInkMuted,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1168,6 +1173,7 @@ class _ShrineCtaState extends State<ShrineCta> {
       button: true,
       enabled: _enabled,
       label: widget.label,
+      identifier: 'arul_paywall_cta',
       child: GestureDetector(
         key: const ValueKey('shrine-cta'),
         onTapDown: _enabled

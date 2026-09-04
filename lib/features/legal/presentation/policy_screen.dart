@@ -187,14 +187,18 @@ class _PolicyScreenState extends State<PolicyScreen> {
   }
 
   /// The document has finished loading: style it, then show it.
+  ///
+  /// Android fires `onPageFinished` for its OWN error page too, right after
+  /// `onWebResourceError` -> revealing there paints the robot over the offline state.
+  /// So a failed load is final until [_retry] clears it.
   Future<void> _reveal() async {
+    if (_failed) return;
     await _applyAppChrome();
-    if (!mounted) return;
+    if (!mounted || _failed) return;
     final canGoBack = await _controller.canGoBack();
-    if (!mounted) return;
+    if (!mounted || _failed) return;
     setState(() {
       _loading = false;
-      _failed = false;
       _canGoBack = canGoBack;
     });
   }
@@ -308,6 +312,7 @@ class _PolicyScreenState extends State<PolicyScreen> {
                         message: l10n.offlineBody,
                         actionLabel: l10n.retry,
                         onAction: _retry,
+                        actionIdentifier: 'arul_policy_retry',
                       )
                     : Stack(
                         children: [

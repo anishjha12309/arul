@@ -17,6 +17,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
 import com.facebook.applinks.AppLinkData
@@ -45,10 +46,12 @@ class MainActivity : FlutterFragmentActivity() {
         // Exposes isPlayInstall() to Dart -> the reminders screen gates its QA tools on it.
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
 
+        private const val NOTIFICATION_SETTINGS_CHANNEL = "com.hsrutility.arul/notification_settings"
+
         // Below this the phone is "low memory" for the auth video: a 4 GB phone reports ~3.6 GiB
-        // and a 6 GB phone ~5.5 GiB -> 4 GiB puts every 4 GB phone on the poster and no 6 GB phone.
+        // and a 6 GB phone ~5.5 GiB -> 4.5 GiB puts every 4 GB phone on the poster and no 6 GB phone.
         // Half of the handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
-        private const val LOW_RAM_TOTAL_BYTES = 4096L * 1024 * 1024
+        private const val LOW_RAM_TOTAL_BYTES = 4608L * 1024 * 1024
 
         // QA-only override for the rule above -> honoured on sideloads only (see isLowRamDevice).
         private const val FORCE_LOW_RAM_SETTING = "arul_force_low_ram"
@@ -143,17 +146,17 @@ class MainActivity : FlutterFragmentActivity() {
             // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
             // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
             val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
-            // NOT `info.lowMemory`: that is the OS's moment-in-time pressure flag, and 4–6 GB
-            // Android 13/14 phones trip it at a cold start right after install -> capable phones got
-            // the poster at random and the population that took the path could not be identified.
-            // Android 12 and older joins the rule as a THIRD stable fact: the one build that carried
-            // the pressure flag put far more old 6 GB phones on the poster and lifted their sign-in
-            // from ~66% to ~79%, while the same flag cost Android 13/14 six points. OS version keeps
-            // the gain, drops the randomness, and names the population in analytics (owner's call).
+            // Three stable facts (Go flag, total RAM, Android 12 and older) name the population that
+            // always takes the poster, and `info.lowMemory` — the OS's moment-in-time pressure flag —
+            // adds any phone that is squeezed at THIS cold start. The one build that carried the flag
+            // had the best old-phone sign-in; the build that dropped it lost ten points there
+            // (owner's call: handle memory the way that build did). A flag phone cannot be named in
+            // analytics — read the poster's effect off the three stable facts, never off the flag.
             (!isPlayInstall() && forced) ||
                 am.isLowRamDevice ||
                 info.totalMem < LOW_RAM_TOTAL_BYTES ||
-                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
+                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 ||
+                info.lowMemory
         } catch (e: Exception) {
             false
         }
@@ -245,6 +248,23 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
+
+        // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
+        // Android stops showing its dialog once the user has refused twice, so the toggle would
+        // otherwise be a dead tap behind a toast naming a screen with no way to reach it.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFICATION_SETTINGS_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "notificationsBlocked" -> result.success(notificationsBlocked())
+                "openNotificationSettings" -> {
+                    openNotificationSettingsScreen()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         // Ringtone set -> WRITE_SETTINGS check and deep-link, MediaStore register, then the default-tone set.
         MethodChannel(
@@ -473,6 +493,46 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
         Log.e(TAG, "No settings screen resolvable for WRITE_SETTINGS grant")
+    }
+
+    // Not granted AND Android will no longer show its dialog -> only Settings can turn it back on.
+    // shouldShowRequestPermissionRationale is false BEFORE the first ask too, so this is only ever
+    // read AFTER a request came back denied, where false can only mean "refused for good".
+    private fun notificationsBlocked(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED &&
+                !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            // Below 13 there is no runtime permission — the app-level switch is the only gate.
+            !NotificationManagerCompat.from(this).areNotificationsEnabled()
+        }
+
+    // Same fallback chain as WRITE_SETTINGS: the per-app notification page, then app details,
+    // which resolves everywhere. A tap that opens nothing is preferable to a crash.
+    private fun openNotificationSettingsScreen() {
+        val candidates = mutableListOf<Intent>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            candidates.add(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+        candidates.add(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "notification settings intent unresolvable, trying fallback", e)
+            }
+        }
+        Log.e(TAG, "No settings screen resolvable for notification permission")
     }
 
     // The PhonePe plugin completes a `lateinit var result` that startTransaction() sets -> a fresh instance has none.

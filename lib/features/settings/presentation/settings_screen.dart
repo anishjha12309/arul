@@ -123,12 +123,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         glyph: (color) => GopuramMark(size: 19, color: color),
                         title: l10n.premiumBrandTitle,
+                        identifier: 'arul_settings_premium',
                         sub: premiumSub,
                         onTap: () => context.push('/premium?source=settings'),
                       ),
                       _RowData(
                         icon: Icons.card_giftcard,
                         title: l10n.referTitle,
+                        identifier: 'arul_settings_refer',
                         sub: l10n.settingsReferSub,
                         onTap: () => context.push('/refer'),
                       ),
@@ -137,6 +139,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.ios_share_rounded,
                         title: l10n.settingsTellFriend,
+                        identifier: 'arul_settings_tell_friend',
                         sub: l10n.settingsTellFriendSub,
                         onTap: () =>
                             tellAFriend(context, ref, source: 'settings'),
@@ -144,12 +147,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.notifications_active_outlined,
                         title: l10n.remindersTitle,
+                        identifier: 'arul_settings_reminders',
                         sub: notificationsSub,
                         onTap: () => context.push('/settings/notifications'),
                       ),
                       _RowData(
                         icon: Icons.translate,
                         title: l10n.settingsLanguage,
+                        identifier: 'arul_settings_language',
                         sub: language,
                         onTap: () => _pickLanguage(language),
                       ),
@@ -157,12 +162,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         // Follows the selection — a fixed moon on a row reading "Light" was stale.
                         icon: themeModeIcon(themeMode),
                         title: l10n.settingsTheme,
+                        identifier: 'arul_settings_theme',
                         sub: themeModeLabel(l10n, themeMode),
                         onTap: () => showThemeSheet(context),
                       ),
                       _RowData(
                         icon: Icons.help_outline,
                         title: l10n.settingsNeedHelp,
+                        identifier: 'arul_settings_help',
                         // Subscription has its own row now -> pointing a mailto at it would be a lie.
                         sub: l10n.settingsNeedHelpSub,
                         onTap: _support,
@@ -170,44 +177,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.upload,
                         title: l10n.settingsUpload,
+                        identifier: 'arul_settings_upload',
                         sub: l10n.settingsUploadSub,
                         onTap: () => context.push('/upload'),
                       ),
                     ],
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  _LogoutButton(onTap: _logout),
+                  Semantics(
+                    container: true,
+                    identifier: 'arul_settings_logout',
+                    child: _LogoutButton(onTap: _logout),
+                  ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    // Deleting is the app's one irreversible act -> the strongest beat, twice.
-                    onTapDown: (_) => ArulHaptics.heavy(),
-                    onTap: _delete,
-                    // TextDecoration.underline sits hard on the baseline -> a hand-drawn 3px rule.
-                    // Line-height collapses to 1.0 first, or body's 1.5 leading drops the rule away.
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            l10n.settingsDeleteAccount,
-                            textAlign: TextAlign.center,
-                            style: ArulTokens.body.copyWith(
+                  Semantics(
+                    container: true,
+                    identifier: 'arul_settings_delete',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      // Deleting is the app's one irreversible act -> the strongest beat, twice.
+                      onTapDown: (_) => ArulHaptics.heavy(),
+                      onTap: _delete,
+                      // TextDecoration.underline sits hard on the baseline -> a hand-drawn 3px rule.
+                      // Line-height collapses to 1.0 first, or body's 1.5 leading drops the rule away.
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              l10n.settingsDeleteAccount,
+                              textAlign: TextAlign.center,
+                              style: ArulTokens.body.copyWith(
+                                height: 1,
+                                color: isDark
+                                    ? ArulTokens.darkTextSecondary
+                                    : ArulTokens.lightSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Container(
                               height: 1,
+                              width: 98,
                               color: isDark
                                   ? ArulTokens.darkTextSecondary
                                   : ArulTokens.lightSecondary,
                             ),
-                          ),
-                          const SizedBox(height: 3),
-                          Container(
-                            height: 1,
-                            width: 98,
-                            color: isDark
-                                ? ArulTokens.darkTextSecondary
-                                : ArulTokens.lightSecondary,
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -497,6 +513,7 @@ class _RowData {
     required this.title,
     required this.sub,
     required this.onTap,
+    required this.identifier,
   }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
   /// A Material icon — the default for the utility rows.
@@ -512,6 +529,10 @@ class _RowData {
   final String title;
   final String sub;
   final VoidCallback onTap;
+
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String identifier;
 }
 
 /// A single rounded card holding all five rows, hairline-divided.
@@ -569,52 +590,58 @@ class _SettingsRow extends StatelessWidget {
     // The chevron's exact alphas have no token — darkMuted and lightFaint are the nearest neutrals.
     final chevronColor = isDark ? ArulTokens.darkMuted : ArulTokens.lightFaint;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // Every settings row presses the same, push or sheet.
-      // The sheet itself stays silent — the tap that opened it already answered the finger.
-      onTapDown: (_) => ArulHaptics.tap(),
-      onTap: data.onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: ArulTokens.iconChipSize,
-              height: ArulTokens.iconChipSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius),
+    return Semantics(
+      container: true,
+      identifier: data.identifier,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Every settings row presses the same, push or sheet.
+        // The sheet itself stays silent — the tap that opened it already answered the finger.
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: data.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: ArulTokens.iconChipSize,
+                height: ArulTokens.iconChipSize,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(
+                    ArulTokens.iconChipRadius,
+                  ),
+                ),
+                child:
+                    data.glyph?.call(iconColor) ??
+                    Icon(
+                      data.icon,
+                      size: ArulTokens.iconChipIconSize,
+                      color: iconColor,
+                    ),
               ),
-              child:
-                  data.glyph?.call(iconColor) ??
-                  Icon(
-                    data.icon,
-                    size: ArulTokens.iconChipIconSize,
-                    color: iconColor,
-                  ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data.title,
-                    style: ArulTokens.rowTitle.copyWith(color: titleColor),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    data.sub,
-                    style: ArulTokens.rowSub.copyWith(color: subColor),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data.title,
+                      style: ArulTokens.rowTitle.copyWith(color: titleColor),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      data.sub,
+                      style: ArulTokens.rowSub.copyWith(color: subColor),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 20, color: chevronColor),
-          ],
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, size: 20, color: chevronColor),
+            ],
+          ),
         ),
       ),
     );
@@ -688,6 +715,7 @@ class _FooterLink extends StatelessWidget {
     return Semantics(
       link: true,
       label: label,
+      identifier: 'arul_policy_${doc.name}',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),

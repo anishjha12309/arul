@@ -27,7 +27,7 @@ import '../providers/upload_provider.dart';
 /// Upload categories are the LIVE ones off the browse catalog, with the shipped six as an
 /// offline fallback. A submission still lands only in a moderator-known slug: a catalog chip
 /// exists because a PUBLISHED row carries it, so a CMS draft category is never offered.
-/// The two kinds do NOT share a list — ringtones drop `temples`, add `others` (CLAUDE.md §5b).
+/// The two kinds do NOT share a list — ringtones drop `temples` (CLAUDE.md §5b).
 /// The CMS re-checks the slug against the matching set at approve time.
 /// A ringtone's `deity` is NEVER collected here — it is classified from LYRICS, not a filename.
 /// The row lands with a null deity and degrades to its category's default art.
@@ -54,12 +54,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     'temples',
   ];
 
-  /// NOT the wallpaper list — no `temples`, plus `others` for tracks belonging to no deity.
+  /// NOT the wallpaper list — no `temples`. `others` is retired: nothing may be submitted into it.
   static const _fallbackRingtoneCategories = [
     'amman',
     'ayyappan',
     'murugan',
-    'others',
     'perumal',
     'sivan',
   ];
@@ -303,12 +302,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                             label: l10n.uploadKindWallpaper,
                             selected: !_isRingtone,
                             variant: ArulChipVariant.surface,
+                            identifier: 'arul_upload_kind_wallpaper',
                             onTap: () => _selectKind('wallpaper'),
                           ),
                           ArulChip(
                             label: l10n.uploadKindRingtone,
                             selected: _isRingtone,
                             variant: ArulChipVariant.surface,
+                            identifier: 'arul_upload_kind_ringtone',
                             onTap: () => _selectKind('ringtone'),
                           ),
                         ],
@@ -318,59 +319,63 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   const SizedBox(height: 16),
 
                   // Pick zone.
-                  GestureDetector(
-                    onTapDown: (_) => ArulHaptics.tap(),
-                    onTap: _pickFile,
-                    child: CustomPaint(
-                      painter: _DashedRectPainter(
-                        color: dashColor,
-                        radius: ArulTokens.cardRadius,
-                      ),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 34,
+                  Semantics(
+                    container: true,
+                    identifier: 'arul_upload_pick',
+                    child: GestureDetector(
+                      onTapDown: (_) => ArulHaptics.tap(),
+                      onTap: _pickFile,
+                      child: CustomPaint(
+                        painter: _DashedRectPainter(
+                          color: dashColor,
+                          radius: ArulTokens.cardRadius,
                         ),
-                        decoration: BoxDecoration(
-                          color: pickZoneFill,
-                          borderRadius: BorderRadius.circular(
-                            ArulTokens.cardRadius,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 34,
                           ),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              _isRingtone
-                                  ? Icons.library_music
-                                  : Icons.add_photo_alternate,
-                              size: 32,
-                              color: accent,
+                          decoration: BoxDecoration(
+                            color: pickZoneFill,
+                            borderRadius: BorderRadius.circular(
+                              ArulTokens.cardRadius,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _fileName ??
-                                  (_isRingtone
-                                      ? l10n.uploadPickZoneTitleAudio
-                                      : l10n.uploadPickZoneTitle),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: ArulTokens.rowTitle.copyWith(
-                                color: textPrimary,
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                _isRingtone
+                                    ? Icons.library_music
+                                    : Icons.add_photo_alternate,
+                                size: 32,
+                                color: accent,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _isRingtone
-                                  ? l10n.uploadPickZoneSubAudio
-                                  : l10n.uploadPickZoneSub,
-                              textAlign: TextAlign.center,
-                              style: ArulTokens.rowSub.copyWith(
-                                color: pickSubLabel,
+                              const SizedBox(height: 8),
+                              Text(
+                                _fileName ??
+                                    (_isRingtone
+                                        ? l10n.uploadPickZoneTitleAudio
+                                        : l10n.uploadPickZoneTitle),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: ArulTokens.rowTitle.copyWith(
+                                  color: textPrimary,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                _isRingtone
+                                    ? l10n.uploadPickZoneSubAudio
+                                    : l10n.uploadPickZoneSub,
+                                textAlign: TextAlign.center,
+                                style: ArulTokens.rowSub.copyWith(
+                                  color: pickSubLabel,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -443,6 +448,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                               label: c.label,
                               selected: _category == c.slug,
                               variant: ArulChipVariant.surface,
+                              identifier: 'arul_chip_${c.slug}',
                               onTap: () => setState(() => _category = c.slug),
                             ),
                         ],
@@ -497,6 +503,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   // Also disabled while an upload is in flight, for re-entrancy.
                   CtaButton(
                     label: l10n.uploadSubmitCta,
+                    identifier: 'arul_upload_submit',
                     busy: ref.watch(uploadProvider) is UploadLoading,
                     fontSize: 15.5,
                     onPressed:

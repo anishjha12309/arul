@@ -359,6 +359,7 @@ class _LanguageTrigger extends StatelessWidget {
     return Semantics(
       button: true,
       label: semanticsLabel,
+      identifier: 'arul_signin_language',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
@@ -437,6 +438,14 @@ class _SignInPillState extends State<_SignInPill> {
 
   @override
   Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      identifier: 'arul_signin_pill',
+      child: _pill(context),
+    );
+  }
+
+  Widget _pill(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) {
         ArulHaptics.tap();
@@ -497,18 +506,24 @@ class _SignInPillState extends State<_SignInPill> {
                       style: kSignInTitleStyle,
                     ),
                   ),
-                  Text(
-                    widget.subtitle,
-                    key: kSignInSubtitleKey,
-                    // TWO lines is the design budget on a 360dp phone: a line that fits at 1.0
-                    // needs at most 1.3 slots at 1.3. The third exists for the 320dp frame the
-                    // l10n envelope gates on, where the slot is 140dp and wrapping is limited by
-                    // WORD boundaries — Tamil's "Google வரவில்லை, தட்டவும்" is three chunks that
-                    // no two lines can hold. No ellipsis anywhere: nothing on this screen truncates.
-                    maxLines: 3,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: ArulTokens.ivory.withValues(alpha: 0.6),
+                  Semantics(
+                    container: true,
+                    identifier: 'arul_signin_subtitle',
+                    label: widget.subtitle,
+                    excludeSemantics: true,
+                    child: Text(
+                      widget.subtitle,
+                      key: kSignInSubtitleKey,
+                      // TWO lines is the design budget on a 360dp phone: a line that fits at 1.0
+                      // needs at most 1.3 slots at 1.3. The third exists for the 320dp frame the
+                      // l10n envelope gates on, where the slot is 140dp and wrapping is limited by
+                      // WORD boundaries — Tamil's "Google வரவில்லை, தட்டவும்" is three chunks that
+                      // no two lines can hold. No ellipsis anywhere: nothing on this screen truncates.
+                      maxLines: 3,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: ArulTokens.ivory.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ],

@@ -126,18 +126,54 @@ class WallpaperPrefetchService {
     }
   }
 
+  /// How many `priority` [ensureCached] calls — bytes the user is STARING at — are outstanding.
+  ///
+  /// While any is, [_pump] starts no look-ahead transfer and every non-priority [ensureCached]
+  /// waits, so the visible card owns the pipe. At ~4.5 MB a clip, the two window neighbours plus
+  /// three look-ahead transfers sharing a thin pipe is what made the visible card wait on cards
+  /// nobody had reached yet. It cannot deadlock: a priority call never waits on itself, and it
+  /// fetches through the cache manager directly, joining any transfer of the SAME url already up.
+  int _priorityWaiters = 0;
+
+  /// Completed and cleared the moment [_priorityWaiters] falls to zero.
+  Completer<void>? _priorityIdle;
+
   /// Downloads [url] if needed and completes once its bytes are on disk, returning the local path.
   ///
   /// Null on failure. Unlike [prefetchAround] this AWAITS the transfer.
-  /// So a caller can hold a screen until the first live clip is local, then open from a file.
+  /// So the player can hold the poster until the clip is local, then open from a file.
   /// Safe alongside [prefetchAround] — flutter_cache_manager coalesces concurrent fetches of a URL.
-  Future<String?> ensureCached(String url) async {
+  /// [priority] is the CURRENT card: it jumps every queue, and holds every other transfer.
+  Future<String?> ensureCached(String url, {bool priority = false}) async {
     if (_disposed) return null;
     try {
       final existing = await _cache.getFileFromCache(url);
       if (existing != null) return existing.file.path;
-      final file = await _cache.getSingleFile(url);
-      return file.path;
+      if (!priority) {
+        // Yield to the visible card. Re-checked in a loop: another priority open may start while
+        // this one waits, and a neighbour must never overtake it.
+        while (!_disposed && _priorityIdle != null) {
+          await _priorityIdle!.future;
+        }
+        if (_disposed) return null;
+        // It may have landed while we waited — the priority transfer can be this very url.
+        final landed = await _cache.getFileFromCache(url);
+        if (landed != null) return landed.file.path;
+      }
+      if (priority) {
+        _priorityWaiters++;
+        _priorityIdle ??= Completer<void>();
+      }
+      try {
+        final file = await _cache.getSingleFile(url);
+        return file.path;
+      } finally {
+        if (priority && --_priorityWaiters == 0) {
+          _priorityIdle?.complete();
+          _priorityIdle = null;
+        }
+        if (!_disposed) _pump();
+      }
     } catch (_) {
       // Network or backend failure -> the caller falls back to streaming the CDN URL.
       return null;
@@ -195,7 +231,10 @@ class WallpaperPrefetchService {
   }
 
   void _pump() {
-    while (!_disposed && _active < _maxConcurrent && _queue.isNotEmpty) {
+    while (!_disposed &&
+        _priorityWaiters == 0 &&
+        _active < _maxConcurrent &&
+        _queue.isNotEmpty) {
       final url = _queue.removeFirst();
       _active++;
       unawaited(_download(url));
@@ -223,6 +262,9 @@ class WallpaperPrefetchService {
   /// In-flight transfers are tiny and finish on their own; the disk cache persists.
   void dispose() {
     _disposed = true;
+    // Release anything parked behind the visible card, or its future never completes.
+    _priorityIdle?.complete();
+    _priorityIdle = null;
     _widenTimer?.cancel();
     _widenTimer = null;
     _lastItems = const [];

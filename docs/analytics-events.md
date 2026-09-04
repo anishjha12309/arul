@@ -48,8 +48,9 @@ one event per mandate from every channel that ends a LIVE row, carrying `reason`
 
 ## The sign-in diagnostics
 
-`login_cancelled` and `login_failed` are on the PostHog allow-list as a **diagnostic exception** to
-the journey-only rule; taking them off is the owner's call. Both carry `gis_code`,
+`login_attempt`, `login_cancelled` and `login_failed` are on the PostHog allow-list as a **diagnostic exception** to
+the journey-only rule; taking them off is the owner's call. An attempt with no cancel, success or
+failure is a process that died under Google's picker — the only way that loss is visible. Both carry `gis_code`,
 `ms_since_authenticate` and `surface`. `login_cancelled` adds `nudge` (the classified outcome; the
 screen shows one retry line whatever it is) and `ms_to_surface`, carried by `login_success` too — the slow-surface split needs a
 succeeding population for its denominator. Both: [auth.md](auth.md).

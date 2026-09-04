@@ -1,0 +1,50 @@
+appId: com.hsrutility.arul
+name: apply_static
+# PREMIUM ACCOUNT. Static apply: the in-app target sheet, then the OS write.
+# `LiveMark` is the ONLY thing that tells a live card from a static one — an undecoded live card is
+# pixel-identical to a static one (video-feed.md) — so the rig swipes past marked cards to find a
+# static one rather than trusting a position in the feed.
+# The real assertion is native: the wrapper diffs `dumpsys wallpaper` around this flow.
+---
+- runFlow: _feed.yaml
+- repeat:
+    while:
+      visible:
+        id: "arul_live_mark"
+    commands:
+      - swipe:
+          direction: UP
+          duration: 500
+      - waitForAnimationToEnd:
+          timeout: 5000
+- assertNotVisible:
+    id: "arul_live_mark"
+- tapOn:
+    id: "arul_feed_apply"
+# LIVE wallpapers never reach this sheet, so its appearance re-proves the card was static.
+- extendedWaitUntil:
+    visible:
+      id: "arul_apply_confirm"
+    timeout: 45000
+- assertVisible:
+    id: "arul_apply_home"
+- assertVisible:
+    id: "arul_apply_lock"
+# Both is the default; tapped anyway so the flow asserts the choice rather than the default.
+- tapOn:
+    id: "arul_apply_both"
+- assertVisible:
+    id: "arul_apply_both"
+    selected: true
+- tapOn:
+    id: "arul_apply_confirm"
+# Download + centre-crop + setBitmap, then the Android 12+ activity recreate. The app must come
+# back to its own feed and must NOT cold-restart (wallpaper-apply.md).
+- extendedWaitUntil:
+    visible:
+      id: "arul_feed_apply"
+    timeout: 120000
+- assertVisible:
+    id: "arul_tab_wallpapers"
+- assertNotVisible:
+    id: "arul_signin_pill"

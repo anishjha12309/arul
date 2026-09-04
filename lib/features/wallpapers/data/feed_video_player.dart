@@ -238,6 +238,13 @@ class FeedVideoPlayer {
   /// readiness rebuilds only that card.
   final ValueNotifier<bool> firstFrame = ValueNotifier<bool>(false);
 
+  /// True between [resetForReassign] and the next [open]: the native player is still
+  /// LOOPING the previous card's clip, and Media3 fires onRenderedFirstFrame on every
+  /// lap with the still-current openId. Without this gate a lap during the wait — now a
+  /// whole download on a cold cache — re-revealed the OLD category's clip over the new
+  /// card's poster (posters "overlapping" across categories until the cache warmed).
+  bool _awaitingOpen = false;
+
   /// Native video size once known (for BoxFit.cover scaling of the [Texture]).
   final ValueNotifier<Size?> videoSize = ValueNotifier<Size?>(null);
 
@@ -282,6 +289,8 @@ class FeedVideoPlayer {
     if (_disposed) return;
     firstFrame.value = false;
     _openErrored = false;
+    // The gate closes here: from this open on, first-frame events are for the NEW media.
+    _awaitingOpen = false;
     // Bump in lockstep with the native openId (native increments its own
     // monotonic openId once per open()). A firstFrame from the PREVIOUS media,
     // which can fire around the setMediaItem swap, carries an openId below this
@@ -310,6 +319,8 @@ class FeedVideoPlayer {
     if (_disposed) return;
     firstFrame.value = false;
     _openErrored = false;
+    // Anything the still-looping OLD clip reports until open() belongs to the previous card.
+    _awaitingOpen = true;
   }
 
   /// Whether the native side has actually painted a frame for the CURRENT open
@@ -324,6 +335,10 @@ class FeedVideoPlayer {
     final painted = await _hub.invokeIntMethod('paintedOpenId', {
       'playerId': playerId,
     });
+    // The old clip's frames are not this card's.
+    if (_awaitingOpen) {
+      return false;
+    }
     return painted != null && painted >= _currentOpenId;
   }
 
@@ -378,6 +393,9 @@ class FeedVideoPlayer {
         // asked for. The native side echoes its own monotonic openId which is
         // >= ours; a frame from a since-swapped media carries an older openId.
         final openId = (event['openId'] as num?)?.toInt();
+        // A lap of the previous clip while this player waits to be re-opened carries the
+        // still-current openId -> the id check alone cannot drop it; the gate does.
+        if (_awaitingOpen) break;
         if (openId != null && openId >= _currentOpenId) {
           _currentOpenId = openId;
           firstFrame.value = true;

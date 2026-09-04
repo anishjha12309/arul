@@ -28,6 +28,7 @@ class ArulChip extends StatelessWidget {
     required this.selected,
     this.onTap,
     this.variant = ArulChipVariant.feed,
+    this.identifier,
   });
 
   final String label;
@@ -35,12 +36,16 @@ class ArulChip extends StatelessWidget {
   final VoidCallback? onTap;
   final ArulChipVariant variant;
 
+  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Never announced and never visible — see that folder's README for the list.
+  final String? identifier;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final (Color bg, Color border, Color fg) = _palette(isDark);
 
-    return GestureDetector(
+    final chip = GestureDetector(
       // A chip picks between values -> the lightest tick, never a button press, and on press-DOWN.
       onTapDown: onTap == null ? null : (_) => ArulHaptics.selection(),
       onTap: onTap,
@@ -69,6 +74,9 @@ class ArulChip extends StatelessWidget {
         ),
       ),
     );
+
+    if (identifier == null) return chip;
+    return Semantics(container: true, identifier: identifier, child: chip);
   }
 
   /// The browse chip's fixed height.

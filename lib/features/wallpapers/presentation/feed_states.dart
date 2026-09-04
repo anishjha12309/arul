@@ -53,6 +53,7 @@ class FeedChips extends ConsumerWidget {
             label: c.label,
             selected: c.slug == selected,
             variant: ArulChipVariant.category,
+            identifier: 'arul_chip_${c.slug}',
             onTap: () =>
                 ref.read(selectedCategoryProvider.notifier).select(c.slug),
           );
@@ -221,7 +222,11 @@ class FeedEmpty extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+          Semantics(
+            container: true,
+            identifier: 'arul_feed_browse_all',
+            child: _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+          ),
         ],
       ),
     );
@@ -315,6 +320,7 @@ class FeedError extends StatelessWidget {
             label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
+            identifier: 'arul_feed_retry',
             height: 46,
             fontSize: 14,
             expand: false,

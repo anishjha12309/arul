@@ -1,0 +1,25 @@
+appId: com.hsrutility.arul
+name: share
+# PREMIUM ACCOUNT. Share prepares the file, then hands the OS a chooser. The chooser is a system
+# window: the app's own nodes go not-visible behind it, and that disappearance IS the assertion
+# that the sheet came up. Its contents are OEM/locale text and are deliberately not matched.
+# EXACTLY ONE link leaves per share, owned by the caption (share.md) — a text contract the rig
+# cannot read; the owner checks it by hand in WhatsApp.
+---
+- runFlow: _feed.yaml
+- tapOn:
+    id: "arul_feed_share"
+# Signed-url + download + watermark on a cold cache; the chooser is the far side of all of it.
+- extendedWaitUntil:
+    notVisible:
+      id: "arul_feed_share"
+    timeout: 180000
+- back
+- waitForAnimationToEnd:
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: "arul_feed_share"
+    timeout: 45000
+- assertVisible:
+    id: "arul_feed_apply"

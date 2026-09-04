@@ -1005,6 +1005,7 @@ class _ApplyPill extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
+      identifier: 'arul_feed_apply',
       child: Opacity(
         opacity: disabled ? 0.55 : 1,
         child: Material(
@@ -1073,6 +1074,7 @@ class _ShareCircle extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
+      identifier: 'arul_feed_share',
       child: Opacity(
         opacity: disabled ? 0.55 : 1,
         child: Material(

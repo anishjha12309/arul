@@ -53,6 +53,9 @@ const postHogAllowedEvents = <String>{
   // The pinned set in test/core/analytics_gating_test.dart makes removing them a deliberate edit.
   'login_cancelled',
   'login_failed',
+  // `login_attempt` closes the one hole in the outcome table: an attempt with no cancel, success or
+  // failure is a process that died under Google's picker, which otherwise hides inside "cancelled".
+  'login_attempt',
 };
 
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
