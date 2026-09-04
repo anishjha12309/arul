@@ -28,6 +28,7 @@ in the `docs/` file of the same name; this file carries the rule and nothing els
 - [ ] Sign-in auto-launches a Google surface on the first frame, never a silent check
 - [ ] SHEET FIRST, picker second; a pill tap skips the sheet; the `sheetFirst` kill switch stays a BUILD const
 - [ ] EXACTLY ONE visible Google surface per attempt; the picker follows only a sheet that drew nothing or could not COMPLETE. A DISMISSED sheet stops it — no picker, no auto-relaunch
+- [ ] A failed sign-in shows ONE retry line, no fix line, no help link; `clearTaskOnLaunch` stays on MainActivity
 - [ ] Every ID token carries the per-process nonce and the Worker checks the PAIR, both-absent accepted so fielded builds keep working. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace

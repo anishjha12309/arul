@@ -27,6 +27,10 @@ config error and a user dismissal with the same code.
   sheet that never drew, and the ask was to sign in.
 - **A DISMISSED sheet (`canceled`) STOPS the attempt** — nudge, no picker. The Credential Manager
   guide forbids automatically retrying a cancellation.
+- **Google's surfaces live INSIDE this app's task and outlive its process.** Swipe home out of a
+  picker, lose the process, tap the icon: Android resumes the dead picker with no app behind it, and
+  a pick lands on the home screen (reproduced on device). `clearTaskOnLaunch` on `MainActivity`
+  strips everything above it on an icon launch; recents are untouched. Keep it.
 - **A pill tap SKIPS the sheet** (`signInWith(auto: false)`). Google's stated reasons for the button
   flow — sheet dismissed, no accounts, accounts needing re-auth — are exactly why the user taps.
 - **Sheet-first is not the reverted warm-up**, which ran the sheet *ahead of* a picker it was always
@@ -65,23 +69,21 @@ auto-launch, not the sheet, so a scripted dismissal lands inside the failure ban
 
 ## What the screen may say about a failed attempt
 
-**Every line shown must be TRUE of THAT attempt and specific enough to act on** — one retry line for
-every cancel told a user whose Play services closed the window the same as one who tapped Back. The
-copy routes off `classifySignInOutcome` (`domain/sign_in_outcome.dart`), pure and pinned string by
-string in both of Google's spellings: MESSAGE first, then the backed-out family split on
-**`ms_to_surface`**: wall-clock from `authenticate()` to the FIRST inactive/paused/hidden
-of the attempt — the only signal the app gets that Google's surface came up, a GMS activity over
-ours, the same edge the stall guard extends on. Null means no surface was ever seen. Under 8 s the
-user closed it; at or over 8 s the PHONE was slow and a second tap only restarts the wait, so that
-line asks for patience, not another tap.
+**ONE line, the same for every failure — the retry line. No sentence under the pill, no link out of
+the app** (owner's call: three lines naming Play services or account settings were noise to an
+audience that cannot act on them, and the only thing any of them can do is tap again). Never re-add a
+fix line or a help link. The outcome (`classifySignInOutcome`, `domain/sign_in_outcome.dart`) still
+rides `AuthCancelled` into `login_cancelled` as `nudge`, pinned string by string in both of Google's
+spellings: MESSAGE first, then the backed-out family split on **`ms_to_surface`** — wall-clock from
+`authenticate()` to the FIRST inactive/paused/hidden of the attempt, the only signal the app gets
+that Google's surface came up, a GMS activity over ours. Null means no surface was ever seen; 8 s
+separates the user's back-out from the phone's wait. `providerConfigurationError` routes off the
+failure KIND, never a message; an unrecognised message classifies as nothing.
 
-- **An unrecognised message claims nothing** — the plain retry line; never invent a reason.
-- **`AuthCancelled` carries the outcome**, so the event and the line the user read cannot disagree;
-  `providerConfigurationError` routes off the failure KIND, never a message.
 - **The copy fits; the type never shrinks.** The pill's slot is 180 dp on a 360 dp phone, and every
   title (15 px) and subtitle (12 px) must fit it AT TEXT SCALE 1.0 in all six scripts — shorten the
   string, never scale it. A scaled Tamil or Malayalam subtitle lands near 10 px, on exactly the
-  phones the nudge is for. A sentence goes to the fix line under the pill, which wraps uncapped.
+  phones the retry line is for.
 - **At large text the two lines diverge, because their jobs do.** The title is a button label and
   stays one line (`scaleDown`, a net that never fires at 1.0); the subtitle is a sentence, WRAPS, and
   the pill's 56 dp is a `minHeight` so it grows. Nothing truncates — no ellipsis on either line. Its
@@ -103,9 +105,6 @@ line asks for patience, not another tap.
   still routes — `context.go` replaces the stack its route sits on, so the feed cannot arrive with a
   picker over it. Wordmark and eyebrow stay English. **Its glyphs take NO `shadows`:** Impeller
   mis-offsets a shadow from an icon FONT and paints a second mark beside it; text shadows are fine.
-- **A help link must never start or cancel an attempt** — re-entering the Google flow from a link
-  puts a second surface over the first. `url_launcher` builds an ACTION_VIEW from a URI and has no
-  `Intent.parseUri`, so a Settings ACTION needs the `sign_in_help` channel, not a URL.
 
 ## Failure handling
 

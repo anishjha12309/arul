@@ -126,12 +126,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  /// A visible failure already toasted its own message, so the subtitle only has to be TRUE.
-  ///
-  /// `noPlayServices` is the one failure with an actionable fix line — Credential Manager has no
-  /// provider to ask, and no number of taps changes that. Everything else gets the plain retry
-  /// line: the toast said what went wrong, and inventing a second, more specific claim here would
-  /// be guessing.
+  /// A visible failure already toasted its own message; the screen shows the same retry line as any
+  /// other outcome, so this only classifies for `login_cancelled` — `noPlayServices` is the one
+  /// failure with no provider to ask, and the toast is where that is said.
   SignInOutcome _outcomeForFailure(AuthFailureKind kind) =>
       kind == AuthFailureKind.noPlayServices
       ? SignInOutcome.noProvider
@@ -170,23 +167,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     await ref.read(localeProvider.notifier).setLocale(Locale(code));
   }
 
-  /// Opens the one out-of-app target this outcome offers.
-  ///
-  /// It must NEVER start or cancel a sign-in: the pill owns the attempt, and a help tap that
-  /// silently re-launched Google would put a second surface up over the first.
-  void _openHelp(_SignInHelpTarget target) {
-    ArulHaptics.tap();
-    final links = ref.read(signInHelpLinksProvider);
-    unawaited(switch (target) {
-      _SignInHelpTarget.accountSettings => links.openAccountSettings(),
-      _SignInHelpTarget.playServices => links.openPlayServices(),
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final copy = _copyFor(l10n, _outcome);
+    final subtitle = _subtitleFor(l10n, _outcome);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -287,21 +271,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         title: l10n.signInGoogle,
                         subtitle: exchanging
                             ? l10n.signInSubtitleExchanging
-                            : copy.subtitle,
+                            : subtitle,
                         onTap: _signingIn ? () {} : _onPillTap,
                         busy: _signingIn,
                       ),
                     ),
-                    // The explanation the one-line subtitle has no room for, and the one place the
-                    // screen can hand the user something to DO about it.
-                    if (copy.fix != null || copy.linkLabel != null)
-                      _FixLine(
-                        text: copy.fix,
-                        linkLabel: copy.linkLabel,
-                        onLink: copy.link == null
-                            ? null
-                            : () => _openHelp(copy.link!),
-                      ),
                     const _TermsPrivacyLine(),
                   ],
                 ),
@@ -425,127 +399,14 @@ class _LanguageTrigger extends StatelessWidget {
   }
 }
 
-/// The out-of-app targets a nudge may offer. Two, and there will never be a third: everything else
-/// the user could "fix" is inside the Google flow the app cannot reach.
-enum _SignInHelpTarget { accountSettings, playServices }
-
-/// What the screen says about [outcome], resolved in ONE place so the subtitle, the explanation and
-/// the link can never drift apart.
+/// What the pill says under its title, resolved in ONE place.
 ///
-/// The pill subtitle is one 12px line in a ~182dp slot on a 360dp phone -> it carries the ACTION and
-/// nothing else. Anything that needs a sentence goes to the fix line under the pill, which may wrap.
-/// Rules the copy obeys: say only what this attempt actually did, separate the phone's wait from the
-/// person's own hesitation, and never offer a link that cannot change the outcome.
-({String subtitle, String? fix, String? linkLabel, _SignInHelpTarget? link})
-_copyFor(AppLocalizations l10n, SignInOutcome? outcome) => switch (outcome) {
-  null => (
-    subtitle: l10n.signInSubtitleIdle,
-    fix: null,
-    linkLabel: null,
-    link: null,
-  ),
-  // Google's surface came and went inside 8s -> the user closed it. Nothing to explain.
-  SignInOutcome.backedOutQuick => (
-    subtitle: l10n.signInNudgeBackedOutQuick,
-    fix: null,
-    linkLabel: null,
-    link: null,
-  ),
-  // The wait was the PHONE'S. Telling this user to "try again" invites the second tap that opens a
-  // second surface over the first -> the line asks for one tap and patience, and says why.
-  SignInOutcome.backedOutSlow => (
-    subtitle: l10n.signInNudgeBackedOutSlow,
-    fix: l10n.signInFixBackedOutSlow,
-    linkLabel: null,
-    link: null,
-  ),
-  // No surface was ever seen -> "didn't go through" would be a lie about something the user did.
-  SignInOutcome.neverOpened => (
-    subtitle: l10n.signInNudgeNeverOpened,
-    fix: null,
-    linkLabel: null,
-    link: null,
-  ),
-  // The user went looking for "add account". The fix is that they never needed one.
-  SignInOutcome.addAccountAbandoned => (
-    subtitle: l10n.signInNudgeAddAccount,
-    fix: l10n.signInFixAddAccount,
-    linkLabel: null,
-    link: null,
-  ),
-  // Google refused to re-verify the account -> the repair is in the phone's own Google settings.
-  SignInOutcome.reauthFailed => (
-    subtitle: l10n.signInNudgeReauth,
-    fix: l10n.signInFixReauth,
-    linkLabel: l10n.signInLinkAccountSettings,
-    link: _SignInHelpTarget.accountSettings,
-  ),
-  // GMS closed the window under us -> name what did it, and offer its listing.
-  SignInOutcome.activityClosed => (
-    subtitle: l10n.signInNudgeActivityClosed,
-    fix: l10n.signInFixActivityClosed,
-    linkLabel: l10n.signInLinkPlayServices,
-    link: _SignInHelpTarget.playServices,
-  ),
-  // There is no provider to ask. The toast already said so -> the link is the whole fix line.
-  SignInOutcome.noProvider => (
-    subtitle: l10n.signInNudgeNoProvider,
-    fix: null,
-    linkLabel: l10n.signInLinkPlayStore,
-    link: _SignInHelpTarget.playServices,
-  ),
-};
-
-/// The sentence the pill subtitle has no room for, plus at most one gold link.
-///
-/// It WRAPS — uncapped, deliberately. A `maxLines` here would ellipsise a Malayalam explanation on
-/// a 320dp phone, and an explanation cut in half is worse than no explanation.
-/// The link is a separate tappable line, not an inline span: a `TapGestureRecognizer` inside a
-/// `Text.rich` must be owned and disposed or it leaks, and an 11px inline word is too small to aim
-/// at. The padding below IS the tap target.
-class _FixLine extends StatelessWidget {
-  const _FixLine({this.text, this.linkLabel, this.onLink});
-
-  final String? text;
-  final String? linkLabel;
-  final VoidCallback? onLink;
-
-  static const _text = TextStyle(
-    fontSize: 11.5,
-    height: 1.35,
-    color: Color.fromRGBO(250, 245, 236, 0.5),
-  );
-  static const _link = TextStyle(
-    fontSize: 11.5,
-    height: 1.35,
-    color: Color.fromRGBO(212, 160, 23, 0.85),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final label = linkLabel;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (text != null)
-          Text(text!, textAlign: TextAlign.center, style: _text),
-        if (label != null)
-          Semantics(
-            link: true,
-            label: label,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onLink,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
-                child: Text(label, textAlign: TextAlign.center, style: _link),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
+/// Every failed attempt gets the SAME line. The outcome still rides `AuthCancelled` into
+/// `login_cancelled`, but the screen no longer explains it: a sentence naming Play services or
+/// account settings, and a link out of the app, were three lines this audience cannot act on
+/// (owner's call). The one thing any of them can do is tap again -> that is the whole message.
+String _subtitleFor(AppLocalizations l10n, SignInOutcome? outcome) =>
+    outcome == null ? l10n.signInSubtitleIdle : l10n.signInNudgeRetry;
 
 /// The one-tap pill: 56px, r999, `rgba(20,9,12,.55)` fill, gold-50% border, solid gold on press.
 class _SignInPill extends StatefulWidget {

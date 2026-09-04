@@ -51,50 +51,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInSubtitleExchanging => 'Signing you in…';
 
   @override
-  String get signInNudgeBackedOutQuick => 'Didn\'t go through? Tap again';
-
-  @override
-  String get signInNudgeBackedOutSlow => 'Tap once and wait for Google';
-
-  @override
-  String get signInNudgeNeverOpened => 'Google didn\'t open. Tap again';
-
-  @override
-  String get signInNudgeAddAccount => 'Use an account on this phone';
-
-  @override
-  String get signInNudgeReauth => 'Tap again and pick an account';
-
-  @override
-  String get signInNudgeActivityClosed => 'Sign-in closed early. Tap again';
-
-  @override
-  String get signInNudgeNoProvider => 'Update Google Play services';
-
-  @override
-  String get signInFixBackedOutSlow =>
-      'Google is taking a while on this phone.';
-
-  @override
-  String get signInFixAddAccount =>
-      'No new account needed. Any Google account already on this phone works.';
-
-  @override
-  String get signInFixReauth =>
-      'Google couldn\'t verify that account. Re-sign in to Google in phone settings.';
-
-  @override
-  String get signInFixActivityClosed =>
-      'Google Play services closed the sign-in window.';
-
-  @override
-  String get signInLinkAccountSettings => 'Open account settings';
-
-  @override
-  String get signInLinkPlayServices => 'Check Google Play services';
-
-  @override
-  String get signInLinkPlayStore => 'Update in Play Store';
+  String get signInNudgeRetry => 'Tap again';
 
   @override
   String get signInTermsLink => 'Terms';

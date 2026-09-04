@@ -14,8 +14,7 @@
 //   * the language chip keeps its 48dp target and never comes within [kFooterGapDp] of the silk
 //     panel — the two are the only things on this screen that can collide, and the panel grows with
 //     the copy and the text size while the chip is pinned to the bottom inset. These EIGHT sizes are
-//     the bar; the l10n envelope's 320x569@1.3 frame is an accepted overlap, recorded and reasoned in
-//     `test/l10n/support/known_defects.dart` (`kAcceptedSignInChipOverlap`).
+//     the bar.
 //
 // Real fonts, per weight, or every width here is fiction: `flutter test` renders one flat box glyph
 // per character, which measures English ~2x too wide and Indic conjuncts at an advance they never

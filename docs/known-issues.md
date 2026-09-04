@@ -5,10 +5,6 @@ real time**. Nothing else. No changelog — close a line by deleting it.
 
 ## Open
 
-- **Sign-in: the panel overlaps the language chip ~17dp at 320dp + scale 1.3**, only with the
-  `reauthFailed` nudge in Tamil or Malayalam. ACCEPTED — the fix moved the layout on every phone to
-  buy that corner. Clearance is asserted on the eight real sizes (`sign_in_size_matrix_test.dart`);
-  the reason sits in `test/l10n/support/known_defects.dart`.
 - **The restyled language chip and the PostHog sideload gate have not run on a phone** — tests only.
 
 - **Meta deferred deep links are unproven until the App Ads Helper "Test deep link" run** (recipe in

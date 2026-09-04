@@ -1,13 +1,10 @@
-// The nudge is the only thing the sign-in wall says to a user who did not get in, so these pin the
-// two ways it can lie: showing a line that is not true of THIS attempt, and offering a link that
-// quietly does something else. A help tap in particular must never touch the sign-in attempt —
-// re-entering the Google flow from a text link would put a second surface over the first, which is
-// the one bug this screen exists to have fixed.
+// The retry line is the only thing the sign-in wall says to a user who did not get in, and it is the
+// SAME line for every outcome (owner's call: no explanation, no link — this audience cannot act on
+// either). These pin that: one line, never the idle line, never a sentence under the pill.
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
-import 'package:arul/features/auth/data/sign_in_help_links.dart';
 import 'package:arul/features/auth/data/sign_in_surface_clock.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
@@ -53,25 +50,13 @@ class _CountingAuthService implements AuthService {
   Future<void> deleteAccount() async {}
 }
 
-class _RecordingHelpLinks implements SignInHelpLinks {
-  final List<String> opened = [];
-
-  @override
-  Future<void> openAccountSettings() async => opened.add('accountSettings');
-
-  @override
-  Future<void> openPlayServices() async => opened.add('playServices');
-}
-
 void main() {
   late _CountingAuthService auth;
-  late _RecordingHelpLinks links;
   late List<String> routes;
   late SharedPreferences prefs;
 
   setUp(() async {
     auth = _CountingAuthService();
-    links = _RecordingHelpLinks();
     routes = [];
     SignInPhase.exchanging.value = false;
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -121,7 +106,6 @@ void main() {
           sharedPreferencesProvider.overrideWithValue(prefs),
           platformLocalesProvider.overrideWithValue(phoneLocales),
           authServiceProvider.overrideWithValue(auth),
-          signInHelpLinksProvider.overrideWithValue(links),
         ],
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
@@ -139,8 +123,8 @@ void main() {
     return AppLocalizations.of(tester.element(find.byType(SignInScreen).first));
   }
 
-  group('the line each outcome shows', () {
-    testWidgets('idle asks for an account and explains nothing', (
+  group('the line under the pill', () {
+    testWidgets('idle asks for an account and never shows the retry line', (
       tester,
     ) async {
       final l10n = await pump(tester);
@@ -148,11 +132,7 @@ void main() {
       expect(find.text(l10n.signInSubtitleIdle), findsOneWidget);
       expect(find.text(l10n.signInGoogle), findsOneWidget);
       expect(find.text(l10n.signInCaption), findsOneWidget);
-      // Nothing failed -> nothing to fix.
-      expect(find.text(l10n.signInFixBackedOutSlow), findsNothing);
-      expect(find.text(l10n.signInLinkAccountSettings), findsNothing);
-      expect(find.text(l10n.signInLinkPlayServices), findsNothing);
-      expect(find.text(l10n.signInLinkPlayStore), findsNothing);
+      expect(find.text(l10n.signInNudgeRetry), findsNothing);
     });
 
     testWidgets('the exchange is the ONE wait the app claims', (tester) async {
@@ -162,147 +142,45 @@ void main() {
 
       expect(find.text(l10n.signInSubtitleExchanging), findsOneWidget);
       expect(
-        find.text(l10n.signInNudgeBackedOutQuick),
+        find.text(l10n.signInNudgeRetry),
         findsNothing,
         reason: 'an attempt in flight has not failed yet',
       );
     });
 
-    testWidgets('a quick back-out gets the plain retry line and no fix line', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.backedOutQuick);
-
-      expect(find.text(l10n.signInNudgeBackedOutQuick), findsOneWidget);
-      expect(find.byType(GestureDetector), findsWidgets);
-      expect(find.text(l10n.signInFixBackedOutSlow), findsNothing);
-    });
-
-    testWidgets('a slow surface blames the phone, and offers no link', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.backedOutSlow);
-
-      expect(find.text(l10n.signInNudgeBackedOutSlow), findsOneWidget);
-      expect(find.text(l10n.signInFixBackedOutSlow), findsOneWidget);
-      expect(find.text(l10n.signInLinkAccountSettings), findsNothing);
-      expect(find.text(l10n.signInLinkPlayServices), findsNothing);
-    });
-
-    testWidgets('a surface that never drew never claims the user backed out', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.neverOpened);
-
-      expect(find.text(l10n.signInNudgeNeverOpened), findsOneWidget);
-      expect(find.text(l10n.signInNudgeBackedOutQuick), findsNothing);
-      expect(find.text(l10n.signInFixBackedOutSlow), findsNothing);
-    });
-
-    testWidgets('the add-account walkout is told it needed no new account', (
-      tester,
-    ) async {
-      final l10n = await pump(
-        tester,
-        outcome: SignInOutcome.addAccountAbandoned,
-      );
-
-      expect(find.text(l10n.signInNudgeAddAccount), findsOneWidget);
-      expect(find.text(l10n.signInFixAddAccount), findsOneWidget);
-      // Nothing outside the app can help here -> no link.
-      expect(find.text(l10n.signInLinkAccountSettings), findsNothing);
-    });
-
-    testWidgets('a failed re-auth points at the phone\'s Google settings', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.reauthFailed);
-
-      expect(find.text(l10n.signInNudgeReauth), findsOneWidget);
-      expect(find.text(l10n.signInFixReauth), findsOneWidget);
-      expect(find.text(l10n.signInLinkAccountSettings), findsOneWidget);
-    });
-
-    testWidgets('a closed window names Play services and links its listing', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.activityClosed);
-
-      expect(find.text(l10n.signInNudgeActivityClosed), findsOneWidget);
-      expect(find.text(l10n.signInFixActivityClosed), findsOneWidget);
-      expect(find.text(l10n.signInLinkPlayServices), findsOneWidget);
-    });
-
-    testWidgets('a missing provider offers the update and nothing else', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.noProvider);
-
-      expect(find.text(l10n.signInNudgeNoProvider), findsOneWidget);
-      expect(find.text(l10n.signInLinkPlayStore), findsOneWidget);
-      // The toast already carried the explanation -> the fix line is the link alone.
-      expect(find.text(l10n.signInFixActivityClosed), findsNothing);
-    });
-
-    testWidgets('every outcome renders a subtitle — none falls through', (
+    testWidgets('every failure shows the same retry line and nothing else', (
       tester,
     ) async {
       for (final outcome in SignInOutcome.values) {
         final l10n = await pump(tester, outcome: outcome);
-        final subtitle = switch (outcome) {
-          SignInOutcome.backedOutQuick => l10n.signInNudgeBackedOutQuick,
-          SignInOutcome.backedOutSlow => l10n.signInNudgeBackedOutSlow,
-          SignInOutcome.neverOpened => l10n.signInNudgeNeverOpened,
-          SignInOutcome.addAccountAbandoned => l10n.signInNudgeAddAccount,
-          SignInOutcome.reauthFailed => l10n.signInNudgeReauth,
-          SignInOutcome.activityClosed => l10n.signInNudgeActivityClosed,
-          SignInOutcome.noProvider => l10n.signInNudgeNoProvider,
-        };
-        expect(find.text(subtitle), findsOneWidget, reason: outcome.name);
+        expect(
+          find.text(l10n.signInNudgeRetry),
+          findsOneWidget,
+          reason: outcome.name,
+        );
         expect(
           find.text(l10n.signInSubtitleIdle),
           findsNothing,
           reason: '${outcome.name} must not fall back to the idle line',
         );
+        // The panel is caption, pill and the terms line — no sentence under the pill, and the only
+        // links on the screen are Terms and Privacy.
+        expect(
+          find.byWidgetPredicate(
+            (w) =>
+                w is Semantics &&
+                w.properties.link == true &&
+                w.properties.label != l10n.signInTermsLink &&
+                w.properties.label != l10n.signInPrivacyLink,
+          ),
+          findsNothing,
+          reason: '${outcome.name} must offer no help link',
+        );
       }
     });
   });
 
-  group('a help link opens its target and touches nothing else', () {
-    testWidgets('re-auth opens the account settings screen', (tester) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.reauthFailed);
-
-      await tester.tap(find.text(l10n.signInLinkAccountSettings));
-      await tester.pump();
-
-      expect(links.opened, ['accountSettings']);
-      expect(auth.signInCalls, 0, reason: 'a link tap is not a sign-in');
-      expect(auth.abandonCalls, 0, reason: 'nor a cancel');
-      expect(routes, isEmpty, reason: 'and it never leaves the wall');
-    });
-
-    testWidgets('a closed window opens the Play services listing', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.activityClosed);
-
-      await tester.tap(find.text(l10n.signInLinkPlayServices));
-      await tester.pump();
-
-      expect(links.opened, ['playServices']);
-      expect(auth.signInCalls, 0);
-    });
-
-    testWidgets('a missing provider opens the same listing', (tester) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.noProvider);
-
-      await tester.tap(find.text(l10n.signInLinkPlayStore));
-      await tester.pump();
-
-      expect(links.opened, ['playServices']);
-      expect(auth.signInCalls, 0);
-    });
-
+  group('the language trigger', () {
     testWidgets('the sheet follows the DEVICE mode, not the app theme', (
       tester,
     ) async {
@@ -330,17 +208,6 @@ void main() {
         Theme.of(tester.element(find.text('Tamil').first)).brightness,
         Brightness.dark,
       );
-    });
-
-    testWidgets('the nudge survives the tap — the screen does not reset', (
-      tester,
-    ) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.reauthFailed);
-
-      await tester.tap(find.text(l10n.signInLinkAccountSettings));
-      await tester.pump();
-
-      expect(find.text(l10n.signInNudgeReauth), findsOneWidget);
     });
   });
 

@@ -10,18 +10,12 @@ import '../../../core/crash/crash_provider.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
-import '../data/sign_in_help_links.dart';
 import '../domain/auth_service.dart';
 
 part 'auth_providers.g.dart';
 
 @Riverpod(keepAlive: true)
 ApiClient apiClient(Ref ref) => ApiClient();
-
-/// The out-of-app help targets the sign-in nudges can offer. Overridden in widget tests so a link
-/// tap is observable without a platform.
-@Riverpod(keepAlive: true)
-SignInHelpLinks signInHelpLinks(Ref ref) => const PlatformSignInHelpLinks();
 
 @Riverpod(keepAlive: true)
 AuthService authService(Ref ref) => ApiAuthService(

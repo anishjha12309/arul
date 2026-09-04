@@ -20,10 +20,10 @@ config error and a dismissal with one code.
 - **`login_cancelled` is a MIXED bucket** — a config error returns `canceled` after the user picked
   an account. Split on message text first, timing second; the two spell it differently
   (`description` vs `error`).
-- **Every nudge must be TRUE of THAT attempt** (`classifySignInOutcome`); an unknown message claims
-  nothing. **Copy FITS the pill slot at scale 1.0 in all six scripts** — shorten it, never scale it;
-  at large text the subtitle wraps and the pill grows. Nothing truncates. The trigger and help links
-  never start or cancel an attempt.
+- **ONE retry line for every failure — no fix line, no help link** (owner's call);
+  `classifySignInOutcome` still stamps `login_cancelled`. **Copy FITS the pill slot at scale 1.0 in
+  all six scripts** — shorten, never scale; nothing truncates. The language trigger never starts
+  or cancels an attempt.
 - Classify by typed `code` only — a "cancel" sniff swallowed real failures. **Every failure return
   goes through `_googleFailure`** or the funnel loses it.
 - The stall guard abandons only on CONTINUOUS FOREGROUND time; backgrounding extends it, returning

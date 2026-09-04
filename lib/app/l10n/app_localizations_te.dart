@@ -51,50 +51,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get signInSubtitleExchanging => 'సైన్ ఇన్ చేస్తోంది…';
 
   @override
-  String get signInNudgeBackedOutQuick => 'పూర్తి కాలేదా? మళ్లీ నొక్కండి';
-
-  @override
-  String get signInNudgeBackedOutSlow => 'ఒకసారి నొక్కి Google కోసం ఆగండి';
-
-  @override
-  String get signInNudgeNeverOpened => 'Google తెరవలేదు, మళ్లీ నొక్కండి';
-
-  @override
-  String get signInNudgeAddAccount => 'ఈ ఫోన్‌లోని ఖాతాను వాడండి';
-
-  @override
-  String get signInNudgeReauth => 'మళ్లీ నొక్కి ఖాతాను ఎంచుకోండి';
-
-  @override
-  String get signInNudgeActivityClosed => 'సైన్ ఇన్ ముందే మూసింది, నొక్కండి';
-
-  @override
-  String get signInNudgeNoProvider => 'Google Play సేవలను నవీకరించండి';
-
-  @override
-  String get signInFixBackedOutSlow =>
-      'ఈ ఫోన్‌లో Google కొంత సమయం తీసుకుంటోంది.';
-
-  @override
-  String get signInFixAddAccount =>
-      'కొత్త ఖాతా అవసరం లేదు. ఈ ఫోన్‌లో ఇప్పటికే ఉన్న ఏ Google ఖాతా అయినా పని చేస్తుంది.';
-
-  @override
-  String get signInFixReauth =>
-      'ఆ ఖాతాను Google ధృవీకరించలేకపోయింది. ఫోన్ సెట్టింగ్‌లలో Googleకి మళ్లీ సైన్ ఇన్ చేయండి.';
-
-  @override
-  String get signInFixActivityClosed =>
-      'Google Play సేవలు సైన్ ఇన్ విండోను మూసివేశాయి.';
-
-  @override
-  String get signInLinkAccountSettings => 'ఖాతా సెట్టింగ్‌లు తెరవండి';
-
-  @override
-  String get signInLinkPlayServices => 'Google Play సేవలను చూడండి';
-
-  @override
-  String get signInLinkPlayStore => 'Play Storeలో నవీకరించండి';
+  String get signInNudgeRetry => 'మళ్లీ నొక్కండి';
 
   @override
   String get signInTermsLink => 'నిబంధనలు';

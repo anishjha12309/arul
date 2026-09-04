@@ -39,11 +39,6 @@ class MainActivity : FlutterFragmentActivity() {
 
         private const val RINGTONE_CHANNEL = "com.hsrutility.arul/ringtone_set"
 
-        // The sign-in screen's "Open account settings" nudge, for an account Google will not
-        // re-verify. url_launcher builds an ACTION_VIEW from a URI and has no Intent.parseUri, so a
-        // Settings ACTION is out of its reach -> this channel, not a link.
-        private const val SIGN_IN_HELP_CHANNEL = "com.hsrutility.arul/sign_in_help"
-
         // Request code for the pre-Android-10 WRITE_EXTERNAL_STORAGE grant a custom ringtone needs there.
         private const val STORAGE_PERMISSION_REQUEST = 5001
 
@@ -51,9 +46,9 @@ class MainActivity : FlutterFragmentActivity() {
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
 
         // Below this the phone is "low memory" for the auth video: a 4 GB phone reports ~3.6 GiB
-        // and a 6 GB phone ~5.5 GiB -> 4.5 GiB puts every 4 GB phone on the poster. Half of the
-        // handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
-        private const val LOW_RAM_TOTAL_BYTES = 4608L * 1024 * 1024
+        // and a 6 GB phone ~5.5 GiB -> 4 GiB puts every 4 GB phone on the poster and no 6 GB phone.
+        // Half of the handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
+        private const val LOW_RAM_TOTAL_BYTES = 4096L * 1024 * 1024
 
         // QA-only override for the rule above -> honoured on sideloads only (see isLowRamDevice).
         private const val FORCE_LOW_RAM_SETTING = "arul_force_low_ram"
@@ -151,9 +146,14 @@ class MainActivity : FlutterFragmentActivity() {
             // NOT `info.lowMemory`: that is the OS's moment-in-time pressure flag, and 4–6 GB
             // Android 13/14 phones trip it at a cold start right after install -> capable phones got
             // the poster at random and the population that took the path could not be identified.
-            // Only the two stable facts about the hardware decide (owner's call).
+            // Android 12 and older joins the rule as a THIRD stable fact: the one build that carried
+            // the pressure flag put far more old 6 GB phones on the poster and lifted their sign-in
+            // from ~66% to ~79%, while the same flag cost Android 13/14 six points. OS version keeps
+            // the gain, drops the randomness, and names the population in analytics (owner's call).
             (!isPlayInstall() && forced) ||
-                am.isLowRamDevice || info.totalMem < LOW_RAM_TOTAL_BYTES
+                am.isLowRamDevice ||
+                info.totalMem < LOW_RAM_TOTAL_BYTES ||
+                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
         } catch (e: Exception) {
             false
         }
@@ -245,23 +245,6 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
-
-        // One method: the phone's Google account screen, for a sign-in Google refused to re-verify.
-        // Best-effort by contract -> the nudge above the link already said what went wrong, and a
-        // second error about an unreachable settings screen teaches the user nothing.
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            SIGN_IN_HELP_CHANNEL,
-        ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "openAccountSettings" -> {
-                    openAccountSettingsScreen()
-                    result.success(null)
-                }
-
-                else -> result.notImplemented()
-            }
-        }
 
         // Ringtone set -> WRITE_SETTINGS check and deep-link, MediaStore register, then the default-tone set.
         MethodChannel(
@@ -464,27 +447,6 @@ class MainActivity : FlutterFragmentActivity() {
         runOnUiThread {
             for (payload in payloads) channel.invokeMethod("onDeferredDeepLink", payload)
         }
-    }
-
-    // ACTION_SYNC_SETTINGS is the accounts screen on stock Android, but several OEM builds ship no
-    // activity for it -> walk the same kind of chain as the WRITE_SETTINGS deep link below:
-    // accounts -> add-account -> the settings root, which resolves everywhere.
-    // Every intent failing is a silent no-op, which is the contract for a help link.
-    private fun openAccountSettingsScreen() {
-        val candidates = listOf(
-            Intent(Settings.ACTION_SYNC_SETTINGS),
-            Intent(Settings.ACTION_ADD_ACCOUNT),
-            Intent(Settings.ACTION_SETTINGS),
-        )
-        for (intent in candidates) {
-            try {
-                startActivity(intent)
-                return
-            } catch (e: Exception) {
-                Log.w(TAG, "account-settings intent unresolvable, trying fallback", e)
-            }
-        }
-        Log.e(TAG, "No settings screen resolvable for the sign-in account nudge")
     }
 
     // The per-package ACTION_MANAGE_WRITE_SETTINGS is unresolvable on some OEM builds -> startActivity throws there.

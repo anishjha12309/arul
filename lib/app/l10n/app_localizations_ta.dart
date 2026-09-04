@@ -51,50 +51,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get signInSubtitleExchanging => 'உள்நுழைகிறது…';
 
   @override
-  String get signInNudgeBackedOutQuick => 'முடியவில்லையா? தட்டவும்';
-
-  @override
-  String get signInNudgeBackedOutSlow => 'தட்டி Google-ஐக் காக்கவும்';
-
-  @override
-  String get signInNudgeNeverOpened => 'Google வரவில்லை, தட்டவும்';
-
-  @override
-  String get signInNudgeAddAccount => 'உள்ள கணக்கைத் தேர்க';
-
-  @override
-  String get signInNudgeReauth => 'மீண்டும் கணக்கைத் தேர்க';
-
-  @override
-  String get signInNudgeActivityClosed => 'சாளரம் மூடியது, தட்டவும்';
-
-  @override
-  String get signInNudgeNoProvider => 'Google Play புதுப்பிக்கவும்';
-
-  @override
-  String get signInFixBackedOutSlow =>
-      'இந்தத் தொலைபேசியில் Google சற்று நேரம் எடுக்கிறது.';
-
-  @override
-  String get signInFixAddAccount =>
-      'புதிய கணக்கு தேவையில்லை. இந்தத் தொலைபேசியில் ஏற்கனவே உள்ள எந்த Google கணக்கும் போதும்.';
-
-  @override
-  String get signInFixReauth =>
-      'அந்தக் கணக்கை Google சரிபார்க்க முடியவில்லை. தொலைபேசி அமைப்புகளில் Google-இல் மீண்டும் உள்நுழையவும்.';
-
-  @override
-  String get signInFixActivityClosed =>
-      'Google Play சேவைகள் உள்நுழைவுச் சாளரத்தை மூடிவிட்டன.';
-
-  @override
-  String get signInLinkAccountSettings => 'கணக்கு அமைப்புகளைத் திறக்க';
-
-  @override
-  String get signInLinkPlayServices => 'Google Play சேவைகளைப் பார்க்க';
-
-  @override
-  String get signInLinkPlayStore => 'Play Store-இல் புதுப்பிக்க';
+  String get signInNudgeRetry => 'மீண்டும் தட்டவும்';
 
   @override
   String get signInTermsLink => 'விதிமுறைகள்';

@@ -135,3 +135,11 @@ custom_domain = true
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+# ─── Placement ─────────────────────────────────────────────────────────────────
+# Every DB route does 2–3 Hyperdrive round trips to Neon in ap-southeast-1, and about a fifth of Indian
+# traffic enters Cloudflare in Europe (Jio peering -> MRS), so those requests paid EU->SIN per hop.
+# Smart placement runs the Worker near Neon instead of near the user -> one long hop, not three.
+# Browse never reaches this Worker (edge-cached catalog), so nothing latency-sensitive moves away from users.
+[placement]
+mode = "smart"

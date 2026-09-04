@@ -51,49 +51,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get signInSubtitleExchanging => 'साइन इन हो रहा है…';
 
   @override
-  String get signInNudgeBackedOutQuick => 'नहीं हुआ? फिर से टैप करें';
-
-  @override
-  String get signInNudgeBackedOutSlow => 'एक बार टैप करें, Google का इंतज़ार';
-
-  @override
-  String get signInNudgeNeverOpened => 'Google नहीं खुला, फिर से टैप करें';
-
-  @override
-  String get signInNudgeAddAccount => 'इस फ़ोन का मौजूदा खाता चुनें';
-
-  @override
-  String get signInNudgeReauth => 'फिर से टैप करें और खाता चुनें';
-
-  @override
-  String get signInNudgeActivityClosed => 'साइन इन जल्दी बंद हुआ, फिर टैप करें';
-
-  @override
-  String get signInNudgeNoProvider => 'पहले Google Play सेवाएं अपडेट करें';
-
-  @override
-  String get signInFixBackedOutSlow => 'इस फ़ोन पर Google थोड़ा समय ले रहा है।';
-
-  @override
-  String get signInFixAddAccount =>
-      'नया खाता ज़रूरी नहीं। इस फ़ोन पर मौजूद कोई भी Google खाता चलेगा।';
-
-  @override
-  String get signInFixReauth =>
-      'Google उस खाते की पुष्टि नहीं कर सका। फ़ोन सेटिंग में Google में दोबारा साइन इन करें।';
-
-  @override
-  String get signInFixActivityClosed =>
-      'Google Play सेवाओं ने साइन इन विंडो बंद कर दी।';
-
-  @override
-  String get signInLinkAccountSettings => 'खाता सेटिंग खोलें';
-
-  @override
-  String get signInLinkPlayServices => 'Google Play सेवाएं देखें';
-
-  @override
-  String get signInLinkPlayStore => 'Play Store में अपडेट करें';
+  String get signInNudgeRetry => 'फिर से टैप करें';
 
   @override
   String get signInTermsLink => 'शर्तें';

@@ -51,50 +51,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get signInSubtitleExchanging => 'ಸೈನ್ ಇನ್ ಆಗುತ್ತಿದೆ…';
 
   @override
-  String get signInNudgeBackedOutQuick => 'ಆಗಲಿಲ್ಲವೇ? ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ';
-
-  @override
-  String get signInNudgeBackedOutSlow => 'ಟ್ಯಾಪ್ ಮಾಡಿ Google ಗಾಗಿ ಕಾಯಿರಿ';
-
-  @override
-  String get signInNudgeNeverOpened => 'Google ತೆರೆಯಲಿಲ್ಲ, ಟ್ಯಾಪ್ ಮಾಡಿ';
-
-  @override
-  String get signInNudgeAddAccount => 'ಈ ಫೋನ್‌ನ ಖಾತೆಯನ್ನು ಬಳಸಿ';
-
-  @override
-  String get signInNudgeReauth => 'ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ ಖಾತೆ ಆರಿಸಿ';
-
-  @override
-  String get signInNudgeActivityClosed => 'ಬೇಗ ಮುಚ್ಚಿತು, ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ';
-
-  @override
-  String get signInNudgeNoProvider => 'Google Play ಸೇವೆಗಳನ್ನು ನವೀಕರಿಸಿ';
-
-  @override
-  String get signInFixBackedOutSlow =>
-      'ಈ ಫೋನ್‌ನಲ್ಲಿ Google ಸ್ವಲ್ಪ ಸಮಯ ತೆಗೆದುಕೊಳ್ಳುತ್ತಿದೆ.';
-
-  @override
-  String get signInFixAddAccount =>
-      'ಹೊಸ ಖಾತೆ ಬೇಡ. ಈ ಫೋನ್‌ನಲ್ಲಿ ಈಗಾಗಲೇ ಇರುವ ಯಾವುದೇ Google ಖಾತೆ ಸಾಕು.';
-
-  @override
-  String get signInFixReauth =>
-      'ಆ ಖಾತೆಯನ್ನು Google ಪರಿಶೀಲಿಸಲಾಗಲಿಲ್ಲ. ಫೋನ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ Google ಗೆ ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.';
-
-  @override
-  String get signInFixActivityClosed =>
-      'Google Play ಸೇವೆಗಳು ಸೈನ್ ಇನ್ ವಿಂಡೋವನ್ನು ಮುಚ್ಚಿದವು.';
-
-  @override
-  String get signInLinkAccountSettings => 'ಖಾತೆ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ತೆರೆಯಿರಿ';
-
-  @override
-  String get signInLinkPlayServices => 'Google Play ಸೇವೆಗಳನ್ನು ನೋಡಿ';
-
-  @override
-  String get signInLinkPlayStore => 'Play Store ನಲ್ಲಿ ನವೀಕರಿಸಿ';
+  String get signInNudgeRetry => 'ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ';
 
   @override
   String get signInTermsLink => 'ನಿಯಮಗಳು';
