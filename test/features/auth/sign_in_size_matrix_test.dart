@@ -4,13 +4,17 @@
 // other axis: the eight logical sizes that cover most of the install base, every outcome the nudge
 // can show, and the OS text scale on top. What it pins:
 //
-//   * **at text scale 1.0 the COPY FITS** — the title needs no scaling at all and the subtitle sets
-//     on ONE line, in all six scripts. Neither is ever shrunk to make a translation fit: at 12px a
-//     scaled Tamil or Malayalam subtitle lands near 10px, on exactly the phones this nudge is for.
-//     Shorten the copy instead; the failure message says which string and by how much.
-//   * **at 1.3 nothing truncates and nothing overflows** — the subtitle may take a second line and
-//     the pill grows to hold it. A nudge the user cannot finish reading is not a nudge, and half of
-//     these lines end in the verb.
+// The type on this screen is a FIXED size on every phone (owner's call) and the LAYOUT absorbs a
+// translation that outgrows its slot — the ordinary way a shipped button behaves. So what this
+// pins is the absorbing, not the fitting:
+//
+//   * **the subtitle WRAPS, within a budget** — at most TWO lines at text scale 1.0 and THREE at
+//     1.3, in all six scripts, with the pill's `minHeight` growing to hold them. Past that the line
+//     stops being a line under a button, so the copy is what gives.
+//   * **the title stays ONE line** — it is a button label; `scaleDown` is how it absorbs a long
+//     translation, and that is allowed at any scale.
+//   * **nothing truncates and nothing overflows, at either scale** — no ellipsis on either line. A
+//     nudge the user cannot finish reading is not a nudge, and half of these lines end in the verb.
 //   These EIGHT sizes are the bar.
 //
 // Real fonts, per weight, or every width here is fiction: `flutter test` renders one flat box glyph
@@ -29,7 +33,7 @@ import '../../l10n/support/real_font_theme.dart';
 import '../../l10n/support/registry.dart';
 
 /// The top eight phone sizes in the install base, in logical dp.
-/// Narrowest first — 360dp leaves the pill's two lines 180dp, and that is the binding case.
+/// Narrowest first — 360dp leaves the pill's lines ~180dp, and that is the binding case.
 const _sizes = <(double, double)>[
   (360, 724),
   (360, 730),
@@ -43,6 +47,9 @@ const _sizes = <(double, double)>[
 
 /// 1.0 and 1.3 — the OS font sizes people actually run, same pair the l10n envelope gates on.
 const _scales = <double>[1.0, 1.3];
+
+/// How many lines the subtitle may take at each of those scales.
+int _lineBudget(double scale) => scale > 1.0 ? 3 : 2;
 
 /// Idle plus every failure the screen speaks to. `null` is idle.
 const _states = <SignInOutcome?>[null, ...SignInOutcome.values];
@@ -107,22 +114,15 @@ void main() {
               failures.add('$where — $message');
             }
 
-            // ── The title: one line, and at 1.0 never scaled ───────────────────────────
+            // ── The title: ONE line, never truncated ───────────────────────────────────
+            // It may be scaled down: that is a button label absorbing a long translation, and
+            // `scaleDown` is the pill's own handling of it.
             final titleBox = tester.renderObject<RenderBox>(
               find.byKey(kSignInTitleKey),
             );
             final title = _descendants(
               titleBox,
             ).whereType<RenderParagraph>().single;
-            final slot = titleBox.constraints.maxWidth;
-            if (scale == 1.0 && title.size.width > slot + 0.01) {
-              failures.add(
-                '$where — the pill TITLE needs '
-                '${title.size.width.toStringAsFixed(1)}dp of a '
-                '${slot.toStringAsFixed(0)}dp slot at 15px, so the safety net had to scale it: '
-                '"${title.text.toPlainText()}". Shorten the title.',
-              );
-            }
             if (title.didExceedMaxLines) {
               failures.add(
                 '$where — the pill title was truncated: '
@@ -130,7 +130,7 @@ void main() {
               );
             }
 
-            // ── The subtitle: one line at 1.0, at most two at 1.3, never an ellipsis ────
+            // ── The subtitle: inside its line budget, never an ellipsis ────────────────
             final subtitle = tester.renderObject<RenderParagraph>(
               find.byKey(kSignInSubtitleKey),
             );
@@ -141,7 +141,8 @@ void main() {
               );
             }
             final lines = _lineCount(subtitle);
-            if (scale == 1.0 && lines != 1) {
+            final budget = _lineBudget(scale);
+            if (lines > budget) {
               final painter = TextPainter(
                 text: subtitle.text,
                 textDirection: subtitle.textDirection,
@@ -150,8 +151,8 @@ void main() {
               final need = painter.width;
               painter.dispose();
               failures.add(
-                '$where — the subtitle wrapped to $lines lines at 12px: it needs '
-                '${need.toStringAsFixed(1)}dp of a '
+                '$where — the subtitle took $lines lines at ${_px(subtitle)}, budget $budget: '
+                'unwrapped it needs ${need.toStringAsFixed(1)}dp of a '
                 '${subtitle.constraints.maxWidth.toStringAsFixed(0)}dp slot: '
                 '"${subtitle.text.toPlainText()}". Shorten the line.',
               );
@@ -170,6 +171,11 @@ void main() {
     });
   }
 }
+
+/// The size the wall set this paragraph at, read back rather than hardcoded so a change of size
+/// cannot leave a lying message.
+String _px(RenderParagraph paragraph) =>
+    '${paragraph.text.style?.fontSize?.toStringAsFixed(1) ?? '?'}px';
 
 /// How many lines the paragraph actually took in its own slot.
 /// `RenderParagraph` does not expose its line metrics, so re-lay-out its exact span at the width it

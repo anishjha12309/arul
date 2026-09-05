@@ -193,7 +193,7 @@ abstract class AppLocalizations {
   /// No description provided for @signInNudgeRetry.
   ///
   /// In en, this message translates to:
-  /// **'Tap again'**
+  /// **'Click here to sign in'**
   String get signInNudgeRetry;
 
   /// No description provided for @signInTermsLink.

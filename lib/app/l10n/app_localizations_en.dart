@@ -51,7 +51,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInSubtitleExchanging => 'Signing you in…';
 
   @override
-  String get signInNudgeRetry => 'Tap again';
+  String get signInNudgeRetry => 'Click here to sign in';
 
   @override
   String get signInTermsLink => 'Terms';

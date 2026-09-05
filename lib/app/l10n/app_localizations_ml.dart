@@ -51,7 +51,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String get signInSubtitleExchanging => 'സൈൻ ഇൻ ചെയ്യുന്നു…';
 
   @override
-  String get signInNudgeRetry => 'വീണ്ടും ടാപ്പ് ചെയ്യുക';
+  String get signInNudgeRetry => 'സൈൻ ഇൻ ചെയ്യാൻ ഇവിടെ ടാപ്പ് ചെയ്യുക';
 
   @override
   String get signInTermsLink => 'നിബന്ധനകൾ';

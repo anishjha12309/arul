@@ -51,7 +51,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get signInSubtitleExchanging => 'உள்நுழைகிறது…';
 
   @override
-  String get signInNudgeRetry => 'மீண்டும் தட்டவும்';
+  String get signInNudgeRetry => 'உள்நுழைய இங்கே தட்டவும்';
 
   @override
   String get signInTermsLink => 'விதிமுறைகள்';

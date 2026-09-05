@@ -51,7 +51,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get signInSubtitleExchanging => 'సైన్ ఇన్ చేస్తోంది…';
 
   @override
-  String get signInNudgeRetry => 'మళ్లీ నొక్కండి';
+  String get signInNudgeRetry => 'సైన్ ఇన్ చేయడానికి ఇక్కడ నొక్కండి';
 
   @override
   String get signInTermsLink => 'నిబంధనలు';

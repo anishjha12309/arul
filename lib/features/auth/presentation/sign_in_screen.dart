@@ -17,6 +17,29 @@ import '../domain/sign_in_outcome.dart';
 import '../providers/auth_providers.dart';
 import 'widgets/video_background.dart';
 
+/// The wall's caption.
+///
+/// Google's own credential sheet lands ON this screen, drawn by GMS and unstyled by us: ~16sp
+/// account rows under a ~22sp title. Beside it the panel's older 13.5/15/12 read a size small, so
+/// the whole panel is set one step up (owner's call). Flat numbers on every phone — a translation
+/// that outgrows its slot is handled where it happens, not by shrinking the screen.
+const double _kCaptionSize = 15;
+
+/// The pill's subtitle, one step under the title.
+const double _kSubtitleSize = 13;
+
+/// The pill's MINIMUM height at this type size. It still grows past it whenever the subtitle wraps.
+const double _kPillMinHeight = 64;
+
+/// The footer's policy links.
+const double _kPolicySize = 12;
+
+/// The panel's corner and vertical padding, opened up with the type so the bigger lines are not
+/// crowded against the edges. Horizontal padding stays at 18: every dp of it comes straight out of
+/// the pill's text slot.
+const double _kPanelRadius = 23;
+const double _kPanelPadY = 25;
+
 /// Sign-in.
 ///
 /// This IS a wall, deliberately (owner's call) — every signed-out session lands here, no skip.
@@ -43,11 +66,6 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
-  /// The splash's eyebrow, repeated so the two brand beats read as one handoff.
-  /// Same string, same [ArulTokens.tagline] — change one and you must change the other.
-  /// Latin-only and UNLOCALIZED with the wordmark: both are the brand mark, not copy.
-  static const _tagline = 'DEVOTIONAL WALLPAPERS & RINGTONES';
-
   bool _signingIn = false;
 
   /// What the last ended-without-a-session attempt actually did, or null while nothing has failed.
@@ -165,39 +183,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               decoration: BoxDecoration(gradient: ArulTokens.signInScrim),
             ),
 
-            // Wordmark and tagline are the only things on bare artwork -> the only over-media shadows.
+            // The wordmark is the only thing on bare artwork -> the only over-media shadow.
+            // The splash keeps the eyebrow under it; the wall does NOT — the panel below now
+            // carries the type, and a tracked rule of caps above it read as a third voice.
             // The scrim is only ~.29 this far down, which a bright sky walks straight through.
             Positioned(
               left: 0,
               right: 0,
               top: 112,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Arul',
-                    textAlign: TextAlign.center,
-                    style: ArulTokens.wordmarkSignIn.copyWith(
-                      shadows: ArulTokens.overMediaShadow,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // At .42em the eyebrow measures ~364 and a 360dp phone breaks it over two lines.
-                  // Two lines read as a heading, not a tracked rule of type -> shrink, never wrap.
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _tagline,
-                        maxLines: 1,
-                        style: ArulTokens.tagline.copyWith(
-                          shadows: ArulTokens.overMediaShadow,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              child: Text(
+                'Arul',
+                textAlign: TextAlign.center,
+                style: ArulTokens.wordmarkSignIn.copyWith(
+                  shadows: ArulTokens.overMediaShadow,
+                ),
               ),
             ),
 
@@ -217,6 +216,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       l10n.signInCaption,
                       textAlign: TextAlign.center,
                       style: ArulTokens.body.copyWith(
+                        fontSize: _kCaptionSize,
                         color: ArulTokens.ivory.withValues(alpha: 0.8),
                       ),
                     ),
@@ -245,10 +245,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-/// The pill title's type, shared with the language chip's label so the two controls cannot drift
-/// apart on size, weight or colour — the chip adds only the over-media shadow it needs off-panel.
+/// The pill title's type. 19 w600 — the largest thing on the panel and the line Google's own sheet
+/// is read beside.
 const TextStyle kSignInTitleStyle = TextStyle(
-  fontSize: 15,
+  fontSize: 17,
   fontWeight: FontWeight.w600,
   color: ArulTokens.ivory,
 );
@@ -263,7 +263,7 @@ const Key kSignInPanelKey = Key('signIn.panel');
 const Key kSignInTitleKey = Key('signIn.pill.title');
 
 /// The pill's subtitle line. The size matrix lays it out at its own constraints and counts lines:
-/// exactly one at text scale 1.0 in every language, and never a truncation at any size.
+/// at most two at text scale 1.0 and three at 1.3, in every language, never a truncation.
 @visibleForTesting
 const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 
@@ -276,7 +276,8 @@ const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 String _subtitleFor(AppLocalizations l10n, SignInOutcome? outcome) =>
     outcome == null ? l10n.signInSubtitleIdle : l10n.signInNudgeRetry;
 
-/// The one-tap pill: 56px, r999, `rgba(20,9,12,.55)` fill, gold-50% border, solid gold on press.
+/// The one-tap pill: r999, `rgba(20,9,12,.55)` fill, gold-50% border, solid gold on press,
+/// [_kPillMinHeight] tall or taller.
 class _SignInPill extends StatefulWidget {
   const _SignInPill({
     required this.title,
@@ -322,12 +323,10 @@ class _SignInPillState extends State<_SignInPill> {
       onTapCancel: () => _setPressed(false),
       onTap: widget.onTap,
       child: Container(
-        // A MINIMUM, not a height. At the OS text sizes people run, a two-line block in six scripts
-        // does not fit a fixed 56 (Devanagari sets ~40% taller per line and overflowed it by 2px at
-        // 1.3x). The pill grows instead of clipping, and only when the subtitle actually wraps.
-        constraints: const BoxConstraints(
-          minHeight: ArulTokens.signInPillHeight,
-        ),
+        // A MINIMUM, not a height. A wrapped subtitle, or a script that sets ~40% taller per line
+        // (Devanagari) at a large OS text size, does not fit a fixed box. The pill GROWS instead of
+        // clipping, and only when the subtitle actually wraps.
+        constraints: const BoxConstraints(minHeight: _kPillMinHeight),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: _pillFill,
@@ -350,14 +349,12 @@ class _SignInPillState extends State<_SignInPill> {
               child: const _GoogleGMark(size: 20),
             ),
             const SizedBox(width: 12),
-            // Both lines are written to FIT the slot at their own size, at text scale 1.0, in all
-            // six scripts — that is the copy rule, and the size matrix is what enforces it. Neither
-            // line is ever SHRUNK to make a translation fit: at 12px in Tamil or Malayalam a scaled
-            // subtitle lands near 10px, on exactly the phones and readers this nudge exists for.
-            // What each line does when the OS text size grows differs, because the two jobs differ:
-            //   * the TITLE is a button label and must stay one line -> scaleDown, as a large-text
-            //     safety net only; at 1.0 it is never scaled.
-            //   * the SUBTITLE is a sentence -> it WRAPS to a second line and the pill grows.
+            // The type is a fixed size and the LAYOUT absorbs a translation that outgrows its
+            // slot — the ordinary way a shipped button behaves, not a screen that resizes itself.
+            // The two lines absorb it differently, because their jobs differ:
+            //   * the TITLE is a button label and must stay ONE line -> scaleDown.
+            //   * the SUBTITLE is a sentence -> it WRAPS and the pill grows to hold it.
+            // Neither ever truncates and neither is ellipsised.
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -381,14 +378,15 @@ class _SignInPillState extends State<_SignInPill> {
                     child: Text(
                       widget.subtitle,
                       key: kSignInSubtitleKey,
-                      // TWO lines is the design budget on a 360dp phone: a line that fits at 1.0
-                      // needs at most 1.3 slots at 1.3. The third exists for the 320dp frame the
-                      // l10n envelope gates on, where the slot is 140dp and wrapping is limited by
-                      // WORD boundaries — Tamil's "Google வரவில்லை, தட்டவும்" is three chunks that
-                      // no two lines can hold. No ellipsis anywhere: nothing on this screen truncates.
-                      maxLines: 3,
+                      // The budget the size matrix pins on the phones people hold: at most TWO
+                      // lines at text scale 1.0 and THREE at 1.3, in all six scripts. The fourth is
+                      // for the 320dp frame the l10n envelope gates on, where the slot is 140dp and
+                      // wrapping is word-bounded — a Malayalam or Tamil sentence is four chunks
+                      // there and no three lines can hold it. No ellipsis anywhere: nothing on this
+                      // screen truncates, and a nudge half-read is not a nudge.
+                      maxLines: 4,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: _kSubtitleSize,
                         color: ArulTokens.ivory.withValues(alpha: 0.6),
                       ),
                     ),
@@ -434,7 +432,7 @@ class _SilkPanel extends StatelessWidget {
 
   final List<Widget> children;
 
-  static final _radius = BorderRadius.circular(ArulTokens.cardRadius);
+  static final _radius = BorderRadius.circular(_kPanelRadius);
 
   @override
   Widget build(BuildContext context) {
@@ -450,7 +448,10 @@ class _SilkPanel extends StatelessWidget {
           borderRadius: _radius,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: _kPanelPadY,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -466,11 +467,14 @@ class _SilkPanel extends StatelessWidget {
   }
 }
 
-/// 'Terms · Privacy', 11px, faint ivory, gold-85% links.
+/// 'Terms · Privacy' at [_kPolicySize], faint ivory, gold-85% links.
 ///
 /// A [TapGestureRecognizer] must be owned and disposed by a stateful widget or it leaks.
-/// So this is a Row of two tappable children, not one `Text.rich` with spans.
-/// 11px glyphs are far too small to aim at -> the padding below is the TAP TARGET, not spacing.
+/// So this is a row of two tappable children, not one `Text.rich` with spans.
+/// These glyphs are far too small to aim at -> the padding below is the TAP TARGET, not spacing.
+/// A `Wrap`, not a `Row`: at a large OS text size on a 320dp frame the two localized labels are
+/// wider than the panel, and a legal footer stacks rather than clips. It lays out identically to a
+/// centred Row whenever it fits, which is every ordinary phone.
 class _TermsPrivacyLine extends StatelessWidget {
   const _TermsPrivacyLine();
 
@@ -478,9 +482,9 @@ class _TermsPrivacyLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // This sits on the silk panel, not the wallpaper -> a shadow on a solid ground reads as fuzz.
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _PolicyLink(label: l10n.signInTermsLink, doc: PolicyDoc.terms),
         const Text(' · ', style: _policyBase),
@@ -491,11 +495,11 @@ class _TermsPrivacyLine extends StatelessWidget {
 }
 
 const _policyBase = TextStyle(
-  fontSize: 11,
+  fontSize: _kPolicySize,
   color: Color.fromRGBO(250, 245, 236, 0.5),
 );
 const _policyLink = TextStyle(
-  fontSize: 11,
+  fontSize: _kPolicySize,
   color: Color.fromRGBO(212, 160, 23, 0.85),
 );
 

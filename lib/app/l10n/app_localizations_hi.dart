@@ -51,7 +51,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get signInSubtitleExchanging => 'साइन इन हो रहा है…';
 
   @override
-  String get signInNudgeRetry => 'फिर से टैप करें';
+  String get signInNudgeRetry => 'साइन इन करने के लिए यहाँ टैप करें';
 
   @override
   String get signInTermsLink => 'शर्तें';

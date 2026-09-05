@@ -51,7 +51,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get signInSubtitleExchanging => 'ಸೈನ್ ಇನ್ ಆಗುತ್ತಿದೆ…';
 
   @override
-  String get signInNudgeRetry => 'ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ';
+  String get signInNudgeRetry => 'ಸೈನ್ ಇನ್ ಮಾಡಲು ಇಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ';
 
   @override
   String get signInTermsLink => 'ನಿಯಮಗಳು';

@@ -80,18 +80,21 @@ that Google's surface came up, a GMS activity over ours. Null means no surface w
 separates the user's back-out from the phone's wait. `providerConfigurationError` routes off the
 failure KIND, never a message; an unrecognised message classifies as nothing.
 
-- **The copy fits; the type never shrinks.** The pill's slot is 180 dp on a 360 dp phone, and every
-  title (15 px) and subtitle (12 px) must fit it AT TEXT SCALE 1.0 in all six scripts — shorten the
-  string, never scale it. A scaled Tamil or Malayalam subtitle lands near 10 px, on exactly the
-  phones the retry line is for.
-- **At large text the two lines diverge, because their jobs do.** The title is a button label and
-  stays one line (`scaleDown`, a net that never fires at 1.0); the subtitle is a sentence, WRAPS, and
-  the pill's 56 dp is a `minHeight` so it grows. Nothing truncates — no ellipsis on either line. Its
-  three-line cap is for the 320 dp frame, where the slot is 140 dp and wrapping is word-bounded.
-  `sign_in_size_matrix_test.dart` enforces it.
+- **The type is a FIXED size on every phone and the LAYOUT absorbs a long translation** (owner's
+  call: handle it the way a shipped app does, not by resizing the screen). The sizes live as
+  constants at the top of `sign_in_screen.dart`, set against Google's own sheet, which lands on this
+  screen at ~16 sp rows. The panel's 18 dp side padding may not grow: every dp of it leaves the
+  pill's 180 dp slot.
+- **The two lines absorb it differently, because their jobs do.** The title is a button label and
+  stays one line — `scaleDown` is its handling. The subtitle is a sentence, so it WRAPS and the pill
+  grows: at most two lines at text scale 1.0 and three at 1.3 on the phones the size matrix covers,
+  a fourth for the 320 dp frame where the slot is 140 dp and wrapping is word-bounded. Nothing
+  truncates — no ellipsis on either line. `sign_in_size_matrix_test.dart` enforces it, and the
+  policy footer is a `Wrap` so it stacks instead of clipping on that same frame.
 - **No language control on the wall** (owner's call). The wall follows the phone's language and the
   picker lives in Settings only; a footer chip was tried and pulled — it never moved sign-in and it
-  was a second tappable thing beside the one button that matters. Wordmark and eyebrow stay English.
+  was a second tappable thing beside the one button that matters. The wordmark stays English and is
+  the wall's only brand mark; the eyebrow under it is the splash's alone.
   **Icon glyphs take NO `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text
   shadows are fine.
 
@@ -119,7 +122,7 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   switch accounts is not handed the same one. Best-effort AFTER the local clear; a plugin error must
   never strand the user signed in.
 - **The sign-in SCREEN is localized in all six; the failure TOASTS are not.** Everything on the wall
-  but the wordmark and eyebrow comes from the ARBs. `AuthFailure.message` stays authored-English
+  but the wordmark comes from the ARBs. `AuthFailure.message` stays authored-English
   ("localized-enough") — the one exception left to the all-6-locales rule.
 
 ## Session
