@@ -55,14 +55,14 @@ brown-screen duration fell in two steps, to zero only once both were in.
   `!mounted` bail warmed nothing.
 - **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
   `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
-  splash or the sign-in screen. The native rule is three stable facts OR one moment-in-time one: the
-  Android Go flag, under 4.5 GiB total RAM (a 4 GB phone reports ~3.6, a 6 GB ~5.5, so every 4 GB
-  phone qualifies and no 6 GB phone does), Android 12 and older, OR the OS's `lowMemory` pressure
-  flag at this launch. The stable facts name the population in analytics; the flag catches any phone
-  squeezed at the launch the funnel lives on. The one build that carried the flag had the best
-  old-phone sign-in and the build that dropped it lost ten points there, so it stays (owner's call
-  after build 66). Read the poster's effect off the stable facts, never off the flag — a flag phone
-  cannot be identified afterwards. The probe fails OPEN to the video: a missing channel or
+  splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under
+  4.5 GiB total RAM (a 4 GB phone reports ~3.6, a 6 GB ~5.5, so every 4 GB phone qualifies and no
+  6 GB phone does), and Android 12 and older. **Never add the OS's `lowMemory` pressure flag**: it is
+  set at random on the cold start right after a Play install, so capable Android 13+ phones got the
+  poster by chance, first-sheet dismissals rose on exactly those tiers both times it shipped, and the
+  phones it touched cannot be identified in analytics. Everything under the RAM line or on Android
+  12 and older is already on the poster, so the flag can only take video away from phones that
+  need it to wait through Google's sheet. The probe fails OPEN to the video: a missing channel or
   a platform error must never leave a bare background. To test the poster path on a capable phone:
   sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
   per process), then `settings delete global arul_force_low_ram`. The override is gated on

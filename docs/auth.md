@@ -88,17 +88,12 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   stays one line (`scaleDown`, a net that never fires at 1.0); the subtitle is a sentence, WRAPS, and
   the pill's 56 dp is a `minHeight` so it grows. Nothing truncates — no ellipsis on either line. Its
   three-line cap is for the 320 dp frame, where the slot is 140 dp and wrapping is word-bounded.
-  `sign_in_size_matrix_test.dart` enforces it, and the chip's clearance from the panel.
-- **The language trigger is not part of the attempt.** The only way out of a language the user
-  cannot read — a 36 dp chip bottom LEFT, on the safe-area inset plus 16 dp, never a constant (a
-  gesture bar and 3-button nav are 24 dp apart). Its fill is matched to the pill's interior AS
-  MEASURED on device, not to the pill's paint — the same paint over the scrim's darkest band read as
-  a solid block beside a translucent pill. It carries the language CODE (two Latin capitals never
-  resize). It stays live during an attempt but never starts, joins or cancels one. **Its sheet follows
-  the DEVICE's light/dark mode**, not the app's saved theme — the wall is always dark over video. A
-  session landing with the sheet open still routes: `context.go` replaces the stack, so the feed
-  cannot arrive with a picker over it. Wordmark and eyebrow stay English. **Icon glyphs take NO
-  `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text shadows are fine.
+  `sign_in_size_matrix_test.dart` enforces it.
+- **No language control on the wall** (owner's call). The wall follows the phone's language and the
+  picker lives in Settings only; a footer chip was tried and pulled — it never moved sign-in and it
+  was a second tappable thing beside the one button that matters. Wordmark and eyebrow stay English.
+  **Icon glyphs take NO `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text
+  shadows are fine.
 
 ## Failure handling
 

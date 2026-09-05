@@ -35,7 +35,8 @@ class ArulButton extends StatefulWidget {
   /// [ArulHapticStyle.firm] for a committing press; [ArulHapticStyle.none] where a toast covers the beat.
   final ArulHapticStyle haptic;
 
-  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
+  /// the UI layer and survives every locale.
   /// Never announced and never visible — see that folder's README for the list.
   final String? identifier;
 

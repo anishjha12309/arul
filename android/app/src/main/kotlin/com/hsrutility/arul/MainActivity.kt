@@ -146,17 +146,19 @@ class MainActivity : FlutterFragmentActivity() {
             // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
             // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
             val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
-            // Three stable facts (Go flag, total RAM, Android 12 and older) name the population that
-            // always takes the poster, and `info.lowMemory` — the OS's moment-in-time pressure flag —
-            // adds any phone that is squeezed at THIS cold start. The one build that carried the flag
-            // had the best old-phone sign-in; the build that dropped it lost ten points there
-            // (owner's call: handle memory the way that build did). A flag phone cannot be named in
-            // analytics — read the poster's effect off the three stable facts, never off the flag.
+            // Three STABLE facts only: the Go flag, total RAM, Android 12 and older. They name the
+            // poster population in analytics and give the same answer on every launch.
+            // NEVER `info.lowMemory`: it is the OS's moment-in-time pressure bit (availMem under the
+            // kill threshold), and it is routinely set on the cold start right after a Play install,
+            // so capable Android 13+ phones got the still poster at random. Both builds that carried
+            // it lost Android 13+ sign-ins (more first-sheet dismissals, same speed as human swipes)
+            // while the phones it touched could not be identified afterwards. Phones under the RAM
+            // line or on Android 12 and older are already on the poster, so the flag can only ever
+            // hurt. The video is what keeps capable phones waiting through Google's sheet.
             (!isPlayInstall() && forced) ||
                 am.isLowRamDevice ||
                 info.totalMem < LOW_RAM_TOTAL_BYTES ||
-                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 ||
-                info.lowMemory
+                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
         } catch (e: Exception) {
             false
         }

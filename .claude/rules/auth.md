@@ -22,8 +22,8 @@ config error and a dismissal with one code.
   (`description` vs `error`).
 - **ONE retry line for every failure — no fix line, no help link** (owner's call);
   `classifySignInOutcome` still stamps `login_cancelled`. **Copy FITS the pill slot at scale 1.0 in
-  all six scripts** — shorten, never scale; nothing truncates. The language trigger never starts
-  or cancels an attempt.
+  all six scripts** — shorten, never scale; nothing truncates. No language control on the wall —
+  the picker is Settings-only (owner's call).
 - Classify by typed `code` only — a "cancel" sniff swallowed real failures. **Every failure return
   goes through `_googleFailure`** or the funnel loses it.
 - The stall guard abandons only on CONTINUOUS FOREGROUND time; backgrounding extends it, returning

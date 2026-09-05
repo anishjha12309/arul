@@ -36,7 +36,8 @@ class ArulChip extends StatelessWidget {
   final VoidCallback? onTap;
   final ArulChipVariant variant;
 
-  /// Stable accessibility id for the on-device test rig (`tools/device-test/`).
+  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
+  /// the UI layer and survives every locale.
   /// Never announced and never visible — see that folder's README for the list.
   final String? identifier;
 

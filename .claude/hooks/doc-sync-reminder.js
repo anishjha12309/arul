@@ -122,13 +122,6 @@ const ROUTES = [
     when: ["lib/features/ringtones/**"],
     docs: ["docs/ringtones.md", "docs/architecture.md §API"],
   },
-  // The rig is CODE that asserts the edge-cases index on a real phone, and its whole
-  // surface is the SEMANTIC IDENTIFIERS the app exposes -> a renamed id breaks a pass
-  // nobody runs until release day.
-  {
-    when: ["tools/device-test/**"],
-    docs: ["tools/device-test/README.md"],
-  },
   // The hooks are CODE, not prose — CLAUDE.md §8 and release-build/SKILL.md both
   // make claims about what they enforce, so changing one can silently contradict them.
   {
@@ -224,7 +217,7 @@ process.stdin.on("end", () => {
     // .claude/hooks/ is deliberately NOT exempt -> it is code CLAUDE.md makes claims about ->
     // suppressing the whole .claude/ tree is how the hooks drifted from those claims.
     if (
-      /^(docs\/|CLAUDE\.md$|README\.md$|workers\/README\.md$|tools\/(content-import|device-test)\/.*\.md$|\.claude\/(skills|agents|rules)\/)/i.test(
+      /^(docs\/|CLAUDE\.md$|README\.md$|workers\/README\.md$|tools\/content-import\/.*\.md$|\.claude\/(skills|agents|rules)\/)/i.test(
         rel
       )
     )

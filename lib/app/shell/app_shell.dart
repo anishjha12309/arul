@@ -362,8 +362,8 @@ class _DockTab extends StatelessWidget {
       button: true,
       selected: selected,
       label: item.label,
-      // The GLYPH names the tab, not the label: the dock's labels are ARB strings and
-      // the rig's ids must not move when one is reworded. `tools/device-test/`.
+      // The GLYPH names the tab, not the label: the dock's labels are ARB strings and an
+      // accessibility id must not move when one is reworded.
       identifier: 'arul_tab_${item.glyph.name}',
       child: GestureDetector(
         onTap: onTap,

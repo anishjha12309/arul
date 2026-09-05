@@ -35,8 +35,8 @@ class LiveMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // `arul_live_mark` is how the on-device test rig tells a live card from a static one
-    // (`tools/device-test/`) — the mark is already the ONLY signal on screen. Never announced.
+    // `arul_live_mark` is the one machine-readable tell of a live card — the mark is already the
+    // ONLY signal on screen. Never announced.
     return Semantics(
       container: true,
       identifier: 'arul_live_mark',
