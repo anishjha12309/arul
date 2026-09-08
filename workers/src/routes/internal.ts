@@ -236,6 +236,9 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
                 notified_at         = NULL,
                 redemption_order_id = NULL,
                 retry_count         = 0,
+                first_debit_at      = COALESCE(first_debit_at, now()),
+                debit_count         = debit_count + 1,
+                paid_paise          = paid_paise + 19900,
                 updated_at          = now()
             WHERE id = ${row.id as string}
           `;

@@ -151,6 +151,11 @@ describe("Pass B — a settled debit is always recorded", () => {
 
     const activated = updates(executed).find((u) => u.text.includes("status = 'active'"));
     expect(activated, "a COMPLETED order must activate the row").toBeDefined();
+    // The debit-tracking columns the CMS reads move on the SAME statement -> a settle can never activate without stamping
+    // COALESCE is what keeps first_debit_at at the FIRST settle when this row renews next month
+    expect(activated!.text).toContain("first_debit_at = COALESCE(first_debit_at, now())");
+    expect(activated!.text).toContain("debit_count = debit_count + 1");
+    expect(activated!.text).toContain("paid_paise = paid_paise + 19900");
     expect(referral.grantReferralReward).toHaveBeenCalledTimes(1);
     // 'trialing' at settle is the FIRST trial->paid conversion -> PostHog ONLY
     // GA4 `purchase` and Meta `Subscribe` are gone from this path -> one conversion, one data source
@@ -283,6 +288,52 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
 
       expect(phonepe.getOrderStatus).toHaveBeenCalledTimes(1);
       expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * The skip above is necessary but not sufficient: it runs BELOW `LIMIT MAX_ROWS_PER_PASS`.
+   * A stale row the loop will never touch still consumed one of the scan's 200 slots -> measured at
+   * 56 of 150 rows in production, a third of the capacity spent fetching rows already ruled out.
+   * The cap is what starves fresh debits behind an old head, so the deferral has to be a QUERY bound.
+   */
+  it("bounds the Pass B query itself off the top of the hour — a stale row never takes a slot", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T05:30:00Z"));
+    try {
+      const { sql, executed } = makeSql([]);
+      db.getDb.mockReturnValue(sql);
+
+      await runAutopayNotify(makeEnv());
+
+      const passB = executed.find((e) => e.text.includes("notified_at IS NOT NULL"));
+      expect(passB).toBeDefined();
+      expect(passB!.values).toContain(
+        new Date(Date.now() - 48 * HOUR).toISOString(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops that bound on the top-of-hour tick — stale rows are in scope exactly when the loop acts", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-25T05:00:20Z"));
+    try {
+      const { sql, executed } = makeSql([]);
+      db.getDb.mockReturnValue(sql);
+
+      await runAutopayNotify(makeEnv());
+
+      const passB = executed.find((e) => e.text.includes("notified_at IS NOT NULL"));
+      expect(passB).toBeDefined();
+      // Epoch, not the 48h floor -> the same statement, no stale row excluded
+      expect(passB!.values).toContain(new Date(0).toISOString());
+      expect(passB!.values).not.toContain(
+        new Date(Date.now() - 48 * HOUR).toISOString(),
+      );
     } finally {
       vi.useRealTimers();
     }

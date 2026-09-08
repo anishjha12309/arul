@@ -24,6 +24,13 @@ re-notified by Pass A used to be executed by Pass B in the same run, every run. 
 PhonePe's 48 h retry window (aged from `notified_at`) is reconciled on the **top-of-hour tick only**:
 it can settle only through PhonePe's own retries, so polling it every tick starved fresh executes.
 
+**That deferral is a bound in Pass B's `WHERE`, not just a skip in its loop.** The loop runs below
+`LIMIT MAX_ROWS_PER_PASS`, so a row it had already ruled out still spent one of the 200 slots — 56 of
+150 fetched, measured in production. Slots are the scarce resource, not calls (a tick spends ~100 of
+its 600), and the row cap is exactly what starves fresh debits behind an old head. `isTopOfHourTick()`
+is read ONCE per run and shared by the bound and the skip: a scan long enough to outlive a 15-minute
+boundary must not fetch a row under one rule and drop it under the other.
+
 ## Hourly `0 * * * *`
 
 1. **build-catalog** — a no-op if `content_version` is unchanged, so most hours only rewrite

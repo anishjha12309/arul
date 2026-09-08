@@ -188,6 +188,25 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     const now = new Date();
     const notifyThreshold = new Date(now.getTime() + NOTIFY_WINDOW_HOURS * 60 * 60 * 1000);
 
+    // Read ONCE for the whole run, then reused by Pass B's query AND its loop skip.
+    // A scan that spends its call budget runs for minutes and can outlive a 15-minute boundary ->
+    // two independent reads would disagree mid-run and fetch a row under one rule, skip it under the other
+    const topOfHour = isTopOfHourTick();
+
+    /**
+     * Pass B's floor on `notified_at` — the stale-order deferral, expressed where the LIMIT can see it.
+     *
+     * The loop has always skipped these rows without a call, but that skip runs BELOW
+     * `LIMIT MAX_ROWS_PER_PASS` -> a row it had already ruled out still consumed one of the scan's slots.
+     * Measured in production: 56 of 150 fetched rows, a third of the capacity, read only to be dropped.
+     * Slots are the scarce resource, not calls (a tick uses ~100 of a 600 budget), and the cap is
+     * precisely what starves fresh debits behind an old head — the failure this cron already had once.
+     * Epoch on the hourly tick -> ONE statement, no stale row excluded, the query plan unchanged.
+     */
+    const staleFloor = topOfHour
+      ? new Date(0)
+      : new Date(now.getTime() - STALE_ORDER_MS);
+
     // ── Pass A: Notify ────────────────────────────────────────────────────────
     const toNotify = await sql`
       SELECT
@@ -311,13 +330,19 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       FROM subscriptions
       WHERE notified_at IS NOT NULL
         AND notified_at <= ${new Date(now.getTime() - EXECUTE_AFTER_NOTIFY_MS).toISOString()}
+        AND notified_at >= ${staleFloor.toISOString()}
         AND next_debit_at <= ${now.toISOString()}
         AND status IN ('trialing', 'active')
       ORDER BY next_debit_at ASC
       LIMIT ${MAX_ROWS_PER_PASS}
     `;
 
-    console.log(`[autopay-notify] Pass B — ${toExecute.length} subscriptions due for execute`);
+    // The scope is named because the COUNT alone is ambiguous -> a quarter tick and an hourly tick
+    // legitimately report different numbers off the same table, and the gap IS the stale pile
+    console.log(
+      `[autopay-notify] Pass B — ${toExecute.length} subscriptions due for execute ` +
+      `(${topOfHour ? "all orders, incl. past PhonePe's retry window" : "fresh orders only, stale deferred to the hourly tick"})`,
+    );
     if (toExecute.length === MAX_ROWS_PER_PASS) {
       console.warn(
         `[autopay-notify] Pass B hit the ${MAX_ROWS_PER_PASS}-row cap — backlog continues next run`,
@@ -347,7 +372,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       if (
         notifiedAt !== null &&
         Date.now() - notifiedAt.getTime() > STALE_ORDER_MS &&
-        !isTopOfHourTick()
+        !topOfHour
       ) {
         console.log(
           `[autopay-notify] Sub ${merchantSubId} order is ${Math.round((Date.now() - notifiedAt.getTime()) / 3_600_000)}h old ` +
@@ -618,6 +643,8 @@ async function applyDebitOutcome(
 ): Promise<boolean> {
   if (state === "COMPLETED") {
     const nextPeriodEnd = addOneMonth(new Date());
+    // Every statement that grants a PAID period stamps the three debit-tracking columns -> the CMS reads them, nothing else
+    // first_debit_at is COALESCEd so a renewal never moves it; the count and the paise total grow on every settle
     const settled = (await sql`
       UPDATE subscriptions
       SET status             = 'active',
@@ -626,6 +653,9 @@ async function applyDebitOutcome(
           notified_at        = NULL,
           redemption_order_id = NULL,
           retry_count        = 0,
+          first_debit_at     = COALESCE(first_debit_at, now()),
+          debit_count        = debit_count + 1,
+          paid_paise         = paid_paise + 19900,
           updated_at         = now()
       WHERE id = ${row.id}
       RETURNING updated_at

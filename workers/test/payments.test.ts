@@ -665,6 +665,10 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
     expect(res.status).toBe(200);
     const update = texts.find((t) => t.includes("UPDATE subscriptions"));
     expect(update).toBeDefined();
+    // The settle stamps the debit-tracking columns off the row's OLD values -> alias-qualified because of the FROM join
+    expect(update).toContain("COALESCE(s.first_debit_at, now())");
+    expect(update).toContain("s.debit_count + 1");
+    expect(update).toContain("s.paid_paise + 19900");
     expect(env.KV.put).toHaveBeenCalledWith(
       "txn:subscription.redemption.order.completed:OMO_NEST_1",
       "1",
@@ -771,6 +775,10 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
     expect(update).toBeDefined();
     expect(update).toContain("CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END");
     expect(update).toContain("COALESCE(trial_end,");
+    // A repeat subscriber's setup is a real ₹199 -> the debit-tracking columns move on the ELSE branch and ONLY there
+    expect(update).toContain("ELSE COALESCE(first_debit_at, now()) END");
+    expect(update).toContain("ELSE debit_count + 1 END");
+    expect(update).toContain("ELSE paid_paise + 19900 END");
     // A LOAD-BEARING guard -> without it the webhook/status-poll race hands out a full month off a ₹2 PENNY_DROP
     // And a referral reward with it -> the second writer re-reads the trial_end the first just wrote
     expect(update).toContain("AND status = 'pending'");

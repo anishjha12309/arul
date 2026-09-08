@@ -27,8 +27,16 @@ still open → **reconcile again inside the catch**. A throw is never evidence t
 | `INVALID_SUBSCRIPTION_STATE` | The mandate is gone at PhonePe (user revoked it at their bank) | Read mandate status; park the row `cancelled` |
 | `DUPLICATE_TXN_REQUEST` | *"Another redemption request is not allowed for PHONEPE_CONTROLLED retry strategy"* — PhonePe owns the retry now | Do NOT re-redeem. Poll order status and wait |
 | `SUBSCRIPTION_DEBIT_EXECUTE_INTERVAL_NOT_STARTED` | Executed less than 24 h after the order's notify — the mandatory pre-debit notice window. Seen on every RECYCLED order | Nothing — Pass B skips rows notified under 24 h ago without a call. Never treat as a failed debit |
+| `BAD_REQUEST` — *"Previous transaction is not in terminal state"* | PhonePe's own attempt on this order is still open. Means exactly what `DUPLICATE_TXN_REQUEST` means, in different words | Do NOT re-redeem. **OPEN DEFECT: the `inFlight` test matches only the `DUPLICATE_TXN_REQUEST` string**, so this logs `Execute failed` at ERROR and spends a mandate-status call on a healthy debit — widen the test |
 
-All three are 4xx, so `PhonePeApiError.isPermanent` is true — but permanent means "this CALL cannot
+**Where the fourth one comes from:** it lands on rows overdue by LESS than `RECONCILE_STUCK_AFTER_MS`,
+which is the window where no reconcile runs first and the redeem goes out blind — `trialing`,
+`retry_count 0`, notified 24–26 h ago. 5–6 per tick on 8 Sep 2026. It self-corrects once the row
+passes 2 h overdue and reconcile-first starts reporting PENDING, and parking stays gated on a
+terminal mandate state, so no row is at risk. It is noise that reads as failure, which is the one
+thing this file says trains everyone to ignore the line that will one day be real.
+
+All four are 4xx, so `PhonePeApiError.isPermanent` is true — but permanent means "this CALL cannot
 succeed", NOT "the debit failed". `DUPLICATE_TXN_REQUEST` in particular fires on debits that are
 mid-flight and will succeed. **Never expire a row on a redeem error alone.**
 
@@ -92,6 +100,16 @@ let a webhook-shaped optimisation become the only path to a correct row.
 
 No webhook has ever actually arrived in production — cause and evidence in
 [phonepe.md](phonepe.md) §The webhook.
+
+## Every paid grant stamps the debit-tracking columns
+
+`first_debit_at = COALESCE(first_debit_at, now())`, `debit_count + 1` and `paid_paise + 19900` ride on the
+SAME statement as the `active` flip — `applyDebitOutcome`, the webhook's redemption branch, `run-redemptions`,
+and the three setup grants in `payments.ts`, whose ELSE branch is a real ₹199. Nothing in this Worker reads
+them; the unified CMS's subscriptions page does, and it starts its history after the newest cohort holding a
+paid period with no stamp. So a new grant path that skips them moves that page's start date forward instead
+of undercounting — treat the date moving as the alarm. Schema: `db/schema/14_debit_tracking.sql`, applied
+BEFORE the Worker that writes it, or every settle UPDATE fails while PhonePe keeps the money.
 
 ## Testing this
 

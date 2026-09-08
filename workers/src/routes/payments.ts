@@ -495,6 +495,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // trial_end NOT NULL -> initiate authorized this mandate with a real ₹199 TRANSACTION -> 'active' for a month
       // The CASE expressions read the row's OLD trial_end under Postgres SET semantics -> decide and write in ONE statement
       // COALESCE keeps the ORIGINAL trial_end forever -> that column is the consumed-marker, not a date to refresh
+      // The ELSE branch is itself a ₹199 debit -> the three debit-tracking columns move on it and ONLY on it
+      // Same rule as the cron settle: first_debit_at is stamped once, the count and paise total grow every time
       const trialEnd = new Date(Date.now() + TRIAL_MS);
       const paidEnd = addOneMonth(new Date());
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
@@ -519,6 +521,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                                             ELSE ${paidEnd.toISOString()}::timestamptz END,
             notified_at              = NULL,
             retry_count              = 0,
+            first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                            ELSE COALESCE(first_debit_at, now()) END,
+            debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+            paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
             updated_at               = now()
         WHERE merchant_subscription_id = ${merchantSubId}
           AND status = 'pending'
@@ -548,6 +554,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                                               ELSE ${paidEnd.toISOString()}::timestamptz END,
               notified_at              = NULL,
               retry_count              = 0,
+              first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                              ELSE COALESCE(first_debit_at, now()) END,
+              debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+              paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
               updated_at               = now()
           WHERE merchant_subscription_id = ${merchantSubId}
             AND merchant_order_id = ${pp.merchantOrderId ?? ""}
@@ -657,6 +667,9 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             next_debit_at           = ${nextEnd.toISOString()},
             notified_at             = NULL,
             retry_count             = 0,
+            first_debit_at          = COALESCE(s.first_debit_at, now()),
+            debit_count             = s.debit_count + 1,
+            paid_paise              = s.paid_paise + 19900,
             updated_at              = now()
         FROM subscriptions AS prior
         WHERE s.merchant_subscription_id = ${merchantSubId}
@@ -865,6 +878,10 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
                                                 ELSE ${paidEnd.toISOString()}::timestamptz END,
                 notified_at              = NULL,
                 retry_count              = 0,
+                first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                                ELSE COALESCE(first_debit_at, now()) END,
+                debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+                paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
                 updated_at               = now()
             WHERE user_id = ${sub}
               AND status  = 'pending'

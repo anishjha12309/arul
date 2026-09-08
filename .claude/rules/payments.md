@@ -23,6 +23,8 @@ shape or a status vocabulary from memory.
   change either side only with the other.
 - Set secrets with `wrangler secret bulk`, never a shell pipe; delete the cached `phonepe:oauth` KV
   key after any env or credential change.
+- **Every statement that grants a paid period stamps `first_debit_at` / `debit_count` / `paid_paise`** on
+  the same UPDATE — the CMS subscriptions page reads nothing else, and a missing stamp moves its start date.
 
 Read [docs/phonepe.md](../../docs/phonepe.md) before changing setup, cancel or the webhook, and
 [docs/autopay-debits.md](../../docs/autopay-debits.md) before changing the cron's passes or the
