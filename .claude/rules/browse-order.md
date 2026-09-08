@@ -4,12 +4,10 @@ paths:
   - "workers/src/cron/build-catalog.ts"
   - "workers/src/lib/feed-score.ts"
   - "lib/features/wallpapers/providers/**"
-  - "lib/features/wallpapers/presentation/feed_card_geometry.dart"
-  - "lib/features/wallpapers/presentation/feed_screen.dart"
 ---
 
 - **`category` is THE browse axis**; `type` (static/live) is a rendering hint, never a filter or tab.
-  Chips derive from each tab's own catalog, so the two lists differing is correct.
+  Chips derive from each tab's own catalog; the two lists differing is correct.
 - **Chip ROW order is the operator's** when set: CMS `categories.picker_order` → `app_config
   .category_order` keyed by SCOPE → `orderedByCms`. It SORTS only (never adds or hides a chip); absent
   or empty falls back to `compareBrowseCategories` / `compareRingtoneCategories`; a partial list puts
@@ -23,8 +21,9 @@ paths:
 - **Pins are the ONLY hand tier.** `feed_rank` is nullable, NULL = unpinned (~every row); never fold
   NULL to 0 — 0 is a valid top pin. `apply_score`/`set_score`/`scored_at` are unread; `sort_order`
   reaches no user and every import resets it — never park curation there.
-- **Reel card geometry lives ONLY in `feed_card_geometry.dart`**, pinned by its test; `cardAspect` is
-  a request — read the solved size. `gutter` buys width, `minPeek` buys height; screen-anchored
-  things offset by `underhang + peek + gap`.
+- **The New chip is a WINDOW, not a category.** Sentinel `__new__`, chrome beside All, never in
+  `categoriesProvider` — so never in the Upload picker or CMS, and never on a row. Client-side
+  `published_at` window (created_at would bury a late-published batch); `kNewMinItems` is a FLOOR,
+  not a cap; `newSelection` hands back CATALOG order, keeping New All restricted.
 
-Read [docs/browse.md](../../docs/browse.md) before changing order or geometry.
+Read [docs/browse.md](../../docs/browse.md) first; geometry is [feed-card.md](feed-card.md).

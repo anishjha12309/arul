@@ -285,13 +285,105 @@ class SelectedCategory extends Notifier<String> {
 /// Position in the filtered list is monotonic in the full one -> restricting cannot reverse a pair.
 /// [apply_restore] resolves its saved page index through this too — a position in the SERVED list.
 /// Validating it against any other ordering restores a post-apply restart to a different wallpaper.
-List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) => orderedByUse(
-  slug == WallpaperCategory.allSlug
-      ? all
-      : all.where((w) => w.category == slug).toList(growable: false),
-  (w) => w.applyCount,
-  rank: (w) => w.feedRank,
-);
+List<Wallpaper> feedOrder(String slug, List<Wallpaper> all, {DateTime? now}) =>
+    orderedByUse(
+      switch (slug) {
+        WallpaperCategory.allSlug => all,
+        WallpaperCategory.newSlug => newSelection(
+          all,
+          (w) => w.publishedAt,
+          now: now ?? DateTime.now(),
+        ),
+        _ => all.where((w) => w.category == slug).toList(growable: false),
+      },
+      (w) => w.applyCount,
+      rank: (w) => w.feedRank,
+    );
+
+/// How far back "New" reaches. Everything published inside this window is in the chip, however much
+/// that is — a 40-item drop shows all 40 (owner's call). The window is the rule; [kNewMinItems] only
+/// rescues a quiet one.
+const Duration kNewWindow = Duration(days: 7);
+
+/// The floor under [kNewWindow], so the chip is never thin. A week with 3 publishes shows those 3
+/// plus the 17 next-newest of any age; a week with none shows the newest 20. A FLOOR, never a cap.
+const int kNewMinItems = 20;
+
+/// Which rows the New chip holds — the membership decision, and the ONLY place recency is read.
+///
+/// Two different dates are doing two different jobs here, and keeping them apart is the whole point:
+/// membership is by [publishedAt] (recency), and the ORDER of what comes back is not decided here at
+/// all. The caller hands the result to [orderedByUse] like any other chip, so New is pins, then
+/// applies, then catalog position — the same three tiers as every chip.
+///
+/// Returned in CATALOG ORDER, deliberately, not in the recency order used to choose it. That is what
+/// keeps the invariant that New is All RESTRICTED: [orderedByUse]'s last tier is position in the list
+/// it is given, so re-ordering the subset first would give New a third tier All does not have, and
+/// two items tied on rank and applies could then sit in a different order in the two chips. Catalog
+/// position already IS recency — build-catalog's clause ends `created_at DESC, id ASC`.
+///
+/// A null [publishedAt] sorts LAST and can only ever arrive as [kNewMinItems] padding: it means the
+/// row predates the field, never that it is new. `showNewCategoryProvider` hides the chip entirely
+/// when NOTHING in the catalog carries the field, so a stale cache shows no chip rather than a
+/// "New" one that is really just the top of All.
+///
+/// [now] is required, not read from the clock in here — the window is a boundary a test has to be
+/// able to stand on either side of.
+List<T> newSelection<T>(
+  List<T> all,
+  DateTime? Function(T) publishedAt, {
+  required DateTime now,
+}) {
+  if (all.isEmpty) return const [];
+
+  // Decorate-sort-undecorate, same shape as orderedByUse: read the date ONCE per row, and carry the
+  // index so the sort stays total (`List.sort` is not stable) and the undecorate can restore order.
+  final keyed = [
+    for (var i = 0; i < all.length; i++) (at: publishedAt(all[i]), i: i),
+  ];
+  keyed.sort((a, b) {
+    final aAt = a.at;
+    final bAt = b.at;
+    if (aAt == null || bAt == null) {
+      if (aAt == null && bAt == null) return a.i.compareTo(b.i);
+      return aAt == null ? 1 : -1; // nulls last
+    }
+    final byDate = bAt.compareTo(aAt); // newest first
+    return byDate != 0 ? byDate : a.i.compareTo(b.i);
+  });
+
+  // Newest-first with nulls last -> the window is a PREFIX -> count it, never filter twice.
+  final cutoff = now.subtract(kNewWindow);
+  var take = 0;
+  while (take < keyed.length) {
+    final at = keyed[take].at;
+    if (at == null || at.isBefore(cutoff)) break;
+    take++;
+  }
+  if (take < kNewMinItems) take = kNewMinItems;
+  if (take > keyed.length) take = keyed.length;
+
+  final keep = {for (final e in keyed.take(take)) e.i};
+  return [
+    for (var i = 0; i < all.length; i++)
+      if (keep.contains(i)) all[i],
+  ];
+}
+
+/// Whether the New chip may be offered on the Wallpapers row.
+///
+/// The chip needs `published_at`, which only a catalog built after db/schema/15_published_at.sql
+/// carries. An install holding an older cached page would otherwise show a "New" chip whose window
+/// matched nothing and whose 20-item floor served the top of All under a wrong name. One row with
+/// the field is enough — the field is emitted for the whole scope or not at all, and the chip
+/// appears by itself on the next drain.
+final showNewCategoryProvider = Provider<bool>((ref) {
+  final all = switch (ref.watch(catalogProvider)) {
+    AsyncData(:final value) => value,
+    _ => const <Wallpaper>[],
+  };
+  return all.any((w) => w.publishedAt != null);
+});
 
 /// The three-tier feed order (CLAUDE.md §5b), for any catalog list with a rank and a use counter:
 ///

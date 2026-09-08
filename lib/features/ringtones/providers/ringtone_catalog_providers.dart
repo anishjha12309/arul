@@ -8,7 +8,8 @@ import '../../../data/models/catalog_page.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
-import '../../wallpapers/providers/catalog_providers.dart' show orderedByUse;
+import '../../wallpapers/providers/catalog_providers.dart'
+    show newSelection, orderedByUse;
 import '../data/cdn_ringtone_repository.dart';
 import '../domain/ringtone_repository.dart';
 
@@ -225,14 +226,36 @@ class SelectedRingtoneCategory extends Notifier<String> {
 /// See catalog_providers.dart for why rank is nulls-last and the position tiebreaker is load-bearing.
 /// EVERY chip gets the comparator, All included — a category is All restricted to that category.
 /// A deep link resolves its row index through this too: raw catalog order would scroll elsewhere.
-List<Ringtone> ringtoneFeedOrder(String slug, List<Ringtone> all) =>
-    orderedByUse(
-      slug == WallpaperCategory.allSlug
-          ? all
-          : all.where((r) => r.category == slug).toList(growable: false),
-      (r) => r.setCount,
-      rank: (r) => r.feedRank,
-    );
+List<Ringtone> ringtoneFeedOrder(
+  String slug,
+  List<Ringtone> all, {
+  DateTime? now,
+}) => orderedByUse(
+  switch (slug) {
+    WallpaperCategory.allSlug => all,
+    // The wallpaper row's [newSelection] verbatim — one window, one floor, one set of rules for both
+    // tabs. The tabs stay SEPARATE lists: this one windows ringtones, and its chip is its own.
+    WallpaperCategory.newSlug => newSelection(
+      all,
+      (r) => r.publishedAt,
+      now: now ?? DateTime.now(),
+    ),
+    _ => all.where((r) => r.category == slug).toList(growable: false),
+  },
+  (r) => r.setCount,
+  rank: (r) => r.feedRank,
+);
+
+/// The Ringtones row's twin of `showNewCategoryProvider` — same rule, this tab's own catalog.
+/// Two providers and not one: the scopes are built and cached independently, so one tab can carry
+/// `published_at` while the other still serves a page from before it.
+final showNewRingtoneCategoryProvider = Provider<bool>((ref) {
+  final all = switch (ref.watch(ringtoneCatalogProvider)) {
+    AsyncData(:final value) => value,
+    _ => const <Ringtone>[],
+  };
+  return all.any((r) => r.publishedAt != null);
+});
 
 /// The list the screen renders: [ringtoneFeedOrder] for the selected category.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {

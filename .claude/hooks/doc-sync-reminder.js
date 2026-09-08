@@ -114,6 +114,11 @@ const ROUTES = [
     when: ["lib/theme/**", "lib/app/theme/**"],
     docs: ["docs/ui-direction.md", ".claude/rules/theming.md"],
   },
+  // Ahead of the browse row -> first match wins, and the geometry file is under its glob.
+  {
+    when: ["lib/features/wallpapers/**/feed_card_geometry.dart", "lib/features/wallpapers/**/*reel*"],
+    docs: ["docs/feed-card.md"],
+  },
   {
     when: ["workers/src/cron/build-catalog.ts", "workers/src/lib/feed-score.ts", "lib/features/wallpapers/**"],
     docs: ["docs/browse.md", "CLAUDE.md §5b Browse Model"],

@@ -353,8 +353,11 @@ class _RingtoneChips extends ConsumerWidget {
       return const _ChipsSkeleton();
     }
 
+    // Same two leaders, same reasons, as the wallpaper row (`FeedChips`).
     final items = <WallpaperCategory>[
       WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll),
+      if (ref.watch(showNewRingtoneCategoryProvider))
+        const WallpaperCategory(WallpaperCategory.newSlug, kNewCategoryLabel),
       ...categories,
     ];
 

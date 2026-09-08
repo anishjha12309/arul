@@ -28,13 +28,21 @@ class FeedChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
     final selected = ref.watch(selectedCategoryProvider);
+    final showNew = ref.watch(showNewCategoryProvider);
 
     // A loaded catalog with NO categories -> collapse, never a 34px band of nothing under the title.
     // The loading case never reaches here — FeedChipsSkeleton holds the height, so nothing jumps.
     if (categories.isEmpty) return const SizedBox.shrink();
 
+    // All, then New, then the catalog's own chips. Both leaders are CHROME built here, which is why
+    // neither can reach `categoriesProvider` — and so neither can reach the Upload picker, which
+    // reads that provider to decide what a user may submit into. A window is not a submittable
+    // category. `orderedByCms` sorts only what came off the catalog, so an operator's drag can
+    // never move these two either.
     final items = <WallpaperCategory>[
       const WallpaperCategory(WallpaperCategory.allSlug, _kAllLabel),
+      if (showNew)
+        const WallpaperCategory(WallpaperCategory.newSlug, kNewCategoryLabel),
       ...categories,
     ];
 

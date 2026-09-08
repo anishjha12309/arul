@@ -113,8 +113,8 @@ usually already there) and update it through the `doc-update` skill. Each entry 
 `docs/<name>.md`. Two are not obvious: **edge-cases** indexes every regression contract — walk it
 before a release — and **architecture** covers routes, entitlement, uploads and the catalog build.
 
-edge-cases · architecture · data-model · browse · ringtones · auth · launch-surface · phonepe ·
-autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
+edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
+phonepe · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
 notifications · ui-direction · perf-measurement
 

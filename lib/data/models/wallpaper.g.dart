@@ -20,6 +20,9 @@ _Wallpaper _$WallpaperFromJson(Map<String, dynamic> json) => _Wallpaper(
   height: (json['height'] as num?)?.toInt(),
   applyCount: (json['apply_count'] as num?)?.toInt() ?? 0,
   feedRank: (json['feed_rank'] as num?)?.toInt(),
+  publishedAt: json['published_at'] == null
+      ? null
+      : DateTime.parse(json['published_at'] as String),
 );
 
 Map<String, dynamic> _$WallpaperToJson(_Wallpaper instance) =>
@@ -33,6 +36,7 @@ Map<String, dynamic> _$WallpaperToJson(_Wallpaper instance) =>
       'height': instance.height,
       'apply_count': instance.applyCount,
       'feed_rank': instance.feedRank,
+      'published_at': instance.publishedAt?.toIso8601String(),
     };
 
 const _$WallpaperKindEnumMap = {

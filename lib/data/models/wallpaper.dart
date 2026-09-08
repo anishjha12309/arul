@@ -51,6 +51,15 @@ abstract class Wallpaper with _$Wallpaper {
     /// Not a pin and not authored anywhere -> it is a position, so never write or sort it server-side.
     /// An older cached catalog built before this field parses as null -> that feed falls back to popularity.
     int? feedRank,
+
+    /// The DEBUT date — when this wallpaper was published, not when it was imported.
+    ///
+    /// The one input to the New chip ([newSelection]), and the reason there is no `createdAt` here:
+    /// created_at is import time, so a batch imported in August and published in September would be
+    /// born too old to ever appear in New. Stamped once, by a DB trigger (db/schema/15_published_at.sql).
+    /// Null on a catalog cached before the field existed -> the New chip hides itself rather than
+    /// windowing on nothing (`showNewCategoryProvider`), and returns on its own once a page lands.
+    DateTime? publishedAt,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>
@@ -95,7 +104,23 @@ class WallpaperCategory {
   final String label;
 
   static const allSlug = '__all__';
+
+  /// The New chip, the second piece of chrome in both rows.
+  ///
+  /// A SENTINEL, exactly like [allSlug], and for the same reason: New is a WINDOW over the feed,
+  /// not a value any row carries. Keeping it out of the `category` column is what stops it leaking
+  /// into the places a real category reaches — `categoriesProvider` derives chips from the items,
+  /// so the Upload picker (which reads that provider) can never offer it, the CMS never sees it,
+  /// and no import can write it. Both sentinels are `__`-fenced against a real slug colliding.
+  static const newSlug = '__new__';
 }
+
+/// The New chip's label, in EVERY locale (owner's call).
+///
+/// Shared by both rows so they cannot drift. Deliberately NOT an ARB key: the chip sits between
+/// "All" and the title-cased catalog slugs ("Sivan", "Amman"), which are English in all six
+/// locales, and one translated pill in that row reads as a mistake rather than as a translation.
+const String kNewCategoryLabel = 'New';
 
 /// Slug the browse rows pin to the FIRST chip after All, in BOTH tabs (owner's instruction).
 /// Chip-row order ONLY — it never touches `feed_rank` or the order of items inside a chip.

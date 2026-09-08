@@ -1,8 +1,8 @@
 # Browse — feed order and the reel card
 
-Read before touching `workers/src/cron/build-catalog.ts`, `workers/src/lib/feed-score.ts`,
-`lib/features/wallpapers/providers/**` or `feed_card_geometry.dart`. The category axis itself is
-CLAUDE.md §5b. Ringtone browse: [ringtones.md](ringtones.md).
+Read before touching `workers/src/cron/build-catalog.ts`, `workers/src/lib/feed-score.ts` or
+`lib/features/wallpapers/providers/**`. The category axis itself is CLAUDE.md §5b.
+Ringtone browse: [ringtones.md](ringtones.md). Card geometry: [feed-card.md](feed-card.md).
 
 ## Order is ONE SQL clause
 
@@ -51,6 +51,30 @@ rebuilds; without both the phone keeps its cached `app_config.json` and the orde
   still stored and still editable in the CMS; nothing reads it for order.
 - The CMS ordering page is READ-ONLY and copies this clause verbatim. Keep the two in step.
 
+## The New chip
+
+**A WINDOW over the feed, not a category any row carries.** Sentinel slug (`__new__`), built as
+chrome beside All in both chip rows, so it never reaches `categoriesProvider` — which is what keeps
+it out of the Upload picker, the CMS and every import. Never give a row this `category` value.
+
+**Client-side, and it has to be:** the hourly build is a no-op while `content_version` holds, so a
+server-stamped `is_new` would freeze a row as new through a quiet week. `newSelection`
+(catalog_providers.dart) windows at read time; the catalog only carries the column.
+
+- **`published_at`, never `created_at`** — created_at is import time, so a batch imported long before
+  it went live would be born too old to appear. Debut date, DB-trigger stamped
+  ([data-model.md](data-model.md)).
+- **`kNewMinItems` is a FLOOR, not a cap.** Everything inside `kNewWindow` is in — a 40-row drop
+  shows all 40; a thin week tops up by recency to 20, an empty one serves the newest 20. A cap would
+  hide half a bulk drop behind All for a week.
+- **`newSelection` returns the subset in CATALOG order, not the recency order that chose it.**
+  `orderedByUse`'s last tier is position in the list it is GIVEN, so re-sorting first hands New a
+  third tier All lacks, and the two then disagree on a pair tied on rank and applies. Recency decides
+  membership only.
+- **Nothing in the scope carrying `published_at` → no chip** (`showNewCategoryProvider` and its
+  ringtone twin, each on its own scope). An install on a page built before the column would serve the
+  top of All under the wrong name.
+
 ## What was removed and may not come back
 
 **No decayed score.** It weighted uses by recency with a stepped newcomer credit, and it worked — but
@@ -87,44 +111,4 @@ deep link resolves the same way (always on All); a ringtone link goes through `r
 lands the row at the TOP of All. The link's `lang` always wins over the user's Settings pick
 ([deep-links.md](deep-links.md)).
 
-## Reel card geometry
-
-**All of it lives in `feed_card_geometry.dart`, pinned by its test.** The numbers are Shubh's tile
-(owner's instruction, measured from Shubh's own accessibility tree on a Nothing A001): 16 dp gutters,
-16 dp gap, 24 radius, peek pinned at `minPeek` (25), **1:1.86 asked** and no floor. `card + gap +
-peek + floor` fills the reel exactly. Re-measure Shubh (`uiautomator dump` — its screenshots are
-FLAG_SECURE-blank) before moving a knob.
-
-- **The card is HEIGHT-CLAMPED on a real phone, so `cardAspect` is a request and the reel decides
-  what ships.** Read the solved size, never the constant. `gutter` buys WIDTH only; `minPeek` is the
-  only knob that buys height.
-- **The floor is split either side of the reel** — `headroom` above, `underhang` below, with
-  `underhang` carrying the odd pixel so the two sum exactly. It is frequently ZERO, because at 1.86
-  the card consumes the whole reel on an ordinary phone; it earns its keep on tall screens. Anything
-  screen-anchored offsets by `underhang + peek + gap`, **not** the whole floor.
-- Short-screen degradation, in order: floor, then peek down to `minPeek`, only then the card. A card
-  taller than its viewport cannot snap.
-- **1.78 (9:16) is a BOUNDARY, not a dial.** Above it the crop is horizontal and cheap; below it it
-  flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases
-  the window UP for that case and is LIVE on the phones this ships to — do not delete it as unused.
-- Skeleton and reel must read the SAME geometry, or the card resizes when the first page lands.
-- Rejected shapes, do not revisit: device-aspect 1:2.22 · Pakiza's 1:1.63 verbatim · short-and-wide
-  1:1.40.
-
-## The live mark
-
-A live card is marked by `LiveMark` ONLY — a 24 dp glass disc with a play glyph, top-right, and
-**STATIC**: it shares a card with a live `Texture`, so the cheapest mark is one that never asks for a
-frame. **Never text** — the `LIVE` pill it replaced shipped untranslated English in six locales.
-
-Its inset is **22, not the action row's 14**: at 14 it rides the corner arc and reads as stuck to the
-rim. **No shadow** (owner's call): it shipped with the rail glyphs' dark halo as insurance against
-washing out on a white temple, and on the real catalog that halo read as a black smudge on every
-wallpaper — a louder failure than the one it insured against. Contrast comes from a dark fill INSIDE
-the disc; a shadow bleeds outside the object onto the artwork, which is the whole difference.
-
-**The two over-media glass objects share a RIM (`overMediaGlassBorder`) but NOT a fill**, and that
-split is deliberate: the Share circle sits inside the bottom scrim so it can be the bright half
-(`overMediaGlassFill`, ivory); `LiveMark` sits on raw artwork where the ground is unknown, so it must
-be the dark half (`overMediaInkFill`). Ivory chrome on a white marble temple is invisible at ANY
-alpha — raising it makes it whiter, not clearer. Never unify the two fills.
+Reel card geometry and the live mark: [feed-card.md](feed-card.md).

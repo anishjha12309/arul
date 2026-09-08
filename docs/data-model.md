@@ -20,11 +20,18 @@ package the mandate was handed to at initiate, or `phonepe_page` for the SDK/hos
 when an intent setup falls back, so it names the flow that RAN; NULL predates the column → PostHog
 `subscription_active` reports `unknown`)
 
+**Debit tracking on `subscriptions`:** `first_debit_at` · `debit_count` · `paid_paise` — written by EVERY
+statement that grants a paid period (both settles, `run-redemptions`, and the repeat-subscriber ₹199 setup)
+and read ONLY by the unified CMS's subscriptions page. `first_debit_at` is COALESCEd so a renewal never
+moves it; NULL = never debited. Rows debited before the columns existed stay unstamped on purpose: the CMS
+starts its history after the last such cohort instead of backfilling, so a grant that forgets to stamp
+shows there as the start date moving, never as a short count. Apply the schema BEFORE the Worker.
+
 **wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) ·
 **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text plus
 an index, so a new category is an insert and not a migration) · tags[] · full_key(R2, public) · mime ·
 duration_ms(null for static) · width · height · bytes · is_published · sort_order · created_at ·
-**apply_count**(bigint, default 0) · apply_score, scored_at (**retired, unread**). No `is_premium` —
+**published_at** · **apply_count**(bigint, default 0) · apply_score, scored_at (**retired, unread**). No `is_premium` —
 the gate is in the Worker.
 
 **ringtones:** id(PK) · title · **category** (the same browse axis, but its OWN six values —
@@ -32,10 +39,19 @@ the gate is in the Worker.
 **deity** (free text, nullable, indexed — DISPLAY ONLY, never a browse axis) · cover_key(R2, public,
 nullable — **null on every row; nothing has ever been written under `ringtones/covers/`**) · mime
 (kept in the catalog for set-file extension inference) · duration_ms · bytes · is_published ·
-sort_order · created_at · **set_count**(bigint, default 0) · set_score, scored_at (**retired,
+sort_order · created_at · **published_at** · **set_count**(bigint, default 0) · set_score, scored_at (**retired,
 unread**). No `is_premium` — preview is free from the CDN; Set gates through `/media/signed-url` with
 `kind='ringtone'`. Catalog scope `ringtones` strips `duration_ms`/`bytes`. Both keys live under the
 `ringtones/` canonical prefix so the sweep protects audio and covers together.
+
+**`published_at` is stamped by a TRIGGER, never by a caller** (`stamp_published_at`, on both
+tables). Three unrelated things publish — the unified CMS, the bulk importers, manual SQL — and all
+of them do it by flipping `is_published`, so the stamp belongs on that flip and nowhere else. It is
+the DEBUT date the app's New chip ages from, and deliberately not `created_at`, which is import time:
+a batch imported in one month and published the next would otherwise be born too old to ever appear.
+Stamped on the FIRST publish only (`published_at is null` guards it), so pulling a row to fix its
+title and putting it back does not resurface it. Clearing the column by hand is therefore the lever
+that DOES resurface one. No index — nothing filters on it; the app windows client-side.
 
 **`feed_rank` is a nullable `integer` on BOTH tables** again (dropped 2026-08-25, restored
 2026-09-02): the hand pin the unified CMS writes, and tier 1 of the feed order. NULL means unpinned

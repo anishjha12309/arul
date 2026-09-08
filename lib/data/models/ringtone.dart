@@ -42,6 +42,10 @@ abstract class Ringtone with _$Ringtone {
     /// Tier 1, ahead of [setCount] — the same semantics and null contract as [Wallpaper.feedRank].
     /// Both tabs order through the one `orderedByUse`.
     int? feedRank,
+
+    /// Debut date — the same contract and the same null case as [Wallpaper.publishedAt].
+    /// NOT [createdAt], which is import time; the two differ by however long a batch sat unpublished.
+    DateTime? publishedAt,
   }) = _Ringtone;
 
   factory Ringtone.fromJson(Map<String, dynamic> json) =>
