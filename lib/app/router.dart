@@ -95,7 +95,7 @@ final router = GoRouter(
       builder: (_, _) => const EnglishOnly(child: UploadScreen()),
     ),
     // Privacy / Terms, read in-app.
-    // Pushed OVER the shell -> opens the same from the Settings branch and from /sign-in, outside it.
+    // Pushed OVER the shell -> the Settings branch's own dock does not paint across it.
     // Push it with `PolicyDoc.route`, never a literal path.
     GoRoute(
       path: '/policy/:doc',

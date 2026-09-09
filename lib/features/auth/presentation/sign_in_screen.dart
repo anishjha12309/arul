@@ -11,7 +11,6 @@ import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../legal/presentation/policy_screen.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 import '../providers/auth_providers.dart';
@@ -30,9 +29,6 @@ const double _kSubtitleSize = 13;
 
 /// The pill's MINIMUM height at this type size. It still grows past it whenever the subtitle wraps.
 const double _kPillMinHeight = 64;
-
-/// The footer's policy links.
-const double _kPolicySize = 12;
 
 /// The panel's corner and vertical padding, opened up with the type so the bigger lines are not
 /// crowded against the edges. Horizontal padding stays at 18: every dp of it comes straight out of
@@ -233,7 +229,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         busy: _signingIn,
                       ),
                     ),
-                    const _TermsPrivacyLine(),
                   ],
                 ),
               ),
@@ -461,72 +456,6 @@ class _SilkPanel extends StatelessWidget {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 'Terms · Privacy' at [_kPolicySize], faint ivory, gold-85% links.
-///
-/// A [TapGestureRecognizer] must be owned and disposed by a stateful widget or it leaks.
-/// So this is a row of two tappable children, not one `Text.rich` with spans.
-/// These glyphs are far too small to aim at -> the padding below is the TAP TARGET, not spacing.
-/// A `Wrap`, not a `Row`: at a large OS text size on a 320dp frame the two localized labels are
-/// wider than the panel, and a legal footer stacks rather than clips. It lays out identically to a
-/// centred Row whenever it fits, which is every ordinary phone.
-class _TermsPrivacyLine extends StatelessWidget {
-  const _TermsPrivacyLine();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    // This sits on the silk panel, not the wallpaper -> a shadow on a solid ground reads as fuzz.
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        _PolicyLink(label: l10n.signInTermsLink, doc: PolicyDoc.terms),
-        const Text(' · ', style: _policyBase),
-        _PolicyLink(label: l10n.signInPrivacyLink, doc: PolicyDoc.privacy),
-      ],
-    );
-  }
-}
-
-const _policyBase = TextStyle(
-  fontSize: _kPolicySize,
-  color: Color.fromRGBO(250, 245, 236, 0.5),
-);
-const _policyLink = TextStyle(
-  fontSize: _kPolicySize,
-  color: Color.fromRGBO(212, 160, 23, 0.85),
-);
-
-/// One policy link, opening the in-app reader.
-///
-/// The same pages are linked from the Settings footer and named in the Play listing.
-/// Three copies of a policy URL is how one goes stale -> the URLs come from [AppConfig]/[PolicyDoc].
-class _PolicyLink extends StatelessWidget {
-  const _PolicyLink({required this.label, required this.doc});
-
-  final String label;
-  final PolicyDoc doc;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      link: true,
-      label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => ArulHaptics.tap(),
-        // Pushed OVER this screen and popping back -> sign-in is never left behind in another app.
-        // Safe mid-auth: the one-shot authenticate() already launched, and returning does not re-arm.
-        onTap: () => context.push(doc.route),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 3),
-          child: Text(label, style: _policyLink),
         ),
       ),
     );

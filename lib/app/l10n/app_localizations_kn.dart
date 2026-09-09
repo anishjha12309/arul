@@ -54,12 +54,6 @@ class AppLocalizationsKn extends AppLocalizations {
   String get signInNudgeRetry => 'ಸೈನ್ ಇನ್ ಮಾಡಲು ಇಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ';
 
   @override
-  String get signInTermsLink => 'ನಿಯಮಗಳು';
-
-  @override
-  String get signInPrivacyLink => 'ಗೌಪ್ಯತೆ';
-
-  @override
   String get premiumTitle => 'ಪ್ರೀಮಿಯಂ';
 
   @override
@@ -251,9 +245,6 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'ಅನ್ವಯಿಸಲು, ಹಂಚಿಕೊಳ್ಳಲು ಅನ್‌ಲಾಕ್ ಮಾಡಿ';
-
-  @override
   String get settingsPremiumSubTrial => 'ನೀವು ಉಚಿತ ಟ್ರಯಲ್‌ನಲ್ಲಿದ್ದೀರಿ';
 
   @override
@@ -288,7 +279,19 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsNeedHelp => 'ಸಹಾಯ ಬೇಕೇ?';
 
   @override
-  String get settingsNeedHelpSub => 'ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ';
+  String get settingsNeedHelpSub => 'ಬೆಂಬಲ ಮತ್ತು ಚಂದಾದಾರಿಕೆ';
+
+  @override
+  String get settingsHelpSupport => 'ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ';
+
+  @override
+  String get settingsHelpSupportSub => 'ಇಮೇಲ್‌ನಲ್ಲಿ ನಮಗೆ ಬರೆಯಿರಿ';
+
+  @override
+  String get settingsHelpManage => 'ಚಂದಾದಾರಿಕೆ ನಿರ್ವಹಿಸಿ';
+
+  @override
+  String get settingsHelpDeleteSub => 'ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸುತ್ತದೆ';
 
   @override
   String get settingsUpload => 'ನಿಮ್ಮ ವಿಷಯವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ';
@@ -415,9 +418,6 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get remindersMonthDec => 'ಡಿಸೆಂ';
-
-  @override
-  String get premiumBrandTitle => 'Arul Premium';
 
   @override
   String get premiumScreenSubline => 'ಪೂರ್ಣ ಸಂಗ್ರಹ, ನಿಮ್ಮ ಪರದೆಯ ಮೇಲೆ ಜೀವಂತ';

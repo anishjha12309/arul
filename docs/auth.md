@@ -89,11 +89,12 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   stays one line — `scaleDown` is its handling. The subtitle is a sentence, so it WRAPS and the pill
   grows: at most two lines at text scale 1.0 and three at 1.3 on the phones the size matrix covers,
   a fourth for the 320 dp frame where the slot is 140 dp and wrapping is word-bounded. Nothing
-  truncates — no ellipsis on either line. `sign_in_size_matrix_test.dart` enforces it, and the
-  policy footer is a `Wrap` so it stacks instead of clipping on that same frame.
+  truncates — no ellipsis on either line. `sign_in_size_matrix_test.dart` enforces it.
 - **No language control on the wall** (owner's call). The wall follows the phone's language and the
   picker lives in Settings only; a footer chip was tried and pulled — it never moved sign-in and it
-  was a second tappable thing beside the one button that matters. The wordmark stays English and is
+  was a second tappable thing beside the one button that matters. **Nothing else on the wall is
+  tappable either** — the Terms · Privacy footer went for the same reason, and Play's in-app
+  privacy-policy requirement is met by Settings, which every signed-in user reaches. The wordmark stays English and is
   the wall's only brand mark; the eyebrow under it is the splash's alone.
   **Icon glyphs take NO `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text
   shadows are fine.

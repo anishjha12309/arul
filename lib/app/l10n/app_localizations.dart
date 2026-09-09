@@ -196,18 +196,6 @@ abstract class AppLocalizations {
   /// **'Click here to sign in'**
   String get signInNudgeRetry;
 
-  /// No description provided for @signInTermsLink.
-  ///
-  /// In en, this message translates to:
-  /// **'Terms'**
-  String get signInTermsLink;
-
-  /// No description provided for @signInPrivacyLink.
-  ///
-  /// In en, this message translates to:
-  /// **'Privacy'**
-  String get signInPrivacyLink;
-
   /// No description provided for @premiumTitle.
   ///
   /// In en, this message translates to:
@@ -562,12 +550,6 @@ abstract class AppLocalizations {
   /// **'Signed in with Google'**
   String get settingsFallbackEmail;
 
-  /// No description provided for @settingsPremiumSubLocked.
-  ///
-  /// In en, this message translates to:
-  /// **'Unlock apply & share'**
-  String get settingsPremiumSubLocked;
-
   /// No description provided for @settingsPremiumSubTrial.
   ///
   /// In en, this message translates to:
@@ -637,8 +619,32 @@ abstract class AppLocalizations {
   /// No description provided for @settingsNeedHelpSub.
   ///
   /// In en, this message translates to:
-  /// **'Contact support'**
+  /// **'Support and subscription'**
   String get settingsNeedHelpSub;
+
+  /// No description provided for @settingsHelpSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support'**
+  String get settingsHelpSupport;
+
+  /// No description provided for @settingsHelpSupportSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to us by email'**
+  String get settingsHelpSupportSub;
+
+  /// No description provided for @settingsHelpManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage subscription'**
+  String get settingsHelpManage;
+
+  /// No description provided for @settingsHelpDeleteSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove your account for good'**
+  String get settingsHelpDeleteSub;
 
   /// No description provided for @settingsUpload.
   ///
@@ -873,12 +879,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dec'**
   String get remindersMonthDec;
-
-  /// No description provided for @premiumBrandTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Arul Premium'**
-  String get premiumBrandTitle;
 
   /// No description provided for @premiumScreenSubline.
   ///

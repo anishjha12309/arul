@@ -46,6 +46,12 @@ enum PolicyDoc {
   };
 }
 
+/// How long the reveal waits for the web view to raster the injected chrome.
+///
+/// The stale texture was measured at ONE frame in a 30 fps screen recording, so this is the next
+/// round number past it. It is spent under a spinner that is already up — nothing waits on it.
+const Duration _kRasterHold = Duration(milliseconds: 50);
+
 /// Privacy Policy / Terms & Conditions / Refund Policy, read INSIDE the app.
 ///
 /// The reviewer requires a policy to open WITHIN the app, with a back button that returns to it.
@@ -57,7 +63,10 @@ enum PolicyDoc {
 /// What keeps it from reading as "a website in a box":
 ///  * the site's navbar, mobile menu and footer are suppressed — no second chrome, no way out;
 ///  * the page is held back until that is applied, so the nav never flashes in and out;
-///  * the site's theme is pinned to the app's, so a dark-mode app does not open a white page.
+///  * the site's theme is pinned to the app's, so a dark-mode app does not open a white page,
+///    and its colour TRANSITIONS are killed so that pinning lands instantly rather than animating
+///    a 250ms wash into view (the page resolves `prefers-color-scheme` from the OS, which is a
+///    different thing from the app's theme, so its first paint is often the wrong one).
 class PolicyScreen extends StatefulWidget {
   const PolicyScreen({super.key, required this.doc});
 
@@ -82,7 +91,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// False is the normal case -> the route pops the ordinary way and keeps predictive back.
   bool _canGoBack = false;
 
-  Brightness _brightness = Brightness.light;
+  /// NULL until the first [didChangeDependencies] -> the ground is set on the FIRST build in BOTH
+  /// themes. Seeded `light`, a light-theme app never differed from it, so
+  /// [WebViewController.setBackgroundColor] was never called and the platform view kept its
+  /// default white.
+  Brightness? _brightness;
 
   /// Hosts the reader navigates itself — DERIVED from the configured URLs, never written out.
   /// So a dart-define override cannot bounce our own pages out to the browser.
@@ -163,13 +176,21 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// Selectors are the site's stable hooks: `[data-nav]` header, `#mobile-menu` sheet, `footer.foot`.
   /// CSS, not DOM surgery -> a moved hook degrades to the page with its own nav, never to a blank.
   /// `.doc`'s top padding exists to clear the fixed navbar, so it comes down with it.
+  ///
+  /// `transition:none` is what keeps the theme pin from being SEEN. The page's own head script
+  /// resolves `prefers-color-scheme` — the OS setting, not the app's theme — so a light-theme app
+  /// on a dark-mode phone gets a dark first paint, and `body` carries
+  /// `transition:background-color .25s,color .25s`. The flip below then ANIMATED, and since the
+  /// reveal follows it by a couple of frames the reader watched a dark page wash to cream.
+  /// Killing transitions makes the flip land inside the same style recalc, under the spinner.
   Future<void> _applyAppChrome() async {
     final theme = _brightness == Brightness.dark ? 'dark' : 'light';
     try {
       await _controller.runJavaScript('''
 (function () {
   var css = '.skip-link,[data-nav],#mobile-menu,footer.foot{display:none!important}'
-          + '.doc{padding-block:1.25rem 2.5rem!important}';
+          + '.doc{padding-block:1.25rem 2.5rem!important}'
+          + '*{transition:none!important}';
   var el = document.getElementById('arul-app-chrome');
   if (!el) {
     el = document.createElement('style');
@@ -196,6 +217,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
     await _applyAppChrome();
     if (!mounted || _failed) return;
     final canGoBack = await _controller.canGoBack();
+    if (!mounted || _failed) return;
+    // `runJavaScript` returns when the SCRIPT ran, not when the web view has DRAWN what it did.
+    // Revealing on that returned a texture still holding the page's own first paint — navbar up,
+    // themed off the OS — for a single frame. There is no paint callback to await instead.
+    await Future<void>.delayed(_kRasterHold);
     if (!mounted || _failed) return;
     setState(() {
       _loading = false;

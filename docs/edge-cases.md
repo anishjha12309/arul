@@ -1,9 +1,8 @@
 # Edge Cases — the regression-contract index
 
-Permanent regression contracts: each line is a bug someone already paid for, and they bind regardless
-of UI design. Walk them on-device before cutting a release; **boxes stay unticked on purpose** —
-unticked means "not re-checked for the release you are cutting now". Each section's reasoning lives
-in the `docs/` file of the same name; this file carries the rule and nothing else.
+Each line is a bug someone already paid for; they bind regardless of UI design. Walk them on-device
+before a release. **Unticked is the resting state**: not re-checked for the release you are cutting
+now. Reasoning lives in the `docs/` file of the same name.
 
 ## Video feed
 - [ ] Live MP4s exactly 1024×1824 (w%128==0, h%32==0, inside the 1088×1920 hw cap)
@@ -27,8 +26,8 @@ in the `docs/` file of the same name; this file carries the rule and nothing els
 ## Auth
 - [ ] Sign-in auto-launches a Google surface on the first frame, never a silent check
 - [ ] SHEET FIRST, picker second; a pill tap skips the sheet; the `sheetFirst` kill switch stays a BUILD const
-- [ ] EXACTLY ONE visible Google surface per attempt; the picker follows only a sheet that drew nothing or could not complete; a DISMISSED sheet ends the attempt
-- [ ] A failed sign-in shows ONE retry line, no fix line, no help link; `clearTaskOnLaunch` stays on MainActivity
+- [ ] EXACTLY ONE visible Google surface per attempt; the picker follows only a sheet that drew nothing or failed; a DISMISSED sheet ends the attempt
+- [ ] A failed sign-in shows ONE retry line; the wall has no links at all; `clearTaskOnLaunch` stays on MainActivity
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
@@ -42,7 +41,7 @@ in the `docs/` file of the same name; this file carries the rule and nothing els
 - [ ] `cancelled` keeps premium to period end, NO grace; `trialing`/`active` get 6 h; `pending` with a live period counts; `paused`/`expired` none; `reward_premium_until` ORed in
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while the period lives, never `expired`; resurrect matches `('expired','cancelled')`
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause
-- [ ] The app reads the `premium` flag from `GET /me` and NEVER re-derives the rule from the row
+- [ ] The app reads the `premium` flag from `GET /me` and NEVER re-derives the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row, every other state being a sell
 - [ ] One trial ever: `trial_end` consumed-marker + a delete-account HMAC tombstone (secret NEVER rotates)
 - [ ] Endpoint contracts hold — SDK order token, the cancel path, 409 `setup_in_progress`, webhook dedupe
 - [ ] Re-applying or re-sharing a CACHED wallpaper still calls `/media/signed-url`; offline with bytes on disk is the one pass-through
@@ -97,13 +96,13 @@ in the `docs/` file of the same name; this file carries the rule and nothing els
 ## Catalog / storage
 - [ ] `version.json` edge-cacheable (`max-age=30` + SWR), pages `max-age=86400` + `?v=`; stale = rebuild, NEVER purge
 - [ ] A zero-row scope still writes a valid empty `all_1.json` — a 404 means the build FAILED, never "no content"
-- [ ] Orphaned pages deleted each rebuild; the hourly sweep runs only after a fully-successful rebuild that touched a scope; the 21:30 UTC daily pass is the backstop
+- [ ] Orphaned pages deleted each rebuild; the hourly sweep runs only after a successful rebuild that touched a scope; the 21:30 UTC daily pass is the backstop
 - [ ] Both sweep failsafes hold — a zero referenced-key set ABORTS that prefix, and the blast-radius cap refuses an oversized delete
 - [ ] Hyperdrive query caching OFF (it caused ~60 s staleness)
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing means mutual media deletion. R2 objects are public BY DESIGN; never add a "private" one
 
 ## App-wide
-- [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (a store rejection). Navigation fenced to the policy host; navbar/footer hidden, page held until they are. Offline = the app's own error state + Retry; `onPageFinished` fires for Android's robot page too; the reveal must not clear the failure
+- [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (a store rejection). Navigation fenced to the policy host; navbar/footer hidden, page held until they are. Offline = the app's own error state + Retry; `onPageFinished` fires for Android's robot page too; the reveal must not clear the failure. The page themes off the OS `prefers-color-scheme`, not the app's, so the reveal must never show its own first paint
 - [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT the paywall (English by decision) and purchase/auth error strings
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**

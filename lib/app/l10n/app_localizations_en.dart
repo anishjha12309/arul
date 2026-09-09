@@ -54,12 +54,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInNudgeRetry => 'Click here to sign in';
 
   @override
-  String get signInTermsLink => 'Terms';
-
-  @override
-  String get signInPrivacyLink => 'Privacy';
-
-  @override
   String get premiumTitle => 'Premium';
 
   @override
@@ -250,9 +244,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'Unlock apply & share';
-
-  @override
   String get settingsPremiumSubTrial => 'You\'re on the free trial';
 
   @override
@@ -286,7 +277,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNeedHelp => 'Need help?';
 
   @override
-  String get settingsNeedHelpSub => 'Contact support';
+  String get settingsNeedHelpSub => 'Support and subscription';
+
+  @override
+  String get settingsHelpSupport => 'Contact support';
+
+  @override
+  String get settingsHelpSupportSub => 'Write to us by email';
+
+  @override
+  String get settingsHelpManage => 'Manage subscription';
+
+  @override
+  String get settingsHelpDeleteSub => 'Remove your account for good';
 
   @override
   String get settingsUpload => 'Upload your content';
@@ -413,9 +416,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get remindersMonthDec => 'Dec';
-
-  @override
-  String get premiumBrandTitle => 'Arul Premium';
 
   @override
   String get premiumScreenSubline =>

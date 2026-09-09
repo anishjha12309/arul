@@ -9,7 +9,6 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
@@ -27,14 +26,16 @@ import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
+import 'help_sheet.dart';
 import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
-/// Settings — profile card, one rows-card, muted logout, demoted delete link, faint legal line.
+/// Settings — profile card, one rows-card, muted logout, policy footer.
 ///
 /// Identity comes from the auth state, with neutral stand-ins while it loads.
 /// Edit-name persists via `POST /me/profile`, and language drives the app locale.
-/// Logout and delete-account run the real auth actions before routing back to sign-in.
+/// Support, the plan and account deletion all live behind the Need help? row's sheet; logout and
+/// delete run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -75,17 +76,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? l10n.settingsRemindersSubOn
         : l10n.settingsRemindersSubOff;
 
-    // The premium subtitle reflects the REAL plan; while it resolves, fall back to the upsell.
-    // The Manage screen re-reads it anyway -> a momentary understatement costs nothing.
-    // Claiming a membership the user does not have would.
-    final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
-    final premiumSub = switch (entitlement?.subscription?.status) {
-      _ when entitlement?.isPremium != true => l10n.settingsPremiumSubLocked,
-      SubscriptionStatus.trialing => l10n.settingsPremiumSubTrial,
-      SubscriptionStatus.cancelled => l10n.settingsPremiumSubCancelled,
-      _ => l10n.settingsPremiumSubActive,
-    };
-
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
@@ -119,14 +109,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
                     rows: [
-                      // First row — the plan is the most consequential thing in Settings.
-                      _RowData(
-                        glyph: (color) => GopuramMark(size: 19, color: color),
-                        title: l10n.premiumBrandTitle,
-                        identifier: 'arul_settings_premium',
-                        sub: premiumSub,
-                        onTap: () => context.push('/premium?source=settings'),
-                      ),
                       _RowData(
                         icon: Icons.card_giftcard,
                         title: l10n.referTitle,
@@ -170,9 +152,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         icon: Icons.help_outline,
                         title: l10n.settingsNeedHelp,
                         identifier: 'arul_settings_help',
-                        // Subscription has its own row now -> pointing a mailto at it would be a lie.
+                        // FIXED, not state-aware (owner's call): the sheet behind it is where a
+                        // stuck user goes, whatever their plan.
                         sub: l10n.settingsNeedHelpSub,
-                        onTap: _support,
+                        onTap: _needHelp,
                       ),
                       _RowData(
                         icon: Icons.upload,
@@ -189,44 +172,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     identifier: 'arul_settings_logout',
                     child: _LogoutButton(onTap: _logout),
                   ),
-                  const SizedBox(height: ArulTokens.contentGap),
-                  Semantics(
-                    container: true,
-                    identifier: 'arul_settings_delete',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      // Deleting is the app's one irreversible act -> the strongest beat, twice.
-                      onTapDown: (_) => ArulHaptics.heavy(),
-                      onTap: _delete,
-                      // TextDecoration.underline sits hard on the baseline -> a hand-drawn 3px rule.
-                      // Line-height collapses to 1.0 first, or body's 1.5 leading drops the rule away.
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              l10n.settingsDeleteAccount,
-                              textAlign: TextAlign.center,
-                              style: ArulTokens.body.copyWith(
-                                height: 1,
-                                color: isDark
-                                    ? ArulTokens.darkTextSecondary
-                                    : ArulTokens.lightSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Container(
-                              height: 1,
-                              width: 98,
-                              color: isDark
-                                  ? ArulTokens.darkTextSecondary
-                                  : ArulTokens.lightSecondary,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  // Delete lives in the Need help? sheet now -> one home, and it stops being a
+                  // demoted link the eye finds on the way past the version number.
                   const SizedBox(height: 18),
                   const _PolicyFooter(),
                 ],
@@ -261,6 +208,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final code = next == null ? null : appLanguageCodeFor(next);
     if (code == null) return;
     await ref.read(localeProvider.notifier).setLocale(Locale(code));
+  }
+
+  /// Opens the help sheet and runs whatever came back.
+  ///
+  /// The sheet resolves a choice and nothing else -> every action runs from THIS context, with the
+  /// sheet already gone: a confirm dialog raised under a closing sheet loses its route, and a toast
+  /// belongs over Settings, not over something on its way out.
+  Future<void> _needHelp() async {
+    final action = await showHelpSheet(context);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case HelpAction.support:
+        await _support();
+      case HelpAction.manage:
+        unawaited(context.push('/premium?source=settings'));
+      case HelpAction.delete:
+        await _delete();
+    }
   }
 
   Future<void> _logout() async {

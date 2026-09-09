@@ -24,12 +24,14 @@ import 'package:arul/app/theme/theme.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
+import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
 import 'package:arul/features/notifications/presentation/notification_settings_screen.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
+import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/referral/presentation/refer_screen.dart';
 import 'package:arul/features/referral/presentation/share_moment_sheet.dart';
@@ -39,6 +41,7 @@ import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dar
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
 import 'package:arul/features/settings/presentation/confirm_dialog.dart';
 import 'package:arul/features/settings/presentation/edit_name_sheet.dart';
+import 'package:arul/features/settings/presentation/help_sheet.dart';
 import 'package:arul/features/settings/presentation/language_sheet.dart';
 import 'package:arul/features/settings/presentation/settings_screen.dart';
 import 'package:arul/features/settings/presentation/theme_sheet.dart';
@@ -322,6 +325,28 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     textField: true,
     build: () =>
         SheetHost(open: (context) async => showEditNameSheet(context, 'Anish')),
+  ),
+  // Two variants, because the Manage row's presence is what changes between them and its sub is
+  // the longest string in the sheet.
+  ScreenEntry(
+    id: 'settings.help_sheet',
+    build: () => SheetHost(open: (context) async => showHelpSheet(context)),
+  ),
+  ScreenEntry(
+    id: 'settings.help_sheet.trialing',
+    build: () => SheetHost(open: (context) async => showHelpSheet(context)),
+    overrides: [
+      entitlementDetailProvider.overrideWith(
+        (ref) async => Entitlement(
+          isPremium: true,
+          subscription: SubscriptionModel(
+            id: 'sub_1',
+            userId: 'u_1',
+            status: SubscriptionStatus.trialing,
+          ),
+        ),
+      ),
+    ],
   ),
   ScreenEntry(
     id: 'settings.confirm_logout',

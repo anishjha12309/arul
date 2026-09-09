@@ -75,11 +75,16 @@ class _ThemeSheet extends ConsumerWidget {
             l10n.settingsTheme,
             style: ArulTokens.sheetTitle.copyWith(color: titleColor),
           ),
-          const SizedBox(height: 12),
-          for (final o in _options(l10n))
-            _ThemeRow(
-              option: o,
-              on: selected == o.mode,
+          const SizedBox(height: 14),
+          for (final (i, o) in _options(l10n).indexed) ...[
+            if (i > 0) const SizedBox(height: kSheetRowGap),
+            ArulSheetRow(
+              icon: o.icon,
+              title: o.title,
+              sub: o.sub,
+              selected: selected == o.mode,
+              // Picking a theme moves between discrete values -> it ticks, not presses.
+              haptic: ArulHapticStyle.selection,
               // Flip the theme and close in the SAME frame -> the sheet slides away already wearing
               // the new theme.
               // `select` applies the mode synchronously and only THEN awaits the prefs write ->
@@ -90,75 +95,8 @@ class _ThemeSheet extends ConsumerWidget {
                 Navigator.of(context).pop();
               },
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ThemeRow extends StatelessWidget {
-  const _ThemeRow({
-    required this.option,
-    required this.on,
-    required this.onTap,
-  });
-
-  final _ThemeOption option;
-  final bool on;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final unselectedIcon = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    final unselectedTitle = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final subColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // Picking a theme moves between discrete values -> it ticks, not presses; a radio's beat.
-      onTapDown: (_) => ArulHaptics.selection(),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: on ? ArulTokens.goldTintFill10 : Colors.transparent,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              option.icon,
-              size: 22,
-              color: on ? ArulTokens.gold : unselectedIcon,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    option.title,
-                    style: ArulTokens.rowTitle.copyWith(
-                      color: on ? ArulTokens.gold : unselectedTitle,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    option.sub,
-                    style: ArulTokens.rowSub.copyWith(color: subColor),
-                  ),
-                ],
-              ),
-            ),
-            if (on)
-              const Icon(Icons.check_circle, size: 20, color: ArulTokens.gold),
           ],
-        ),
+        ],
       ),
     );
   }

@@ -54,12 +54,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get signInNudgeRetry => 'साइन इन करने के लिए यहाँ टैप करें';
 
   @override
-  String get signInTermsLink => 'शर्तें';
-
-  @override
-  String get signInPrivacyLink => 'गोपनीयता';
-
-  @override
   String get premiumTitle => 'प्रीमियम';
 
   @override
@@ -249,9 +243,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'लगाना और साझा करना अनलॉक करें';
-
-  @override
   String get settingsPremiumSubTrial => 'आप मुफ़्त ट्रायल पर हैं';
 
   @override
@@ -285,7 +276,19 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsNeedHelp => 'मदद चाहिए?';
 
   @override
-  String get settingsNeedHelpSub => 'सपोर्ट से संपर्क करें';
+  String get settingsNeedHelpSub => 'सपोर्ट और सदस्यता';
+
+  @override
+  String get settingsHelpSupport => 'सपोर्ट से संपर्क करें';
+
+  @override
+  String get settingsHelpSupportSub => 'ईमेल से हमें लिखें';
+
+  @override
+  String get settingsHelpManage => 'सदस्यता प्रबंधित करें';
+
+  @override
+  String get settingsHelpDeleteSub => 'आपका खाता हमेशा के लिए हट जाएगा';
 
   @override
   String get settingsUpload => 'अपनी सामग्री अपलोड करें';
@@ -411,9 +414,6 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get remindersMonthDec => 'दिस';
-
-  @override
-  String get premiumBrandTitle => 'Arul Premium';
 
   @override
   String get premiumScreenSubline => 'पूरा संग्रह, आपकी स्क्रीन पर जीवंत';

@@ -89,7 +89,7 @@ void main() {
           path: '/sign-in',
           builder: (_, _) => SignInScreen(debugOutcome: outcome),
         ),
-        for (final path in const ['/browse', '/legal/terms', '/legal/privacy'])
+        for (final path in const ['/browse'])
           GoRoute(
             path: path,
             builder: (_, _) {
@@ -163,18 +163,14 @@ void main() {
           findsNothing,
           reason: '${outcome.name} must not fall back to the idle line',
         );
-        // The panel is caption, pill and the terms line — no sentence under the pill, and the only
-        // links on the screen are Terms and Privacy.
+        // The panel is caption and pill, nothing else — no sentence under it and no link at all.
+        // Terms and Privacy left with the rest: the policy reader opens from Settings now.
         expect(
           find.byWidgetPredicate(
-            (w) =>
-                w is Semantics &&
-                w.properties.link == true &&
-                w.properties.label != l10n.signInTermsLink &&
-                w.properties.label != l10n.signInPrivacyLink,
+            (w) => w is Semantics && w.properties.link == true,
           ),
           findsNothing,
-          reason: '${outcome.name} must offer no help link',
+          reason: '${outcome.name} must offer no links at all',
         );
       }
     });
