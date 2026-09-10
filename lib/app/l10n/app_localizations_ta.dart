@@ -653,6 +653,27 @@ class AppLocalizationsTa extends AppLocalizations {
       'UPI ஆட்டோபே பாதுகாப்பு · ஒரே தட்டலில் ரத்து';
 
   @override
+  String get premiumInstallUpiTrial =>
+      'உங்கள் இலவச சோதனையைத் தொடங்க PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்';
+
+  @override
+  String get premiumInstallUpiPaid =>
+      'சந்தா செலுத்த PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்';
+
+  @override
+  String get trialNudgeRow => 'உங்கள் இலவச சோதனை அமைப்பை முடிக்கவும்';
+
+  @override
+  String get trialNudgeDismiss => 'மூடு';
+
+  @override
+  String get trialReminderTitle => 'உங்கள் இலவச சோதனை காத்திருக்கிறது';
+
+  @override
+  String get trialReminderBody =>
+      'அமைப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ஆப்';
 
   @override

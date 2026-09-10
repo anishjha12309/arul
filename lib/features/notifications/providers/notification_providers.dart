@@ -1,6 +1,9 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../app/l10n/app_localizations.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
+import '../../premium/domain/trial_nudge.dart';
 import '../data/notification_service.dart';
 import '../domain/notification_settings.dart';
 
@@ -74,8 +77,30 @@ Future<void> notificationBootstrap(Ref ref) async {
 
   if (!settings.masterEnabled) {
     await service.cancelAll();
-    return;
+  } else {
+    await service.applySettings(settings);
   }
 
-  await service.applySettings(settings);
+  // AFTER either branch, because both cancel every pending notification — including this one.
+  //
+  // The unfinished-trial reminder is NOT a devotional reminder and the master toggle does not own
+  // it: it is one follow-up to a payment the user started themselves. Gating it on that toggle
+  // would make it dead code, since it defaults OFF and the people who abandon a trial are mostly
+  // fresh installs. Its gate is the OS permission alone — `scheduleTrialReminder` refuses without
+  // it, and NOTHING here ever asks for it.
+  //
+  // Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
+  // reminder further out on every launch, so the people who open the app most would never see it.
+  final prefs = ref.read(sharedPreferencesProvider);
+  final due = TrialNudge.pendingReminder(prefs, DateTime.now());
+  if (due != null) {
+    // No BuildContext here — a boot re-arm has no widget tree. `lookupAppLocalizations` is the
+    // generated SYNCHRONOUS lookup, fed the same locale the app resolved for its UI.
+    final l10n = lookupAppLocalizations(ref.read(localeProvider));
+    await service.scheduleTrialReminder(
+      due: due,
+      title: l10n.trialReminderTitle,
+      body: l10n.trialReminderBody,
+    );
+  }
 }

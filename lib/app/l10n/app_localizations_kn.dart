@@ -644,6 +644,27 @@ class AppLocalizationsKn extends AppLocalizations {
       'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು';
 
   @override
+  String get premiumInstallUpiTrial =>
+      'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ';
+
+  @override
+  String get premiumInstallUpiPaid =>
+      'ಚಂದಾದಾರರಾಗಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ';
+
+  @override
+  String get trialNudgeRow => 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಿ';
+
+  @override
+  String get trialNudgeDismiss => 'ಮುಚ್ಚಿ';
+
+  @override
+  String get trialReminderTitle => 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಕಾಯುತ್ತಿದೆ';
+
+  @override
+  String get trialReminderBody =>
+      'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ಆ್ಯಪ್';
 
   @override

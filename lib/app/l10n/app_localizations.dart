@@ -1288,6 +1288,42 @@ abstract class AppLocalizations {
   /// **'Secured by UPI Autopay · Cancel anytime in one tap'**
   String get premiumReassurancePaid;
 
+  /// No description provided for @premiumInstallUpiTrial.
+  ///
+  /// In en, this message translates to:
+  /// **'Install PhonePe or Google Pay to start your free trial'**
+  String get premiumInstallUpiTrial;
+
+  /// No description provided for @premiumInstallUpiPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Install PhonePe or Google Pay to subscribe'**
+  String get premiumInstallUpiPaid;
+
+  /// No description provided for @trialNudgeRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish setting up your free trial'**
+  String get trialNudgeRow;
+
+  /// No description provided for @trialNudgeDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get trialNudgeDismiss;
+
+  /// No description provided for @trialReminderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your free trial is waiting'**
+  String get trialReminderTitle;
+
+  /// No description provided for @trialReminderBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You didn\'t finish setting up. Tap to try again — it takes a moment.'**
+  String get trialReminderBody;
+
   /// No description provided for @premiumSelectedUpiApp.
   ///
   /// In en, this message translates to:

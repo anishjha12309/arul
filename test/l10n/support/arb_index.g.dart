@@ -233,6 +233,14 @@ const Map<String, Map<String, String>> kArbStrings = {
         '₹2 verification, refunded instantly · Cancel anytime',
     'premiumReassurancePaid':
         'Secured by UPI Autopay · Cancel anytime in one tap',
+    'premiumInstallUpiTrial':
+        'Install PhonePe or Google Pay to start your free trial',
+    'premiumInstallUpiPaid': 'Install PhonePe or Google Pay to subscribe',
+    'trialNudgeRow': 'Finish setting up your free trial',
+    'trialNudgeDismiss': 'Dismiss',
+    'trialReminderTitle': 'Your free trial is waiting',
+    'trialReminderBody':
+        'You didn\'t finish setting up. Tap to try again — it takes a moment.',
     'premiumSelectedUpiApp': 'Selected UPI App',
     'upiPickerTitle': 'Pay using',
     'upiPickerLastUsed': 'Last used',
@@ -450,6 +458,15 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumReassuranceTrial':
         '₹2 சரிபார்ப்பு, உடனே திரும்பும் · எப்போதும் ரத்து செய்யலாம்',
     'premiumReassurancePaid': 'UPI ஆட்டோபே பாதுகாப்பு · ஒரே தட்டலில் ரத்து',
+    'premiumInstallUpiTrial':
+        'உங்கள் இலவச சோதனையைத் தொடங்க PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
+    'premiumInstallUpiPaid':
+        'சந்தா செலுத்த PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
+    'trialNudgeRow': 'உங்கள் இலவச சோதனை அமைப்பை முடிக்கவும்',
+    'trialNudgeDismiss': 'மூடு',
+    'trialReminderTitle': 'உங்கள் இலவச சோதனை காத்திருக்கிறது',
+    'trialReminderBody':
+        'அமைப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.',
     'premiumSelectedUpiApp': 'UPI ஆப்',
     'upiPickerTitle': 'இதன் மூலம் செலுத்து',
     'upiPickerLastUsed': 'கடைசியாக பயன்படுத்தியது',
@@ -662,6 +679,15 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumReassuranceTrial':
         '₹2 ధృవీకరణ, వెంటనే వాపసు · ఎప్పుడైనా రద్దు చేయవచ్చు',
     'premiumReassurancePaid': 'UPI ఆటోపే భద్రత · ఒకే ట్యాప్‌లో రద్దు',
+    'premiumInstallUpiTrial':
+        'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
+    'premiumInstallUpiPaid':
+        'సబ్‌స్క్రైబ్ చేయడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
+    'trialNudgeRow': 'మీ ఉచిత ట్రయల్ సెటప్ పూర్తి చేయండి',
+    'trialNudgeDismiss': 'మూసివేయి',
+    'trialReminderTitle': 'మీ ఉచిత ట్రయల్ వేచి ఉంది',
+    'trialReminderBody':
+        'మీరు సెటప్ పూర్తి చేయలేదు. మళ్లీ ప్రయత్నించడానికి నొక్కండి — ఒక క్షణం చాలు.',
     'premiumSelectedUpiApp': 'UPI యాప్',
     'upiPickerTitle': 'దీని ద్వారా చెల్లించండి',
     'upiPickerLastUsed': 'చివరిగా వాడినది',
@@ -875,6 +901,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumReassuranceTrial':
         '₹2 ಪರಿಶೀಲನೆ, ತಕ್ಷಣ ಮರುಪಾವತಿ · ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ',
     'premiumReassurancePaid': 'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು',
+    'premiumInstallUpiTrial':
+        'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
+    'premiumInstallUpiPaid': 'ಚಂದಾದಾರರಾಗಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
+    'trialNudgeRow': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಿ',
+    'trialNudgeDismiss': 'ಮುಚ್ಚಿ',
+    'trialReminderTitle': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಕಾಯುತ್ತಿದೆ',
+    'trialReminderBody':
+        'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.',
     'premiumSelectedUpiApp': 'UPI ಆ್ಯಪ್',
     'upiPickerTitle': 'ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ',
     'upiPickerLastUsed': 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು',
@@ -1089,6 +1123,15 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumReassuranceTrial':
         '₹2 പരിശോധന, ഉടനടി തിരികെ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം',
     'premiumReassurancePaid': 'UPI ഓട്ടോപേ സുരക്ഷ · ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം',
+    'premiumInstallUpiTrial':
+        'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
+    'premiumInstallUpiPaid':
+        'സബ്‌സ്‌ക്രൈബ് ചെയ്യാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
+    'trialNudgeRow': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ സജ്ജീകരണം പൂർത്തിയാക്കുക',
+    'trialNudgeDismiss': 'അടയ്ക്കുക',
+    'trialReminderTitle': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ കാത്തിരിക്കുന്നു',
+    'trialReminderBody':
+        'സെറ്റപ്പ് നിങ്ങൾ പൂർത്തിയാക്കിയില്ല. വീണ്ടും ശ്രമിക്കാൻ ടാപ്പ് ചെയ്യുക — ഒരു നിമിഷം മതി.',
     'premiumSelectedUpiApp': 'UPI ആപ്പ്',
     'upiPickerTitle': 'ഇതുവഴി അടയ്ക്കൂ',
     'upiPickerLastUsed': 'അവസാനം ഉപയോഗിച്ചത്',
@@ -1299,6 +1342,15 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumCtaSubscribe': 'अभी सदस्यता लें',
     'premiumReassuranceTrial': '₹2 सत्यापन, तुरंत वापस · कभी भी रद्द करें',
     'premiumReassurancePaid': 'UPI ऑटोपे सुरक्षित · एक टैप में रद्द करें',
+    'premiumInstallUpiTrial':
+        'अपना मुफ़्त ट्रायल शुरू करने के लिए PhonePe या Google Pay इंस्टॉल करें',
+    'premiumInstallUpiPaid':
+        'सदस्यता लेने के लिए PhonePe या Google Pay इंस्टॉल करें',
+    'trialNudgeRow': 'अपना मुफ़्त ट्रायल सेटअप पूरा करें',
+    'trialNudgeDismiss': 'बंद करें',
+    'trialReminderTitle': 'आपका मुफ़्त ट्रायल इंतज़ार कर रहा है',
+    'trialReminderBody':
+        'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।',
     'premiumSelectedUpiApp': 'UPI ऐप',
     'upiPickerTitle': 'इससे भुगतान करें',
     'upiPickerLastUsed': 'पिछली बार इस्तेमाल',

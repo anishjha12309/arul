@@ -13,6 +13,7 @@ import 'entitlement_provider.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 import 'trial_conversion_catch_up.dart';
+import 'trial_nudge_provider.dart';
 
 part 'premium_purchase_provider.g.dart';
 
@@ -65,12 +66,23 @@ class PremiumPurchase extends _$PremiumPurchase {
     _api = ref.read(apiClientProvider);
     _analytics = ref.read(analyticsServiceProvider);
     _catchUp = ref.read(trialConversionCatchUpProvider);
+    // Same reason as the three above: the nudge is written from the SAME continuation, and an
+    // abandonment the user could not see is exactly the one worth remembering. The notifier is
+    // keepAlive, so it outlives this autoDispose one and the write always lands.
+    _nudge = ref.read(trialNudgeProvider.notifier);
     return const PurchaseIdle();
   }
 
   late ApiClient _api;
   late AnalyticsService _analytics;
   late TrialConversionCatchUp _catchUp;
+  late TrialNudgeNotifier _nudge;
+
+  /// Whether the attempt in flight is for a FREE TRIAL.
+  ///
+  /// Captured at [startTrial], not read at the failure: the nudge line says "free trial", and a
+  /// user who has spent theirs is abandoning a ₹199 charge, which that line would misdescribe.
+  bool _trialAttempt = false;
 
   /// Writes [next] only while the paywall still owns this notifier.
   /// After the pop the state has no reader and the setter throws -> the write is dropped.
@@ -223,9 +235,13 @@ class PremiumPurchase extends _$PremiumPurchase {
   ///
   /// [targetApp] selects the direct UPI-intent flow — that app opens onto its AutoPay sheet.
   /// Null → the PhonePe SDK hosted-page flow.
-  Future<void> startTrial({String? targetApp}) async {
+  Future<void> startTrial({
+    String? targetApp,
+    bool trialEligible = false,
+  }) async {
     if (state is PurchaseLoading || state is PurchaseProcessing) return;
 
+    _trialAttempt = trialEligible;
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
     // The user has committed -> count the checkout BEFORE any network call.
@@ -497,11 +513,13 @@ class PremiumPurchase extends _$PremiumPurchase {
         );
         _refreshEntitlement();
         _setState(const PurchaseSuccess());
+        await _nudge.resolve();
         return true;
       }
       if (serverStatus == 'expired') {
         _pollGeneration++;
         _fail('expired', const PurchaseError(_intentFailedCopy));
+        await _nudge.remember(orderId, trialAttempt: _trialAttempt);
         return true;
       }
       return false;
@@ -521,6 +539,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
     _fail('intent_abandoned', const PurchaseError(_intentFailedCopy));
+    await _nudge.remember(orderId, trialAttempt: _trialAttempt);
   }
 
   /// Short-backoff poll of /payments/status until the server confirms the mandate.
@@ -558,6 +577,7 @@ class PremiumPurchase extends _$PremiumPurchase {
           );
           _refreshEntitlement();
           _setState(const PurchaseSuccess());
+          await _nudge.resolve();
           return;
         }
 
@@ -574,6 +594,7 @@ class PremiumPurchase extends _$PremiumPurchase {
                 ? const PurchaseError(_intentFailedCopy)
                 : const PurchaseError('Payment cancelled.', cancelled: true),
           );
+          await _nudge.remember(merchantOrderId, trialAttempt: _trialAttempt);
           return;
         }
 

@@ -65,7 +65,7 @@ final class PremiumPurchaseProvider
   }
 }
 
-String _$premiumPurchaseHash() => r'c6981d5c74ac6e35ddae822b0ac070071c06d2a9';
+String _$premiumPurchaseHash() => r'e0c6898f76c4d90d9ac77a8f3767acee1693777b';
 
 /// Manages the PhonePe Standard Checkout trial-start flow.
 ///

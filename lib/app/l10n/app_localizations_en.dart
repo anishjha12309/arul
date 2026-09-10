@@ -643,6 +643,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Secured by UPI Autopay · Cancel anytime in one tap';
 
   @override
+  String get premiumInstallUpiTrial =>
+      'Install PhonePe or Google Pay to start your free trial';
+
+  @override
+  String get premiumInstallUpiPaid =>
+      'Install PhonePe or Google Pay to subscribe';
+
+  @override
+  String get trialNudgeRow => 'Finish setting up your free trial';
+
+  @override
+  String get trialNudgeDismiss => 'Dismiss';
+
+  @override
+  String get trialReminderTitle => 'Your free trial is waiting';
+
+  @override
+  String get trialReminderBody =>
+      'You didn\'t finish setting up. Tap to try again — it takes a moment.';
+
+  @override
   String get premiumSelectedUpiApp => 'Selected UPI App';
 
   @override

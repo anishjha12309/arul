@@ -28,6 +28,11 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       ref.read(selectedCategoryProvider.notifier).select(category);
       router.go('/browse');
     };
+    // The one reminder that is not about a deity: an unfinished trial goes back to the paywall.
+    ref.read(notificationServiceProvider).onOpenTrialReminder = () {
+      if (!mounted) return;
+      router.go('/premium?source=trial_reminder');
+    };
   }
 
   @override

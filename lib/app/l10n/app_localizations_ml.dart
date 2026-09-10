@@ -652,6 +652,27 @@ class AppLocalizationsMl extends AppLocalizations {
       'UPI ഓട്ടോപേ സുരക്ഷ · ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം';
 
   @override
+  String get premiumInstallUpiTrial =>
+      'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക';
+
+  @override
+  String get premiumInstallUpiPaid =>
+      'സബ്‌സ്‌ക്രൈബ് ചെയ്യാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക';
+
+  @override
+  String get trialNudgeRow => 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ സജ്ജീകരണം പൂർത്തിയാക്കുക';
+
+  @override
+  String get trialNudgeDismiss => 'അടയ്ക്കുക';
+
+  @override
+  String get trialReminderTitle => 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ കാത്തിരിക്കുന്നു';
+
+  @override
+  String get trialReminderBody =>
+      'സെറ്റപ്പ് നിങ്ങൾ പൂർത്തിയാക്കിയില്ല. വീണ്ടും ശ്രമിക്കാൻ ടാപ്പ് ചെയ്യുക — ഒരു നിമിഷം മതി.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ആപ്പ്';
 
   @override

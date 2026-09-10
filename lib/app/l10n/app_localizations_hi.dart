@@ -638,6 +638,27 @@ class AppLocalizationsHi extends AppLocalizations {
       'UPI ऑटोपे सुरक्षित · एक टैप में रद्द करें';
 
   @override
+  String get premiumInstallUpiTrial =>
+      'अपना मुफ़्त ट्रायल शुरू करने के लिए PhonePe या Google Pay इंस्टॉल करें';
+
+  @override
+  String get premiumInstallUpiPaid =>
+      'सदस्यता लेने के लिए PhonePe या Google Pay इंस्टॉल करें';
+
+  @override
+  String get trialNudgeRow => 'अपना मुफ़्त ट्रायल सेटअप पूरा करें';
+
+  @override
+  String get trialNudgeDismiss => 'बंद करें';
+
+  @override
+  String get trialReminderTitle => 'आपका मुफ़्त ट्रायल इंतज़ार कर रहा है';
+
+  @override
+  String get trialReminderBody =>
+      'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ऐप';
 
   @override

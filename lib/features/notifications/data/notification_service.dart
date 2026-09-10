@@ -61,6 +61,9 @@ class NotificationService {
   // The KEYS are the identity, never these numbers.
   static const _weeklyIdBase = 1000;
   static const _festivalIdBase = 2000;
+
+  /// The unfinished-trial reminder. One at a time, so ONE id, clear of both ranges above.
+  static const _trialReminderId = 3000;
   static const _testId = 9999;
 
   /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.
@@ -109,6 +112,12 @@ class NotificationService {
   /// Set once the router exists -> a notification tap opens the feed on the right category.
   /// Null until then — an early tap just opens the app, which is the correct fallback.
   void Function(String category)? onOpenCategory;
+
+  /// Tapped the unfinished-trial reminder — the paywall, not a category.
+  void Function()? onOpenTrialReminder;
+
+  /// Payload marking [_trialReminderId], distinguishable from every category slug.
+  static const trialReminderPayload = 'arul_trial_reminder';
 
   /// One-time setup: timezone database, plugin init, channel creation.
   /// Prompts for NO permission — that is opt-in ([requestPermissions]). Single-flight via [_initFuture].
@@ -175,6 +184,11 @@ class NotificationService {
   void _onTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;
+    // The one payload that is not a category. Checked first — a slug can never collide with it.
+    if (payload == trialReminderPayload) {
+      onOpenTrialReminder?.call();
+      return;
+    }
     onOpenCategory?.call(payload);
   }
 
@@ -241,6 +255,12 @@ class NotificationService {
 
   /// Cancels everything and re-schedules from [settings] — idempotent, safe on every change and launch.
   /// Accepting notifications enables the WHOLE set; there are no per-event opt-ins.
+  /// Cancels everything and re-schedules from [settings].
+  ///
+  /// It cancels ALL, including the unfinished-trial reminder, which these settings do not own:
+  /// ids are derived from list INDEXES, so a reordered or shortened list leaves orphans that only
+  /// `cancelAll` reaches. `notificationBootstrap` re-arms the trial reminder afterwards from its
+  /// persisted instant — that ordering is the contract, and it is why the instant is persisted.
   Future<void> applySettings(NotificationSettings settings) async {
     if (!_initialized) await initialize();
     await _plugin.cancelAll();
@@ -414,6 +434,49 @@ class NotificationService {
       festivalsExpected: festivalEvents.length,
       titles: armed.map((n) => n.title ?? '(untitled)').toList(),
     );
+  }
+
+  /// Arms the ONE unfinished-trial reminder for [due]. False when nothing was scheduled.
+  ///
+  /// NEVER requests the permission: this fires from a payment failing, which is not an opt-in to
+  /// notifications. A user who has not already said yes simply gets no reminder — the row on the
+  /// feed is what covers them.
+  Future<bool> scheduleTrialReminder({
+    required DateTime due,
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) await initialize();
+    if (await areNotificationsEnabled() != true) return false;
+    final when = tz.TZDateTime.from(due, tz.local);
+    if (!when.isAfter(tz.TZDateTime.now(tz.local))) return false;
+    try {
+      await _plugin.zonedSchedule(
+        id: _trialReminderId,
+        title: title,
+        body: body,
+        scheduledDate: when,
+        // The EXISTING weekly channel, never a new one: a channel's sound is immutable once created
+        // and a new id would show up as a second toggle in the system settings for one reminder.
+        notificationDetails: _details(
+          _weeklyChannelId,
+          _weeklyChannelName,
+          body: body,
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: trialReminderPayload,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[TrialNudge] reminder not scheduled: $e');
+      return false;
+    }
+  }
+
+  /// Drops the unfinished-trial reminder — the trial was finished, or the marker aged out.
+  Future<void> cancelTrialReminder() async {
+    if (!_initialized) await initialize();
+    await _plugin.cancel(id: _trialReminderId);
   }
 
   /// Fires a one-off notification [delay] from now -> the user confirms reminders actually arrive.

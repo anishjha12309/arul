@@ -50,6 +50,21 @@ count short of expected in the QA card is the only other signal.
   colour, not the file. The coloured mark is the LARGE icon, and that one is the launcher art
   recomposed.
 - **Android suppresses notifications for the foreground app** — minimise before judging a QA send.
+- **`applySettings` cancels EVERY pending notification, including ones these settings do not own.**
+  Ids come from list INDEXES, so a reordered or shortened list leaves orphans only `cancelAll`
+  reaches. The unfinished-trial reminder is therefore re-armed by `notificationBootstrap` AFTER
+  `applySettings`, from an instant persisted at abandonment — re-arming from "now" would walk it
+  further out on every launch, so the people who open the app most would be the ones never reminded.
+  Anything one-shot added beside it owes the same treatment.
+- **The trial reminder NEVER requests the notification permission** — it fires from a payment
+  failing, which is not an opt-in. No permission means no reminder; the feed row is what covers that
+  user. It rides the EXISTING weekly channel: a channel's sound is immutable once created, and a new
+  id would show up as a second toggle in the system settings for one reminder.
+- **The master toggle does not own the trial reminder.** It is a follow-up to a payment the user
+  started, not a devotional reminder, and `masterEnabled` defaults OFF — gating it there made it
+  dead code for the fresh installs that abandon most. Its only gate is the OS permission, which on
+  13+ is itself an explicit grant. So the re-arm runs after BOTH bootstrap branches, not inside the
+  enabled one.
 
 ## Adding the chime
 

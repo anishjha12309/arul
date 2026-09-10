@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
+import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -109,6 +110,8 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        // The purchase notifier captures the trial-nudge notifier in build(), which reads prefs.
+        sharedPreferencesProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWith((ref) => api),
         analyticsServiceProvider.overrideWith((ref) => analytics),
         appConfigProvider.overrideWith(

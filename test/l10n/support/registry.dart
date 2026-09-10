@@ -32,7 +32,9 @@ import 'package:arul/features/notifications/presentation/notification_settings_s
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
+import 'package:arul/features/premium/presentation/trial_nudge_row.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
+import 'package:arul/features/premium/providers/trial_nudge_provider.dart';
 import 'package:arul/features/referral/presentation/refer_screen.dart';
 import 'package:arul/features/referral/presentation/share_moment_sheet.dart';
 import 'package:arul/features/ringtones/presentation/ringtone_states.dart';
@@ -85,6 +87,12 @@ class ScreenEntry {
   /// Localize the screen and the assertion FAILS -> that is the signal to delete the flag in the same change.
   /// Found by this audit's coverage check, with translations already sitting unused in the ARBs (docs/known-issues.md).
   final bool unlocalizedEnglish;
+}
+
+/// An unfinished trial, without writing the marker into the shared prefs every other entry reads.
+class _NudgeShowing extends TrialNudgeNotifier {
+  @override
+  bool build() => true;
 }
 
 /// Overrides every entry needs, whatever it is.
@@ -250,6 +258,19 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     id: 'feed.offline',
     build: () => Scaffold(body: FeedError(offline: true, onRetry: () {})),
+  ),
+  ScreenEntry(
+    // Only ever seen by someone whose mandate setup died at the UPI app, so the matrix has to be
+    // told to build it: the marker lives in prefs and no pumped state would set it.
+    id: 'feed.trial_nudge',
+    build: () => const Padding(
+      padding: EdgeInsets.only(top: 12),
+      child: TrialNudgeRow(),
+    ),
+    overrides: [
+      ..._online(premium: false),
+      trialNudgeProvider.overrideWith(_NudgeShowing.new),
+    ],
   ),
   ScreenEntry(
     id: 'feed.chips',
