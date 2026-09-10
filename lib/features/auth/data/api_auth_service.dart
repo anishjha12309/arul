@@ -424,6 +424,12 @@ class ApiAuthService implements AuthService {
   static const _surfaceSheet = 'sheet';
   static const _surfaceButton = 'button';
 
+  /// The picker reached by DISMISSING the sheet, kept distinct from a picker
+  /// the sheet never contested: it is the only bucket where the user has
+  /// already said no once, so it is the only one whose conversion rate says
+  /// whether [pickerAfterDismiss] earns its second surface.
+  static const _surfaceButtonAfterDismiss = 'button_after_dismiss';
+
   /// KILL SWITCH for sheet-first: `false` restores the previous behaviour —
   /// the button flow only, on every attempt.
   ///
@@ -434,6 +440,30 @@ class ApiAuthService implements AuthService {
   /// flag that arrives after the surface has opened controls nothing.
   @visibleForTesting
   static const bool sheetFirst = true;
+
+  /// ESCALATE a DISMISSED sheet to the account picker instead of stopping.
+  /// `false` restores the guide's default — a dismissal ends the attempt and
+  /// the wall's pill is the user's next surface.
+  ///
+  /// The escalation target is the BUTTON flow (`GetSignInWithGoogleOption`),
+  /// deliberately NOT a second `GetGoogleIdOption` pass, even though the
+  /// unfiltered pass is what "show all the accounts" sounds like:
+  ///  * Both One Tap passes are the SAME rate-limited surface. Google's own
+  ///    guidance — "implement your own rate limiting… if a user cancels
+  ///    several prompts in a row, the One Tap client will not prompt the user
+  ///    for the next 24 hours" — means re-drawing it doubles the cancels per
+  ///    attempt, and the 24 h suppression takes AUTOMATIC sign-in with it.
+  ///    That is the one thing on this screen that measurably works.
+  ///  * The unfiltered pass is a SUPERSET of what was just dismissed. On a
+  ///    one-account phone it redraws the identical account — the user reads
+  ///    that as the app ignoring them, and it is the 2026-08-11 "two pickers"
+  ///    complaint by another route.
+  ///  * The button flow is the remedy the SIWG guide names for a dismissal,
+  ///    and it alone shows accounts that need re-auth and can ADD an account.
+  ///
+  /// A BUILD const for the same reason as [sheetFirst].
+  @visibleForTesting
+  static const bool pickerAfterDismiss = true;
 
   /// The surface ORDER of Google's SIWG implementation guide, kept pure and
   /// generic so the contract is pinnable without a platform channel.
@@ -447,11 +477,13 @@ class ApiAuthService implements AuthService {
   ///     prompts" turned off in Google Account settings, or no credential
   ///     after BOTH native steps — authorized-filtered, then unfiltered).
   ///     Nothing was shown, so the button is still the user's first surface.
-  ///   * `canceled` → the user DISMISSED the sheet. Stop. Never open the
-  ///     picker over a dismissed sheet: the Credential Manager troubleshooting
-  ///     guide forbids automatically retrying a cancellation, and a second
-  ///     surface inside one attempt is the 2026-08-11 "two pickers" bug by
-  ///     another route.
+  ///   * `canceled` → the user DISMISSED the sheet. Under
+  ///     [pickerAfterDismiss] this escalates ONCE to the button flow — a
+  ///     DIFFERENT surface, not the sheet again; read that const for why the
+  ///     unfiltered One Tap pass is the wrong target. It is reported as its
+  ///     own surface so the cost (a second dismissal) stays separable from
+  ///     the gain, and it is NOT sent to [onSheetUnavailable]: a dismissal is
+  ///     a decision, not a failure of the sheet.
   ///   * any other code → the sheet could not COMPLETE (`uiUnavailable`,
   ///     `interrupted`, an Android 14 `TransactionTooLargeException` on
   ///     GMS < 24.40 arriving as `unknownError`, a future code): report it and
@@ -481,7 +513,11 @@ class ApiAuthService implements AuthService {
         final credential = pending == null ? null : await pending;
         if (credential != null) return credential;
       } on GoogleSignInException catch (e) {
-        if (e.code == GoogleSignInExceptionCode.canceled) rethrow;
+        if (e.code == GoogleSignInExceptionCode.canceled) {
+          if (!pickerAfterDismiss) rethrow;
+          onSurface(_surfaceButtonAfterDismiss);
+          return button();
+        }
         onSheetUnavailable(e);
       }
     }
