@@ -112,10 +112,20 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   exception. Allow `stallResumeGrace` (2 s), all a real back-from-sheet outcome needs, then abandon
   as `stalled_resumed`; a full budget spins the pill 30 s over a corpse. Re-read the lifecycle AFTER
   the grace — returning by RECENTS puts the sheet back on top, which is mid-flow again.
+  **The guard reads the lifecycle every 250 ms, never once per budget:** it once slept through the
+  whole 30 s and a Home-and-back inside it was invisible — sheet, picker and mid token-mint all spun
+  to "taking too long" on device.
+- **An icon tap on a live task is the OS, not the user.** `clearTaskOnLaunch` strips Google's
+  surface: a stripped sheet delivers nothing (the grace path), a stripped PICKER delivers a
+  `canceled` nobody made. The launcher brings the task forward WITHOUT `onNewIntent` (measured), so
+  the tell is the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
+  framework closing the session says `User cancelled the selector` — on the BUTTON surface that is
+  `SignInOutcome.selectorStripped` and relaunches once as `surface_stripped`; on the sheet the
+  same words are the user's swipe. Recents keeps the surface and needs none of this.
 - A cancel stays TOAST-less; the retry line is the only feedback. **A DISMISSED sheet is never
-  auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A cancel
-  SETTLES the future inside the grace and can never reach that path, which is what keeps the guide's
-  "never retry a cancellation" true.
+  auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A user's
+  cancel SETTLES the future inside the grace and never reaches that path; the launcher's
+  manufactured cancel is the one exception, because there was no cancellation to honour.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.

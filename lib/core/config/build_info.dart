@@ -88,19 +88,29 @@ abstract final class DeviceMemory {
 
   static Future<bool> get isLow => _isLow ??= _probe();
 
+  /// The verdict once the probe has landed, else null. Read by the sign-in events, which fire
+  /// after the splash already awaited [isLow] -> stamped on every install that reached the wall.
+  static bool? get resolved => _resolved;
+  static bool? _resolved;
+
   static Future<bool> _probe() async {
     try {
-      return await _channel.invokeMethod<bool>('isLowRamDevice') ?? false;
+      final low = await _channel.invokeMethod<bool>('isLowRamDevice') ?? false;
+      _resolved = low;
+      return low;
     } on MissingPluginException {
-      return false;
+      return _resolved = false;
     } on PlatformException {
-      return false;
+      return _resolved = false;
     }
   }
 
   /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
-  static void resetForTesting() => _isLow = null;
+  static void resetForTesting() {
+    _isLow = null;
+    _resolved = null;
+  }
 }
 
 /// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect

@@ -56,6 +56,9 @@ const postHogAllowedEvents = <String>{
   // `login_attempt` closes the one hole in the outcome table: an attempt with no cancel, success or
   // failure is a process that died under Google's picker, which otherwise hides inside "cancelled".
   'login_attempt',
+  // `login_surface_shown` proves Google's screen actually appeared -> for the installs that leave
+  // no outcome at all it splits "never saw the sheet" from "saw it and left". Once per attempt.
+  'login_surface_shown',
 };
 
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.

@@ -11,7 +11,8 @@ import 'package:flutter/widgets.dart';
 /// back must not have the call counted as Google being slow.
 abstract interface class SignInSurfaceClock {
   /// Arms a fresh measurement. Called immediately before the attempt's first Google surface.
-  void startAttempt();
+  /// [onSurface] fires once, when the first inactive/paused/hidden lands during the attempt.
+  void startAttempt({void Function(int msToSurface)? onSurface});
 
   /// Disarms and DROPS the reading -> the next attempt can never report the last one's wait.
   /// Every read happens while the attempt is still live, so clearing here costs nothing.
@@ -37,9 +38,12 @@ class BindingSignInSurfaceClock
   @override
   int? get msToSurface => _msToSurface;
 
+  void Function(int msToSurface)? _onSurface;
+
   @override
-  void startAttempt() {
+  void startAttempt({void Function(int msToSurface)? onSurface}) {
     _msToSurface = null;
+    _onSurface = onSurface;
     _clock = Stopwatch()..start();
     if (!_observing) {
       WidgetsBinding.instance.addObserver(this);
@@ -66,7 +70,11 @@ class BindingSignInSurfaceClock
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
-        _msToSurface = clock.elapsedMilliseconds;
+        final ms = clock.elapsedMilliseconds;
+        _msToSurface = ms;
+        // Fired ONCE per attempt, the first time something covers us: the only proof the app has
+        // that Google's screen actually appeared for people who then vanish without an outcome.
+        _onSurface?.call(ms);
       case AppLifecycleState.resumed:
       case AppLifecycleState.detached:
         break;

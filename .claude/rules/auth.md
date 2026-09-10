@@ -22,10 +22,14 @@ Sign-in is the whole install→login funnel and every failure is silent.
 - Classify by typed `code` only — a "cancel" sniff swallowed real failures, and `login_cancelled`
   is MIXED: a config error returns `canceled` after a pick. **Every failure return goes through
   `_googleFailure`** or the funnel loses it.
-- The stall guard counts CONTINUOUS FOREGROUND time; backgrounding extends it. On RESUME split on
-  `SignInPhase.exchanging`: true restarts the full clock, false gets `stallResumeGrace` then abandons
-  as `stalled_resumed` — a destroyed selector delivers nothing, ever. A LOST callback relaunches
-  ONCE, a dismissal never. `POST /auth/login` retries connectivity failures only, never a RESPONSE.
+- The stall guard counts CONTINUOUS FOREGROUND time; backgrounding extends it. **It reads the
+  lifecycle every 250 ms, never once per budget** — a Home-and-back inside the budget was invisible
+  and spun to "taking too long". On RESUME split on `SignInPhase.exchanging`: true restarts the full
+  clock, false gets `stallResumeGrace` then abandons as `stalled_resumed` — a destroyed selector
+  delivers nothing, ever. A LOST callback relaunches ONCE, a dismissal never — except the `canceled`
+  an icon relaunch manufactures by finishing the picker: `User cancelled the selector` on the BUTTON
+  surface (a real back-out says `[16] Cancelled by user`) = `selectorStripped`, relaunched once.
+  `POST /auth/login` retries connectivity failures only, never a RESPONSE.
 - `sheetFirst`/`pickerAfterDismiss` stay BUILD consts, never `feature_flags` — `app_config.json`
   is absent on a first launch.
 

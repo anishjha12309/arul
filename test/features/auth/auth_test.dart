@@ -6,6 +6,7 @@ import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/auth/google_sign_in_init.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
+import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -179,6 +180,70 @@ void main() {
     });
   });
 
+  // The OS finishing Google's picker under us (an icon launch on the live task) reaches the app
+  // as a `canceled` — in the FRAMEWORK's words, where a user's back-out carries GMS's words.
+  // Measured on one phone in one minute; pinned here so the two can never be merged again.
+  group('ApiAuthService.isSelectorStrip', () {
+    test('the framework wording on the button flow is a strip', () {
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'button',
+          description: 'User cancelled the selector',
+        ),
+        isTrue,
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'button_after_dismiss',
+          description: 'User cancelled the selector.',
+        ),
+        isTrue,
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'button',
+          description: 'User canceled the selector',
+        ),
+        isTrue,
+        reason: 'both spellings, like the classifier',
+      );
+    });
+
+    test("a user's own back-out of the picker is not", () {
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'button',
+          description: '[16] Cancelled by user.',
+        ),
+        isFalse,
+      );
+    });
+
+    test('the same wording on the SHEET is the user swiping it away', () {
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'sheet',
+          description: 'User cancelled the selector',
+        ),
+        isFalse,
+      );
+    });
+
+    test('no surface or no message proves nothing', () {
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: null,
+          description: 'User cancelled the selector',
+        ),
+        isFalse,
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(surface: 'button', description: null),
+        isFalse,
+      );
+    });
+  });
+
   group('AuthUserState', () {
     test('unauthenticated state has correct status', () {
       final state = AuthUserState.unauthenticated();
@@ -220,8 +285,8 @@ void main() {
       addTearDown(container.dispose);
       controller = container.read(authControllerProvider.notifier)
         ..stallLimit = const Duration(milliseconds: 120)
-        ..stallRecheck = const Duration(milliseconds: 40)
         ..stallResumeGrace = const Duration(milliseconds: 40)
+        ..stallTick = const Duration(milliseconds: 10)
         ..lifecycleProbe = (() => AppLifecycleState.resumed);
       // A process-wide notifier -> a test that leaves it true poisons the next one.
       SignInPhase.exchanging.value = false;
@@ -353,6 +418,90 @@ void main() {
       auth.settleLast(const AuthSuccess(userId: 'u1'));
       expect(await pending, isA<AuthSuccess>());
     });
+
+    // ─── Home and back through the icon: clearTaskOnLaunch strips Google's surface ───────────
+    // The old guard slept through its whole budget and only then read the lifecycle -> a return
+    // INSIDE the budget was invisible and the pill spun to "taking too long". Three variants
+    // reproduced on device (sheet up, picker up, after the account tap).
+
+    test('a return to the foreground BEFORE the budget runs out, with no '
+        'exchange in flight, relaunches after the grace instead of spinning '
+        'out the budget', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      // Sheet up for a moment, well inside the 120ms budget...
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // ...then Home and back through the icon: the sheet is gone and nothing will ever land.
+      lifecycle = AppLifecycleState.resumed;
+
+      // Grace 40ms + a few ticks — long before the budget would have expired.
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      expect(auth.abandonCount, 1, reason: 'the corpse goes after the grace');
+      expect(auth.attempts, hasLength(2), reason: 'and a fresh surface opens');
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    test('a `canceled` the service classified as the OS stripping the picker '
+        'is relaunched once, not returned', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      lifecycle = AppLifecycleState.resumed;
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.selectorStripped),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(auth.attempts, hasLength(2), reason: 'nobody dismissed anything');
+      expect(auth.abandonCount, 1);
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    test(
+      'a second strip after the one relaunch is returned, never looped',
+      () async {
+        var lifecycle = AppLifecycleState.paused;
+        controller.lifecycleProbe = () => lifecycle;
+
+        final pending = controller.signIn(AuthProvider.google);
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        lifecycle = AppLifecycleState.resumed;
+        auth.settleLast(
+          const AuthCancelled(outcome: SignInOutcome.selectorStripped),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(auth.attempts, hasLength(2));
+        auth.settleLast(
+          const AuthCancelled(outcome: SignInOutcome.selectorStripped),
+        );
+
+        expect(await pending, isA<AuthCancelled>());
+        expect(auth.attempts, hasLength(2), reason: 'one-shot');
+      },
+    );
+
+    test(
+      'a plain `canceled` is the user saying no and is returned untouched',
+      () async {
+        var lifecycle = AppLifecycleState.paused;
+        controller.lifecycleProbe = () => lifecycle;
+
+        final pending = controller.signIn(AuthProvider.google);
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+        lifecycle = AppLifecycleState.resumed;
+        auth.settleLast(const AuthCancelled());
+
+        expect(await pending, isA<AuthCancelled>());
+        expect(auth.attempts, hasLength(1));
+        expect(auth.abandonCount, 0);
+      },
+    );
 
     test('the relaunch is ONE-SHOT — a second lost sheet reports instead of '
         'looping', () async {

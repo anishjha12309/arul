@@ -8,6 +8,7 @@ import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/google_sign_in_init.dart';
+import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
@@ -302,6 +303,7 @@ class ApiAuthService implements AuthService {
     _analytics.track(
       'login_failed',
       properties: {
+        ..._installProps,
         'provider': 'google',
         'kind': kind.name,
         // Null-aware elements: dropped entirely when absent.
@@ -339,6 +341,31 @@ class ApiAuthService implements AuthService {
   int? get _msToSurface => _surfaceClock.msToSurface;
 
   /// What the attempt actually did, for the nudge and for `login_cancelled.nudge`.
+  /// TRUE when Credential Manager closed a BUTTON-flow session the user never touched.
+  ///
+  /// A user backing out of Google's picker reports "[16] Cancelled by user." — GMS's own wording.
+  /// "User cancelled the selector" is the FRAMEWORK's wording for its selector session ending,
+  /// which on the button flow (GMS's own activity, no framework selector on screen) only happens
+  /// when the OS finishes the picker under us — an app-icon launch on the live task, which
+  /// `clearTaskOnLaunch` turns into exactly that. Both measured on device, same phone, same minute.
+  /// On the SHEET the same string is the user's own swipe and never a strip.
+  @visibleForTesting
+  static bool isSelectorStrip({
+    required String? surface,
+    required String? description,
+  }) {
+    if (surface != _surfaceButton && surface != _surfaceButtonAfterDismiss) {
+      return false;
+    }
+    final message = description?.trim();
+    if (message == null || message.isEmpty) return false;
+    final bare = message.endsWith('.')
+        ? message.substring(0, message.length - 1)
+        : message;
+    return bare == 'User cancelled the selector' ||
+        bare == 'User canceled the selector';
+  }
+
   SignInOutcome _outcomeFor(String? description) => classifySignInOutcome(
     description: description,
     msSinceAuthenticate: _msSinceAuthenticate,
@@ -358,10 +385,18 @@ class ApiAuthService implements AuthService {
   ///
   /// `nudge` is the LINE THE USER WAS SHOWN for this event, so the funnel reads the copy and the
   /// outcome as one row instead of joining a message string to a screen state after the fact.
+  /// Where the install came from and whether the phone is on the poster rule — the two cuts
+  /// PostHog cannot make from its own properties, on every sign-in event rather than a new one.
+  Map<String, Object> get _installProps => {
+    ...?_referral?.attributionProps,
+    'low_ram': ?DeviceMemory.resolved,
+  };
+
   Map<String, Object?> _cancelProperties({
     String? description,
     SignInOutcome? outcome,
   }) => {
+    ..._installProps,
     'provider': 'google',
     'surface': ?_surface,
     'ms_since_authenticate': ?_msSinceAuthenticate,
@@ -558,6 +593,7 @@ class ApiAuthService implements AuthService {
       _analytics.track(
         'login_attempt',
         properties: {
+          ..._installProps,
           'provider': 'google',
           'surface': useSheet ? _surfaceSheet : _surfaceButton,
           'auto': auto,
@@ -573,7 +609,20 @@ class ApiAuthService implements AuthService {
       _authClock = Stopwatch()..start();
       // Same zero as [_authClock]; it stops at the first inactive/paused/hidden, which is Google's
       // surface arriving over ours -> the only signal the app gets that the sheet is up.
-      _surfaceClock.startAttempt();
+      _surfaceClock.startAttempt(
+        // Google's screen is up. For the people who then leave without a cancel, a success or a
+        // failure, this is the one fact that separates "never saw the sheet" from "saw it and left".
+        onSurface: (ms) => _analytics.track(
+          'login_surface_shown',
+          properties: {
+            ..._installProps,
+            'provider': 'google',
+            'surface': ?_surface,
+            'auto': auto,
+            'ms_to_surface': ms,
+          },
+        ),
+      );
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
         sheet: useSheet
             ? () => GoogleSignIn.instance.attemptLightweightAuthentication(
@@ -730,6 +779,7 @@ class ApiAuthService implements AuthService {
       _analytics.track(
         ArulEvents.loginSuccess,
         properties: {
+          ..._installProps,
           'provider': 'google',
           // Which Google surface landed it, and how long the attempt took —
           // the pair that says whether sheet-first is working.
@@ -760,6 +810,17 @@ class ApiAuthService implements AuthService {
       var result = mapped;
       switch (mapped) {
         case AuthCancelled():
+          if (isSelectorStrip(surface: _surface, description: e.description)) {
+            // Not a cancel: nobody touched anything -> no `login_cancelled`, the guard relaunches
+            // and files it as `login_failed{kind: surface_stripped}`.
+            debugPrint(
+              '[ApiAuthService] selector stripped by the OS (surface=$_surface)',
+            );
+            result = const AuthCancelled(
+              outcome: SignInOutcome.selectorStripped,
+            );
+            break;
+          }
           // No error toast (the user may genuinely have closed the sheet) but
           // tracked WITH the plugin's description — see _cancelProperties for
           // why the message text is the dismissal-vs-GMS-failure split.

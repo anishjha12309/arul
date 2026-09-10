@@ -60,7 +60,7 @@ final class TrialNudgeNotifierProvider
 }
 
 String _$trialNudgeNotifierHash() =>
-    r'8a42cdea2f3c3b70e467fccd427c246972e86895';
+    r'e133c5d0706da57ca8dcb9aea0b397dce969a208';
 
 /// Whether the "finish setting up your free trial" row should show.
 ///

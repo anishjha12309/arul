@@ -53,6 +53,16 @@ failure is a process that died under Google's picker — the only way that loss 
 `ms_since_authenticate` and `surface`. `login_cancelled` adds `nudge` (the classified outcome; the
 screen shows one retry line whatever it is) and `ms_to_surface`, carried by `login_success` too — the slow-surface split needs a
 succeeding population for its denominator. Both: [auth.md](auth.md).
+`login_surface_shown` (once per attempt, `surface`/`auto`/`ms_to_surface`) proves Google's screen
+appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
+left". **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
+lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
+100 installs read as "install, then nothing". Expect the measured install→login rate to read LOWER
+from build 74 on — the denominator now includes people it used to miss.
+Every sign-in event also carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` /
+`share` / `link` / `other` / `unknown`, off the Play referrer, `install_utm_source` and
+`install_utm_campaign` beside it) and **`low_ram`** (the poster rule's verdict) — the two cuts
+PostHog's own properties cannot make, on the events that exist rather than new ones.
 
 **The two events spell the Credential Manager message differently: `login_cancelled` carries
 `description`, `login_failed` carries `error`.** A query that splits "on `description`" returns

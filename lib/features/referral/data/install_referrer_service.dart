@@ -32,6 +32,9 @@ class InstallReferrerService {
   static const _kPendingSource = 'pending_deeplink_source';
   static const _kPendingLang = 'pending_deeplink_lang';
   static const _kChecked = 'install_referrer_checked';
+  static const _kInstallChannel = 'install_channel';
+  static const _kInstallSource = 'install_utm_source';
+  static const _kInstallCampaign = 'install_utm_campaign';
 
   /// The shareable Play Store link that embeds [code] for attribution.
   ///
@@ -108,6 +111,72 @@ class InstallReferrerService {
 
   /// Extract our referral code from a raw install-referrer string.
   /// Handles both the "ref=CODE" query form we set and a bare code, and rejects junk.
+  /// Where this install came from, read off the Play referrer ONCE and stamped on every sign-in
+  /// event — the split PostHog could not make on its own ("is the Tamil Nadu gap the ad audience?").
+  ///
+  /// `install_channel`: `google_ads` (a `gclid`, or utm_source google / utm_medium cpc), `meta_ads`
+  /// (utm_source naming facebook/instagram/meta), `organic` (Play's own `google-play`/`organic`
+  /// pair), `share` (a friend's referral code), `link` (one of our /w or /r links with no ad tag),
+  /// `other` (some other utm_source) or `unknown` (a referrer with none of the above). No referrer at
+  /// all stamps nothing. `install_utm_source` / `install_utm_campaign` are the raw tags, clipped.
+  @visibleForTesting
+  static Map<String, String> parseAttribution(String raw) {
+    Map<String, String> params;
+    try {
+      params = Uri.splitQueryString(raw.trim());
+    } catch (_) {
+      return const {};
+    }
+    String? clip(String? v, int max) {
+      final t = v?.trim().toLowerCase();
+      if (t == null || t.isEmpty) return null;
+      return t.length <= max ? t : t.substring(0, max);
+    }
+
+    final source = clip(params['utm_source'], 40);
+    final medium = clip(params['utm_medium'], 40);
+    final campaign = clip(params['utm_campaign'], 60);
+    final String channel;
+    if (params.containsKey('gclid') ||
+        source == 'google' ||
+        source == 'google_ads' ||
+        source == 'adwords' ||
+        medium == 'cpc') {
+      channel = 'google_ads';
+    } else if (source != null &&
+        (source.contains('facebook') ||
+            source.contains('instagram') ||
+            source.contains('meta') ||
+            source == 'fb' ||
+            source == 'ig')) {
+      channel = 'meta_ads';
+    } else if (source == 'google-play' && medium == 'organic') {
+      channel = 'organic';
+    } else if (parseReferralCode(raw) != null) {
+      channel = 'share';
+    } else if (params.containsKey('w') ||
+        params.containsKey('r') ||
+        params.containsKey('screen')) {
+      channel = 'link';
+    } else if (source != null) {
+      channel = 'other';
+    } else {
+      channel = 'unknown';
+    }
+    return {
+      _kInstallChannel: channel,
+      _kInstallSource: ?source,
+      _kInstallCampaign: ?campaign,
+    };
+  }
+
+  /// The persisted attribution as event properties; empty until the referrer has landed.
+  Map<String, Object> get attributionProps => {
+    _kInstallChannel: ?_nonEmpty(_prefs.getString(_kInstallChannel)),
+    _kInstallSource: ?_nonEmpty(_prefs.getString(_kInstallSource)),
+    _kInstallCampaign: ?_nonEmpty(_prefs.getString(_kInstallCampaign)),
+  };
+
   @visibleForTesting
   static String? parseReferralCode(String? raw) {
     if (raw == null) return null;
@@ -191,6 +260,10 @@ class InstallReferrerService {
     }
 
     if (raw != null) {
+      final attribution = parseAttribution(raw);
+      for (final MapEntry(:key, :value) in attribution.entries) {
+        await _prefs.setString(key, value);
+      }
       final code = parseReferralCode(raw);
       if (code != null) {
         await _prefs.setString(_kPendingCode, code);

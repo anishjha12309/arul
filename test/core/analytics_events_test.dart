@@ -29,6 +29,7 @@ void main() {
       'login_cancelled',
       'login_failed',
       'login_attempt',
+      'login_surface_shown',
     });
   });
 }

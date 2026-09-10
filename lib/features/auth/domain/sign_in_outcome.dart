@@ -37,6 +37,13 @@ enum SignInOutcome {
   /// Credential Manager has no provider on this phone (`providerConfigurationError`).
   /// Routed on the failure KIND, never classified from a message.
   noProvider,
+
+  /// Credential Manager closed a BUTTON-flow session the user never touched. An app-icon launch
+  /// on the live task (`clearTaskOnLaunch`) finished Google's picker under us; the framework
+  /// reports that as "User cancelled the selector", where a real back-out says "[16] Cancelled by
+  /// user". Not a cancellation -> the guard relaunches once. Assigned by the service, never by
+  /// [classifySignInOutcome], which has no surface to read.
+  selectorStripped,
 }
 
 /// Where "the surface appeared quickly" ends, in milliseconds since `authenticate()`.

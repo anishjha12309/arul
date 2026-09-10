@@ -219,6 +219,12 @@ Future<void> _startApp() async {
       ..captureApplicationLifecycleEvents = false
       ..sessionReplay = false
       ..surveys = false
+      // Send every event the moment it is captured. The default batches 20 events or 30 s, and a
+      // person who opens the app, meets the Google sheet and leaves inside that window takes the
+      // install AND the sign-in outcome with them -> 6 in 100 installs read as "install, then
+      // nothing", and some never registered at all. The journey is a handful of events per person,
+      // so one request each costs nothing that matters.
+      ..flushAt = 1
       ..debug = kDebugMode;
     // `setup()` does native init and opens the SDK's first network work -> awaiting it here puts that
     // on the critical path to the first frame for every panel member -> fire-and-forget, matching the

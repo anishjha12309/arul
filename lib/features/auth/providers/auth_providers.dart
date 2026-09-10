@@ -11,6 +11,7 @@ import '../../../core/providers/locale_provider.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
 import '../domain/auth_service.dart';
+import '../domain/sign_in_outcome.dart';
 
 part 'auth_providers.g.dart';
 
@@ -38,7 +39,9 @@ Stream<AuthUserState> authStateStream(Ref ref) =>
 @Riverpod(keepAlive: true)
 class AuthController extends _$AuthController {
   @override
-  FutureOr<void> build() {}
+  FutureOr<void> build() {
+    ref.onDispose(() => _disposed = true);
+  }
 
   /// The sign-in currently in flight, already wrapped by [_guard] -> joiners share ONE future.
   /// Identity matters — the tests pin `identical(join, first)`.
@@ -54,10 +57,6 @@ class AuthController extends _$AuthController {
   @visibleForTesting
   Duration stallLimit = const Duration(seconds: 30);
 
-  /// Re-check cadence once [stallLimit] elapsed while not resumed — wait this much more, look again.
-  @visibleForTesting
-  Duration stallRecheck = const Duration(seconds: 5);
-
   /// How long a RESUMED attempt with no exchange of ours in flight is given to produce an outcome.
   ///
   /// Short on purpose: a real back-from-the-sheet result lands within milliseconds of the resume,
@@ -65,10 +64,28 @@ class AuthController extends _$AuthController {
   @visibleForTesting
   Duration stallResumeGrace = const Duration(seconds: 2);
 
-  /// Seam for the lifecycle read — tests stub it rather than poke the binding's @protected plumbing.
+  /// How often the guard re-reads the lifecycle while an attempt is pending.
+  ///
+  /// It once slept through its whole budget and read the lifecycle only when that ran out, so a
+  /// Home-and-back inside the first 30 s was invisible: the icon relaunch had already stripped
+  /// Google's sheet (clearTaskOnLaunch), nothing would ever land, and the pill spun until "taking
+  /// too long" — reproduced on device from the sheet, the picker and mid token-mint alike.
   @visibleForTesting
-  AppLifecycleState? Function() lifecycleProbe = () =>
-      WidgetsBinding.instance.lifecycleState;
+  Duration stallTick = const Duration(milliseconds: 250);
+
+  /// Seam for the lifecycle read — tests stub it rather than poke the binding's @protected plumbing.
+  /// No binding at all (a bare unit test) reads as "resumed": there is no OS to background us.
+  @visibleForTesting
+  AppLifecycleState? Function() lifecycleProbe = () {
+    try {
+      return WidgetsBinding.instance.lifecycleState;
+    } on FlutterError {
+      return null;
+    }
+  };
+
+  /// Set when the container goes away -> the guard's tick loop must not outlive it.
+  bool _disposed = false;
 
   /// Whether the ONE automatic sign-in of the CURRENT signed-out stretch has been spent.
   ///
@@ -117,6 +134,14 @@ class AuthController extends _$AuthController {
   /// nothing of ours is running and no Google surface is on top (one would keep us inactive), so
   /// the sheet is gone and only a real back-from-the-sheet outcome can still land — which takes
   /// milliseconds, not seconds. Hence [stallResumeGrace], then abandon.
+  ///
+  /// The lifecycle is read every [stallTick], not once per budget: the return to the foreground is
+  /// the event, and it happens whenever the user comes back, not when a timer says so.
+  ///
+  /// One `canceled` IS retried: [SignInOutcome.selectorStripped], the one an icon relaunch
+  /// manufactures by finishing Google's picker (the service tells it apart by wording). The user
+  /// made no choice there. Every other cancellation settles the attempt, as Google's guidance
+  /// requires.
   Future<AuthResult> _guard(
     Future<AuthResult> raw,
     DateTime started,
@@ -126,29 +151,50 @@ class AuthController extends _$AuthController {
     // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
     var wasMidFlow = false;
-    // The lost-callback relaunch is ONE-SHOT per attempt -> a second lost sheet cannot loop it.
+    // The relaunch is ONE-SHOT per attempt -> a second lost sheet cannot loop it.
     var relaunched = false;
+
+    bool midFlow(AppLifecycleState? state) =>
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden;
+
+    bool stripped(AuthResult result) =>
+        !relaunched &&
+        result is AuthCancelled &&
+        result.outcome == SignInOutcome.selectorStripped;
+
+    Future<AuthResult> relaunch(String kind) {
+      relaunched = true;
+      _abandonStalled(kind: kind);
+      sinceForeground = DateTime.now();
+      wasMidFlow = false;
+      return ref.read(authServiceProvider).signInWith(provider, auto: auto);
+    }
+
     while (true) {
-      final budget = stallLimit - DateTime.now().difference(sinceForeground);
-      if (budget > Duration.zero) {
-        try {
-          return await raw.timeout(budget);
-        } on TimeoutException {
-          // Budget spent — evaluate below.
-        }
+      AuthResult? settled;
+      try {
+        settled = await raw.timeout(stallTick);
+      } on TimeoutException {
+        settled = null;
       }
-      final lifecycle = lifecycleProbe();
-      final maybeMidFlow =
-          lifecycle == AppLifecycleState.inactive ||
-          lifecycle == AppLifecycleState.paused ||
-          lifecycle == AppLifecycleState.hidden;
-      if (maybeMidFlow) {
-        wasMidFlow = true;
-        try {
-          return await raw.timeout(stallRecheck);
-        } on TimeoutException {
+      if (settled != null) {
+        if (stripped(settled)) {
+          raw = relaunch('surface_stripped');
           continue;
         }
+        return settled;
+      }
+      // The container is gone (tests, a hot restart) -> nothing to guard for.
+      if (_disposed) return const AuthCancelled();
+
+      final now = DateTime.now();
+      if (midFlow(lifecycleProbe())) {
+        // A Google surface is on top or the app is backgrounded -> the clock pauses.
+        wasMidFlow = true;
+        sinceForeground = now;
+        continue;
       }
       if (wasMidFlow) {
         wasMidFlow = false;
@@ -156,19 +202,29 @@ class AuthController extends _$AuthController {
           // Our own `POST /auth/login` is live -> a fresh foreground budget, exactly as before.
           // This is the regression the guard exists for: an exchange abandoned 20ms before it
           // landed strands a signed-in user on the wall, one tap from a second picker.
-          sinceForeground = DateTime.now();
+          sinceForeground = now;
           continue;
         }
         // Resumed with nothing of ours in flight. Give a real outcome its few milliseconds.
+        AuthResult? late;
         try {
-          return await raw.timeout(stallResumeGrace);
+          late = await raw.timeout(stallResumeGrace);
         } on TimeoutException {
-          // Nothing came. Below.
+          late = null;
         }
-        final after = lifecycleProbe();
-        if (after == AppLifecycleState.inactive ||
-            after == AppLifecycleState.paused ||
-            after == AppLifecycleState.hidden) {
+        if (late != null) {
+          if (stripped(late)) {
+            raw = relaunch('surface_stripped');
+            continue;
+          }
+          return late;
+        }
+        if (SignInPhase.exchanging.value) {
+          // The credential landed inside the grace and the exchange is live now.
+          sinceForeground = DateTime.now();
+          continue;
+        }
+        if (midFlow(lifecycleProbe())) {
           // A surface came back on top during the grace — returning by RECENTS does exactly this.
           // That is mid-flow again, not a corpse: extend as always.
           wasMidFlow = true;
@@ -177,45 +233,38 @@ class AuthController extends _$AuthController {
         if (!relaunched) {
           // The one exemption to "one visible Google surface per attempt": the first surface is
           // provably gone and delivered nothing, so this replaces it rather than adding to it.
-          // Never reachable from a DISMISSED sheet — a cancellation SETTLES `raw`, so the grace
-          // above returns it and we never arrive here. Google's guidance forbids retrying a
-          // cancellation; a destroyed selector activity delivers none to retry.
-          relaunched = true;
-          _abandonStalled(resumed: true);
-          raw = ref.read(authServiceProvider).signInWith(provider, auto: auto);
-          sinceForeground = DateTime.now();
+          raw = relaunch('stalled_resumed');
           continue;
         }
-        _abandonStalled(resumed: true);
+        _abandonStalled(kind: 'stalled_resumed');
         return const AuthFailure(
           message: 'Sign-in is taking too long. Please try again.',
           kind: AuthFailureKind.networkError,
         );
       }
-      // Foreground throughout, spinner up, nothing happening -> the callback is lost.
-      _abandonStalled(resumed: false);
-      return const AuthFailure(
-        message: 'Sign-in is taking too long. Please try again.',
-        kind: AuthFailureKind.networkError,
-      );
+      if (now.difference(sinceForeground) >= stallLimit) {
+        // Foreground throughout, spinner up, nothing happening -> the callback is lost.
+        _abandonStalled(kind: 'stalled');
+        return const AuthFailure(
+          message: 'Sign-in is taking too long. Please try again.',
+          kind: AuthFailureKind.networkError,
+        );
+      }
     }
   }
 
   /// Discards the zombie's eventual result and counts the stall.
   ///
-  /// `stalled_resumed` is a second VALUE of `kind` on an event already on the allow-list — the
-  /// people who came back and found a dead sheet, told apart from those who never left. No new
-  /// event, no new property.
-  void _abandonStalled({required bool resumed}) {
+  /// `kind` is a VALUE on an event already on the allow-list — `stalled` (never left the
+  /// foreground), `stalled_resumed` (came back to a dead sheet), `surface_stripped` (an icon
+  /// relaunch finished Google's picker). No new event, no new property.
+  void _abandonStalled({required String kind}) {
     ref.read(authServiceProvider).abandonPendingSignIn();
     ref
         .read(analyticsServiceProvider)
         .track(
           'login_failed',
-          properties: {
-            'provider': 'google',
-            'kind': resumed ? 'stalled_resumed' : 'stalled',
-          },
+          properties: {'provider': 'google', 'kind': kind},
         );
   }
 
