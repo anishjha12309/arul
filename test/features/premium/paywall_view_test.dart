@@ -52,6 +52,7 @@ ArulPaywallView _paywall({required bool trialEligible}) => ArulPaywallView(
     label: 'PhonePe',
   ),
   canChangeUpiApp: true,
+  upiAppsKnown: true,
   onBack: () {},
   onChangeUpiApp: () {},
   onPurchase: () {},
@@ -273,6 +274,7 @@ void main() {
             showSocialProof: false,
             selectedUpiApp: null,
             canChangeUpiApp: false,
+            upiAppsKnown: true,
             onBack: () {},
             onChangeUpiApp: () {},
             onPurchase: () {},
@@ -284,8 +286,13 @@ void main() {
         find.textContaining('just applied a live wallpaper'),
         findsNothing,
       );
-      // No installed UPI app → no selector row, and the CTA still stands.
+      // No installed UPI app → the install prompt takes the selector row's place, and the CTA is
+      // dead: there is nothing on this phone that can take a mandate.
       expect(find.text('Selected UPI App'), findsNothing);
+      expect(
+        find.text('Install PhonePe or Google Pay to subscribe'),
+        findsOneWidget,
+      );
       expect(find.text('Subscribe Now'), findsOneWidget);
     });
 
@@ -306,6 +313,7 @@ void main() {
             showSocialProof: true,
             selectedUpiApp: null,
             canChangeUpiApp: false,
+            upiAppsKnown: true,
             onBack: () {},
             onChangeUpiApp: () {},
             onPurchase: () => pressed++,
@@ -331,6 +339,72 @@ void main() {
       expect(tester.takeException(), isNull);
       final cta = tester.getRect(find.text('Start Free Trial'));
       expect(cta.bottom, lessThanOrEqualTo(640));
+    });
+  });
+
+  // ─── No mandate-capable app on the phone ────────────────────────────────────
+  // The hosted PhonePe page completed 5 setups in 733. A route that cannot finish is worse than no
+  // route, so the app stops offering one: name the two apps that do complete mandates instead.
+
+  group('the install prompt', () {
+    Future<void> pumpNoApp(
+      WidgetTester tester, {
+      required bool trialEligible,
+      required bool upiAppsKnown,
+      VoidCallback? onPurchase,
+    }) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _host(
+          ArulPaywallView(
+            trialEligible: trialEligible,
+            monthlyPrice: '₹199',
+            purchaseBusy: false,
+            showSocialProof: false,
+            selectedUpiApp: null,
+            canChangeUpiApp: false,
+            upiAppsKnown: upiAppsKnown,
+            onBack: () {},
+            onChangeUpiApp: () {},
+            onPurchase: onPurchase ?? () {},
+          ),
+        ),
+      );
+    }
+
+    testWidgets('names the two apps and never promises a trial to someone who '
+        'has spent theirs', (tester) async {
+      await pumpNoApp(tester, trialEligible: true, upiAppsKnown: true);
+      expect(
+        find.text('Install PhonePe or Google Pay to start your free trial'),
+        findsOneWidget,
+      );
+      expect(find.text('PhonePe'), findsOneWidget);
+      expect(find.text('Google Pay'), findsOneWidget);
+    });
+
+    testWidgets('the CTA is DEAD — there is nothing on this phone that can '
+        'take a mandate', (tester) async {
+      var pressed = 0;
+      await pumpNoApp(
+        tester,
+        trialEligible: true,
+        upiAppsKnown: true,
+        onPurchase: () => pressed++,
+      );
+
+      await tester.tap(find.text('Start Free Trial'));
+      expect(pressed, 0);
+    });
+
+    testWidgets('says NOTHING while the query is still out — an empty list is '
+        'not yet an answer', (tester) async {
+      await pumpNoApp(tester, trialEligible: true, upiAppsKnown: false);
+      expect(find.textContaining('Install PhonePe'), findsNothing);
+      expect(find.text('Selected UPI App'), findsNothing);
     });
   });
 }

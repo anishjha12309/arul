@@ -208,6 +208,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.read(premiumPurchaseProvider.notifier).pollNowOnResume();
+      // The installed-app set is keepAlive and changes only on an install — but the ONE moment it
+      // changes under this screen is the user leaving it to install PhonePe from the prompt above.
+      // Without this they come back to the same dead CTA that sent them.
+      ref.invalidate(installedUpiAppsProvider);
     }
   }
 
@@ -296,7 +300,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  void _startPurchase(String? targetApp) {
+  void _startPurchase(String? targetApp, {required bool trialEligible}) {
     final l10n = AppLocalizations.of(context);
     if (!AppConfig.hasBackend) {
       // Unreachable in shipped builds — API_BASE_URL is always set.
@@ -304,7 +308,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       showArulToast(context, l10n.premiumComingSoonToast);
       return;
     }
-    ref.read(premiumPurchaseProvider.notifier).startTrial(targetApp: targetApp);
+    ref
+        .read(premiumPurchaseProvider.notifier)
+        .startTrial(targetApp: targetApp, trialEligible: trialEligible);
   }
 
   @override
@@ -399,17 +405,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             ? _selectedUpiPackage
             : upiApps.first.packageName);
 
-  /// Installed apps with the user's remembered pick floated to the head.
-  /// Everything below it keeps `MANDATE_APPS` order — one personal row, then the owner's order.
-  /// Android exposes no permission-free "most used app" signal, so our own memory IS that signal.
-  List<UpiApp> _orderedUpiApps(List<UpiApp> apps) {
-    final remembered = _selectedUpiPackage;
-    if (remembered == null) return apps;
-    final at = apps.indexWhere((a) => a.packageName == remembered);
-    // -1 = uninstalled since they picked it; 0 = already the head. Neither needs reordering.
-    if (at <= 0) return apps;
-    return [apps[at], ...apps.where((a) => a.packageName != remembered)];
-  }
+  /// Installed apps with the user's remembered pick floated to the head — see [UpiApps.ordered].
+  List<UpiApp> _orderedUpiApps(List<UpiApp> apps) =>
+      UpiApps.ordered(apps, _selectedUpiPackage);
 
   Future<void> _openUpiPicker(
     List<UpiApp> upiApps,
@@ -443,10 +441,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final config = ref.watch(appConfigProvider).asData?.value;
     final monthlyPrice = _monthlyPrice(config?.prices);
 
-    // Installed mandate-capable UPI apps — best-effort; empty hides the row, keeping the hosted page.
-    final upiApps = _orderedUpiApps(
-      ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[],
-    );
+    // Installed mandate-capable UPI apps — best-effort. Empty AND answered puts the install prompt
+    // in the picker's place and kills the CTA; empty and still loading shows neither.
+    final upiAsync = ref.watch(installedUpiAppsProvider);
+    final upiApps = _orderedUpiApps(upiAsync.asData?.value ?? const <UpiApp>[]);
     final selectedUpiPackage = _resolvedUpiPackage(upiApps);
     final selectedApp = upiApps.isEmpty
         ? null
@@ -478,6 +476,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             ),
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
+      upiAppsKnown: upiAsync.hasValue,
       onBack: () {
         if (context.canPop()) context.pop();
       },
@@ -485,7 +484,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
       ),
-      onPurchase: () => _startPurchase(selectedUpiPackage),
+      onPurchase: () =>
+          _startPurchase(selectedUpiPackage, trialEligible: trialEligible),
     );
   }
 
@@ -547,7 +547,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
       ),
-      onResubscribe: () => _startPurchase(selectedUpiPackage),
+      // A resubscribe is never a trial — the row already carries a spent `trial_end`.
+      onResubscribe: () =>
+          _startPurchase(selectedUpiPackage, trialEligible: false),
     );
   }
 }

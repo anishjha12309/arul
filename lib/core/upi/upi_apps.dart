@@ -43,6 +43,20 @@ class UpiApps {
     }
   }
 
+  /// [apps] with [remembered] floated to the head, everything below it in channel order.
+  ///
+  /// Pure, and here rather than in the screen so it can be pinned: one personal row, then the
+  /// owner's order. Android exposes no permission-free "most used app" signal, so our own memory IS
+  /// that signal. A remembered package that is no longer in [apps] — uninstalled, or dropped by the
+  /// mandate probe — simply does not move anything.
+  static List<UpiApp> ordered(List<UpiApp> apps, String? remembered) {
+    if (remembered == null) return apps;
+    final at = apps.indexWhere((a) => a.packageName == remembered);
+    // -1 = gone since they picked it; 0 = already the head. Neither needs reordering.
+    if (at <= 0) return apps;
+    return [apps[at], ...apps.where((a) => a.packageName != remembered)];
+  }
+
   /// Fires [intentUrl] as an ACTION_VIEW aimed at [packageName]; false when the app cannot take it.
   /// Nothing was authorized then -> the caller MUST abandon the claimed setup and show a clean error.
   static Future<bool> launch(String intentUrl, String packageName) async {

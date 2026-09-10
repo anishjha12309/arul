@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -65,6 +66,7 @@ class ArulPaywallView extends StatelessWidget {
     this.onboardingVideo,
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
+    required this.upiAppsKnown,
     required this.onBack,
     required this.onChangeUpiApp,
     required this.onPurchase,
@@ -91,9 +93,16 @@ class ArulPaywallView extends StatelessWidget {
   /// The clip caps its own height against the screen so that block always fits.
   final Widget? onboardingVideo;
 
-  /// Null when no mandate-capable UPI app is installed -> the row goes, the CTA uses the hosted page.
+  /// Null when no mandate-capable UPI app is installed -> the install prompt replaces the row.
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
+
+  /// Whether the installed-apps query has ANSWERED.
+  ///
+  /// Loading and "none installed" are both an empty list, and they mean opposite things: one is a
+  /// sub-second wait, the other is the install prompt plus a dead CTA. Showing the prompt while the
+  /// query is still out would flash "install PhonePe" at someone who has it.
+  final bool upiAppsKnown;
 
   final VoidCallback onBack;
   final VoidCallback onChangeUpiApp;
@@ -186,6 +195,8 @@ class ArulPaywallView extends StatelessWidget {
           // Pinned: the buy decision must never be the thing below the fold.
           _Footer(
             dense: video != null && denseFooter,
+            trialEligible: trialEligible,
+            upiAppsKnown: upiAppsKnown,
             ctaLabel: trialEligible
                 ? l10n.premiumCtaTrial
                 : l10n.premiumCtaSubscribe,
@@ -869,16 +880,35 @@ class PriceLockup extends StatelessWidget {
 class _FeatureRow extends StatelessWidget {
   const _FeatureRow({this.tight = false});
 
+  /// Side padding, and the horizontal padding inside each [_Feature].
+  ///
+  /// Named because the label's own scale ceiling is decided from the column width they leave, and a
+  /// [LayoutBuilder] cannot supply it — this row is measured for intrinsics, and LayoutBuilder
+  /// refuses to answer that. The row is always full-width, so the arithmetic below is exact.
+  static const double _sidePad = 12;
+  static const double _featurePad = 4;
+
+  /// One column's text width at [screenWidth]: the row less its padding and the two 1px dividers,
+  /// split three ways, less the feature's own padding.
+  static double labelWidthFor(double screenWidth) =>
+      (screenWidth - _sidePad * 2 - 2) / 3 - _featurePad * 2;
+
   /// Short screen: 20% off the medallions and the gaps. Never the labels — they are the content.
   final bool tight;
 
   @override
   Widget build(BuildContext context) {
+    final labelWidth = labelWidthFor(MediaQuery.sizeOf(context).width);
     return Padding(
       // Tighter than the handoff's 24/6 — the clip below may never shrink (owner's call).
       // So this row is where the vertical budget comes from; three icons and two words afford it.
       // Without it the second line of "Unlimited HD Wallpapers" was sliced by the fold at 360x640.
-      padding: EdgeInsets.fromLTRB(24, tight ? 8 : 12, 24, 4),
+      //
+      // 12, not 24, on the sides: a third of 360dp less 24+8 each side left the longest label an
+      // 87dp column, where it took THREE lines and the row fell past the fold. Width is the only
+      // thing that buys a line back — the labels are content and may not shrink (see [_Feature]).
+      // 10, not 4, at the foot: line two's descenders owe the same air as line one's.
+      padding: EdgeInsets.fromLTRB(_sidePad, tight ? 8 : 12, _sidePad, 10),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -887,6 +917,7 @@ class _FeatureRow extends StatelessWidget {
               child: _Feature(
                 icon: PaywallOrnament.wallpapers,
                 label: AppLocalizations.of(context).premiumFeatureWallpapers,
+                labelWidth: labelWidth,
                 tight: tight,
               ),
             ),
@@ -895,6 +926,7 @@ class _FeatureRow extends StatelessWidget {
               child: _Feature(
                 icon: PaywallOrnament.ringtones,
                 label: AppLocalizations.of(context).premiumFeatureRingtones,
+                labelWidth: labelWidth,
                 tight: tight,
               ),
             ),
@@ -903,6 +935,7 @@ class _FeatureRow extends StatelessWidget {
               child: _Feature(
                 icon: PaywallOrnament.daily,
                 label: AppLocalizations.of(context).premiumFeatureDaily,
+                labelWidth: labelWidth,
                 tight: tight,
               ),
             ),
@@ -922,16 +955,24 @@ class _FeatureDivider extends StatelessWidget {
 }
 
 class _Feature extends StatelessWidget {
-  const _Feature({required this.icon, required this.label, this.tight = false});
+  const _Feature({
+    required this.icon,
+    required this.label,
+    required this.labelWidth,
+    this.tight = false,
+  });
 
   final PaywallOrnament icon;
   final String label;
+
+  /// The width this column's label actually gets — see [_FeatureRow.labelWidthFor].
+  final double labelWidth;
   final bool tight;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: _FeatureRow._featurePad),
       child: Column(
         children: [
           Container(
@@ -953,10 +994,23 @@ class _Feature extends StatelessWidget {
             ),
           ),
           SizedBox(height: tight ? 4 : 6),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: ArulTokens.paywallFeatureLabel,
+          // The dock's handling, for the same reason: three fixed cells, one long word per locale.
+          // The page is already clamped to 1.3 ([PaywallGround]); a THIRD of the width cannot carry
+          // that, and at 1.3 the longest label took four lines. So the label clamps AGAIN here and
+          // caps at two lines — the cap only ever bites a string two lines genuinely cannot hold.
+          //
+          // The ceiling is the column's, not the screen's: at 320dp a third is 90dp, where even
+          // 1.15 truncates the longest English label. Below 96dp the label keeps its designed size
+          // and spends the user's scale on the rest of the page, which has width to give.
+          MediaQuery.withClampedTextScaling(
+            maxScaleFactor: labelWidth < 96 ? 1.0 : 1.15,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: ArulTokens.paywallFeatureLabel,
+            ),
           ),
         ],
       ),
@@ -972,6 +1026,8 @@ class _Footer extends StatelessWidget {
     required this.busy,
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
+    required this.upiAppsKnown,
+    required this.trialEligible,
     required this.onChangeUpiApp,
     required this.onPurchase,
   });
@@ -983,12 +1039,18 @@ class _Footer extends StatelessWidget {
   final bool busy;
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
+  final bool upiAppsKnown;
+  final bool trialEligible;
   final VoidCallback onChangeUpiApp;
   final VoidCallback onPurchase;
 
   @override
   Widget build(BuildContext context) {
     final app = selectedUpiApp;
+    // No app can take the mandate -> there is nothing to buy with, so the CTA is dead until one
+    // appears. The hosted page used to catch this and completed 5 setups in 733: sending someone
+    // somewhere that cannot finish is the failure, not the missing app.
+    final canBuy = app != null;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -998,37 +1060,64 @@ class _Footer extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (app != null) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
+          if (app == null) ...[
+            if (upiAppsKnown) ...[
+              _InstallUpiPrompt(trialEligible: trialEligible),
+              const SizedBox(height: 14),
+            ],
+          ] else ...[
+            // Label and chip share ONE line only while both fit on it. Past 1.2 the label was
+            // ellipsised to "Selected UPI Ap…" — a truncated label naming a payment app is worse
+            // than a taller footer, so above that the pair stacks and each gets the full width.
+            if (MediaQuery.textScalerOf(context).scale(1) > 1.2)
+              Column(
+                children: [
+                  Text(
                     AppLocalizations.of(context).premiumSelectedUpiApp,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: ArulTokens.paywallUpiLabel,
                   ),
-                ),
-                const SizedBox(width: 12),
-                // A Spacer claims its share of the free space and ellipsises a name that fits.
-                // So Flexible, not Expanded, and NO Spacer between the two.
-                Flexible(
-                  child: _UpiChip(
+                  const SizedBox(height: 6),
+                  _UpiChip(
                     app: app,
-                    // A single installed app is a fact, not a choice — no caret, no tap target.
                     canChange: canChangeUpiApp && !busy,
                     onTap: onChangeUpiApp,
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      AppLocalizations.of(context).premiumSelectedUpiApp,
+                      // Two, not one: a translation that overruns the half-row wraps rather than
+                      // losing its tail. The stack above catches the scales two lines cannot save.
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: ArulTokens.paywallUpiLabel,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // A Spacer claims its share of the free space and ellipsises a name that fits.
+                  // So Flexible, not Expanded, and NO Spacer between the two.
+                  Flexible(
+                    child: _UpiChip(
+                      app: app,
+                      // A single installed app is a fact, not a choice — no caret, no tap target.
+                      canChange: canChangeUpiApp && !busy,
+                      onTap: onChangeUpiApp,
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 14),
           ],
           ShrineCta(
             label: ctaLabel,
             busy: busy,
-            onPressed: busy ? null : onPurchase,
+            onPressed: busy || !canBuy ? null : onPurchase,
           ),
           const SizedBox(height: 10),
           Row(
@@ -1066,6 +1155,98 @@ class _Footer extends StatelessWidget {
   }
 }
 
+/// Shown in the picker's place when NO mandate-capable UPI app is installed.
+///
+/// The hosted PhonePe page used to take this case and completed 5 mandates in 733. Offering a route
+/// that cannot finish is worse than offering none, so the page is gone from the app and the two apps
+/// that actually complete mandates are named instead. The Worker keeps its `targetApp == null`
+/// branch — builds already in the field still send it.
+class _InstallUpiPrompt extends StatelessWidget {
+  const _InstallUpiPrompt({required this.trialEligible});
+
+  /// The line may not promise a trial to someone who has spent theirs.
+  final bool trialEligible;
+
+  /// Play Store deep links. `market://` opens the STORE APP directly; the https form would offer a
+  /// browser first, which is one more place to lose someone who has already agreed to install.
+  static const _links = <(String, String)>[
+    ('PhonePe', 'com.phonepe.app'),
+    ('Google Pay', 'com.google.android.apps.nbu.paisa.user'),
+  ];
+
+  Future<void> _open(String package) async {
+    // Brand names, not localized. `launchUrl` THROWS when nothing can take the intent — a phone
+    // with no Play Store at all — so the https fallback is the second try, not a parallel path.
+    for (final uri in [
+      Uri.parse('market://details?id=$package'),
+      Uri.parse('https://play.google.com/store/apps/details?id=$package'),
+    ]) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } catch (e) {
+        debugPrint('[PremiumPurchase] store link failed for $package: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      children: [
+        Text(
+          trialEligible
+              ? l10n.premiumInstallUpiTrial
+              : l10n.premiumInstallUpiPaid,
+          textAlign: TextAlign.center,
+          style: ArulTokens.paywallUpiLabel,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 10,
+          runSpacing: 6,
+          children: [
+            for (final (label, package) in _links)
+              Semantics(
+                link: true,
+                label: label,
+                identifier: 'arul_install_$package',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) => ArulHaptics.tap(),
+                  onTap: () => _open(package),
+                  child: SizedBox(
+                    height: ArulTokens.minHitTarget,
+                    child: Center(
+                      widthFactor: 1,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(
+                            color: ArulTokens.paywallBorderControl,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            ArulTokens.pillRadius,
+                          ),
+                        ),
+                        child: Text(label, style: ArulTokens.paywallUpiName),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 /// The chosen UPI app as a white pill: its own icon, its own name, a caret.
 class _UpiChip extends StatelessWidget {
   const _UpiChip({
@@ -1087,51 +1268,63 @@ class _UpiChip extends StatelessWidget {
       label: app.label,
       child: GestureDetector(
         onTap: canChange ? onTap : null,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: ArulTokens.paywallBorderControl),
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // The app's REAL mark from PackageManager — the handoff fakes one, having no PM.
-              if (icon == null)
-                const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 18,
-                  color: ArulTokens.paywallInkMuted,
-                )
-              else
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.memory(
-                    icon,
-                    width: 20,
-                    height: 20,
-                    gaplessPlayback: true,
-                  ),
-                ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  app.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArulTokens.paywallUpiName,
-                ),
+        // The pill draws 36 and is tapped at 44 — this one opens the picker that decides which app
+        // takes the mandate, so it is the last control on the page that may be hard to hit.
+        // `opaque`, or the grown box is transparent to the hit test as well as to the eye.
+        // `Center(widthFactor: 1)`, never `Container(alignment:)` — an alignment expands the box to
+        // its max constraint, and inside the footer's Flexible that is the whole half-row.
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: ArulTokens.minHitTarget,
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: ArulTokens.paywallBorderControl),
+                borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
               ),
-              if (canChange) ...[
-                const SizedBox(width: 6),
-                const Icon(
-                  Icons.arrow_drop_down,
-                  size: 16,
-                  color: ArulTokens.paywallInkMuted,
-                ),
-              ],
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // The app's REAL mark from PackageManager — the handoff fakes one, having no PM.
+                  if (icon == null)
+                    const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 18,
+                      color: ArulTokens.paywallInkMuted,
+                    )
+                  else
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.memory(
+                        icon,
+                        width: 20,
+                        height: 20,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      app.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: ArulTokens.paywallUpiName,
+                    ),
+                  ),
+                  if (canChange) ...[
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 16,
+                      color: ArulTokens.paywallInkMuted,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

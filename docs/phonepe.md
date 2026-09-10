@@ -24,28 +24,9 @@ are wrong. Running on **PRODUCTION** credentials. Recurring debits have their ow
 
 ## The webhook
 
-`Authorization: SHA256(username:password)`, deduped by **(event, orderId)** in KV with a 30-day TTL —
-the event MUST be in the key. The order-id prefix is `DKS_`, which is how the shared merchant's
-streams stay distinguishable from Pakiza's `PKZ_`. The registered URL is
-`https://api.hsrutility.com/payments/webhook`, the hsr-cms dispatcher that forwards `DKS_` orders on.
-
-**Order events nest the ids under `payload.paymentFlow`**; state-change events keep them top-level.
-Read via `merchantSubscriptionIdOf()`. The flat read acked every real redemption webhook as "Missing
-merchantSubscriptionId".
-
-Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
-`checkout.order.*` names onto the same branches, so it is safe either way.
-
-⚠ **No PhonePe webhook has ever been processed in production.** The `txn:` prefix in KV holds ZERO
-keys for any event, including setup confirmations, while the server's own `ph:` marks sit in the
-hundreds under the same 30-day TTL — so this is not a stale reading. **The cause is outside this
-repo**: either the events are not ticked on the webhook in the PhonePe Business dashboard, or the
-dispatcher is not forwarding `DKS_`. Until it is fixed the cron is the ONLY channel, and revoked or
-paused mandates are invisible until a debit fails.
-
-One webhook per MERCHANT, shared with Pakiza: Test-Mode, the selected events and the SHA password
-apply to both, and the password is not editable after creation, so the Worker secrets must match it.
-**Events are opt-in per webhook**, so a missing tick sends nothing and logs nothing.
+Never processed in production, and the cause is outside this repo — the cron is the only channel.
+Auth, the KV dedup key, the payload shapes and the dashboard preconditions:
+[phonepe-webhook.md](phonepe-webhook.md). Read it before trusting a webhook with anything.
 
 ## Mandate setup
 
@@ -58,8 +39,13 @@ user lands straight on its AutoPay sheet. Sandbox returns a `ppesim://` link, pr
 
 Initiate takes `targetApp` (opt-in, package-shape validated) and **MUST fall back to the SDK page
 inside the SAME request on any intent failure** — a second initiate bounces off its own claim window.
-Picker apps are a fixed allowlist, never an open `upi://` resolver query: a pay-only wallet accepts
-the intent and then fails the mandate.
+Picker apps pass TWO gates: `MANDATE_APPS`, never an open `upi://` query — a pay-only wallet accepts
+the intent then fails the mandate — AND the device resolver against a mandate-SHAPED probe URL,
+which separates the two (Mobikwik answers `upi://pay` only; Paytm uses a different activity for
+each). Earn a place on the list with ONE real ₹2 penny drop, never the resolver alone; lose it on
+zero completions from a meaningful n. **No hosted-page fallback in the app** — it completed 5 of 733,
+and a route that cannot finish is worse than none, so a phone with no usable app gets an install
+prompt and a dead CTA. The Worker's `targetApp == null` branch stays for fielded builds.
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — 1-day
 trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
@@ -71,22 +57,21 @@ success and must not do the same for an in-flight setup. Initiate is serialized 
 superseded mandates are revoked rather than orphaned.
 
 The claim is released by the app calling **`POST /payments/abandon`** the moment the SDK returns
-non-success: a user backing out and re-tapping must retry INSTANTLY. A lockout long enough to be
-visible shipped once and users read it as "payments broken". The short claim window is only the
-backstop for attempts that died without abandoning. The app rides out 409 `setup_in_progress`
-silently with two retries, and **the pairing is load-bearing**: the sum of the client retry delays
-equals the window, so a stale claim has always lapsed by the last retry and the message is
-unreachable for a solo user, while a genuinely concurrent attempt still refuses. **Change either side
-only with the other.**
+non-success: a user backing out and re-tapping must retry INSTANTLY. A visible lockout shipped once
+and users read it as "payments broken". The short claim window is only the backstop for attempts that
+died without abandoning. The app rides out 409 `setup_in_progress` silently with two retries, and
+**the pairing is load-bearing**: the client retry delays sum to the window, so a stale claim has
+lapsed by the last retry and the message is unreachable for a solo user, while a genuinely concurrent
+attempt still refuses. **Change either side only with the other.**
 
 **A failed setup RESTORES, never just expires.** A resubscribe claims the user's ONE subscriptions
-row, so the claim rides over whatever entitlement that row still carried — and flipping every failed
-setup to `expired` stripped a cancelled-but-live trial when the user backed out at the UPI app. All
-three failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook)
-write `CASE WHEN current_period_end > now() THEN 'cancelled' ELSE 'expired' END`, and the
-setup-completed resurrect matches `('expired','cancelled')` for the same reason — a paid approval
-racing the restore must still grant. `pending` with a live period keeps premium, so entitlement never
-flickers while the sheet is open.
+row, so the claim rides over whatever entitlement that row carried — flipping every failed setup to
+`expired` stripped a cancelled-but-live trial when the user backed out at the UPI app. All three
+failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook) write
+`CASE WHEN current_period_end > now() THEN 'cancelled' ELSE 'expired' END`, and the setup-completed
+resurrect matches `('expired','cancelled')` for the same reason — a paid approval racing the restore
+must still grant. `pending` with a live period keeps premium, so entitlement never flickers while the
+sheet is open.
 
 **Unpause must REARM the debit clock.** The cron's park nulls `next_debit_at`, so a status-only
 unpause left a row neither cron pass could ever select: "Active" forever, never billed, premium
