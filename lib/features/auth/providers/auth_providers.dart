@@ -58,6 +58,13 @@ class AuthController extends _$AuthController {
   @visibleForTesting
   Duration stallRecheck = const Duration(seconds: 5);
 
+  /// How long a RESUMED attempt with no exchange of ours in flight is given to produce an outcome.
+  ///
+  /// Short on purpose: a real back-from-the-sheet result lands within milliseconds of the resume,
+  /// so anything still silent after this had no callback coming. See [_guard].
+  @visibleForTesting
+  Duration stallResumeGrace = const Duration(seconds: 2);
+
   /// Seam for the lifecycle read — tests stub it rather than poke the binding's @protected plumbing.
   @visibleForTesting
   AppLifecycleState? Function() lifecycleProbe = () =>
@@ -81,7 +88,7 @@ class AuthController extends _$AuthController {
     final raw = ref.read(authServiceProvider).signInWith(provider, auto: auto);
     final started = DateTime.now();
     late final Future<AuthResult> guarded;
-    guarded = _guard(raw, started).whenComplete(() {
+    guarded = _guard(raw, started, provider, auto).whenComplete(() {
       // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
       if (identical(_inFlight, guarded)) _inFlight = null;
     });
@@ -101,10 +108,26 @@ class AuthController extends _$AuthController {
   /// The session landed while the screen said "taking too long" — a signed-in user stranded on sign-in.
   /// One pill tap away from a second picker over a live session.
   /// Post-sheet exchange is PROGRESS -> the pathology is an attempt dead through a CONTINUOUS budget.
-  Future<AuthResult> _guard(Future<AuthResult> raw, DateTime started) async {
+  ///
+  /// RESUMING is not progress on its own. A destroyed `CredentialSelectorActivity` delivers no
+  /// result, no cancellation and no exception -> the androidx.credentials continuation never
+  /// completes. Returning to a corpse used to buy it a whole fresh budget, so the pill span 30s
+  /// more over nothing. [SignInPhase.exchanging] is the discriminator and it was already here:
+  /// true means OUR `POST /auth/login` is live and the full budget is exactly right; false means
+  /// nothing of ours is running and no Google surface is on top (one would keep us inactive), so
+  /// the sheet is gone and only a real back-from-the-sheet outcome can still land — which takes
+  /// milliseconds, not seconds. Hence [stallResumeGrace], then abandon.
+  Future<AuthResult> _guard(
+    Future<AuthResult> raw,
+    DateTime started,
+    AuthProvider provider,
+    bool auto,
+  ) async {
     // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
     var wasMidFlow = false;
+    // The lost-callback relaunch is ONE-SHOT per attempt -> a second lost sheet cannot loop it.
+    var relaunched = false;
     while (true) {
       final budget = stallLimit - DateTime.now().difference(sinceForeground);
       if (budget > Duration.zero) {
@@ -128,25 +151,72 @@ class AuthController extends _$AuthController {
         }
       }
       if (wasMidFlow) {
-        // Just back from the sheet or background -> a fresh foreground budget.
-        // The token exchange is usually still in flight right here.
         wasMidFlow = false;
-        sinceForeground = DateTime.now();
-        continue;
+        if (SignInPhase.exchanging.value) {
+          // Our own `POST /auth/login` is live -> a fresh foreground budget, exactly as before.
+          // This is the regression the guard exists for: an exchange abandoned 20ms before it
+          // landed strands a signed-in user on the wall, one tap from a second picker.
+          sinceForeground = DateTime.now();
+          continue;
+        }
+        // Resumed with nothing of ours in flight. Give a real outcome its few milliseconds.
+        try {
+          return await raw.timeout(stallResumeGrace);
+        } on TimeoutException {
+          // Nothing came. Below.
+        }
+        final after = lifecycleProbe();
+        if (after == AppLifecycleState.inactive ||
+            after == AppLifecycleState.paused ||
+            after == AppLifecycleState.hidden) {
+          // A surface came back on top during the grace — returning by RECENTS does exactly this.
+          // That is mid-flow again, not a corpse: extend as always.
+          wasMidFlow = true;
+          continue;
+        }
+        if (!relaunched) {
+          // The one exemption to "one visible Google surface per attempt": the first surface is
+          // provably gone and delivered nothing, so this replaces it rather than adding to it.
+          // Never reachable from a DISMISSED sheet — a cancellation SETTLES `raw`, so the grace
+          // above returns it and we never arrive here. Google's guidance forbids retrying a
+          // cancellation; a destroyed selector activity delivers none to retry.
+          relaunched = true;
+          _abandonStalled(resumed: true);
+          raw = ref.read(authServiceProvider).signInWith(provider, auto: auto);
+          sinceForeground = DateTime.now();
+          continue;
+        }
+        _abandonStalled(resumed: true);
+        return const AuthFailure(
+          message: 'Sign-in is taking too long. Please try again.',
+          kind: AuthFailureKind.networkError,
+        );
       }
       // Foreground throughout, spinner up, nothing happening -> the callback is lost.
-      ref.read(authServiceProvider).abandonPendingSignIn();
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            'login_failed',
-            properties: {'provider': 'google', 'kind': 'stalled'},
-          );
+      _abandonStalled(resumed: false);
       return const AuthFailure(
         message: 'Sign-in is taking too long. Please try again.',
         kind: AuthFailureKind.networkError,
       );
     }
+  }
+
+  /// Discards the zombie's eventual result and counts the stall.
+  ///
+  /// `stalled_resumed` is a second VALUE of `kind` on an event already on the allow-list — the
+  /// people who came back and found a dead sheet, told apart from those who never left. No new
+  /// event, no new property.
+  void _abandonStalled({required bool resumed}) {
+    ref.read(authServiceProvider).abandonPendingSignIn();
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          'login_failed',
+          properties: {
+            'provider': 'google',
+            'kind': resumed ? 'stalled_resumed' : 'stalled',
+          },
+        );
   }
 
   /// A failure from the auto-launched attempt, held until a screen can show it.

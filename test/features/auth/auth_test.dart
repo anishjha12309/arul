@@ -221,7 +221,11 @@ void main() {
       controller = container.read(authControllerProvider.notifier)
         ..stallLimit = const Duration(milliseconds: 120)
         ..stallRecheck = const Duration(milliseconds: 40)
+        ..stallResumeGrace = const Duration(milliseconds: 40)
         ..lifecycleProbe = (() => AppLifecycleState.resumed);
+      // A process-wide notifier -> a test that leaves it true poisons the next one.
+      SignInPhase.exchanging.value = false;
+      addTearDown(() => SignInPhase.exchanging.value = false);
     });
 
     test('a foreground stall abandons the attempt, frees the pill, and lets '
@@ -285,6 +289,9 @@ void main() {
       final pending = controller.signIn(AuthProvider.google);
       // Sheet up well past stallLimit (120ms), then the user picks: resume.
       await Future<void>.delayed(const Duration(milliseconds: 200));
+      // The credential is in hand and `POST /auth/login` is live -> this is the fresh-budget path,
+      // and the only one that may have a full budget. Without it the resume falls to the grace.
+      SignInPhase.exchanging.value = true;
       lifecycle = AppLifecycleState.resumed;
       // The exchange completes shortly after resume -> inside the fresh budget, long after the ORIGINAL clock expired.
       await Future<void>.delayed(const Duration(milliseconds: 60));
@@ -306,12 +313,108 @@ void main() {
 
         final pending = controller.signIn(AuthProvider.google);
         await Future<void>.delayed(const Duration(milliseconds: 200));
+        // Our exchange is live -> the resume buys the FULL budget, not the grace.
+        SignInPhase.exchanging.value = true;
         lifecycle = AppLifecycleState.resumed;
         // Never settled: the reset buys one fresh budget, not immunity.
         final result = await pending;
 
         expect(result, isA<AuthFailure>());
         expect(auth.abandonCount, 1);
+      },
+    );
+
+    // ─── The LOST callback: resumed, nothing of ours running, no outcome ──────
+    // A destroyed CredentialSelectorActivity completes nothing at all -> returning to it used to
+    // buy the corpse another full budget. `exchanging` tells a corpse from a live exchange.
+
+    test('resumed with NO exchange in flight abandons after the grace, not '
+        'after another full budget', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // The sheet is gone and nothing of ours is running.
+      lifecycle = AppLifecycleState.resumed;
+
+      // Grace 40ms + slack, but well inside another full budget (120ms).
+      await Future<void>.delayed(const Duration(milliseconds: 90));
+      expect(
+        auth.abandonCount,
+        1,
+        reason: 'the corpse is discarded after the 40ms grace, not 120ms more',
+      );
+      expect(
+        auth.attempts,
+        hasLength(2),
+        reason: 'a lost callback is relaunched, not just reported',
+      );
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    test('the relaunch is ONE-SHOT — a second lost sheet reports instead of '
+        'looping', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      lifecycle = AppLifecycleState.resumed;
+
+      expect(await pending, isA<AuthFailure>());
+      expect(
+        auth.attempts,
+        hasLength(2),
+        reason: 'exactly one relaunch, never a third sheet',
+      );
+    });
+
+    test('a DISMISSED sheet is never relaunched — the cancel settles inside '
+        'the grace', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      lifecycle = AppLifecycleState.resumed;
+      // A cancellation is a RESULT: it arrives on the same future, inside the grace.
+      auth.settleLast(
+        const AuthFailure(message: 'cancelled', kind: AuthFailureKind.unknown),
+      );
+
+      expect(await pending, isA<AuthFailure>());
+      expect(
+        auth.attempts,
+        hasLength(1),
+        reason: 'no second sheet on a cancel',
+      );
+      expect(auth.abandonCount, 0);
+    });
+
+    test(
+      'the grace never runs while PAUSED — a sheet back on top extends',
+      () async {
+        var lifecycle = AppLifecycleState.paused;
+        controller.lifecycleProbe = () => lifecycle;
+
+        final pending = controller.signIn(AuthProvider.google);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        // Returning by RECENTS: resumed for an instant, then the sheet is back on top.
+        lifecycle = AppLifecycleState.resumed;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        lifecycle = AppLifecycleState.paused;
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+
+        expect(
+          auth.abandonCount,
+          0,
+          reason: 'a surface on top is mid-flow, whatever the grace saw',
+        );
+        expect(auth.attempts, hasLength(1));
+        auth.settleLast(const AuthSuccess(userId: 'u1'));
+        expect(await pending, isA<AuthSuccess>());
       },
     );
 
@@ -423,8 +526,9 @@ void main() {
   });
 
   // Google's guide puts the Credential Manager bottom sheet FIRST and the button flow behind it.
-  // Hard stop one -> never a second surface in one attempt.
-  // Hard stop two -> never a picker over a sheet the user dismissed.
+  // Hard stop -> a credential from the sheet ENDS the attempt; nothing follows a success.
+  // A dismissal escalates ONCE, and only ever to the button flow: re-drawing the One Tap sheet
+  // spends the user's 24 h cancel budget, which would cost them automatic sign-in too.
   group('resolveGoogleCredential — surface order', () {
     late List<String> surfaces;
     late List<GoogleSignInException> unavailable;
@@ -456,15 +560,18 @@ void main() {
       expect(surfaces, ['sheet']);
     });
 
-    test('a sheet that drew NOTHING (null) falls through to the button', () async {
-      // No accounts, "Sign-in prompts" off, or no credential after both native steps -> the user saw nothing.
-      // So the button is still their first surface.
-      final out = await run(sheet: () async => null);
+    test(
+      'a sheet that drew NOTHING (null) falls through to the button',
+      () async {
+        // No accounts, "Sign-in prompts" off, or no credential after both native steps -> the user saw nothing.
+        // So the button is still their first surface.
+        final out = await run(sheet: () async => null);
 
-      expect(out, 'button-credential');
-      expect(surfaces, ['sheet', 'button']);
-      expect(unavailable, isEmpty, reason: 'nothing failed — it was empty');
-    });
+        expect(out, 'button-credential');
+        expect(surfaces, ['sheet', 'button']);
+        expect(unavailable, isEmpty, reason: 'nothing failed — it was empty');
+      },
+    );
 
     test(
       'a null sheet FUTURE (no lightweight flow here) falls through too',
@@ -476,22 +583,30 @@ void main() {
       },
     );
 
+    test('a DISMISSED sheet escalates ONCE to the button flow', () async {
+      final out = await run(
+        sheet: () async => throw const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+          description: 'activity is cancelled by the user',
+        ),
+      );
+
+      expect(out, 'button-credential');
+      expect(buttonCalls, 1, reason: 'ONCE — the button flow, never the sheet');
+      expect(unavailable, isEmpty, reason: 'a dismissal is not a failure');
+    });
+
     test(
-      'a DISMISSED sheet STOPS the attempt — never a picker over it',
+      'and it is reported under its OWN surface — a picker the user has '
+      'already refused once cannot be averaged with one they have not',
       () async {
-        await expectLater(
-          run(
-            sheet: () async => throw const GoogleSignInException(
-              code: GoogleSignInExceptionCode.canceled,
-              description: 'activity is cancelled by the user',
-            ),
+        await run(
+          sheet: () async => throw const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
           ),
-          throwsA(isA<GoogleSignInException>()),
         );
 
-        expect(buttonCalls, 0, reason: 'the guide forbids retrying a cancel');
-        expect(surfaces, ['sheet']);
-        expect(unavailable, isEmpty, reason: 'a dismissal is not a failure');
+        expect(surfaces, ['sheet', 'button_after_dismiss']);
       },
     );
 
