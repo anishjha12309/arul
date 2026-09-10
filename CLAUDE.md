@@ -114,7 +114,7 @@ usually already there) and update it through the `doc-update` skill. Each entry 
 before a release — and **architecture** covers routes, entitlement, uploads and the catalog build.
 
 edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
-phonepe · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
+phonepe · phonepe-webhook · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
 notifications · ui-direction · perf-measurement
 

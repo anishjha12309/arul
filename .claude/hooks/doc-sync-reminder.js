@@ -25,7 +25,7 @@ const ROUTES = [
   },
   {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
-    docs: ["docs/phonepe.md"],
+    docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],

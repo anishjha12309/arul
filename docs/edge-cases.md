@@ -10,7 +10,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] ONE process-global EventChannel hub; a second listener silently steals the sink
 - [ ] Software-decoder fallback → pool demoted 3→2, **floor 2**; only a real codec error demotes to 1
 - [ ] Decoder capability APIs untrusted — attempt and degrade, never query and assume
-- [ ] Poster paints FIRST under the texture, revealed on `onRenderedFirstFrame`: an undecoded live card looks static; poster, image, texture share one `cropAlignment`
+- [ ] Poster paints FIRST under the texture, revealed on `onRenderedFirstFrame` (an undecoded live card looks static); poster, image and texture share one `cropAlignment`
 - [ ] Audio decided at CREATE, not per open; all but the paywall clip stays `audio: false`
 
 ## Wallpaper apply
@@ -25,13 +25,13 @@ now. Reasoning lives in the `docs/` file of the same name.
 
 ## Auth
 - [ ] Sign-in auto-launches a Google surface on the first frame, never a silent check
-- [ ] SHEET FIRST, picker second; a pill tap skips the sheet; the `sheetFirst` kill switch stays a BUILD const
-- [ ] EXACTLY ONE visible Google surface per attempt; the picker follows only a sheet that drew nothing or failed; a DISMISSED sheet ends the attempt
+- [ ] SHEET FIRST, picker second; a pill tap skips the sheet; `sheetFirst`/`pickerAfterDismiss` stay BUILD consts
+- [ ] At most TWO Google surfaces per attempt; a DISMISSED sheet escalates ONCE to the button flow, never a second One Tap pass
 - [ ] A failed sign-in shows ONE retry line; the wall has no links at all; `clearTaskOnLaunch` stays on MainActivity
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
-- [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time
+- [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time, and a resume with no exchange in flight abandons after the grace, then relaunches ONCE
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
 
@@ -40,8 +40,10 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
 - [ ] `cancelled` keeps premium to period end, NO grace; `trialing`/`active` get 6 h; `pending` with a live period counts; `paused`/`expired` none; `reward_premium_until` ORed in
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while the period lives, never `expired`; resurrect matches `('expired','cancelled')`
+- [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = install prompt + dead CTA, never the hosted page
+- [ ] An abandoned TRIAL setup (never a spent-trial ₹199 one) marks prefs, shows one dismissible feed row and arms one reminder; a premium read or settled purchase clears both
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause
-- [ ] The app reads the `premium` flag from `GET /me` and NEVER re-derives the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row, every other state being a sell
+- [ ] The app reads `premium` from `GET /me`, never re-deriving the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row — every other state is a sell
 - [ ] One trial ever: `trial_end` consumed-marker + a delete-account HMAC tombstone (secret NEVER rotates)
 - [ ] Endpoint contracts hold — SDK order token, the cancel path, 409 `setup_in_progress`, webhook dedupe
 - [ ] Re-applying or re-sharing a CACHED wallpaper still calls `/media/signed-url`; offline with bytes on disk is the one pass-through
@@ -102,11 +104,11 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing means mutual media deletion. R2 objects are public BY DESIGN; never add a "private" one
 
 ## App-wide
-- [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (a store rejection). Navigation fenced to the policy host; navbar/footer hidden, page held until they are. Offline = the app's own error state + Retry; `onPageFinished` fires for Android's robot page too; the reveal must not clear the failure. The page themes off the OS `prefers-color-scheme`, not the app's, so the reveal must never show its own first paint
+- [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
 - [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT the paywall (English by decision) and purchase/auth error strings
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**
 - [ ] `allowBackup=false`, data-extraction rules, HTTPS-only network config
-- [ ] `FLAG_SECURE` set in `MainActivity.onCreate` (not the manifest; it must survive the apply recreate) **only when `isPlayInstall()`**, fail-CLOSED; a guard denies any `.aab` that loses it
+- [ ] `FLAG_SECURE` set in `MainActivity.onCreate` (not the manifest — it must survive the apply recreate) **only when `isPlayInstall()`**, fail-CLOSED; a guard denies any `.aab` that loses it
 - [ ] No secrets in repo or APK; dart-defines only
 - [ ] Worker vitest + `flutter test` green, `tsc --noEmit` clean, worker deployed

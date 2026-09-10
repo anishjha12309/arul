@@ -99,7 +99,7 @@ always re-ask. **The cron is what makes billing self-healing; the webhook only m
 let a webhook-shaped optimisation become the only path to a correct row.
 
 No webhook has ever actually arrived in production — cause and evidence in
-[phonepe.md](phonepe.md) §The webhook.
+[phonepe-webhook.md](phonepe-webhook.md).
 
 ## Every paid grant stamps the debit-tracking columns
 

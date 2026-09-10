@@ -8,7 +8,15 @@ user edits — login then stops syncing from Google) · referral_code(unique) ·
 reward_premium_until (referral credit, read by `isPremium`, decoupled from subscriptions) ·
 app_instance_id, meta_anon_id (**VESTIGIAL** — their only readers were the server GA4/Meta conversion
 reporters, since deleted; nothing writes or reads them, and the columns stay because dropping them is
-a migration) · created_at
+a migration) · **is_internal** (reporting-only, below) · created_at
+
+**`is_internal` is set BY HAND and read ONLY by the unified CMS's subscriptions page.** No
+entitlement, payment, catalog or app path reads it, so a wrong flag can never cost a user access —
+it can only move a number on an admin page. It exists because the owner's own test trials and Google
+Play's pre-launch robots are ~1.4% of trials but ~4% of CANCELLATIONS. **Enumerate exact addresses.**
+An email substring is unusable on this user base: `%anish%` matches ~35 real paying users (kanishka,
+manisharma, dhanish, nishanth) and `%test%` matches real ones too. The one safe pattern is
+`%@cloudtestlabaccounts.com` — Google's Test Lab domain, never a person.
 
 **subscriptions:** id(PK) · user_id(FK, unique — one row per user) ·
 status(pending|trialing|active|paused|cancelled|expired) · plan · phonepe_subscription_id (**may stay
@@ -23,9 +31,12 @@ when an intent setup falls back, so it names the flow that RAN; NULL predates th
 **Debit tracking on `subscriptions`:** `first_debit_at` · `debit_count` · `paid_paise` — written by EVERY
 statement that grants a paid period (both settles, `run-redemptions`, and the repeat-subscriber ₹199 setup)
 and read ONLY by the unified CMS's subscriptions page. `first_debit_at` is COALESCEd so a renewal never
-moves it; NULL = never debited. Rows debited before the columns existed stay unstamped on purpose: the CMS
-starts its history after the last such cohort instead of backfilling, so a grant that forgets to stamp
-shows there as the start date moving, never as a short count. Apply the schema BEFORE the Worker.
+moves it; NULL = never debited. Rows debited before the columns existed stay unstamped and NOTHING
+backfills them — so the CMS does not read conversion off `first_debit_at` at all. It counts a granted
+paid period instead (`current_period_end > trial_end`), which is true across the whole history, and
+spends the stamps only on what the period cannot say: Renewed (`debit_count`) and Revenue
+(`paid_paise`). Those two are LOWER BOUNDS for any cohort predating the columns, marked "≥" there.
+Apply the schema BEFORE the Worker.
 
 **wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) ·
 **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text plus

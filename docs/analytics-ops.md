@@ -128,3 +128,12 @@ interpreting what they record.
   `ph:<event>:<txn>` to KV **only** on an accepted send, stamped with the row's RETURNED
   `updated_at`, not `now()` — PostHog dedupes on `[timestamp, distinct_id, event, uuid]`, so a
   wall-clock stamp had made the deterministic `uuid` inert.
+- **`login_cancelled` is a MIXED bucket — never read it as "users who dismissed the sheet".** Per
+  `google_sign_in_android`'s README a config error (wrong signing SHA, wrong package name
+  server-side, wrong `serverClientId`) returns `canceled` *after the user picked an account*, and the
+  plugin cannot tell that from a real cancellation. Split on the message TEXT first, timing second —
+  timing alone under-splits, because the clock starts at the auto-launch, not the sheet, so a
+  scripted dismissal lands inside the failure band. **The two events spell the message
+  differently**: `login_cancelled` carries `description`, `login_failed` carries `error`, so a query
+  splitting "on `description`" returns nothing for `login_failed`. Contract:
+  [auth.md](auth.md) §Failure handling.

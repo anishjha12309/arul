@@ -48,7 +48,7 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   carries a non-gating `411x891@1.3-sweep` frame — a modern phone at accessibility text size, added
   after an on-device sweep found the language sheet overflowing.
 - **No PhonePe webhook has ever been delivered, and it measurably costs row accuracy.** Cause and
-  evidence: [phonepe.md](phonepe.md) §The webhook. A full read of all 185 live mandates found **6
+  evidence: [phonepe-webhook.md](phonepe-webhook.md). A full read of all 185 live mandates found **6
   rows (3.2%) drifted** — 4 `REVOKED` and 2 `PAUSED` at PhonePe while Neon still says `trialing`, the
   two states only the webhook reports. The revoked ones keep climbing the dunning ladder against a
   dead mandate. `POST /payments/status` per subscriber parks them; the durable fix is the webhook.
@@ -115,3 +115,11 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   `.bat` and cmd.exe treats an unquoted `&` as a command separator, so the define arrives cut at the
   ampersand and the rest fails silently. Use `--dart-define-from-file`. The phone's shell does the
   same to `adb shell am start -d <url>` — quote the URL.
+- **Account deletion silently rewrites subscription history.** `DELETE /me` cascade-deletes the
+  `subscriptions` row, so that person's trial vanishes from every past cohort on the CMS's
+  subscriptions page; then on re-signup `/auth/login` re-inserts a synthetic `status='expired'` row
+  carrying the OLD `trial_end`, which lands back in the original cohort as "expired, never
+  converted" — even if they had actually paid before deleting. Both directions are wrong and neither
+  is detectable from the row. The tombstone stores only `trial_end`, so the paid state cannot be
+  restored, and widening it would put PII behind the trial-farming guard. Small today (5 tombstones);
+  read cohort counts as "≥" if it ever grows.

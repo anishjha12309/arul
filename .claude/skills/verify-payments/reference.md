@@ -95,7 +95,7 @@ skill when billing code changes rather than re-deriving. Two facts that make re-
   it is indistinguishable from waiting. Never wait out a real trial day.
 - **Local dev cannot receive the real S2S webhook** (`127.0.0.1` is unreachable from PhonePe). Drive
   the handler with `workers/tools/prod-webhook.mjs`. **Production delivery has never been observed** —
-  the `txn:` KV prefix is empty; see `docs/phonepe.md` §The webhook, which is the one home for that
+  the `txn:` KV prefix is empty; see `docs/phonepe-webhook.md`, which is the one home for that
   fact. Do not re-assert it here.
 
 Endpoint facts and the traps that return 200 while broken: `docs/phonepe.md`.

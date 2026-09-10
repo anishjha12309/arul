@@ -26,6 +26,7 @@ shape or a status vocabulary from memory.
 - **Every statement that grants a paid period stamps `first_debit_at` / `debit_count` / `paid_paise`** on
   the same UPDATE — the CMS subscriptions page reads nothing else, and a missing stamp moves its start date.
 
-Read [docs/phonepe.md](../../docs/phonepe.md) before changing setup, cancel or the webhook, and
+Read [docs/phonepe.md](../../docs/phonepe.md) before changing setup or cancel,
+[docs/phonepe-webhook.md](../../docs/phonepe-webhook.md) before the webhook, and
 [docs/autopay-debits.md](../../docs/autopay-debits.md) before changing the cron's passes or the
 dunning ladder. Re-prove a billing change with `.claude/skills/verify-payments/`.
