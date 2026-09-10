@@ -291,7 +291,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsHelpManage => 'ಚಂದಾದಾರಿಕೆ ನಿರ್ವಹಿಸಿ';
 
   @override
-  String get settingsHelpDeleteSub => 'ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸುತ್ತದೆ';
+  String get settingsHelpDeleteSub => 'ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಅಳಿಸುತ್ತದೆ';
 
   @override
   String get settingsUpload => 'ನಿಮ್ಮ ವಿಷಯವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ';
@@ -316,12 +316,11 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'ಖಾತೆ ಅಳಿಸುವುದೇ?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'ಇದು ನಿಮ್ಮ ಖಾತೆ, ಮೆಚ್ಚಿನವು ಮತ್ತು ರಿವಾರ್ಡ್‌ಗಳನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸುತ್ತದೆ.';
+  String get settingsDeleteConfirmBody => 'ಇದನ್ನು ಮರಳಿ ಪಡೆಯಲಾಗದು.';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳು';

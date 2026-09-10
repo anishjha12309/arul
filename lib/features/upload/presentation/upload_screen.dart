@@ -76,6 +76,13 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   final _titleController = TextEditingController();
 
+  /// One picker per app: the plugin refuses a second `pickFiles` while its sheet is still up, and
+  /// that refusal is an uncaught PlatformException that takes the process down (5 users in the 8
+  /// days to 10 Sep). The pick zone is a bare GestureDetector, so a double tap is one tap too many.
+  /// Guarding the CALL, not the widget, is what the plugin's own troubleshooting page prescribes,
+  /// and it covers every future caller of [_pickFile] rather than one button's onTap.
+  bool _picking = false;
+
   bool get _isRingtone => _kind == 'ringtone';
 
   /// The categories a submission may claim — the LIVE ones, off the catalog.
@@ -129,6 +136,17 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// Picks media for the current kind and validates MIME and size against [UploadConstraints].
   /// Rejects with a toast when it does not fit.
   Future<void> _pickFile() async {
+    if (_picking) return;
+    _picking = true;
+    try {
+      await _pickFileOnce();
+    } finally {
+      // Not setState: nothing on screen reads it, and the pick sheet is the OS's, not ours.
+      _picking = false;
+    }
+  }
+
+  Future<void> _pickFileOnce() async {
     final l10n = AppLocalizations.of(context);
     // FileType.audio for a ringtone -> the picker cannot offer images or video in the first place.
     // The allow-list below is still the enforcing check — some OEM pickers honour the filter loosely.

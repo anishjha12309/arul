@@ -288,7 +288,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsHelpManage => 'सदस्यता प्रबंधित करें';
 
   @override
-  String get settingsHelpDeleteSub => 'आपका खाता हमेशा के लिए हट जाएगा';
+  String get settingsHelpDeleteSub => 'आपका खाता हट जाएगा';
 
   @override
   String get settingsUpload => 'अपनी सामग्री अपलोड करें';
@@ -313,12 +313,11 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'खाता मिटाएँ?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।';
+  String get settingsDeleteConfirmBody => 'इसे वापस नहीं लाया जा सकता।';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'नियम और शर्तें';

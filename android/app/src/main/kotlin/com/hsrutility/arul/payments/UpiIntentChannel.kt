@@ -48,13 +48,16 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
         // CRED, Amazon Pay and SuperMoney were removed: 181 recorded mandate attempts between them,
         // ZERO completions. An app that never finishes one is a dead end however good its docs are.
         // Do NOT re-add on the strength of the resolver alone -> one real penny-drop per app, watched.
-        // Ranked by mandates actually SET UP, not by market share: 364 PhonePe · 118 GPay · 28 Paytm
-        // · 1 BHIM. GPay sits second because four times as many people finish a mandate in it as in
-        // Paytm, whatever the install base says.
+        // Ranked by COMPLETION RATE per person who chose the app — not raw completions, and never
+        // market share. Every mandate attempt on record: PhonePe 405/2944 = 13.8% · Paytm
+        // 37/351 = 10.5% · GPay 132/1560 = 8.5% · BHIM 1/10. GPay finishes four times as many
+        // mandates as Paytm ONLY because four times as many people pick it; per person who picks
+        // it, Paytm converts better, so Paytm is second. Raw counts read backwards here — re-derive
+        // from `subscriptions.upi_target_app` before reordering this list again.
         private val MANDATE_APPS = listOf(
             "com.phonepe.app",
-            "com.google.android.apps.nbu.paisa.user",
             "net.one97.paytm",
+            "com.google.android.apps.nbu.paisa.user",
             "in.org.npci.upiapp",
             "com.phonepe.simulator",
         )

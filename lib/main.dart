@@ -211,9 +211,16 @@ Future<void> _startApp() async {
     '[Analytics] PostHog sink: ${PlayInstall.isPlay ? "on (Play install)" : "OFF (sideloaded)"}',
   );
 
-  if (AppConfig.posthogEnabled &&
-      PlayInstall.isPlay &&
-      AnalyticsCohort.resolve(prefs)) {
+  // Called UNCONDITIONALLY, never as the last term of an `&&`. `resolve` returns cohort membership
+  // but its other job is to set `AnalyticsCohort.isFreshInstall`, which the splash reads to skip the
+  // first secure-storage read (`api_auth_service` authSeed) — a decision about STARTUP, not about
+  // analytics. Short-circuited behind `isPlay`, that flag stayed false on every non-Play install and
+  // the splash paid the keystore master-key setup before it could ask Google for an account: 2937ms
+  // vs 643ms to `signIn: google surface opening`, measured on a vivo 1916 / Android 9 fresh install.
+  // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
+  // build we can ever put on a test phone — measures the same startup path real users get.
+  final inCohort = AnalyticsCohort.resolve(prefs);
+  if (AppConfig.posthogEnabled && PlayInstall.isPlay && inCohort) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
       ..captureApplicationLifecycleEvents = false

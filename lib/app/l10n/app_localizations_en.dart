@@ -289,7 +289,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsHelpManage => 'Manage subscription';
 
   @override
-  String get settingsHelpDeleteSub => 'Remove your account for good';
+  String get settingsHelpDeleteSub => 'Remove your account';
 
   @override
   String get settingsUpload => 'Upload your content';
@@ -314,12 +314,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'Delete account?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'This removes your account, favourites and rewards for good.';
+  String get settingsDeleteConfirmBody => 'This can\'t be undone.';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'Terms & Conditions';

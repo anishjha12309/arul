@@ -47,6 +47,15 @@ import java.util.concurrent.ConcurrentHashMap
 // "stretching in, then out" every time (and once on first apply, when the home engine starts at 0 while the
 // chooser's preview engine was mid-clip). [resumePositions] keeps the last position per source path,
 // process-wide, so a rebuilt player and a brand-new engine both continue from where the clip was.
+// THREADING. A Media3 player may only be touched from the one thread it was built on, and the
+// framework's own teardown path calls straight into it: WallpaperService.Engine.detach() ->
+// reportSurfaceDestroyed() -> ExoPlayer's SurfaceHolder.Callback. Left to itself Media3 adopts the
+// looper of whoever called the builder, and some OEM wallpaper services (every crash in the 3-10 Sep
+// window was a Vivo) start an engine off the main thread while detach() arrives on it. The player
+// then rejects stop()/release() -- swallowed here as non-critical -- so it stays registered on the
+// holder, and the framework's next callback kills the PROCESS, dropping the user to the default
+// wallpaper. So the looper is PINNED to main and every entry point goes through [onMain]. On a
+// device whose engine already runs on main this changes nothing: that is the looper Media3 picked.
 @UnstableApi
 class VideoRenderer(private val context: Context) {
 
@@ -75,6 +84,13 @@ class VideoRenderer(private val context: Context) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** Runs [block] on the ONE thread this renderer's player may be touched from -> see the header.
+     *  INLINE when already there, so a teardown that has to finish before the framework's own
+     *  `detach()` still does; posted otherwise, which keeps call order. */
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post { block() }
+    }
+
     private val releaseOnIdle = Runnable {
         logd("Invisible past grace period — releasing decoder")
         releasePlayerInstance()
@@ -96,18 +112,20 @@ class VideoRenderer(private val context: Context) {
     var audioEnabled: Boolean = false
         set(value) {
             field = value
-            player?.volume = if (value) 1.0f else 0.0f
+            onMain { player?.volume = if (value) 1.0f else 0.0f }
         }
 
     @Volatile
     var loopEnabled: Boolean = true
         set(value) {
             field = value
-            player?.repeatMode =
-                if (value) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            onMain {
+                player?.repeatMode =
+                    if (value) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            }
         }
 
-    fun initialize(videoPath: String, surfaceHolder: SurfaceHolder, resumeKey: String = videoPath) {
+    fun initialize(videoPath: String, surfaceHolder: SurfaceHolder, resumeKey: String = videoPath) = onMain {
         logd("Initializing with video: $videoPath")
         mainHandler.removeCallbacks(releaseOnIdle)
 
@@ -125,7 +143,11 @@ class VideoRenderer(private val context: Context) {
             val startMs = resumePositions[resumeKey]
                 ?: liveByKey[resumeKey]?.takeIf { it !== this }?.player?.currentPosition?.takeIf { it > 0L }
                 ?: 0L
-            player = ExoPlayer.Builder(context).build().apply {
+            player = ExoPlayer.Builder(context)
+                // The whole point of [onMain] -> read the threading note in the header.
+                .setLooper(Looper.getMainLooper())
+                .build()
+                .apply {
                 setVideoSurfaceHolder(surfaceHolder)
                 // Aspect-true full-bleed -> set on the PLAYER, not per item, so swapVideo keeps it when it reuses this instance.
                 // A re-created player passes through here again. It is re-asserted later too — see [assertScalingMode].
@@ -152,7 +174,7 @@ class VideoRenderer(private val context: Context) {
     // The next visibility gain then re-initializes with the new video through that path.
     // Deliberately does NOT force play() -> playWhenReady is preserved, so an invisible-paused player stays paused.
     // A pending [releaseOnIdle] still frees the decoder.
-    fun swapVideo(videoPath: String, surfaceHolder: SurfaceHolder, resumeKey: String = videoPath) {
+    fun swapVideo(videoPath: String, surfaceHolder: SurfaceHolder, resumeKey: String = videoPath) = onMain {
         logd("Swapping video in place: $videoPath")
         this.resumeKey?.let { resumePositions.remove(it) }
         resumePositions.remove(resumeKey)
@@ -160,7 +182,7 @@ class VideoRenderer(private val context: Context) {
         currentVideoPath = videoPath
         currentSurfaceHolder = surfaceHolder
 
-        val activePlayer = player ?: return
+        val activePlayer = player ?: return@onMain
         try {
             activePlayer.setMediaItem(MediaItem.fromUri("file://$videoPath"))
             activePlayer.prepare()
@@ -182,7 +204,7 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    fun onSurfaceChanged(surfaceHolder: SurfaceHolder) {
+    fun onSurfaceChanged(surfaceHolder: SurfaceHolder) = onMain {
         try {
             // Retain the LIVE holder even while the decoder is released -> the next visibility gain
             // re-initializes onto this surface and never onto a destroyed one.
@@ -204,14 +226,14 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    fun onSurfaceDestroyed() {
+    fun onSurfaceDestroyed() = onMain {
         logd("Surface destroyed")
         mainHandler.removeCallbacks(releaseOnIdle)
         currentSurfaceHolder = null
         releasePlayerInstance()
     }
 
-    fun onVisibilityChanged(visible: Boolean) {
+    fun onVisibilityChanged(visible: Boolean) = onMain {
         logd("Visibility changed: $visible")
         this.visible = visible
         try {
@@ -261,7 +283,7 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    fun release() {
+    fun release() = onMain {
         mainHandler.removeCallbacks(releaseOnIdle)
         releasePlayerInstance()
         currentVideoPath = null

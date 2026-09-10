@@ -643,7 +643,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsHelpDeleteSub.
   ///
   /// In en, this message translates to:
-  /// **'Remove your account for good'**
+  /// **'Remove your account'**
   String get settingsHelpDeleteSub;
 
   /// No description provided for @settingsUpload.
@@ -691,13 +691,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'This removes your account, favourites and rewards for good.'**
+  /// **'This can\'t be undone.'**
   String get settingsDeleteConfirmBody;
 
   /// No description provided for @settingsDeleteConfirmBodyPremium.
   ///
   /// In en, this message translates to:
-  /// **'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.'**
+  /// **'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.'**
   String get settingsDeleteConfirmBodyPremium;
 
   /// No description provided for @settingsTerms.

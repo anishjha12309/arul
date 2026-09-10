@@ -12,9 +12,15 @@ import 'package:flutter/foundation.dart';
 abstract final class BootTrace {
   static final Stopwatch _sw = Stopwatch()..start();
 
-  /// Emit `[boot] +1234ms <label>`. No-op in release.
+  /// Set by `--dart-define=DIAG=true`, the same switch that restores `debugPrint` in a release
+  /// build. It is what makes the REAL build measurable: a profile build reaches `main()` about
+  /// three times slower, so any change that hides work behind startup looks better there than it
+  /// is, and a profile-vs-profile A/B would flatter it.
+  static const _diag = bool.fromEnvironment('DIAG');
+
+  /// Emit `[boot] +1234ms <label>`. No-op in a shipped release; a DIAG release keeps it.
   static void mark(String label) {
-    if (kReleaseMode) return;
+    if (kReleaseMode && !_diag) return;
     debugPrint('[boot] +${_sw.elapsedMilliseconds}ms $label');
   }
 }
