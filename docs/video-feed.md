@@ -18,6 +18,13 @@ never with an error.
   budget 3 → 2, with a **floor of 2**. Only a real codec error may demote to 1.
 - **Never query decoder capability and assume.** `getMaxSupportedInstances` lies in both directions.
   Attempt and degrade; the try IS the probe.
+- **Leaving the Wallpapers tab PAUSES at once and frees the decoders only after a grace period**
+  (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild:
+  measured on a Nothing A001 at **430 ms with no frame on the video surface**, and **10.4% of frames
+  over 33 ms** across a tab-switch window against 3.9% idle. The pause is what stops audio and decode
+  behind the ringtone list, and it is free; only the freeing is worth deferring. The other three
+  release paths stay IMMEDIATE and must: the apply flow AWAITS one so the OS finds decoders free,
+  backgrounding hands them to the OEM chooser, and `detach()` is a teardown.
 
 ## The feed opens FILES. A CDN stream is a failure path, never the plan
 

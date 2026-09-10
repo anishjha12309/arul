@@ -10,6 +10,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] ONE process-global EventChannel hub; a second listener silently steals the sink
 - [ ] Software-decoder fallback → pool demoted 3→2, **floor 2**; only a real codec error demotes to 1
 - [ ] Decoder capability APIs untrusted — attempt and degrade, never query and assume
+- [ ] Leaving Wallpapers pauses at once, frees decoders only after a grace; apply, backgrounding and detach stay immediate
 - [ ] Poster paints FIRST under the texture, revealed on `onRenderedFirstFrame` (an undecoded live card looks static); poster, image and texture share one `cropAlignment`
 - [ ] Audio decided at CREATE, not per open; all but the paywall clip stays `audio: false`
 

@@ -209,6 +209,14 @@ class VideoPreloadController extends ChangeNotifier
   bool _settling = false;
   Timer? _settleTimer;
 
+  /// How long the pool survives after the user leaves the Wallpapers tab.
+  ///
+  /// Emptying it costs three `MediaCodec` instantiations to rebuild — measured at 430 ms with no
+  /// frame on the video surface, and 10.4% of frames over 33 ms across a tab-switch window. That is
+  /// worth paying when the user has actually gone; it is pure loss when they tap straight back.
+  static const _leaveGrace = Duration(seconds: 3);
+  Timer? _leaveTimer;
+
   /// The fixed reuse pool — grows lazily to [_poolSize], then is reused for the session.
   /// Cleared only by [releaseDecoders] and [dispose].
   /// A player with `servingIndex == -1` is idle and available for reassignment.
@@ -295,8 +303,31 @@ class VideoPreloadController extends ChangeNotifier
   /// The native handler releases codec and surface synchronously before replying.
   /// The apply flow AWAITS this before the native call -> the OS finds the decoders free.
   /// Fire-and-forget call sites — lifecycle pause, screen dispose — just ignore the future.
+  /// Leaving the Wallpapers tab: stop NOW, free the decoders only if the user stays away.
+  ///
+  /// The pause is what the immediate release was really buying — no audio and no decode behind the
+  /// ringtone list — and it is free. Freeing the decoders is the expensive half, and it is the only
+  /// half a quick return can make pointless, so it waits [_leaveGrace].
+  ///
+  /// Deliberately NOT used by the other three release paths, which must stay immediate: the apply
+  /// flow AWAITS a release so the OS finds decoders free, backgrounding hands them to the OEM
+  /// chooser, and [detach] is a teardown. Only the tab switch can be undone.
+  void releaseDecodersOnLeave() {
+    if (_disposed) return;
+    _pauseAll();
+    _leaveTimer?.cancel();
+    _leaveTimer = Timer(_leaveGrace, () {
+      _leaveTimer = null;
+      unawaited(releaseDecoders());
+    });
+  }
+
   Future<void> releaseDecoders() async {
     if (_disposed) return;
+    // An immediate release supersedes a deferred one -> never free twice, and never let a pending
+    // timer fire into a pool the apply flow or a backgrounding already emptied.
+    _leaveTimer?.cancel();
+    _leaveTimer = null;
     // Cancel any pending settle -> the timer cannot reassign a player right after a release.
     _settleTimer?.cancel();
     _settling = false;
@@ -323,6 +354,10 @@ class VideoPreloadController extends ChangeNotifier
   /// A no-op while backgrounded — the resume path owns that case — and idempotent when serving.
   void reclaimDecoders() {
     if (_disposed || _appPaused) return;
+    // Returning inside [_leaveGrace] cancels the pending release, so the pool was never emptied and
+    // this reconcile is a resume rather than three MediaCodec instantiations.
+    _leaveTimer?.cancel();
+    _leaveTimer = null;
     _reconcile();
   }
 
@@ -865,6 +900,7 @@ class VideoPreloadController extends ChangeNotifier
   void dispose() {
     _disposed = true;
     _settleTimer?.cancel();
+    _leaveTimer?.cancel();
     // Do NOT dispose _prefetch — it is the shared app-scoped instance and outlives this controller.
     // A remount then keeps the same disk cache and in-flight queue. The provider disposes it.
     WidgetsBinding.instance.removeObserver(this);

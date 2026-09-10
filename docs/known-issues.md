@@ -7,6 +7,13 @@ real time**. Nothing else. No changelog — close a line by deleting it.
 
 - **The restyled language chip and the PostHog sideload gate have not run on a phone** — tests only.
 
+- **The feed's decoder grace can starve the paywall clip on a budget SoC** — ACCEPTED, owner's call.
+  Leaving Wallpapers holds the video decoders for `_leaveGrace`, and `premium_screen.dart` builds its
+  OWN pool; reaching the paywall inside that window (Ringtones → a gated Set) leaves a 2-decoder
+  phone contending. It degrades to the mounted shutter, never a crash or a bare card, and the next
+  open is fine. The precise fix if it ever surfaces: free the feed's decoders before the premium
+  screen builds its pool — `releaseDecoders()` cancels the pending timer and runs at once.
+
 - **Meta deferred deep links are unproven until the App Ads Helper "Test deep link" run** (recipe in
   [deferred-links.md](deferred-links.md) §Meta). The installed `fb<id>://open` path and both debug
   seams ARE proven on the A001. Also needed: the Meta App Dashboard → Settings → Android entry

@@ -34,6 +34,11 @@ class _StubVideo extends VideoPreloadController {
   @override
   Future<void> releaseDecoders() async => calls.add('release');
 
+  /// Recorded, never scheduled: the real one starts a [Duration] timer, which these deep-link tests
+  /// would leave pending at teardown. Its grace semantics are pinned in video_leave_grace_test.dart.
+  @override
+  void releaseDecodersOnLeave() => calls.add('leave');
+
   @override
   void reclaimDecoders() => calls.add('reclaim');
 }
@@ -154,7 +159,12 @@ void main() {
       const RingtoneLinkTarget('r1'),
       reason: 'only PEEKED here — the list resolves the id',
     );
-    expect(video.calls, contains('release'), reason: 'feed decoders freed');
+    expect(
+      video.calls,
+      contains('leave'),
+      reason:
+          'the feed is paused at once; its decoders are freed after the grace',
+    );
     expect(analytics.events, isEmpty);
   });
 

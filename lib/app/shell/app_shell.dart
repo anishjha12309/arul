@@ -19,10 +19,12 @@ import '../widgets/english_only.dart';
 ///
 /// The stateful shell keeps every branch ALIVE -> hidden media never tears itself down -> referee:
 ///
-///   * leaving Wallpapers -> `releaseDecoders()`: budget SoCs hold a handful, and a hidden feed must
-///     never keep playing behind the ringtone list;
-///   * returning -> `reclaimDecoders()` reconciles onto the current page; list and index live in the
-///     app-scoped controller;
+///   * leaving Wallpapers -> `releaseDecodersOnLeave()`: pauses AT ONCE, so a hidden feed never
+///     keeps playing behind the ringtone list, but frees the decoders only after a grace period —
+///     budget SoCs hold a handful, and a user who taps straight back should not pay three
+///     MediaCodec rebuilds (430 ms of dropped frames) for a trip they did not make;
+///   * returning -> `reclaimDecoders()` cancels that pending release and reconciles onto the
+///     current page; list and index live in the app-scoped controller;
 ///   * leaving Ringtones -> preview audio stops; the screen's own route listener double-stops, idempotently.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -111,7 +113,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     if (from == AppShell.wallpapersBranch) {
       // The pool's epoch guard makes a release racing a quick return safe -> fire-and-forget.
-      unawaited(ref.read(videoPreloadControllerProvider).releaseDecoders());
+      ref.read(videoPreloadControllerProvider).releaseDecodersOnLeave();
     }
     if (to == AppShell.wallpapersBranch) {
       ref.read(videoPreloadControllerProvider).reclaimDecoders();
