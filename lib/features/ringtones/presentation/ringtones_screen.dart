@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -111,7 +112,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   }
 
   /// Once the All list is built, jump the pending row to the top.
-  /// Every row is [RingtoneRow.extent] tall with no top padding -> the offset is pure arithmetic.
+  /// Every row is [RingtoneRow.extentFor] tall with no top padding -> the offset is pure arithmetic.
   void _scheduleDeepLinkScroll() {
     final index = _pendingScrollIndex;
     if (index == null) return;
@@ -122,7 +123,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
       _pendingScrollIndex = null;
-      final offset = index * (RingtoneRow.extent + _rowGap);
+      final offset =
+          index *
+          (RingtoneRow.extentFor(MediaQuery.textScalerOf(context)) + _rowGap);
       _scroll.jumpTo(offset.clamp(0.0, _scroll.position.maxScrollExtent));
     });
   }
@@ -337,7 +340,8 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
 class _RingtoneChips extends ConsumerWidget {
   const _RingtoneChips();
 
-  static const double _height = 34;
+  /// The chips draw 34 and are tapped at 44 -> the strip owes the taller box.
+  static const double _height = ArulChip.categoryStripHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -487,10 +491,33 @@ class RingtoneRow extends ConsumerWidget {
   static const double _padV = 9;
   static const double _borderWidth = 1;
 
-  /// The row's laid-out height — art, vertical padding, and the hairline border on both edges.
-  /// NOTHING else may grow it; the text column and both controls fit inside the art's height.
-  /// The deep-link scroll multiplies this out -> a taller row puts the WRONG ringtone at the top.
-  static const double extent = coverSize + 2 * _padV + 2 * _borderWidth;
+  /// The row's inner height — the art, or a two-line title over the deity label, whichever is taller.
+  ///
+  /// PINNED, and identical for every row: the deep-link scroll multiplies [extentFor] out, so a row
+  /// that grew with its own title would put the WRONG ringtone at the top. A short title simply
+  /// centres in the same box. It follows the text scale because at 1.3 two title lines and the
+  /// deity label no longer fit inside 56 — and a clipped second line is what this box exists to stop.
+  static double innerHeightFor(TextScaler scaler) {
+    const title = ArulTokens.rowTitleTracked;
+    const sub = ArulTokens.caption;
+    final text =
+        scaler.scale(title.fontSize!) * title.height! * _titleMaxLines +
+        _titleSubGap +
+        scaler.scale(sub.fontSize!) * sub.height!;
+    return math.max(coverSize, text);
+  }
+
+  /// The row's laid-out height — the inner height, vertical padding, and the hairline on both edges.
+  /// NOTHING else may grow it; both controls fit inside it.
+  static double extentFor(TextScaler scaler) =>
+      innerHeightFor(scaler) + 2 * _padV + 2 * _borderWidth;
+
+  /// Two, not one: the longest shipped title measures 213dp against a 121dp slot at 360dp, so one
+  /// line ellipsised the p90 of the library. Two lines hold every title the catalog has at 360dp.
+  static const int _titleMaxLines = 2;
+
+  /// The gap the deity label sits under the title by.
+  static const double _titleSubGap = 2;
 
   /// The gap the handoff draws between the row's children.
   /// Both trailing controls centre their visual in a [ArulTokens.minHitTarget] box.
@@ -519,6 +546,9 @@ class RingtoneRow extends ConsumerWidget {
     final playSlack = (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
 
     return Container(
+      // PINNED, never the content's own height — see [innerHeightFor]. A row that grew with its own
+      // title would break the deep-link scroll, which multiplies one extent out by the row index.
+      height: extentFor(MediaQuery.textScalerOf(context)),
       padding: const EdgeInsets.symmetric(horizontal: _padH, vertical: _padV),
       decoration: BoxDecoration(
         color: lit
@@ -554,7 +584,7 @@ class RingtoneRow extends ConsumerWidget {
               children: [
                 Text(
                   ringtone.title,
-                  maxLines: 1,
+                  maxLines: _titleMaxLines,
                   overflow: TextOverflow.ellipsis,
                   style: ArulTokens.rowTitleTracked.copyWith(
                     color: lit
@@ -569,7 +599,7 @@ class RingtoneRow extends ConsumerWidget {
                 // Deliberately NOT tinted by now-playing: a second gold line read as disabled.
                 if (ringtone.deityLabel case final label?)
                   Padding(
-                    padding: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.only(top: _titleSubGap),
                     child: Text(
                       label,
                       maxLines: 1,

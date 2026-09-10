@@ -804,11 +804,17 @@ abstract final class ArulTokens {
   /// Secondary ink `#6B5A41` — the social-proof pill, the trial lead line, "Selected UPI App".
   static const Color paywallInkSecondary = Color(0xFF6B5A41);
 
-  /// Muted ink — the fine print under the price, and the UPI caret. `#8B7355`.
-  static const Color paywallInkMuted = Color(0xFF8B7355);
+  /// Muted ink — the fine print under the price, and the UPI caret. `#7D684D`.
+  ///
+  /// Darkened from `#8B7355` (4.09:1 on [paywallPanelFill]'s foot) to clear WCAG AA. The rung sits
+  /// barely above [paywallInkFaint] because AA leaves no room between them on a cream ground.
+  static const Color paywallInkMuted = Color(0xFF7D684D);
 
-  /// Faint ink — the struck-through price and the reassurance line. `#A3926F`.
-  static const Color paywallInkFaint = Color(0xFFA3926F);
+  /// Faint ink — the struck-through price and the reassurance line. `#7D6E50`.
+  ///
+  /// Darkened from `#A3926F` (2.77:1) — a struck price is still the price, and the reassurance line
+  /// is body copy; both owe AA. It stays the LIGHTEST readable rung, not a decorative one.
+  static const Color paywallInkFaint = Color(0xFF7D6E50);
 
   /// Gold label ink — "PER MONTH", the tagline. `#A3814A`.
   static const Color paywallInkGold = Color(0xFFA3814A);

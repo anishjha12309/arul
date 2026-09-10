@@ -47,7 +47,9 @@ class FeedChips extends ConsumerWidget {
     ];
 
     return SizedBox(
-      height: 34,
+      // The chips draw 34 and are tapped at 44 -> the strip owes the taller box or the hit area
+      // it gains is clipped straight back off. The chip row still sits in equal air.
+      height: ArulChip.categoryStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
@@ -85,7 +87,8 @@ class FeedChipsSkeleton extends StatelessWidget {
         ? ArulTokens.ivory.withValues(alpha: 0.08)
         : ArulTokens.maroonTintFill08;
     return SizedBox(
-      height: 34,
+      // Matches the real chip row it stands in for -> the strip must not resize when they land.
+      height: ArulChip.categoryStripHeight,
       child: Row(
         children: [
           const SizedBox(width: ArulTokens.screenPadding),

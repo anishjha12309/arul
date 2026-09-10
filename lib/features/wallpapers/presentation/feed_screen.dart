@@ -29,6 +29,7 @@ import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
+import '../../premium/presentation/trial_nudge_row.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
@@ -553,9 +554,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 titleStyle: ArulTokens.wordmarkHeader,
                 titleDrop: 1.5,
                 actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
-                chips: feed is AsyncLoading
-                    ? const FeedChipsSkeleton()
-                    : const FeedChips(),
+                // The nudge sits ABOVE the strip and inside the same slot, so it scrolls and
+                // cross-fades with the header rather than floating over the reel. It renders
+                // nothing at all unless there is an unfinished trial -> for everyone else this
+                // band is the height the reel geometry was always solved against.
+                chips: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const TrialNudgeRow(),
+                    if (feed is AsyncLoading)
+                      const FeedChipsSkeleton()
+                    else
+                      const FeedChips(),
+                  ],
+                ),
               ),
 
               Expanded(
@@ -1037,16 +1049,23 @@ class _ApplyPill extends StatelessWidget {
               // Text only, like the reference: an icon would crowd the longer
               // verbs (ta/ml/te set "Apply" as a whole word) and this pill is
               // already the only thing that can be tapped down here.
+              // The ceiling is a hard 240 and the verb may not be cut: at 320dp
+              // with the OS at 1.3, Tamil's whole-word "Apply" was ellipsised
+              // inside it. So the label shrinks to fit the pill it is given,
+              // exactly as the sign-in title does — the pill's width is the
+              // reference and the type gives way, never the other way round.
               child: Center(
                 widthFactor: 1,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: ArulTokens.button.copyWith(
-                    fontSize: 16,
-                    color: ArulTokens.maroon,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: ArulTokens.button.copyWith(
+                      fontSize: 16,
+                      color: ArulTokens.maroon,
+                    ),
                   ),
                 ),
               ),

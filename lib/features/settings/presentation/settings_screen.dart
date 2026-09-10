@@ -688,11 +688,20 @@ class _FooterLink extends StatelessWidget {
         // In-app, NEVER the browser — the policy is a pushed screen with its own back arrow.
         // A route, not an intent that can find no handler, so there is nothing to guard.
         onTap: () => context.push(doc.route),
-        child: Text(
-          label,
-          style: ArulTokens.body.copyWith(
-            fontWeight: FontWeight.w500,
-            color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+        // A 20dp line of text is not a tap target. The label does not move — it centres in a
+        // [ArulTokens.minHitTarget] box and the air around it becomes tappable, which is what
+        // `opaque` above is for. The Wrap centres the separators against the taller run.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: ArulTokens.minHitTarget),
+          child: Center(
+            widthFactor: 1,
+            child: Text(
+              label,
+              style: ArulTokens.body.copyWith(
+                fontWeight: FontWeight.w500,
+                color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+              ),
+            ),
           ),
         ),
       ),
