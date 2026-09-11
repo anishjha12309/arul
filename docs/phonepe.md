@@ -43,9 +43,11 @@ Picker apps pass TWO gates: `MANDATE_APPS`, never an open `upi://` query — a p
 the intent then fails the mandate — AND the device resolver against a mandate-SHAPED probe URL,
 which separates the two (Mobikwik answers `upi://pay` only; Paytm uses a different activity for
 each). Earn a place on the list with ONE real ₹2 penny drop, never the resolver alone; lose it on
-zero completions from a meaningful n. **Order it by completion RATE per person who chose the app,
-never by raw completions** — those read backwards: GPay outnumbers Paytm 132 to 37 only because 4×
-as many people pick it, and converts worse doing so (8.5% vs 10.5%). **No hosted-page fallback in the app** — it completed 5 of 733,
+zero completions from a meaningful n. **Never reorder it off observed completion rates** — they are
+self-selected by the position the app already holds. Paytm converts better per chooser than GPay
+(10.5% vs 8.5%) only because reaching it means scrolling past the top two, which selects for
+determined payers; promoting it changes that population and destroys the rate it was promoted for.
+A reorder needs a split test. **No hosted-page fallback in the app** — it completed 5 of 733,
 and a route that cannot finish is worse than none, so a phone with no usable app gets an install
 prompt and a dead CTA. The Worker's `targetApp == null` branch stays for fielded builds.
 
