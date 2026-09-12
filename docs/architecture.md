@@ -69,7 +69,14 @@ exposes no `/admin` of its own.**
 
 ## Schema (Neon) — [data-model.md](data-model.md), DDL in `db/schema/`
 users · subscriptions · wallpapers · ringtones · content_submissions · referrals · trial_tombstones ·
-app_config (singleton). **No RLS** — the Worker scopes every parameterized query to the verified sub.
+app_config (singleton) · push_devices/campaigns/deliveries/opens ([push.md](push.md)). **No RLS** —
+the Worker scopes every parameterized query to the verified sub.
+
+## Campaign push — [push.md](push.md)
+The CMS writes `push_campaigns` and reads audience counts over `ARUL_API`; this Worker's
+`* * * * *` cron sends over FCM HTTP v1. The Firebase service-account key lives HERE and is never
+handed to the CMS, so a bug on that page can mis-address a campaign but cannot send one.
+`PUSH_SECRET` guards `/internal/push/*` — a THIRD secret, never `CATALOG_BUILD_SECRET`.
 
 ## Security
 JWT HS256: access 60 m, refresh 60 d rotating, jti denylisted in KV. idToken verified against Google

@@ -41,8 +41,9 @@ class NotificationAudit {
 
 /// Owns the [FlutterLocalNotificationsPlugin] and turns [NotificationSettings] into local alarms.
 ///
-/// Fully on-device: **no FCM, no network, no server** -> no content ever leaves the phone.
-/// That is also why there is no push channel to promise users elsewhere in the app.
+/// The REMINDERS are fully on-device: no network, no server, nothing leaves the phone.
+/// This class also creates the CAMPAIGN channel ([updatesChannelId]) but never posts to it — FCM shows
+/// those itself, and the channel has to exist before a message arrives (docs/push.md).
 ///
 ///  * **Weekly** ([weeklyDevotionalDays]) — a native recurring alarm, armed once, repeated by the OS;
 ///  * **Festivals** ([festivalEvents]) — one-shot; a lunisolar festival has no recurrence rule.
@@ -94,6 +95,23 @@ class NotificationService {
   static const _weeklyChannelName = 'Weekly devotional reminders';
   static const _festivalChannelId = 'arul_festivals_v1';
   static const _festivalChannelName = 'Festival reminders';
+
+  /// The CMS campaign channel (docs/push.md). Created by THIS class even though nothing here ever
+  /// posts to it: FCM shows those notifications itself, and the id in the payload has to already
+  /// exist on the device or FCM silently falls back to the manifest's default channel.
+  ///
+  /// Created at EVERY launch, never at opt-in, and that is the point on Android 8–12: those phones
+  /// have no runtime permission, so the channel IS the user's control — and a phone that upgrades to
+  /// 13 later is auto-granted only if a channel already exists and notifications were not disabled.
+  /// **The id is immutable once a device has seen it** — a new one appears as a second, empty toggle
+  /// in system settings. Getting it right the first time is the whole reason for the `_v1` suffix.
+  static const updatesChannelId = 'arul_updates_v1';
+
+  /// Fallback until [setUpdatesChannelName] supplies the user's language. Name and description ARE
+  /// mutable (importance may only be lowered, sound never changes), so renaming costs one Binder call.
+  static const _defaultUpdatesChannelName = 'Updates from Arul';
+
+  String _updatesChannelName = _defaultUpdatesChannelName;
 
   /// Superseded channels, deleted on init -> no stale duplicates in the system notification settings.
   static const _legacyChannelIds = <String>[];
@@ -160,12 +178,39 @@ class NotificationService {
             sound: _chime,
           ),
         ),
+        android.createNotificationChannel(_updatesChannel()),
         for (final id in _legacyChannelIds)
           android.deleteNotificationChannel(channelId: id),
       ],
     ]);
 
     _initialized = true;
+  }
+
+  /// The campaign channel. `defaultImportance`, not high: these are ours to send, not the user's to
+  /// expect, so they belong in the shade rather than as a heads-up banner over whatever they are
+  /// doing. No custom sound — referencing the absent `arul_bell` raw resource fails channel creation
+  /// outright, which would take the reminder channels down with it.
+  AndroidNotificationChannel _updatesChannel() => AndroidNotificationChannel(
+    updatesChannelId,
+    _updatesChannelName,
+    description: 'New wallpapers, ringtones and offers',
+    importance: Importance.defaultImportance,
+  );
+
+  /// Rename the campaign channel into the user's language, and on every later language change.
+  ///
+  /// Re-creating with the same id UPDATES the name; only importance (downward) and the sound are
+  /// pinned. Cheap enough to call whenever the locale settles, and a no-op before [initialize].
+  Future<void> setUpdatesChannelName(String name) async {
+    if (name.isEmpty || name == _updatesChannelName) return;
+    _updatesChannelName = name;
+    if (!_initialized) return;
+    try {
+      await _android?.createNotificationChannel(_updatesChannel());
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] updates channel rename failed: $e');
+    }
   }
 
   /// Resolve the device IANA zone → `tz.local`. Independent of plugin init, so it overlaps it.

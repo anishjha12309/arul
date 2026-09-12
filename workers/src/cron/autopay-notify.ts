@@ -7,7 +7,7 @@
  * Pass A NOTIFY: rows trialing/active, next_debit_at within the window, notified_at NULL -> verify ACTIVE, then notify
  * Pass B EXECUTE: rows notified >= 24h ago and due -> redeem -> COMPLETED extends a month, FAILED climbs the ladder
  * PENDING is left alone in both -> PhonePe's STANDARD strategy is still retrying it -> a second redeem is a 4xx
- * sendUserNotification is a log-only stub BY DESIGN -> Arul has no push channel -> PhonePe delivers the payer notice
+ * sendUserNotification is a log-only stub BY DESIGN -> PhonePe's own rails deliver the payer-facing notice
  */
 
 import type { Env } from "../env.js";
@@ -833,9 +833,9 @@ interface UserNotificationParams {
 }
 
 /**
- * Log-only BY DESIGN. Arul has no push channel -> reminders are on-device only and no screen may promise push.
- * PhonePe's own rails deliver the payer-facing pre-debit notice when the notify above succeeds -> a push here is redundant
- * If that ever reverses, the shape is FCM HTTP v1 plus an `fcm_token` column on `users`
+ * Log-only BY DESIGN, and it stays that way now that the app HAS a push channel (docs/push.md).
+ * PhonePe's own rails deliver the payer-facing pre-debit notice when the notify above succeeds -> a push here is redundant,
+ * and a debit reminder is a payment follow-up, not a campaign -> it does not belong in the CMS's composer either
  */
 async function sendUserNotification(params: UserNotificationParams): Promise<void> {
   console.log(

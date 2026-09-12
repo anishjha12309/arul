@@ -690,4 +690,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String premiumSocialProof(String name, String city) {
     return '$city-ல் $name லைவ் வால்பேப்பர் போட்டார் 🙏';
   }
+
+  @override
+  String get pushChannelName => 'அருள் அப்டேட்கள்';
 }

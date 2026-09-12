@@ -85,6 +85,35 @@ export interface Env {
    */
   TRIAL_TOMBSTONE_SECRET: string;
 
+  // ── Campaign push (FCM HTTP v1) — docs/push.md ───────────────────────────
+  /**
+   * Guards /internal/push/{count,dispatch,test}. A NEW secret, never CATALOG_BUILD_SECRET.
+   *
+   * The CMS holds both; one string must not authorize "rebuild the catalog" AND "message every user"
+   * Fails closed when unset -> a 401 on a push route means the wrong secret, never a widened one
+   */
+  PUSH_SECRET: string;
+
+  /** Service-account client_email from the Firebase console key (Project settings -> Service accounts). */
+  FCM_SA_CLIENT_EMAIL: string;
+  /**
+   * The same key's private_key PEM. Set from a JSON file, so it arrives carrying literal `\n`
+   * sequences -> lib/fcm.ts normalises those to newlines before importPKCS8 and nothing else
+   */
+  FCM_SA_PRIVATE_KEY: string;
+  /** Firebase project id — "arul-prod-db4f8". Part of the messages:send URL, not a credential. */
+  FIREBASE_PROJECT_ID: string;
+
+  /**
+   * Campaign-send kill switch, `"true"` or `"false"` -> wrangler.toml [vars], NOT a secret.
+   *
+   * Anything but the exact string "true" is OFF: runPushDispatch and /internal/push/dispatch claim
+   * NOTHING. /internal/push/test and /internal/push/count keep working either way, which is what lets
+   * the whole chain be proven on the owner's own phones while production stays dark.
+   * Flipping it in production is the OWNER's call (docs/push.md §Going live).
+   */
+  PUSH_ENABLED?: string;
+
   // ── PostHog capture — the ONLY server-side analytics sink (lib/posthog.ts) ──
   // GA4 and Meta server reporting were removed -> one conversion must have ONE data source -> never re-add them
   /**

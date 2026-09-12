@@ -190,5 +190,6 @@
   "upiPickerTitle": "దీని ద్వారా చెల్లించండి",
   "upiPickerLastUsed": "చివరిగా వాడినది",
   "premiumTrialFinePrint": "తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.",
-  "premiumSocialProof": "{city}-లో {name} లైవ్ వాల్‌పేపర్ పెట్టారు 🙏"
+  "premiumSocialProof": "{city}-లో {name} లైవ్ వాల్‌పేపర్ పెట్టారు 🙏",
+  "pushChannelName": "అరుళ్ అప్‌డేట్‌లు"
 }

@@ -78,6 +78,12 @@ export function makeEnv(overrides: Record<string, unknown> = {}): Env {
     PHONEPE_ENV: "SANDBOX",
     CATALOG_BUILD_SECRET: "test-catalog-secret",
     OPS_SECRET: "test-ops-secret",
+    PUSH_SECRET: "test-push-secret",
+    FCM_SA_CLIENT_EMAIL: "fcm@test.iam.gserviceaccount.com",
+    FCM_SA_PRIVATE_KEY: "test-fcm-key",
+    FIREBASE_PROJECT_ID: "arul-test",
+    // OFF by default -> a test that wants the dispatcher to claim must say so explicitly
+    PUSH_ENABLED: "false",
     ALLOWED_ORIGINS: "https://arul.hsrutility.com",
     ...overrides,
   } as unknown as Env;

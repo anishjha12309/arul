@@ -289,5 +289,9 @@
         "example": "Madurai"
       }
     }
+  },
+  "pushChannelName": "Updates from Arul",
+  "@pushChannelName": {
+    "description": "Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push."
   }
 }

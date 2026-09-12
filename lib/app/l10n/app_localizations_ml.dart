@@ -688,4 +688,7 @@ class AppLocalizationsMl extends AppLocalizations {
   String premiumSocialProof(String name, String city) {
     return '$city-യിൽ $name ലൈവ് വാൾപേപ്പർ ഇട്ടു 🙏';
   }
+
+  @override
+  String get pushChannelName => 'അരുൾ അപ്ഡേറ്റുകൾ';
 }

@@ -190,5 +190,6 @@
   "upiPickerTitle": "ഇതുവഴി അടയ്ക്കൂ",
   "upiPickerLastUsed": "അവസാനം ഉപയോഗിച്ചത്",
   "premiumTrialFinePrint": "പിന്നീട് മാസം {price} ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.",
-  "premiumSocialProof": "{city}-യിൽ {name} ലൈവ് വാൾപേപ്പർ ഇട്ടു 🙏"
+  "premiumSocialProof": "{city}-യിൽ {name} ലൈവ് വാൾപേപ്പർ ഇട്ടു 🙏",
+  "pushChannelName": "അരുൾ അപ്ഡേറ്റുകൾ"
 }

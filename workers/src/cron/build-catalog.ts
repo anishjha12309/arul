@@ -301,9 +301,17 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 // ── Public app_config.json ────────────────────────────────────────────────────
 
 /**
- * Coerce a jsonb column to a real object.
- * `fetch_types:false` returns jsonb as the raw JSON STRING -> passing it through double-encodes it in the catalog
- * AppConfigModel.fromJson then fails to parse -> parse here, and pass real objects through unchanged
+ * Coerce a jsonb column to a real object, for LEGACY ROWS ONLY.
+ *
+ * This comment used to blame `fetch_types:false` for returning jsonb as a raw string. That is wrong,
+ * and believing it is how the same bug reached the push composer: jsonb comes back parsed whatever
+ * fetch_types says. The cause was always on the WRITE side, in the CMS — postgres.js reads a
+ * `::jsonb` cast out of the template and stringifies the value itself, so the CMS's
+ * `${JSON.stringify(x)}::jsonb` encoded twice and stored a jsonb STRING holding JSON. The CMS now
+ * passes the object through sql.json; rows written before that still hold a string.
+ *
+ * Keep this until no such row is left, then delete it — a reader that silently repairs its input is
+ * why nothing surfaced for months. AppConfigModel.fromJson cannot parse a double-encoded blob.
  */
 function asJsonObject(v: unknown): unknown {
   if (typeof v === "string") {

@@ -245,6 +245,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'upiPickerLastUsed': 'Last used',
     'premiumTrialFinePrint': 'Then {price}/month via autopay. Cancel anytime.',
     'premiumSocialProof': '{name} in {city} just applied a live wallpaper 🙏',
+    'pushChannelName': 'Updates from Arul',
   },
   'ta': {
     'appName': 'அருள்',
@@ -471,6 +472,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumTrialFinePrint':
         'பிறகு மாதம் {price} ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.',
     'premiumSocialProof': '{city}-ல் {name} லைவ் வால்பேப்பர் போட்டார் 🙏',
+    'pushChannelName': 'அருள் அப்டேட்கள்',
   },
   'te': {
     'appName': 'అరుళ్',
@@ -691,6 +693,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumTrialFinePrint':
         'తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
     'premiumSocialProof': '{city}-లో {name} లైవ్ వాల్‌పేపర్ పెట్టారు 🙏',
+    'pushChannelName': 'అరుళ్ అప్‌డేట్‌లు',
   },
   'kn': {
     'appName': 'ಅರುಳ್',
@@ -911,6 +914,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumTrialFinePrint':
         'ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.',
     'premiumSocialProof': '{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏',
+    'pushChannelName': 'ಅರುಳ್ ಅಪ್‌ಡೇಟ್‌ಗಳು',
   },
   'ml': {
     'appName': 'അരുൾ',
@@ -1133,6 +1137,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumTrialFinePrint':
         'പിന്നീട് മാസം {price} ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.',
     'premiumSocialProof': '{city}-യിൽ {name} ലൈവ് വാൾപേപ്പർ ഇട്ടു 🙏',
+    'pushChannelName': 'അരുൾ അപ്ഡേറ്റുകൾ',
   },
   'hi': {
     'appName': 'अरुल',
@@ -1350,6 +1355,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'upiPickerLastUsed': 'पिछली बार इस्तेमाल',
     'premiumTrialFinePrint': 'फिर {price}/माह ऑटोपे से। कभी भी रद्द करें।',
     'premiumSocialProof': '{city} में {name} ने लाइव वॉलपेपर लगाया 🙏',
+    'pushChannelName': 'अरुल से अपडेट',
   },
 };
 

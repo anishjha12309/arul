@@ -84,7 +84,10 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Moderation approve NEVER ships a dimension-violating video as-is
 
 ## Notifications, share and deep links
-- [ ] Notifications are local only; there is no push channel and no screen may promise one
+- [ ] Reminders stay local; a campaign push reaches a phone ONLY through the CMS ([push.md](push.md))
+- [ ] Push permission asked once per install, on the first feed frame AFTER sign-in — never on the wall
+- [ ] An unreadable push payload opens the app, never a crash; `is_internal` gets test sends only
+- [ ] BOTH tap paths deliver: killed → `getInitialMessage()`, backgrounded → `onMessageOpenedApp`
 - [ ] Festival dates are DATA — a table that runs out means SKIP, never extrapolate
 - [ ] `keep.xml` stops R8 stripping the icons; breaks release builds ONLY
 - [ ] QA tools gate on `kDebugMode` OR not `isPlayInstall`, so a sideloaded release keeps them

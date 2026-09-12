@@ -27,6 +27,17 @@ const ROUTES = [
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
     docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
   },
+  // Must outrank the generic cron row below: push-dispatch IS a cron, but its rules are its own.
+  {
+    when: [
+      "workers/src/cron/push-dispatch.ts",
+      "workers/src/lib/fcm.ts",
+      "workers/src/lib/push-audience.ts",
+      "lib/features/push/**",
+      "db/schema/17_push.sql",
+    ],
+    docs: ["docs/push.md", "docs/edge-cases.md §Push"],
+  },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],
     docs: ["docs/cron.md", "workers/README.md §Dev / deploy"],

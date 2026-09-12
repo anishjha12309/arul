@@ -14,8 +14,10 @@
 
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- Prompted on Android 13+ only when the user turns reminders on -> never at launch. -->
-    <!-- Nothing is scheduled while the master toggle is off -> the permission stays unasked. -->
+    <!-- Prompted on Android 13+ once, right after the first successful sign-in (campaign pushes), and
+         when the user turns local reminders on -> never at launch, never on the sign-in wall.
+         The FCM SDK (>= 23.0.6) declares this permission itself -> this line is the app's own
+         declaration and the two merge, they do not conflict. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Reminders are one-shot alarms -> a reboot drops every pending one -> this re-arms them via the boot receiver below. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -135,6 +137,22 @@
                     android:host="open"/>
             </intent-filter>
         </activity>
+
+        <!-- Campaign pushes (docs/push.md). FCM reads these three when it posts a notification message
+             with the app in the background or dead — no app code runs at all, so a value missing here
+             is a wrong-looking notification nothing in Dart can correct.
+             The channel MUST already exist on the device or FCM falls back to this default id, so
+             NotificationService creates arul_updates_v1 at EVERY launch, not at opt-in.
+             ic_notification is resolved BY NAME -> keep.xml is what stops R8 stripping it in release. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="arul_updates_v1"/>
 
         <!-- The Flutter tool reads this to generate GeneratedPluginRegistrant -> never delete it. -->
         <meta-data

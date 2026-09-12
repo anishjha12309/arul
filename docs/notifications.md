@@ -1,7 +1,9 @@
 # Notifications — traps only
 
-Local reminders via `flutter_local_notifications` — **no FCM, no Worker, nothing leaves the device,
-and no screen may promise a push channel.**
+Local reminders via `flutter_local_notifications` — **on-device only: no network, no server, nothing
+leaves the phone.** Campaign pushes are a SEPARATE feature with separate rules
+([push.md](push.md)); the only thing the two share is this class, which creates the campaign channel
+at launch because FCM needs it to exist before a message arrives. No screen promises either.
 
 ## Deliberate decisions that look wrong — do not "fix"
 

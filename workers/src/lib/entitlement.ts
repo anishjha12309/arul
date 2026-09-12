@@ -33,10 +33,15 @@ export async function isPremium(
  *
  * A caller already fetching another row (/media/signed-url needs the key) inlines this -> one round-trip, not two
  * Exported as a fragment, never copied -> a drifted second copy hands premium to a lapsed user or locks out a payer
+ *
+ * `userId` takes a BOUND VALUE (one caller, one user) or a SQL FRAGMENT naming a column, which is
+ * what makes the rule usable per row. The push audience query needs "every device whose owner is
+ * paying" and passes `sql`d.user_id`` -> the EXISTS becomes correlated against the outer row instead
+ * of a second copy of the rule living in the audience builder.
  */
 export function premiumPredicate(
   sql: postgres.Sql,
-  userId: string,
+  userId: string | postgres.PendingQuery<postgres.Row[]>,
 ): postgres.PendingQuery<postgres.Row[]> {
   return sql`
     EXISTS (

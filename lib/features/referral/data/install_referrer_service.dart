@@ -321,7 +321,12 @@ class InstallReferrerService {
         ArulDeepLink.requestTarget(
           RingtoneLinkTarget(normalized, source: source),
         );
+      // Not persisted, handed straight to the live app. A tab-only target loses nothing by losing
+      // the startup race; the other two are push-only (no URL parses into a category or the premium
+      // screen), so nothing deferred can ever reach this branch carrying one.
       case TabLinkTarget():
+      case CategoryLinkTarget():
+      case PremiumLinkTarget():
         ArulDeepLink.requestTarget(target);
     }
   }

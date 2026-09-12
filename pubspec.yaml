@@ -46,8 +46,9 @@ dependencies:
                                 # preview can ask for TRANSIENT audio focus
   image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
 
-  # ── Local notifications (devotional reminders). Fully on-device: no FCM, no
-  # network, no server. Versions pinned to Pakiza's, which ships the same stack.
+  # ── Local notifications (devotional reminders). The reminders themselves are
+  # fully on-device: no network, no server. This plugin also owns the campaign
+  # push CHANNEL, which FCM needs to exist before a message arrives (docs/push.md).
   flutter_local_notifications: ^22.0.1
   timezone: ^0.11.0             # tz-correct zonedSchedule (wall-clock local times)
   flutter_timezone: ^5.1.0      # device IANA timezone → tz.setLocalLocation
@@ -92,6 +93,12 @@ dependencies:
   firebase_crashlytics: ^5.2.4
   firebase_performance: ^0.11.4+3
   firebase_analytics: ^12.4.3
+  # Campaign pushes composed in the CMS (docs/push.md). NOTIFICATION messages only — never data-only
+  # and no onBackgroundMessage handler anywhere: ~70% of this base runs a battery manager that kills a
+  # background isolate, while a notification message is posted by Play services without waking the app.
+  # firebase_app_installations supplies the FID the Worker sends to; `message.token` is deprecated.
+  firebase_messaging: ^16.6.0
+  firebase_app_installations: ^0.4.3
   # Agent UI automation only — enableFlutterDriverExtension() in main.dart,
   # opt-in per run via --dart-define=ENABLE_FLUTTER_DRIVER=true (a const gate:
   # compiled out of every other build, release binaries tree-shake it away).

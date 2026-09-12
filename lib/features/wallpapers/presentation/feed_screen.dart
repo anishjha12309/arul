@@ -30,6 +30,7 @@ import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
+import '../../push/providers/push_providers.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
@@ -147,6 +148,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // maybeOpenDeepLink runs from build() -> a target landing on an already-built screen (warm App
     // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+
+    // THE one POST_NOTIFICATIONS prompt (docs/push.md), on the first home-feed frame after sign-in.
+    // Here and nowhere earlier: a system dialog stacked on Credential Manager is exactly the
+    // interruption that costs sign-ins, and sign-in percentage is the number this app is judged on.
+    // By the time this frame draws the person is already in. Spent once per install, grant or deny.
+    // Post-frame so it never shares a frame with the feed's first paint.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(pushPermissionProvider).promptOnce());
+    });
   }
 
   void _onDeepLinkChanged() {

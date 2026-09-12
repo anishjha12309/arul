@@ -1353,6 +1353,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} in {city} just applied a live wallpaper 🙏'**
   String premiumSocialProof(String name, String city);
+
+  /// Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates from Arul'**
+  String get pushChannelName;
 }
 
 class _AppLocalizationsDelegate

@@ -675,4 +675,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String premiumSocialProof(String name, String city) {
     return '$city में $name ने लाइव वॉलपेपर लगाया 🙏';
   }
+
+  @override
+  String get pushChannelName => 'अरुल से अपडेट';
 }

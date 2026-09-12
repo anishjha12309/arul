@@ -38,6 +38,12 @@ All**, and `DeepLinkLocaleSync` (above `MaterialApp`) applies the language live.
 | Not installed, Google App Campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
 | Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
 
+A **campaign push** is a sixth delivery into the same slot, and the only one carrying no URL:
+`CategoryLinkTarget` and `PremiumLinkTarget` exist for it alone, no parser emits them, and its
+targets are stamped `DeepLinkSource.push` so `deep_link_opened` never reports a push as an ad click
+([push.md](push.md)). Category and premium are acted on immediately rather than parked — only the
+wallpaper and ringtone shapes go through the typed takes.
+
 **Language precedence: an explicit pick > the link > the PHONE > English.** A link's language always
 wins over what the user picked earlier (owner's call) because it goes through
 `LocaleNotifier.setLocale`, which PERSISTS — so it is an explicit pick from then on, and Settings

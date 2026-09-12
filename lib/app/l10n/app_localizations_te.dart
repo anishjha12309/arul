@@ -681,4 +681,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String premiumSocialProof(String name, String city) {
     return '$city-లో $name లైవ్ వాల్‌పేపర్ పెట్టారు 🙏';
   }
+
+  @override
+  String get pushChannelName => 'అరుళ్ అప్‌డేట్‌లు';
 }

@@ -1,7 +1,15 @@
-# Crons — the three triggers and the cold-connection hazard
+# Crons — the four triggers and the cold-connection hazard
 
 Read before adding, splitting or "simplifying" a scheduled handler. Declared in
-`workers/wrangler.toml [triggers]` as `crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]`.
+`workers/wrangler.toml [triggers]` as
+`crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *", "* * * * *"]`.
+
+## Every-minute `* * * * *` — campaign push dispatch only
+
+Its own invocation for the same reason autopay has one: a 60k-phone drain must never share a wall
+clock or a subrequest budget with the catalog rebuild. Claims NOTHING while `PUSH_ENABLED` is not
+exactly `"true"`, and logs nothing on an idle minute — at 1,440 ticks a day a line per tick buries
+everything else. Rules, claim loop and kill switch: [push.md](push.md).
 
 ## Quarter-hour `*/15 * * * *` — autopay only, its own invocation
 

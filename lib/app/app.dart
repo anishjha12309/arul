@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/analytics/analytics_provider.dart';
+import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
 import '../core/providers/locale_provider.dart';
+import '../features/auth/providers/auth_providers.dart';
 import '../features/notifications/providers/notification_providers.dart';
+import '../features/push/data/push_open_handler.dart';
+import '../features/push/providers/push_providers.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
 import '../features/wallpapers/providers/catalog_providers.dart';
 import 'l10n/app_localizations.dart';
@@ -33,6 +40,34 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       if (!mounted) return;
       router.go('/premium?source=trial_reminder');
     };
+
+    // A tapped CAMPAIGN notification (docs/push.md). Started here, beside the local handlers and
+    // before the router resolves the launch, for the same reason `NotificationService` is built
+    // before `runApp`: a tap that LAUNCHED the app must find a live handler, and the cold tap is the
+    // one that matters. Its category branch selects BEFORE routing, exactly as `onOpenCategory` does.
+    _pushOpen = PushOpenHandler(
+      apiClient: ref.read(apiClientProvider),
+      analytics: ref.read(analyticsServiceProvider),
+      crash: ref.read(crashReporterProvider),
+      onOpenCategory: (slug) {
+        if (!mounted) return;
+        ref.read(selectedCategoryProvider.notifier).select(slug);
+        router.go('/browse');
+      },
+      onOpenPremium: () {
+        if (!mounted) return;
+        router.go('/premium?source=push');
+      },
+    );
+    unawaited(_pushOpen!.start());
+  }
+
+  PushOpenHandler? _pushOpen;
+
+  @override
+  void dispose() {
+    _pushOpen?.dispose();
+    super.dispose();
   }
 
   @override
@@ -41,6 +76,13 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     // Festival reminders are one-shot alarms -> only the launch-time re-arm reaches the next one.
     // So it must not depend on the user opening a screen -> watched at the ROOT, not from any screen.
     ref.watch(notificationBootstrapProvider);
+
+    // Campaign push (docs/push.md), watched at the ROOT for the same reason: neither depends on a
+    // user opening a screen. `pushBootstrap` registers this phone once a session exists and re-posts
+    // on a language change; `pushChannelName` renames the "Updates from Arul" channel into the
+    // user's language (the channel itself is created by NotificationService.initialize at launch).
+    ref.watch(pushBootstrapProvider);
+    ref.watch(pushChannelNameProvider);
 
     // Above the MaterialApp -> a link's `lang=` covers the sign-in screen as much as the feed.
     // Lives for the whole session -> a deferred delivery arriving seconds in still applies.

@@ -4,6 +4,7 @@
  *   node tools/cron-rehearse.mjs hourly            # "0 * * * *"   catalog rebuild (+ on-change sweep)
  *   node tools/cron-rehearse.mjs daily             # "30 21 * * *" unconditional sweeps + popularity bump
  *   node tools/cron-rehearse.mjs autopay --allow-autopay   # the quarter-hour trigger, PhonePe SANDBOX only
+ *   node tools/cron-rehearse.mjs push --allow-push         # "* * * * *"   campaign push dispatch
  *   node tools/cron-rehearse.mjs hourly --wait 90  # seconds to let ctx.waitUntil work finish (default 60)
  *
  * What keeps this safe, and why each line exists:
@@ -12,6 +13,9 @@
  *  - POSTHOG_HOST is overridden to an unroutable address -> a server event raised on debug data never reaches
  *    the real project (the API key in .dev.vars is the production key)
  *  - autopay talks to PhonePe -> refused unless .dev.vars says PHONEPE_ENV=SANDBOX AND you pass --allow-autopay
+ *  - push REALLY SENDS to whatever phones the debug branch's push_devices holds -> refused unless you pass
+ *    --allow-push AND .dev.vars sets PUSH_ENABLED=true. Local KV cannot make an FCM send local: the message
+ *    leaves for Google and arrives on a real phone. The debug branch is what keeps that to test phones
  *
  * The scheduled handler answers /__scheduled immediately and does its work in ctx.waitUntil -> this streams
  * the dev-server log for --wait seconds after the trigger so the `[cron] … complete` lines are visible.
@@ -24,17 +28,19 @@ const CRONS = {
   hourly: "0 * * * *",
   daily: "30 21 * * *",
   autopay: "*/15 * * * *",
+  push: "* * * * *",
 };
 const PORT = 8799;
 
 const args = process.argv.slice(2);
 const which = args.find((a) => !a.startsWith("--"));
 const allowAutopay = args.includes("--allow-autopay");
+const allowPush = args.includes("--allow-push");
 const waitIdx = args.indexOf("--wait");
 const waitSeconds = waitIdx >= 0 ? Number(args[waitIdx + 1]) || 60 : 60;
 
 if (!which || !(which in CRONS)) {
-  console.error(`usage: node tools/cron-rehearse.mjs <${Object.keys(CRONS).join("|")}> [--allow-autopay] [--wait N]`);
+  console.error(`usage: node tools/cron-rehearse.mjs <${Object.keys(CRONS).join("|")}> [--allow-autopay] [--allow-push] [--wait N]`);
   process.exit(2);
 }
 if (args.includes("--remote") || args.includes("-r")) {
@@ -57,6 +63,21 @@ if (!debug) {
 if (debug === hostOf(prodUrl)) {
   console.error("REFUSED: DEBUG_DATABASE_URL points at the same host as DATABASE_URL (production).");
   process.exit(1);
+}
+if (which === "push") {
+  // The one rehearsal whose side effect leaves the machine. Nothing local can intercept an FCM send,
+  // so the guards are the debug branch (whose push_devices holds only phones you registered against it)
+  // and an explicit flag. PUSH_ENABLED gates the dispatcher itself -> without it the rehearsal is a no-op
+  // that reads as "the cron did nothing", which is the confusing failure, not the dangerous one.
+  const pushEnabled = (devVars.match(/^PUSH_ENABLED=(.*)$/m)?.[1] ?? "").trim().replace(/^"|"$/g, "");
+  if (pushEnabled !== "true") {
+    console.error(`REFUSED: push rehearsal needs PUSH_ENABLED=true in .dev.vars (found "${pushEnabled || "unset"}").`);
+    process.exit(1);
+  }
+  if (!allowPush) {
+    console.error("REFUSED: a push send reaches real phones through Google. Re-run with --allow-push once the debug branch's push_devices holds only test phones.");
+    process.exit(1);
+  }
 }
 if (which === "autopay") {
   const phonepeEnv = (devVars.match(/^PHONEPE_ENV=(.*)$/m)?.[1] ?? "").trim();

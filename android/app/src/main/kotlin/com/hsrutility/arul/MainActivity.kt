@@ -233,6 +233,10 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "isPlayInstall" -> result.success(isPlayInstall())
                 "isLowRamDevice" -> result.success(isLowRamDevice())
+                // Stamped on the push registry row so a delivery gap can be read per Android
+                // generation — the permission model, the channel rules and the trampoline rules all
+                // change with it, and nothing else in the payload says which phone this is.
+                "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 else -> result.notImplemented()
             }
         }

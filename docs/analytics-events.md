@@ -148,5 +148,7 @@ where a join silently matches nothing: [analytics-ops.md](analytics-ops.md) §Re
 - `wallpaper_applied.confirmed` has no Pakiza equivalent (Pakiza carries `is_live`).
 - **The PostHog LISTS are not shared.** Sync the MECHANISM (cohort gate, allow-list decorator,
   lifecycle flag off), never the contents.
-- Notifications and upload are untracked in BOTH apps on purpose — no revenue path. Add one only if
-  a product decision rides on it, and keep it GA4-only.
+- Upload is untracked on purpose — no revenue path. Campaign push has exactly two events, both
+  GA4-only and off the PostHog list: `push_opened` on a tap and `push_permission` on the one prompt.
+  The CMS's "Opened" number reads Neon's `push_opens`, never GA4 — one conversion, one source
+  ([push.md](push.md)).

@@ -417,6 +417,131 @@ export async function handleMeReferrals(
   }
 }
 
+// ── POST /me/device ──────────────────────────────────────────────────────────
+
+/**
+ * The six shipped app languages, normalised the way the deep-link bounce does it.
+ *
+ * Duplicated by necessity (the Worker has no Dart) -> a seventh language is an edit here, in
+ * `routes/deeplink.ts`'s LANG_RE and in `supportedAppLocales`. Anything unrecognised becomes `en`
+ * rather than being rejected: a phone whose locale this Worker has never heard of must still register
+ * and still receive the English text, not silently drop out of every audience.
+ */
+const PUSH_LANG_RE = /^(en|ta|te|kn|ml|hi)$/;
+
+function normalizePushLang(raw: unknown): string {
+  if (typeof raw !== "string") return "en";
+  const bare = raw.trim().toLowerCase().split(/[-_]/)[0] ?? "";
+  return PUSH_LANG_RE.test(bare) ? bare : "en";
+}
+
+/**
+ * POST /me/device — register (or refresh) this phone in the campaign-push registry.
+ *
+ * ADDITIVE, and that is the backwards-compatibility contract: builds 68-74 never call it, keep
+ * working untouched, and simply cannot be reached by a campaign. There is no backfill — a Firebase
+ * Installation ID only exists once an app asks for one — so expect about a fortnight for a new build
+ * to reach most of the active base.
+ *
+ * ONE PHONE, ONE SIGNED-IN USER. A FID that reappears under a different account is RE-POINTED, never
+ * duplicated: the alternative is the previous owner of a shared phone receiving the new owner's
+ * segment. Every field but `fid` is optional so a later build can send less without a Worker deploy.
+ */
+export async function handleRegisterDevice(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    return errorResponse(400, "invalid_body", "Request body must be valid JSON");
+  }
+
+  const fid = typeof body["fid"] === "string" ? body["fid"].trim() : "";
+  if (!fid || fid.length > 256) {
+    return errorResponse(400, "missing_field", "fid is required");
+  }
+  const token = typeof body["token"] === "string" && body["token"].length > 0 ? body["token"] : null;
+  const lang = normalizePushLang(body["lang"]);
+  const appBuild = Number.isFinite(Number(body["appBuild"])) ? Math.floor(Number(body["appBuild"])) : null;
+  const androidSdk = Number.isFinite(Number(body["androidSdk"])) ? Math.floor(Number(body["androidSdk"])) : null;
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_devices (fid, user_id, token, lang, app_build, android_sdk, last_seen_at)
+      VALUES (${fid}, ${sub}, ${token}, ${lang}, ${appBuild}, ${androidSdk}, now())
+      ON CONFLICT (fid) DO UPDATE
+        SET user_id      = EXCLUDED.user_id,
+            -- COALESCE, not EXCLUDED: a build that omits the token must not erase one already stored.
+            token        = COALESCE(EXCLUDED.token, push_devices.token),
+            lang         = EXCLUDED.lang,
+            app_build    = COALESCE(EXCLUDED.app_build, push_devices.app_build),
+            android_sdk  = COALESCE(EXCLUDED.android_sdk, push_devices.android_sdk),
+            last_seen_at = now()
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/device] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+// ── POST /me/push-opened ─────────────────────────────────────────────────────
+
+/**
+ * POST /me/push-opened — the app reporting that this person tapped a campaign.
+ *
+ * Keyed per USER, not per device: the same person tapping the same campaign on two phones is ONE
+ * open, which is what "Opened 14.8%" has to mean on the CMS card. `ON CONFLICT DO NOTHING` is the
+ * whole dedup — a tap replayed by `getInitialMessage()` on a relaunch must not inflate the number.
+ * A body naming a campaign that does not exist is accepted and ignored, never a 4xx: the app fires
+ * this off the tap path and an error there would be noise in Crashlytics, not information.
+ */
+export async function handlePushOpened(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let campaignId: string | null = null;
+  try {
+    const body = (await c.req.json()) as { campaign_id?: unknown };
+    if (typeof body.campaign_id === "string") campaignId = body.campaign_id.trim();
+  } catch {
+    // fall through to validation
+  }
+  if (!campaignId || !UUID_RE.test(campaignId)) {
+    return errorResponse(400, "invalid_body", "campaign_id is required");
+  }
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_opens (campaign_id, user_id)
+      SELECT ${campaignId}, ${sub}
+      WHERE EXISTS (SELECT 1 FROM push_campaigns WHERE id = ${campaignId})
+      ON CONFLICT DO NOTHING
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/push-opened] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+/** A campaign id is always a uuid -> anything else is a malformed payload, never a lookup. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Mask an email for the referrer's list -> "amir@gmail.com" becomes "am***@gmail.com" -> never show a full address. */

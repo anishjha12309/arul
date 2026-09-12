@@ -25,7 +25,8 @@ in `docs/` (§9). Open defects: `docs/known-issues.md`.
 - Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers
   (static + live video feed) and ringtones; premium via PhonePe UPI Autopay.
 - Three-tab shell behind the floating dock (Wallpapers · Ringtones · Settings). **Settings is a dock
-  branch, not a pushed route.** Reminders are on-device only: no push, and no screen may promise one.
+  branch, not a pushed route.** Local reminders stay on-device; campaign pushes come only from the CMS
+  through the Worker (`docs/push.md`). No screen promises a push.
 - Content lives in the R2 bucket `south-indian-wallpapers`. **Never share a bucket, KV namespace or
   database with another app** — the orphan sweep deletes the other app's media.
 
@@ -116,7 +117,7 @@ before a release — and **architecture** covers routes, entitlement, uploads an
 edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
 phonepe · phonepe-webhook · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
-notifications · ui-direction · perf-measurement
+notifications · push · ui-direction · perf-measurement
 
 ## Compact instructions
 

@@ -190,5 +190,6 @@
   "upiPickerTitle": "ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ",
   "upiPickerLastUsed": "ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು",
   "premiumTrialFinePrint": "ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.",
-  "premiumSocialProof": "{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏"
+  "premiumSocialProof": "{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏",
+  "pushChannelName": "ಅರುಳ್ ಅಪ್‌ಡೇಟ್‌ಗಳು"
 }

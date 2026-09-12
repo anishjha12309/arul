@@ -37,6 +37,30 @@ export function toDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Render a string[] as a Postgres array LITERAL, for `= ANY(${toPgTextArray(xs)}::text[])`.
+ *
+ * `fetch_types:false` is the reason this exists. postgres.js resolves an array's type OID from the
+ * server's catalog at startup; skipping that fetch means it never registers an array serializer, so a
+ * bound JS array is stringified as `'' + xs` — the elements comma-joined, no braces. Postgres then
+ * rejects it: `malformed array literal: "a,b"`. It is not a driver bug and no amount of casting the
+ * placeholder fixes it; the VALUE has to arrive already shaped like an array literal.
+ *
+ * This cost a production campaign. Every delivery sat 'pending' while the campaign held 'sending'
+ * forever, because the error was thrown inside a waitUntil and surfaced nowhere the CMS could show
+ * it. "Send to my phone" kept working the whole time — it sends per device and binds no array — so
+ * the failure was invisible until the first scheduled send.
+ *
+ * ALWAYS pair it with an explicit cast: the literal is sent as an untyped string, and `ANY()` needs
+ * to know what it is looking at. An empty list renders `{}`, which matches nothing rather than
+ * throwing — the callers rely on that.
+ */
+export function toPgTextArray(items: string[]): string {
+  if (items.length === 0) return "{}";
+  const esc = items.map((t) => `"${t.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  return `{${esc.join(",")}}`;
+}
+
 export function getDb(env: Env): postgres.Sql {
   const connectionString = env.HYPERDRIVE.connectionString;
   // The verify-payments harness serves Postgres from PGlite -> exactly ONE client connection is accepted

@@ -8,4 +8,9 @@
     <!-- That layer is a radial gradient, #A7233E centre to #911B35 edge -> only the EDGE value hides the seam -> sample at r = W/3. -->
     <!-- Source is mipmap-xxxhdpi/ic_launcher_background.png -> re-sample it whenever the icon art is regenerated. -->
     <color name="splash_icon_field">#911B35</color>
+
+    <!-- Arul gold, the notification accent Android tints the small icon and app name with.
+         THREE copies: NotificationService._accent (Dart), lib/fcm.ts PUSH_ACCENT (the payload's
+         `color`) and this one (the FCM manifest default) -> change all three together. -->
+    <color name="notification_accent">#D4A017</color>
 </resources>

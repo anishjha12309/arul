@@ -681,4 +681,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String premiumSocialProof(String name, String city) {
     return '$city-ನಲ್ಲಿ $name ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏';
   }
+
+  @override
+  String get pushChannelName => 'ಅರುಳ್ ಅಪ್‌ಡೇಟ್‌ಗಳು';
 }

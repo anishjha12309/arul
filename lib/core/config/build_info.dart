@@ -113,6 +113,34 @@ abstract final class DeviceMemory {
   }
 }
 
+/// The device's `Build.VERSION.SDK_INT`, or null where there is no platform (`flutter test`).
+///
+/// Stamped on the push registry row ([PushRegistration]) so a delivery gap can be read per Android
+/// generation: the permission model, the channel rules and the trampoline rules all change with it,
+/// and no other field on the row says which phone this is.
+/// One probe per process — the answer cannot change while the app is running.
+abstract final class AndroidVersion {
+  static Future<int?>? _probe;
+
+  static Future<int?> get sdkInt => _probe ??= _ask();
+
+  /// Catches EVERYTHING, not just the two channel exceptions: this answers one diagnostic column on
+  /// the push registry row, and the registration that carries it must never be lost to a probe.
+  /// A binding that is not up yet throws a plain `FlutterError` from `defaultBinaryMessenger`, which
+  /// a narrow `on PlatformException` would let straight through.
+  static Future<int?> _ask() async {
+    try {
+      return await _channel.invokeMethod<int>('androidSdkInt');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Drop the cached answer so a test can re-probe under a different mock.
+  @visibleForTesting
+  static void resetForTesting() => _probe = null;
+}
+
 /// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect
 /// what is actually armed) should be reachable.
 ///
