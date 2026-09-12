@@ -99,3 +99,33 @@ skill when billing code changes rather than re-deriving. Two facts that make re-
   fact. Do not re-assert it here.
 
 Endpoint facts and the traps that return 200 while broken: `docs/phonepe.md`.
+
+## Production tools
+
+All read-only, all safe to run any time. Each names the Neon branch it opened — if one does not,
+do not trust its answer (SKILL.md §Traps).
+
+```bash
+cd workers
+node tools/payments-health.mjs            # the whole question; --phonepe <envfile> adds the gateway
+node tools/verify-debits.mjs              # per-row backlog detail when health reports STUCK
+node tools/phonepe-status.mjs --env-file <path> <subId>[,<orderId>]   # probe named subscriptions
+node tools/prod-query.mjs "SELECT …"      # one SELECT, refuses writes; --debug for the other branch
+node tools/smoke.mjs                      # is the deployed Worker up on both hostnames
+```
+
+`payments-health.mjs` and `verify-debits.mjs` share their WAITING/IN FLIGHT/STUCK boundaries through
+`tools/lib/debit-phases.mjs`, so the two can never disagree about what "stuck" means. Change a
+boundary there, never in a caller.
+
+## Teardown
+
+```bash
+cp <backup> workers/.dev.vars       # drops PHONEPE_BASE_URL_OVERRIDE, restores the Neon string
+adb shell pm enable com.phonepe.app # only if you disabled it
+adb reverse --remove tcp:8787
+```
+
+Then `cd workers && npx tsc --noEmit && npx vitest run`, and compare against §Known-good
+baseline above.
+
