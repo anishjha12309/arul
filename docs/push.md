@@ -195,6 +195,14 @@ catalog thumb renders as `BigPictureStyle`, verified on device); JPEG and PNG ha
 and `onNewIntent` does not fire on a launcher relaunch, so **both tap paths need proving on a real
 phone**: app killed → `getInitialMessage()`, and app backgrounded → `onMessageOpenedApp`.
 
+**Every tap routes through `PushTapRouter`.** Past the launch it ends in a `go`, which replaces whatever
+covers the shell: a premium push opens `/premium` with `go` (no shell underneath) and refer, upload and
+notification settings are pushed over it, so a wallpaper target that only PARKED stayed behind them —
+the build-76 production walk tapped one and stayed on the paywall. On the splash or sign-in the
+destination is HELD until the launch reaches another screen: `getInitialMessage()` resolves before the
+auth decision and phones register signed out, so an immediate `go` would skip the sign-in wall.
+`home` still routes nowhere: the app opening, on whatever screen it was left, is the destination.
+
 ## Backwards compatibility
 
 Only additive routes and tables; `GET /me` untouched; no new required field. Builds already in the

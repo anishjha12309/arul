@@ -11,6 +11,7 @@ import '../core/providers/locale_provider.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/notifications/providers/notification_providers.dart';
 import '../features/push/data/push_open_handler.dart';
+import '../features/push/data/push_tap_router.dart';
 import '../features/push/providers/push_providers.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
 import '../features/wallpapers/providers/catalog_providers.dart';
@@ -45,19 +46,19 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     // A tapped CAMPAIGN notification (docs/push.md). Started here, beside the local handlers and
     // before the router resolves the launch, for the same reason `NotificationService` is built
     // before `runApp`: a tap that LAUNCHED the app must find a live handler, and the cold tap is the
-    // one that matters. Its category branch selects BEFORE routing, exactly as `onOpenCategory` does.
+    // one that matters. [PushTapRouter] holds a tap that lands before the splash's auth decision.
+    _pushTaps = PushTapRouter(
+      router: router,
+      onSelectCategory: (slug) =>
+          ref.read(selectedCategoryProvider.notifier).select(slug),
+    );
     _pushOpen = PushOpenHandler(
       apiClient: ref.read(apiClientProvider),
       analytics: ref.read(analyticsServiceProvider),
       crash: ref.read(crashReporterProvider),
-      onOpenCategory: (slug) {
+      onOpen: (target) {
         if (!mounted) return;
-        ref.read(selectedCategoryProvider.notifier).select(slug);
-        router.go('/browse');
-      },
-      onOpenPremium: () {
-        if (!mounted) return;
-        router.go('/premium?source=push');
+        _pushTaps?.open(target);
       },
     );
     unawaited(_pushOpen!.start());
@@ -75,10 +76,12 @@ class _ArulAppState extends ConsumerState<ArulApp> {
   }
 
   PushOpenHandler? _pushOpen;
+  PushTapRouter? _pushTaps;
 
   @override
   void dispose() {
     _pushOpen?.dispose();
+    _pushTaps?.dispose();
     super.dispose();
   }
 

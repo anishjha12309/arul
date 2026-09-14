@@ -30,8 +30,7 @@ class PushOpenHandler {
     required ApiClient apiClient,
     required this._analytics,
     required this._crash,
-    required this.onOpenCategory,
-    required this.onOpenPremium,
+    required this.onOpen,
     this._messaging,
     this._openedStream,
     this._foregroundStream,
@@ -49,12 +48,8 @@ class PushOpenHandler {
   final Stream<RemoteMessage>? _openedStream;
   final Stream<RemoteMessage>? _foregroundStream;
 
-  /// Select the category, THEN route — the same order the local reminder's tap uses, so the feed's
-  /// first build already filters and there is no flash of whatever was on screen before.
-  final void Function(String slug) onOpenCategory;
-
-  /// The premium screen, stamped `source=push` so the paywall's trigger split stays readable.
-  final void Function() onOpenPremium;
+  /// Every readable target, whatever the app is showing — routing is [PushTapRouter]'s alone.
+  final void Function(DeepLinkTarget target) onOpen;
 
   StreamSubscription<RemoteMessage>? _opened;
   StreamSubscription<RemoteMessage>? _foreground;
@@ -96,20 +91,9 @@ class PushOpenHandler {
       final campaignId = pushCampaignId(data);
       debugPrint('[Push] opened campaign=$campaignId dest=${data['dest']}');
 
-      switch (target) {
-        case CategoryLinkTarget(:final slug):
-          onOpenCategory(slug);
-        case PremiumLinkTarget():
-          onOpenPremium();
-        case final DeepLinkTarget t:
-          // Wallpaper and ringtone park in the one-shot slot every other delivery path uses, so the
-          // tab that can show it consumes it — typed takes keep a wallpaper from eating a ringtone.
-          ArulDeepLink.requestTarget(t);
-        case null:
-          // `home`, or anything this build cannot read. The app is already opening; that IS the
-          // destination. Reported all the same — a home campaign's opens are still its opens.
-          break;
-      }
+      // Null is `home`, or anything this build cannot read. The app is already opening; that IS the
+      // destination. Reported all the same — a home campaign's opens are still its opens.
+      if (target != null) onOpen(target);
 
       if (campaignId != null) _report(campaignId, data);
     } catch (error, stack) {

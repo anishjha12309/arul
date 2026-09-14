@@ -88,6 +88,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Push permission asked once per install, on the first feed frame AFTER sign-in — never on the wall
 - [ ] An unreadable push payload opens the app, never a crash; `is_internal` gets test sends only
 - [ ] BOTH tap paths deliver: killed → `getInitialMessage()`, backgrounded → `onMessageOpenedApp`
+- [ ] A campaign tap lands on its screen even under `/premium` or a pushed screen, and a cold tap is held until the splash's auth decision (`PushTapRouter`)
 - [ ] Festival dates are DATA — a table that runs out means SKIP, never extrapolate
 - [ ] `keep.xml` stops R8 stripping the icons; breaks release builds ONLY
 - [ ] QA tools gate on `kDebugMode` OR not `isPlayInstall`, so a sideloaded release keeps them
