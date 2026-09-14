@@ -138,7 +138,9 @@ the count and the send can never disagree. `premium` states import `premiumPredi
 `sql`d.user_id`` so the EXISTS correlates per row — **never re-derive entitlement** (CLAUDE.md §5).
 `lapsed` is "subscribed once AND not entitled now", excluding a cancelled user still inside a paid
 period: telling someone who is paying today that their subscription stopped is the one message this
-segment must never send.
+segment must never send. `trialing` is the `trialing` status OR a `cancelled` row whose `trial_end`
+is still ahead — removing the mandate mid-trial flips the status, and until 2026-09-14 that person
+belonged to no plan at all (not lapsed, because still entitled; not free, because a row exists).
 
 **Every kind LEFT JOINs users**, reading the flag as `NOT coalesce(u.is_internal, false)`, so `all`
 now includes phones that never signed in. Every plan state also requires `d.user_id IS NOT NULL` —

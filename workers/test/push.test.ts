@@ -121,6 +121,17 @@ describe("audienceQuery", () => {
     }
   });
 
+  it("trialing includes a cancelled mandate whose trial is still running, and only that cancelled row", () => {
+    // A cancelled trial with trial_end ahead is entitled (premiumPredicate), so `lapsed` cannot take
+    // it; without this arm it sat in no plan at all.
+    const text = flat(audienceQuery(sql, { kind: "filter", plan: "trialing" }));
+    expect(text).toContain("s.status = 'trialing'");
+    expect(text).toContain("OR (s.status = 'cancelled' AND s.trial_end IS NOT NULL AND s.trial_end > now())");
+    for (const state of ["free", "paid", "lapsed"] as const) {
+      expect(flat(audienceQuery(sql, { kind: "filter", plan: state })), state).not.toContain("s.trial_end");
+    }
+  });
+
   it("filter ANDs every picked row and nothing else", () => {
     const text = flat(
       audienceQuery(sql, { kind: "filter", lang: "ta", plan: "free", idle_days: 7, joined_hours: 24, signed_in: true }),

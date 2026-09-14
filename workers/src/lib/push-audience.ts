@@ -239,7 +239,17 @@ function planState(
         AND (u.reward_premium_until IS NULL OR u.reward_premium_until <= now())
       `;
     case "trialing":
-      return sql`EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id AND s.status = 'trialing')`;
+      // Still inside the trial, whether or not the mandate survives: removing the mandate flips the
+      // row to 'cancelled' while trial_end is still ahead, and that person is exactly who a "your
+      // trial ends soon" message is for. Without the second arm they belonged to no plan at all —
+      // not trialing (status), not lapsed (still entitled), not free (has a row). Seen on a real
+      // account on 2026-09-14. `lapsed` cannot overlap: it needs NOT premium, and a cancelled trial
+      // with trial_end ahead is premium until then.
+      return sql`EXISTS (
+        SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id
+          AND (s.status = 'trialing'
+               OR (s.status = 'cancelled' AND s.trial_end IS NOT NULL AND s.trial_end > now()))
+      )`;
     case "paid":
       return sql`
         ${premium}
