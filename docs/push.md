@@ -44,7 +44,7 @@ A row with no token is registered but **unreachable** until `onTokenRefresh` fil
 fails that delivery with `NO_TOKEN` rather than putting the fid in the token field — that comes back
 UNREGISTERED, and the caller would delete a row that was only ever missing a column.
 
-## Notification messages only — never data-only, never a background handler
+## Notification messages by default — never a Dart background handler
 
 About 70% of this base runs a vivo/Xiaomi/OPPO/realme battery manager that kills a background isolate
 on sight. A notification message is posted by Google Play services without waking the app, so it
@@ -52,11 +52,50 @@ survives everything short of a user force-stop. It is also what keeps `priority:
 Android 13 downgrades an app that consistently sends high-priority messages producing no
 notification, and every message here produces one.
 
+**The one exception is a coloured campaign, decided per campaign AND per phone.** FCM's `color`
+tints the small icon only, so a true card background means the app draws the notification. When
+`push_campaigns.color` is set AND the phone's build number is `>= COLOR_MIN_BUILD` (76, `lib/fcm.ts`)
+— `app_build % 1000`, because per-ABI builds register 1000 × abiCode + build (a build-75 phone in the
+production registry reports 2075),
+the Worker sends a data-only message: no `notification` block, the texts, picture, colour, channel
+and tag in `data`, `android.collapse_key` = the campaign id. Every other campaign, and a coloured
+one to an older or unknown build, is the notification message above, unchanged. The plain path stays
+the default because it is the one that needs no app code alive; the coloured path trades that for the
+look and is only as reliable as `ArulMessagingService` getting its short `onMessageReceived` window.
+
+`ArulMessagingService` (Kotlin, `android/…/push/`) subclasses the plugin's
+`FlutterFirebaseMessagingService` and replaces its manifest entry — one service may own
+`MESSAGING_EVENT`, and the inherited `onNewToken` is what keeps Dart's `onTokenRefresh` alive. It
+posts on `arul_updates_v1` with `DecoratedCustomViewStyle`: collapsed and expanded `RemoteViews`
+whose root background is the colour, text white when white reaches a 3.0 contrast ratio, else
+`#1b1b1f` (the CMS preview runs the same formula). The picture downloads under one 5 s deadline and
+is dropped, never the notification, when it misses. Before posting it writes the message into
+`FlutterFirebaseMessagingStore` and puts `google.message_id` on the tap intent — the plugin's
+receiver stores only messages with a notification block, and that store plus that extra are all
+`getInitialMessage()` / `onMessageOpenedApp` read. So the tap path, `/me/push-opened` and GA4
+`push_opened` are identical on both paths. FCM's own automatic `notification_open` Analytics event
+exists only for notification messages; coloured campaigns do not produce it.
+
+- **Android 12+ keeps the header system-styled.** A decorated custom view sits inside the system
+  template: the icon, app name and time row are the system's, the content area carries the colour.
+  That is the accepted result, not a bug to chase with an undecorated view.
+- **A coloured campaign posts even while the app is open** — a data message always reaches the
+  service. Plain campaigns are still ignored in the foreground.
+
 **Registering no handler is what keeps the isolate out — the plugin does not check first.**
 `FlutterFirebaseMessagingReceiver` enqueues `FlutterFirebaseMessagingBackgroundService`
 unconditionally for every background message, so the app PROCESS does start. The executor then reads
 the stored callback handle and, finding none, starts no Flutter isolate (verified on device: process
 up, zero Dart frames). Register `onBackgroundMessage` anywhere and that gate opens for every message.
+
+**An offline phone gets only the LATEST plain campaign.** FCM keeps notification messages
+collapsible, keyed by package, and ignores `collapse_key` — measured with a shared key and a
+per-campaign key alike: two sends in airplane mode, one arrived, both delivery rows `sent`. The price
+of the rule above; Sent counts what FCM accepted, never what a phone showed.
+
+**Expiry is `android.ttl`.** The editor picks 1, 6 or 24 hours (`push_campaigns.expires_hours`, a
+checked column defaulting to 24, what every earlier campaign was sent with); a phone that stays
+offline longer than that never gets the campaign.
 
 **A force-stopped app receives nothing at all.** `adb shell am force-stop` sets Android's stopped
 flag and the FCM broadcast is refused outright (`GCM: broadcast intent callback: result=CANCELLED`)
@@ -66,11 +105,24 @@ the process without the flag.
 **The foreground is ignored.** `onMessage` logs one line — a notification over the app someone is
 already using answers nothing.
 
-## Data model (`db/schema/17_push.sql`)
+## Data model (`db/schema/17_push.sql`, `18_push_journey.sql`)
 
-`push_devices` (fid PK, user_id, token, lang, app_build, android_sdk, last_seen_at) ·
-`push_campaigns` (status, texts jsonb, dest, dest_id, image_url, audience jsonb, send_at, counters) ·
-`push_deliveries` ((campaign_id, fid) PK, status, error) · `push_opens` ((campaign_id, user_id) PK).
+`push_devices` (fid PK, user_id NULLABLE, token, lang, app_build, android_sdk, last_seen_at, created_at) ·
+`push_campaigns` (status, texts jsonb, dest, dest_id, image_url, audience jsonb, color, expires_hours,
+send_at, counters) · `push_deliveries` ((campaign_id, fid) PK, status, error) ·
+`push_opens` ((campaign_id, user_id) PK).
+
+**Phones register before sign-in.** The app registers on every launch: signed out through the
+unauthenticated `POST /push/device` (2 KB body cap, upsert on `fid` that NEVER writes `user_id`),
+signed in through `/me/device` (which re-points it). A `user_id` of NULL is a phone that has never
+signed in; sign-out never nulls it, so "one phone is one signed-in user" still holds. Junk rows from
+the open route cost nothing: an unroutable token comes back UNREGISTERED on its first send and is
+deleted. `push_opens.user_id` stays NOT NULL, so a never-signed-in phone's tap is not recorded
+server-side — GA4 `push_opened` still fires.
+
+**The permission prompt did not move** (below), so on Android 13+ a phone that never signed in is
+counted in every audience that includes it and shows nothing until it signs in and allows
+notifications. The CMS says so under the audience picker.
 
 Why each key is shaped that way is in the schema file's own comments. The two rules that are NOT
 there: cleanup rides the `30 21 * * *` cron (deliveries over 30 days, devices idle over **270 days**
@@ -87,6 +139,15 @@ the count and the send can never disagree. `premium` states import `premiumPredi
 `lapsed` is "subscribed once AND not entitled now", excluding a cancelled user still inside a paid
 period: telling someone who is paying today that their subscription stopped is the one message this
 segment must never send.
+
+**Every kind LEFT JOINs users**, reading the flag as `NOT coalesce(u.is_internal, false)`, so `all`
+now includes phones that never signed in. Every plan state also requires `d.user_id IS NOT NULL` —
+a phone with no account has no subscription row and would otherwise read as `free`. The composer
+builds one combinable kind, `{kind:"filter", lang?, plan?, idle_days?: 7|14|30, joined_hours?:
+1|24|168, signed_in?}`, ANDing whatever was picked; `joined_hours` bounds `d.created_at` through a
+bound interval like `inactive`. A filter with nothing picked parses to null (it would mean everyone),
+and so does `plan` with `signed_in:false` (a contradiction). `lang`, `premium` and `inactive` keep
+parsing: scheduled and historical rows carry them.
 
 **Internal accounts are excluded from every kind but `internal`.** That kind reaches nobody else,
 and it is offered TWO ways: the "Send to my phone" button (send-now, writes a `cancelled` draft) and

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Static apply needs WallpaperManager -> normal permission, auto-granted -> live uses the chooser and needs none. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
@@ -153,6 +154,21 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="arul_updates_v1"/>
+
+        <!-- Coloured campaigns are data-only and drawn by ArulMessagingService, which SUBCLASSES the
+             plugin's service (onNewToken still reaches Dart). One service may own MESSAGING_EVENT ->
+             the plugin's own declaration is removed here rather than left to a priority race.
+             Plain campaigns never reach it: Play services posts a notification message itself. -->
+        <service
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
+            tools:node="remove"/>
+        <service
+            android:name=".push.ArulMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
 
         <!-- The Flutter tool reads this to generate GeneratedPluginRegistrant -> never delete it. -->
         <meta-data

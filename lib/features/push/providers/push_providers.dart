@@ -7,7 +7,9 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
+import '../../auth/domain/auth_service.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../notifications/data/notification_service.dart';
 import '../../notifications/providers/notification_providers.dart';
 import '../data/push_permission.dart';
 import '../data/push_registration.dart';
@@ -51,11 +53,12 @@ Future<void> pushChannelName(Ref ref) async {
   await service.setUpdatesChannelName(l10n.pushChannelName);
 }
 
-/// Registers this phone, once per launch, and re-registers when the language or the token moves.
+/// Registers this phone, once per launch, and re-registers when the language, the token or the
+/// account moves.
 ///
-/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on a cold start that
-/// already had a session AND right after a fresh sign-in, which are the two moments a row can appear
-/// or change hands. Never awaited by anything on screen — a registration that fails costs this phone
+/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on every cold start —
+/// signed in or not — AND right after a fresh sign-in, which are the moments a row can appear or
+/// change hands. Never awaited by anything on screen — a registration that fails costs this phone
 /// the next campaign and nothing else.
 @Riverpod(keepAlive: true)
 void pushBootstrap(Ref ref) {
@@ -66,8 +69,33 @@ void pushBootstrap(Ref ref) {
   // Watched, not read: a language change re-runs this and re-posts the row through the same
   // debounce, which is what keeps the "By language" audience honest.
   ref.watch(localeProvider);
-  if (!ref.read(authServiceProvider).currentState.isAuthenticated) return;
   final registration = ref.watch(pushRegistrationProvider);
   registration.listenForTokenRefresh();
-  unawaited(registration.register());
+  unawaited(
+    _registerWhenReady(
+      ref.read(authServiceProvider),
+      ref.read(notificationServiceProvider),
+      registration,
+    ),
+  );
+}
+
+/// Waits for the stored-session verdict, so a returning user's launch does not post a signed-out
+/// registration first, and for the campaign channel, which must exist before any message arrives.
+Future<void> _registerWhenReady(
+  AuthService auth,
+  NotificationService notifications,
+  PushRegistration registration,
+) async {
+  try {
+    await auth.initialized;
+    await notifications.initialize();
+  } catch (_) {
+    // A channel that failed to create is FCM's default-channel fallback, never a reason not to register.
+  }
+  final state = auth.currentState;
+  // The user is part of the debounce: a different account on the same phone must re-point the row.
+  await registration.register(
+    account: state.isAuthenticated ? state.userId : null,
+  );
 }

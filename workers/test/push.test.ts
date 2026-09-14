@@ -11,12 +11,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type postgres from "postgres";
 
 import {
+  audienceLabel,
   audienceQuery,
   parseAudience,
   type PushAudience,
 } from "../src/lib/push-audience.js";
-import { isDeadRegistration, sendPush, textFor, type PushCampaign } from "../src/lib/fcm.js";
-import { handleRegisterDevice, handlePushOpened } from "../src/routes/me.js";
+import {
+  COLOR_MIN_BUILD,
+  isDeadRegistration,
+  sendPush,
+  textFor,
+  type PushCampaign,
+} from "../src/lib/fcm.js";
+import { handleRegisterDevice, handleRegisterAnonDevice, handlePushOpened } from "../src/routes/me.js";
 import { handlePushCount, handlePushDispatch, handlePushTest } from "../src/routes/internal.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 import { makeEnv, makeCtx, makeMockKV } from "./_ctx.js";
@@ -76,9 +83,16 @@ describe("audienceQuery", () => {
       { kind: "premium", state: "trialing" },
       { kind: "premium", state: "paid" },
       { kind: "premium", state: "lapsed" },
+      { kind: "filter", lang: "ta" },
+      { kind: "filter", signed_in: false },
+      { kind: "filter", plan: "paid", idle_days: 14, joined_hours: 168, signed_in: true },
     ];
     for (const kind of kinds) {
-      expect(flat(audienceQuery(sql, kind)), JSON.stringify(kind)).toContain("NOT u.is_internal");
+      // Through coalesce: a phone that never signed in has no users row, and `NOT NULL` is NULL,
+      // which would silently drop every anonymous phone from every audience.
+      expect(flat(audienceQuery(sql, kind)), JSON.stringify(kind)).toContain(
+        "NOT coalesce(u.is_internal, false)",
+      );
     }
   });
 
@@ -86,11 +100,54 @@ describe("audienceQuery", () => {
     const text = flat(audienceQuery(sql, { kind: "internal" }));
     expect(text).toContain("WHERE u.is_internal");
     expect(text).not.toContain("NOT u.is_internal");
+    expect(text).not.toContain("coalesce");
   });
 
-  it("every kind selects fids off push_devices joined to users", () => {
-    const text = flat(audienceQuery(sql, { kind: "all" }));
-    expect(text).toContain("SELECT d.fid FROM push_devices d JOIN users u ON u.id = d.user_id");
+  it("every kind selects fids off push_devices LEFT JOINed to users — anonymous phones included", () => {
+    const kinds: PushAudience[] = [{ kind: "all" }, { kind: "internal" }, { kind: "filter", lang: "hi" }];
+    for (const kind of kinds) {
+      expect(flat(audienceQuery(sql, kind)), JSON.stringify(kind)).toContain(
+        "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id",
+      );
+    }
+  });
+
+  it("a plan is never satisfied by a phone with no account — `free` would otherwise match it", () => {
+    for (const state of ["free", "trialing", "paid", "lapsed"] as const) {
+      expect(flat(audienceQuery(sql, { kind: "premium", state })), state).toContain("d.user_id IS NOT NULL AND");
+      expect(flat(audienceQuery(sql, { kind: "filter", plan: state })), state).toContain(
+        "d.user_id IS NOT NULL AND",
+      );
+    }
+  });
+
+  it("filter ANDs every picked row and nothing else", () => {
+    const text = flat(
+      audienceQuery(sql, { kind: "filter", lang: "ta", plan: "free", idle_days: 7, joined_hours: 24, signed_in: true }),
+    );
+    expect(text).toContain("AND d.lang = ?");
+    expect(text).toContain("NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id)");
+    expect(text).toContain("AND d.last_seen_at < now() - (? || ' days')::interval");
+    expect(text).toContain("AND d.created_at >= now() - (? || ' hours')::interval");
+    expect(text).toContain("AND d.user_id IS NOT NULL");
+
+    const langOnly = flat(audienceQuery(sql, { kind: "filter", lang: "ta" }));
+    expect(langOnly).toBe(
+      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.is_internal, false) AND d.lang = ?",
+    );
+  });
+
+  it("signed_in maps to the device's user_id, both ways", () => {
+    expect(flat(audienceQuery(sql, { kind: "filter", signed_in: true }))).toMatch(/AND d\.user_id IS NOT NULL$/);
+    const no = flat(audienceQuery(sql, { kind: "filter", signed_in: false }));
+    expect(no).toMatch(/AND d\.user_id IS NULL$/);
+    expect(no).not.toContain("IS NOT NULL");
+  });
+
+  it("joined bounds on created_at with a bound interval, never interpolated text", () => {
+    const text = flat(audienceQuery(sql, { kind: "filter", joined_hours: 168 }));
+    expect(text).toContain("d.created_at >= now() - (? || ' hours')::interval");
+    expect(text).not.toContain("168");
   });
 
   it("lang filters on the device's stored language", () => {
@@ -144,6 +201,64 @@ describe("parseAudience", () => {
     expect(parseAudience({ kind: "lang", lang: "fr" })).toBeNull();
     expect(parseAudience({ kind: "premium", state: "vip" })).toBeNull();
     expect(parseAudience({ kind: "inactive", days: 3 })).toBeNull();
+  });
+
+  it("accepts every filter shape, keeping only the keys that were picked", () => {
+    expect(parseAudience({ kind: "filter", lang: "ta" })).toEqual({ kind: "filter", lang: "ta" });
+    expect(parseAudience({ kind: "filter", plan: "trialing" })).toEqual({ kind: "filter", plan: "trialing" });
+    expect(parseAudience({ kind: "filter", idle_days: 30 })).toEqual({ kind: "filter", idle_days: 30 });
+    for (const h of [1, 24, 168]) {
+      expect(parseAudience({ kind: "filter", joined_hours: h })).toEqual({ kind: "filter", joined_hours: h });
+    }
+    expect(parseAudience({ kind: "filter", signed_in: false })).toEqual({ kind: "filter", signed_in: false });
+    expect(
+      parseAudience({ kind: "filter", lang: "hi", plan: "paid", idle_days: 7, joined_hours: 24, signed_in: true }),
+    ).toEqual({ kind: "filter", lang: "hi", plan: "paid", idle_days: 7, joined_hours: 24, signed_in: true });
+    // Unknown keys are dropped, not carried into the row the dispatcher reads.
+    expect(parseAudience({ kind: "filter", lang: "ta", extra: 1 })).toEqual({ kind: "filter", lang: "ta" });
+  });
+
+  it("a filter with nothing picked is null — it would silently mean everyone", () => {
+    expect(parseAudience({ kind: "filter" })).toBeNull();
+    expect(parseAudience({ kind: "filter", nonsense: "x" })).toBeNull();
+  });
+
+  it("a filter carrying a value the CMS never offers is null", () => {
+    expect(parseAudience({ kind: "filter", lang: "fr" })).toBeNull();
+    expect(parseAudience({ kind: "filter", plan: "vip" })).toBeNull();
+    expect(parseAudience({ kind: "filter", idle_days: 3 })).toBeNull();
+    expect(parseAudience({ kind: "filter", idle_days: "7" })).toBeNull();
+    expect(parseAudience({ kind: "filter", joined_hours: 2 })).toBeNull();
+    expect(parseAudience({ kind: "filter", signed_in: "no" })).toBeNull();
+    // One bad key sinks the whole audience; it is never quietly narrowed to the good ones.
+    expect(parseAudience({ kind: "filter", lang: "ta", joined_hours: 48 })).toBeNull();
+  });
+
+  it("a plan asked of phones that never signed in is a contradiction and parses to null", () => {
+    expect(parseAudience({ kind: "filter", plan: "free", signed_in: false })).toBeNull();
+    expect(parseAudience({ kind: "filter", plan: "free", signed_in: true })).toEqual({
+      kind: "filter",
+      plan: "free",
+      signed_in: true,
+    });
+  });
+});
+
+describe("audienceLabel", () => {
+  it("joins a filter's parts in the CMS's words", () => {
+    expect(
+      audienceLabel({ kind: "filter", lang: "ta", plan: "free", joined_hours: 24, signed_in: false }),
+    ).toBe("Tamil · Free users · Joined in the last 24 hours · Not signed in");
+    expect(audienceLabel({ kind: "filter", idle_days: 14, joined_hours: 1, signed_in: true })).toBe(
+      "Haven't opened in 14 days · Joined in the last hour · Signed in",
+    );
+    expect(audienceLabel({ kind: "filter", joined_hours: 168 })).toBe("Joined in the last 7 days");
+  });
+
+  it("keeps the old kinds' labels for historical rows", () => {
+    expect(audienceLabel({ kind: "all" })).toBe("Everyone");
+    expect(audienceLabel({ kind: "premium", state: "lapsed" })).toBe("Stopped paying");
+    expect(audienceLabel({ kind: "inactive", days: 30 })).toBe("Haven't opened in 30 days");
   });
 });
 
@@ -204,6 +319,91 @@ describe("sendPush", () => {
       expect(typeof v).toBe("string");
     }
     expect((m["data"] as Record<string, string>)["id"]).toBe("ganapathi");
+  });
+
+  describe("plain vs coloured", () => {
+    async function sent(device: typeof DEVICE & { app_build?: number | null }, campaign: PushCampaign) {
+      const fetchMock = vi.fn(async (_url: unknown, _init: RequestInit) => fcmOk());
+      vi.stubGlobal("fetch", fetchMock);
+      await sendPush(makeEnv(), "tok", device, campaign);
+      return (JSON.parse(String(fetchMock.mock.calls[0]![1].body)) as { message: Record<string, unknown> })
+        .message;
+    }
+
+    it("a campaign with no colour is today's notification message; only ttl follows the expiry", async () => {
+      const m = await sent({ ...DEVICE, app_build: 99 }, { ...CAMPAIGN, color: null, expires_hours: 6 });
+      expect(Object.keys(m)).toEqual(["token", "notification", "data", "fcm_options", "android"]);
+      expect(m["notification"]).toEqual({ title: "Hello", body: "World", image: CAMPAIGN.image_url });
+      expect(m["data"]).toEqual({ campaign_id: CAMPAIGN_ID, dest: "category", lang: "en", id: "ganapathi" });
+      expect(m["android"]).toEqual({
+        priority: "HIGH",
+        ttl: "21600s",
+        notification: {
+          channel_id: "arul_updates_v1",
+          icon: "ic_notification",
+          color: "#D4A017",
+          tag: CAMPAIGN_ID,
+          notification_priority: "PRIORITY_DEFAULT",
+        },
+      });
+    });
+
+    it("a row read before the expiry column existed keeps the old 24 h ttl", async () => {
+      const m = await sent(DEVICE, CAMPAIGN);
+      expect((m["android"] as Record<string, unknown>)["ttl"]).toBe("86400s");
+    });
+
+    it("a coloured campaign to a build with the renderer goes data-only", async () => {
+      const m = await sent(
+        { ...DEVICE, app_build: COLOR_MIN_BUILD },
+        { ...CAMPAIGN, color: "#2b3a8a", expires_hours: 1 },
+      );
+      expect(m["notification"]).toBeUndefined();
+      expect(m["data"]).toEqual({
+        campaign_id: CAMPAIGN_ID,
+        dest: "category",
+        lang: "en",
+        id: "ganapathi",
+        title: "Hello",
+        body: "World",
+        image: CAMPAIGN.image_url,
+        color: "#2b3a8a",
+        channel_id: "arul_updates_v1",
+        tag: CAMPAIGN_ID,
+      });
+      expect(m["android"]).toEqual({ priority: "HIGH", ttl: "3600s", collapse_key: CAMPAIGN_ID });
+      expect((m["fcm_options"] as Record<string, string>)["analytics_label"]).toBe(CAMPAIGN_ID);
+      for (const v of Object.values(m["data"] as Record<string, unknown>)) expect(typeof v).toBe("string");
+    });
+
+    it("a coloured campaign to an older or unknown build falls back to the plain message", async () => {
+      const devices = [{ ...DEVICE, app_build: COLOR_MIN_BUILD - 1 }, { ...DEVICE, app_build: null }, DEVICE];
+      for (const device of devices) {
+        const app_build = "app_build" in device ? device.app_build : undefined;
+        const m = await sent(device, { ...CAMPAIGN, color: "#2b3a8a", expires_hours: 24 });
+        expect(m["notification"], String(app_build)).toBeDefined();
+        expect((m["data"] as Record<string, string>)["color"], String(app_build)).toBeUndefined();
+        expect((m["android"] as Record<string, unknown>)["ttl"]).toBe("86400s");
+      }
+    });
+
+    it("reads the build number out of a per-ABI versionCode — 2075 is build 75, not newer than 76", async () => {
+      const coloured = { ...CAMPAIGN, color: "#2b3a8a" };
+      const old = await sent({ ...DEVICE, app_build: 2075 }, coloured);
+      expect(old["notification"], "2075 is build 75: no renderer").toBeDefined();
+      for (const app_build of [2076, 1076, 4077]) {
+        const m = await sent({ ...DEVICE, app_build }, coloured);
+        expect(m["notification"], String(app_build)).toBeUndefined();
+      }
+    });
+
+    it("a coloured campaign with no picture sends no image key", async () => {
+      const m = await sent(
+        { ...DEVICE, app_build: COLOR_MIN_BUILD },
+        { ...CAMPAIGN, image_url: null, color: "#1b1b2f" },
+      );
+      expect(m["data"]).not.toHaveProperty("image");
+    });
   });
 
   it("a device row with no token fails the delivery WITHOUT deleting the row", async () => {
@@ -373,7 +573,7 @@ describe("runPushDispatch", () => {
         ],
       },
       claim,
-      { match: /SELECT fid, token, lang FROM push_devices/, rows: [DEVICE] },
+      { match: /SELECT fid, token, lang, app_build FROM push_devices/, rows: [DEVICE] },
       { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
@@ -514,7 +714,7 @@ describe("array parameters", () => {
           return claims++ === 0 ? [{ fid: "fid-1" }] : [];
         },
       },
-      { match: /SELECT fid, token, lang FROM push_devices/, rows: [DEVICE] },
+      { match: /SELECT fid, token, lang, app_build FROM push_devices/, rows: [DEVICE] },
       { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
@@ -594,6 +794,47 @@ describe("POST /me/device", () => {
   });
 });
 
+describe("POST /push/device", () => {
+  it("registers a signed-out phone without a JWT and NEVER writes user_id", async () => {
+    const db = recordingSql();
+    const res = await handleRegisterAnonDevice(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: db.sql }),
+        jsonBody: { fid: "fid-anon", token: "tok", lang: "ta-IN", appBuild: 76, androidSdk: 36 },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(db.text()).toContain("INSERT INTO push_devices (fid, token, lang, app_build, android_sdk, last_seen_at)");
+    expect(db.text()).toContain("ON CONFLICT (fid) DO UPDATE");
+    // The whole safety property: an unauthenticated caller cannot detach a phone from its account.
+    expect(db.text()).not.toContain("user_id");
+    expect(db.text()).toContain("COALESCE(EXCLUDED.token, push_devices.token)");
+    expect(db.values()).toEqual(["fid-anon", "tok", "ta", 76, 36]);
+  });
+
+  it("ignores a user id smuggled into the body", async () => {
+    const db = recordingSql();
+    await handleRegisterAnonDevice(
+      makeCtx({ env: makeEnv({ _testSql: db.sql }), jsonBody: { fid: "f", user_id: USER_ID, sub: USER_ID } }),
+    );
+    expect(db.values()).not.toContain(USER_ID);
+  });
+
+  it("413s on a body over 2 KB and 400s on no fid or bad JSON, writing nothing", async () => {
+    const db = recordingSql();
+    const env = makeEnv({ _testSql: db.sql });
+    const big = await handleRegisterAnonDevice(
+      makeCtx({ env, rawBody: JSON.stringify({ fid: "f", token: "x".repeat(2100) }) }),
+    );
+    expect(big.status).toBe(413);
+    expect((await handleRegisterAnonDevice(makeCtx({ env, jsonBody: {} }))).status).toBe(400);
+    expect((await handleRegisterAnonDevice(makeCtx({ env, jsonBody: { fid: "" } }))).status).toBe(400);
+    expect((await handleRegisterAnonDevice(makeCtx({ env, invalidJson: true }))).status).toBe(400);
+    expect((await handleRegisterAnonDevice(makeCtx({ env, rawBody: "[1,2]" }))).status).toBe(400);
+    expect(db.captured).toHaveLength(0);
+  });
+});
+
 describe("POST /me/push-opened", () => {
   it("records one open per user and dedupes a replayed tap", async () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
@@ -665,6 +906,29 @@ describe("/internal/push/* auth gate", () => {
     );
     expect(res.status).toBe(400);
     expect(db.captured).toHaveLength(0);
+  });
+
+  it("count accepts a filter audience and counts it through the one audience builder", async () => {
+    const db = recordingSql([{ n: 42 }]);
+    const env = makeEnv({ PUSH_SECRET: "s", _testSql: db.sql });
+    const res = await handlePushCount(
+      makeCtx({
+        env,
+        token: "s",
+        jsonBody: { audience: { kind: "filter", lang: "ta", plan: "free", joined_hours: 24 } },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { devices: number }).devices).toBe(42);
+    expect(db.text()).toContain("SELECT count(*)::int AS n FROM (");
+    expect(db.text()).toContain("d.created_at >= now() - (? || ' hours')::interval");
+
+    const before = db.captured.length;
+    const contradiction = await handlePushCount(
+      makeCtx({ env, token: "s", jsonBody: { audience: { kind: "filter", plan: "paid", signed_in: false } } }),
+    );
+    expect(contradiction.status).toBe(400);
+    expect(db.captured).toHaveLength(before);
   });
 
   it("dispatch is inert while PUSH_ENABLED is off, but still answers the CMS", async () => {

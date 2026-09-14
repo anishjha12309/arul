@@ -34,15 +34,85 @@ void main() {
       final api = _RecordingApi();
       final registration = _make(api);
 
-      await registration.register();
-      await registration.register();
-      await registration.register();
+      await registration.register(account: 'user-a');
+      await registration.register(account: 'user-a');
+      await registration.register(account: 'user-a');
 
       expect(api.posts, hasLength(1));
       expect(api.posts.single.path, '/me/device');
+      expect(api.posts.single.requiresAuth, isTrue);
       expect(api.posts.single.body?['fid'], 'fid-test');
       expect(api.posts.single.body?['lang'], 'ta');
       expect(api.posts.single.body?['appBuild'], 76);
+    });
+
+    test(
+      'a signed-out phone registers through /push/device, unauthenticated, with the same body',
+      () async {
+        final api = _RecordingApi();
+        final registration = _make(api);
+
+        await registration.register();
+        await registration.register();
+
+        expect(api.posts, hasLength(1));
+        expect(api.posts.single.path, '/push/device');
+        expect(api.posts.single.requiresAuth, isFalse);
+        expect(api.posts.single.body, {
+          'fid': 'fid-test',
+          'token': 'tok-test',
+          'lang': 'ta',
+          'appBuild': 76,
+        });
+      },
+    );
+
+    test(
+      'signing in after a signed-out registration re-posts through /me/device',
+      () async {
+        final api = _RecordingApi();
+        final registration = _make(api);
+
+        await registration.register();
+        await registration.register(account: 'user-a');
+
+        expect(api.posts.map((p) => p.path), ['/push/device', '/me/device']);
+      },
+    );
+
+    test(
+      'a sign-in landing while the signed-out post is in flight is not swallowed by it',
+      () async {
+        final gate = Completer<void>();
+        final api = _RecordingApi(gate: gate.future);
+        final registration = _make(api);
+
+        final signedOut = registration.register();
+        final signedIn = registration.register(account: 'user-a');
+        gate.complete();
+        await Future.wait([signedOut, signedIn]);
+
+        expect(api.posts.map((p) => p.path), ['/push/device', '/me/device']);
+      },
+    );
+
+    test('a token refresh posts to the route of the current state', () async {
+      final api = _RecordingApi();
+      final refresh = StreamController<String>.broadcast();
+      addTearDown(refresh.close);
+      final registration = _make(api, tokenRefresh: refresh.stream);
+
+      await registration.register();
+      registration.listenForTokenRefresh();
+      refresh.add('t1');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.posts.last.path, '/push/device');
+
+      await registration.register(account: 'user-a');
+      refresh.add('t2');
+      await Future<void>.delayed(Duration.zero);
+      expect(api.posts.last.path, '/me/device');
+      registration.dispose();
     });
 
     test(
@@ -58,6 +128,21 @@ void main() {
 
         expect(api.posts, hasLength(2));
         expect(api.posts.last.body?['lang'], 'hi');
+      },
+    );
+
+    test(
+      'a different account in the same process re-posts — the row must change hands',
+      () async {
+        final api = _RecordingApi();
+        final registration = _make(api);
+
+        await registration.register(account: 'user-a');
+        await registration.register(account: 'user-a');
+        // Sign-out, sign-in as someone else: fid, token and language are identical.
+        await registration.register(account: 'user-b');
+
+        expect(api.posts, hasLength(2));
       },
     );
 
@@ -224,12 +309,17 @@ PushRegistration _make(
 );
 
 class _RecordedPost {
-  _RecordedPost(this.path, this.body);
+  _RecordedPost(this.path, this.body, this.requiresAuth);
   final String path;
   final Map<String, dynamic>? body;
+  final bool requiresAuth;
 }
 
 class _RecordingApi extends ApiClient {
+  _RecordingApi({this.gate});
+
+  /// Holds every post open until it completes, to put two registrations in flight at once.
+  final Future<void>? gate;
   final List<_RecordedPost> posts = [];
 
   @override
@@ -238,7 +328,8 @@ class _RecordingApi extends ApiClient {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
   }) async {
-    posts.add(_RecordedPost(path, body));
+    posts.add(_RecordedPost(path, body, requiresAuth));
+    await gate;
     return {'ok': true};
   }
 }
@@ -279,4 +370,7 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }

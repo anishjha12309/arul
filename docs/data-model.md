@@ -103,9 +103,10 @@ anything already on a content row are never inserted, so nothing live can be ret
 **app_config:** singleton(id=1) · content_version · prices(jsonb) · support_email · policy_urls(jsonb)
 · feature_flags(jsonb) · min_supported_version
 
-**Campaign push** ([push.md](push.md)): push_devices(fid PK) · push_campaigns · push_deliveries
-((campaign_id, fid) PK — the idempotency) · push_opens ((campaign_id, user_id) PK — an open is per
-PERSON, not per phone). All additive: no existing table changed, so every build in the field kept
+**Campaign push** ([push.md](push.md)): push_devices(fid PK, user_id NULL until the phone signs in) ·
+push_campaigns (color, expires_hours 1|6|24) · push_deliveries ((campaign_id, fid) PK — the
+idempotency) · push_opens ((campaign_id, user_id) PK — an open is per PERSON, not per phone). All
+additive: no existing table changed in a way a shipped build can see, so every build in the field kept
 working. A device row is deleted on a 404 UNREGISTERED and after 270 idle days, never on a quota error.
 
 ## Popularity counters

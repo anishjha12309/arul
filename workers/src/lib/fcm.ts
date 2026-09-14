@@ -1,13 +1,19 @@
 /**
- * FCM HTTP v1 — mint an OAuth access token from the service account, send one notification message.
+ * FCM HTTP v1 — mint an OAuth access token from the service account, send one campaign message.
  * https://firebase.google.com/docs/cloud-messaging/send/v1-api · https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages
  *
- * NOTIFICATION MESSAGES ONLY, never data-only, and there is no background handler anywhere in the app.
+ * NOTIFICATION MESSAGES BY DEFAULT, and there is no Dart background handler anywhere in the app.
  * ~70% of this base runs a vivo/Xiaomi/OPPO/realme battery manager that kills a background isolate on
  * sight; a notification message is posted by Google Play services without waking the app at all, so it
  * survives everything short of a user force-stop. It is also what keeps `priority: HIGH` honest —
  * Android 13 downgrades an app that consistently sends high-priority messages producing no
  * notification, and every message here produces one.
+ *
+ * THE ONE EXCEPTION IS A COLOURED CAMPAIGN to a build that carries the native renderer. FCM's
+ * `color` tints the icon only, so a card background means the app draws the notification itself:
+ * a data-only message handled by `ArulMessagingService` (Kotlin, no isolate), which still posts one
+ * notification per message. Every other campaign, and every build below COLOR_MIN_BUILD, keeps the
+ * notification-message path unchanged.
  *
  * IDENTITY IS THE `fid`, THE TARGET IS THE `token`, and they are not the same job. The REST reference
  * marks `message.token` deprecated in favour of `message.fid`, so this shipped targeting the fid —
@@ -44,10 +50,28 @@ const PUSH_ACCENT = "#D4A017";
 /** Monochrome status-bar silhouette; resolved BY NAME on the device, so keep.xml keeps it alive. */
 const PUSH_ICON = "ic_notification";
 
+/**
+ * versionCode 76 is the first build carrying `ArulMessagingService`, the native renderer for coloured
+ * campaigns. Below it a data-only message would produce no notification at all, so those phones get
+ * the plain notification message instead.
+ */
+export const COLOR_MIN_BUILD = 76;
+
+/**
+ * The build number inside a registered versionCode. Flutter's per-ABI builds report
+ * 1000 × abiCode + build, and they are in the field: the one phone in the production registry on
+ * 2026-09-14 reported 2075 for build 75. Compared raw, that passes `>= 76` and a build with no
+ * renderer would be sent a data-only message it cannot show — so compare this, never the raw value.
+ */
+export function buildNumber(appBuild: number): number {
+  return appBuild % 1000;
+}
+
 export interface PushDevice {
   fid: string;
   token: string | null;
   lang: string;
+  app_build?: number | null;
 }
 
 export interface PushCampaign {
@@ -57,6 +81,10 @@ export interface PushCampaign {
   dest: string;
   dest_id: string | null;
   image_url: string | null;
+  /** `#rrggbb` or null. Non-null switches builds >= COLOR_MIN_BUILD to the data-only path. */
+  color?: string | null;
+  /** 1 | 6 | 24 -> `android.ttl`. Rows written before db/schema/18 read as the column default, 24. */
+  expires_hours?: number;
 }
 
 export type PushResult =
@@ -160,7 +188,15 @@ export async function sendPush(
   };
   if (campaign.dest_id) data["id"] = campaign.dest_id;
 
-  const message = {
+  const ttl = `${(campaign.expires_hours ?? 24) * 3600}s`;
+  // The console's Messaging -> Reports tab filters on this, which is the owner's independent read
+  // of Sent/Received/Opens against the CMS's own numbers. Pattern: ^[a-zA-Z0-9-_.~%]{1,50}$ — a UUID fits.
+  const fcmOptions = { analytics_label: campaign.id };
+
+  const rendersColor =
+    !!campaign.color && device.app_build != null && buildNumber(device.app_build) >= COLOR_MIN_BUILD;
+
+  const plain = {
     ...target,
     notification: {
       title,
@@ -168,14 +204,14 @@ export async function sendPush(
       ...(campaign.image_url ? { image: campaign.image_url } : {}),
     },
     data,
-    // The console's Messaging -> Reports tab filters on this, which is the owner's independent read
-    // of Sent/Received/Opens against the CMS's own numbers. Pattern: ^[a-zA-Z0-9-_.~%]{1,50}$ — a UUID fits.
-    fcm_options: { analytics_label: campaign.id },
+    fcm_options: fcmOptions,
     android: {
       priority: "HIGH",
-      ttl: "86400s",
-      // One campaign replaces its own earlier copy rather than stacking; `tag` does the same in the drawer.
-      collapse_key: "arul_campaign",
+      ttl,
+      // No collapse_key: FCM documents NOTIFICATION messages as always collapsible, keyed by package,
+      // and ignores the field. A phone offline across two campaigns gets only the LATEST (measured with
+      // a shared key and with a per-campaign key alike: 2 sent in airplane mode, 1 arrived, both rows
+      // "sent"). Only data messages avoid it. `tag` de-dupes the drawer.
       notification: {
         channel_id: PUSH_CHANNEL_ID,
         icon: PUSH_ICON,
@@ -186,6 +222,32 @@ export async function sendPush(
       },
     },
   };
+
+  const coloured = () => ({
+    ...target,
+    // Data-only: no `notification` block, so FCM hands the message to ArulMessagingService, which
+    // posts it with the colour. The keys the tap path reads stay exactly as the plain path sends them;
+    // the rest are what the service needs to draw the card.
+    data: {
+      ...data,
+      title,
+      body,
+      ...(campaign.image_url ? { image: campaign.image_url } : {}),
+      color: campaign.color as string,
+      channel_id: PUSH_CHANNEL_ID,
+      tag: campaign.id,
+    },
+    fcm_options: fcmOptions,
+    android: {
+      priority: "HIGH",
+      ttl,
+      // Data messages DO honour collapse_key. Per campaign, so a phone offline across two campaigns
+      // gets both, while a genuine duplicate of one campaign still collapses.
+      collapse_key: campaign.id,
+    },
+  });
+
+  const message = rendersColor ? coloured() : plain;
 
   const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
   const attempt = async (): Promise<PushResult> => {

@@ -37,6 +37,7 @@ import {
   handleMeSubmissions,
   handleMeReferrals,
   handleRegisterDevice,
+  handleRegisterAnonDevice,
   handlePushOpened,
 } from "./routes/me.js";
 import {
@@ -120,6 +121,7 @@ app.get("/me/referrals", handleMeReferrals);
 // Campaign push (docs/push.md). ADDITIVE — builds 68-74 never call either and keep working untouched.
 app.post("/me/device", handleRegisterDevice);       // JWT — register this phone's FID in the registry
 app.post("/me/push-opened", handlePushOpened);      // JWT — this person tapped campaign <id>
+app.post("/push/device", handleRegisterAnonDevice); // PUBLIC — a signed-out phone; never writes user_id
 
 // ── Internal routes ───────────────────────────────────────────────────────────
 app.post("/internal/build-catalog", handleBuildCatalog);

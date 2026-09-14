@@ -79,7 +79,7 @@ export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
 
     // Oldest first: a campaign already half-sent finishes before a newer one starts consuming ticks.
     const running = (await sql`
-      SELECT id, texts, dest, dest_id, image_url, last_error
+      SELECT id, texts, dest, dest_id, image_url, color, expires_hours, last_error
       FROM push_campaigns
       WHERE status = 'sending'
       ORDER BY started_at ASC NULLS FIRST
@@ -262,7 +262,7 @@ async function sendOneBatch(
 
     const fids = claimed.map((r) => r.fid);
     const devices = (await tx`
-      SELECT fid, token, lang FROM push_devices WHERE fid = ANY(${toPgTextArray(fids)}::text[])
+      SELECT fid, token, lang, app_build FROM push_devices WHERE fid = ANY(${toPgTextArray(fids)}::text[])
     `) as unknown as PushDevice[];
     const byFid = new Map(devices.map((d) => [d.fid, d]));
 
@@ -337,7 +337,7 @@ export async function runPushTest(
   const sql = getDb(env);
   try {
     const devices = (await sql`
-      SELECT d.fid, d.token, d.lang
+      SELECT d.fid, d.token, d.lang, d.app_build
       FROM push_devices d JOIN users u ON u.id = d.user_id
       WHERE u.is_internal
     `) as unknown as PushDevice[];

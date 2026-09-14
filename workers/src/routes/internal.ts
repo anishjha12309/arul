@@ -473,7 +473,8 @@ export async function handlePushTest(c: Context<{ Bindings: Env }>): Promise<Res
   let campaign: PushCampaign | null = null;
   try {
     const rows = (await sql`
-      SELECT id, texts, dest, dest_id, image_url FROM push_campaigns WHERE id = ${campaignId} LIMIT 1
+      SELECT id, texts, dest, dest_id, image_url, color, expires_hours
+      FROM push_campaigns WHERE id = ${campaignId} LIMIT 1
     `) as unknown as PushCampaign[];
     campaign = rows[0] ?? null;
   } catch (err) {

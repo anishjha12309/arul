@@ -16,6 +16,11 @@ import '../../../core/crash/crash_reporter.dart';
 /// simply unreachable, and a new build takes about a fortnight to reach most of the active base.
 /// That is the backwards-compatibility contract, not a defect to work around.
 ///
+/// **Before sign-in too.** A signed-out phone posts to the unauthenticated `/push/device`, which never
+/// touches the row's user; a signed-in one posts to `/me/device`, which re-points it. That is what
+/// lets the CMS reach "joined in the last hour" and "never signed in". The permission prompt did not
+/// move (after sign-in, on the feed), so on Android 13+ such a phone is counted and shows nothing.
+///
 /// **Never on the critical path.** It is fired after `/me` has already answered, never awaited by a
 /// screen, and every failure is swallowed into [CrashReporter]: a phone with no Google Play services
 /// (some Huawei/Honor units) throws at `getId()`, and the right outcome there is an app that behaves
@@ -55,6 +60,10 @@ class PushRegistration {
 
   /// The registration in flight, shared by concurrent callers -> two triggers never race two writes.
   Future<void>? _inFlight;
+  String? _inFlightAccount;
+
+  /// The account the last [register] call named, so a token refresh posts to the same route.
+  String? _account;
 
   bool _disposed = false;
 
@@ -62,15 +71,30 @@ class PushRegistration {
   ///
   /// [force] re-posts even when the body is unchanged — the token-refresh path, where the VALUE is
   /// what moved and every other field is identical.
-  Future<void> register({bool force = false}) {
+  ///
+  /// [account] is the signed-in user, or null while signed out — which picks `/push/device`. The body
+  /// never names them (the Worker reads the JWT), so without it a sign-out and a different sign-in in
+  /// the SAME process posted nothing: fid, token and language were identical and the row stayed on the
+  /// previous user until the next cold start.
+  Future<void> register({bool force = false, String? account}) {
+    _account = account;
     final existing = _inFlight;
-    if (existing != null) return existing;
-    final run = _register(force: force).whenComplete(() => _inFlight = null);
+    if (existing != null) {
+      // A sign-in landing while the launch's signed-out registration is still in flight must not be
+      // swallowed by it — that row would stay unowned until the next cold start.
+      if (account == _inFlightAccount && !force) return existing;
+      return existing.then((_) => register(force: force, account: account));
+    }
+    final run = _register(
+      force: force,
+      account: account,
+    ).whenComplete(() => _inFlight = null);
     _inFlight = run;
+    _inFlightAccount = account;
     return run;
   }
 
-  Future<void> _register({required bool force}) async {
+  Future<void> _register({required bool force, String? account}) async {
     if (_disposed) return;
     try {
       final fid =
@@ -92,12 +116,19 @@ class PushRegistration {
         'androidSdk': ?sdk,
       };
 
-      final fingerprint = body.toString();
+      final fingerprint = '$account|$body';
       if (!force && fingerprint == _lastPosted) return;
 
-      await _api.post('/me/device', body: body);
+      if (account == null) {
+        await _api.post('/push/device', body: body, requiresAuth: false);
+      } else {
+        await _api.post('/me/device', body: body);
+      }
       _lastPosted = fingerprint;
-      debugPrint('[Push] registered $fid (${body['lang']})');
+      debugPrint(
+        '[Push] registered $fid (${body['lang']}) '
+        '${account == null ? 'signed-out' : 'signed-in'}',
+      );
     } catch (error, stack) {
       // Never surfaced. A failed registration costs this phone the next campaign and nothing else;
       // a message about it would be noise about a feature the user never asked for.
@@ -124,7 +155,7 @@ class PushRegistration {
     try {
       _tokenSub = (_tokenRefresh ?? FirebaseMessaging.instance.onTokenRefresh)
           .listen(
-            (_) => unawaited(register(force: true)),
+            (_) => unawaited(register(force: true, account: _account)),
             onError: (Object e, StackTrace s) =>
                 _crash.recordError(e, s, reason: 'push token refresh'),
           );

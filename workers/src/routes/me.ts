@@ -461,14 +461,9 @@ export async function handleRegisterDevice(
     return errorResponse(400, "invalid_body", "Request body must be valid JSON");
   }
 
-  const fid = typeof body["fid"] === "string" ? body["fid"].trim() : "";
-  if (!fid || fid.length > 256) {
-    return errorResponse(400, "missing_field", "fid is required");
-  }
-  const token = typeof body["token"] === "string" && body["token"].length > 0 ? body["token"] : null;
-  const lang = normalizePushLang(body["lang"]);
-  const appBuild = Number.isFinite(Number(body["appBuild"])) ? Math.floor(Number(body["appBuild"])) : null;
-  const androidSdk = Number.isFinite(Number(body["androidSdk"])) ? Math.floor(Number(body["androidSdk"])) : null;
+  const device = readDeviceBody(body);
+  if (!device) return errorResponse(400, "missing_field", "fid is required");
+  const { fid, token, lang, appBuild, androidSdk } = device;
 
   const sql = getDb(env);
   try {
@@ -487,6 +482,86 @@ export async function handleRegisterDevice(
     return c.json({ ok: true });
   } catch (err) {
     console.error("[me/device] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+interface DeviceBody {
+  fid: string;
+  token: string | null;
+  lang: string;
+  appBuild: number | null;
+  androidSdk: number | null;
+}
+
+/** The body both registration routes accept, normalised once. Null when there is no usable fid. */
+function readDeviceBody(body: Record<string, unknown>): DeviceBody | null {
+  const fid = typeof body["fid"] === "string" ? body["fid"].trim() : "";
+  if (!fid || fid.length > 256) return null;
+  return {
+    fid,
+    token: typeof body["token"] === "string" && body["token"].length > 0 ? body["token"] : null,
+    lang: normalizePushLang(body["lang"]),
+    appBuild: Number.isFinite(Number(body["appBuild"])) ? Math.floor(Number(body["appBuild"])) : null,
+    androidSdk: Number.isFinite(Number(body["androidSdk"])) ? Math.floor(Number(body["androidSdk"])) : null,
+  };
+}
+
+// ── POST /push/device ────────────────────────────────────────────────────────
+
+/** A registration body is a fid, a token and three scalars — far below this. */
+const ANON_DEVICE_BODY_MAX_BYTES = 2048;
+
+/**
+ * POST /push/device — register a phone that has not signed in. No JWT.
+ *
+ * This is what makes "joined in the last hour" and "never signed in" reachable: the app calls it on
+ * every launch while signed out. The upsert NEVER touches `user_id` — a new row gets NULL, and a row
+ * an account already claimed keeps that account, so an unauthenticated caller can refresh a token but
+ * can never detach a phone from its user or attach one to someone else.
+ *
+ * Unauthenticated writes are safe to accept: a junk fid with an unroutable token comes back
+ * UNREGISTERED on its first send and the dispatcher deletes it.
+ */
+export async function handleRegisterAnonDevice(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+
+  const raw = await c.req.text().catch(() => "");
+  if (new TextEncoder().encode(raw).length > ANON_DEVICE_BODY_MAX_BYTES) {
+    return errorResponse(413, "body_too_large", "Request body is too large");
+  }
+  let body: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return errorResponse(400, "invalid_body", "Request body must be valid JSON");
+  }
+
+  const device = readDeviceBody(body);
+  if (!device) return errorResponse(400, "missing_field", "fid is required");
+  const { fid, token, lang, appBuild, androidSdk } = device;
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_devices (fid, token, lang, app_build, android_sdk, last_seen_at)
+      VALUES (${fid}, ${token}, ${lang}, ${appBuild}, ${androidSdk}, now())
+      ON CONFLICT (fid) DO UPDATE
+        SET token        = COALESCE(EXCLUDED.token, push_devices.token),
+            lang         = EXCLUDED.lang,
+            app_build    = COALESCE(EXCLUDED.app_build, push_devices.app_build),
+            android_sdk  = COALESCE(EXCLUDED.android_sdk, push_devices.android_sdk),
+            last_seen_at = now()
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[push/device] DB error:", err);
     return errorResponse(500, "server_error", "Internal server error");
   } finally {
     c.executionCtx.waitUntil(sql.end());

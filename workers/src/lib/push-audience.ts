@@ -10,29 +10,52 @@
  * land on one. `internal` is the other half of the same rule: it is what "Send to my phone" targets,
  * and it reaches nobody else. The flag is set by hand — NEVER match an account by email substring
  * ('%anish%' matches ~35 real paying users).
+ *
+ * PHONES THAT NEVER SIGNED IN ARE IN THE REGISTRY (user_id NULL, db/schema/18_push_journey.sql), so
+ * every kind LEFT JOINs users and reads the flag through `coalesce(…, false)`: an anonymous phone is
+ * not internal, and `all` reaches it. A plan is a fact about an account, so every plan state also
+ * requires `d.user_id IS NOT NULL` — without it a phone with no account has no subscription row and
+ * no reward credit, and would read as "free".
+ *
+ * `filter` is the combinable kind the composer builds today. `lang`, `premium` and `inactive` stay
+ * because scheduled and historical campaign rows carry them.
  */
 
 import type postgres from "postgres";
 import { premiumPredicate } from "./entitlement.js";
 
+type PlanState = "free" | "trialing" | "paid" | "lapsed";
+
+export interface PushFilter {
+  kind: "filter";
+  lang?: string;
+  plan?: PlanState;
+  idle_days?: number;
+  joined_hours?: number;
+  signed_in?: boolean;
+}
+
 export type PushAudience =
   | { kind: "all" }
   | { kind: "lang"; lang: string }
-  | { kind: "premium"; state: "free" | "trialing" | "paid" | "lapsed" }
+  | { kind: "premium"; state: PlanState }
   | { kind: "inactive"; days: number }
-  | { kind: "internal" };
+  | { kind: "internal" }
+  | PushFilter;
 
 /** The six shipped app languages. Mirrors Dart's `supportedAppLocales` and the Worker's LANG_RE. */
 export const PUSH_LANGS = ["en", "ta", "te", "kn", "ml", "hi"] as const;
 
 const PREMIUM_STATES = ["free", "trialing", "paid", "lapsed"] as const;
 const INACTIVE_DAYS = [7, 14, 30] as const;
+const JOINED_HOURS = [1, 24, 168] as const;
 
 /**
  * Narrow untrusted JSON to an audience, or null.
  *
  * Returns null rather than defaulting to `all`: an audience the CMS mistyped must fail the request,
- * never silently become "everyone".
+ * never silently become "everyone". For `filter` that means a key that is present but not one of the
+ * offered values, a filter with no keys at all, and a plan asked of phones that never signed in.
  */
 export function parseAudience(raw: unknown): PushAudience | null {
   if (!raw || typeof raw !== "object") return null;
@@ -54,9 +77,42 @@ export function parseAudience(raw: unknown): PushAudience | null {
       const days = Number(a["days"]);
       return (INACTIVE_DAYS as readonly number[]).includes(days) ? { kind: "inactive", days } : null;
     }
+    case "filter":
+      return parseFilter(a);
     default:
       return null;
   }
+}
+
+function parseFilter(a: Record<string, unknown>): PushFilter | null {
+  const f: PushFilter = { kind: "filter" };
+  if (a["lang"] !== undefined) {
+    const lang = PUSH_LANGS.find((l) => l === a["lang"]);
+    if (!lang) return null;
+    f.lang = lang;
+  }
+  if (a["plan"] !== undefined) {
+    const plan = PREMIUM_STATES.find((s) => s === a["plan"]);
+    if (!plan) return null;
+    f.plan = plan;
+  }
+  if (a["idle_days"] !== undefined) {
+    const days = INACTIVE_DAYS.find((d) => d === a["idle_days"]);
+    if (!days) return null;
+    f.idle_days = days;
+  }
+  if (a["joined_hours"] !== undefined) {
+    const hours = JOINED_HOURS.find((h) => h === a["joined_hours"]);
+    if (!hours) return null;
+    f.joined_hours = hours;
+  }
+  if (a["signed_in"] !== undefined) {
+    if (typeof a["signed_in"] !== "boolean") return null;
+    f.signed_in = a["signed_in"];
+  }
+  if (Object.keys(f).length === 1) return null;
+  if (f.plan && f.signed_in === false) return null;
+  return f;
 }
 
 /** A one-line description for the campaign card's "who got it" chip. */
@@ -72,8 +128,23 @@ export function audienceLabel(a: PushAudience): string {
       return `Haven't opened in ${a.days} days`;
     case "internal":
       return "My own phones";
+    case "filter": {
+      const parts: string[] = [];
+      if (a.lang) parts.push(LANG_LABELS[a.lang] ?? a.lang);
+      if (a.plan) parts.push(PLAN_LABELS[a.plan]);
+      if (a.idle_days) parts.push(`Haven't opened in ${a.idle_days} days`);
+      if (a.joined_hours) parts.push(JOINED_LABELS[a.joined_hours] ?? `Joined in the last ${a.joined_hours} hours`);
+      if (a.signed_in !== undefined) parts.push(a.signed_in ? "Signed in" : "Not signed in");
+      return parts.join(" · ");
+    }
   }
 }
+
+const JOINED_LABELS: Record<number, string> = {
+  1: "Joined in the last hour",
+  24: "Joined in the last 24 hours",
+  168: "Joined in the last 7 days",
+};
 
 const LANG_LABELS: Record<string, string> = {
   en: "English",
@@ -102,26 +173,42 @@ export function audienceQuery(
   sql: postgres.Sql,
   audience: PushAudience,
 ): postgres.PendingQuery<postgres.Row[]> {
-  const base = sql`SELECT d.fid FROM push_devices d JOIN users u ON u.id = d.user_id`;
+  const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
+  const external = sql`NOT coalesce(u.is_internal, false)`;
 
   switch (audience.kind) {
     case "internal":
       return sql`${base} WHERE u.is_internal`;
     case "all":
-      return sql`${base} WHERE NOT u.is_internal`;
+      return sql`${base} WHERE ${external}`;
     case "lang":
-      return sql`${base} WHERE NOT u.is_internal AND d.lang = ${audience.lang}`;
+      return sql`${base} WHERE ${external} AND d.lang = ${audience.lang}`;
     case "inactive":
-      // A cast, not string interpolation: the day counts are a closed set but the interval still
-      // arrives as a bound value, so this stays one prepared statement whatever the caller passes.
-      return sql`
-        ${base}
-        WHERE NOT u.is_internal
-          AND d.last_seen_at < now() - (${String(audience.days)} || ' days')::interval
-      `;
+      return sql`${base} WHERE ${external} AND ${idlePredicate(sql, audience.days)}`;
     case "premium":
-      return sql`${base} WHERE NOT u.is_internal AND ${planPredicate(sql, audience.state)}`;
+      return sql`${base} WHERE ${external} AND ${planPredicate(sql, audience.state)}`;
+    case "filter": {
+      const parts = [external];
+      if (audience.lang) parts.push(sql`d.lang = ${audience.lang}`);
+      if (audience.plan) parts.push(planPredicate(sql, audience.plan));
+      if (audience.idle_days) parts.push(idlePredicate(sql, audience.idle_days));
+      if (audience.joined_hours) {
+        parts.push(sql`d.created_at >= now() - (${String(audience.joined_hours)} || ' hours')::interval`);
+      }
+      if (audience.signed_in === true) parts.push(sql`d.user_id IS NOT NULL`);
+      if (audience.signed_in === false) parts.push(sql`d.user_id IS NULL`);
+      const where = parts.reduce((acc, p) => sql`${acc} AND ${p}`);
+      return sql`${base} WHERE ${where}`;
+    }
   }
+}
+
+/**
+ * A cast, not string interpolation: the day counts are a closed set but the interval still arrives as
+ * a bound value, so this stays one prepared statement whatever the caller passes.
+ */
+function idlePredicate(sql: postgres.Sql, days: number): postgres.PendingQuery<postgres.Row[]> {
+  return sql`d.last_seen_at < now() - (${String(days)} || ' days')::interval`;
 }
 
 /**
@@ -133,7 +220,14 @@ export function audienceQuery(
  */
 function planPredicate(
   sql: postgres.Sql,
-  state: "free" | "trialing" | "paid" | "lapsed",
+  state: PlanState,
+): postgres.PendingQuery<postgres.Row[]> {
+  return sql`d.user_id IS NOT NULL AND ${planState(sql, state)}`;
+}
+
+function planState(
+  sql: postgres.Sql,
+  state: PlanState,
 ): postgres.PendingQuery<postgres.Row[]> {
   const premium = premiumPredicate(sql, sql`d.user_id`);
   const hasRow = sql`EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id)`;
