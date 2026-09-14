@@ -123,6 +123,22 @@ void main() {
     });
   });
 
+  // main() stamps `Application Installed` with the language before Riverpod exists -> it must read
+  // the same key and resolve the same way, or the install event disagrees with every later event.
+  test('the pre-Riverpod resolution matches the provider', () async {
+    final (container, prefs) = await boot(
+      persisted: 'hi',
+      phone: const [Locale('ta')],
+    );
+    expect(
+      resolveAppLocale(prefs.getString(appLocalePrefsKey), const [
+        Locale('ta'),
+      ]),
+      container.read(localeProvider),
+    );
+    expect(resolveAppLocale(null, const [Locale('ta')]), const Locale('ta'));
+  });
+
   group('the language tables have ONE home', () {
     test('every supported locale has both names', () {
       for (final locale in supportedAppLocales) {

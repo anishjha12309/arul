@@ -57,6 +57,9 @@ class _NoopAnalytics implements AnalyticsService {
   void screen(String name, {Map<String, Object?>? properties}) {}
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 const _tone = Ringtone(

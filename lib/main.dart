@@ -17,6 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/analytics/analytics_events.dart';
+import 'core/analytics/analytics_service.dart';
+import 'core/analytics/posthog_analytics_service.dart';
 import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
@@ -25,6 +27,7 @@ import 'core/config/app_config.dart';
 import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
+import 'core/providers/locale_provider.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
 import 'features/notifications/providers/notification_providers.dart';
@@ -140,8 +143,18 @@ void _maybeEnableFlutterDriver() {
 /// call site (the allow-list governs only those), GA4 auto-collects `first_open` for the same moment,
 /// and a name with a space is not a legal GA4 event name.
 /// A capture before native init finishes is DROPPED -> await `setup()` first.
-Future<void> _startPostHog(PostHogConfig config) async {
+/// `app_language` is registered in between -> the install event carries the language the app opened
+/// in, read straight from prefs because Riverpod does not exist yet.
+Future<void> _startPostHog(
+  PostHogConfig config,
+  SharedPreferences prefs,
+) async {
   await Posthog().setup(config);
+  final lang = resolveAppLocale(
+    prefs.getString(appLocalePrefsKey),
+    WidgetsBinding.instance.platformDispatcher.locales,
+  ).languageCode;
+  await PostHogAnalyticsService.started({kAppLanguageProperty: lang});
   if (!AnalyticsCohort.isFreshInstall) return;
   await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }
@@ -237,7 +250,7 @@ Future<void> _startApp() async {
     // on the critical path to the first frame for every panel member -> fire-and-forget, matching the
     // contract every other PostHog call already uses (`PostHogAnalyticsService`).
     // Nothing captures before the first user action anyway — lifecycle autocapture is off above.
-    unawaited(_startPostHog(config));
+    unawaited(_startPostHog(config, prefs));
   }
 
   // The Play Install Referrer is read once per install: the referral code for the first sign-in, and,

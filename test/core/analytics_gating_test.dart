@@ -30,6 +30,11 @@ class _RecordingAnalyticsService implements AnalyticsService {
 
   @override
   void reset() => resets++;
+
+  final registered = <String, Object>{};
+
+  @override
+  void register(String key, Object value) => registered[key] = value;
 }
 
 /// Returns a fixed draw so cohort membership is deterministic in tests.
@@ -89,6 +94,12 @@ void main() {
       svc.reset();
       expect(inner.identified, ['user-1']);
       expect(inner.resets, 1);
+    });
+
+    // Not an event — dropping it would leave the allow-listed sign-in events without a language.
+    test('always forwards register', () {
+      svc.register(kAppLanguageProperty, 'ta');
+      expect(inner.registered, {kAppLanguageProperty: 'ta'});
     });
   });
 

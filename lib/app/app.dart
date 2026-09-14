@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/analytics/analytics_provider.dart';
+import '../core/analytics/analytics_service.dart';
 import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
 import '../core/providers/locale_provider.dart';
@@ -60,6 +61,17 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       },
     );
     unawaited(_pushOpen!.start());
+
+    // The UI language on EVERY event, not only on the person at sign-in: pre-login events (install,
+    // the sign-in wall) otherwise carry no language, and a `lang=` link applying mid-launch is
+    // exactly what the funnel needs to see. Fires now and on each change (link or Settings).
+    ref.listenManual(
+      localeProvider,
+      (_, next) => ref
+          .read(analyticsServiceProvider)
+          .register(kAppLanguageProperty, next.languageCode),
+      fireImmediately: true,
+    );
   }
 
   PushOpenHandler? _pushOpen;

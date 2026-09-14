@@ -85,6 +85,10 @@ class MetaAnalyticsService implements AnalyticsService {
   @override
   void reset() => unawaited(_facebook.clearUserID());
 
+  /// No-op: Meta receives three ★ events and no product cuts are read there.
+  @override
+  void register(String key, Object value) {}
+
   /// Meta's StartTrial wants a NON-EMPTY `orderId` -> the PhonePe merchant order id, else a fallback.
   /// Meta-side dedup is best-effort only.
   String _orderId(Map<String, Object?>? props) {

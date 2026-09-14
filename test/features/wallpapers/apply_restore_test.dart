@@ -82,6 +82,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 void main() {
@@ -195,40 +198,37 @@ void main() {
     },
   );
 
-  testWidgets(
-    'an All index resolves through the POPULARITY order: index 0 is the '
-    'most-applied wallpaper, not the newest one',
-    (tester) async {
-      // temple0 sits last in catalog order but applies move it to slot 0 -> that is the slot the saved index refers to.
-      // This is why apply_restore goes through feedOrder() -> a restart landing on the wrong wallpaper is the bug.
-      final applied = [
-        for (final w in _catalog)
-          w.id == 'id-temple0' ? w.copyWith(applyCount: 12) : w,
-      ];
-      final all = WallpaperCategory.allSlug;
-      final h = await pumpHost(tester, {
-        appliedWallpaperPendingKey: true,
-        pendingApplyPageIndexKey: 0,
-        pendingApplyCategoryKey: all,
-        pendingApplyIsLiveKey: false,
-      });
+  testWidgets('an All index resolves through the POPULARITY order: index 0 is the '
+      'most-applied wallpaper, not the newest one', (tester) async {
+    // temple0 sits last in catalog order but applies move it to slot 0 -> that is the slot the saved index refers to.
+    // This is why apply_restore goes through feedOrder() -> a restart landing on the wrong wallpaper is the bug.
+    final applied = [
+      for (final w in _catalog)
+        w.id == 'id-temple0' ? w.copyWith(applyCount: 12) : w,
+    ];
+    final all = WallpaperCategory.allSlug;
+    final h = await pumpHost(tester, {
+      appliedWallpaperPendingKey: true,
+      pendingApplyPageIndexKey: 0,
+      pendingApplyCategoryKey: all,
+      pendingApplyIsLiveKey: false,
+    });
 
-      h.host.maybeRestoreAfterApply(applied);
-      await tester.pump();
+    h.host.maybeRestoreAfterApply(applied);
+    await tester.pump();
 
-      expect(h.host.restoreCalls, [(index: 0, category: all, wasLive: false)]);
-      expect(
-        feedOrder(all, applied).first.id,
-        'id-temple0',
-        reason: 'the index the restore accepted must address the served list',
-      );
-      expect(
-        feedOrder(all, _catalog).first.id,
-        isNot('id-temple0'),
-        reason: '…and that is only meaningful because the applies moved it',
-      );
-    },
-  );
+    expect(h.host.restoreCalls, [(index: 0, category: all, wasLive: false)]);
+    expect(
+      feedOrder(all, applied).first.id,
+      'id-temple0',
+      reason: 'the index the restore accepted must address the served list',
+    );
+    expect(
+      feedOrder(all, _catalog).first.id,
+      isNot('id-temple0'),
+      reason: '…and that is only meaningful because the applies moved it',
+    );
+  });
 
   testWidgets(
     'a category no longer in the catalog restores nothing (empty feed list) '

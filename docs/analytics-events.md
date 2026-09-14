@@ -136,6 +136,12 @@ the funnel joins on it — a rendering hint, never a browse axis. **Analytics va
 while catalog and Neon wire values are `static`/`live`**, so an event↔Neon join on `type` silently
 matches nothing.
 
+**`app_language` rides EVERY event via `AnalyticsService.register`, never only `identify`.** PostHog
+freezes person properties onto each event at ingest, so a person property leaves every pre-login event
+(install, the sign-in wall) blank forever. A blank event-level `app_language` on older data means "not signed in
+yet", not "no language". PostHog's `reset()` clears cached properties on sign-out, so each sink re-applies what was
+registered after it.
+
 Reading these without a wrong conclusion — what `confirmed` counts, which metrics are tripwires,
 where a join silently matches nothing: [analytics-ops.md](analytics-ops.md) §Reading.
 

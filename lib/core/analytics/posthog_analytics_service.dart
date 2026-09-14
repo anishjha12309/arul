@@ -38,7 +38,42 @@ class PostHogAnalyticsService implements AnalyticsService {
   }
 
   @override
-  void reset() => unawaited(Posthog().reset());
+  void reset() => unawaited(_resetKeepingRegistered());
+
+  /// A PostHog super property. Held here as well as in the SDK for two windows the SDK cannot cover:
+  /// `setup()` is fire-and-forget in `main()`, so the root listener's first call can arrive before
+  /// native init (see [started]); and `reset()` "resets all cached properties", super properties
+  /// included, so a sign-out would strip it from every event until the next change.
+  @override
+  void register(String key, Object value) {
+    _registered[key] = value;
+    if (_started) unawaited(Posthog().register(key, value));
+  }
+
+  static final _registered = <String, Object>{};
+  static var _started = false;
+
+  /// Called by `main()` once `setup()` has completed and BEFORE the first capture.
+  /// [initial] is the launch value, for a key the app has not registered yet — `Application
+  /// Installed` fires here, usually ahead of the first frame that would register it.
+  static Future<void> started(Map<String, Object> initial) async {
+    for (final e in initial.entries) {
+      _registered.putIfAbsent(e.key, () => e.value);
+    }
+    _started = true;
+    await _applyRegistered();
+  }
+
+  static Future<void> _resetKeepingRegistered() async {
+    await Posthog().reset();
+    await _applyRegistered();
+  }
+
+  static Future<void> _applyRegistered() async {
+    for (final e in _registered.entries) {
+      await Posthog().register(e.key, e.value);
+    }
+  }
 
   /// The SDK takes `Map<String, Object>` but our interface allows nulls -> drop null entries.
   /// An empty or absent map -> `null`, never `{}`.

@@ -28,6 +28,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 Entitlement _row(SubscriptionStatus status, {String? orderId = 'DKS_ORDER_1'}) {

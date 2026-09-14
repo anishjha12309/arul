@@ -71,6 +71,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 void main() {

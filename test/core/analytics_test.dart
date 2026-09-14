@@ -23,6 +23,11 @@ class _RecordingAnalyticsService implements AnalyticsService {
 
   @override
   void reset() => resets++;
+
+  final registered = <String, Object>{};
+
+  @override
+  void register(String key, Object value) => registered[key] = value;
 }
 
 /// Throws on every call — used to prove the composite isolates a bad delegate.
@@ -38,6 +43,9 @@ class _ThrowingAnalyticsService implements AnalyticsService {
       throw StateError('boom');
   @override
   void reset() => throw StateError('boom');
+
+  @override
+  void register(String key, Object value) {}
 }
 
 void main() {
@@ -60,12 +68,14 @@ void main() {
       composite.track('trial_started', properties: {'value': 199.0});
       composite.identify('user-1');
       composite.reset();
+      composite.register(kAppLanguageProperty, 'hi');
 
       for (final svc in [a, b]) {
         expect(svc.tracked.single.$1, 'trial_started');
         expect(svc.tracked.single.$2, {'value': 199.0});
         expect(svc.identified.single, 'user-1');
         expect(svc.resets, 1);
+        expect(svc.registered, {kAppLanguageProperty: 'hi'});
       }
     });
 

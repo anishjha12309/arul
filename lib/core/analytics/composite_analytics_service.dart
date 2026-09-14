@@ -37,4 +37,8 @@ class CompositeAnalyticsService implements AnalyticsService {
 
   @override
   void reset() => _forEach((d) => d.reset());
+
+  @override
+  void register(String key, Object value) =>
+      _forEach((d) => d.register(key, value));
 }

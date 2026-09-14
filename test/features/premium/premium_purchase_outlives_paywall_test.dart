@@ -43,6 +43,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 /// Answers the three purchase endpoints in memory -> `/payments/status` walks [statuses] and repeats the last.

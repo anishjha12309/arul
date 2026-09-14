@@ -58,6 +58,27 @@ String? appLanguageCodeFor(String englishName) {
   return null;
 }
 
+/// The prefs key [LocaleNotifier] persists an explicit pick under.
+const appLocalePrefsKey = LocaleNotifier._key;
+
+/// [LocaleNotifier]'s resolution, callable before Riverpod exists — `main()` stamps it on
+/// `Application Installed`, which fires ahead of the first frame.
+Locale resolveAppLocale(String? storedCode, List<Locale> phoneLocales) {
+  if (storedCode != null) {
+    return supportedAppLocales.firstWhere(
+      (l) => l.languageCode == storedCode,
+      orElse: () => const Locale('en'),
+    );
+  }
+  // Language only — a phone set to `ta-MY` or `hi-Latn` still reads Tamil and Hindi.
+  for (final phone in phoneLocales) {
+    for (final supported in supportedAppLocales) {
+      if (supported.languageCode == phone.languageCode) return supported;
+    }
+  }
+  return const Locale('en');
+}
+
 /// The phone's own language preference order.
 ///
 /// A provider so tests can hand in a phone; read straight off the [ui.PlatformDispatcher] rather
@@ -81,22 +102,10 @@ class LocaleNotifier extends _$LocaleNotifier {
   static const _key = 'arul_locale';
 
   @override
-  Locale build() {
-    final code = ref.read(sharedPreferencesProvider).getString(_key);
-    if (code != null) {
-      return supportedAppLocales.firstWhere(
-        (l) => l.languageCode == code,
-        orElse: () => const Locale('en'),
-      );
-    }
-    // Language only — a phone set to `ta-MY` or `hi-Latn` still reads Tamil and Hindi.
-    for (final phone in ref.read(platformLocalesProvider)) {
-      for (final supported in supportedAppLocales) {
-        if (supported.languageCode == phone.languageCode) return supported;
-      }
-    }
-    return const Locale('en');
-  }
+  Locale build() => resolveAppLocale(
+    ref.read(sharedPreferencesProvider).getString(_key),
+    ref.read(platformLocalesProvider),
+  );
 
   Future<void> setLocale(Locale locale) async {
     state = locale;
