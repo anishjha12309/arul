@@ -252,7 +252,18 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       premium: true,
     );
     if (!mounted) return;
-    if (context.mounted && context.canPop()) context.pop();
+    if (context.mounted) _leave();
+  }
+
+  /// Out of the premium screen. A campaign push or the trial reminder OPENS it with `go`, so nothing
+  /// sits under it: a bare pop is a no-op there and the system back closes the app -> land on the feed.
+  void _leave() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/browse');
+    }
   }
 
   Future<void> _confirmAndCancel(SubscriptionModel sub) async {
@@ -352,45 +363,49 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // So the light theme is pinned at the ROUTE level (router.dart), never here.
     final p = _Palette(false);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      // Ivory ground → dark system-bar icons; no AppBar here to apply the theme's own overlay.
-      value: const SystemUiOverlayStyle(
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarIconBrightness: Brightness.dark,
-        systemNavigationBarContrastEnforced: false,
-      ),
-      child: Scaffold(
-        backgroundColor: p.bg,
-        body: SafeArea(
-          child: entitlementAsync.when(
-            loading: () => ArulPaywallLoading(
-              onBack: () {
-                if (context.canPop()) context.pop();
+    // Intercepted only when nothing sits under this route (opened by a push or reminder via `go`):
+    // the system back would otherwise close the app. A pushed open keeps predictive back.
+    return PopScope(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        // Ivory ground → dark system-bar icons; no AppBar here to apply the theme's own overlay.
+        value: const SystemUiOverlayStyle(
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarIconBrightness: Brightness.dark,
+          systemNavigationBarContrastEnforced: false,
+        ),
+        child: Scaffold(
+          backgroundColor: p.bg,
+          body: SafeArea(
+            child: entitlementAsync.when(
+              loading: () => ArulPaywallLoading(onBack: _leave),
+              // A failed fetch falls back to the PAYWALL, never a dead-end error card.
+              // The upsell is still useful, and the Worker remains the authoritative gate.
+              // Null entitlement = "we don't know" -> show the paid copy, never a free-day promise.
+              error: (_, _) => _paywall(p, null, purchaseBusy),
+              data: (e) {
+                final sub = e.subscription;
+                // Only a LIVE plan gets the plan-home treatment; everything else is a sell.
+                if (!e.isPremium || sub == null) {
+                  return _paywall(p, e, purchaseBusy);
+                }
+                return switch (sub.status) {
+                  SubscriptionStatus.trialing ||
+                  SubscriptionStatus.active => _planHome(p, sub, purchaseBusy),
+                  SubscriptionStatus.cancelled => _resubscribeHome(
+                    p,
+                    sub,
+                    purchaseBusy,
+                  ),
+                  // isPremium was true, so pending/paused/expired cannot reach here.
+                  // The enum is exhaustive though, and a silent wrong screen is worse than a safe one.
+                  _ => _paywall(p, e, purchaseBusy),
+                };
               },
             ),
-            // A failed fetch falls back to the PAYWALL, never a dead-end error card.
-            // The upsell is still useful, and the Worker remains the authoritative gate.
-            // Null entitlement = "we don't know" -> show the paid copy, never a free-day promise.
-            error: (_, _) => _paywall(p, null, purchaseBusy),
-            data: (e) {
-              final sub = e.subscription;
-              // Only a LIVE plan gets the plan-home treatment; everything else is a sell.
-              if (!e.isPremium || sub == null) {
-                return _paywall(p, e, purchaseBusy);
-              }
-              return switch (sub.status) {
-                SubscriptionStatus.trialing ||
-                SubscriptionStatus.active => _planHome(p, sub, purchaseBusy),
-                SubscriptionStatus.cancelled => _resubscribeHome(
-                  p,
-                  sub,
-                  purchaseBusy,
-                ),
-                // isPremium was true, so pending/paused/expired cannot reach here.
-                // The enum is exhaustive though, and a silent wrong screen is worse than a safe one.
-                _ => _paywall(p, e, purchaseBusy),
-              };
-            },
           ),
         ),
       ),
@@ -477,9 +492,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
       upiAppsKnown: upiAsync.hasValue,
-      onBack: () {
-        if (context.canPop()) context.pop();
-      },
+      onBack: _leave,
       onChangeUpiApp: () => _openUpiPicker(
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
@@ -505,9 +518,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       trialing: trialing,
       renewalDate: _formatDate(renewalDate),
       cancelBusy: _cancelBusy,
-      onBack: () {
-        if (context.canPop()) context.pop();
-      },
+      onBack: _leave,
       onCancel: () => _confirmAndCancel(sub),
     );
   }
@@ -540,9 +551,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
       purchaseBusy: purchaseBusy,
-      onBack: () {
-        if (context.canPop()) context.pop();
-      },
+      onBack: _leave,
       onChangeUpiApp: () => _openUpiPicker(
         upiApps,
         selectedApp?.packageName ?? upiApps.first.packageName,
