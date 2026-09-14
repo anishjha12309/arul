@@ -53,8 +53,9 @@ count short of expected in the QA card is the only other signal.
   recomposed.
 - **Android suppresses notifications for the foreground app** — minimise before judging a QA send.
 - **`applySettings` cancels EVERY pending notification, including ones these settings do not own.**
-  Ids come from list INDEXES, so a reordered or shortened list leaves orphans only `cancelAll`
-  reaches. The unfinished-trial reminder is therefore re-armed by `notificationBootstrap` AFTER
+  Ids come from list INDEXES, so a reordered or shortened list leaves orphans only a cancel-all
+  reaches — `cancelAllPendingNotifications`, **never the plugin's `cancelAll`**, which also clears
+  what is on screen: this runs on every launch, and it wiped unread campaign pushes. The unfinished-trial reminder is therefore re-armed by `notificationBootstrap` AFTER
   `applySettings`, from an instant persisted at abandonment — re-arming from "now" would walk it
   further out on every launch, so the people who open the app most would be the ones never reminded.
   Anything one-shot added beside it owes the same treatment.

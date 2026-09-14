@@ -302,13 +302,16 @@ class NotificationService {
   /// Accepting notifications enables the WHOLE set; there are no per-event opt-ins.
   /// Cancels everything and re-schedules from [settings].
   ///
-  /// It cancels ALL, including the unfinished-trial reminder, which these settings do not own:
-  /// ids are derived from list INDEXES, so a reordered or shortened list leaves orphans that only
-  /// `cancelAll` reaches. `notificationBootstrap` re-arms the trial reminder afterwards from its
+  /// It cancels every PENDING one, including the unfinished-trial reminder, which these settings do
+  /// not own: ids are derived from list INDEXES, so a reordered or shortened list leaves orphans that
+  /// only a cancel-all reaches. `notificationBootstrap` re-arms the trial reminder afterwards from its
   /// persisted instant — that ordering is the contract, and it is why the instant is persisted.
+  ///
+  /// PENDING only, never the plugin's `cancelAll`: that also clears what is ON SCREEN, campaign pushes
+  /// included, and this runs on every launch — opening Arul from its icon wiped unread campaigns.
   Future<void> applySettings(NotificationSettings settings) async {
     if (!_initialized) await initialize();
-    await _plugin.cancelAll();
+    await _plugin.cancelAllPendingNotifications();
     if (!settings.masterEnabled) return;
 
     // Exact alarms need a special-access permission that shows on the Play listing -> inexact.
@@ -319,11 +322,12 @@ class NotificationService {
     await _scheduleFestivals(settings, mode);
   }
 
-  Future<void> cancelAll() async {
-    // cancelAll on an UN-initialised plugin silently no-ops, and setup is deferred off startup.
+  /// Disarms every scheduled reminder; what is already on screen (campaign pushes too) stays.
+  Future<void> cancelAllPending() async {
+    // A cancel on an UN-initialised plugin silently no-ops, and setup is deferred off startup.
     // So self-initialise here; initialize() is single-flight and never triggers a second setup.
     if (!_initialized) await initialize();
-    await _plugin.cancelAll();
+    await _plugin.cancelAllPendingNotifications();
   }
 
   Future<void> _scheduleWeekly(

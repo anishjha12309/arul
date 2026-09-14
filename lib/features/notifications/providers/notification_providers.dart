@@ -76,7 +76,7 @@ Future<void> notificationBootstrap(Ref ref) async {
   final service = ref.read(notificationServiceProvider);
 
   if (!settings.masterEnabled) {
-    await service.cancelAll();
+    await service.cancelAllPending();
   } else {
     await service.applySettings(settings);
   }
