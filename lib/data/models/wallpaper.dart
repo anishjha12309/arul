@@ -154,24 +154,31 @@ List<WallpaperCategory> orderedByCms(
   int Function(WallpaperCategory, WallpaperCategory) fallback,
 ) {
   if (order.isEmpty) return categories..sort(fallback);
-  final rank = <String, int>{for (var i = 0; i < order.length; i++) order[i]: i};
-  return categories
-    ..sort((a, b) {
-      final ra = rank[a.slug];
-      final rb = rank[b.slug];
-      if (ra != null && rb != null) return ra.compareTo(rb);
-      if (ra != null) return -1;
-      if (rb != null) return 1;
-      return fallback(a, b);
-    });
+  final rank = <String, int>{
+    for (var i = 0; i < order.length; i++) order[i]: i,
+  };
+  return categories..sort((a, b) {
+    final ra = rank[a.slug];
+    final rb = rank[b.slug];
+    if (ra != null && rb != null) return ra.compareTo(rb);
+    if (ra != null) return -1;
+    if (rb != null) return 1;
+    return fallback(a, b);
+  });
 }
 
 /// One scope's slug list out of `app_config.category_order`, defensively.
 ///
 /// The catalog is JSON off a CDN -> every level can be the wrong shape or absent, and a
 /// throw here would take the whole chip row down. Anything unexpected reads as "no order".
-List<String> categoryOrderFor(Map<String, dynamic>? categoryOrder, String scope) {
+List<String> categoryOrderFor(
+  Map<String, dynamic>? categoryOrder,
+  String scope,
+) {
   final raw = categoryOrder?[scope];
   if (raw is! List) return const <String>[];
-  return raw.whereType<String>().where((s) => s.isNotEmpty).toList(growable: false);
+  return raw
+      .whereType<String>()
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
 }

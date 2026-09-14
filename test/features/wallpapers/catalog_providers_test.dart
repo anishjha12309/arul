@@ -324,26 +324,23 @@ void main() {
       );
     });
 
-    test(
-      'with nothing applied yet, All IS catalog order — so a bulk import does '
-      'own the top, deliberately',
-      () async {
-        // The accepted cost of "default behaviour is newest only" -> it replaced an FNV-1a shuffle built to stop this.
-        // Pinned as a REQUIREMENT, not left untested -> the next reader will see 30 Sivan in a row and call it a bug.
-        // A re-introduced shuffle would fight the popularity order.
-        serveClumpedCatalog();
+    test('with nothing applied yet, All IS catalog order — so a bulk import does '
+        'own the top, deliberately', () async {
+      // The accepted cost of "default behaviour is newest only" -> it replaced an FNV-1a shuffle built to stop this.
+      // Pinned as a REQUIREMENT, not left untested -> the next reader will see 30 Sivan in a row and call it a bug.
+      // A re-introduced shuffle would fight the popularity order.
+      serveClumpedCatalog();
 
-        final all = await feedFor(makeContainer(), WallpaperCategory.allSlug);
+      final all = await feedFor(makeContainer(), WallpaperCategory.allSlug);
 
-        expect(
-          all.take(30).every((w) => w.category == 'sivan'),
-          isTrue,
-          reason:
-              'zero applies everywhere → every comparison falls through to '
-              'catalog order, which is newest-first',
-        );
-      },
-    );
+      expect(
+        all.take(30).every((w) => w.category == 'sivan'),
+        isTrue,
+        reason:
+            'zero applies everywhere → every comparison falls through to '
+            'catalog order, which is newest-first',
+      );
+    });
 
     test(
       'the All order is stable — the same catalog yields the same order '
@@ -491,23 +488,20 @@ void main() {
       ]);
     });
 
-    test(
-      'an unpinned row sinks below every pin — nulls LAST, never rank 0',
-      () {
-        // Treating null as 0 would pin the whole uncurated catalog above the curated head -> exactly inverting it.
-        final all = [
-          Wallpaper.fromJson(_item('unpinned0', applyCount: 99)),
-          Wallpaper.fromJson(_item('pinned', feedRank: 400)),
-          Wallpaper.fromJson(_item('unpinned1')),
-        ];
+    test('an unpinned row sinks below every pin — nulls LAST, never rank 0', () {
+      // Treating null as 0 would pin the whole uncurated catalog above the curated head -> exactly inverting it.
+      final all = [
+        Wallpaper.fromJson(_item('unpinned0', applyCount: 99)),
+        Wallpaper.fromJson(_item('pinned', feedRank: 400)),
+        Wallpaper.fromJson(_item('unpinned1')),
+      ];
 
-        expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
-          'pinned',
-          'unpinned0',
-          'unpinned1',
-        ]);
-      },
-    );
+      expect(feedOrder(WallpaperCategory.allSlug, all).map((w) => w.title), [
+        'pinned',
+        'unpinned0',
+        'unpinned1',
+      ]);
+    });
 
     test('rank 0 is a real pin, not an absent one', () {
       final all = [

@@ -42,14 +42,18 @@ void main() {
   group('no CMS order -> the built-in rule is untouched', () {
     test('wallpapers keep Sivan first, then alphabetical', () {
       expect(
-        _slugs(orderedByCms(wallpapers.toList(), const [], compareBrowseCategories)),
+        _slugs(
+          orderedByCms(wallpapers.toList(), const [], compareBrowseCategories),
+        ),
         ['sivan', 'amman', 'ayyappan', 'murugan', 'perumal', 'temples'],
       );
     });
 
     test('ringtones keep Sivan first and `others` last', () {
       expect(
-        _slugs(orderedByCms(ringtones.toList(), const [], compareRingtoneCategories)),
+        _slugs(
+          orderedByCms(ringtones.toList(), const [], compareRingtoneCategories),
+        ),
         ['sivan', 'amman', 'ayyappan', 'murugan', 'perumal', 'others'],
       );
     });
@@ -59,31 +63,40 @@ void main() {
     test('wallpapers follow it exactly, Sivan included', () {
       expect(
         _slugs(
-          orderedByCms(
-            wallpapers.toList(),
-            const ['amman', 'ayyappan', 'sivan', 'murugan', 'perumal', 'temples'],
-            compareBrowseCategories,
-          ),
+          orderedByCms(wallpapers.toList(), const [
+            'amman',
+            'ayyappan',
+            'sivan',
+            'murugan',
+            'perumal',
+            'temples',
+          ], compareBrowseCategories),
         ),
         ['amman', 'ayyappan', 'sivan', 'murugan', 'perumal', 'temples'],
       );
     });
 
-    test('`others` moves when dragged — the CMS is not overridden (owner call)', () {
-      // The built-in rule pins `others` last on purpose. An explicit order is a
-      // deliberate act, and silently ignoring it would leave the CMS showing one
-      // order and the app another — the exact confusion this feature removes.
-      expect(
-        _slugs(
-          orderedByCms(
-            ringtones.toList(),
-            const ['others', 'sivan', 'amman', 'ayyappan', 'murugan', 'perumal'],
-            compareRingtoneCategories,
+    test(
+      '`others` moves when dragged — the CMS is not overridden (owner call)',
+      () {
+        // The built-in rule pins `others` last on purpose. An explicit order is a
+        // deliberate act, and silently ignoring it would leave the CMS showing one
+        // order and the app another — the exact confusion this feature removes.
+        expect(
+          _slugs(
+            orderedByCms(ringtones.toList(), const [
+              'others',
+              'sivan',
+              'amman',
+              'ayyappan',
+              'murugan',
+              'perumal',
+            ], compareRingtoneCategories),
           ),
-        ),
-        ['others', 'sivan', 'amman', 'ayyappan', 'murugan', 'perumal'],
-      );
-    });
+          ['others', 'sivan', 'amman', 'ayyappan', 'murugan', 'perumal'],
+        );
+      },
+    );
   });
 
   group('a PARTIAL order is ordinary, not an error', () {
@@ -93,7 +106,10 @@ void main() {
       final withRama = [...wallpapers, _cat('rama')];
       expect(
         _slugs(
-          orderedByCms(withRama, const ['temples', 'murugan'], compareBrowseCategories),
+          orderedByCms(withRama, const [
+            'temples',
+            'murugan',
+          ], compareBrowseCategories),
         ),
         // listed first, in order… then the rest by Sivan-first-then-alphabetical.
         ['temples', 'murugan', 'sivan', 'amman', 'ayyappan', 'perumal', 'rama'],
@@ -106,18 +122,20 @@ void main() {
       final only = [_cat('amman'), _cat('sivan')];
       expect(
         _slugs(
-          orderedByCms(only, const ['rama', 'sivan', 'amman'], compareBrowseCategories),
+          orderedByCms(only, const [
+            'rama',
+            'sivan',
+            'amman',
+          ], compareBrowseCategories),
         ),
         ['sivan', 'amman'],
       );
     });
 
     test('it never drops a category the order omits entirely', () {
-      final result = orderedByCms(
-        wallpapers.toList(),
-        const ['temples'],
-        compareBrowseCategories,
-      );
+      final result = orderedByCms(wallpapers.toList(), const [
+        'temples',
+      ], compareBrowseCategories);
       expect(result, hasLength(wallpapers.length));
       expect(_slugs(result).toSet(), _slugs(wallpapers).toSet());
     });
@@ -134,13 +152,22 @@ void main() {
       );
     });
 
-    test('a null config, a missing scope and a wrong-typed value all read as none', () {
-      // Any of these throwing would take the whole chip row down over a cosmetic field.
-      expect(categoryOrderFor(null, 'wallpapers'), isEmpty);
-      expect(categoryOrderFor(const {}, 'wallpapers'), isEmpty);
-      expect(categoryOrderFor(const {'wallpapers': 'sivan'}, 'wallpapers'), isEmpty);
-      expect(categoryOrderFor(const {'wallpapers': 42}, 'wallpapers'), isEmpty);
-    });
+    test(
+      'a null config, a missing scope and a wrong-typed value all read as none',
+      () {
+        // Any of these throwing would take the whole chip row down over a cosmetic field.
+        expect(categoryOrderFor(null, 'wallpapers'), isEmpty);
+        expect(categoryOrderFor(const {}, 'wallpapers'), isEmpty);
+        expect(
+          categoryOrderFor(const {'wallpapers': 'sivan'}, 'wallpapers'),
+          isEmpty,
+        );
+        expect(
+          categoryOrderFor(const {'wallpapers': 42}, 'wallpapers'),
+          isEmpty,
+        );
+      },
+    );
 
     test('non-string and empty entries are dropped, not passed through', () {
       expect(

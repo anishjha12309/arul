@@ -96,18 +96,15 @@ void main() {
     },
   );
 
-  test(
-    'with nothing pinned and nothing set, the list IS catalog order',
-    () async {
-      // The zero state is the intended default, not a fallback -> every comparison falls through to catalog position.
-      // build-catalog already emits that order -> nothing client-side re-derives it.
-      final catalog = [
-        _rt('a', category: 'amman'),
-        _rt('b', category: 'sivan'),
-        _rt('c', category: 'others'),
-      ];
+  test('with nothing pinned and nothing set, the list IS catalog order', () async {
+    // The zero state is the intended default, not a fallback -> every comparison falls through to catalog position.
+    // build-catalog already emits that order -> nothing client-side re-derives it.
+    final catalog = [
+      _rt('a', category: 'amman'),
+      _rt('b', category: 'sivan'),
+      _rt('c', category: 'others'),
+    ];
 
-      expect(await feed(catalog, WallpaperCategory.allSlug), ['a', 'b', 'c']);
-    },
-  );
+    expect(await feed(catalog, WallpaperCategory.allSlug), ['a', 'b', 'c']);
+  });
 }
