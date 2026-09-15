@@ -650,6 +650,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Install PhonePe or Google Pay to subscribe';
 
   @override
+  String premiumResumeCta(String app) {
+    return 'Open $app again';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'Approve the ₹2 verification in $app to start your trial.';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'Approve the payment in $app to continue.';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'your UPI app';
+
+  @override
   String get trialNudgeRow => 'Finish setting up your free trial';
 
   @override

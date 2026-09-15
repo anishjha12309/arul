@@ -108,7 +108,15 @@ abstract interface class AuthService {
   /// It selects the Credential Manager BOTTOM SHEET as the first surface (Google's SIWG order).
   /// A pill tap is `auto: false` and goes straight to the button flow.
   /// Google's reasons for the button are why the user taps — dismissed sheet, no accounts, re-auth.
-  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false});
+  ///
+  /// [returned] marks the automatic attempt a RETURN to the wall re-armed, as opposed to the one a
+  /// cold start fires. Analytics only — it changes no surface and no order, it only renames the
+  /// sheet on this attempt's events (`sheet_return`) so the two populations stay separable.
+  Future<AuthResult> signInWith(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+  });
 
   /// Declares every sign-in attempt started so far ABANDONED.
   ///

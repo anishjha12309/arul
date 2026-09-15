@@ -109,9 +109,8 @@ export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
 /**
  * The bare link domain — `arul.hsrutility.com/?lang=hi` is what someone writes for "the app, in Hindi".
  * A 404 there costs the install it was bought for -> serve the bounce page
- * It covers only the NOT-installed half -> the app's filter is a pathPrefix on `/w/` and `/r/`
- * So an installed phone opens a BROWSER here, reaches Play with an Open button, and loses the language
- * `/w/?lang=hi` does both halves on every build already in the field -> keep recommending that form to ad ops
+ * Builds before the exact `/` manifest filter open a BROWSER here when installed and lose the language
+ * `/w/<uuid>?lang=hi` does every half on every build in the field -> keep recommending that form to ad ops
  */
 export function handleRootLink(c: Context<{ Bindings: Env }>): Response {
   // From the URL, never the Host header -> that header is absent in unit contexts and proxy-writable in front of one

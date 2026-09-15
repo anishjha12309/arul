@@ -22,11 +22,22 @@ class _FakeAuthService implements AuthService {
 
   final List<bool> autoFlags = [];
 
+  /// The `returned` flag each attempt carried -> "did the RETURN marker reach the service?".
+  final List<bool> returnedFlags = [];
+
+  /// Flipped by the tests that need a live session (the return rule must never re-arm over one).
+  bool authed = false;
+
   @override
-  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) {
+  Future<AuthResult> signInWith(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+  }) {
     final completer = Completer<AuthResult>();
     attempts.add(completer);
     autoFlags.add(auto);
+    returnedFlags.add(returned);
     return completer.future;
   }
 
@@ -45,7 +56,9 @@ class _FakeAuthService implements AuthService {
   Stream<AuthUserState> get authStateChanges => const Stream.empty();
 
   @override
-  AuthUserState get currentState => AuthUserState.unauthenticated();
+  AuthUserState get currentState => authed
+      ? AuthUserState.authenticated(userId: 'u1')
+      : AuthUserState.unauthenticated();
 
   @override
   Future<void> get initialized async {}
@@ -180,6 +193,200 @@ void main() {
     });
   });
 
+  // 52 of build 74's 722 logins landed on a LATER return, and 28 of 157 lost attempters came back
+  // more than ten minutes after failing — to a bare pill, because the process's one automatic
+  // surface was spent minutes ago. The re-arm gives that return its own sheet, ONCE. These pin the
+  // fire, and harder, every case that must NOT: a cancel's own foreground stretch, an attempt in
+  // flight, a second resume with no away stretch, a live session, and Google's rate-limit window.
+  group('AuthController return re-arm', () {
+    late _FakeAuthService auth;
+    late AuthController controller;
+    final t0 = DateTime(2026, 9, 15, 10);
+    late DateTime clock;
+
+    setUp(() {
+      auth = _FakeAuthService();
+      final container = ProviderContainer(
+        overrides: [authServiceProvider.overrideWithValue(auth)],
+      );
+      addTearDown(container.dispose);
+      clock = t0;
+      controller = container.read(authControllerProvider.notifier)
+        // Parenthesised: a bare `() => clock` swallows the cascade below into its body.
+        ..now = (() => clock)
+        ..stallTick = const Duration(milliseconds: 10)
+        // Paused throughout -> the stall guard never abandons an attempt a test parks in flight.
+        // The return rule reads `now`, never the probe, so this constrains nothing it does.
+        ..lifecycleProbe = (() => AppLifecycleState.paused);
+    });
+
+    /// The cold-start attempt, cancelled at [t0] — every return scenario starts from one.
+    Future<void> coldStartCancelled() async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(const AuthCancelled());
+      await first;
+    }
+
+    test(
+      'a cold start is ONE attempt and is never marked as a return',
+      () async {
+        final splash = controller.autoSignIn(AuthProvider.google);
+        final firstFrame = controller.autoSignIn(AuthProvider.google);
+
+        expect(identical(splash, firstFrame), isTrue);
+        expect(auth.attempts, hasLength(1));
+        expect(auth.returnedFlags, [false]);
+
+        auth.settleLast(const AuthCancelled());
+        await splash!;
+      },
+    );
+
+    test('a return inside the cooldown re-arms nothing; one past it fires '
+        'exactly ONE attempt, marked as a return', () async {
+      await coldStartCancelled();
+
+      clock = t0.add(const Duration(seconds: 5));
+      expect(controller.noteAppLifecycle(AppLifecycleState.paused), isFalse);
+      clock = t0.add(const Duration(seconds: 40));
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason: '35s away is enough, 40s since the cancel is not',
+      );
+      expect(auth.attempts, hasLength(1));
+
+      clock = t0.add(const Duration(seconds: 45));
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 70));
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isTrue);
+
+      final again = controller.autoSignIn(AuthProvider.google);
+      expect(again, isNotNull, reason: 'the re-arm must un-spend the launch');
+      expect(auth.attempts, hasLength(2));
+      expect(auth.returnedFlags, [false, true]);
+      expect(auth.autoFlags, [
+        true,
+        true,
+      ], reason: 'sheet-first, exactly like the cold-start attempt');
+
+      auth.settleLast(const AuthCancelled());
+      await again!;
+    });
+
+    test('an away stretch under the threshold is not a return', () async {
+      await coldStartCancelled();
+
+      clock = t0.add(const Duration(seconds: 90));
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 100));
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason: '10s away — the cooldown is long past, the departure was not',
+      );
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test(
+      'inactive is NOT away — a Google surface over us is not a return',
+      () async {
+        await coldStartCancelled();
+
+        clock = t0.add(const Duration(seconds: 100));
+        controller.noteAppLifecycle(AppLifecycleState.inactive);
+        clock = t0.add(const Duration(seconds: 200));
+        expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
+        expect(auth.attempts, hasLength(1));
+      },
+    );
+
+    test('a return while an attempt is IN FLIGHT joins it, never a second '
+        'surface', () async {
+      await coldStartCancelled();
+
+      clock = t0.add(const Duration(seconds: 120));
+      final pill = controller.signIn(AuthProvider.google);
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 200));
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason: 'the stall guard owns an attempt in flight, not this rule',
+      );
+      expect(auth.attempts, hasLength(2));
+
+      auth.settleLast(const AuthCancelled());
+      await pill;
+    });
+
+    test('ONE re-arm per return — a second resume with no away stretch buys '
+        'nothing', () async {
+      await coldStartCancelled();
+
+      clock = t0.add(const Duration(seconds: 100));
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 130));
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isTrue);
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason: 'the away stretch is spent the moment it is read',
+      );
+
+      final again = controller.autoSignIn(AuthProvider.google)!;
+      expect(auth.attempts, hasLength(2));
+      auth.settleLast(const AuthCancelled());
+      await again;
+
+      clock = t0.add(const Duration(seconds: 300));
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason: 'nothing to return from — the app never left',
+      );
+      expect(auth.attempts, hasLength(2));
+    });
+
+    test('a cancel that lands while the app is away does not make that same '
+        'return a relaunch', () async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 120));
+      auth.settleLast(const AuthCancelled());
+      await first;
+
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isFalse,
+        reason:
+            'the stretch began BEFORE the cancel — this return IS the cancel',
+      );
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('a signed-in user is never handed a sheet on return', () async {
+      await coldStartCancelled();
+      auth.authed = true;
+
+      clock = t0.add(const Duration(seconds: 100));
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 130));
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('a build with no attempt behind it (define-less, nothing ever fired) '
+        'never re-arms', () async {
+      clock = t0.add(const Duration(seconds: 100));
+      controller.noteAppLifecycle(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 300));
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
+      expect(auth.attempts, isEmpty);
+    });
+  });
+
   // The OS finishing Google's picker under us (an icon launch on the live task) reaches the app
   // as a `canceled` — in the FRAMEWORK's words, where a user's back-out carries GMS's words.
   // Measured on one phone in one minute; pinned here so the two can never be merged again.
@@ -227,6 +434,23 @@ void main() {
         ),
         isFalse,
       );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'sheet_return',
+          description: 'User cancelled the selector',
+        ),
+        isFalse,
+        reason: 'the return sheet is a sheet — a NAME, never a new behaviour',
+      );
+    });
+
+    // The return marker is a VALUE on `surface`, and `surface` is read by more than analytics.
+    // If a renamed sheet ever started matching here, a swipe on the return sheet would relaunch it
+    // — the one thing the Credential Manager guide forbids.
+    test('a returned sheet reports itself as sheet_return, and nothing else '
+        'changes', () {
+      expect(ApiAuthService.sheetSurfaceFor(returned: false), 'sheet');
+      expect(ApiAuthService.sheetSurfaceFor(returned: true), 'sheet_return');
     });
 
     test('no surface or no message proves nothing', () {
@@ -689,16 +913,19 @@ void main() {
       buttonCalls = 0;
     });
 
-    Future<String> run({Future<String?>? Function()? sheet}) =>
-        ApiAuthService.resolveGoogleCredential<String>(
-          sheet: sheet,
-          button: () async {
-            buttonCalls++;
-            return 'button-credential';
-          },
-          onSurface: surfaces.add,
-          onSheetUnavailable: unavailable.add,
-        );
+    Future<String> run({
+      Future<String?>? Function()? sheet,
+      String sheetSurface = 'sheet',
+    }) => ApiAuthService.resolveGoogleCredential<String>(
+      sheet: sheet,
+      sheetSurface: sheetSurface,
+      button: () async {
+        buttonCalls++;
+        return 'button-credential';
+      },
+      onSurface: surfaces.add,
+      onSheetUnavailable: unavailable.add,
+    );
 
     test('a credential from the sheet is the whole attempt — no picker after '
         'it', () async {
@@ -756,6 +983,30 @@ void main() {
         );
 
         expect(surfaces, ['sheet', 'button_after_dismiss']);
+      },
+    );
+
+    // The return marker rides the SHEET's name only. A dismissal escalates to the same
+    // `button_after_dismiss` it always did, so the return attempt's marker lives on its
+    // `login_attempt` alone and the picker's own conversion stays one comparable bucket.
+    test(
+      'a RETURN attempt renames its sheet and leaves the escalation alone',
+      () async {
+        final out = await run(
+          sheet: () async => 'sheet-credential',
+          sheetSurface: 'sheet_return',
+        );
+        expect(out, 'sheet-credential');
+        expect(surfaces, ['sheet_return']);
+
+        surfaces = [];
+        await run(
+          sheet: () async => throw const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+          ),
+          sheetSurface: 'sheet_return',
+        );
+        expect(surfaces, ['sheet_return', 'button_after_dismiss']);
       },
     );
 

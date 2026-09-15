@@ -67,6 +67,8 @@ class ArulPaywallView extends StatelessWidget {
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
     required this.upiAppsKnown,
+    this.resumeAppLabel,
+    this.onResume,
     required this.onBack,
     required this.onChangeUpiApp,
     required this.onPurchase,
@@ -103,6 +105,15 @@ class ArulPaywallView extends StatelessWidget {
   /// sub-second wait, the other is the install prompt plus a dead CTA. Showing the prompt while the
   /// query is still out would flash "install PhonePe" at someone who has it.
   final bool upiAppsKnown;
+
+  /// Non-null while a mandate this user already opened is STILL OPEN at PhonePe: the label of the
+  /// UPI app holding it. It turns the CTA into "open it again" and says so in the line beneath.
+  /// There is NO way out to find: the deadline retires the order by itself and the CTA goes back to
+  /// selling (owner's call — this audience gets the automatic thing, never a control to reason
+  /// about). The picker stays LIVE throughout: an open order must never read as "PhonePe is your
+  /// only option". Picking another app abandons this order and starts a fresh one there.
+  final String? resumeAppLabel;
+  final VoidCallback? onResume;
 
   final VoidCallback onBack;
   final VoidCallback onChangeUpiApp;
@@ -197,17 +208,27 @@ class ArulPaywallView extends StatelessWidget {
             dense: video != null && denseFooter,
             trialEligible: trialEligible,
             upiAppsKnown: upiAppsKnown,
-            ctaLabel: trialEligible
-                ? l10n.premiumCtaTrial
-                : l10n.premiumCtaSubscribe,
-            reassurance: trialEligible
-                ? l10n.premiumReassuranceTrial
-                : l10n.premiumReassurancePaid,
+            // Resuming replaces BOTH the label and the line under it: the decision has been made,
+            // and the only thing left to say is what has to happen inside the UPI app.
+            ctaLabel: resumeAppLabel != null
+                ? l10n.premiumResumeCta(resumeAppLabel!)
+                : (trialEligible
+                      ? l10n.premiumCtaTrial
+                      : l10n.premiumCtaSubscribe),
+            reassurance: resumeAppLabel != null
+                ? (trialEligible
+                      ? l10n.premiumResumeHintTrial(resumeAppLabel!)
+                      : l10n.premiumResumeHintPaid(resumeAppLabel!))
+                : (trialEligible
+                      ? l10n.premiumReassuranceTrial
+                      : l10n.premiumReassurancePaid),
             busy: purchaseBusy,
             selectedUpiApp: selectedUpiApp,
             canChangeUpiApp: canChangeUpiApp,
             onChangeUpiApp: onChangeUpiApp,
-            onPurchase: onPurchase,
+            onPurchase: resumeAppLabel != null
+                ? (onResume ?? onPurchase)
+                : onPurchase,
           ),
         ],
       ),
@@ -1040,6 +1061,7 @@ class _Footer extends StatelessWidget {
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
   final bool upiAppsKnown;
+
   final bool trialEligible;
   final VoidCallback onChangeUpiApp;
   final VoidCallback onPurchase;
@@ -1147,8 +1169,9 @@ class _Footer extends StatelessWidget {
             ornament: PaywallOrnament.footerRule,
             width: ArulTokens.paywallFooterRuleWidth,
           ),
-          // The audience is not payment-literate -> no cancel affordance during the wait, on purpose.
-          // The provider's resume checkpoint resolves success or failure within ~2s of the UPI return.
+          // The audience is not payment-literate -> no cancel affordance while the UPI app is up,
+          // and none when they come back either. The CTA re-opens the sheet they left; when the
+          // order's own deadline passes the app retires it and the CTA sells again, silently.
         ],
       ),
     );

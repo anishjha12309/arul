@@ -178,10 +178,14 @@ class ApiAuthService implements AuthService {
   AuthUserState get currentState => _current;
 
   @override
-  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) {
+  Future<AuthResult> signInWith(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+  }) {
     switch (provider) {
       case AuthProvider.google:
-        return _signInWithGoogle(auto: auto);
+        return _signInWithGoogle(auto: auto, returned: returned);
     }
   }
 
@@ -459,6 +463,21 @@ class ApiAuthService implements AuthService {
   static const _surfaceSheet = 'sheet';
   static const _surfaceButton = 'button';
 
+  /// The sheet of an attempt the controller re-armed on a RETURN to the wall, kept apart from the
+  /// cold-start sheet: it is the only automatic surface a person has already walked away from once,
+  /// so it is the only one whose conversion says whether re-arming on a return earns its cancels.
+  /// A VALUE on the existing `surface` property — no new event, no new property.
+  static const _surfaceSheetReturn = 'sheet_return';
+
+  /// The sheet's reported name for an attempt, given whether a RETURN re-armed it.
+  ///
+  /// A pure one-liner only because the service itself is unconstructable in a unit test (a real
+  /// ApiClient, a real analytics sink, GMS): this is the only way the funnel's most load-bearing
+  /// mapping — which `surface` value a return attempt files itself under — is pinnable at all.
+  @visibleForTesting
+  static String sheetSurfaceFor({required bool returned}) =>
+      returned ? _surfaceSheetReturn : _surfaceSheet;
+
   /// The picker reached by DISMISSING the sheet, kept distinct from a picker
   /// the sheet never contested: it is the only bucket where the user has
   /// already said no once, so it is the only one whose conversion rate says
@@ -535,14 +554,20 @@ class ApiAuthService implements AuthService {
   /// "no lightweight flow on this platform", handled exactly like a null
   /// credential.
   @visibleForTesting
+  ///
+  /// [sheetSurface] is the NAME this attempt's sheet reports itself under — `sheet`, or
+  /// `sheet_return` for the one a return to the wall re-armed. A label, never a branch: the order
+  /// and the escalation below are identical either way, and a picker that follows a dismissal is
+  /// still `button_after_dismiss`, so the return marker lives on its `login_attempt` alone.
   static Future<T> resolveGoogleCredential<T extends Object>({
     required Future<T?>? Function()? sheet,
     required Future<T> Function() button,
     required void Function(String surface) onSurface,
     required void Function(GoogleSignInException e) onSheetUnavailable,
+    String sheetSurface = _surfaceSheet,
   }) async {
     if (sheet != null) {
-      onSurface(_surfaceSheet);
+      onSurface(sheetSurface);
       try {
         final pending = sheet();
         final credential = pending == null ? null : await pending;
@@ -560,7 +585,10 @@ class ApiAuthService implements AuthService {
     return button();
   }
 
-  Future<AuthResult> _signInWithGoogle({required bool auto}) async {
+  Future<AuthResult> _signInWithGoogle({
+    required bool auto,
+    required bool returned,
+  }) async {
     final attempt = ++_attemptSeq;
     // Clear first: a failure BEFORE any surface opened (unsupported device,
     // config guard) must not report the PREVIOUS attempt's elapsed time or
@@ -590,12 +618,15 @@ class ApiAuthService implements AuthService {
       // is already past what the sheet had to offer (see AuthService.signInWith
       // and resolveGoogleCredential for the order and its reasons).
       final useSheet = sheetFirst && auto;
+      // The return marker rides the sheet's NAME: an attempt with no sheet is a pill tap, which a
+      // return never is.
+      final sheetSurface = sheetSurfaceFor(returned: returned);
       _analytics.track(
         'login_attempt',
         properties: {
           ..._installProps,
           'provider': 'google',
-          'surface': useSheet ? _surfaceSheet : _surfaceButton,
+          'surface': useSheet ? sheetSurface : _surfaceButton,
           'auto': auto,
         },
       );
@@ -637,6 +668,7 @@ class ApiAuthService implements AuthService {
           BootTrace.mark('signIn: authenticate() called');
           return GoogleSignIn.instance.authenticate();
         },
+        sheetSurface: sheetSurface,
         onSurface: (surface) => _surface = surface,
         onSheetUnavailable: (e) => _analytics.track(
           'sheet_unavailable',

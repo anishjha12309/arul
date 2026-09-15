@@ -7,6 +7,20 @@ real time**. Nothing else. No changelog — close a line by deleting it.
 
 - **The restyled language chip and the PostHog sideload gate have not run on a phone** — tests only.
 
+- **Funtouch CAN kill Arul ~30 s after a screen lock with Google's sheet up** (`am_kill … stop by
+  com.vivo.abe`, no LMK, no `am_low_memory`; Vivo U10, Android 9) — seen once, and once NOT (a 41 s
+  lock survived), so it is state-dependent, not deterministic. When it fires, the next return is a
+  cold start with a second automatic attempt and no outcome for the first — the shape of the
+  Android ≤11 "attempted, then nothing" and relaunch-pair buckets. OEM behaviour, nothing app-side
+  to fix; the wall's recovery path itself walks clean on that phone (icon return relaunches once,
+  Recents keeps the sheet, a later return re-arms). Not shown for other ≤11 OEMs.
+- **A legacy `GoogleSignIn` fallback cannot be built:** Google removed the Google Sign-In APIs
+  from `play-services-auth` in 22.0.0; `google_sign_in_android` pins 21.6.0, the last version that
+  ships them, and drops them on its next bump. `activityClosed` (~1% of installs) stays
+  unexplained; Credential Manager's GMS minimum is a 2023 build, so "old Play services" is unlikely.
+- **`tools/drive.mjs dump` returns stale accessibility XML across activity transitions on
+  Android 9** (kept echoing Google's sheet after the wall was back) — cross-check with `screencap`.
+
 - **The feed's decoder grace can starve the paywall clip on a budget SoC** — ACCEPTED, owner's call.
   Leaving Wallpapers holds the video decoders for `_leaveGrace`, and `premium_screen.dart` builds its
   OWN pool; reaching the paywall inside that window (Ringtones → a gated Set) leaves a 2-decoder

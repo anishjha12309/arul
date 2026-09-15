@@ -235,6 +235,11 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumInstallUpiTrial':
         'Install PhonePe or Google Pay to start your free trial',
     'premiumInstallUpiPaid': 'Install PhonePe or Google Pay to subscribe',
+    'premiumResumeCta': 'Open {app} again',
+    'premiumResumeHintTrial':
+        'Approve the ₹2 verification in {app} to start your trial.',
+    'premiumResumeHintPaid': 'Approve the payment in {app} to continue.',
+    'premiumUpiAppGeneric': 'your UPI app',
     'trialNudgeRow': 'Finish setting up your free trial',
     'trialNudgeDismiss': 'Dismiss',
     'trialReminderTitle': 'Your free trial is waiting',
@@ -461,6 +466,11 @@ const Map<String, Map<String, String>> kArbStrings = {
         'உங்கள் இலவச சோதனையைத் தொடங்க PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
     'premiumInstallUpiPaid':
         'சந்தா செலுத்த PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
+    'premiumResumeCta': '{app} செயலியை மீண்டும் திற',
+    'premiumResumeHintTrial':
+        'உங்கள் சோதனையைத் தொடங்க {app} செயலியில் ₹2 சரிபார்ப்பை அனுமதிக்கவும்.',
+    'premiumResumeHintPaid': 'தொடர {app} செயலியில் கட்டணத்தை அனுமதிக்கவும்.',
+    'premiumUpiAppGeneric': 'உங்கள் UPI ஆப்',
     'trialNudgeRow': 'உங்கள் இலவச சோதனை அமைப்பை முடிக்கவும்',
     'trialNudgeDismiss': 'மூடு',
     'trialReminderTitle': 'உங்கள் இலவச சோதனை காத்திருக்கிறது',
@@ -682,6 +692,12 @@ const Map<String, Map<String, String>> kArbStrings = {
         'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
     'premiumInstallUpiPaid':
         'సబ్‌స్క్రైబ్ చేయడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
+    'premiumResumeCta': '{app} యాప్‌ను మళ్లీ తెరవండి',
+    'premiumResumeHintTrial':
+        'మీ ట్రయల్ ప్రారంభించడానికి {app} యాప్‌లో ₹2 ధృవీకరణను ఆమోదించండి.',
+    'premiumResumeHintPaid':
+        'కొనసాగించడానికి {app} యాప్‌లో చెల్లింపును ఆమోదించండి.',
+    'premiumUpiAppGeneric': 'మీ UPI యాప్',
     'trialNudgeRow': 'మీ ఉచిత ట్రయల్ సెటప్ పూర్తి చేయండి',
     'trialNudgeDismiss': 'మూసివేయి',
     'trialReminderTitle': 'మీ ఉచిత ట్రయల్ వేచి ఉంది',
@@ -903,6 +919,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumInstallUpiTrial':
         'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
     'premiumInstallUpiPaid': 'ಚಂದಾದಾರರಾಗಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
+    'premiumResumeCta': '{app} ಆ್ಯಪ್ ಅನ್ನು ಮತ್ತೆ ತೆರೆಯಿರಿ',
+    'premiumResumeHintTrial':
+        'ನಿಮ್ಮ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ₹2 ಪರಿಶೀಲನೆಯನ್ನು ಅನುಮೋದಿಸಿ.',
+    'premiumResumeHintPaid':
+        'ಮುಂದುವರಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ಪಾವತಿಯನ್ನು ಅನುಮೋದಿಸಿ.',
+    'premiumUpiAppGeneric': 'ನಿಮ್ಮ UPI ಆ್ಯಪ್',
     'trialNudgeRow': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಿ',
     'trialNudgeDismiss': 'ಮುಚ್ಚಿ',
     'trialReminderTitle': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಕಾಯುತ್ತಿದೆ',
@@ -1126,6 +1148,11 @@ const Map<String, Map<String, String>> kArbStrings = {
         'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
     'premiumInstallUpiPaid':
         'സബ്‌സ്‌ക്രൈബ് ചെയ്യാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
+    'premiumResumeCta': '{app} ആപ്പ് വീണ്ടും തുറക്കൂ',
+    'premiumResumeHintTrial':
+        'നിങ്ങളുടെ ട്രയൽ തുടങ്ങാൻ {app} ആപ്പിൽ ₹2 പരിശോധന അംഗീകരിക്കൂ.',
+    'premiumResumeHintPaid': 'തുടരാൻ {app} ആപ്പിൽ പേയ്‌മെന്റ് അംഗീകരിക്കൂ.',
+    'premiumUpiAppGeneric': 'നിങ്ങളുടെ UPI ആപ്പ്',
     'trialNudgeRow': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ സജ്ജീകരണം പൂർത്തിയാക്കുക',
     'trialNudgeDismiss': 'അടയ്ക്കുക',
     'trialReminderTitle': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ കാത്തിരിക്കുന്നു',
@@ -1345,6 +1372,12 @@ const Map<String, Map<String, String>> kArbStrings = {
         'अपना मुफ़्त ट्रायल शुरू करने के लिए PhonePe या Google Pay इंस्टॉल करें',
     'premiumInstallUpiPaid':
         'सदस्यता लेने के लिए PhonePe या Google Pay इंस्टॉल करें',
+    'premiumResumeCta': '{app} फिर से खोलें',
+    'premiumResumeHintTrial':
+        'अपना ट्रायल शुरू करने के लिए {app} में ₹2 सत्यापन को मंज़ूरी दें।',
+    'premiumResumeHintPaid':
+        'जारी रखने के लिए {app} में भुगतान को मंज़ूरी दें।',
+    'premiumUpiAppGeneric': 'आपका UPI ऐप',
     'trialNudgeRow': 'अपना मुफ़्त ट्रायल सेटअप पूरा करें',
     'trialNudgeDismiss': 'बंद करें',
     'trialReminderTitle': 'आपका मुफ़्त ट्रायल इंतज़ार कर रहा है',
@@ -1365,6 +1398,9 @@ const Map<String, Map<String, String>> kArbStrings = {
 const Map<String, List<String>> kArbPlaceholders = {
   'premiumFootnotePaid': ['price'],
   'premiumFootnoteTrial': ['price'],
+  'premiumResumeCta': ['app'],
+  'premiumResumeHintPaid': ['app'],
+  'premiumResumeHintTrial': ['app'],
   'premiumSocialProof': ['name', 'city'],
   'premiumTrialFinePrint': ['price'],
   'referRewardDays': ['days'],

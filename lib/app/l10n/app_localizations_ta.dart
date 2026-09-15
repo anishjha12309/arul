@@ -660,6 +660,24 @@ class AppLocalizationsTa extends AppLocalizations {
       'சந்தா செலுத்த PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்';
 
   @override
+  String premiumResumeCta(String app) {
+    return '$app செயலியை மீண்டும் திற';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'உங்கள் சோதனையைத் தொடங்க $app செயலியில் ₹2 சரிபார்ப்பை அனுமதிக்கவும்.';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'தொடர $app செயலியில் கட்டணத்தை அனுமதிக்கவும்.';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'உங்கள் UPI ஆப்';
+
+  @override
   String get trialNudgeRow => 'உங்கள் இலவச சோதனை அமைப்பை முடிக்கவும்';
 
   @override

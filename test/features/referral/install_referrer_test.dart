@@ -342,6 +342,34 @@ void main() {
     });
 
     test(
+      'the install link rides on install_channel and outlives the pending target',
+      () async {
+        final s = await service({
+          'install_channel': 'meta_ads',
+          'install_utm_source': 'fb',
+        });
+        expect(s.attributionProps['install_channel'], 'meta_ads');
+
+        await s.queueTarget(
+          const RingtoneLinkTarget(rid, source: DeepLinkSource.meta),
+        );
+        await s.clearPendingTarget();
+        expect(s.attributionProps, {
+          'install_channel': 'meta_ads+ringtone',
+          'install_utm_source': 'fb',
+        });
+      },
+    );
+
+    test('a link before the referrer answers reads unknown+kind', () async {
+      final s = await service();
+      expect(s.attributionProps, isEmpty);
+      await s.queueTarget(const WallpaperLinkTarget(id));
+      await s.queueTarget(const TabLinkTarget(ArulTab.ringtones));
+      expect(s.attributionProps['install_channel'], 'unknown+wallpaper');
+    });
+
+    test(
       'clearPendingTarget / clearPendingLang drop the persisted copies',
       () async {
         final s = await service({

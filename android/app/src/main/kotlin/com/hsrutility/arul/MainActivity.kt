@@ -73,8 +73,6 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SOURCE_GOOGLE_ADS = "google_ads"
         private const val SOURCE_META = "meta"
         private const val DEEP_LINK_HOST = "arul.hsrutility.com"
-        private val UUID_RE =
-            Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     }
 
     private var wallpaperApplyChannel: WallpaperApplyChannel? = null
@@ -374,9 +372,8 @@ class MainActivity : FlutterFragmentActivity() {
         val raw = prefs.getString(GOOGLE_DDL_KEY, null)?.trim().orEmpty()
         if (raw.isEmpty()) return
         if (!isAppLinkUrl(raw)) {
-            // An ad group's App URL must be /w/<uuid> or /r/<uuid> (a ?lang= query is fine) -> anything else is dropped.
-            // Dropping it silently is invisible -> the shipped build is FLAG_SECURE, so logcat is the only window.
-            Log.w(TAG, "Deferred deep link ignored: not a /w/ or /r/ App Link")
+            // Not our host -> dropped. Dropping it silently is invisible -> the shipped build is FLAG_SECURE, so logcat is the only window.
+            Log.w(TAG, "Deferred deep link ignored: not an arul.hsrutility.com link")
             return
         }
 
@@ -421,16 +418,16 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** `https://arul.hsrutility.com/w/<uuid>` or `/r/<uuid>`, any query. */
+    /**
+     * Any `https://arul.hsrutility.com/…` URL. Only the HOST is checked here; Dart's `parseDeepLink` decides what the
+     * path and query mean, and ACKs what it rejects. A path rule here once required `/w/<uuid>`, so the id-less
+     * `/w/?lang=ta` the ads carried was dropped on every Google Ads install while the Dart parser accepted it.
+     */
     private fun isAppLinkUrl(raw: String): Boolean {
         return try {
             val uri = Uri.parse(raw)
-            val parts = uri.pathSegments
             uri.scheme.equals("https", ignoreCase = true) &&
-                uri.host.equals(DEEP_LINK_HOST, ignoreCase = true) &&
-                parts.size == 2 &&
-                (parts[0] == "w" || parts[0] == "r") &&
-                UUID_RE.matches(parts[1])
+                uri.host.equals(DEEP_LINK_HOST, ignoreCase = true)
         } catch (_: Exception) {
             false
         }

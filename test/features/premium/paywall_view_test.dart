@@ -3,6 +3,7 @@ import 'dart:ui' show ImageByteFormat;
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/upi/upi_apps.dart';
+import 'package:arul/features/premium/presentation/paywall_ornaments.dart';
 import 'package:arul/features/premium/presentation/paywall_view.dart';
 import 'package:arul/theme/arul_tokens.dart';
 import 'package:flutter/material.dart';
@@ -405,6 +406,169 @@ void main() {
       await pumpNoApp(tester, trialEligible: true, upiAppsKnown: false);
       expect(find.textContaining('Install PhonePe'), findsNothing);
       expect(find.text('Selected UPI App'), findsNothing);
+    });
+  });
+
+  // ─── The mandate the user has not approved yet ──────────────────────────────
+  // They came back from the UPI app without approving, and the order is STILL LIVE at PhonePe.
+  // So the footer stops selling and starts pointing: one line saying what has to happen and the CTA
+  // re-opening the app that holds the sheet. Nothing else — no way out to find, because the
+  // deadline retires the order by itself (owner's call).
+
+  group('the resumable footer', () {
+    setUpAll(_loadPaywallFonts);
+
+    Future<void> pumpResuming(
+      WidgetTester tester, {
+      bool trialEligible = true,
+      Size size = const Size(390, 844),
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _host(
+          ArulPaywallView(
+            trialEligible: trialEligible,
+            monthlyPrice: '₹199',
+            purchaseBusy: false,
+            showSocialProof: true,
+            selectedUpiApp: const UpiApp(
+              packageName: 'com.phonepe.app',
+              label: 'PhonePe',
+            ),
+            canChangeUpiApp: true,
+            upiAppsKnown: true,
+            resumeAppLabel: 'PhonePe',
+            onResume: () {},
+            onBack: () {},
+            onChangeUpiApp: () {},
+            onPurchase: () {},
+          ),
+        ),
+      );
+    }
+
+    testWidgets('names the app in the CTA and in the one line under it', (
+      tester,
+    ) async {
+      await pumpResuming(tester);
+
+      expect(find.text('Open PhonePe again'), findsOneWidget);
+      expect(
+        find.text(
+          'Approve the ₹2 verification in PhonePe to start your trial.',
+        ),
+        findsOneWidget,
+      );
+      // The sell is over — the reassurance line it replaced must be gone, not stacked with it.
+      expect(find.textContaining('refunded instantly · Cancel'), findsNothing);
+      // No way out to find: the footer is the line, the CTA and the chip, nothing more.
+      expect(find.text('Start over'), findsNothing);
+      expect(find.byKey(const ValueKey('paywall-start-over')), findsNothing);
+      expect(find.text('Start Free Trial'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the paid variant never mentions a trial', (tester) async {
+      await pumpResuming(tester, trialEligible: false);
+
+      expect(
+        find.text('Approve the payment in PhonePe to continue.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('trial'), findsNothing);
+    });
+
+    testWidgets('the CTA resumes instead of buying again', (tester) async {
+      var resumed = 0;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _host(
+          ArulPaywallView(
+            trialEligible: true,
+            monthlyPrice: '₹199',
+            purchaseBusy: false,
+            showSocialProof: true,
+            selectedUpiApp: const UpiApp(
+              packageName: 'com.phonepe.app',
+              label: 'PhonePe',
+            ),
+            canChangeUpiApp: true,
+            upiAppsKnown: true,
+            resumeAppLabel: 'PhonePe',
+            onResume: () => resumed++,
+            onBack: () {},
+            onChangeUpiApp: () {},
+            onPurchase: () => fail('the CTA must resume, never buy again'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('shrine-cta')));
+      expect(resumed, 1);
+    });
+
+    testWidgets('the UPI chip is still changeable — an open order is not a '
+        'lock-in to one wallet', (tester) async {
+      var changes = 0;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _host(
+          ArulPaywallView(
+            trialEligible: true,
+            monthlyPrice: '₹199',
+            purchaseBusy: false,
+            showSocialProof: true,
+            selectedUpiApp: const UpiApp(
+              packageName: 'com.phonepe.app',
+              label: 'PhonePe',
+            ),
+            canChangeUpiApp: true,
+            upiAppsKnown: true,
+            resumeAppLabel: 'PhonePe',
+            onResume: () {},
+            onBack: () {},
+            onChangeUpiApp: () => changes++,
+            onPurchase: () {},
+          ),
+        ),
+      );
+
+      // The chip's own label, not the CTA's "Open PhonePe again".
+      await tester.tap(find.text('PhonePe'));
+      expect(
+        changes,
+        1,
+        reason: 'the picker opens while resumable — switching is a real choice',
+      );
+      // The caret is the affordance -> it stays wherever the tap target is.
+      expect(find.byIcon(Icons.arrow_drop_down), findsOneWidget);
+    });
+
+    testWidgets('the whole footer still fits a 4.7" screen', (tester) async {
+      await pumpResuming(tester, size: const Size(360, 640));
+
+      expect(tester.takeException(), isNull);
+      // The footer rule is the last thing in the pinned footer -> if it is on screen, so is
+      // everything above it: the chip, the CTA and the one line that says what to approve.
+      expect(
+        tester
+            .getRect(
+              find.byWidgetPredicate(
+                (w) =>
+                    w is PaywallOrnamentImage &&
+                    w.ornament == PaywallOrnament.footerRule,
+              ),
+            )
+            .bottom,
+        lessThanOrEqualTo(640),
+      );
     });
   });
 }

@@ -11,7 +11,7 @@ import 'deep_link_target.dart';
 /// Native buffers every link until this channel attaches -> it then pushes each AND answers a pull.
 /// A link is not marked handled until [InstallReferrerService.queueRequest] has persisted it.
 /// So a process death cannot turn an ad click into a plain home-screen launch.
-/// Both sides validate the URL shape; Dart is the one that decides what it MEANS.
+/// Native checks only the host (ours, or Meta's scheme); Dart alone decides what the path and query MEAN.
 class DeferredLinkService {
   DeferredLinkService(this._targets, {MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);

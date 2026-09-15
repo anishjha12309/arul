@@ -40,7 +40,9 @@ const double _kPanelPadY = 25;
 ///
 /// This IS a wall, deliberately (owner's call) — every signed-out session lands here, no skip.
 /// Browse and preview being free (§5) is about the MEDIA gate, not about reaching the feed unauthed.
-/// **PHASE CONTRACT:** the screen AUTO-LAUNCHES a Google credential request on its FIRST FRAME.
+/// **PHASE CONTRACT:** the screen AUTO-LAUNCHES a Google credential request on its FIRST FRAME,
+/// and once more when the app RETURNS to this wall after an away stretch (never after a cancel on
+/// the same foreground stretch) — the rule is [AuthController.noteAppLifecycle]'s, not the screen's.
 /// That request is SHEET-FIRST — Credential Manager bottom sheet, then the button flow (SIWG guide).
 /// The wall only works because a surface appears without a tap -> never a silent, no-UI check.
 /// ONE visible Google surface per attempt -> the picker follows only when the sheet drew NOTHING.
@@ -61,7 +63,8 @@ class SignInScreen extends ConsumerStatefulWidget {
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
 }
 
-class _SignInScreenState extends ConsumerState<SignInScreen> {
+class _SignInScreenState extends ConsumerState<SignInScreen>
+    with WidgetsBindingObserver {
   bool _signingIn = false;
 
   /// What the last ended-without-a-session attempt actually did, or null while nothing has failed.
@@ -71,14 +74,35 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   /// One line for every cancel was the OTHER failure: "didn't go through, tap again" told a user
   /// whose Play services closed the window nothing they could act on. The line must be true of THIS
   /// attempt, so it is routed off [SignInOutcome] and never off a bool.
-  /// NEVER auto-relaunch on a cancel — the Credential Manager guide forbids retrying the request.
+  /// NEVER auto-relaunch on a cancel — the Credential Manager guide forbids retrying the request,
+  /// and a redrawn One Tap sheet is the fastest way to Google's 24 h suppression. That holds for the
+  /// whole foreground stretch a cancel happened in. A RETURN is a different event: the person left
+  /// the app and came back, so the wall gets one fresh automatic surface, gated by
+  /// [AuthController.noteAppLifecycle] on an away stretch that began AFTER the cancel settled
+  /// ([AuthController.returnAwayThreshold]) and on [AuthController.returnCooldown] since it.
   SignInOutcome? _outcome;
 
   @override
   void initState() {
     super.initState();
     _outcome = widget.debugOutcome;
+    WidgetsBinding.instance.addObserver(this);
     _initAutoLaunch();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// The wall's lifecycle feed. The DECISION is the controller's — this only supplies transitions
+  /// and joins whatever it re-arms, so the toast and the route stay on [_signIn] alone.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (ref.read(authControllerProvider.notifier).noteAppLifecycle(state)) {
+      unawaited(_signIn(auto: true));
+    }
   }
 
   void _initAutoLaunch() {
@@ -95,7 +119,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  /// [auto] is the first-frame launch — it JOINS whatever the splash started, never a second picker.
+  /// [auto] is the first-frame launch, or the one a return re-armed — it JOINS whatever the splash
+  /// started, never a second picker.
   /// It does nothing at all once that one attempt has been spent and dismissed.
   /// [auto] false is the pill, which may always start a fresh attempt.
   Future<void> _signIn({bool auto = false}) async {

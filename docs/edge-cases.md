@@ -33,6 +33,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
 - [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time, and a resume with no exchange in flight abandons after the grace, then relaunches ONCE
+- [ ] A RETURN to the wall (paused/hidden ≥ 20 s begun after the last outcome, ≥ 60 s since it, nothing in flight) re-arms the automatic sheet ONCE as `sheet_return`; a cancel on the same foreground stretch never relaunches
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
 
@@ -50,6 +51,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Re-applying or re-sharing a CACHED wallpaper still calls `/media/signed-url`; offline with bytes on disk is the one pass-through
 - [ ] A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial
 - [ ] The confirmation poll TOLERATES network failure and OUTLIVES the paywall; never-reached says confirmation is late, not the refund line
+- [ ] A return from the UPI app with the order OPEN is RESUMABLE (same link, same app, no new initiate, no second `checkout_started`); only picking ANOTHER app (fresh checkout with it, chip never frozen) or the `QRexpire` deadline (5 min on production links; 10–15 min fallback) abandons — SILENTLY, no "start over" button, no failure toast
 - [ ] Delete account: revoke → tombstone → cascade → refresh-jti denylist
 
 ## Browse

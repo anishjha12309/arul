@@ -22,15 +22,20 @@ ArulResubscribeView _view({
   bool canChange = true,
   String? accessUntil = '12 Aug 2026',
   bool busy = false,
+  String? resumeAppLabel,
+  VoidCallback? onResume,
+  VoidCallback? onResubscribe,
 }) => ArulResubscribeView(
   monthlyPrice: '₹199',
   accessUntil: accessUntil,
   selectedUpiApp: app,
   canChangeUpiApp: canChange,
   purchaseBusy: busy,
+  resumeAppLabel: resumeAppLabel,
+  onResume: onResume,
   onBack: () {},
   onChangeUpiApp: () {},
-  onResubscribe: () {},
+  onResubscribe: onResubscribe ?? () {},
 );
 
 void main() {
@@ -94,6 +99,52 @@ void main() {
       );
       expect(gesture.onTap, isNull);
       expect(find.byType(ListView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // A resubscribe dies in the UPI handoff exactly as a first purchase does -> the same way back in.
+  group('a resubscribe mandate waiting for approval', () {
+    testWidgets('re-opens the app instead of buying again, and never says '
+        'trial', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      var resumed = 0;
+      await tester.pumpWidget(
+        _host(
+          _view(
+            resumeAppLabel: 'PhonePe',
+            onResume: () => resumed++,
+            onResubscribe: () => fail('the CTA must resume, never buy again'),
+          ),
+        ),
+      );
+
+      expect(find.text('Open PhonePe again'), findsOneWidget);
+      expect(find.text('Resubscribe'), findsNothing);
+      expect(
+        find.text('Approve the payment in PhonePe to continue.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('trial'), findsNothing);
+      // Nothing to back out with — the order's own deadline retires it (owner's call).
+      expect(find.text('Start over'), findsNothing);
+      expect(find.byKey(const ValueKey('paywall-start-over')), findsNothing);
+      // The selector keeps its affordance: picking another app abandons this order and starts a
+      // fresh one there, which beats telling someone their one wallet is their only option.
+      expect(find.text('Change'), findsOneWidget);
+      expect(
+        tester
+            .widget<GestureDetector>(
+              find.byKey(const ValueKey('resubscribe-upi-selector')),
+            )
+            .onTap,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('shrine-cta')));
+      expect(resumed, 1);
       expect(tester.takeException(), isNull);
     });
   });

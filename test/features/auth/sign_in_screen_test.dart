@@ -2,6 +2,8 @@
 // SAME line for every outcome (owner's call: no explanation, no link — this audience cannot act on
 // either). These pin that: one line, never the idle line, never a sentence under the pill.
 
+import 'dart:async';
+
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
@@ -22,9 +24,17 @@ class _CountingAuthService implements AuthService {
   int signInCalls = 0;
   int abandonCalls = 0;
 
+  /// The `returned` flag of every attempt, in order -> the return re-arm is visible from the screen.
+  final List<bool> returnedFlags = [];
+
   @override
-  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) {
+  Future<AuthResult> signInWith(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+  }) {
     signInCalls++;
+    returnedFlags.add(returned);
     return Future.value(const AuthCancelled());
   }
 
@@ -173,6 +183,65 @@ void main() {
           reason: '${outcome.name} must offer no links at all',
         );
       }
+    });
+  });
+
+  // The wall FEEDS the controller its lifecycle and joins whatever that re-arms. The rule itself is
+  // pinned in auth_test.dart; this pins the WIRE, because an observer that is never registered (or
+  // that a dispose leaves attached) makes the whole re-arm dead code with every unit test still green.
+  group('the return re-arm reaches the wall', () {
+    testWidgets('a resume after a real away stretch fires ONE more automatic '
+        'attempt, marked as a return', (tester) async {
+      await pump(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SignInScreen)),
+        listen: false,
+      );
+      final t0 = DateTime(2026, 9, 15, 10);
+      var clock = t0;
+      final controller = container.read(authControllerProvider.notifier)
+        ..now = (() => clock)
+        ..stallTick = const Duration(milliseconds: 10);
+
+      // The cold-start attempt the splash fires. This build has no API define, so the screen's own
+      // first frame stood down -> firing it here is the only way the wall has a spent launch.
+      unawaited(controller.autoSignIn(AuthProvider.google)!);
+      await tester.pump();
+      expect(auth.signInCalls, 1);
+
+      clock = t0.add(const Duration(seconds: 100));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      clock = t0.add(const Duration(seconds: 200));
+      // Android's real return order — `inactive` must not count as coming back, or the away
+      // stretch is spent on the transition into the resume it is meant to qualify.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+
+      expect(auth.signInCalls, 2);
+      expect(auth.returnedFlags, [false, true]);
+    });
+
+    testWidgets('a resume with no away stretch behind it changes nothing', (
+      tester,
+    ) async {
+      await pump(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SignInScreen)),
+        listen: false,
+      );
+      final controller = container.read(authControllerProvider.notifier)
+        ..stallTick = const Duration(milliseconds: 10);
+
+      unawaited(controller.autoSignIn(AuthProvider.google)!);
+      await tester.pump();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+
+      expect(auth.signInCalls, 1);
     });
   });
 

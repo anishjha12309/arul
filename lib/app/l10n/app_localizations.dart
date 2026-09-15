@@ -1300,6 +1300,30 @@ abstract class AppLocalizations {
   /// **'Install PhonePe or Google Pay to subscribe'**
   String get premiumInstallUpiPaid;
 
+  /// The paywall's main button once the user has come back from their UPI app with the mandate still unapproved. It re-opens the SAME mandate link — never a new payment — so it must read as continuing, not as paying twice. {app} is the UPI app's own name from the phone (PhonePe, Google Pay, Paytm), never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {app} again'**
+  String premiumResumeCta(String app);
+
+  /// Replaces the reassurance line while a mandate is waiting to be approved, on the free-trial variant. The audience is not payment-literate: say the one thing that has to happen, in the app it has to happen in. ₹2 is the penny-drop the trial mandate charges and refunds.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve the ₹2 verification in {app} to start your trial.'**
+  String premiumResumeHintTrial(String app);
+
+  /// The same waiting-for-approval line on the paid variant, where there is no trial and no ₹2 — the first charge is the monthly price.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve the payment in {app} to continue.'**
+  String premiumResumeHintPaid(String app);
+
+  /// Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences.
+  ///
+  /// In en, this message translates to:
+  /// **'your UPI app'**
+  String get premiumUpiAppGeneric;
+
   /// No description provided for @trialNudgeRow.
   ///
   /// In en, this message translates to:

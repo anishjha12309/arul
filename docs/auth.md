@@ -126,6 +126,13 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A user's
   cancel SETTLES the future inside the grace and never reaches that path; the launcher's
   manufactured cancel is the one exception, because there was no cancellation to honour.
+- **A RETURN to the wall re-arms the automatic sheet ONCE** (`AuthController.noteAppLifecycle`, fed
+  by the screen's observer; the screen decides nothing). A person who left and came back is not the
+  cancel case, and a share of logins only ever land on such a return. Conditions, all required:
+  paused/hidden stretch ≥ `returnAwayThreshold` (20 s) that BEGAN after the last outcome settled,
+  ≥ `returnCooldown` (60 s) since that outcome, nothing in flight, signed out. `inactive` is a
+  Google surface or a dialog, never "away". Lock/unlock counts as a return. The attempt files under
+  `surface=sheet_return` so the return surface is priced apart from the cold-start sheet.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.

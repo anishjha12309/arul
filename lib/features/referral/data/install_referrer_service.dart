@@ -35,6 +35,7 @@ class InstallReferrerService {
   static const _kInstallChannel = 'install_channel';
   static const _kInstallSource = 'install_utm_source';
   static const _kInstallCampaign = 'install_utm_campaign';
+  static const _kInstallLink = 'install_link_kind';
 
   /// The shareable Play Store link that embeds [code] for attribution.
   ///
@@ -171,11 +172,21 @@ class InstallReferrerService {
   }
 
   /// The persisted attribution as event properties; empty until the referrer has landed.
-  Map<String, Object> get attributionProps => {
-    _kInstallChannel: ?_nonEmpty(_prefs.getString(_kInstallChannel)),
-    _kInstallSource: ?_nonEmpty(_prefs.getString(_kInstallSource)),
-    _kInstallCampaign: ?_nonEmpty(_prefs.getString(_kInstallCampaign)),
-  };
+  ///
+  /// An install that arrived on a wallpaper or ringtone link carries it as a suffix on the SAME
+  /// property — `google_ads+wallpaper`, `meta_ads+ringtone` — so no new parameter exists and the
+  /// part before `+` still reads as the channel. A link with no referrer answer yet is `unknown+…`.
+  Map<String, Object> get attributionProps {
+    final link = _nonEmpty(_prefs.getString(_kInstallLink));
+    final channel =
+        _nonEmpty(_prefs.getString(_kInstallChannel)) ??
+        (link == null ? null : 'unknown');
+    return {
+      _kInstallChannel: ?(link == null ? channel : '$channel+$link'),
+      _kInstallSource: ?_nonEmpty(_prefs.getString(_kInstallSource)),
+      _kInstallCampaign: ?_nonEmpty(_prefs.getString(_kInstallCampaign)),
+    };
+  }
 
   @visibleForTesting
   static String? parseReferralCode(String? raw) {
@@ -301,6 +312,8 @@ class InstallReferrerService {
   /// Persisting BEFORE the live request is load-bearing -> a process death is re-seeded at startup.
   /// Last write wins across kinds — a ringtone replaces a pending wallpaper, never both keys.
   /// A tab-only target is NOT persisted: losing that race just lands the user on the default tab.
+  /// Only install-time deliveries reach here, so the kind is also kept for [attributionProps] — and,
+  /// unlike the pending target, never cleared once the tab has shown it.
   Future<void> queueTarget(DeepLinkTarget target) async {
     switch (target) {
       case WallpaperLinkTarget(:final id, :final source):
@@ -309,6 +322,7 @@ class InstallReferrerService {
         await _prefs.setString(_kPendingWallpaper, normalized);
         await _prefs.remove(_kPendingRingtone);
         await _prefs.setString(_kPendingSource, source.key);
+        await _prefs.setString(_kInstallLink, target.kind);
         ArulDeepLink.requestTarget(
           WallpaperLinkTarget(normalized, source: source),
         );
@@ -318,6 +332,7 @@ class InstallReferrerService {
         await _prefs.setString(_kPendingRingtone, normalized);
         await _prefs.remove(_kPendingWallpaper);
         await _prefs.setString(_kPendingSource, source.key);
+        await _prefs.setString(_kInstallLink, target.kind);
         ArulDeepLink.requestTarget(
           RingtoneLinkTarget(normalized, source: source),
         );

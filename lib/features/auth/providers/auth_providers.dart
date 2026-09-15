@@ -84,6 +84,26 @@ class AuthController extends _$AuthController {
     }
   };
 
+  /// How long the app must have been AWAY before a return to the wall re-arms the automatic sheet.
+  ///
+  /// It separates "left the app and came back" from the app's own flicker: a Google surface, a
+  /// permission dialog or a rotation costs a moment, a person going somewhere else costs longer.
+  @visibleForTesting
+  Duration returnAwayThreshold = const Duration(seconds: 20);
+
+  /// The quiet period after the LAST settled attempt before a return may re-arm.
+  ///
+  /// Google rate-limits One Tap and suppresses it for 24h after several cancels in a row, which
+  /// takes automatic sign-in with it. A re-arm is therefore rare by construction: at most one per
+  /// return, and never near the outcome it would be retrying.
+  @visibleForTesting
+  Duration returnCooldown = const Duration(seconds: 60);
+
+  /// Clock seam for the return rule — tests move time instead of waiting it out.
+  /// The stall guard deliberately keeps its own real clock; it is timed by [stallTick], not by this.
+  @visibleForTesting
+  DateTime Function() now = DateTime.now;
+
   /// Set when the container goes away -> the guard's tick loop must not outlive it.
   bool _disposed = false;
 
@@ -92,20 +112,89 @@ class AuthController extends _$AuthController {
   /// Re-armed by [signOut]/[deleteAccount] -> process scope left the post-logout screen with no picker.
   /// A session dying on its own (401) is detected during the startup seed, before the auto-launch.
   /// So no re-arm is needed there — the flag is still false when it matters.
+  /// Also re-armed by [noteAppLifecycle] when the user LEFT the wall and came back: a cancel still
+  /// never relaunches, but a return after a real away stretch is a fresh visit, not a retry.
   bool _autoLaunched = false;
+
+  /// Start of the current away stretch (paused/hidden), cleared on every resume.
+  ///
+  /// `inactive` is NOT away: that is Google's own surface sitting over us, or a system dialog.
+  DateTime? _awaySince;
+
+  /// When the last attempt SETTLED — success, cancel, failure, or one of the guard's abandons.
+  /// Null until an attempt has run at all, which is also what keeps a define-less build inert.
+  DateTime? _lastOutcomeAt;
+
+  /// Set by [noteAppLifecycle], consumed by the next [autoSignIn] -> that attempt reports itself as
+  /// the return sheet (`surface: 'sheet_return'`) instead of a cold-start one.
+  bool _returnArmed = false;
+
+  /// One lifecycle transition, from the sign-in wall's observer. Returns true when the caller should
+  /// fire the automatic attempt again — the SCREEN stays the single joiner, so the toast and route
+  /// handling live in one place.
+  ///
+  /// The whole rule, for the 52-in-722 who only ever get in on a later return: a person who left the
+  /// wall and came back lands on a bare pill today, because the process's one automatic surface was
+  /// spent minutes ago. This gives that return its own surface, ONCE, and only when all of these
+  /// hold — nothing in flight (the guard owns that case, `stalled_resumed`/`surface_stripped`), still
+  /// signed out, an away stretch of at least [returnAwayThreshold] that STARTED after the last
+  /// outcome settled, and at least [returnCooldown] since that outcome.
+  ///
+  /// The away-started-after-the-outcome clause is what keeps "never auto-relaunch on a cancel"
+  /// intact: a dismissal followed by a return on the SAME foreground stretch re-arms nothing.
+  /// Recents, the launcher icon and a screen lock/unlock all read as paused -> all count as a
+  /// return. A rotation or a Google surface reads as inactive -> none of them do.
+  bool noteAppLifecycle(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        // The FIRST of a paused/hidden run owns the stretch — hidden->paused is one departure.
+        _awaySince ??= now();
+        return false;
+      case AppLifecycleState.resumed:
+        final away = _awaySince;
+        // Cleared whatever the verdict -> at most ONE re-arm per return, never a second resume's.
+        _awaySince = null;
+        final settled = _lastOutcomeAt;
+        if (away == null || settled == null) return false;
+        if (_inFlight != null) return false;
+        if (ref.read(authServiceProvider).currentState.isAuthenticated) {
+          return false;
+        }
+        if (!away.isAfter(settled)) return false;
+        final at = now();
+        if (at.difference(away) < returnAwayThreshold) return false;
+        if (at.difference(settled) < returnCooldown) return false;
+        _autoLaunched = false;
+        _returnArmed = true;
+        return true;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        return false;
+    }
+  }
 
   /// Starts a sign-in, or joins the one already running.
   ///
   /// Safe from a button — a tap while a sheet is up gets that sheet's result, never a second sheet.
   /// [auto] passes straight through to the service, which picks the FIRST Google surface.
   /// Not a policy this layer owns.
-  Future<AuthResult> signIn(AuthProvider provider, {bool auto = false}) {
+  /// [returned] is analytics only: it stamps this attempt as the one a RETURN re-armed.
+  Future<AuthResult> signIn(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+  }) {
     final existing = _inFlight;
     if (existing != null) return existing;
-    final raw = ref.read(authServiceProvider).signInWith(provider, auto: auto);
+    final raw = ref
+        .read(authServiceProvider)
+        .signInWith(provider, auto: auto, returned: returned);
     final started = DateTime.now();
     late final Future<AuthResult> guarded;
-    guarded = _guard(raw, started, provider, auto).whenComplete(() {
+    guarded = _guard(raw, started, provider, auto, returned).whenComplete(() {
+      // The return rule measures its cooldown from here -> every settle counts, abandons included.
+      _lastOutcomeAt = now();
       // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
       if (identical(_inFlight, guarded)) _inFlight = null;
     });
@@ -147,6 +236,7 @@ class AuthController extends _$AuthController {
     DateTime started,
     AuthProvider provider,
     bool auto,
+    bool returned,
   ) async {
     // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
@@ -169,7 +259,9 @@ class AuthController extends _$AuthController {
       _abandonStalled(kind: kind);
       sinceForeground = DateTime.now();
       wasMidFlow = false;
-      return ref.read(authServiceProvider).signInWith(provider, auto: auto);
+      return ref
+          .read(authServiceProvider)
+          .signInWith(provider, auto: auto, returned: returned);
     }
 
     while (true) {
@@ -282,15 +374,19 @@ class AuthController extends _$AuthController {
     return failure;
   }
 
-  /// The automatic sign-in, fired ONCE per process by whichever screen gets there first.
+  /// The automatic sign-in, fired ONCE per signed-out stretch by whichever screen gets there first.
   ///
   /// The splash the moment it knows there is no stored session, else the sign-in screen's first frame.
   /// Null once that attempt is spent and settled -> the signal to show the retry pill and stay put.
   /// Without it a cancelled sheet re-launches the instant the splash routes, and nobody escapes.
+  /// [noteAppLifecycle] can re-arm it once for a RETURN; that attempt carries the `sheet_return`
+  /// stamp so the funnel can price the return surface on its own.
   Future<AuthResult>? autoSignIn(AuthProvider provider) {
     if (_autoLaunched) return _inFlight;
     _autoLaunched = true;
-    final attempt = signIn(provider, auto: true);
+    final returned = _returnArmed;
+    _returnArmed = false;
+    final attempt = signIn(provider, auto: true, returned: returned);
     // Record a failure in case it settles before any screen joins; a joiner clears it after toasting.
     // The service never throws — every path returns a result -> no error continuation.
     unawaited(

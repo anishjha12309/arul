@@ -356,6 +356,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final purchase = ref.watch(premiumPurchaseProvider);
     final purchaseBusy =
         purchase is PurchaseLoading || purchase is PurchaseProcessing;
+    // The mandate is still open at PhonePe and the user is back in Arul -> the CTA becomes
+    // "open it again"; picking another app in the chip, or the order's own deadline, is the only
+    // other way out. Never a toast: nothing failed.
+    final resumable = purchase is PurchaseResumable ? purchase : null;
 
     final entitlementAsync = ref.watch(entitlementDetailProvider);
     // This route is LIGHT, always (owner's call) — the paywall is designed against ivory only.
@@ -385,12 +389,12 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
               // A failed fetch falls back to the PAYWALL, never a dead-end error card.
               // The upsell is still useful, and the Worker remains the authoritative gate.
               // Null entitlement = "we don't know" -> show the paid copy, never a free-day promise.
-              error: (_, _) => _paywall(p, null, purchaseBusy),
+              error: (_, _) => _paywall(p, null, purchaseBusy, resumable),
               data: (e) {
                 final sub = e.subscription;
                 // Only a LIVE plan gets the plan-home treatment; everything else is a sell.
                 if (!e.isPremium || sub == null) {
-                  return _paywall(p, e, purchaseBusy);
+                  return _paywall(p, e, purchaseBusy, resumable);
                 }
                 return switch (sub.status) {
                   SubscriptionStatus.trialing ||
@@ -399,10 +403,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                     p,
                     sub,
                     purchaseBusy,
+                    resumable,
                   ),
                   // isPremium was true, so pending/paused/expired cannot reach here.
                   // The enum is exhaustive though, and a silent wrong screen is worse than a safe one.
-                  _ => _paywall(p, e, purchaseBusy),
+                  _ => _paywall(p, e, purchaseBusy, resumable),
                 };
               },
             ),
@@ -424,10 +429,18 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   List<UpiApp> _orderedUpiApps(List<UpiApp> apps) =>
       UpiApps.ordered(apps, _selectedUpiPackage);
 
+  /// The picker, open in EVERY state including a resumable one.
+  ///
+  /// An order already open at PhonePe never narrows the choice to the app holding it: picking a
+  /// different one there is a decision to pay with that app instead, and [PremiumPurchase.switchApp]
+  /// carries it out in one motion — this order abandoned, a fresh one initiated in the new app.
+  /// Picking the app that already holds the order changes nothing at all.
   Future<void> _openUpiPicker(
     List<UpiApp> upiApps,
-    String currentPackage,
-  ) async {
+    String currentPackage, {
+    PurchaseResumable? resumable,
+    required bool trialEligible,
+  }) async {
     ArulHaptics.tap();
     final picked = await showArulSheet<String>(
       context,
@@ -442,12 +455,21 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     if (picked == null || !mounted) return;
     setState(() => _selectedUpiPackage = picked);
     await ref.read(sharedPreferencesProvider).setString(_kUpiAppKey, picked);
+    if (!mounted || resumable == null || picked == resumable.targetApp) return;
+    await ref
+        .read(premiumPurchaseProvider.notifier)
+        .switchApp(picked, trialEligible: trialEligible);
   }
 
   /// The sell — `design_handoff_arul_premium`, rendered by [ArulPaywallView].
   ///
   /// Resolves the four things that view cannot: trial eligibility, price, the UPI app, social proof.
-  Widget _paywall(_Palette p, Entitlement? entitlement, bool purchaseBusy) {
+  Widget _paywall(
+    _Palette p,
+    Entitlement? entitlement,
+    bool purchaseBusy,
+    PurchaseResumable? resumable,
+  ) {
     // One free trial per user -> a non-null trial_end means it was consumed.
     // Advertise the trial only from a LOADED entitlement — never promise a day the Worker charges.
     final trialEligible =
@@ -492,15 +514,43 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
       upiAppsKnown: upiAsync.hasValue,
+      resumeAppLabel: _resumeAppLabel(resumable, upiApps, selectedApp),
+      onResume: _resume,
       onBack: _leave,
+      // While resumable the highlighted row is the ORDER's app, not the picker's idea of current —
+      // the same app the CTA above promises to re-open.
       onChangeUpiApp: () => _openUpiPicker(
         upiApps,
-        selectedApp?.packageName ?? upiApps.first.packageName,
+        resumable?.targetApp ??
+            selectedApp?.packageName ??
+            upiApps.first.packageName,
+        resumable: resumable,
+        trialEligible: trialEligible,
       ),
       onPurchase: () =>
           _startPurchase(selectedUpiPackage, trialEligible: trialEligible),
     );
   }
+
+  /// The label of the app the live mandate link was fired at — the one named by the resume copy.
+  /// Null whenever there is nothing to resume, which is what switches the footer over.
+  /// It is the ATTEMPT's app, never the picker's: the button must promise the app that actually
+  /// holds the half-finished sheet. The two DO diverge for the length of a switch — the chip shows
+  /// the app just picked while this line still names the order being abandoned for it.
+  String? _resumeAppLabel(
+    PurchaseResumable? resumable,
+    List<UpiApp> apps,
+    UpiApp? selected,
+  ) {
+    if (resumable == null) return null;
+    for (final app in apps) {
+      if (app.packageName == resumable.targetApp) return app.label;
+    }
+    return selected?.label ?? AppLocalizations.of(context).premiumUpiAppGeneric;
+  }
+
+  void _resume() =>
+      unawaited(ref.read(premiumPurchaseProvider.notifier).resumeIntent());
 
   /// `feature_flags.show_social_proof` — ON unless config says otherwise.
   /// So a config the app could not fetch never silently strips the page.
@@ -530,6 +580,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     _Palette p,
     SubscriptionModel sub,
     bool purchaseBusy,
+    PurchaseResumable? resumable,
   ) {
     final monthlyPrice = _monthlyPrice(
       ref.watch(appConfigProvider).asData?.value?.prices,
@@ -551,12 +602,18 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       selectedUpiApp: selectedApp,
       canChangeUpiApp: upiApps.length > 1,
       purchaseBusy: purchaseBusy,
+      resumeAppLabel: _resumeAppLabel(resumable, upiApps, selectedApp),
+      onResume: _resume,
       onBack: _leave,
       onChangeUpiApp: () => _openUpiPicker(
         upiApps,
-        selectedApp?.packageName ?? upiApps.first.packageName,
+        resumable?.targetApp ??
+            selectedApp?.packageName ??
+            upiApps.first.packageName,
+        resumable: resumable,
+        // A resubscribe is never a trial — the row already carries a spent `trial_end`.
+        trialEligible: false,
       ),
-      // A resubscribe is never a trial — the row already carries a spent `trial_end`.
       onResubscribe: () =>
           _startPurchase(selectedUpiPackage, trialEligible: false),
     );

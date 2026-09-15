@@ -124,6 +124,35 @@
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/r/"/>
             </intent-filter>
+            <!-- The same links typed without the trailing slash, and the bare domain -> `/w?lang=ta`, `/?lang=ta`. -->
+            <!-- pathPrefix="/w/" does not match "/w" -> without these an INSTALLED phone opened a browser and lost the language. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/w"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/r"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/"/>
+            </intent-filter>
             <!-- fb<APP_ID>://open?wallpaper_id=…&lang=… (or ?screen=ringtones&ringtone_id=…) is what FB/IG launch for an INSTALLED user. -->
             <!-- The id reuses the SDK meta-data's META_APP_ID placeholder -> the scheme can never drift from the SDK's app. -->
             <!-- A key-less dev build resolves to a bare "fb" scheme -> nothing ever sends it -> harmless. -->

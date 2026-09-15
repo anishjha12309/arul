@@ -129,6 +129,19 @@ itself. Only the severity is wrong.
   counted twice.
 - **`phonepe_subscription_id` may stay NULL** when the webhook is lost and only status-reconcile
   runs. Harmless: the cron addresses PhonePe by *our* `merchant_subscription_id`.
+- **A return from the UPI app with the order OPEN is RESUMABLE, never a failure.** Most failed
+  setups are `INTENT_EXPIRED` — the approval sheet was reached and not approved — and abandoning on
+  that return revoked a mandate the person could still approve. `PurchaseResumable` keeps the SAME
+  link/app/order: "open again" re-fires it (no initiate, no `checkout_started`) and a slow status
+  watch lets a late approval land. **No "start over" button and no failure toast on this path**
+  (owner's call: users are not technical, keep it automatic, and "any amount deducted will be
+  refunded" is false when nothing was approved): the deadline passing, or PhonePe reporting the
+  order expired, resets the CTA SILENTLY (Idle, `payment_failed` still tracked, nudge armed) and the
+  next tap is a fresh order. **The app chip stays changeable**: picking another app abandons the
+  open order and starts a fresh checkout with that app in one motion; the same app does nothing. Deadline = the link's
+  `QRexpire` (split from the RAW query then percent-decoded; `Uri.queryParameters` turns the bare
+  `+05:30` into a space; **production links expire 5 min after creation**, the docs' sample says
+  15), else launch + 10 min, capped at 15 — the setup RESPONSE has no expiry.
 
 The billing lifecycle has been proven against UAT plus a local stub — re-prove after a change with
 `.claude/skills/verify-payments/` rather than re-deriving.

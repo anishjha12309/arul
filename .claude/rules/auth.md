@@ -30,6 +30,9 @@ Sign-in is the whole install→login funnel and every failure is silent.
   an icon relaunch manufactures by finishing the picker: `User cancelled the selector` on the BUTTON
   surface (a real back-out says `[16] Cancelled by user`) = `selectorStripped`, relaunched once.
   `POST /auth/login` retries connectivity failures only, never a RESPONSE.
+- **A RETURN re-arms the automatic sheet ONCE** (`noteAppLifecycle`): paused/hidden ≥ 20 s begun
+  after the last outcome, ≥ 60 s since it, nothing in flight, signed out → `surface=sheet_return`.
+  A cancel on the same foreground stretch never does; `inactive` is not away.
 - `sheetFirst`/`pickerAfterDismiss` stay BUILD consts, never `feature_flags` — `app_config.json`
   is absent on a first launch.
 

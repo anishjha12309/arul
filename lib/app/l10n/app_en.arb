@@ -261,6 +261,40 @@
   "premiumReassurancePaid": "Secured by UPI Autopay · Cancel anytime in one tap",
   "premiumInstallUpiTrial": "Install PhonePe or Google Pay to start your free trial",
   "premiumInstallUpiPaid": "Install PhonePe or Google Pay to subscribe",
+  "premiumResumeCta": "Open {app} again",
+  "@premiumResumeCta": {
+    "description": "The paywall's main button once the user has come back from their UPI app with the mandate still unapproved. It re-opens the SAME mandate link — never a new payment — so it must read as continuing, not as paying twice. {app} is the UPI app's own name from the phone (PhonePe, Google Pay, Paytm), never translated.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumResumeHintTrial": "Approve the ₹2 verification in {app} to start your trial.",
+  "@premiumResumeHintTrial": {
+    "description": "Replaces the reassurance line while a mandate is waiting to be approved, on the free-trial variant. The audience is not payment-literate: say the one thing that has to happen, in the app it has to happen in. ₹2 is the penny-drop the trial mandate charges and refunds.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumResumeHintPaid": "Approve the payment in {app} to continue.",
+  "@premiumResumeHintPaid": {
+    "description": "The same waiting-for-approval line on the paid variant, where there is no trial and no ₹2 — the first charge is the monthly price.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumUpiAppGeneric": "your UPI app",
+  "@premiumUpiAppGeneric": {
+    "description": "Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences."
+  },
   "trialNudgeRow": "Finish setting up your free trial",
   "trialNudgeDismiss": "Dismiss",
   "trialReminderTitle": "Your free trial is waiting",

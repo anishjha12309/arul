@@ -161,30 +161,33 @@ final class PushChannelNameProvider
 
 String _$pushChannelNameHash() => r'2831d3546f2b8770e9b452b809413d2e775bfb81';
 
-/// Registers this phone, once per launch, and re-registers when the language or the token moves.
+/// Registers this phone, once per launch, and re-registers when the language, the token or the
+/// account moves.
 ///
-/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on a cold start that
-/// already had a session AND right after a fresh sign-in, which are the two moments a row can appear
-/// or change hands. Never awaited by anything on screen — a registration that fails costs this phone
+/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on every cold start —
+/// signed in or not — AND right after a fresh sign-in, which are the moments a row can appear or
+/// change hands. Never awaited by anything on screen — a registration that fails costs this phone
 /// the next campaign and nothing else.
 
 @ProviderFor(pushBootstrap)
 final pushBootstrapProvider = PushBootstrapProvider._();
 
-/// Registers this phone, once per launch, and re-registers when the language or the token moves.
+/// Registers this phone, once per launch, and re-registers when the language, the token or the
+/// account moves.
 ///
-/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on a cold start that
-/// already had a session AND right after a fresh sign-in, which are the two moments a row can appear
-/// or change hands. Never awaited by anything on screen — a registration that fails costs this phone
+/// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on every cold start —
+/// signed in or not — AND right after a fresh sign-in, which are the moments a row can appear or
+/// change hands. Never awaited by anything on screen — a registration that fails costs this phone
 /// the next campaign and nothing else.
 
 final class PushBootstrapProvider extends $FunctionalProvider<void, void, void>
     with $Provider<void> {
-  /// Registers this phone, once per launch, and re-registers when the language or the token moves.
+  /// Registers this phone, once per launch, and re-registers when the language, the token or the
+  /// account moves.
   ///
-  /// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on a cold start that
-  /// already had a session AND right after a fresh sign-in, which are the two moments a row can appear
-  /// or change hands. Never awaited by anything on screen — a registration that fails costs this phone
+  /// Deliberately NOT tied to a screen: it watches the auth stream, so it fires on every cold start —
+  /// signed in or not — AND right after a fresh sign-in, which are the moments a row can appear or
+  /// change hands. Never awaited by anything on screen — a registration that fails costs this phone
   /// the next campaign and nothing else.
   PushBootstrapProvider._()
     : super(
@@ -219,4 +222,4 @@ final class PushBootstrapProvider extends $FunctionalProvider<void, void, void>
   }
 }
 
-String _$pushBootstrapHash() => r'a945cdc064f0304e85f1cfc7f1ed6a9f997f7250';
+String _$pushBootstrapHash() => r'12a149b3aa4f202218f22b03ad0b003c3c6f8b5f';

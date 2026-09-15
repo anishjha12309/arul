@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -32,6 +33,35 @@ final class PurchaseLoading extends PurchaseState {
 /// SDK launched; waiting for the user to complete/cancel in PhonePe.
 final class PurchaseProcessing extends PurchaseState {
   const PurchaseProcessing();
+}
+
+/// The UPI app was launched, the user came back, and the mandate is STILL OPEN at PhonePe.
+///
+/// 84.4% of failed setups are `INTENT_EXPIRED` — the approval sheet was reached and not approved.
+/// Backing out of a UPI app tells PhonePe nothing, so returning to Arul is not a decision: the
+/// order lives until [expiresAt]. Destroying it on that return is what this state exists to stop.
+/// The user gets the SAME link back, never a second initiate, until the deadline retires it.
+final class PurchaseResumable extends PurchaseState {
+  const PurchaseResumable({
+    required this.intentUrl,
+    required this.targetApp,
+    required this.merchantOrderId,
+    required this.launchedAt,
+    required this.expiresAt,
+  });
+
+  /// The intent link from the ORIGINAL initiate — re-fired verbatim, never rebuilt.
+  final String intentUrl;
+
+  /// The UPI package it was aimed at. Fixed for THIS order — picking another app in the chip does
+  /// not retarget it, it abandons this one and starts a fresh order ([PremiumPurchase.switchApp]).
+  final String targetApp;
+  final String merchantOrderId;
+  final DateTime launchedAt;
+
+  /// When the mandate link dies at PhonePe — see [PremiumPurchase.intentExpiry].
+  /// NEVER extended by a resume: the deadline belongs to the order, not to the button.
+  final DateTime expiresAt;
 }
 
 final class PurchaseSuccess extends PurchaseState {
@@ -223,13 +253,39 @@ class PremiumPurchase extends _$PremiumPurchase {
     4, 4, 4, 5, 5, 6, 8, 8, 10, 10, 10, 10, 10, 10, 10, 10, //
   ];
 
-  /// The merchant order id of an intent setup awaiting UPI approval — [cancelPending]'s handle.
-  /// Null outside that window.
+  /// The merchant order id of an intent setup being POLLED right now.
+  /// Null outside that window — a resumable attempt carries its own id in the state instead, and
+  /// there is no user-driven cancel: returning to Arul only re-offers the app that holds the sheet.
   String? _intentOrderId;
 
   /// Bumped to cancel a running [_confirmWithServer] loop — it captures the value and goes silent.
   /// So a user-tapped cancel owns the next state without racing a late poll response.
   int _pollGeneration = 0;
+
+  /// Wall clock, seamed for tests only — [PurchaseResumable]'s deadline is a real-time fact.
+  /// Timers alone would not do: Android freezes a backgrounded process and a Dart timer with it,
+  /// so the deadline has to be re-read from the clock every time we look at it.
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
+  DateTime _now() => clock();
+
+  /// The intent link, its target app and its deadline, kept for the whole attempt so the SAME
+  /// mandate can be re-opened. Cleared at the next [startTrial] and on every terminal exit.
+  String? _intentUrl;
+  String? _intentTargetApp;
+  DateTime? _intentLaunchedAt;
+  DateTime? _intentExpiresAt;
+
+  /// PhonePe documents 15 min as the intent link's MAXIMUM life (`expireAt` is a request field and
+  /// the setup response carries no expiry at all). So a link whose own `QRexpire` we cannot read
+  /// gets a deliberately shorter window, and one that reads longer than the documented max is capped.
+  static const _intentMaxWindow = Duration(minutes: 15);
+  static const _intentFallbackWindow = Duration(minutes: 10);
+
+  /// While resumable the server is still watched, just slowly — the approval can land at any second
+  /// inside the window, and the user is looking at a button, not a spinner.
+  static const _resumeWatchDelays = [3, 10, 30, 60];
 
   /// Starts the 1-day free trial via PhonePe.
   ///
@@ -239,9 +295,18 @@ class PremiumPurchase extends _$PremiumPurchase {
     String? targetApp,
     bool trialEligible = false,
   }) async {
-    if (state is PurchaseLoading || state is PurchaseProcessing) return;
+    // A resumable attempt owns the screen: its own order is still live at PhonePe, and a second
+    // initiate would revoke it. Resume, [switchApp], or the deadline — nothing else moves from
+    // here, and switchApp only reaches this line once its own abandon has ended the resumable
+    // state.
+    if (state is PurchaseLoading ||
+        state is PurchaseProcessing ||
+        state is PurchaseResumable) {
+      return;
+    }
 
     _trialAttempt = trialEligible;
+    _clearIntentAttempt();
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
     // The user has committed -> count the checkout BEFORE any network call.
@@ -427,14 +492,22 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// Direct UPI-intent flow — launch the chosen app onto its AutoPay sheet, then watch the server.
   /// There is NO SDK callback here -> the confirmation poll, and the webhook behind it, is the signal.
-  /// [cancelPending] is the user's way out.
+  /// A return with the order still open hands the user [PurchaseResumable], never a failure.
   Future<void> _startIntentFlow(
     String intentUrl,
     String targetApp,
     String merchantOrderId,
   ) async {
+    // Recorded BEFORE the launch: everything a resume needs is the launch's own input.
+    _intentUrl = intentUrl;
+    _intentTargetApp = targetApp;
+    final launchedAt = _now();
+    _intentLaunchedAt = launchedAt;
+    _intentExpiresAt = intentExpiry(intentUrl, launchedAt);
+
     final launched = await UpiApps.launch(intentUrl, targetApp);
     if (!launched) {
+      _clearIntentAttempt();
       // Nothing was authorized — the app never opened -> release the claim so a retry starts clean.
       await _abandonSetup(merchantOrderId);
       _fail(
@@ -463,35 +536,50 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
 
-  /// App-resumed checkpoint for the intent flow — the APP decides, never the user.
+  /// App-resumed checkpoint for the intent flow.
   ///
   /// A third-party UPI app the user cancels out of tells PhonePe NOTHING; the order stays PENDING.
-  /// So the user returning to Arul is itself the signal:
+  /// So the user returning to Arul is a checkpoint, NOT a decision:
   ///
   ///   1. check the server immediately — an approval settles here;
-  ///   2. still open → one short grace poll, since settlement can lag approval by seconds;
-  ///   3. STILL open → declare it failed: release the claim, order-status-guarded, and show the line.
+  ///   2. still open → [PurchaseResumable]: the same link, one tap away, until the order's deadline.
   ///
-  /// A settled payment is granted, never discarded.
-  /// The residual race — approval landing AFTER the release — is closed by the setup webhook.
+  /// What this must NEVER do is abandon on a mere return. 84.4% of failed setups die as
+  /// `INTENT_EXPIRED` — the sheet was reached and not approved — and abandoning revoked the mandate
+  /// the user was still able to approve.
   Future<void> pollNowOnResume() async {
-    final orderId = _intentOrderId;
-    if (orderId == null || !_isProcessing || _resolvingIntent) {
-      return;
-    }
+    final resumable = _resumableState;
+    final orderId = resumable?.merchantOrderId ?? _intentOrderId;
+    if (orderId == null || _resolvingIntent) return;
+    if (resumable == null && !_isProcessing) return;
     _resolvingIntent = true;
     try {
-      if (await _settleFromStatus(orderId)) return;
       // NO artificial delay. Production tails showed PhonePe still PENDING at both samples of a
       // 2 s re-poll on every real back-out -> the wait never changed an outcome, only held a spinner.
-      // Redundant by construction too: the abandon below re-reads the LIVE order and answers
-      // settled:true when PhonePe says COMPLETED, from a strictly fresher read than a second poll.
-      // Anything later than that belongs to the setup webhook. Resolution is now network-bound.
+      if (await _settleFromStatus(orderId)) return;
+      if (resumable != null) {
+        // Already resumable: the one thing a return can still decide is that the window is gone.
+        if (!_now().isBefore(resumable.expiresAt)) {
+          await _autoResolveIntent(
+            orderId,
+            reason: 'intent_resume_expired',
+            silent: true,
+          );
+        }
+        return;
+      }
       if (!_isProcessing) return;
-      await _autoResolveIntent(orderId);
+      await _enterResumable(orderId);
     } finally {
       _resolvingIntent = false;
     }
+  }
+
+  /// The live [PurchaseResumable], or null — including whenever the paywall is gone.
+  PurchaseResumable? get _resumableState {
+    if (!ref.mounted) return null;
+    final current = state;
+    return current is PurchaseResumable ? current : null;
   }
 
   /// One status check — true when it OWNED the outcome, false when the order is still open.
@@ -501,7 +589,11 @@ class PremiumPurchase extends _$PremiumPurchase {
       final serverStatus = statusResp['status'] as String? ?? '';
       // A cancel owned the outcome meanwhile.
       // A DISPOSED notifier is not that case — nothing else can settle its order — so it reports.
-      if (ref.mounted && state is! PurchaseProcessing) return true;
+      if (ref.mounted &&
+          state is! PurchaseProcessing &&
+          state is! PurchaseResumable) {
+        return true;
+      }
 
       if (serverStatus == 'trialing' || serverStatus == 'active') {
         _pollGeneration++;
@@ -518,7 +610,16 @@ class PremiumPurchase extends _$PremiumPurchase {
       }
       if (serverStatus == 'expired') {
         _pollGeneration++;
-        _fail('expired', const PurchaseError(_intentFailedCopy));
+        // While the attempt is resumable NOTHING was ever approved: the sheet was reached and
+        // left. So "Payment failed. Any amount deducted will be refunded" is false on both halves,
+        // and the order is simply over -> [PurchaseIdle], where the CTA reads as the offer again
+        // and the next tap opens a fresh one. Still counted, and the nudge still remembers it.
+        if (_resumableState != null) {
+          _trackPaymentFailed('expired', cancelled: false);
+          _setState(const PurchaseIdle());
+        } else {
+          _fail('expired', const PurchaseError(_intentFailedCopy));
+        }
         await _nudge.remember(orderId, trialAttempt: _trialAttempt);
         return true;
       }
@@ -531,15 +632,253 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// Declares the intent payment failed for the user — silence the poll, release the claim, show it.
   /// The abandoned mandate can never debit: it was never authorized, and the next initiate revokes it.
-  Future<void> _autoResolveIntent(String orderId) async {
+  ///
+  /// Only THREE things reach here now, and [reason] says which: the window ran out
+  /// (`intent_resume_expired`), the user picked a different UPI app (`intent_app_switched`), or there
+  /// was nothing to resume with (`intent_abandoned`). A plain return from the UPI app is not one of
+  /// them, and there is no "start over" control any more — this audience is not payment-literate,
+  /// so the app decides for them and keeps the screen automatic (owner's call).
+  ///
+  /// [silent] covers every ending where the person never approved anything: the deadline passing,
+  /// or their own pick of another app. The order still dies and the SAME `payment_failed` still
+  /// counts it, but the failure copy is never shown — nothing failed and nothing was deducted, so
+  /// "Payment failed. Any amount deducted will be refunded" would be false (owner's call). It lands
+  /// on [PurchaseIdle] instead, the one state [startTrial] accepts, so the CTA reads as the offer
+  /// again and the next tap is a genuinely new order. [nudge] decides whether the abandoned-trial
+  /// reminder is armed: true when they are walking away, the deadline included, false for
+  /// [switchApp] (the attempt that replaces this one remembers itself if IT dies; nothing may be
+  /// awaited before its initiate, so no frame can render the idle paywall between the two halves of
+  /// one tap).
+  Future<void> _autoResolveIntent(
+    String orderId, {
+    String reason = 'intent_abandoned',
+    bool silent = false,
+    bool nudge = true,
+  }) async {
     _pollGeneration++;
+    _clearIntentAttempt();
     final settled = await _abandonSetup(orderId);
     if (settled) {
       await _confirmWithServer(orderId);
       return;
     }
-    _fail('intent_abandoned', const PurchaseError(_intentFailedCopy));
-    await _nudge.remember(orderId, trialAttempt: _trialAttempt);
+    if (silent) {
+      _trackPaymentFailed(reason, cancelled: false);
+      _setState(const PurchaseIdle());
+    } else {
+      _fail(reason, const PurchaseError(_intentFailedCopy));
+    }
+    if (nudge) await _nudge.remember(orderId, trialAttempt: _trialAttempt);
+  }
+
+  /// Hands the still-open order back to the user as something they can finish.
+  ///
+  /// Silences the confirmation poll (the button is the state now), then keeps a slow watch so an
+  /// approval that lands while they look at the screen still settles by itself.
+  /// With no link to re-fire, or nobody left to press it, this is the old terminal path instead.
+  Future<void> _enterResumable(String orderId) async {
+    final url = _intentUrl;
+    final app = _intentTargetApp;
+    if (url == null || app == null || !ref.mounted) {
+      await _autoResolveIntent(orderId);
+      return;
+    }
+    _pollGeneration++;
+    final launchedAt = _intentLaunchedAt ?? _now();
+    final expiresAt = _intentExpiresAt ?? intentExpiry(url, launchedAt);
+    _intentExpiresAt = expiresAt;
+    if (!_now().isBefore(expiresAt)) {
+      await _autoResolveIntent(
+        orderId,
+        reason: 'intent_resume_expired',
+        silent: true,
+      );
+      return;
+    }
+    _setState(
+      PurchaseResumable(
+        intentUrl: url,
+        targetApp: app,
+        merchantOrderId: orderId,
+        launchedAt: launchedAt,
+        expiresAt: expiresAt,
+      ),
+    );
+    unawaited(_watchResumable(orderId, expiresAt));
+  }
+
+  /// The slow watch behind [PurchaseResumable] — every tick asks the server, and the last one lands
+  /// on the deadline. Goes silent the moment [_pollGeneration] moves, i.e. on any user action.
+  Future<void> _watchResumable(String orderId, DateTime expiresAt) async {
+    final generation = _pollGeneration;
+    for (var i = 0; ; i++) {
+      final step = Duration(
+        seconds:
+            _resumeWatchDelays[i < _resumeWatchDelays.length
+                ? i
+                : _resumeWatchDelays.length - 1],
+      );
+      final remaining = expiresAt.difference(_now());
+      if (remaining <= Duration.zero) {
+        await _autoResolveIntent(
+          orderId,
+          reason: 'intent_resume_expired',
+          silent: true,
+        );
+        return;
+      }
+      await Future<void>.delayed(remaining < step ? remaining : step);
+      if (generation != _pollGeneration) return;
+      // Disposed, resumed, switched, or settled elsewhere -> not this loop's business any more.
+      if (_resumableState == null) return;
+      if (!_now().isBefore(expiresAt)) {
+        await _autoResolveIntent(
+          orderId,
+          reason: 'intent_resume_expired',
+          silent: true,
+        );
+        return;
+      }
+      if (await _settleFromStatus(orderId)) return;
+    }
+  }
+
+  /// Re-opens the SAME mandate link in the SAME app — the one way forward from [PurchaseResumable].
+  ///
+  /// No `/payments/initiate` (a second one revokes the live order and burns the claim window) and no
+  /// second `checkout_started` (the funnel counts ONE checkout per decision). The deadline is the
+  /// order's, so it is carried over untouched however many times this runs.
+  Future<void> resumeIntent() async {
+    // Not resumable = already processing, already settled, or gone. Never a second launch.
+    // Mid-switch counts as gone: the state still reads resumable while the abandon is in flight,
+    // and re-opening an order that is being revoked server-side sends the user to a dead sheet.
+    final resumable = _resumableState;
+    if (resumable == null || _switching) return;
+
+    _pollGeneration++;
+    // The ONE marker that this attempt came back through the resume button. Terminal events read it:
+    // `trial_started`/`subscription_active` via _trackConversion, `payment_failed` via _fail.
+    _checkoutMethod = 'upi_app_resumed';
+    _setState(const PurchaseProcessing());
+
+    final launched = await UpiApps.launch(
+      resumable.intentUrl,
+      resumable.targetApp,
+    );
+    if (!launched) {
+      _clearIntentAttempt();
+      await _abandonSetup(resumable.merchantOrderId);
+      _fail(
+        'upi_launch_failed',
+        const PurchaseError('Could not open your UPI app. Please try again.'),
+      );
+      return;
+    }
+
+    _intentOrderId = resumable.merchantOrderId;
+    try {
+      await _confirmWithServer(
+        resumable.merchantOrderId,
+        delays: _intentPollDelays,
+      );
+    } finally {
+      _intentOrderId = null;
+    }
+  }
+
+  /// The person picked a DIFFERENT UPI app while their order is still open — one motion, two steps.
+  ///
+  /// Freezing the picker instead would mean "you have PhonePe, so PhonePe is your only option",
+  /// which is not a choice anyone agreed to. So: abandon the open order exactly as a dead intent
+  /// has always been abandoned — a silent `intent_app_switched` failure, the claim released — and
+  /// immediately initiate a fresh one at [targetApp]. That is a NEW decision, so a second
+  /// `checkout_started` fires with the new `target_app`; the funnel still counts one checkout per
+  /// decision.
+  ///
+  /// Picking the app that already holds the order is a no-op: the state stays resumable, nothing is
+  /// abandoned and nothing is initiated, because the button they want is the CTA above the chip.
+  ///
+  /// The 409 `setup_in_progress` window cannot bite here: the abandon's UPDATE takes the row out of
+  /// `pending` before it answers, so the initiate that follows sees no claim. If the abandon could
+  /// not release one (PhonePe unreachable, a row already terminal) `_initiateWithRetry` rides the
+  /// 409 out — its delays sum past SETUP_CLAIM_WINDOW_MS, and this claim is minutes old anyway.
+  Future<void> switchApp(
+    String targetApp, {
+    required bool trialEligible,
+  }) async {
+    final resumable = _resumableState;
+    if (resumable == null || resumable.targetApp == targetApp || _switching) {
+      return;
+    }
+    _switching = true;
+    try {
+      await _autoResolveIntent(
+        resumable.merchantOrderId,
+        reason: 'intent_app_switched',
+        silent: true,
+        nudge: false,
+      );
+    } finally {
+      _switching = false;
+    }
+    // Anything but idle means the abandon found the mandate SETTLED and `_confirmWithServer` owns
+    // the screen — that order is a live subscription now, and a second checkout over it is exactly
+    // the double-mandate the server refuses.
+    if (!ref.mounted || state is! PurchaseIdle) return;
+    await startTrial(targetApp: targetApp, trialEligible: trialEligible);
+  }
+
+  /// True for the one network round-trip in the middle of [switchApp]: the state still says
+  /// resumable, but that order is already being revoked, so the resume CTA above it must not fire.
+  bool _switching = false;
+
+  /// Forgets the link, so nothing can resume an attempt that is over.
+  void _clearIntentAttempt() {
+    _intentUrl = null;
+    _intentTargetApp = null;
+    _intentLaunchedAt = null;
+    _intentExpiresAt = null;
+  }
+
+  /// When the intent link dies at PhonePe.
+  ///
+  /// The setup response carries NO expiry — `expireAt` is a REQUEST field, capped at 15 min for an
+  /// intent — so the only deadline the app can read is the one PhonePe writes into the link itself
+  /// as `QRexpire`. Absent or unreadable (sandbox `ppesim://` links have none) -> a deliberately
+  /// SHORTER window than the documented maximum, which can only ever end an attempt early.
+  @visibleForTesting
+  static DateTime intentExpiry(String intentUrl, DateTime launchedAt) {
+    final parsed = parseIntentExpiry(intentUrl)?.toLocal();
+    final latest = launchedAt.add(_intentMaxWindow);
+    if (parsed == null || !parsed.isAfter(launchedAt)) {
+      return launchedAt.add(_intentFallbackWindow);
+    }
+    return parsed.isAfter(latest) ? latest : parsed;
+  }
+
+  /// `QRexpire` out of a `upi://mandate?...` link — ISO-8601 with an offset, and PhonePe writes
+  /// NANOSECONDS (`2026-04-14T11:26:11.582158634+05:30`), which `DateTime.parse` truncates happily.
+  ///
+  /// Hand-split rather than `Uri.queryParameters`: that decodes a raw `+` in a value as a SPACE, and
+  /// production links carry the `+05:30` offset unencoded — the offset became " 05:30" and every
+  /// link read as unparseable. [Uri.decodeComponent] keeps the plus and still handles `%2B`.
+  @visibleForTesting
+  static DateTime? parseIntentExpiry(String intentUrl) {
+    final query = Uri.tryParse(intentUrl)?.query;
+    if (query == null || query.isEmpty) return null;
+    for (final pair in query.split('&')) {
+      final eq = pair.indexOf('=');
+      if (eq <= 0 || pair.substring(0, eq) != 'QRexpire') continue;
+      try {
+        return DateTime.tryParse(
+          Uri.decodeComponent(pair.substring(eq + 1)).trim(),
+        );
+      } catch (_) {
+        // A malformed percent escape is not worth a crash — the fallback window covers it.
+        return null;
+      }
+    }
+    return null;
   }
 
   /// Short-backoff poll of /payments/status until the server confirms the mandate.
@@ -641,11 +980,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
 
     // Retries exhausted and the server has not confirmed.
-    // Intent flow -> most likely a dismissed third-party app that told no one, so resolve it FOR them.
-    // SDK flow -> a SUCCESS callback fired, so a payment happened and only confirmation is late.
+    // Intent flow -> ~2 minutes of PENDING says the user is still inside the UPI app, not that the
+    // attempt is dead. The order lives until its own deadline, so hand it back as resumable rather
+    // than spending it. SDK flow -> a SUCCESS callback fired, so only confirmation is late.
     final intentOrderId = _intentOrderId;
     if (intentOrderId != null) {
-      await _autoResolveIntent(intentOrderId);
+      await _enterResumable(intentOrderId);
       return;
     }
     _failUnconfirmed(

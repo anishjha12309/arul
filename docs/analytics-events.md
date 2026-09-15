@@ -55,13 +55,16 @@ screen shows one retry line whatever it is) and `ms_to_surface`, carried by `log
 succeeding population for its denominator. Both: [auth.md](auth.md).
 `login_surface_shown` (once per attempt, `surface`/`auto`/`ms_to_surface`) proves Google's screen
 appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
-left". **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
+left". `surface` values: `sheet`, `sheet_return` (the automatic attempt a return to the wall
+re-armed), `button`, `button_after_dismiss`; a return attempt that escalates to the picker carries
+`sheet_return` on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
 lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
 100 installs read as "install, then nothing". Expect the measured install→login rate to read LOWER
 from build 74 on — the denominator now includes people it used to miss.
 Every sign-in event also carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` /
 `share` / `link` / `other` / `unknown`, off the Play referrer, `install_utm_source` and
-`install_utm_campaign` beside it) and **`low_ram`** (the poster rule's verdict) — the two cuts
+`install_utm_campaign` beside it; an install that arrived on a wallpaper or ringtone link adds
+`+wallpaper` / `+ringtone` to the SAME value — split on `+`, never compare the whole string) and **`low_ram`** (the poster rule's verdict) — the two cuts
 PostHog's own properties cannot make, on the events that exist rather than new ones.
 
 **The two events spell the Credential Manager message differently: `login_cancelled` carries
@@ -85,7 +88,12 @@ an `ArulEvents` constant.
 `payment_failed` is GA4-only (a failure is a diagnostic; an ad optimiser fed one trains on the wrong
 outcome) and covers EVERY terminal exit of the purchase notifier through one `_fail()`, so a new error
 path cannot silently skip it. **`reason` is a short stable code, NEVER the user-facing copy**, which
-is prose and would fragment the metric.
+is prose and would fragment the metric. A resumable intent that ends without approval says
+`intent_app_switched` (the user picked ANOTHER UPI app — there is no start-over button) or
+`intent_resume_expired` (the link's deadline); a PhonePe verdict stays `expired`. All three are
+silent on screen: the event counts it, the user sees no failure. Once the resume button was used, `method` reads `upi_app_resumed` on
+`trial_started`, `subscription_active` and `payment_failed` — `checkout_started` keeps `upi_app` and
+fires once per decision, never on a resume.
 
 The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES and the PostHog
 allow-list are exact sets pinned by tests: every sink matches the literal, a typo drops silently.
