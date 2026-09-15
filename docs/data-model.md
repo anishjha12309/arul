@@ -71,9 +71,15 @@ client-side.
 renewed rows lead New, the last renewed on top ([browse.md](browse.md)). It has ONE writer, the
 unified CMS's Feed order page, and it is deliberately not a trigger — resurfacing is an act, never a
 side effect of publishing. That same UPDATE re-stamps `published_at = now()` (the trigger keeps an
-explicit value), so builds before 1.0.0+78 still window the row into New; the debut date is lost, by
-the owner's choice. This replaces clearing `published_at` by hand as the way to resurface a row.
-Unpublishing does not clear it.
+explicit value), so builds before 1.0.0+78 still window the row into New. This replaces clearing
+`published_at` by hand as the way to resurface a row. Unpublishing does not clear it.
+
+**`pre_renew_published_at` makes a Renew undoable** (nullable, no default, no index —
+`db/schema/20_renew_undo.sql`, 2026-09-15). The renew UPDATE keeps the `published_at` it overwrites,
+but only when `renewed_at` was null, so a chain of renews keeps the ORIGINAL debut. The CMS's Undo
+writes it back into `published_at` and nulls both renew columns. CMS bookkeeping only: build-catalog
+deletes it from the catalog JSON. The one row renewed before the column existed (Bala Murugan,
+2026-09-15) had its kept date filled by hand from the catalog built before that renew.
 
 **`feed_rank` is a nullable `integer` on BOTH tables** again (dropped 2026-08-25, restored
 2026-09-02): the hand pin the unified CMS writes, and tier 1 of the feed order. NULL means unpinned

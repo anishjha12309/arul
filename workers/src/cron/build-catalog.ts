@@ -595,6 +595,8 @@ async function buildScope(
 
     r["feed_rank"] = rankFor(i);
     delete r["scored_at"];
+    // The CMS's Undo bookkeeping (db/schema/20_renew_undo.sql) -> never content, and no model reads it
+    delete r["pre_renew_published_at"];
 
     if (scope === "wallpapers") {
       r["apply_count"] = pgBigintToNumber(r["apply_count"]);

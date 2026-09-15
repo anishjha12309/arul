@@ -78,8 +78,10 @@ server-stamped `is_new` would freeze a row as new through a quiet week. `newOrde
 - **A CMS Renew writes `renewed_at = now()` AND `published_at = now()`** in one UPDATE, with the
   `content_version` bump (db/schema/19_renewed_at.sql). Re-stamping `published_at` is what lets builds
   before 1.0.0+78 — which window on `published_at` alone, in their old pins-then-applies order — still
-  show a renewed row in New. The first-publish date is overwritten; there is no undo. A renew older
-  than the window is just a date again.
+  show a renewed row in New. The date it overwrites is kept in `pre_renew_published_at` (first renew
+  of a chain only), and the CMS's **Undo** writes it back and clears both renew columns, so the row
+  returns exactly where it was (db/schema/20_renew_undo.sql). The app needs nothing for Undo: a null
+  `renewed_at` is simply not tier 1. A renew older than the window is just a date again.
 - **`published_at`, never `created_at`** — created_at is import time, so a batch imported long before
   it went live would be born too old to appear. Debut date, DB-trigger stamped
   ([data-model.md](data-model.md)).
