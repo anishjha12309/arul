@@ -142,8 +142,9 @@ segment must never send. `trialing` is the `trialing` status OR a `cancelled` ro
 is still ahead — removing the mandate mid-trial flips the status, and until 2026-09-14 that person
 belonged to no plan at all (not lapsed, because still entitled; not free, because a row exists).
 
-**Every kind LEFT JOINs users**, reading the flag as `NOT coalesce(u.is_internal, false)`, so `all`
-now includes phones that never signed in. Every plan state also requires `d.user_id IS NOT NULL` —
+**Every kind LEFT JOINs users**, reading the robot check as
+`NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)`, so `all` includes phones that never
+signed in. Every plan state also requires `d.user_id IS NOT NULL` —
 a phone with no account has no subscription row and would otherwise read as `free`. The composer
 builds one combinable kind, `{kind:"filter", lang?, plan?, idle_days?: 7|14|30, joined_hours?:
 1|24|168, signed_in?}`, ANDing whatever was picked; `joined_hours` bounds `d.created_at` through a
@@ -151,11 +152,20 @@ bound interval like `inactive`. A filter with nothing picked parses to null (it 
 and so does `plan` with `signed_in:false` (a contradiction). `lang`, `premium` and `inactive` keep
 parsing: scheduled and historical rows carry them.
 
-**Internal accounts are excluded from every kind but `internal`.** That kind reaches nobody else,
-and it is offered TWO ways: the "Send to my phone" button (send-now, writes a `cancelled` draft) and
-"My own phones" in the audience picker. The picker entry is what makes a SCHEDULED notification
-testable at all — every other audience excludes the owner, so without it the cron path could never be
-walked on a real device. Never match an account by email substring.
+**Test accounts (`users.is_internal`) receive every real campaign; Google Play's robots receive
+none.** Until 2026-09-15 test accounts were excluded from every kind but `internal`, and a team member
+who sent to Everyone and heard nothing read it as a failed send. The flag now only moves numbers:
+the fan-out `total` and the drain's `sent`/`failed` skip test-account phones (`countsTestAccounts` in
+`cron/push-dispatch.ts`) and the CMS leaves their taps out of Opened — except on an `internal`
+campaign, where they are the only phones. `internal` still reaches nobody else, offered two ways that
+save the SAME row: "Test accounts" in the audience picker (what makes a SCHEDULED notification
+testable) and the "Send to test accounts" button, which since 2026-09-15 is a send-now campaign with
+that audience through `/internal/push/dispatch`. It used to write a `cancelled` draft and send through
+`/internal/push/test`, which kept no deliveries, so its card read "Cancelled" with no numbers; the CMS
+no longer calls that route (`runPushTest` stays for the rehearsal tooling, unused by the CMS). Robots are flagged too, for the
+subscriptions report, but hold no FCM token, so every kind — `internal` and the test button included
+— leaves out `%@cloudtestlabaccounts.com`, the one safe email pattern. Never match a person by email
+substring.
 
 ## Permission — once, after sign-in, on the feed
 

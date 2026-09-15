@@ -5,15 +5,16 @@
  * campaign row, and both the count and the delivery fan-out run this same builder. A second copy in
  * the CMS would be a count that disagrees with the send.
  *
- * INTERNAL ACCOUNTS ARE EXCLUDED FROM EVERY KIND BUT `internal`. The owner's own test accounts and
- * Google Play's pre-launch robots share the tables with real users, and a real campaign must never
- * land on one. `internal` is the other half of the same rule: it is what "Send to my phone" targets,
- * and it reaches nobody else. The flag is set by hand — NEVER match an account by email substring
- * ('%anish%' matches ~35 real paying users).
+ * TEST ACCOUNTS GET REAL CAMPAIGNS TOO. A team member who sends to Everyone and hears nothing reads
+ * it as a failed send, so `users.is_internal` no longer removes anyone from a real audience — it only
+ * keeps those phones out of the campaign's Sent/Failed counters (cron/push-dispatch.ts) and its
+ * Opened number (the CMS). `internal` still reaches ONLY them: it is what "Send to test accounts"
+ * targets. Google Play's pre-launch robots are the one exclusion left, matched on Google's Test Lab
+ * domain — the only safe email pattern on this user base ('%anish%' matches ~35 real paying users).
  *
  * PHONES THAT NEVER SIGNED IN ARE IN THE REGISTRY (user_id NULL, db/schema/18_push_journey.sql), so
- * every kind LEFT JOINs users and reads the flag through `coalesce(…, false)`: an anonymous phone is
- * not internal, and `all` reaches it. A plan is a fact about an account, so every plan state also
+ * every kind LEFT JOINs users and reads the email through `coalesce(…, false)`: an anonymous phone is
+ * not a robot, and `all` reaches it. A plan is a fact about an account, so every plan state also
  * requires `d.user_id IS NOT NULL` — without it a phone with no account has no subscription row and
  * no reward credit, and would read as "free".
  *
@@ -174,11 +175,13 @@ export function audienceQuery(
   audience: PushAudience,
 ): postgres.PendingQuery<postgres.Row[]> {
   const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
-  const external = sql`NOT coalesce(u.is_internal, false)`;
+  const external = sql`NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)`;
 
   switch (audience.kind) {
     case "internal":
-      return sql`${base} WHERE u.is_internal`;
+      // The robots are flagged too (for the subscriptions report), but they never hold an FCM token:
+      // left in, every test send reported one failure per robot run.
+      return sql`${base} WHERE u.is_internal AND ${external}`;
     case "all":
       return sql`${base} WHERE ${external}`;
     case "lang":

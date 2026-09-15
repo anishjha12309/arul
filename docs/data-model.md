@@ -10,9 +10,11 @@ app_instance_id, meta_anon_id (**VESTIGIAL** — their only readers were the ser
 reporters, since deleted; nothing writes or reads them, and the columns stay because dropping them is
 a migration) · **is_internal** (reporting-only, below) · created_at
 
-**`is_internal` is set BY HAND and read ONLY by the unified CMS's subscriptions page.** No
-entitlement, payment, catalog or app path reads it, so a wrong flag can never cost a user access —
-it can only move a number on an admin page. It exists because the owner's own test trials and Google
+**`is_internal` is set BY HAND and read only for reporting and test sends:** the unified CMS's
+subscriptions page, and campaign push, where it is the "Test accounts" audience and keeps those phones
+out of a campaign's Sent/Failed/Opened ([push.md](push.md)). No entitlement, payment, catalog or app
+path reads it, so a wrong flag can never cost a user access — it can only move a number on an admin
+page. It exists because the owner's own test trials and Google
 Play's pre-launch robots are ~1.4% of trials but ~4% of CANCELLATIONS. **Enumerate exact addresses.**
 An email substring is unusable on this user base: `%anish%` matches ~35 real paying users (kanishka,
 manisharma, dhanish, nishanth) and `%test%` matches real ones too. The one safe pattern is

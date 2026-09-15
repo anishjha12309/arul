@@ -27,7 +27,7 @@ import {
   type PushCampaign,
   type PushDevice,
 } from "../lib/fcm.js";
-import { audienceQuery, parseAudience } from "../lib/push-audience.js";
+import { audienceQuery, parseAudience, type PushAudience } from "../lib/push-audience.js";
 
 /** Rows claimed per batch transaction. The lock is held only while the batch's sends are in flight. */
 const BATCH = 600;
@@ -58,6 +58,18 @@ export interface PushDispatchResult {
   completed: number;
 }
 
+/**
+ * Whether a campaign's Sent/Failed/total count the test accounts' phones.
+ *
+ * Test accounts receive every real campaign (lib/push-audience.ts) but stay out of its numbers: a
+ * team that opens every send on reinstalled phones would otherwise move Failed and Opened on each
+ * one. A campaign aimed AT them is the exception — there they are the only phones, and "Sent 0"
+ * would hide whether the test went out.
+ */
+export function countsTestAccounts(audience: PushAudience | null): boolean {
+  return audience?.kind === "internal";
+}
+
 /** `"true"` and nothing else. An unset or misspelt var reads as OFF — this switch fails closed. */
 export function pushEnabled(env: Env): boolean {
   return env.PUSH_ENABLED === "true";
@@ -79,11 +91,11 @@ export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
 
     // Oldest first: a campaign already half-sent finishes before a newer one starts consuming ticks.
     const running = (await sql`
-      SELECT id, texts, dest, dest_id, image_url, color, expires_hours, last_error
+      SELECT id, texts, dest, dest_id, image_url, color, expires_hours, last_error, audience
       FROM push_campaigns
       WHERE status = 'sending'
       ORDER BY started_at ASC NULLS FIRST
-    `) as unknown as (PushCampaign & { last_error: string | null })[];
+    `) as unknown as (PushCampaign & { last_error: string | null; audience?: unknown })[];
 
     for (const campaign of running) {
       if (Date.now() >= deadline) break;
@@ -145,10 +157,19 @@ async function startDueCampaigns(sql: postgres.Sql): Promise<number> {
       ON CONFLICT DO NOTHING
     `;
     // An audience of zero phones is finished the moment it starts. Saying "Sent 0" honestly beats a
-    // card that sits on "Sending" forever because nothing will ever drain it.
+    // card that sits on "Sending" forever because nothing will ever drain it. That test is on EVERY
+    // delivery; only `total` leaves test accounts out, like `sent` and `failed` below.
+    const countedTotal = countsTestAccounts(audience)
+      ? sql`SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id`
+      : sql`
+          SELECT count(*) FROM push_deliveries d
+          LEFT JOIN push_devices pd ON pd.fid = d.fid
+          LEFT JOIN users u ON u.id = pd.user_id
+          WHERE d.campaign_id = c.id AND NOT coalesce(u.is_internal, false)
+        `;
     const counted = (await sql`
       UPDATE push_campaigns c
-      SET total = (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id),
+      SET total = (${countedTotal}),
           status = CASE
             WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0
             THEN 'sent' ELSE 'sending' END,
@@ -173,10 +194,11 @@ interface DrainResult {
 async function drainCampaign(
   sql: postgres.Sql,
   env: Env,
-  campaign: PushCampaign & { last_error: string | null },
+  campaign: PushCampaign & { last_error: string | null; audience?: unknown },
   deadline: number,
 ): Promise<DrainResult> {
   const out: DrainResult = { attempted: 0, sent: 0, failed: 0, completed: false };
+  const countTestPhones = countsTestAccounts(parseAudience(campaign.audience));
 
   let accessToken: string;
   try {
@@ -201,7 +223,7 @@ async function drainCampaign(
 
   const deadFids: string[] = [];
   while (Date.now() < deadline) {
-    const batch = await sendOneBatch(sql, env, campaign, accessToken, deadFids);
+    const batch = await sendOneBatch(sql, env, campaign, accessToken, deadFids, countTestPhones);
     out.attempted += batch.attempted;
     out.sent += batch.sent;
     out.failed += batch.failed;
@@ -250,6 +272,7 @@ async function sendOneBatch(
   campaign: PushCampaign,
   accessToken: string,
   deadFids: string[],
+  countTestPhones: boolean,
 ): Promise<{ attempted: number; sent: number; failed: number }> {
   return sql.begin(async (tx) => {
     const claimed = (await tx`
@@ -262,9 +285,13 @@ async function sendOneBatch(
 
     const fids = claimed.map((r) => r.fid);
     const devices = (await tx`
-      SELECT fid, token, lang, app_build FROM push_devices WHERE fid = ANY(${toPgTextArray(fids)}::text[])
-    `) as unknown as PushDevice[];
+      SELECT d.fid, d.token, d.lang, d.app_build, coalesce(u.is_internal, false) AS internal
+      FROM push_devices d LEFT JOIN users u ON u.id = d.user_id
+      WHERE d.fid = ANY(${toPgTextArray(fids)}::text[])
+    `) as unknown as (PushDevice & { internal?: boolean })[];
     const byFid = new Map(devices.map((d) => [d.fid, d]));
+    // A row whose device is gone cannot say whose it was, so it counts: it is a real failure.
+    const counts = (fid: string) => countTestPhones || !byFid.get(fid)?.internal;
 
     const sentFids: string[] = [];
     const failures: { fid: string; error: string }[] = [];
@@ -299,9 +326,11 @@ async function sendOneBatch(
     }
     // One counter write per batch, not per row: the CMS card reads these two numbers every 5 s while
     // a campaign is sending, and they only have to be right at batch granularity.
+    const sentCount = sentFids.filter(counts).length;
+    const failedCount = failures.filter((f) => counts(f.fid)).length;
     await tx`
       UPDATE push_campaigns
-      SET sent = sent + ${sentFids.length}, failed = failed + ${failures.length}
+      SET sent = sent + ${sentCount}, failed = failed + ${failedCount}
       WHERE id = ${campaign.id}
     `;
     return { attempted: fids.length, sent: sentFids.length, failed: failures.length };
@@ -339,7 +368,7 @@ export async function runPushTest(
     const devices = (await sql`
       SELECT d.fid, d.token, d.lang, d.app_build
       FROM push_devices d JOIN users u ON u.id = d.user_id
-      WHERE u.is_internal
+      WHERE u.is_internal AND NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)
     `) as unknown as PushDevice[];
     if (devices.length === 0) {
       return { sent: 0, failed: 0, errors: ["No test phone has opened the app yet."] };

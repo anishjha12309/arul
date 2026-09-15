@@ -74,7 +74,7 @@ function fragmentSql(): postgres.Sql {
 describe("audienceQuery", () => {
   const sql = fragmentSql();
 
-  it("excludes internal accounts from every kind but `internal`", () => {
+  it("test accounts get real campaigns — only Play's robots are left out of every kind", () => {
     const kinds: PushAudience[] = [
       { kind: "all" },
       { kind: "lang", lang: "ta" },
@@ -88,19 +88,21 @@ describe("audienceQuery", () => {
       { kind: "filter", plan: "paid", idle_days: 14, joined_hours: 168, signed_in: true },
     ];
     for (const kind of kinds) {
+      const text = flat(audienceQuery(sql, kind));
       // Through coalesce: a phone that never signed in has no users row, and `NOT NULL` is NULL,
       // which would silently drop every anonymous phone from every audience.
-      expect(flat(audienceQuery(sql, kind)), JSON.stringify(kind)).toContain(
-        "NOT coalesce(u.is_internal, false)",
+      expect(text, JSON.stringify(kind)).toContain(
+        "NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)",
       );
+      // A team member who sends to Everyone must get it; the flag only moves the numbers now.
+      expect(text, JSON.stringify(kind)).not.toContain("is_internal");
     }
   });
 
-  it("`internal` targets ONLY internal accounts — that is the whole test-send path", () => {
+  it("`internal` targets ONLY test accounts, and never the tokenless robots", () => {
     const text = flat(audienceQuery(sql, { kind: "internal" }));
-    expect(text).toContain("WHERE u.is_internal");
+    expect(text).toContain("WHERE u.is_internal AND NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)");
     expect(text).not.toContain("NOT u.is_internal");
-    expect(text).not.toContain("coalesce");
   });
 
   it("every kind selects fids off push_devices LEFT JOINed to users — anonymous phones included", () => {
@@ -144,7 +146,7 @@ describe("audienceQuery", () => {
 
     const langOnly = flat(audienceQuery(sql, { kind: "filter", lang: "ta" }));
     expect(langOnly).toBe(
-      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.is_internal, false) AND d.lang = ?",
+      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.lang = ?",
     );
   });
 
@@ -584,7 +586,7 @@ describe("runPushDispatch", () => {
         ],
       },
       claim,
-      { match: /SELECT fid, token, lang, app_build FROM push_devices/, rows: [DEVICE] },
+      { match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/, rows: [DEVICE] },
       { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
@@ -725,7 +727,7 @@ describe("array parameters", () => {
           return claims++ === 0 ? [{ fid: "fid-1" }] : [];
         },
       },
-      { match: /SELECT fid, token, lang, app_build FROM push_devices/, rows: [DEVICE] },
+      { match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/, rows: [DEVICE] },
       { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
@@ -741,6 +743,86 @@ describe("array parameters", () => {
     // And the value that replaced it is a real literal, cast at the call site.
     expect(routed.bound).toContain('{"fid-1"}');
     expect(routed.text()).toContain("::text[]");
+  });
+});
+
+describe("test accounts in a campaign's numbers", () => {
+  // Test accounts now receive every real campaign, but a team opening each send on reinstalled
+  // phones must not move Sent/Failed — except on a campaign aimed at them, where "Sent 0" would hide
+  // whether the test went out at all.
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  async function drainTwoPhones(audience: unknown) {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    let claims = 0;
+    const routed = routedSql([
+      { match: /SET status = 'sending', started_at/, rows: [] },
+      {
+        match: /FROM push_campaigns\s+WHERE status = 'sending'/,
+        rows: [{ ...CAMPAIGN, last_error: null, audience }],
+      },
+      {
+        match: /AND status = 'pending'\s+LIMIT/,
+        get rows() {
+          return claims++ === 0 ? [{ fid: "fid-real" }, { fid: "fid-test" }] : [];
+        },
+      },
+      {
+        match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/,
+        rows: [
+          { ...DEVICE, fid: "fid-real", internal: false },
+          { ...DEVICE, fid: "fid-test", internal: true },
+        ],
+      },
+      { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
+    ]);
+    const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
+    vi.stubGlobal("fetch", vi.fn(async () => fcmOk()));
+    const result = await runPushDispatch(env);
+    const counter = routed.statements.find((s) => s.includes("SET sent = sent +"));
+    return { result, counter };
+  }
+
+  it("a real campaign sends to both phones but counts only the real one", async () => {
+    const { result, counter } = await drainTwoPhones({ kind: "all" });
+    expect(result.sent).toBe(2);
+    expect(counter).toMatch(/ :: 1,0,/);
+  });
+
+  it("a campaign aimed at test accounts counts them", async () => {
+    const { result, counter } = await drainTwoPhones({ kind: "internal" });
+    expect(result.sent).toBe(2);
+    expect(counter).toMatch(/ :: 2,0,/);
+  });
+
+  it("the fan-out total leaves test accounts out of a real campaign only", async () => {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    for (const [audience, excludes] of [
+      [{ kind: "all" }, true],
+      [{ kind: "internal" }, false],
+    ] as const) {
+      const routed = routedSql([
+        {
+          match: /SET status = 'sending', started_at/,
+          rows: [{ id: CAMPAIGN_ID, audience }],
+        },
+      ]);
+      const env = makeEnv({ PUSH_ENABLED: "true", _testSql: routed.sql });
+      await runPushDispatch(env);
+      // The routed mock records a nested fragment as its own statement, not inside the UPDATE's text.
+      const excluding = routed.statements.some(
+        (s) => s.includes("LEFT JOIN push_devices pd") && s.includes("NOT coalesce(u.is_internal, false)"),
+      );
+      expect(excluding, audience.kind).toBe(excludes);
+      const totalWrite = routed.statements.find((s) => s.includes("SET total ="))!;
+      // Whether it is finished is decided on EVERY delivery: a real campaign that only reached test
+      // phones still has rows to drain.
+      expect(totalWrite).toContain("WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0");
+    }
   });
 });
 
