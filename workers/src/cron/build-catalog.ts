@@ -578,6 +578,8 @@ async function buildScope(
   // It is what the app's New chip windows on, entirely client-side -> the chip must not depend on a rebuild
   // The hourly build is a no-op while content_version holds, so a server-stamped is_new flag would freeze
   // Null here means never published -> impossible on a published row once db/schema/15_published_at.sql lands
+  // `renewed_at` STAYS on both as well -> tier 1 of New (a CMS Renew), windowed client-side exactly like published_at
+  // It is not in either delete list below, so SELECT * carries it -> deleting it would silently flatten New's top tier
   // Ringtone `mime` STAYS -> set-as-ringtone infers the file extension from it
   // `apply_count`/`set_count` are emitted as the lifetime number the CMS and older installs read
   // They are also what the ORDER BY sorted on -> but the app must NOT re-sort -> `feed_rank` already encodes it

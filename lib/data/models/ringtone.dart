@@ -46,6 +46,9 @@ abstract class Ringtone with _$Ringtone {
     /// Debut date — the same contract and the same null case as [Wallpaper.publishedAt].
     /// NOT [createdAt], which is import time; the two differ by however long a batch sat unpublished.
     DateTime? publishedAt,
+
+    /// Last CMS Renew — tier 1 of New, the same contract and null case as [Wallpaper.renewedAt].
+    DateTime? renewedAt,
   }) = _Ringtone;
 
   factory Ringtone.fromJson(Map<String, dynamic> json) =>

@@ -459,6 +459,24 @@ void main() {
       },
     );
 
+    test(
+      'renewed_at parses off the catalog and survives the disk-cache round-trip, and a null stays null',
+      () {
+        // Same trap again -> a renew that does not round-trip drops out of New's top tier on every warm
+        // start until the background revalidate lands.
+        final renewed = Wallpaper.fromJson({
+          ..._item('sivan0'),
+          'renewed_at': '2026-09-15T10:30:00.123456Z',
+        });
+        expect(renewed.renewedAt, DateTime.utc(2026, 9, 15, 10, 30, 0, 123, 456));
+        expect(Wallpaper.fromJson(renewed.toJson()).renewedAt, renewed.renewedAt);
+
+        final never = Wallpaper.fromJson(_item('sivan1'));
+        expect(never.renewedAt, isNull);
+        expect(Wallpaper.fromJson(never.toJson()).renewedAt, isNull);
+      },
+    );
+
     test('a pin leads the feed, ahead of a far more popular row', () {
       // Tier 1 beats tier 2 -> that is the entire point of the rank field.
       final all = [

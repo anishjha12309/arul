@@ -26,8 +26,9 @@ clause is the counter order alone. Never fold NULL to 0: 0 is a valid top pin. I
 which is what stops a bulk drop displacing the pinned head; curation must never be parked in
 `sort_order`, because every import resets it and the pins die silently.
 
-The same order applies on every chip, so a filtered view can never contradict All: **a category IS
-All restricted to that category.** Never add a per-chip rank.
+The same order applies on All and every category chip, so a category view can never contradict All:
+**a category IS All restricted to that category.** Never add a per-chip rank. The New chip is the
+one exception and has its own order — see below.
 
 **The chip ROW's own order is a different thing entirely** and does not live here: it is the
 operator's, set by dragging on the unified CMS's Categories page, shipped as
@@ -49,7 +50,7 @@ rebuilds; without both the phone keeps its cached `app_config.json` and the orde
 - **`sort_order` no longer participates in feed order at all.** Imports own it, so leading with it
   meant the feed was really ordered by import sequence with popularity breaking ties. The column is
   still stored and still editable in the CMS; nothing reads it for order.
-- The CMS ordering page is READ-ONLY and copies this clause verbatim. Keep the two in step.
+- The CMS feed-order page copies this clause verbatim. Keep the two in step.
 
 ## The New chip
 
@@ -58,19 +59,34 @@ chrome beside All in both chip rows, so it never reaches `categoriesProvider` �
 it out of the Upload picker, the CMS and every import. Never give a row this `category` value.
 
 **Client-side, and it has to be:** the hourly build is a no-op while `content_version` holds, so a
-server-stamped `is_new` would freeze a row as new through a quiet week. `newSelection`
-(catalog_providers.dart) windows at read time; the catalog only carries the column.
+server-stamped `is_new` would freeze a row as new through a quiet week. `newOrder`
+(catalog_providers.dart) windows at read time; the catalog only carries the columns.
 
+**New has its OWN order — the one chip that is not All restricted** (owner's call, 2026-09-15, build
+1.0.0+78). Three tiers, the first two inside `kNewWindow` (7 days, inclusive):
+
+1. **Renewed** — `renewed_at` in the window, most recent renew first. The operator taps **Renew** on a
+   row of the unified CMS's Feed order page; renew five and they stack, the last one on top.
+2. **Debuts** — every other row with `published_at` in the window, newest publish first.
+3. **Filler** — only when 1 + 2 hold fewer than `kNewMinItems` (20): the next-newest rows by
+   `published_at` make up the floor, shown most-used first.
+
+- **Pins play NO part in New.** Ties in every tier go by uses DESC, then `id` — never by the catalog's
+  `feed_rank`, which is a position with the pins baked in. A bulk publish is one transaction, so a
+  whole batch shares one `published_at`; that is the tie the rule is for. `id` rather than list index
+  because the drained ringtone list is re-sorted by `sort_order`/title.
+- **A CMS Renew writes `renewed_at = now()` AND `published_at = now()`** in one UPDATE, with the
+  `content_version` bump (db/schema/19_renewed_at.sql). Re-stamping `published_at` is what lets builds
+  before 1.0.0+78 — which window on `published_at` alone, in their old pins-then-applies order — still
+  show a renewed row in New. The first-publish date is overwritten; there is no undo. A renew older
+  than the window is just a date again.
 - **`published_at`, never `created_at`** — created_at is import time, so a batch imported long before
   it went live would be born too old to appear. Debut date, DB-trigger stamped
   ([data-model.md](data-model.md)).
 - **`kNewMinItems` is a FLOOR, not a cap.** Everything inside `kNewWindow` is in — a 40-row drop
   shows all 40; a thin week tops up by recency to 20, an empty one serves the newest 20. A cap would
-  hide half a bulk drop behind All for a week.
-- **`newSelection` returns the subset in CATALOG order, not the recency order that chose it.**
-  `orderedByUse`'s last tier is position in the list it is GIVEN, so re-sorting first hands New a
-  third tier All lacks, and the two then disagree on a pair tied on rank and applies. Recency decides
-  membership only.
+  hide half a bulk drop behind All for a week. Membership of the filler is by RECENCY and only its
+  order is by use — sorting the whole remainder by use would pull in the most-applied rows of all time.
 - **Nothing in the scope carrying `published_at` → no chip** (`showNewCategoryProvider` and its
   ringtone twin, each on its own scope). An install on a page built before the column would serve the
   top of All under the wrong name.
@@ -106,7 +122,10 @@ failing to parse.
 ## Where a saved position resolves
 
 Apply-restore resolves its saved page index through `feedOrder()` — the index is a position in the
-SERVED list, and raw catalog order restores the wrong wallpaper whenever the saved chip was All. A
+SERVED list, and raw catalog order restores the wrong wallpaper whenever the saved chip was All. The
+chip saved beside it is the one the user was ON (`selectedCategoryProvider`), never the wallpaper's
+own `category`: before 1.0.0+78 an apply from All or New saved the latter and restored onto a
+category chip at a foreign index. A
 deep link resolves the same way (always on All); a ringtone link goes through `ringtoneFeedOrder` and
 lands the row at the TOP of All. The link's `lang` always wins over the user's Settings pick
 ([deep-links.md](deep-links.md)).

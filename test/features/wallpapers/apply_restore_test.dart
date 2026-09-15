@@ -230,6 +230,44 @@ void main() {
     );
   });
 
+  testWidgets('an apply from the NEW chip restores into New, at New\'s own index', (
+    tester,
+  ) async {
+    // The feed saves the chip the user was ON (feed_screen.dart), so `__new__` arrives here. New has its
+    // own order — renewed, then debuts — so the index must resolve through New's list, not All's.
+    final now = DateTime.now();
+    final catalog = [
+      for (final w in _catalog)
+        switch (w.id) {
+          'id-temple0' => w.copyWith(
+            publishedAt: now.subtract(const Duration(days: 3)),
+            renewedAt: now.subtract(const Duration(hours: 1)),
+          ),
+          'id-amman1' => w.copyWith(publishedAt: now.subtract(const Duration(days: 1))),
+          _ => w,
+        },
+    ];
+    final newSlug = WallpaperCategory.newSlug;
+    final h = await pumpHost(tester, {
+      appliedWallpaperPendingKey: true,
+      pendingApplyPageIndexKey: 1,
+      pendingApplyCategoryKey: newSlug,
+      pendingApplyIsLiveKey: false,
+    });
+
+    h.host.maybeRestoreAfterApply(catalog);
+    await tester.pump();
+
+    expect(h.host.restoreCalls, [(index: 1, category: newSlug, wasLive: false)]);
+    expect(h.container.read(selectedCategoryProvider), newSlug);
+    expect(
+      feedOrder(newSlug, catalog).take(2).map((w) => w.id),
+      ['id-temple0', 'id-amman1'],
+      reason: 'index 1 in New is the debut under the renewed wallpaper',
+    );
+    expect(feedOrder(WallpaperCategory.allSlug, catalog)[1].id, isNot('id-amman1'));
+  });
+
   testWidgets(
     'a category no longer in the catalog restores nothing (empty feed list) '
     'and still consumes the flags',

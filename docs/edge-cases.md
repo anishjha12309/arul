@@ -56,9 +56,10 @@ now. Reasoning lives in the `docs/` file of the same name.
 
 ## Browse
 - [ ] CATEGORY chips only (All + 6), static/live interleaved; an unknown category falls into All and an empty one shows a localized empty state
-- [ ] Order is ONE SQL clause numbered into `feed_rank`, sorted by the shipped comparator on EVERY chip; the last tie breaks on a unique key
-- [ ] No pins, no decayed score; `apply_score`/`set_score`/`scored_at` stay unread and no second sort key joins the counter
-- [ ] Apply-restore and deep links resolve their index through the SERVED list
+- [ ] Order is ONE SQL clause numbered into `feed_rank`, sorted by the shipped comparator on All and every category chip; the last tie breaks on a unique key
+- [ ] Hand pins are tier 1 and the only hand tier of that clause; no decayed score; `apply_score`/`set_score`/`scored_at` stay unread and no second sort key joins the counter
+- [ ] New has its OWN order: renewed (last renew on top) → debuts newest first → filler to 20 by uses; ties by uses then `id`, never by pin or position
+- [ ] Apply-restore and deep links resolve their index through the SERVED list; apply-restore saves the chip the user was ON, never the wallpaper's category
 - [ ] Reel card geometry lives ONLY in `feed_card_geometry.dart`, pinned by its test — read the solved size, never `cardAspect`
 - [ ] The floor splits `headroom`/`underhang` around the reel; screen-anchored things offset by `underhang + peek + gap`; 1.78 is a BOUNDARY, not a dial
 - [ ] Live cards marked by `LiveMark` ONLY: static, 22 dp inset, no shadow, no text

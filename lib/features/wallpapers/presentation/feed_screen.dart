@@ -404,7 +404,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           w,
           target: target,
           feedPageIndex: _index,
-          category: w.category,
+          // The CHIP the user is on, never the wallpaper's own category: `_index` is a position in
+          // that chip's served list, and apply_restore re-selects this slug and jumps to it. Saving
+          // `w.category` restored an All or New apply onto a category chip at a foreign index.
+          category: ref.read(selectedCategoryProvider),
           // The wallpaper engine / chooser preview needs the hardware decoders the feed holds ->
           // a budget SoC has only a handful -> release them for the duration.
           releaseVideoDecoders: _video.releaseDecoders,

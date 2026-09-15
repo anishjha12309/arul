@@ -31,12 +31,19 @@ mixin _$Wallpaper {
 /// An older cached catalog built before this field parses as null -> that feed falls back to popularity.
  int? get feedRank;/// The DEBUT date — when this wallpaper was published, not when it was imported.
 ///
-/// The one input to the New chip ([newSelection]), and the reason there is no `createdAt` here:
+/// Tier 2 of the New chip ([newOrder]), and the reason there is no `createdAt` here:
 /// created_at is import time, so a batch imported in August and published in September would be
-/// born too old to ever appear in New. Stamped once, by a DB trigger (db/schema/15_published_at.sql).
+/// born too old to ever appear in New. Stamped by a DB trigger on the first publish
+/// (db/schema/15_published_at.sql), and re-stamped by a CMS Renew alongside [renewedAt].
 /// Null on a catalog cached before the field existed -> the New chip hides itself rather than
 /// windowing on nothing (`showNewCategoryProvider`), and returns on its own once a page lands.
- DateTime? get publishedAt;
+ DateTime? get publishedAt;/// When an operator last RENEWED this in the CMS — tier 1 of the New chip ([newOrder]): inside
+/// the 7-day window, renewed rows lead New, the most recent renew on top.
+///
+/// The CMS stamps it together with [publishedAt], so builds before 1.0.0+78, which know only
+/// [publishedAt], still window the row into New. Null is ordinary (never renewed), and is also what
+/// a catalog or disk cache from before the column parses to (db/schema/19_renewed_at.sql).
+ DateTime? get renewedAt;
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -49,16 +56,16 @@ $WallpaperCopyWith<Wallpaper> get copyWith => _$WallpaperCopyWithImpl<Wallpaper>
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt)&&(identical(other.renewedAt, renewedAt) || other.renewedAt == renewedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank,publishedAt);
+int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank,publishedAt,renewedAt);
 
 @override
 String toString() {
-  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank, publishedAt: $publishedAt)';
+  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank, publishedAt: $publishedAt, renewedAt: $renewedAt)';
 }
 
 
@@ -69,7 +76,7 @@ abstract mixin class $WallpaperCopyWith<$Res>  {
   factory $WallpaperCopyWith(Wallpaper value, $Res Function(Wallpaper) _then) = _$WallpaperCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank, DateTime? publishedAt
+ String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank, DateTime? publishedAt, DateTime? renewedAt
 });
 
 
@@ -86,7 +93,7 @@ class _$WallpaperCopyWithImpl<$Res>
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,Object? renewedAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -98,6 +105,7 @@ as int?,height: freezed == height ? _self.height : height // ignore: cast_nullab
 as int?,applyCount: null == applyCount ? _self.applyCount : applyCount // ignore: cast_nullable_to_non_nullable
 as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
 as int?,publishedAt: freezed == publishedAt ? _self.publishedAt : publishedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,renewedAt: freezed == renewedAt ? _self.renewedAt : renewedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,
   ));
 }
@@ -183,10 +191,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Wallpaper() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   return orElse();
 
 }
@@ -204,10 +212,10 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)  $default,) {final _that = this;
 switch (_that) {
 case _Wallpaper():
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -224,10 +232,10 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category, @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image)  WallpaperKind kind, @JsonKey(name: 'full_key')  String key,  int? width,  int? height,  int applyCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _Wallpaper() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt);case _:
+return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.width,_that.height,_that.applyCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   return null;
 
 }
@@ -239,7 +247,7 @@ return $default(_that.id,_that.title,_that.category,_that.kind,_that.key,_that.w
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class _Wallpaper extends Wallpaper {
-  const _Wallpaper({required this.id, required this.title, this.category = 'other', @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) required this.kind, @JsonKey(name: 'full_key') required this.key, this.width, this.height, this.applyCount = 0, this.feedRank, this.publishedAt}): super._();
+  const _Wallpaper({required this.id, required this.title, this.category = 'other', @JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) required this.kind, @JsonKey(name: 'full_key') required this.key, this.width, this.height, this.applyCount = 0, this.feedRank, this.publishedAt, this.renewedAt}): super._();
   factory _Wallpaper.fromJson(Map<String, dynamic> json) => _$WallpaperFromJson(json);
 
 @override final  String id;
@@ -267,12 +275,20 @@ class _Wallpaper extends Wallpaper {
 @override final  int? feedRank;
 /// The DEBUT date — when this wallpaper was published, not when it was imported.
 ///
-/// The one input to the New chip ([newSelection]), and the reason there is no `createdAt` here:
+/// Tier 2 of the New chip ([newOrder]), and the reason there is no `createdAt` here:
 /// created_at is import time, so a batch imported in August and published in September would be
-/// born too old to ever appear in New. Stamped once, by a DB trigger (db/schema/15_published_at.sql).
+/// born too old to ever appear in New. Stamped by a DB trigger on the first publish
+/// (db/schema/15_published_at.sql), and re-stamped by a CMS Renew alongside [renewedAt].
 /// Null on a catalog cached before the field existed -> the New chip hides itself rather than
 /// windowing on nothing (`showNewCategoryProvider`), and returns on its own once a page lands.
 @override final  DateTime? publishedAt;
+/// When an operator last RENEWED this in the CMS — tier 1 of the New chip ([newOrder]): inside
+/// the 7-day window, renewed rows lead New, the most recent renew on top.
+///
+/// The CMS stamps it together with [publishedAt], so builds before 1.0.0+78, which know only
+/// [publishedAt], still window the row into New. Null is ordinary (never renewed), and is also what
+/// a catalog or disk cache from before the column parses to (db/schema/19_renewed_at.sql).
+@override final  DateTime? renewedAt;
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
@@ -287,16 +303,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Wallpaper&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.key, key) || other.key == key)&&(identical(other.width, width) || other.width == width)&&(identical(other.height, height) || other.height == height)&&(identical(other.applyCount, applyCount) || other.applyCount == applyCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt)&&(identical(other.renewedAt, renewedAt) || other.renewedAt == renewedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank,publishedAt);
+int get hashCode => Object.hash(runtimeType,id,title,category,kind,key,width,height,applyCount,feedRank,publishedAt,renewedAt);
 
 @override
 String toString() {
-  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank, publishedAt: $publishedAt)';
+  return 'Wallpaper(id: $id, title: $title, category: $category, kind: $kind, key: $key, width: $width, height: $height, applyCount: $applyCount, feedRank: $feedRank, publishedAt: $publishedAt, renewedAt: $renewedAt)';
 }
 
 
@@ -307,7 +323,7 @@ abstract mixin class _$WallpaperCopyWith<$Res> implements $WallpaperCopyWith<$Re
   factory _$WallpaperCopyWith(_Wallpaper value, $Res Function(_Wallpaper) _then) = __$WallpaperCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank, DateTime? publishedAt
+ String id, String title, String category,@JsonKey(name: 'type', unknownEnumValue: WallpaperKind.image) WallpaperKind kind,@JsonKey(name: 'full_key') String key, int? width, int? height, int applyCount, int? feedRank, DateTime? publishedAt, DateTime? renewedAt
 });
 
 
@@ -324,7 +340,7 @@ class __$WallpaperCopyWithImpl<$Res>
 
 /// Create a copy of Wallpaper
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? kind = null,Object? key = null,Object? width = freezed,Object? height = freezed,Object? applyCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,Object? renewedAt = freezed,}) {
   return _then(_Wallpaper(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -336,6 +352,7 @@ as int?,height: freezed == height ? _self.height : height // ignore: cast_nullab
 as int?,applyCount: null == applyCount ? _self.applyCount : applyCount // ignore: cast_nullable_to_non_nullable
 as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
 as int?,publishedAt: freezed == publishedAt ? _self.publishedAt : publishedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,renewedAt: freezed == renewedAt ? _self.renewedAt : renewedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,
   ));
 }

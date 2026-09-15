@@ -9,7 +9,7 @@ import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../wallpapers/providers/catalog_providers.dart'
-    show newSelection, orderedByUse;
+    show newOrder, orderedByUse;
 import '../data/cdn_ringtone_repository.dart';
 import '../domain/ringtone_repository.dart';
 
@@ -22,7 +22,7 @@ final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
 
 /// The full ringtone catalog, drained to one list — the screen filters by category client-side.
 ///
-/// Category is THE browse axis (CLAUDE.md §5b); the reference's All/New tabs are NOT ported.
+/// Category is THE browse axis (CLAUDE.md §5b); New is a chip beside the categories, not a tab.
 /// Sorted by `sort_order` then title, so authoring order holds.
 /// NO disk snapshot: a handful of tiny pages, and this tab is not the launch surface.
 /// [AppShell] warms it post-first-frame -> the drain has usually finished before the user arrives.
@@ -224,27 +224,31 @@ class SelectedRingtoneCategory extends Notifier<String> {
 /// The ringtone twin of `feedOrder()`: filtered by category, then rank, then most-SET, then position.
 /// Identical rule to the wallpaper feed through the same [orderedByUse] -> the two cannot drift.
 /// See catalog_providers.dart for why rank is nulls-last and the position tiebreaker is load-bearing.
-/// EVERY chip gets the comparator, All included — a category is All restricted to that category.
+/// All and every category get that comparator — a category is All restricted to that category.
+/// New does not: it is the wallpaper row's [newOrder] verbatim — renewed, then debuts, then filler by
+/// sets — one window, one floor, one set of rules for both tabs, over this tab's own list.
 /// A deep link resolves its row index through this too: raw catalog order would scroll elsewhere.
 List<Ringtone> ringtoneFeedOrder(
   String slug,
   List<Ringtone> all, {
   DateTime? now,
-}) => orderedByUse(
-  switch (slug) {
-    WallpaperCategory.allSlug => all,
-    // The wallpaper row's [newSelection] verbatim — one window, one floor, one set of rules for both
-    // tabs. The tabs stay SEPARATE lists: this one windows ringtones, and its chip is its own.
-    WallpaperCategory.newSlug => newSelection(
-      all,
-      (r) => r.publishedAt,
-      now: now ?? DateTime.now(),
-    ),
-    _ => all.where((r) => r.category == slug).toList(growable: false),
-  },
-  (r) => r.setCount,
-  rank: (r) => r.feedRank,
-);
+}) => switch (slug) {
+  WallpaperCategory.newSlug => newOrder(
+    all,
+    id: (r) => r.id,
+    publishedAt: (r) => r.publishedAt,
+    renewedAt: (r) => r.renewedAt,
+    useCount: (r) => r.setCount,
+    now: now ?? DateTime.now(),
+  ),
+  _ => orderedByUse(
+    slug == WallpaperCategory.allSlug
+        ? all
+        : all.where((r) => r.category == slug).toList(growable: false),
+    (r) => r.setCount,
+    rank: (r) => r.feedRank,
+  ),
+};
 
 /// The Ringtones row's twin of `showNewCategoryProvider` — same rule, this tab's own catalog.
 /// Two providers and not one: the scopes are built and cached independently, so one tab can carry

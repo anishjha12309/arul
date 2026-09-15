@@ -54,12 +54,21 @@ abstract class Wallpaper with _$Wallpaper {
 
     /// The DEBUT date — when this wallpaper was published, not when it was imported.
     ///
-    /// The one input to the New chip ([newSelection]), and the reason there is no `createdAt` here:
+    /// Tier 2 of the New chip ([newOrder]), and the reason there is no `createdAt` here:
     /// created_at is import time, so a batch imported in August and published in September would be
-    /// born too old to ever appear in New. Stamped once, by a DB trigger (db/schema/15_published_at.sql).
+    /// born too old to ever appear in New. Stamped by a DB trigger on the first publish
+    /// (db/schema/15_published_at.sql), and re-stamped by a CMS Renew alongside [renewedAt].
     /// Null on a catalog cached before the field existed -> the New chip hides itself rather than
     /// windowing on nothing (`showNewCategoryProvider`), and returns on its own once a page lands.
     DateTime? publishedAt,
+
+    /// When an operator last RENEWED this in the CMS — tier 1 of the New chip ([newOrder]): inside
+    /// the 7-day window, renewed rows lead New, the most recent renew on top.
+    ///
+    /// The CMS stamps it together with [publishedAt], so builds before 1.0.0+78, which know only
+    /// [publishedAt], still window the row into New. Null is ordinary (never renewed), and is also what
+    /// a catalog or disk cache from before the column parses to (db/schema/19_renewed_at.sql).
+    DateTime? renewedAt,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>

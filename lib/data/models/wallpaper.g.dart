@@ -23,6 +23,9 @@ _Wallpaper _$WallpaperFromJson(Map<String, dynamic> json) => _Wallpaper(
   publishedAt: json['published_at'] == null
       ? null
       : DateTime.parse(json['published_at'] as String),
+  renewedAt: json['renewed_at'] == null
+      ? null
+      : DateTime.parse(json['renewed_at'] as String),
 );
 
 Map<String, dynamic> _$WallpaperToJson(_Wallpaper instance) =>
@@ -37,6 +40,7 @@ Map<String, dynamic> _$WallpaperToJson(_Wallpaper instance) =>
       'apply_count': instance.applyCount,
       'feed_rank': instance.feedRank,
       'published_at': instance.publishedAt?.toIso8601String(),
+      'renewed_at': instance.renewedAt?.toIso8601String(),
     };
 
 const _$WallpaperKindEnumMap = {

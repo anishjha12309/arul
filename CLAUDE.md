@@ -73,7 +73,8 @@ client-side → `docs/architecture.md` §Entitlement.
 becomes a filter or a tab; categories are free text, so a new one is an insert, not a migration.
 Order is ONE SQL clause in `build-catalog`, numbered into the catalog's `feed_rank` so it reaches
 installs that never update. Hand pins lead it (`feed_rank ASC NULLS LAST`, NULL = unpinned), then
-lifetime uses, then recency, then `id`. No score → `docs/browse.md`.
+lifetime uses, then recency, then `id`. No score. The New chip alone has its own order — CMS-renewed,
+then debuts, then filler by uses, with no pins → `docs/browse.md`.
 
 ## 6. Secrets & environment
 
