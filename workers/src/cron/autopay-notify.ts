@@ -554,6 +554,19 @@ export async function runAutopayNotify(env: Env): Promise<void> {
                 `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
                 `marked cancelled, debit abandoned (access kept to current_period_end)`,
               );
+            } else if (subStatus.state === "PAUSED") {
+              // Same answer Pass A gives a paused mandate -> park it, and Pass D asks again hourly
+              // Left in place it re-redeems every tick, forever, spending two calls on a 400 each time
+              await parkMandate(env, sql, outcomeRow.id, "paused");
+              console.warn(
+                `[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`,
+              );
+            } else {
+              // Name the state -> a row that rejects every tick with a non-terminal mandate is otherwise invisible
+              console.warn(
+                `[autopay-notify] Sub ${merchantSubId} rejected the redeem but reads ${subStatus.state} at PhonePe — ` +
+                `left for the next tick`,
+              );
             }
           } catch (statusErr) {
             console.error(

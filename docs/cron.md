@@ -9,7 +9,8 @@ Read before adding, splitting or "simplifying" a scheduled handler. Declared in
 Its own invocation for the same reason autopay has one: a 60k-phone drain must never share a wall
 clock or a subrequest budget with the catalog rebuild. Claims NOTHING while `PUSH_ENABLED` is not
 exactly `"true"`, and logs nothing on an idle minute — at 1,440 ticks a day a line per tick buries
-everything else. Rules, claim loop and kill switch: [push.md](push.md).
+everything else. The one exception is the registry prune an idle tick runs instead (`[push] prune:`),
+which logs only when it actually dropped something. Rules, claim loop and kill switch: [push.md](push.md).
 
 ## Quarter-hour `*/15 * * * *` — autopay only, its own invocation
 

@@ -109,6 +109,8 @@ export async function sweepSubmissions(env: Env): Promise<SweepResult> {
 
     return result;
   } finally {
-    await sql.end();
+    // Tearing down an already-severed socket can itself reject, and inside a finally that rejection
+    // REPLACES the return value -> a finished sweep would read as a failed one (docs/cron.md)
+    await sql.end().catch(() => {});
   }
 }
