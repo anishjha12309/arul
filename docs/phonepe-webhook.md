@@ -19,7 +19,7 @@ merchantSubscriptionId".
 Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
 `checkout.order.*` names onto the same branches, so it is safe either way.
 
-## Where it dies — narrowed on 17 Sep 2026, not yet proven
+## Where it dies — 17 Sep 2026: PhonePe is not sending
 
 What IS proven, by synthetic POSTs to the live `https://api.hsrutility.com/payments/webhook`:
 the dashboard credentials (username `pakiza_phonepe_hook`, one webhook per merchant so both apps
@@ -28,7 +28,12 @@ matches no row; a wrong password gets `401 invalid_signature`), so credentials, 
 this handler are all correct. Both KV namespaces hold zero `txn:` marks against 1,121 `ph:` order
 marks in Arul alone, so nothing has ever arrived at either Worker.
 
-What is NOT proven is where the delivery dies. Two candidates, one decisive check:
+**The zone's Security Events export for the 24 h to 10:16 UTC, path `/payments/webhook`, holds exactly
+three rows: this team's own Java-agent test POSTs from 103.212.131.238.** No address in PhonePe's
+103.116.32–34 ranges was ever mitigated, and no delivery ever reached a Worker, so the edge is not
+turning PhonePe away — PhonePe is not sending. Fix it in the PhonePe Business dashboard (candidate 2
+below); the WAF skip (candidate 1's fix) is still worth having because PhonePe's sender signature is
+unknown. Kept for the record, the two candidates and the check that decided between them:
 
 1. **Cloudflare's edge rejects PhonePe's sender before any Worker runs.** A `Java/1.8.0_292`
    User-Agent gets **HTTP 403, error 1010** (Browser Integrity Check) on this route — but also on
