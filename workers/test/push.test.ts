@@ -96,12 +96,16 @@ describe("audienceQuery", () => {
       );
       // A team member who sends to Everyone must get it; the flag only moves the numbers now.
       expect(text, JSON.stringify(kind)).not.toContain("is_internal");
+      // SEND_BY is the token: a row without one can only inflate total and Failed.
+      expect(text, JSON.stringify(kind)).toContain("AND d.token IS NOT NULL");
     }
   });
 
   it("`internal` targets ONLY test accounts, and never the tokenless robots", () => {
     const text = flat(audienceQuery(sql, { kind: "internal" }));
-    expect(text).toContain("WHERE u.is_internal AND NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)");
+    expect(text).toContain(
+      "WHERE u.is_internal AND NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL",
+    );
     expect(text).not.toContain("NOT u.is_internal");
   });
 
@@ -146,7 +150,7 @@ describe("audienceQuery", () => {
 
     const langOnly = flat(audienceQuery(sql, { kind: "filter", lang: "ta" }));
     expect(langOnly).toBe(
-      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.lang = ?",
+      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL AND d.lang = ?",
     );
   });
 
@@ -154,7 +158,7 @@ describe("audienceQuery", () => {
     expect(flat(audienceQuery(sql, { kind: "filter", signed_in: true }))).toMatch(/AND d\.user_id IS NOT NULL$/);
     const no = flat(audienceQuery(sql, { kind: "filter", signed_in: false }));
     expect(no).toMatch(/AND d\.user_id IS NULL$/);
-    expect(no).not.toContain("IS NOT NULL");
+    expect(no).not.toContain("d.user_id IS NOT NULL");
   });
 
   it("joined bounds on created_at with a bound interval, never interpolated text", () => {
@@ -823,6 +827,170 @@ describe("test accounts in a campaign's numbers", () => {
       // phones still has rows to drain.
       expect(totalWrite).toContain("WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0");
     }
+  });
+});
+
+describe("a dead registration is not a failure", () => {
+  // 1,864 of one Everyone send's 1,982 "failures" were phones that had uninstalled. Nobody there
+  // could have been reached, so those deliveries move to `gone` and leave `total`: a finished card
+  // reads total = sent + failed, and Failed is left for sends that actually went wrong.
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  async function drain(audience: unknown, fcm: () => Response) {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    let claims = 0;
+    const routed = routedSql([
+      { match: /SET status = 'sending', started_at/, rows: [] },
+      {
+        match: /FROM push_campaigns\s+WHERE status = 'sending'/,
+        rows: [{ ...CAMPAIGN, last_error: null, audience }],
+      },
+      {
+        match: /AND status = 'pending'\s+LIMIT/,
+        get rows() {
+          return claims++ === 0
+            ? [{ fid: "fid-real" }, { fid: "fid-test" }, { fid: "fid-orphan" }]
+            : [];
+        },
+      },
+      // fid-orphan has no device row: the delivery outlived its registration.
+      {
+        match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/,
+        rows: [
+          { ...DEVICE, fid: "fid-real", internal: false },
+          { ...DEVICE, fid: "fid-test", internal: true },
+        ],
+      },
+      { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
+    ]);
+    const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
+    vi.stubGlobal("fetch", vi.fn(async () => fcm()));
+    const result = await runPushDispatch(env);
+    const counter = routed.statements.find((s) => s.includes("SET sent = sent +"))!;
+    return { result, counter, routed };
+  }
+
+  it("404 UNREGISTERED and a row with no device count as gone, out of total, never as failed", async () => {
+    const { result, counter, routed } = await drain({ kind: "all" }, () => fcmErr(404, "UNREGISTERED"));
+    expect(result.failed).toBe(0);
+    expect(result.gone).toBe(3);
+    // Bound: sent, failed, gone, the total decrement, id. The test phone's dead registration moves
+    // nothing — the same rule as sent and failed.
+    expect(counter).toContain("gone = gone + ?");
+    expect(counter).toContain("total = greatest(total - ?, 0)");
+    expect(counter).toMatch(/ :: 0,0,2,2,/);
+    // The delivery rows keep the audit trail…
+    const audit = routed.statements.filter((s) => s.includes("SET status = 'failed', error = ?"));
+    expect(audit.some((s) => s.includes(":: UNREGISTERED: nope,"))).toBe(true);
+    expect(audit.some((s) => s.includes(":: device_gone,"))).toBe(true);
+    // …and the dead registrations still leave the registry, the orphan having nothing to delete.
+    const deleted = routed.statements.find((s) => s.includes("DELETE FROM push_devices"))!;
+    expect(deleted).toContain('"fid-real"');
+    expect(deleted).toContain('"fid-test"');
+    expect(deleted).not.toContain("orphan");
+  });
+
+  it("a campaign aimed at test accounts counts their dead phones too", async () => {
+    const { counter } = await drain({ kind: "internal" }, () => fcmErr(404, "UNREGISTERED"));
+    expect(counter).toMatch(/ :: 0,0,3,3,/);
+  });
+
+  it("a transient FCM error is still a failure — an outage must never shrink total", async () => {
+    const { result, counter } = await drain({ kind: "all" }, () => fcmErr(503, "UNAVAILABLE"));
+    expect(result.failed).toBe(2);
+    expect(result.gone).toBe(1);
+    expect(counter).toMatch(/ :: 0,1,1,1,/);
+  });
+});
+
+describe("the idle tick prunes the registry", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  /** A tick with nothing due and nothing sending, and this slice waiting to be checked. */
+  function idle(slice: { fid: string; token: string }[]) {
+    return routedSql([
+      { match: /SET status = 'sending', started_at/, rows: [] },
+      { match: /FROM push_campaigns\s+WHERE status = 'sending'/, rows: [] },
+      { match: /ORDER BY token_checked_at ASC NULLS FIRST/, rows: slice },
+    ]);
+  }
+
+  it("dry-runs a slice, deletes what FCM calls dead, stamps the rest, drops week-old token-less rows", async () => {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    const routed = idle([
+      { fid: "dead", token: "tok-dead" },
+      { fid: "live", token: "tok-live" },
+    ]);
+    const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
+    const fetchMock = vi.fn(async (_url: unknown, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { message: { token: string } };
+      return body.message.token === "tok-dead" ? fcmErr(404, "UNREGISTERED") : fcmOk();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runPushDispatch(env);
+    expect(result.started).toBe(0);
+    // Every request is a dry run. Nothing on this path may ever deliver.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) {
+      expect(JSON.parse(String(call[1].body))).toMatchObject({ validate_only: true });
+    }
+    const text = routed.text();
+    expect(text).toContain("WHERE token IS NOT NULL");
+    expect(text).toMatch(/LIMIT \?\s+:: 200/);
+    expect(routed.statements.find((s) => s.includes("DELETE FROM push_devices WHERE fid = ANY"))).toContain(
+      '{"dead"}',
+    );
+    expect(routed.statements.find((s) => s.includes("SET token_checked_at = now()"))).toContain('{"live"}');
+    expect(text).toContain("WHERE token IS NULL AND last_seen_at < now() - interval '7 days'");
+  });
+
+  it("stays out of a tick that is draining a campaign", async () => {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    let claims = 0;
+    const routed = routedSql([
+      { match: /SET status = 'sending', started_at/, rows: [] },
+      {
+        match: /FROM push_campaigns\s+WHERE status = 'sending'/,
+        rows: [{ ...CAMPAIGN, last_error: null }],
+      },
+      {
+        match: /AND status = 'pending'\s+LIMIT/,
+        get rows() {
+          return claims++ === 0 ? [{ fid: "fid-1" }] : [];
+        },
+      },
+      { match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/, rows: [DEVICE] },
+      { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
+      { match: /ORDER BY token_checked_at ASC NULLS FIRST/, rows: [{ fid: "x", token: "tok-x" }] },
+    ]);
+    const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
+    const fetchMock = vi.fn(async () => fcmOk());
+    vi.stubGlobal("fetch", fetchMock);
+    await runPushDispatch(env);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(routed.text()).not.toContain("token_checked_at");
+  });
+
+  it("a token it cannot mint is logged once and swallowed — the tick still returns", async () => {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    const routed = idle([{ fid: "live", token: "tok-live" }]);
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: makeMockKV(), _testSql: routed.sql });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(runPushDispatch(env)).resolves.toMatchObject({ started: 0 });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(routed.text()).not.toContain("token_checked_at = now()");
+    error.mockRestore();
   });
 });
 

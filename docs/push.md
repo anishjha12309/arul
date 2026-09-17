@@ -130,6 +130,21 @@ there: cleanup rides the `30 21 * * *` cron (deliveries over 30 days, devices id
 campaign row is gone); and **only a 404 `UNREGISTERED` or a 400 `INVALID_ARGUMENT` deletes a device
 row**, never a quota error or an outage.
 
+**A dead registration is not a failure** (`db/schema/22_push_gone.sql`). A delivery that comes back
+UNREGISTERED, or whose device row is already gone, is a phone nobody could have reached: it counts in
+`push_campaigns.gone` and leaves `total`, so a finished campaign reads total = sent + failed and the
+card says "N no longer have the app" (nothing at zero). The delivery row keeps `failed` and its error —
+that is the audit trail. Failed is left for sends that went wrong. A row with no token is in NO
+audience (`SEND_BY` is the token; it can only inflate total and Failed), and the CMS's "Phones that can
+receive" applies the same predicate.
+
+**The registry prunes itself between campaigns.** The `* * * * *` tick, on a minute that started no
+campaign and drained none, dry-runs up to 200 registrations against FCM (`validate_only: true`, which
+returns 404 UNREGISTERED for a dead token and 200 without delivering — proven on a reinstalled phone),
+oldest `token_checked_at` first, deletes the dead ones and stamps the rest; token-less rows unseen for
+7 days go too. It sits behind `PUSH_ENABLED` with the rest of the machinery, and logs only when it
+deleted something. Before it, dead rows piled up between sends and every one cost a delivery.
+
 ## Audience — ONE home
 
 `audienceQuery` in `workers/src/lib/push-audience.ts`, and nowhere else. The CMS never writes a line

@@ -175,23 +175,28 @@ export function audienceQuery(
   audience: PushAudience,
 ): postgres.PendingQuery<postgres.Row[]> {
   const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
-  const external = sql`NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false)`;
+  // Every kind: not a robot, AND holds a token. SEND_BY is "token" (lib/fcm.ts), so a row with none
+  // can never be delivered to — left in, it only inflates total and Failed (126 NO_TOKEN failures on
+  // one Everyone send). The CMS's live count runs this same fragment, so it agrees.
+  const eligible = sql`
+    NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL
+  `;
 
   switch (audience.kind) {
     case "internal":
       // The robots are flagged too (for the subscriptions report), but they never hold an FCM token:
       // left in, every test send reported one failure per robot run.
-      return sql`${base} WHERE u.is_internal AND ${external}`;
+      return sql`${base} WHERE u.is_internal AND ${eligible}`;
     case "all":
-      return sql`${base} WHERE ${external}`;
+      return sql`${base} WHERE ${eligible}`;
     case "lang":
-      return sql`${base} WHERE ${external} AND d.lang = ${audience.lang}`;
+      return sql`${base} WHERE ${eligible} AND d.lang = ${audience.lang}`;
     case "inactive":
-      return sql`${base} WHERE ${external} AND ${idlePredicate(sql, audience.days)}`;
+      return sql`${base} WHERE ${eligible} AND ${idlePredicate(sql, audience.days)}`;
     case "premium":
-      return sql`${base} WHERE ${external} AND ${planPredicate(sql, audience.state)}`;
+      return sql`${base} WHERE ${eligible} AND ${planPredicate(sql, audience.state)}`;
     case "filter": {
-      const parts = [external];
+      const parts = [eligible];
       if (audience.lang) parts.push(sql`d.lang = ${audience.lang}`);
       if (audience.plan) parts.push(planPredicate(sql, audience.plan));
       if (audience.idle_days) parts.push(idlePredicate(sql, audience.idle_days));

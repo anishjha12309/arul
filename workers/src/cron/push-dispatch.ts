@@ -15,6 +15,10 @@
  *
  * PUSH_ENABLED IS THE KILL SWITCH and it gates THIS function, not the send helper: with it off the
  * cron claims nothing at all, while /internal/push/test still reaches the owner's own phones.
+ *
+ * AN IDLE MINUTE PRUNES THE REGISTRY. A dead registration used to be found only by a send, so they
+ * piled up between campaigns and each one cost the next campaign a delivery. A tick that started
+ * nothing and drained nothing dry-runs a slice of tokens against FCM instead (`pruneRegistry`).
  */
 
 import type postgres from "postgres";
@@ -24,6 +28,7 @@ import {
   getFcmAccessToken,
   isDeadRegistration,
   sendPush,
+  validateToken,
   type PushCampaign,
   type PushDevice,
 } from "../lib/fcm.js";
@@ -49,12 +54,21 @@ const TICK_BUDGET_MS = 10 * 60 * 1000;
  */
 const MAX_TOKEN_FAILURES = 30;
 
+/**
+ * Registrations one idle tick dry-runs. With ~six in flight that is well under a minute of wall
+ * clock and, with the handful of statements around it, nowhere near the subrequest cap; a registry
+ * of tens of thousands is walked in a few hours, and the cursor (`token_checked_at`) carries over.
+ */
+const PRUNE_SLICE = 200;
+
 export interface PushDispatchResult {
   skipped?: string;
   started: number;
   attempted: number;
   sent: number;
   failed: number;
+  /** Deliveries whose phone no longer has the app (lib/fcm.ts isDeadRegistration) — not failures. */
+  gone: number;
   completed: number;
 }
 
@@ -76,7 +90,9 @@ export function pushEnabled(env: Env): boolean {
 }
 
 export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
-  const empty: PushDispatchResult = { started: 0, attempted: 0, sent: 0, failed: 0, completed: 0 };
+  const empty: PushDispatchResult = {
+    started: 0, attempted: 0, sent: 0, failed: 0, gone: 0, completed: 0,
+  };
   // SILENT while disabled. This runs 1,440 times a day and every failure path in this Worker is a
   // bare console.error -> a line per tick would bury them inside the log retention window. The
   // caller logs the disabled state once an hour so the switch still leaves a breadcrumb.
@@ -104,6 +120,7 @@ export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
         result.attempted += drained.attempted;
         result.sent += drained.sent;
         result.failed += drained.failed;
+        result.gone += drained.gone;
         if (drained.completed) result.completed += 1;
       } catch (err) {
         // A throw here used to take the whole pass down having written NOTHING to the row. The
@@ -119,9 +136,79 @@ export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
         `.catch(() => {});
       }
     }
+
+    // Nothing started and nothing draining: spend the idle minute on the registry instead. This sits
+    // inside the PUSH_ENABLED gate above on purpose — the switch covers the whole registry machinery,
+    // and a Worker told to send nothing must not be quietly talking to FCM either.
+    if (result.started === 0 && running.length === 0) await pruneRegistry(sql, env, deadline);
     return result;
   } finally {
     await sql.end().catch(() => {});
+  }
+}
+
+/**
+ * Drop dead registrations, a slice per idle tick.
+ *
+ * 1,864 of one campaign's 1,982 "failures" were phones that had uninstalled since the previous one.
+ * Each idle tick dry-runs PRUNE_SLICE tokens (`validateToken`, lib/fcm.ts — nothing is delivered),
+ * deletes the ones FCM calls dead and stamps the rest, so the least-recently-checked row is always
+ * next and a never-checked one (NULL) goes first. A transient FCM error stamps too: the row is not
+ * dead, and the next pass asks again. Token-less rows unseen for a week go as well — `onTokenRefresh`
+ * fills the column within a launch, so a week without one is a phone that never came back.
+ *
+ * Never throws and logs only when it removed something: this runs on nearly every one of the 1,440
+ * ticks a day, and the prune is housekeeping that must not take the dispatcher down with it.
+ */
+async function pruneRegistry(sql: postgres.Sql, env: Env, deadline: number): Promise<void> {
+  try {
+    const stale = (await sql`
+      DELETE FROM push_devices
+      WHERE token IS NULL AND last_seen_at < now() - interval '7 days'
+      RETURNING fid
+    `) as unknown as unknown[];
+
+    const slice = (await sql`
+      SELECT fid, token FROM push_devices
+      WHERE token IS NOT NULL
+      ORDER BY token_checked_at ASC NULLS FIRST
+      LIMIT ${PRUNE_SLICE}
+    `) as unknown as { fid: string; token: string }[];
+
+    const dead: string[] = [];
+    const live: string[] = [];
+    let accessToken: string | null = null;
+    if (slice.length > 0) {
+      try {
+        accessToken = await getFcmAccessToken(env);
+      } catch (err) {
+        console.error("[push] prune: no access token:", err);
+      }
+    }
+    if (accessToken) {
+      const token = accessToken;
+      await forEachWithConcurrency(slice, CONCURRENCY, async (row) => {
+        if (Date.now() >= deadline) return;
+        const res = await validateToken(env, token, row.token);
+        (isDeadRegistration(res) ? dead : live).push(row.fid);
+      });
+      if (dead.length > 0) {
+        await sql`DELETE FROM push_devices WHERE fid = ANY(${toPgTextArray(dead)}::text[])`;
+      }
+      if (live.length > 0) {
+        await sql`
+          UPDATE push_devices SET token_checked_at = now()
+          WHERE fid = ANY(${toPgTextArray(live)}::text[])
+        `;
+      }
+    }
+    if (dead.length > 0 || stale.length > 0) {
+      console.log(
+        `[push] prune: dropped ${dead.length} dead registrations, ${stale.length} token-less`,
+      );
+    }
+  } catch (err) {
+    console.error("[push] prune failed:", err);
   }
 }
 
@@ -188,6 +275,7 @@ interface DrainResult {
   attempted: number;
   sent: number;
   failed: number;
+  gone: number;
   completed: boolean;
 }
 
@@ -197,7 +285,7 @@ async function drainCampaign(
   campaign: PushCampaign & { last_error: string | null; audience?: unknown },
   deadline: number,
 ): Promise<DrainResult> {
-  const out: DrainResult = { attempted: 0, sent: 0, failed: 0, completed: false };
+  const out: DrainResult = { attempted: 0, sent: 0, failed: 0, gone: 0, completed: false };
   const countTestPhones = countsTestAccounts(parseAudience(campaign.audience));
 
   let accessToken: string;
@@ -227,6 +315,7 @@ async function drainCampaign(
     out.attempted += batch.attempted;
     out.sent += batch.sent;
     out.failed += batch.failed;
+    out.gone += batch.gone;
     if (batch.attempted === 0) break;
   }
 
@@ -247,7 +336,9 @@ async function drainCampaign(
       WHERE id = ${campaign.id} AND status = 'sending'
     `;
     out.completed = true;
-    console.log(`[push] campaign ${campaign.id} complete — sent ${out.sent}, failed ${out.failed}`);
+    console.log(
+      `[push] campaign ${campaign.id} complete — sent ${out.sent}, failed ${out.failed}, gone ${out.gone}`,
+    );
   }
   return out;
 }
@@ -265,6 +356,13 @@ function tokenFailureCount(lastError: string | null): number {
  *
  * The claim flips the rows to 'sending' as well as locking them, so the row state is legible to
  * anyone reading the table mid-drain; the lock is what makes a concurrent tick skip them.
+ *
+ * A DEAD REGISTRATION IS NOT A FAILURE. A 404 UNREGISTERED is a phone that uninstalled, and a row
+ * whose device is already gone is the same phone found a step later: nobody could have been reached,
+ * so the send did not go wrong — the audience was smaller than the registry said. Those deliveries
+ * count toward `gone` and come OUT of `total`, so a finished campaign reads total = sent + failed and
+ * the card's progress (sent + failed) / total stays right mid-drain. The delivery row still says
+ * 'failed' with its error: that is the audit trail; the counter is the card's number.
  */
 async function sendOneBatch(
   sql: postgres.Sql,
@@ -273,7 +371,7 @@ async function sendOneBatch(
   accessToken: string,
   deadFids: string[],
   countTestPhones: boolean,
-): Promise<{ attempted: number; sent: number; failed: number }> {
+): Promise<BatchResult> {
   return sql.begin(async (tx) => {
     const claimed = (await tx`
       SELECT fid FROM push_deliveries
@@ -281,7 +379,7 @@ async function sendOneBatch(
       LIMIT ${BATCH}
       FOR UPDATE SKIP LOCKED
     `) as unknown as { fid: string }[];
-    if (claimed.length === 0) return { attempted: 0, sent: 0, failed: 0 };
+    if (claimed.length === 0) return { attempted: 0, sent: 0, failed: 0, gone: 0 };
 
     const fids = claimed.map((r) => r.fid);
     const devices = (await tx`
@@ -290,17 +388,18 @@ async function sendOneBatch(
       WHERE d.fid = ANY(${toPgTextArray(fids)}::text[])
     `) as unknown as (PushDevice & { internal?: boolean })[];
     const byFid = new Map(devices.map((d) => [d.fid, d]));
-    // A row whose device is gone cannot say whose it was, so it counts: it is a real failure.
+    // A row whose device is gone cannot say whose it was, so it counts.
     const counts = (fid: string) => countTestPhones || !byFid.get(fid)?.internal;
 
     const sentFids: string[] = [];
-    const failures: { fid: string; error: string }[] = [];
+    const failures: { fid: string; error: string; gone: boolean }[] = [];
 
     await forEachWithConcurrency(fids, CONCURRENCY, async (fid) => {
       const device = byFid.get(fid);
       if (!device) {
-        // The row outlived its device: a reinstall re-pointed the FID, or the 270-day sweep took it.
-        failures.push({ fid, error: "device_gone" });
+        // The row outlived its device: a reinstall re-pointed the FID, the 270-day sweep or the
+        // idle-tick prune took it. The same phone as a dead registration, found one step later.
+        failures.push({ fid, error: "device_gone", gone: true });
         return;
       }
       const res = await sendPush(env, accessToken, device, campaign);
@@ -308,8 +407,9 @@ async function sendOneBatch(
         sentFids.push(fid);
         return;
       }
-      failures.push({ fid, error: `${res.code}: ${res.message}`.slice(0, 300) });
-      if (isDeadRegistration(res)) deadFids.push(fid);
+      const dead = isDeadRegistration(res);
+      failures.push({ fid, error: `${res.code}: ${res.message}`.slice(0, 300), gone: dead });
+      if (dead) deadFids.push(fid);
     });
 
     if (sentFids.length > 0) {
@@ -324,17 +424,29 @@ async function sendOneBatch(
         WHERE campaign_id = ${campaign.id} AND fid = ${f.fid}
       `;
     }
-    // One counter write per batch, not per row: the CMS card reads these two numbers every 5 s while
-    // a campaign is sending, and they only have to be right at batch granularity.
+    // One counter write per batch, not per row: the CMS card reads these numbers every 5 s while a
+    // campaign is sending, and they only have to be right at batch granularity. `gone` leaves `total`
+    // by the same amount, never below zero — a test phone's delivery was never in it.
     const sentCount = sentFids.filter(counts).length;
-    const failedCount = failures.filter((f) => counts(f.fid)).length;
+    const counted = failures.filter((f) => counts(f.fid));
+    const goneCount = counted.filter((f) => f.gone).length;
+    const failedCount = counted.length - goneCount;
     await tx`
       UPDATE push_campaigns
-      SET sent = sent + ${sentCount}, failed = failed + ${failedCount}
+      SET sent = sent + ${sentCount}, failed = failed + ${failedCount}, gone = gone + ${goneCount},
+          total = greatest(total - ${goneCount}, 0)
       WHERE id = ${campaign.id}
     `;
-    return { attempted: fids.length, sent: sentFids.length, failed: failures.length };
-  }) as Promise<{ attempted: number; sent: number; failed: number }>;
+    const gone = failures.filter((f) => f.gone).length;
+    return { attempted: fids.length, sent: sentFids.length, failed: failures.length - gone, gone };
+  }) as Promise<BatchResult>;
+}
+
+interface BatchResult {
+  attempted: number;
+  sent: number;
+  failed: number;
+  gone: number;
 }
 
 /** Bounded fan-out — `Promise.all` over 600 sends would open 600 sockets at once. */

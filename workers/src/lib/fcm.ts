@@ -26,6 +26,14 @@
  *
  * The fid still earns its place as the PRIMARY KEY: it survives token rotation, so a phone keeps one
  * row across a refresh instead of accumulating one per token.
+ *
+ * `validate_only` IS WHAT THE REGISTRY PRUNE RELIES ON (cron/push-dispatch.ts). FCM runs a
+ * validate-only request through every check, the target included, and delivers nothing. Proven on
+ * the owner's phone on 2026-09-17: the live token answered HTTP 200 with
+ * `name: …/messages/fake_message_id` and the drawer stayed empty; after an uninstall and reinstall
+ * the old token answered HTTP 404 `{ errorCode: "UNREGISTERED" }` ("NotRegistered") within a minute,
+ * and the new one 200 again. So a dry run reads exactly like a send to `isDeadRegistration`, and the
+ * registry can be checked between campaigns instead of only by one.
  */
 
 import { importPKCS8, SignJWT } from "jose";
@@ -249,40 +257,69 @@ export async function sendPush(
 
   const message = rendersColor ? coloured() : plain;
 
-  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-  const attempt = async (): Promise<PushResult> => {
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message }),
-      });
-    } catch (err) {
-      return { ok: false, status: 0, code: "UNAVAILABLE", message: String(err) };
-    }
-    const parsed = (await res.json().catch(() => null)) as
-      | { name?: string; error?: { message?: string; status?: string; details?: { errorCode?: string }[] } }
-      | null;
-    if (res.ok) return { ok: true, name: parsed?.name ?? "" };
-    const detail = parsed?.error?.details?.find((d) => typeof d?.errorCode === "string");
-    return {
-      ok: false,
-      status: res.status,
-      code: detail?.errorCode ?? parsed?.error?.status ?? `HTTP_${res.status}`,
-      message: parsed?.error?.message ?? `HTTP ${res.status}`,
-    };
-  };
-
-  const first = await attempt();
+  const first = await postMessage(projectId, accessToken, { message });
   if (first.ok) return first;
   const retryable = first.status === 429 || first.status >= 500 || first.status === 0;
   if (!retryable) return first;
   await new Promise((r) => setTimeout(r, 1000));
-  return attempt();
+  return postMessage(projectId, accessToken, { message });
+}
+
+/**
+ * Ask FCM whether a token is still a live registration WITHOUT delivering anything (see header).
+ *
+ * No retry: a transient error leaves the row where it is and the next pass asks again. The texts
+ * are never shown — they are there because a message needs a body to be validated at all.
+ */
+export async function validateToken(
+  env: Env,
+  accessToken: string,
+  token: string,
+): Promise<PushResult> {
+  const projectId = env.FIREBASE_PROJECT_ID ?? "";
+  if (!projectId) {
+    return { ok: false, status: 0, code: "NO_PROJECT_ID", message: "FIREBASE_PROJECT_ID is not set" };
+  }
+  return postMessage(projectId, accessToken, {
+    validate_only: true,
+    message: { token, notification: { title: "dry run", body: "dry run" } },
+  });
+}
+
+/**
+ * One POST to messages:send, read into a PushResult. Never throws. The send and the dry run share
+ * it so a dead registration is spelled the same way on both paths — `isDeadRegistration` reads one.
+ */
+async function postMessage(
+  projectId: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<PushResult> {
+  const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    return { ok: false, status: 0, code: "UNAVAILABLE", message: String(err) };
+  }
+  const parsed = (await res.json().catch(() => null)) as
+    | { name?: string; error?: { message?: string; status?: string; details?: { errorCode?: string }[] } }
+    | null;
+  if (res.ok) return { ok: true, name: parsed?.name ?? "" };
+  const detail = parsed?.error?.details?.find((d) => typeof d?.errorCode === "string");
+  return {
+    ok: false,
+    status: res.status,
+    code: detail?.errorCode ?? parsed?.error?.status ?? `HTTP_${res.status}`,
+    message: parsed?.error?.message ?? `HTTP ${res.status}`,
+  };
 }
 
 /**
