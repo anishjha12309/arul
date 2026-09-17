@@ -106,10 +106,15 @@ No webhook has ever actually arrived in production — cause and evidence in
 `first_debit_at = COALESCE(first_debit_at, now())`, `debit_count + 1` and `paid_paise + 19900` ride on the
 SAME statement as the `active` flip — `applyDebitOutcome`, the webhook's redemption branch, `run-redemptions`,
 and the three setup grants in `payments.ts`, whose ELSE branch is a real ₹199. Nothing in this Worker reads
-them; the unified CMS's subscriptions page does, and it starts its history after the newest cohort holding a
-paid period with no stamp. So a new grant path that skips them moves that page's start date forward instead
-of undercounting — treat the date moving as the alarm. Schema: `db/schema/14_debit_tracking.sql`, applied
-BEFORE the Worker that writes it, or every settle UPDATE fails while PhonePe keeps the money.
+them; the unified CMS's subscriptions page does, for the day-by-day ledger and the retention-by-first-
+payment-month table; rows debited before the columns existed were backfilled once by
+`db/schema/23_debit_backfill.sql` (settle time recovered from `updated_at`, or `current_period_end` minus one
+month when the row was touched again afterwards); and the page still derives a "tracking since" date from any
+paid row with no stamp, so if that date ever appears again a grant path stopped stamping — that is the alarm.
+`addOneMonth` uses JavaScript's `setMonth`, so 31 Aug + 1 month lands on 1 Oct, and any SQL that reverses a
+period end back to a settle date must not assume `interval '1 month'`. Schema:
+`db/schema/14_debit_tracking.sql`, applied BEFORE the Worker that writes it, or every settle UPDATE fails
+while PhonePe keeps the money.
 
 ## Testing this
 
