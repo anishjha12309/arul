@@ -19,25 +19,38 @@ merchantSubscriptionId".
 Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
 `checkout.order.*` names onto the same branches, so it is safe either way.
 
-## Why it never fired — found 17 Sep 2026
+## Where it dies — narrowed on 17 Sep 2026, not yet proven
 
-**Cloudflare's Browser Integrity Check on the `hsrutility.com` zone was rejecting PhonePe at the edge.**
-A POST to `https://api.hsrutility.com/payments/webhook` with a `Java/1.8.0_292` User-Agent answers
-**HTTP 403, Cloudflare error 1010** ("banned your access based on your browser's signature") from
-Cloudflare itself — the hsr-cms Worker never runs, so nothing is logged anywhere we can see. The same
-body with an `okhttp`, `Apache-HttpClient`, `python-requests` or empty User-Agent reaches the Worker,
-is relayed to this Worker, passes the SHA-256 check with the dashboard credentials (username
-`pakiza_phonepe_hook`, shared by both apps) and gets `200 ok`; a wrong password gets the expected
-`401 invalid_signature`. So credentials, the dispatcher's `DKS_` routing and this handler are all
-correct, and both KV namespaces hold zero `txn:` marks against 1,121 `ph:` order marks in Arul alone
-because PhonePe's Java sender is turned away before the request exists to us.
+What IS proven, by synthetic POSTs to the live `https://api.hsrutility.com/payments/webhook`:
+the dashboard credentials (username `pakiza_phonepe_hook`, one webhook per merchant so both apps
+share it) pass this handler's SHA-256 check through the hsr-cms relay (`200 ok` on a `DKS_` id that
+matches no row; a wrong password gets `401 invalid_signature`), so credentials, `DKS_` routing and
+this handler are all correct. Both KV namespaces hold zero `txn:` marks against 1,121 `ph:` order
+marks in Arul alone, so nothing has ever arrived at either Worker.
 
-**The fix is a zone rule, not code:** Cloudflare dashboard → `hsrutility.com` → Rules → Configuration
-Rules → create: *when* Hostname equals `api.hsrutility.com` AND URI Path starts with
-`/payments/webhook` → *then* Browser Integrity Check **Off**. (A WAF custom rule with action *Skip* on
-the same match, skipping Browser Integrity Check, does the same.) Re-test with
-`curl -A "Java/1.8.0_292" -X POST … ` and expect the Worker's answer, not 1010. Then watch this
-namespace for its first `txn:` key on the next setup or redemption.
+What is NOT proven is where the delivery dies. Two candidates, one decisive check:
+
+1. **Cloudflare's edge rejects PhonePe's sender before any Worker runs.** A `Java/1.8.0_292`
+   User-Agent gets **HTTP 403, error 1010** (Browser Integrity Check) on this route — but also on
+   `www.cloudflare.com`, so that is Cloudflare's default treatment of that signature everywhere, and
+   a `Java/17` agent reaches the Worker. It explains everything only if PhonePe's sender carries a
+   signature Cloudflare bans, which nobody has seen.
+2. **PhonePe is not sending**: the webhook was created with the dashboard's Test Mode toggle ON
+   (a sandbox webhook), or with no events ticked, or it points somewhere else. Events are opt-in.
+
+**The check that settles it:** Cloudflare dashboard → `hsrutility.com` → Security → Events, filter
+URI Path contains `/payments/webhook`. Blocked events from `103.116.32.0/22` = candidate 1. No
+events at all from those addresses = candidate 2, fix it in the PhonePe Business dashboard
+(Test Mode OFF → Developer Settings → Webhook → the events ticked → URL exactly
+`https://api.hsrutility.com/payments/webhook`).
+
+**The fix for candidate 1 is a zone rule, not code, and it is worth adding either way:** Security →
+WAF → Custom rules → *Skip*: when `ip.src in {103.116.32.16/28 103.116.33.8/30 103.116.33.136/30
+103.116.34.1 103.116.34.16/29}` AND URI Path starts with `/payments/webhook`, skip all remaining
+custom rules AND the Browser Integrity Check. Those are PhonePe's published webhook source IPs
+(developer.phonepe.com → Webhook Handling → IP Whitelisting: 103.116.33.8–11, 103.116.33.136–139,
+103.116.32.16–29, 103.116.34.1, 103.116.34.16–23). After either fix, watch this namespace for its
+first `txn:` key on the next setup or redemption.
 
 ⚠ **No PhonePe webhook has ever been processed in production.** The `txn:` prefix in KV holds ZERO
 keys for any event, including setup confirmations, while the server's own `ph:` marks sit in the
