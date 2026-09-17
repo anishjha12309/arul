@@ -148,7 +148,12 @@ matches nothing.
 freezes person properties onto each event at ingest, so a person property leaves every pre-login event
 (install, the sign-in wall) blank forever. A blank event-level `app_language` on older data means "not signed in
 yet", not "no language". PostHog's `reset()` clears cached properties on sign-out, so each sink re-applies what was
-registered after it.
+registered after it. **The PostHog sink also stamps every registered value onto the capture itself**, primed
+from prefs before `setup()` starts: on a fresh install the sheet-first `login_attempt` is captured after native
+setup but before the `register` round trip lands, and relying on the SDK alone left it blank on four cold-start
+attempts in five while the install event 20 ms later carried the language. A blank `app_language` bucket in a
+breakdown is therefore installs that predate the register, the cold-start attempt on the builds before the
+capture-side stamp, and the Worker's server-side events, which carry no build and no language.
 
 Reading these without a wrong conclusion — what `confirmed` counts, which metrics are tripwires,
 where a join silently matches nothing: [analytics-ops.md](analytics-ops.md) §Reading.

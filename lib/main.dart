@@ -143,18 +143,21 @@ void _maybeEnableFlutterDriver() {
 /// call site (the allow-list governs only those), GA4 auto-collects `first_open` for the same moment,
 /// and a name with a space is not a legal GA4 event name.
 /// A capture before native init finishes is DROPPED -> await `setup()` first.
-/// `app_language` is registered in between -> the install event carries the language the app opened
-/// in, read straight from prefs because Riverpod does not exist yet.
+/// `app_language` is primed BEFORE setup, synchronously, read straight from prefs because Riverpod
+/// does not exist yet -> every capture carries the language the app opened in, including the
+/// sheet-first `login_attempt` that fires between native setup and the register round trip
+/// (`PostHogAnalyticsService.track`).
 Future<void> _startPostHog(
   PostHogConfig config,
   SharedPreferences prefs,
 ) async {
-  await Posthog().setup(config);
   final lang = resolveAppLocale(
     prefs.getString(appLocalePrefsKey),
     WidgetsBinding.instance.platformDispatcher.locales,
   ).languageCode;
-  await PostHogAnalyticsService.started({kAppLanguageProperty: lang});
+  PostHogAnalyticsService.prime({kAppLanguageProperty: lang});
+  await Posthog().setup(config);
+  await PostHogAnalyticsService.started();
   if (!AnalyticsCohort.isFreshInstall) return;
   await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }

@@ -94,7 +94,15 @@ read synchronously when the sink is assembled, so the first event is already gat
 - Under `--dart-define=DIAG=true` startup logs one line naming the decision, so a device pass can
   tell at a glance whether it is being counted.
 - **The consequence when reading PostHog:** a sideloaded build is invisible there, so an on-device
-  walkthrough proves nothing about the funnel — check GA4 for it.
+  walkthrough proves nothing about the funnel — check GA4 for it. When the PostHog sink ITSELF is
+  under test (what a capture carries), install the APK with Play named as the installer —
+  `adb shell pm install -i com.android.vending /data/local/tmp/<apk>` after an `adb push` — and the
+  gate reads "Play"; the test phone's events stay behind the project's test-account filter. Never
+  on a phone that is not in that filter, and never on top of a Play copy: the debug key cannot
+  update it, so uninstall first and reinstall from Play afterwards.
+- **Event order in PostHog is per-batch, not per-capture.** `timestamp` is corrected by each
+  batch's clock skew, so two events from one launch can swap places by hundreds of ms; `created_at`
+  keeps the order the phone actually sent them in.
 
 ## Reading the data — rules that prevent wrong conclusions
 
