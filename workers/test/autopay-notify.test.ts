@@ -72,7 +72,7 @@ interface Executed {
  * A SQL mock that dispatches on the query TEXT -> this cron runs several different statements per pass.
  * A one-size mock cannot express "Pass A finds nothing, Pass B finds this row"
  */
-function makeSql(passBRows: unknown[]) {
+function makeSql(passBRows: unknown[], passDRows: unknown[] = []) {
   const executed: Executed[] = [];
 
   const fn = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
@@ -80,14 +80,18 @@ function makeSql(passBRows: unknown[]) {
     executed.push({ text, values });
 
     if (/^SELECT 1/i.test(text)) return Promise.resolve([]);
-    // refreshIdleMarker
+    // refreshIdleMarker — it counts paused rows too, so it must be matched BEFORE the Pass D shape
     if (text.includes("min(next_debit_at)")) {
-      return Promise.resolve([{ soonest: null, in_flight: 0 }]);
+      return Promise.resolve([{ soonest: null, in_flight: 0, paused_rechecks: passDRows.length }]);
     }
     // Pass A — notify candidates
     if (text.includes("notified_at IS NULL")) return Promise.resolve([]);
     // Pass B — execute candidates
     if (text.includes("notified_at IS NOT NULL")) return Promise.resolve(passBRows);
+    // Pass D — parked pauses to recheck
+    if (text.includes("FROM subscriptions WHERE status = 'paused'")) {
+      return Promise.resolve(passDRows);
+    }
     return Promise.resolve([]);
   });
 
@@ -115,6 +119,17 @@ function dueRow(overdueMs: number, status = "trialing", notifiedAgoMs = 25 * HOU
     // Notified 25h ago by default -> past PhonePe's 24h notify->execute window -> inside it, execute is skipped
     notified_at: new Date(Date.now() - notifiedAgoMs).toISOString(),
   };
+}
+
+/** A row the cron parked `paused` — invisible to Pass A and Pass B, so only Pass D can ever free it. */
+function pausedRow(id = "paused-1", merchantSubId = "DKS_S_PAUSED") {
+  return { id, merchant_subscription_id: merchantSubId };
+}
+
+/** 05:00:20 UTC is a top-of-hour tick (Pass D runs); 05:30 is not. */
+function atTick(minutesPastHour: 0 | 30): void {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(`2026-08-25T05:${minutesPastHour === 0 ? "00:20" : "30:00"}Z`));
 }
 
 function makeEnv(): Env {
@@ -494,6 +509,131 @@ describe("Pass B — a row is never stranded", () => {
     phonepe.executeRedemption.mockRejectedValue(new Error("gateway down"));
 
     await expect(runAutopayNotify(makeEnv())).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Pass D — the pause nobody ever told us ended.
+ *
+ * The park that discovers a PAUSED mandate NULLs next_debit_at, which is exactly what removes the row
+ * from both passes' queries -> after that, nothing in this cron looks at it again.
+ * The only ways back were the `subscription.unpaused` webhook, which has NEVER been delivered in
+ * production, and the user happening to open the paywall. So a subscriber who paused and then unpaused
+ * in their UPI app was never billed again, silently — 11 such rows were live when this pass was added.
+ * The restore is the WEBHOOK'S OWN statement, shared through lib/subscription-rearm.ts: a second copy
+ * of it here is a copy that one day rearms the status without the clock, which is the original bug.
+ */
+describe("Pass D — a paused mandate the webhook never told us about", () => {
+  it("rearms a paused row whose mandate is ACTIVE again at PhonePe", async () => {
+    atTick(0);
+    try {
+      const { sql, executed } = makeSql([], [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+
+      await runAutopayNotify(makeEnv());
+
+      expect(phonepe.getSubscriptionStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        "DKS_S_PAUSED",
+      );
+      const rearm = updates(executed).find((u) =>
+        u.text.includes("COALESCE(next_debit_at, current_period_end)"),
+      );
+      expect(rearm, "an ACTIVE mandate must put the row back in the rotation").toBeDefined();
+      // Status AND clock, on one statement -> restoring only the status is the zombie-row bug
+      expect(rearm!.text).toContain("THEN 'trialing' ELSE 'active'");
+      // The guard the webhook carries -> a restore must never resurrect a cancelled or expired row
+      expect(rearm!.text).toContain("AND status = 'paused'");
+      expect(rearm!.values).toContain("paused-1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a row still PAUSED at PhonePe exactly as it was", async () => {
+    atTick(0);
+    try {
+      const { sql, executed } = makeSql([], [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "PAUSED" });
+
+      await runAutopayNotify(makeEnv());
+
+      // The ONLY write is the rotation cursor -> nothing about the subscription itself moves
+      expect(updates(executed)).toHaveLength(1);
+      expect(updates(executed)[0].text).toBe(
+        "UPDATE subscriptions SET updated_at = now() WHERE id = ? AND status = 'paused'",
+      );
+      expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("parks a REVOKED mandate as cancelled instead of re-asking forever", async () => {
+    atTick(0);
+    try {
+      const { sql, executed } = makeSql([], [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "REVOKED" });
+
+      await runAutopayNotify(makeEnv());
+
+      const parked = updates(executed).find((u) => u.text.includes("status = ?"));
+      expect(parked, "a revoked mandate must be parked, not left paused").toBeDefined();
+      expect(parked!.values[0]).toBe("cancelled");
+      // Parking is a BILLING decision -> current_period_end is untouched -> access runs out on its own
+      expect(parked!.text).toContain("next_debit_at = NULL");
+      expect(parked!.text).not.toContain("current_period_end");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not run at all off the top of the hour", async () => {
+    atTick(30);
+    try {
+      const { sql, executed } = makeSql([], [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+
+      await runAutopayNotify(makeEnv());
+
+      // Not even the SELECT -> a pause can wait 45 min; a debit due this tick cannot
+      expect(
+        executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'")),
+      ).toBe(false);
+      expect(phonepe.getSubscriptionStatus).not.toHaveBeenCalled();
+      expect(updates(executed)).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never spends a call Pass B needed — the run's budget is shared", async () => {
+    atTick(0);
+    try {
+      // A full Pass B of settling rows: 1 reconcile call + 3 reporter subrequests each -> the 600 budget is gone
+      const passB = Array.from({ length: 200 }, () => dueRow(3 * HOUR, "active"));
+      const { sql, executed } = makeSql(passB, [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getOrderStatus.mockResolvedValue({
+        state: "COMPLETED",
+        expireAt: Date.now() + 24 * HOUR,
+      });
+
+      await runAutopayNotify(makeEnv());
+
+      // Debits outrank pause housekeeping: Pass D stops before its first call, and retries next hour
+      expect(phonepe.getSubscriptionStatus).not.toHaveBeenCalled();
+      expect(
+        executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'")),
+      ).toBe(false);
+      expect(updates(executed).some((u) => u.text.includes("status = 'active'"))).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

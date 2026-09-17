@@ -14,7 +14,10 @@ everything else. Rules, claim loop and kill switch: [push.md](push.md).
 ## Quarter-hour `*/15 * * * *` — autopay only, its own invocation
 
 **Workers Paid gives one invocation 10,000 subrequests, so the ceiling is the 15-minute cron wall
-clock, not the subrequest cap.** PhonePe calls are sequential at ~1 s each, so the scan is budgeted
+clock, not the subrequest cap.** A cron on an interval UNDER an hour (this one and the every-minute
+push tick) also gets only **30 s of CPU time** per invocation; the hourly and daily crons get 15 min.
+Time spent awaiting PhonePe or Neon is not CPU, so 600 sequential calls fit, but any per-row hashing or
+JSON work added here is charged against that 30 s (Workers limits page, "CPU time per Cron Trigger"). PhonePe calls are sequential at ~1 s each, so the scan is budgeted
 at 600 calls and throughput comes from run size AND cadence.
 
 **Autopay is NOT part of the hourly handler**, and putting it back re-creates the failure that split
@@ -39,7 +42,20 @@ its 600), and the row cap is exactly what starves fresh debits behind an old hea
 is read ONCE per run and shared by the bound and the skip: a scan long enough to outlive a 15-minute
 boundary must not fetch a row under one rule and drop it under the other.
 
-## Hourly `0 * * * *`
+**Pass D re-asks about parked pauses, on the top-of-hour tick only, at most `MAX_PAUSED_RECHECK` = 50
+status calls.** A `paused` row has `next_debit_at` NULL and a status outside `('trialing','active')`,
+which is precisely what removes it from both passes — so nothing here ever looked at it again, and the
+only ways back were the `subscription.unpaused` webhook, **never once delivered in production**
+([phonepe-webhook.md](phonepe-webhook.md)), and the user happening to open the paywall. Someone who
+paused in their UPI app and unpaused there was therefore never billed again. Pass D reads the mandate
+oldest-`updated_at` first: ACTIVE restores and rearms the row through the same statement the webhook
+uses (`lib/subscription-rearm.ts` — one copy, or the two drift and one of them forgets the clock),
+a terminal state parks it `cancelled`, and anything else leaves it alone but still moves `updated_at`
+so a backlog over the cap rotates through successive hours. It spends the same per-run call budget as
+the passes above and checks it per row, so a debit always outranks it. One paused row is also enough to
+bound the KV idle marker (`autopay:next_work_at`, which lets a provably empty tick skip the DB
+entirely): while one exists the marker may never reach past the next top of the hour, or a quiet
+population would skip every `:00` tick — the marker outlives them — and the recheck would never run.
 
 1. **build-catalog** — a no-op if `content_version` is unchanged, so most hours only rewrite
    `app_config.json` and `version.json` (whose `built_at` moves on every successful run; the
@@ -93,7 +109,9 @@ the ceiling is the only setting that can blow the budget — at 8 CU a runaway c
 at 1 CU ~$77 worst case. Raise it only on evidence from `pg_stat_statements` (installed) that queries
 queue at 1 CU. Pakiza's endpoint still suspends and still carries the 8 CU ceiling — its traffic is
 too thin to pay for always-on. The defences below stay load-bearing: Neon's weekly maintenance window restarts the
-compute and severs the pooled socket exactly like a suspend did.
+compute and severs the pooled socket exactly like a suspend did, and **Hyperdrive itself closes an
+origin connection idle for 10 minutes** (Hyperdrive limits page), which is shorter than the gap between
+quarter-hour ticks — so the first query of a tick can still land on a fresh connection whatever Neon does.
 
 Before that, this Worker idled for hours (browse never touches the DB), so Neon suspended and
 Hyperdrive's pooled connection went stale. The first query of a cron run then lands on a severed socket, and postgres.js

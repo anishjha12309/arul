@@ -19,6 +19,26 @@ merchantSubscriptionId".
 Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
 `checkout.order.*` names onto the same branches, so it is safe either way.
 
+## Why it never fired — found 17 Sep 2026
+
+**Cloudflare's Browser Integrity Check on the `hsrutility.com` zone was rejecting PhonePe at the edge.**
+A POST to `https://api.hsrutility.com/payments/webhook` with a `Java/1.8.0_292` User-Agent answers
+**HTTP 403, Cloudflare error 1010** ("banned your access based on your browser's signature") from
+Cloudflare itself — the hsr-cms Worker never runs, so nothing is logged anywhere we can see. The same
+body with an `okhttp`, `Apache-HttpClient`, `python-requests` or empty User-Agent reaches the Worker,
+is relayed to this Worker, passes the SHA-256 check with the dashboard credentials (username
+`pakiza_phonepe_hook`, shared by both apps) and gets `200 ok`; a wrong password gets the expected
+`401 invalid_signature`. So credentials, the dispatcher's `DKS_` routing and this handler are all
+correct, and both KV namespaces hold zero `txn:` marks against 1,121 `ph:` order marks in Arul alone
+because PhonePe's Java sender is turned away before the request exists to us.
+
+**The fix is a zone rule, not code:** Cloudflare dashboard → `hsrutility.com` → Rules → Configuration
+Rules → create: *when* Hostname equals `api.hsrutility.com` AND URI Path starts with
+`/payments/webhook` → *then* Browser Integrity Check **Off**. (A WAF custom rule with action *Skip* on
+the same match, skipping Browser Integrity Check, does the same.) Re-test with
+`curl -A "Java/1.8.0_292" -X POST … ` and expect the Worker's answer, not 1010. Then watch this
+namespace for its first `txn:` key on the next setup or redemption.
+
 ⚠ **No PhonePe webhook has ever been processed in production.** The `txn:` prefix in KV holds ZERO
 keys for any event, including setup confirmations, while the server's own `ph:` marks sit in the
 hundreds under the same 30-day TTL — so this is not a stale reading. **The cause is outside this

@@ -1,11 +1,12 @@
 /**
- * Autopay cron — PhonePe Standard Checkout v2 (OAuth / O-Bearer). Two passes per run.
+ * Autopay cron — PhonePe Standard Checkout v2 (OAuth / O-Bearer). Three passes per run.
  *
  * It owns the quarter-hour cron trigger ALONE -> it never shares an invocation's wall clock or call budget
  * Folding it back into the hourly catalog trigger blew the subrequest cap mid-scan -> never do that again
  * The Notify API must be called BEFORE the debit date; Execute (redeem) only AT or after it
  * Pass A NOTIFY: rows trialing/active, next_debit_at within the window, notified_at NULL -> verify ACTIVE, then notify
  * Pass B EXECUTE: rows notified >= 24h ago and due -> redeem -> COMPLETED extends a month, FAILED climbs the ladder
+ * Pass D RECHECK, top-of-hour only: rows parked `paused` -> mandate ACTIVE again -> restore and rearm; terminal -> cancelled
  * PENDING is left alone in both -> PhonePe's STANDARD strategy is still retrying it -> a second redeem is a 4xx
  * sendUserNotification is a log-only stub BY DESIGN -> PhonePe's own rails deliver the payer-facing notice
  */
@@ -18,6 +19,7 @@ import {
   type SubscriptionCancelReason,
 } from "../lib/posthog.js";
 import { grantReferralReward } from "../lib/referral.js";
+import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import {
   notifyRedemption,
   executeRedemption,
@@ -137,9 +139,32 @@ const SETTLE_REPORTER_SUBREQUESTS = 3;
  */
 const STALE_ORDER_MS = 48 * 60 * 60 * 1000;
 
+/**
+ * Paused rows re-asked about per run — Pass D's cap, one PhonePe status call each, hourly.
+ *
+ * A pause is the ONE state this cron cannot leave on its own: the park NULLs next_debit_at and puts the
+ * row outside both passes' status filter, so nothing here ever looks at it again. Only the
+ * `subscription.unpaused` webhook or the user opening the paywall ever brought it back — and NO webhook
+ * has EVER been delivered in production (docs/phonepe-webhook.md). A subscriber who paused in their UPI
+ * app and unpaused there was simply never billed again. So the cron re-asks, which is the whole reason
+ * the cron and not the webhook is the correct channel.
+ * 50 fits any plausible paused population in one hourly tick and cannot crowd out a debit even if it does
+ * not: the shared budget is checked per row, and the oldest-updated_at order rotates a longer backlog
+ * through successive hours -> every checked row's updated_at moves, even one left exactly as it was
+ */
+const MAX_PAUSED_RECHECK = 50;
+
 /** True only on the quarter-hour tick that coincides with the top of the hour -> the once-an-hour work rides this. */
 function isTopOfHourTick(): boolean {
   return new Date().getUTCMinutes() < 15;
+}
+
+/** The next instant a top-of-hour tick fires -> the idle marker may never reach past it while Pass D has rows. */
+function nextTopOfHourMs(): number {
+  const next = new Date();
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return next.getTime();
 }
 
 /**
@@ -540,6 +565,85 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       }
     }
 
+    // ── Pass D: recheck parked pauses ─────────────────────────────────────────
+    // A `paused` row is invisible to Pass A and Pass B by construction -> next_debit_at NULL, status out of scope
+    // Nothing in this Worker ever asked about it again: the unpause webhook has never once been delivered,
+    // so the only escape was the user happening to open the paywall (/payments/status heals it there)
+    // Meanwhile the mandate may be ACTIVE again at PhonePe and the subscriber simply never billed
+    // Hourly, not every tick -> an unpause costs one status call per paused row and can wait 45 min
+    if (topOfHour && budgetLeft(1)) {
+      const parkedPauses = await sql`
+        SELECT id, merchant_subscription_id
+        FROM subscriptions
+        WHERE status = 'paused'
+          AND merchant_subscription_id IS NOT NULL
+        ORDER BY updated_at ASC
+        LIMIT ${MAX_PAUSED_RECHECK}
+      `;
+
+      let checked = 0;
+      let rearmed = 0;
+      let cancelled = 0;
+      let left = 0;
+
+      for (const row of parkedPauses) {
+        if (!budgetLeft(1)) {
+          console.warn(
+            `[autopay-notify] Pass D stopping early — PhonePe call budget ` +
+            `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next hour`,
+          );
+          break;
+        }
+
+        const subscriptionId = row.id as string;
+        const merchantSubId = row.merchant_subscription_id as string;
+        phonePeCalls += 1;
+        checked += 1;
+
+        try {
+          const subStatus = await getSubscriptionStatus(env, merchantSubId);
+          if (subStatus.state === "ACTIVE") {
+            // The unpause we never heard about -> the SAME restore the webhook writes, rearm included
+            await rearmUnpausedSubscription(sql, { subscriptionId });
+            rearmed += 1;
+            console.log(
+              `[autopay-notify] Sub ${merchantSubId} is ACTIVE again at PhonePe — ` +
+              `unpaused, debit clock rearmed`,
+            );
+          } else if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
+            // Paused then killed -> the same park Pass B uses -> access still runs to current_period_end
+            await parkMandate(env, sql, subscriptionId, "cancelled");
+            cancelled += 1;
+            console.warn(
+              `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
+              `marked cancelled (access kept to current_period_end)`,
+            );
+          } else {
+            // Still PAUSED, or mid-transition, or a state we do not know -> the row is RIGHT as it stands
+            // Only updated_at moves, and only so the oldest-first cursor rotates past it next hour
+            // Without that, a backlog over the cap would re-ask the same head rows forever
+            left += 1;
+            await touchPausedRow(sql, subscriptionId);
+          }
+        } catch (err) {
+          // A failed read tells us nothing -> never park or restore on it -> but still rotate the cursor
+          left += 1;
+          await touchPausedRow(sql, subscriptionId);
+          console.warn(
+            `[autopay-notify] Pass D status check failed for ${merchantSubId}:`,
+            err,
+          );
+        }
+      }
+
+      // ONE line per run, whatever happened -> a per-row log for 50 unchanged rows every hour is how
+      // the lines that DO matter get skimmed past
+      console.log(
+        `[autopay-notify] Pass D — ${checked} paused rows rechecked ` +
+        `(${rearmed} rearmed, ${cancelled} cancelled, ${left} left paused)`,
+      );
+    }
+
     // ── Refresh the idle marker ───────────────────────────────────────────────
     // The next moment this cron could have work = the soonest next_debit_at among live rows, minus the notify window
     // Anything already due, or a row mid-flight with notified_at set, yields a past value -> store nothing, query next run
@@ -616,6 +720,26 @@ async function recycleRedemption(
         redemption_order_id = NULL,
         updated_at          = now()
     WHERE id = ${subscriptionId}
+  `;
+}
+
+/**
+ * Move a paused row's rotation cursor and NOTHING else — Pass D's "left exactly as it was".
+ *
+ * Pass D takes the 50 least-recently-updated paused rows, so a row it decides not to change must still
+ * go to the back of the queue or a backlog over the cap would re-ask the same head rows every hour
+ * Guarded on `status = 'paused'` like every other write here -> a row that moved on under us is not touched
+ * The updated_at trigger would do this by itself, but say it explicitly: this statement exists ONLY for it
+ */
+async function touchPausedRow(
+  sql: ReturnType<typeof getDb>,
+  subscriptionId: string,
+): Promise<void> {
+  await sql`
+    UPDATE subscriptions
+    SET updated_at = now()
+    WHERE id = ${subscriptionId}
+      AND status = 'paused'
   `;
 }
 
@@ -733,15 +857,23 @@ async function refreshIdleMarker(
   try {
     const rows = (await sql`
       SELECT
-        min(next_debit_at) AS soonest,
-        count(*) FILTER (WHERE notified_at IS NOT NULL) AS in_flight
+        min(next_debit_at) FILTER (
+          WHERE status IN ('trialing', 'active') AND next_debit_at IS NOT NULL
+        ) AS soonest,
+        count(*) FILTER (
+          WHERE status IN ('trialing', 'active') AND notified_at IS NOT NULL
+        ) AS in_flight,
+        count(*) FILTER (
+          WHERE status = 'paused' AND merchant_subscription_id IS NOT NULL
+        ) AS paused_rechecks
       FROM subscriptions
-      WHERE status IN ('trialing', 'active')
-        AND next_debit_at IS NOT NULL
-    `) as unknown as { soonest: unknown; in_flight: unknown }[];
+    `) as unknown as { soonest: unknown; in_flight: unknown; paused_rechecks: unknown }[];
 
     const inFlight = Number(rows[0]?.in_flight ?? 0);
     const soonestRaw = rows[0]?.soonest ?? null;
+    // Pass D is work this marker would otherwise hide -> a paused row has no next_debit_at to be the soonest one
+    // The marker's TTL is an hour, so an idle population skipped EVERY :00 tick and the recheck never ran
+    const pausedRechecks = Number(rows[0]?.paused_rechecks ?? 0);
     if (inFlight > 0 || soonestRaw === null) {
       await env.KV.delete(NEXT_WORK_KEY);
       return;
@@ -753,7 +885,11 @@ async function refreshIdleMarker(
       return;
     }
     // Work starts one notify-window BEFORE the debit itself -> the marker must be the earlier instant, not the due date
-    const nextWorkMs = soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000;
+    // A paused row waiting to be rechecked pulls it in to the next top of the hour, which is when Pass D runs
+    const nextWorkMs = Math.min(
+      soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000,
+      pausedRechecks > 0 ? nextTopOfHourMs() : Infinity,
+    );
     if (nextWorkMs <= Date.now()) {
       await env.KV.delete(NEXT_WORK_KEY);
       return;

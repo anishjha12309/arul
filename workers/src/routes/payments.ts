@@ -21,6 +21,7 @@ import {
   reportPostHogSubscriptionCancel,
 } from "../lib/posthog.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
+import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import {
   setupSubscription,
   setupSubscriptionIntent,
@@ -818,25 +819,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       `;
 
     } else if (event === "subscription.unpaused") {
-      // Resume -> back to active, or trialing while still inside the trial window
-      // REARM THE DEBIT CLOCK -> the cron's park path NULLs next_debit_at when it discovers a pause
-      // Restoring only `status` left a row neither pass's `next_debit_at <= …` filter can ever select
-      // The app then said "Active" forever, nothing billed, and premium died silently at period end
-      // COALESCE keeps a webhook-paused row's original schedule; notified_at = NULL makes Pass A re-notify first
-      // Scoped to status='paused' -> an unpause must never resurrect a cancelled or expired row
-      // Their next_debit_at is gone ON PURPOSE -> restoring it would resume billing someone who stopped
-      await sql`
-        UPDATE subscriptions
-        SET status        = CASE
-                              WHEN trial_end IS NOT NULL AND trial_end > now()
-                              THEN 'trialing' ELSE 'active'
-                            END,
-            next_debit_at = COALESCE(next_debit_at, current_period_end),
-            notified_at   = NULL,
-            updated_at    = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-          AND status = 'paused'
-      `;
+      // Resume -> back to active, or trialing while still inside the trial window, with the DEBIT CLOCK REARMED
+      // The statement lives in lib/subscription-rearm.ts: the cron's Pass D heals this same lost event
+      // hourly, and one restore written twice is a restore that will one day disagree with itself
+      await rearmUnpausedSubscription(sql, { merchantSubscriptionId: merchantSubId });
 
     } else if (
       event === "pg.refund.accepted" ||
@@ -1062,21 +1048,10 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           (row.status as string) === "paused"
         ) {
           // Lost-unpause heal -> the same restore AND rearm as the unpaused webhook -> the rearm is not optional
-          const restored = await sql<
-            { status: string; next_debit_at: unknown }[]
-          >`
-            UPDATE subscriptions
-            SET status        = CASE
-                                  WHEN trial_end IS NOT NULL AND trial_end > now()
-                                  THEN 'trialing' ELSE 'active'
-                                END,
-                next_debit_at = COALESCE(next_debit_at, current_period_end),
-                notified_at   = NULL,
-                updated_at    = now()
-            WHERE user_id = ${sub}
-              AND status = 'paused'
-            RETURNING status, next_debit_at
-          `;
+          // Literally the same statement: three callers, one home, none of them able to forget the clock
+          const restored = await rearmUnpausedSubscription(sql, {
+            subscriptionId: row.id as string,
+          });
           if (restored[0]) {
             row.status = restored[0].status;
             row.next_debit_at = restored[0].next_debit_at;

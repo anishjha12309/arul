@@ -105,9 +105,12 @@ PENDING order.
 unpause left a row neither cron pass could ever select: "Active" forever, never billed, premium
 silently dead at period end. The `subscription.unpaused` webhook writes `next_debit_at =
 COALESCE(next_debit_at, current_period_end)` and clears `notified_at`, scoped `AND status='paused'`
-so a stray event cannot resurrect a cancelled or expired row. `/payments/status` heals BOTH lost
-webhooks: mandate PAUSED while the row is trialing/active → park; mandate ACTIVE while the row is
-paused → restore and rearm. Abandon checks the live order state first and answers `settled:true`
+so a stray event cannot resurrect a cancelled or expired row. That statement has ONE home,
+`lib/subscription-rearm.ts`, because the cron now heals the same lost event by itself: its hourly
+Pass D re-asks PhonePe about parked pauses and calls the very same restore on an ACTIVE mandate
+([cron.md](cron.md)) — a webhook that has never arrived cannot be the only path back. `/payments/status`
+heals BOTH lost webhooks too: mandate PAUSED while the row is trialing/active → park; mandate ACTIVE
+while the row is paused → restore and rearm. Abandon checks the live order state first and answers `settled:true`
 rather than expiring when PhonePe says COMPLETED, which would strand a paid mandate the webhook can
 no longer grant.
 

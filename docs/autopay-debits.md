@@ -91,6 +91,24 @@ skipped rung) and double-counted beside the cron's own +1.
 Entitlement is untouched — premium still ends at period end plus grace while dunning runs in the
 background, and a mid-ladder settle grants the month from the settle date with `retry_count` reset.
 
+## The rules the ladder is built to satisfy (checked 17 Sep 2026)
+
+- **RBI, Digital Payments – E-mandate Framework, 2026** (RBI/DPSS/2026-27/396, 21 Apr 2026; it repeals
+  the 2019–2024 circulars): the issuer must send a pre-debit notification **at least 24 h before the
+  debit** (§6(a), a floor with no ceiling); recurring debits up to **₹15,000 need no AFA** (§8(a)), so a
+  ₹199 debit never asks for a PIN; the customer can withdraw or opt out of the mandate at any time
+  (§4(b), §6(c)). Every ladder rung is a fresh notify ≥24 h before its redeem, which is what keeps a
+  retry inside §6(a).
+- **PhonePe Autopay v2 (redemption-notify / redemption-execute reference):** inside ONE order the cap is
+  1 attempt + 3 retries within a 48 h window (`expireAt` default 48 h; 72 h has been observed), retries
+  only in the non-peak bands 21:31–09:59 and 13:01–16:59 IST, and `STANDARD` means PhonePe runs those
+  retries itself. The ladder's rungs sit at 03:00 IST, inside the night band, and are ≥2 days apart, so
+  no rung overlaps the previous order's window.
+- **No RBI or NPCI text caps how many days after the due date fresh notify+redeem cycles may continue**,
+  and none forbids retrying an insufficient-funds failure on a later day. The 45-day wall is the owner's
+  call, not a regulatory one. NPCI OC-223 (7 Oct 2025) is about mandate portability and the central
+  "My Mandates" revoke portal, not retries.
+
 ## The webhook is the fast path, the cron is the correct one
 
 The webhook flips the row in seconds and is the only channel that reports `subscription.revoked` or
