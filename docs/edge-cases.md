@@ -42,6 +42,8 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Entitlement live-read from Neon on every gated action; never cached in the JWT
 - [ ] `cancelled` keeps premium to period end, NO grace; `trialing`/`active` get 6 h; `pending` with a live period counts; `paused`/`expired` none; `reward_premium_until` ORed in
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while the period lives, never `expired`; resurrect matches `('expired','cancelled')`
+- [ ] A re-subscribe over a `trialing`/`active`/`paused` row PARKS its mandate (`superseded_mandate_id`), revokes nothing at PhonePe; the grant revokes it, every release path restores it as the live mandate with the ladder intact; cancel and account delete revoke both
+- [ ] `/payments/status` grants the month when a never-converted row's `redemption_order_id` is COMPLETED at PhonePe; the redemption webhook grants only on root `payload.state` COMPLETED
 - [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = install prompt + dead CTA, never the hosted page
 - [ ] An abandoned TRIAL setup (never a spent-trial ₹199 one) marks prefs, shows one dismissible feed row and arms one reminder; a premium read or settled purchase clears both
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause

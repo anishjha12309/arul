@@ -28,7 +28,9 @@ redemption_order_id · trial_end (**one-trial consumed-marker — written once, 
 current_period_end · next_debit_at · notified_at · retry_count · updated_at · upi_target_app (the UPI
 package the mandate was handed to at initiate, or `phonepe_page` for the SDK/hosted page; re-stamped
 when an intent setup falls back, so it names the flow that RAN; NULL predates the column → PostHog
-`subscription_active` reports `unknown`)
+`subscription_active` reports `unknown`) · superseded_mandate_id (the still-billing mandate a
+re-subscribe replaced, parked until the new setup is approved — revoke on grant, restore on release;
+NULL = nothing parked → `docs/phonepe.md` §Mandate setup)
 
 **Debit tracking on `subscriptions`:** `first_debit_at` · `debit_count` · `paid_paise` — written by EVERY
 statement that grants a paid period (both settles, `run-redemptions`, and the repeat-subscriber ₹199 setup)

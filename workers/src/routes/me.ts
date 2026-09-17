@@ -202,7 +202,7 @@ export async function handleDeleteAccount(
   const sql = getDb(env);
   try {
     const rows = await sql`
-      SELECT u.google_sub, s.status, s.merchant_subscription_id, s.trial_end
+      SELECT u.google_sub, s.status, s.merchant_subscription_id, s.superseded_mandate_id, s.trial_end
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
       WHERE u.id = ${sub}
@@ -217,7 +217,13 @@ export async function handleDeleteAccount(
 
     // 1. A mandate may be live under any non-terminal status, 'pending' included -> setup can complete after this read
     if (merchantSubId && status !== null && status !== "cancelled" && status !== "expired") {
-      const revoked = await revokeMandateTolerant(env, merchantSubId);
+      // A re-subscribe PARKS the mandate it replaces -> that one is still billing and must die with the account too
+      const parkedMandateId = (row.superseded_mandate_id as string | null | undefined) ?? null;
+      const revoked =
+        (await revokeMandateTolerant(env, merchantSubId)) &&
+        (parkedMandateId === null ||
+          parkedMandateId === merchantSubId ||
+          (await revokeMandateTolerant(env, parkedMandateId)));
       if (!revoked) {
         return errorResponse(
           502,

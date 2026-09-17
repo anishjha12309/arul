@@ -57,8 +57,21 @@ straight to `active`. `maxAmount: 19900`, `amountType: FIXED`, `frequency: MONTH
 
 `POST /payments/initiate` returns **409 `setup_in_progress`** when a setup is already in flight, kept
 deliberately distinct from **409 `already_subscribed`** — the app treats `already_subscribed` as
-success and must not do the same for an in-flight setup. Initiate is serialized on the user row, and
-superseded mandates are revoked rather than orphaned.
+success and must not do the same for an in-flight setup. Initiate is serialized on the user row.
+
+**A re-subscribe PARKS the mandate it replaces; it is revoked only once the new one is approved.** A
+lapsed trial whose ₹199 is failing (Z9) still has a live mandate climbing the dunning ladder, and its
+owner is exactly who re-taps Subscribe. Revoking that mandate at initiate killed 155 of the 179 such
+mandates checked at PhonePe while 95% of the replacement ₹199 setups were never approved — trials
+that would have paid on a later rung paid nothing. So initiate over a `trialing`/`active`/`paused` row
+writes the old id to `superseded_mandate_id` and touches nothing at PhonePe. Only a `pending` or
+`expired` row's mandate (never approved, or ladder exhausted) is revoked on the spot. Two mandates on
+one user is safe: only the row's `merchant_subscription_id` is ever notified or redeemed. The parked id
+is released by the grant (setup-completed webhook, status COMPLETED reconcile — self-joined so the
+PRIOR value rides back, revoke off the response path), restored by every release path (see below),
+made live again by a redemption webhook that names it (the unapproved newer id is then revoked), and
+revoked with the live one by `/payments/cancel` and account deletion. A `subscription.revoked` for a
+parked id just clears the column.
 
 The claim is released by the app calling **`POST /payments/abandon`** the moment the SDK returns
 non-success: a user backing out and re-tapping must retry INSTANTLY. A visible lockout shipped once
@@ -71,11 +84,22 @@ attempt still refuses. **Change either side only with the other.**
 **A failed setup RESTORES, never just expires.** A resubscribe claims the user's ONE subscriptions
 row, so the claim rides over whatever entitlement that row carried — flipping every failed setup to
 `expired` stripped a cancelled-but-live trial when the user backed out at the UPI app. All three
-failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook) write
-`CASE WHEN current_period_end > now() THEN 'cancelled' ELSE 'expired' END`, and the setup-completed
-resurrect matches `('expired','cancelled')` for the same reason — a paid approval racing the restore
-must still grant. `pending` with a live period keeps premium, so entitlement never flickers while the
-sheet is open.
+failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook) write the
+SAME CASE: a parked `superseded_mandate_id` wins and becomes `merchant_subscription_id` again with
+status `active` when `current_period_end > trial_end`, else `trialing` (ladder columns are never
+touched by the claim, so the cron resumes where it stood); otherwise `current_period_end > now()` →
+`cancelled`, else `expired`. The setup-completed resurrect matches `('expired','cancelled')` for the
+same reason — a paid approval racing the restore must still grant. `pending` with a live period keeps
+premium, so entitlement never flickers while the sheet is open.
+
+**A settled debit the row never learned about is healed by `/payments/status`, not the cron.** The
+cron reconciles `trialing`/`active` rows only; a row that left that set with its `redemption_order_id`
+still open (cancelled in-app, or claimed by a re-subscribe) can have that order COMPLETE afterwards —
+money taken, no premium, two live users. For a `pending`/`cancelled`/`expired`/`paused` row that NEVER
+converted (`current_period_end <= trial_end`), status reads that order and grants the month on
+COMPLETED; the converted gate is what stops a paid period being granted twice. The redemption webhook
+grants only when the ROOT `payload.state` is COMPLETED — PhonePe's transaction-level event carries a
+PENDING order.
 
 **Unpause must REARM the debit clock.** The cron's park nulls `next_debit_at`, so a status-only
 unpause left a row neither cron pass could ever select: "Active" forever, never billed, premium

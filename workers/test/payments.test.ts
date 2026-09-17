@@ -835,6 +835,13 @@ function expectRestoreRule(update: string | undefined, path: string): void {
   expect(sql, `${path}: unconditional expire strips a paid period`).not.toMatch(
     /SET\s+status\s*=\s*'expired'/,
   );
+  // A PARKED mandate (re-subscribe over a lapsed trial) outranks both -> the row goes back to it, ladder intact
+  expect(sql, `${path}: a parked mandate must be restored, not cancelled`).toContain(
+    "WHEN superseded_mandate_id IS NOT NULL",
+  );
+  expect(sql, `${path}: the parked id must become the live one`).toContain(
+    "merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id)",
+  );
 }
 
 describe("the RESTORE rule holds on all three release paths", () => {
@@ -990,5 +997,264 @@ describe("handleCancel — subscription_cancel reporting", () => {
 
     expect(res.status).toBe(502);
     expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
+  });
+});
+
+// ── Re-subscribe keeps the replaced mandate alive until the new one is approved ──
+// 155 of 179 mandates revoked at initiate time were still climbing the ladder (checked at PhonePe), and 95%
+// of the setups that replaced them were never approved -> the revoke now waits for the approval
+
+describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
+  beforeEach(() => {
+    vi.mocked(revokeMandateTolerant).mockClear();
+    vi.mocked(getOrderStatus).mockReset();
+    vi.mocked(getOrderStatus).mockResolvedValue({ state: "PENDING", orderId: "PP_ORDER_1" } as never);
+  });
+
+  const lapsedTrial = (over: Record<string, unknown> = {}) => ({
+    trial_end: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    status: "trialing",
+    merchant_subscription_id: "DKS_S_OLD",
+    superseded_mandate_id: null,
+    current_period_end: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    ...over,
+  });
+
+  it("initiate over a lapsed trialing row parks its mandate and does NOT revoke it", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[], [lapsedTrial()], []]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleInitiate(makeInitiateCtx(env, token));
+
+    expect(res.status).toBe(200);
+    const upsert = texts.find((t) => t.includes("INSERT INTO subscriptions"));
+    expect(upsert).toContain("superseded_mandate_id    = EXCLUDED.superseded_mandate_id");
+    const upsertCall = (sql as unknown as { mock: { calls: unknown[][] } }).mock.calls.find(
+      (call) => Array.isArray(call[0]) && (call[0] as string[]).join("$").includes("INSERT INTO subscriptions"),
+    );
+    expect(upsertCall).toBeDefined();
+    expect((upsertCall as unknown[]).slice(1)).toContain("DKS_S_OLD");
+    expect(vi.mocked(revokeMandateTolerant)).not.toHaveBeenCalled();
+  });
+
+  it("initiate over an expired row (ladder exhausted) still revokes on the spot", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([[], [lapsedTrial({ status: "expired" })], []]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleInitiate(makeInitiateCtx(env, token));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_OLD");
+  });
+
+  it("abandon hands the row back to the parked mandate and revokes only the new one", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ status: "pending", merchant_subscription_id: "DKS_S_NEW" }],
+      [{ id: "sub-1" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleAbandon(makeAbandonCtx(env, token, "DKS_S_NEW_ORDER"));
+
+    expect(res.status).toBe(200);
+    const update = (texts.find((t) => t.includes("UPDATE subscriptions")) ?? "").replace(/\s+/g, " ");
+    expect(update).toContain("WHEN superseded_mandate_id IS NOT NULL");
+    expect(update).toContain("THEN 'active' ELSE 'trialing' END");
+    expect(update).toContain("merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id)");
+    expect(update).toContain("superseded_mandate_id = NULL");
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_NEW");
+  });
+
+  it("setup completed webhook revokes the parked mandate AFTER the grant, once", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ user_id: USER_ID, status: "active" }], // the grant
+      [{ stale_mandate_id: "DKS_S_OLD" }], // the release, self-joined PRIOR value
+      [],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.setup.order.completed",
+        payload: {
+          state: "COMPLETED",
+          merchantId: "M",
+          orderId: "PP_ORDER_RESUB_1",
+          merchantOrderId: "DKS_S_NEW_ORDER",
+          merchantSubscriptionId: "DKS_S_NEW",
+          subscriptionId: "PP_SUB_NEW",
+          amount: 19900,
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const release = texts.find((t) => t.includes("prior.superseded_mandate_id AS stale_mandate_id"));
+    expect(release).toBeDefined();
+    expect(release).toContain("SET superseded_mandate_id = NULL");
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_OLD");
+  });
+
+  it("a debit on the PARKED mandate grants, points the row back at it and retires the unapproved one", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([
+      [{ user_id: USER_ID, prior_status: "pending", prior_mandate_id: "DKS_S_NEW" }],
+      [],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.redemption.order.completed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_R_OLD_1",
+          orderId: "OMO_OLD_1",
+          state: "COMPLETED",
+          amount: 19900,
+          paymentFlow: { type: "SUBSCRIPTION_REDEMPTION", merchantSubscriptionId: "DKS_S_OLD" },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const update = (texts.find((t) => t.includes("UPDATE subscriptions AS s")) ?? "").replace(/\s+/g, " ");
+    expect(update).toContain("OR s.superseded_mandate_id = $");
+    expect(update).toContain("merchant_subscription_id = $");
+    expect(update).toContain("superseded_mandate_id = NULL");
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_NEW");
+  });
+
+  it("a redemption event whose root state is not COMPLETED grants nothing (PhonePe: use payload.state)", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.redemption.transaction.completed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_R_PEND_1",
+          orderId: "OMO_PEND_1",
+          state: "PENDING",
+          amount: 19900,
+          paymentFlow: { type: "SUBSCRIPTION_REDEMPTION", merchantSubscriptionId: "DKS_S_PEND" },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(texts.some((t) => t.includes("UPDATE subscriptions"))).toBe(false);
+  });
+
+  it("status heals a never-converted row whose redemption order COMPLETED at PhonePe", async () => {
+    const env = makeEnv();
+    vi.mocked(getOrderStatus).mockResolvedValueOnce({ state: "COMPLETED", orderId: "OMO_HEAL" } as never);
+    const past = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const { sql, texts } = makeQueueSql([
+      [
+        {
+          id: "sub-heal",
+          user_id: USER_ID,
+          status: "cancelled",
+          plan: "monthly",
+          merchant_subscription_id: "DKS_S_HEAL",
+          merchant_order_id: "DKS_S_HEAL_ORDER",
+          phonepe_order_id: null,
+          phonepe_subscription_id: null,
+          current_period_end: past,
+          trial_end: past,
+          next_debit_at: null,
+          notified_at: null,
+          retry_count: 0,
+          updated_at: past,
+          redemption_order_id: "DKS_R_HEAL_1",
+          superseded_mandate_id: null,
+        },
+      ],
+      [
+        {
+          status: "active",
+          current_period_end: new Date().toISOString(),
+          next_debit_at: new Date().toISOString(),
+          merchant_subscription_id: "DKS_S_HEAL",
+          prior_mandate_id: "DKS_S_HEAL",
+        },
+      ],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleStatus(makeAbandonCtx(env, token, "ignored"));
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { status: string }).status).toBe("active");
+    expect(vi.mocked(getOrderStatus)).toHaveBeenCalledWith(expect.anything(), "DKS_R_HEAL_1");
+    const heal = (texts.find((t) => t.includes("s.redemption_order_id = $")) ?? "").replace(/\s+/g, " ");
+    expect(heal).toContain("s.paid_paise + 19900");
+    expect(heal).toContain("(s.current_period_end IS NULL OR s.current_period_end <= s.trial_end)");
+    expect(vi.mocked(revokeMandateTolerant)).not.toHaveBeenCalled();
+    expect(posthog.reportPostHogFirstConversion).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ transactionId: "DKS_R_HEAL_1" }),
+    );
+  });
+
+  it("status leaves a converted row alone even with an old redemption order on file", async () => {
+    const env = makeEnv();
+    const trialEnd = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    const { sql } = makeQueueSql([
+      [
+        {
+          id: "sub-paid",
+          user_id: USER_ID,
+          status: "cancelled",
+          merchant_subscription_id: "DKS_S_PAID",
+          merchant_order_id: "DKS_S_PAID_ORDER",
+          current_period_end: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+          trial_end: trialEnd,
+          redemption_order_id: "DKS_R_PAID_1",
+          superseded_mandate_id: null,
+          updated_at: trialEnd,
+        },
+      ],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleStatus(makeAbandonCtx(env, token, "ignored"));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(getOrderStatus)).not.toHaveBeenCalled();
+  });
+
+  it("cancel revokes the parked mandate as well as the live one", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([
+      [{ merchant_subscription_id: "DKS_S_NEW", superseded_mandate_id: "DKS_S_OLD", status: "pending" }],
+      [{ updated_at: new Date().toISOString() }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleCancel(makeInitiateCtx(env, token, {}));
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_NEW");
+    expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_OLD");
   });
 });
