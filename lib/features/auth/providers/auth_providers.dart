@@ -10,6 +10,7 @@ import '../../../core/crash/crash_provider.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
+import '../data/play_services_resolver.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 
@@ -98,6 +99,10 @@ class AuthController extends _$AuthController {
   /// return, and never near the outcome it would be retrying.
   @visibleForTesting
   Duration returnCooldown = const Duration(seconds: 60);
+
+  /// Seam for Google's Play services repair — tests answer for the native side.
+  @visibleForTesting
+  PlayServicesResolver playServices = const PlayServicesResolver();
 
   /// Clock seam for the return rule — tests move time instead of waiting it out.
   /// The stall guard deliberately keeps its own real clock; it is timed by [stallTick], not by this.
@@ -264,6 +269,54 @@ class AuthController extends _$AuthController {
           .signInWith(provider, auto: auto, returned: returned);
     }
 
+    // The add-account reopen is ONE-SHOT per attempt, like [relaunched].
+    var reopened = false;
+
+    // A result lands in onActivityResult, a beat before our own surface is resumed again.
+    Future<bool> foregroundWithinGrace() async {
+      final deadline = DateTime.now().add(stallResumeGrace);
+      while (midFlow(lifecycleProbe())) {
+        if (_disposed || !DateTime.now().isBefore(deadline)) return false;
+        await Future<void>.delayed(stallTick);
+      }
+      return !_disposed;
+    }
+
+    /// The attempt that replaces a settled one, or null when [result] stands.
+    ///
+    /// Add-account: Google's own flow hands the user back with ONE cancellation whether they added
+    /// an account, gave up, or were bounced by Google's own "verify it's you" prompt cancelling
+    /// itself (seen on an unattended device) -> nothing reopened, and 76% of those people cancel again.
+    /// The PICKER comes back once (never the One Tap sheet, which a cancel must not redraw): a
+    /// fresh account is then one tap away, and someone who was bounced still has their accounts.
+    ///
+    /// Play services: "Tap again" can never work on a phone whose Play services is below what
+    /// Credential Manager needs, so the failure also asks for GOOGLE'S update dialog. It replaces
+    /// nothing and waits for nothing — the failure stands and the pill frees as before; the way
+    /// back in is the person's return from the Play Store, which [noteAppLifecycle] or a cold
+    /// start already turns into a sign-in.
+    Future<({Future<AuthResult> next})?> recover(AuthResult result) async {
+      if (result is AuthFailure &&
+          result.kind == AuthFailureKind.noPlayServices) {
+        unawaited(playServices.ensureAvailable());
+        return null;
+      }
+      if (!reopened &&
+          result is AuthCancelled &&
+          result.outcome == SignInOutcome.addAccountAbandoned) {
+        reopened = true;
+        if (!await foregroundWithinGrace()) return null;
+        sinceForeground = DateTime.now();
+        wasMidFlow = false;
+        return (
+          next: ref
+              .read(authServiceProvider)
+              .signInWith(provider, reopened: true),
+        );
+      }
+      return null;
+    }
+
     while (true) {
       AuthResult? settled;
       try {
@@ -274,6 +327,11 @@ class AuthController extends _$AuthController {
       if (settled != null) {
         if (stripped(settled)) {
           raw = relaunch('surface_stripped');
+          continue;
+        }
+        final recovery = await recover(settled);
+        if (recovery != null) {
+          raw = recovery.next;
           continue;
         }
         return settled;
@@ -307,6 +365,11 @@ class AuthController extends _$AuthController {
         if (late != null) {
           if (stripped(late)) {
             raw = relaunch('surface_stripped');
+            continue;
+          }
+          final recovery = await recover(late);
+          if (recovery != null) {
+            raw = recovery.next;
             continue;
           }
           return late;

@@ -35,6 +35,14 @@ for (const host of HOSTS) {
     status: 401,
     body: (j) => j && typeof j === "object" && "error" in j,
   });
+  // The region hint every fresh install reads once -> values depend on where the probe runs -> keys only.
+  probes.push({
+    name: `${host} /geo`,
+    url: `${host}/geo`,
+    status: 200,
+    body: (j) =>
+      j && typeof j === "object" && ["country", "region", "lang"].every((k) => k in j),
+  });
 }
 // The catalog pointer is what every install reads first — must be JSON with a built_at.
 probes.push({

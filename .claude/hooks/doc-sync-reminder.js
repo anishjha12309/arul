@@ -76,6 +76,16 @@ const ROUTES = [
     ],
     docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
   },
+  // The region rung of the language precedence: the resolver, the one-shot ask and the route that
+  // answers it. Ahead of the generic routes row -> first match wins.
+  {
+    when: [
+      "lib/core/providers/locale_provider.dart",
+      "lib/core/providers/geo_language_service.dart",
+      "workers/src/routes/geo.ts",
+    ],
+    docs: ["docs/deep-links.md §Language precedence", "workers/README.md §Routes"],
+  },
   {
     when: ["workers/src/lib/referral.ts", "lib/features/referral/**"],
     docs: ["docs/architecture.md §API", "docs/data-model.md"],

@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/perf/boot_trace.dart';
+import '../../../core/providers/geo_language_service.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
@@ -75,6 +76,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .warmUp()
           .then((_) => BootTrace.mark('splash: API warm-up settled')),
     );
+    // A fresh install's region hint, asked once -> the wall flips live when it lands.
+    // Never awaited and never on the routing path -> the splash still routes the moment the seed settles.
+    unawaited(ref.read(geoLanguageServiceProvider).fetchOnce());
 
     // Warm the catalog while the wordmark is up, then the first screenful of feed media.
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {

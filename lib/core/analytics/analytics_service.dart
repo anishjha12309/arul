@@ -2,6 +2,12 @@
 /// sets at sign-in, so a breakdown reads one column whichever scope it picks.
 const kAppLanguageProperty = 'app_language';
 
+/// Which rung decided that language: `pick`, `link`, `geo`, `phone` or `default`.
+const kLanguageSourceProperty = 'language_source';
+
+/// The region `GET /geo` reported for this install, raw, or `none` -> how often the region default is right.
+const kGeoRegionProperty = 'geo_region';
+
 /// Single interface for all analytics events.
 /// `analyticsServiceProvider` assembles PostHog, GA4 and Meta behind it -> call sites never change.
 abstract interface class AnalyticsService {

@@ -5,7 +5,11 @@ real time**. Nothing else. No changelog — close a line by deleting it.
 
 ## Open
 
-- **The restyled language chip and the PostHog sideload gate have not run on a phone** — tests only.
+- **Cloudflare's state accuracy on Indian carriers is unmeasured** — its database is not PostHog's
+  MaxMind. `geo_region` against the phone's language measures it; `GEO_LANG_ENABLED` is the brake.
+  **The network path changes the answer:** on Jio the app connects over IPv4 and read Delhi, while a
+  browser on the same phone in the same minute used IPv6 and read Haryana. Judge the app by its own
+  reading (`npx wrangler tail arul-api --format json`, `cf.regionCode` on `/geo`), never a browser.
 
 - **Funtouch CAN kill Arul ~30 s after a screen lock with Google's sheet up** (`am_kill … stop by
   com.vivo.abe`, no LMK, no `am_low_memory`; Vivo U10, Android 9) — seen once, and once NOT (a 41 s

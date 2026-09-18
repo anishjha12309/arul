@@ -48,6 +48,10 @@ ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:
 # chain be proven on the owner's own phones while production stays dark.
 # Flipping it to "true" is the OWNER's call, not an agent's.
 PUSH_ENABLED = "true"
+# Region-language kill switch for GET /geo (routes/geo.ts). "true" and nothing else answers `lang`;
+# any other value answers `lang: null` with country/region intact -> fresh installs fall back to the
+# phone's language while the accuracy measurement keeps flowing. Turning it off = edit here, deploy.
+GEO_LANG_ENABLED = "true"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>

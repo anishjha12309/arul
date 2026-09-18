@@ -102,9 +102,12 @@ deep link put in the ad set's creative; the call is
 ```bash
 # seam.json: {"DEBUG_INSTALL_REFERRER": "r=<uuid>&lang=ta"}   — stands in for Play's replay
 #        or: {"DEBUG_DEFERRED_LINK": "fb<id>://open?wallpaper_id=<uuid>&lang=hi"} — for GA4F / Meta
+#        or: {"DEBUG_GEO_LANG": "ta"} — stands in for GET /geo; "none" walks an unmapped state
 flutter build apk --debug --split-per-abi --dart-define-from-file=env/dev.json --dart-define-from-file=seam.json
 adb shell pm clear com.hsrutility.arul   # between runs: both seams are once-per-install like the real thing
 ```
+Without the geo seam, the state a fresh install reads depends on the network path, not only the
+place ([known-issues.md](known-issues.md)).
 **A FILE, never `--dart-define=…&lang=…` on the command line** — cmd.exe cuts it at the `&`
 ([known-issues.md](known-issues.md)). The seams feed the SAME `queueRequest` the real callbacks feed,
 so parse → persist → shell → screen → language runs end to end; only the network fetch is skipped.

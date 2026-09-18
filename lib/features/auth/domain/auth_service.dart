@@ -112,10 +112,15 @@ abstract interface class AuthService {
   /// [returned] marks the automatic attempt a RETURN to the wall re-armed, as opposed to the one a
   /// cold start fires. Analytics only — it changes no surface and no order, it only renames the
   /// sheet on this attempt's events (`sheet_return`) so the two populations stay separable.
+  ///
+  /// [reopened] marks the picker the guard puts back after Google's add-account flow handed the
+  /// user back with nothing chosen. Analytics only, like [returned]: it is always a BUTTON-flow
+  /// attempt (`auto: false`) and only renames that picker (`button_after_add_account`).
   Future<AuthResult> signInWith(
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reopened = false,
   });
 
   /// Declares every sign-in attempt started so far ABANDONED.

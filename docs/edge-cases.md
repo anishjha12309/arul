@@ -28,7 +28,8 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Sign-in auto-launches a Google surface on the first frame, never a silent check
 - [ ] SHEET FIRST, picker second; a pill tap skips the sheet; `sheetFirst`/`pickerAfterDismiss` stay BUILD consts
 - [ ] At most TWO Google surfaces per attempt; a DISMISSED sheet escalates ONCE to the button flow, never a second One Tap pass
-- [ ] A failed sign-in shows ONE retry line; the wall has no links at all; `clearTaskOnLaunch` stays on MainActivity
+- [ ] A return from Google's add-account flow reopens the PICKER once (never the sheet, never twice); a Play services failure shows GOOGLE'S update dialog, checked against Credential Manager's floor
+- [ ] A failed sign-in shows ONE retry line; the wall has no links, and the bottom-left language chip is its ONE tappable thing beside the pill; `clearTaskOnLaunch` stays on MainActivity
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
@@ -102,7 +103,8 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A share link carries `ilang=`, never `lang=`; the live watermark needs API 31, below which the share ships clean rather than crashing
 - [ ] Intent-filters never merged across schemes; `flutter_deeplinking_enabled` stays true
 - [ ] ONE level of encoding on `referrer`; the Worker's language normalisation matches the app's
-- [ ] The link's `lang` ALWAYS wins over the device default and the user's Settings pick
+- [ ] The link's `lang` ALWAYS wins over an earlier Settings pick, the region and the device default
+- [ ] The region is asked ONCE per FRESH install (`GET /geo`, retried per cold start until answered) and stored BESIDE `arul_locale`, never in it; an update never asks; `US`+`TN` is Tennessee, Delhi stays unmapped
 - [ ] Typed takes: `consumeWallpaper()` never eats a pending ringtone, or the reverse
 
 ## Catalog / storage

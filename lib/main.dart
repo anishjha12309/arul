@@ -27,6 +27,7 @@ import 'core/config/app_config.dart';
 import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
+import 'core/providers/geo_language_service.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
@@ -143,19 +144,26 @@ void _maybeEnableFlutterDriver() {
 /// call site (the allow-list governs only those), GA4 auto-collects `first_open` for the same moment,
 /// and a name with a space is not a legal GA4 event name.
 /// A capture before native init finishes is DROPPED -> await `setup()` first.
-/// `app_language` is primed BEFORE setup, synchronously, read straight from prefs because Riverpod
-/// does not exist yet -> every capture carries the language the app opened in, including the
-/// sheet-first `login_attempt` that fires between native setup and the register round trip
-/// (`PostHogAnalyticsService.track`).
+/// `app_language`, `language_source` and `geo_region` are primed BEFORE setup, synchronously, read
+/// straight from prefs because Riverpod does not exist yet -> every capture carries the language the
+/// app opened in, including the sheet-first `login_attempt` that fires between native setup and the
+/// register round trip (`PostHogAnalyticsService.track`).
 Future<void> _startPostHog(
   PostHogConfig config,
   SharedPreferences prefs,
 ) async {
+  final phone = WidgetsBinding.instance.platformDispatcher.locales;
   final lang = resolveAppLocale(
     prefs.getString(appLocalePrefsKey),
-    WidgetsBinding.instance.platformDispatcher.locales,
+    prefs.getString(geoLangPrefsKey),
+    phone,
   ).languageCode;
-  PostHogAnalyticsService.prime({kAppLanguageProperty: lang});
+  final origin = resolveLanguageOrigin(prefs, phone);
+  PostHogAnalyticsService.prime({
+    kAppLanguageProperty: lang,
+    kLanguageSourceProperty: origin.source.key,
+    kGeoRegionProperty: origin.geoRegion,
+  });
   await Posthog().setup(config);
   await PostHogAnalyticsService.started();
   if (!AnalyticsCohort.isFreshInstall) return;
@@ -236,6 +244,11 @@ Future<void> _startApp() async {
   // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
   // build we can ever put on a test phone — measures the same startup path real users get.
   final inCohort = AnalyticsCohort.resolve(prefs);
+  // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
+  GeoLanguageService.markIfFreshInstall(
+    prefs,
+    freshInstall: AnalyticsCohort.isFreshInstall,
+  );
   if (AppConfig.posthogEnabled && PlayInstall.isPlay && inCohort) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost

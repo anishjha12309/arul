@@ -50,7 +50,11 @@ class _DeepLinkLocaleSyncState extends ConsumerState<DeepLinkLocaleSync> {
       orElse: () => null,
     );
     if (locale == null) return;
-    unawaited(ref.read(localeProvider.notifier).setLocale(locale));
+    unawaited(
+      ref
+          .read(localeProvider.notifier)
+          .setLocale(locale, source: LanguageSource.link),
+    );
     // The persisted copy only survives a process death between capture and apply -> `arul_locale` has it.
     unawaited(ref.read(installReferrerServiceProvider).clearPendingLang());
   }

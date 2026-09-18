@@ -56,7 +56,8 @@ succeeding population for its denominator. Both: [auth.md](auth.md).
 `login_surface_shown` (once per attempt, `surface`/`auto`/`ms_to_surface`) proves Google's screen
 appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
 left". `surface` values: `sheet`, `sheet_return` (the automatic attempt a return to the wall
-re-armed), `button`, `button_after_dismiss`; a return attempt that escalates to the picker carries
+re-armed), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the guard
+reopens once after Google's add-account flow); a return attempt that escalates to the picker carries
 `sheet_return` on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
 lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
 100 installs read as "install, then nothing". Expect the measured install→login rate to read LOWER
@@ -144,16 +145,19 @@ the funnel joins on it — a rendering hint, never a browse axis. **Analytics va
 while catalog and Neon wire values are `static`/`live`**, so an event↔Neon join on `type` silently
 matches nothing.
 
-**`app_language` rides EVERY event via `AnalyticsService.register`, never only `identify`.** PostHog
-freezes person properties onto each event at ingest, so a person property leaves every pre-login event
-(install, the sign-in wall) blank forever. A blank event-level `app_language` on older data means "not signed in
-yet", not "no language". PostHog's `reset()` clears cached properties on sign-out, so each sink re-applies what was
-registered after it. **The PostHog sink also stamps every registered value onto the capture itself**, primed
-from prefs before `setup()` starts: on a fresh install the sheet-first `login_attempt` is captured after native
-setup but before the `register` round trip lands, and relying on the SDK alone left it blank on four cold-start
-attempts in five while the install event 20 ms later carried the language. A blank `app_language` bucket in a
-breakdown is therefore installs that predate the register, the cold-start attempt on the builds before the
-capture-side stamp, and the Worker's server-side events, which carry no build and no language.
+**`app_language`, `language_source` and `geo_region` ride EVERY event via `AnalyticsService.register`,
+never only `identify`** — a person property, frozen at ingest, leaves every pre-login event blank;
+`reset()` clears them on sign-out, so each sink re-applies them.
+**The PostHog sink also stamps them onto the capture itself**, primed from prefs before `setup()`:
+the sheet-first `login_attempt` lands before the `register` round trip, and the SDK alone left it
+blank on four cold-start attempts in five. A blank `app_language` bucket is installs that predate the
+register, cold-start attempts before that stamp, and the Worker's server-side events.
+
+`language_source` (`pick` · `link` · `geo` · `phone` · `default`) and `geo_region` (Cloudflare's raw
+region or `none`) measure the region default. A fresh install's install event and first-frame
+`login_attempt` fire BEFORE `GET /geo` answers, so they carry the phone's language and `phone`; later
+events carry `geo`. An older stored pick reads `pick`. GA4 hides both until registered as user-scoped
+custom dimensions.
 
 Reading these without a wrong conclusion — what `confirmed` counts, which metrics are tripwires,
 where a join silently matches nothing: [analytics-ops.md](analytics-ops.md) §Reading.

@@ -114,6 +114,14 @@ export interface Env {
    */
   PUSH_ENABLED?: string;
 
+  /**
+   * Region-language kill switch for GET /geo, `"true"` or anything else -> wrangler.toml [vars], NOT a secret.
+   *
+   * Anything but the exact string "true" answers `lang: null` -> installs fall through to the phone's language
+   * `country` and `region` keep flowing either way -> the accuracy measurement never goes dark with the default
+   */
+  GEO_LANG_ENABLED?: string;
+
   // ── PostHog capture — the ONLY server-side analytics sink (lib/posthog.ts) ──
   // GA4 and Meta server reporting were removed -> one conversion must have ONE data source -> never re-add them
   /**

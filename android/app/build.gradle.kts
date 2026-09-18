@@ -145,6 +145,10 @@ dependencies {
     // Same BoM as firebase_core's FirebaseSDKVersion (4.14.0 -> 34.18.0) -> Gradle resolves ONE firebase-messaging -> bump them together.
     implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("com.google.firebase:firebase-messaging")
+
+    // auth/PlayServicesChannel needs GoogleApiAvailability -> the sign-in plugin's copy is off our classpath too.
+    // A floor, not a pin: Gradle resolves the highest version any dependency asks for, and 18.9.0 is what it resolves today.
+    implementation("com.google.android.gms:play-services-base:18.9.0")
 }
 
 flutter {

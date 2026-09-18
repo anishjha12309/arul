@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/auth/google_sign_in_init.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
+import 'package:arul/features/auth/data/play_services_resolver.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -25,6 +26,9 @@ class _FakeAuthService implements AuthService {
   /// The `returned` flag each attempt carried -> "did the RETURN marker reach the service?".
   final List<bool> returnedFlags = [];
 
+  /// The `reopened` flag each attempt carried -> "was this the picker put back after add-account?".
+  final List<bool> reopenedFlags = [];
+
   /// Flipped by the tests that need a live session (the return rule must never re-arm over one).
   bool authed = false;
 
@@ -33,11 +37,13 @@ class _FakeAuthService implements AuthService {
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reopened = false,
   }) {
     final completer = Completer<AuthResult>();
     attempts.add(completer);
     autoFlags.add(auto);
     returnedFlags.add(returned);
+    reopenedFlags.add(reopened);
     return completer.future;
   }
 
@@ -65,6 +71,23 @@ class _FakeAuthService implements AuthService {
 
   @override
   Future<void> updateDisplayName(String name) async {}
+}
+
+/// Answers for the native Play services repair -> "was Google's dialog asked for?" is a call count.
+class _FakeResolver implements PlayServicesResolver {
+  _FakeResolver(PlayServicesFix fix) : _answer = Future.value(fix);
+
+  /// A repair whose Task never settles — the dialog left open, or a callback that never comes.
+  _FakeResolver.hanging() : _answer = Completer<PlayServicesFix>().future;
+
+  final Future<PlayServicesFix> _answer;
+  int calls = 0;
+
+  @override
+  Future<PlayServicesFix> ensureAvailable() {
+    calls++;
+    return _answer;
+  }
 }
 
 // ─── Domain model tests ───────────────────────────────────────────────────────
@@ -453,6 +476,24 @@ void main() {
       expect(ApiAuthService.sheetSurfaceFor(returned: true), 'sheet_return');
     });
 
+    // The reopened picker is a BUTTON surface like any other: an icon relaunch can strip it too,
+    // and a strip the service no longer recognised would be filed as the user saying no.
+    test('the picker reopened after add-account names itself, and an OS strip '
+        'of it is still a strip', () {
+      expect(ApiAuthService.buttonSurfaceFor(reopened: false), 'button');
+      expect(
+        ApiAuthService.buttonSurfaceFor(reopened: true),
+        'button_after_add_account',
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'button_after_add_account',
+          description: 'User cancelled the selector',
+        ),
+        isTrue,
+      );
+    });
+
     test('no surface or no message proves nothing', () {
       expect(
         ApiAuthService.isSelectorStrip(
@@ -726,6 +767,135 @@ void main() {
         expect(auth.abandonCount, 0);
       },
     );
+
+    // Google's add-account flow hands the user back with ONE message whether they added an
+    // account, gave up or were bounced -> nothing reopened, and 76% of them cancelled again.
+    test('a return from add-account reopens the PICKER once: button flow, '
+        'stamped, nothing abandoned', () async {
+      final pending = controller.signIn(AuthProvider.google, auto: true);
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.addAccountAbandoned),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(auth.attempts, hasLength(2), reason: 'the picker comes back');
+      expect(
+        auth.autoFlags.last,
+        isFalse,
+        reason: 'never the One Tap sheet — a cancel must not redraw it',
+      );
+      expect(auth.reopenedFlags, [false, true]);
+      expect(auth.returnedFlags.last, isFalse);
+      expect(auth.abandonCount, 0, reason: 'the first attempt SETTLED');
+
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    test('a second add-account return is handed back, never looped', () async {
+      final pending = controller.signIn(AuthProvider.google);
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.addAccountAbandoned),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(auth.attempts, hasLength(2));
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.addAccountAbandoned),
+      );
+
+      final result = await pending;
+      expect(result, isA<AuthCancelled>());
+      expect(
+        (result as AuthCancelled).outcome,
+        SignInOutcome.addAccountAbandoned,
+      );
+      expect(auth.attempts, hasLength(2), reason: 'one-shot');
+    });
+
+    test('an add-account return that lands while we are still behind another '
+        'app reopens nothing', () async {
+      controller.lifecycleProbe = () => AppLifecycleState.paused;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.addAccountAbandoned),
+      );
+
+      expect(await pending, isA<AuthCancelled>());
+      expect(auth.attempts, hasLength(1), reason: 'no surface from behind');
+    });
+
+    test('an add-account return that lands a beat BEFORE our resume still '
+        'reopens', () async {
+      var lifecycle = AppLifecycleState.inactive;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.addAccountAbandoned),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      expect(auth.attempts, hasLength(1), reason: 'not resumed yet');
+      lifecycle = AppLifecycleState.resumed;
+
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(auth.attempts, hasLength(2));
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    // "Tap again" can never work on a phone whose Play services cannot sign in.
+    for (final fix in PlayServicesFix.values) {
+      test("a Play services failure asks for Google's dialog once and is "
+          'still returned as it was (native answers ${fix.name})', () async {
+        final resolver = _FakeResolver(fix);
+        controller.playServices = resolver;
+
+        final pending = controller.signIn(AuthProvider.google);
+        auth.settleLast(
+          const AuthFailure(message: 'x', kind: AuthFailureKind.noPlayServices),
+        );
+
+        final result = await pending;
+        expect(result, isA<AuthFailure>());
+        expect((result as AuthFailure).kind, AuthFailureKind.noPlayServices);
+        expect(resolver.calls, 1);
+        expect(
+          auth.attempts,
+          hasLength(1),
+          reason: 'the way back in is the return from the Play Store',
+        );
+      });
+    }
+
+    test('a dialog call that never answers cannot hold the pill', () async {
+      controller.playServices = _FakeResolver.hanging();
+
+      final pending = controller.signIn(AuthProvider.google);
+      auth.settleLast(
+        const AuthFailure(message: 'x', kind: AuthFailureKind.noPlayServices),
+      );
+
+      final result = await pending.timeout(const Duration(seconds: 1));
+      expect(result, isA<AuthFailure>());
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('any other failure never reaches the repair', () async {
+      final resolver = _FakeResolver(PlayServicesFix.shown);
+      controller.playServices = resolver;
+
+      final pending = controller.signIn(AuthProvider.google);
+      auth.settleLast(
+        const AuthFailure(message: 'x', kind: AuthFailureKind.networkError),
+      );
+
+      expect(await pending, isA<AuthFailure>());
+      expect(resolver.calls, 0);
+      expect(auth.attempts, hasLength(1));
+    });
 
     test('the relaunch is ONE-SHOT — a second lost sheet reports instead of '
         'looping', () async {

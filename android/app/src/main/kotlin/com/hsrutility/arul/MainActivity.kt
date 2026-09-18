@@ -21,6 +21,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
 import com.facebook.applinks.AppLinkData
+import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
@@ -252,6 +253,13 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
+
+        // Google's own Update / Enable dialog for a phone whose Play services cannot sign in.
+        // Stateless and activity-scoped -> it needs no disposal.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PlayServicesChannel.CHANNEL,
+        ).setMethodCallHandler(PlayServicesChannel(this))
 
         // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
         // Android stops showing its dialog once the user has refused twice, so the toggle would

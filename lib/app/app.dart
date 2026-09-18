@@ -73,6 +73,13 @@ class _ArulAppState extends ConsumerState<ArulApp> {
           .register(kAppLanguageProperty, next.languageCode),
       fireImmediately: true,
     );
+    // Where that language came from and what the region said -> the two properties that measure the
+    // region default. Its own provider: a region answer matching the phone moves the SOURCE only.
+    ref.listenManual(languageOriginProvider, (_, next) {
+      final analytics = ref.read(analyticsServiceProvider);
+      analytics.register(kLanguageSourceProperty, next.source.key);
+      analytics.register(kGeoRegionProperty, next.geoRegion);
+    }, fireImmediately: true);
   }
 
   PushOpenHandler? _pushOpen;

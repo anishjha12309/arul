@@ -182,10 +182,15 @@ class ApiAuthService implements AuthService {
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reopened = false,
   }) {
     switch (provider) {
       case AuthProvider.google:
-        return _signInWithGoogle(auto: auto, returned: returned);
+        return _signInWithGoogle(
+          auto: auto,
+          returned: returned,
+          reopened: reopened,
+        );
     }
   }
 
@@ -358,7 +363,9 @@ class ApiAuthService implements AuthService {
     required String? surface,
     required String? description,
   }) {
-    if (surface != _surfaceButton && surface != _surfaceButtonAfterDismiss) {
+    if (surface != _surfaceButton &&
+        surface != _surfaceButtonAfterDismiss &&
+        surface != _surfaceButtonAfterAddAccount) {
       return false;
     }
     final message = description?.trim();
@@ -478,6 +485,18 @@ class ApiAuthService implements AuthService {
   static String sheetSurfaceFor({required bool returned}) =>
       returned ? _surfaceSheetReturn : _surfaceSheet;
 
+  /// The picker the guard reopens ONCE after Google's add-account flow returned with nothing
+  /// chosen. Kept apart from a tapped picker: it is the only button surface nobody asked for, so
+  /// it is the only one whose conversion says whether the reopen earns its place.
+  /// A VALUE on the existing `surface` property — no new event, no new property.
+  static const _surfaceButtonAfterAddAccount = 'button_after_add_account';
+
+  /// The button flow's reported name for an attempt. Pinnable for the same reason as
+  /// [sheetSurfaceFor].
+  @visibleForTesting
+  static String buttonSurfaceFor({required bool reopened}) =>
+      reopened ? _surfaceButtonAfterAddAccount : _surfaceButton;
+
   /// The picker reached by DISMISSING the sheet, kept distinct from a picker
   /// the sheet never contested: it is the only bucket where the user has
   /// already said no once, so it is the only one whose conversion rate says
@@ -565,6 +584,7 @@ class ApiAuthService implements AuthService {
     required void Function(String surface) onSurface,
     required void Function(GoogleSignInException e) onSheetUnavailable,
     String sheetSurface = _surfaceSheet,
+    String buttonSurface = _surfaceButton,
   }) async {
     if (sheet != null) {
       onSurface(sheetSurface);
@@ -581,13 +601,14 @@ class ApiAuthService implements AuthService {
         onSheetUnavailable(e);
       }
     }
-    onSurface(_surfaceButton);
+    onSurface(buttonSurface);
     return button();
   }
 
   Future<AuthResult> _signInWithGoogle({
     required bool auto,
     required bool returned,
+    required bool reopened,
   }) async {
     final attempt = ++_attemptSeq;
     // Clear first: a failure BEFORE any surface opened (unsupported device,
@@ -621,12 +642,13 @@ class ApiAuthService implements AuthService {
       // The return marker rides the sheet's NAME: an attempt with no sheet is a pill tap, which a
       // return never is.
       final sheetSurface = sheetSurfaceFor(returned: returned);
+      final buttonSurface = buttonSurfaceFor(reopened: reopened);
       _analytics.track(
         'login_attempt',
         properties: {
           ..._installProps,
           'provider': 'google',
-          'surface': useSheet ? sheetSurface : _surfaceButton,
+          'surface': useSheet ? sheetSurface : buttonSurface,
           'auto': auto,
         },
       );
@@ -669,6 +691,7 @@ class ApiAuthService implements AuthService {
           return GoogleSignIn.instance.authenticate();
         },
         sheetSurface: sheetSurface,
+        buttonSurface: buttonSurface,
         onSurface: (surface) => _surface = surface,
         onSheetUnavailable: (e) => _analytics.track(
           'sheet_unavailable',

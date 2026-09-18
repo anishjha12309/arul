@@ -10,7 +10,9 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/perf/boot_trace.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../settings/presentation/language_sheet.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 import '../providers/auth_providers.dart';
@@ -181,6 +183,31 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     _signIn();
   }
 
+  /// The language picker, from the footer.
+  ///
+  /// It is NOT part of the sign-in attempt and must never touch one: no `signIn`, no abandon, and
+  /// it stays live while `_signingIn` — a user who cannot read the pill is exactly the user with an
+  /// attempt in flight.
+  /// The sheet follows the DEVICE's light/dark mode, not the app's saved theme mode: this screen is
+  /// always dark over video whichever the user picked, so the app's own setting says nothing about
+  /// what a sheet rising out of it should look like — the phone does.
+  /// A session landing while the sheet is up still routes: `context.go` replaces the stack the
+  /// sheet's route sits on, so the feed cannot arrive with a picker left over it.
+  Future<void> _pickLanguage() async {
+    ArulHaptics.tap();
+    final current = appLanguageName(ref.read(localeProvider).languageCode);
+    final picked = await showLanguageSheet(
+      context,
+      current,
+      brightness: MediaQuery.platformBrightnessOf(context),
+    );
+    final code = picked == null ? null : appLanguageCodeFor(picked);
+    if (code == null || !mounted) return;
+    await ref
+        .read(localeProvider.notifier)
+        .setLocale(Locale(code), source: LanguageSource.pick);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -218,6 +245,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
                 style: ArulTokens.wordmarkSignIn.copyWith(
                   shadows: ArulTokens.overMediaShadow,
                 ),
+              ),
+            ),
+
+            // The language footer, under Google's own sign-in pages: the way OUT of a language the
+            // user cannot read belongs at the foot of the page, not competing with the wordmark.
+            // Left 20 lines it up with the silk panel's own inset. The bottom offset comes from the
+            // MediaQuery inset, never a constant — a gesture bar and a 3-button nav bar are 24dp
+            // apart and a fixed number buries it under one of them.
+            // The scrim's 0.46 bottom stop is what grounds it; the size matrix pins that it stays
+            // clear of the panel.
+            Positioned(
+              left: 20,
+              bottom: MediaQuery.paddingOf(context).bottom + 16,
+              child: _LanguageTrigger(
+                key: kSignInLanguageTriggerKey,
+                label: ref.watch(localeProvider).languageCode.toUpperCase(),
+                semanticsLabel: l10n.settingsLanguage,
+                onTap: _pickLanguage,
               ),
             ),
 
@@ -273,7 +318,12 @@ const TextStyle kSignInTitleStyle = TextStyle(
   color: ArulTokens.ivory,
 );
 
-/// The silk panel — everything readable or tappable on the wall sits on it.
+/// The language trigger's tap target. The size matrix reads its rect against [kSignInPanelKey]'s:
+/// the two must never touch, and it must stay a 48dp target in every language and text size.
+@visibleForTesting
+const Key kSignInLanguageTriggerKey = Key('signIn.languageTrigger');
+
+/// The silk panel, so the size matrix can measure the gap the footer has to live in.
 @visibleForTesting
 const Key kSignInPanelKey = Key('signIn.panel');
 
@@ -286,6 +336,113 @@ const Key kSignInTitleKey = Key('signIn.pill.title');
 /// at most two at text scale 1.0 and three at 1.3, in every language, never a truncation.
 @visibleForTesting
 const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
+
+/// The language footer: a small chip carrying the `translate` glyph, the current language CODE and a
+/// chevron — the shape of a control that opens a list, so it reads as tappable without competing
+/// with the one thing on this screen that IS a button.
+///
+/// It shows the CODE (EN, TA, ML …), not the native name: two Latin capitals are the same width in
+/// every language, so the chip never changes size or wraps, and a Malayalam speaker recognises "ML"
+/// as fast as "മലയാളം" at a glance. Its label is the PILL TITLE'S style — [kSignInTitleStyle], the
+/// same object, so the two cannot drift.
+///
+/// **The ground is matched to the pill's INTERIOR AS MEASURED, not to the pill's paint.** The pill
+/// paints `rgba(20,9,12,.55)` over the silk panel in the bright middle of the artwork and its
+/// interior reads ≈ rgb(44,27,21) on device. This chip sits on the scrim's darkest band, so the same
+/// paint — alone, or with the panel's two layers under it — measured 7–9 luminance points darker and
+/// read as a solid block beside a translucent pill (both tried on device). [_fill] is the 70% fill
+/// that lands on the pill's interior over that band, measured 31 against the pill's 30 with the
+/// water still faintly visible through it, exactly as the poster shows through the pill. Same
+/// radius, same gold-50% border.
+///
+/// **The GLYPHS take no `shadows`.** `Icon` accepts them, and on device Impeller mis-offsets a
+/// shadow drawn from an icon FONT: it painted a second dark `translate` mark ~13dp to the left of
+/// the real one. Text shadows on the same screen (the wordmark) are correct — only
+/// icons ghost. The chip's own ground is what keeps the glyphs legible here.
+class _LanguageTrigger extends StatelessWidget {
+  const _LanguageTrigger({
+    super.key,
+    required this.label,
+    required this.semanticsLabel,
+    required this.onTap,
+  });
+
+  final String label;
+  final String semanticsLabel;
+  final VoidCallback onTap;
+
+  /// Solved on device for the pill's measured interior over the scrim's bottom band (class doc).
+  static const _fill = Color.fromRGBO(50, 22, 11, 0.70);
+
+  static final _shape = BorderRadius.circular(ArulTokens.pillRadius);
+
+  /// The whole chip at 85% of the size it was drawn at (owner's call): height, insets, gaps,
+  /// glyphs and label shrink TOGETHER, so its proportions are the ones solved on device.
+  static const _scale = 0.85;
+  static const _height = 36 * _scale;
+  static const _glyph = 16 * _scale;
+
+  /// Still the pill title's style — only its size is scaled, so family, weight and colour cannot
+  /// drift from the pill.
+  static final _labelStyle = kSignInTitleStyle.copyWith(
+    fontSize: kSignInTitleStyle.fontSize! * _scale,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      identifier: 'arul_signin_language',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        // The 48dp touch target is this padding around the chip, not chip height -> a smaller chip
+        // takes MORE padding, never a smaller target.
+        // None on the left, so the chip's own edge lands on the 20dp margin the silk panel uses.
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            0,
+            (48 - _height) / 2,
+            12,
+            (48 - _height) / 2,
+          ),
+          child: Container(
+            height: _height,
+            padding: const EdgeInsets.fromLTRB(12 * _scale, 0, 10 * _scale, 0),
+            decoration: BoxDecoration(
+              color: _fill,
+              borderRadius: _shape,
+              border: Border.all(color: ArulTokens.goldBorder50, width: 1),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Sized to the label, not to the G mark's disc -> the glyph reads as part of the
+                // word, the way the pill's title and subtitle read as one block.
+                const Icon(
+                  Icons.translate,
+                  size: _glyph,
+                  color: ArulTokens.ivory,
+                ),
+                const SizedBox(width: 6 * _scale),
+                // The pill title's style, UNSHADOWED like the pill title: the ground is matched to
+                // the pill's, so a media shadow here only fattened the glyphs against it.
+                Text(label, maxLines: 1, style: _labelStyle),
+                const SizedBox(width: 2 * _scale),
+                const Icon(
+                  Icons.keyboard_arrow_down,
+                  size: _glyph,
+                  color: ArulTokens.gold,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// What the pill says under its title, resolved in ONE place.
 ///

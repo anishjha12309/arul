@@ -207,7 +207,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final next = await showLanguageSheet(context, current);
     final code = next == null ? null : appLanguageCodeFor(next);
     if (code == null) return;
-    await ref.read(localeProvider.notifier).setLocale(Locale(code));
+    await ref
+        .read(localeProvider.notifier)
+        .setLocale(Locale(code), source: LanguageSource.pick);
   }
 
   /// Opens the help sheet and runs whatever came back.

@@ -84,14 +84,14 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   grows: at most two lines at text scale 1.0 and three at 1.3 on the phones the size matrix covers,
   a fourth for the 320 dp frame where the slot is 140 dp and wrapping is word-bounded. Nothing
   truncates — no ellipsis on either line. `sign_in_size_matrix_test.dart` enforces it.
-- **No language control on the wall** (owner's call). The wall follows the phone's language and the
-  picker lives in Settings only; a footer chip was tried and pulled — it never moved sign-in and it
-  was a second tappable thing beside the one button that matters. **Nothing else on the wall is
-  tappable either** — the Terms · Privacy footer went for the same reason, and Play's in-app
-  privacy-policy requirement is met by Settings, which every signed-in user reaches. The wordmark
-  stays English and is the wall's only mark; the eyebrow under it is the splash's alone.
-  **Icon glyphs take NO `shadows`:** Impeller paints a second mark beside a shadowed icon FONT; text
-  shadows are fine.
+- **The pill stays the only button on the panel; the language chip, bottom-left, is the wall's ONE
+  other tappable thing** (owner's call). A fresh install opens in its REGION's language
+  ([deep-links.md](deep-links.md)), so a wrong guess must be one tap from undone — alone it never
+  moved sign-in. It never touches the attempt.
+- **Nothing else on the wall is tappable** — the Terms · Privacy footer stays gone; Play's in-app
+  privacy-policy requirement is met by Settings. The wordmark stays English and is the wall's only
+  mark; the eyebrow is the splash's alone. **Icon glyphs take NO `shadows`:** Impeller paints a
+  second mark beside a shadowed icon FONT; text shadows are fine.
 
 ## Failure handling
 
@@ -126,6 +126,21 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A user's
   cancel SETTLES the future inside the grace and never reaches that path; the launcher's
   manufactured cancel is the one exception, because there was no cancellation to honour.
+- **A return from Google's add-account flow reopens the PICKER once** (`auto: false`, never the
+  sheet; files under `surface=button_after_add_account`). Credential Manager reports ONE string,
+  `[16] User cancelled during add account flow and accounts were present`, whether the person added
+  an account, backed out, or was bounced: GMS's "Checking info…" step opens its own "verify it's
+  you" BiometricPrompt, which on an unattended device was seen BOTH cancelling itself within two
+  seconds and waiting for a finger — a hands-off adb walk of this flow proves nothing about what a
+  person holding the phone gets. The app makes one `authenticate()` and only receives that cancel:
+  it cannot tell the cases apart. The result lands a beat before our resume, so
+  the reopen waits `stallResumeGrace` for the foreground and opens nothing from behind another app.
+- **`providerConfigurationError` on Android 13 and below is Play services under Credential
+  Manager's floor**: androidx.credentials gates on `isGooglePlayServicesAvailable(context,
+  MIN_GMS_APK_VERSION)` and throws below it. Check against THAT number (`PlayServicesChannel`), not
+  the default — play-services-base accepts a far older Play services and calls a broken phone
+  healthy. Below it, show Google's error dialog and wait for nothing: the person's return from the
+  Play Store is a return to the wall or a cold start, both of which already sign in.
 - **A RETURN to the wall re-arms the automatic sheet ONCE** (`AuthController.noteAppLifecycle`, fed
   by the screen's observer; the screen decides nothing). A person who left and came back is not the
   cancel case, and a share of logins only ever land on such a return. Conditions, all required:

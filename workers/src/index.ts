@@ -21,6 +21,7 @@ import {
   handleRingtoneLink,
   handleRootLink,
 } from "./routes/deeplink.js";
+import { handleGeo } from "./routes/geo.js";
 import {
   handleInitiate,
   handleWebhook,
@@ -95,6 +96,10 @@ app.get("/r/", handleRingtoneLink);
 app.get("/r", handleRingtoneLink);
 // The bare link domain only (never the API host) — see handleRootLink.
 app.get("/", handleRootLink);
+
+// ── Region hint (PUBLIC — the app's first launch, no JWT) ─────────────────────
+// Read once per fresh install from request.cf -> host-agnostic, so pre-rename workers.dev installs get it too
+app.get("/geo", handleGeo); // routes/geo.ts -> no DB, no KV, no limiter
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);

@@ -15,7 +15,10 @@
 //     translation, and that is allowed at any scale.
 //   * **nothing truncates and nothing overflows, at either scale** — no ellipsis on either line. A
 //     nudge the user cannot finish reading is not a nudge, and half of these lines end in the verb.
-//   These EIGHT sizes are the bar.
+//   * the language chip keeps its 48dp target, its label stays ONE line, and it never comes within
+//     [kFooterGapDp] of the silk panel — the two are the only things on this screen that can
+//     collide, and the panel grows with the copy and the text size while the chip is pinned to the
+//     bottom inset. These EIGHT sizes are the bar.
 //
 // Real fonts, per weight, or every width here is fiction: `flutter test` renders one flat box glyph
 // per character, which measures English ~2x too wide and Indic conjuncts at an advance they never
@@ -47,6 +50,13 @@ const _sizes = <(double, double)>[
 
 /// 1.0 and 1.3 — the OS font sizes people actually run, same pair the l10n envelope gates on.
 const _scales = <double>[1.0, 1.3];
+
+/// The chip's label: the language CODE, two Latin capitals in every locale.
+final _languageCode = RegExp(r'^[A-Z]{2}$');
+
+/// The clearance the language footer must keep from the silk panel above it, in logical dp.
+/// Below this they read as one block and the footer stops looking like a footer.
+const double kFooterGapDp = 12;
 
 /// How many lines the subtitle may take at each of those scales.
 int _lineBudget(double scale) => scale > 1.0 ? 3 : 2;
@@ -155,6 +165,49 @@ void main() {
                 'unwrapped it needs ${need.toStringAsFixed(1)}dp of a '
                 '${subtitle.constraints.maxWidth.toStringAsFixed(0)}dp slot: '
                 '"${subtitle.text.toPlainText()}". Shorten the line.',
+              );
+            }
+
+            // ── The language footer: 48dp target, one-line label, clear of the panel ──
+            final trigger = tester.getRect(
+              find.byKey(kSignInLanguageTriggerKey),
+            );
+            final panel = tester.getRect(find.byKey(kSignInPanelKey));
+            final gap = trigger.top - panel.bottom;
+            if (gap < kFooterGapDp) {
+              failures.add(
+                '$where — the language footer starts at '
+                '${trigger.top.toStringAsFixed(1)}dp, only '
+                '${gap.toStringAsFixed(1)}dp under a silk panel ending at '
+                '${panel.bottom.toStringAsFixed(1)}dp (needs ${kFooterGapDp.toStringAsFixed(0)})',
+              );
+            }
+            if (trigger.height < 48) {
+              failures.add(
+                '$where — the language footer is ${trigger.height.toStringAsFixed(1)}dp tall, '
+                'under the 48dp touch target',
+              );
+            }
+            if (trigger.left < 20 - 0.01) {
+              failures.add(
+                '$where — the language footer starts at x='
+                '${trigger.left.toStringAsFixed(1)}dp, inside the 20dp margin',
+              );
+            }
+            // Its two glyphs are paragraphs too (private-use code points) -> the label is the code.
+            final chipLabel =
+                _descendants(
+                      tester.renderObject(
+                        find.byKey(kSignInLanguageTriggerKey),
+                      ),
+                    )
+                    .whereType<RenderParagraph>()
+                    .where((p) => _languageCode.hasMatch(p.text.toPlainText()))
+                    .single;
+            if (chipLabel.didExceedMaxLines || _lineCount(chipLabel) != 1) {
+              failures.add(
+                '$where — the language chip label is not one line: '
+                '"${chipLabel.text.toPlainText()}"',
               );
             }
           }

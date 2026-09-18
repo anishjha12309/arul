@@ -103,6 +103,8 @@ export function makeCtx(opts: {
   url?: string;
   /** Path parameters, as Hono would have matched them (e.g. `/w/:id`). */
   params?: Record<string, string>;
+  /** Cloudflare's `request.cf`, read as `c.req.raw.cf` -> absent = what the preview and local dev hand a handler. */
+  cf?: Record<string, unknown>;
 }): Context<{ Bindings: Env }> {
   const url = opts.url ?? "https://arul-api.hsrutility.com/test";
   return {
@@ -114,6 +116,7 @@ export function makeCtx(opts: {
           ? `${opts.scheme ?? "Bearer"} ${opts.token}`
           : undefined,
       param: (name: string) => opts.params?.[name],
+      raw: { cf: opts.cf },
       query: (name: string) => new URL(url).searchParams.get(name) ?? undefined,
       json: () =>
         opts.invalidJson

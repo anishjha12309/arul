@@ -70,6 +70,8 @@ brown-screen duration fell in two steps, to zero only once both were in.
 - **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
   may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
   the first-content gap).
+- **`GET /geo` fires beside the API warm-up and is NEVER awaited.** The wall may paint in the phone's
+  language and flip live when the answer lands; gating routing on it re-adds the wait ruled out above.
 - **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
   what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
   second picker.
