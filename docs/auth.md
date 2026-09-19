@@ -84,10 +84,11 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   grows: at most two lines at text scale 1.0 and three at 1.3 on the phones the size matrix covers,
   a fourth for the 320 dp frame where the slot is 140 dp and wrapping is word-bounded. Nothing
   truncates — no ellipsis on either line. `sign_in_size_matrix_test.dart` enforces it.
-- **The pill stays the only button on the panel; the language chip, bottom-left, is the wall's ONE
-  other tappable thing** (owner's call). A fresh install opens in its REGION's language
-  ([deep-links.md](deep-links.md)), so a wrong guess must be one tap from undone — alone it never
-  moved sign-in. It never touches the attempt.
+- **The pill is the ONLY tappable thing on the wall — never add a second control.** Google's sheet
+  lands ON this screen and covers it, so anything else is reached by dismissing the sheet first: the
+  bottom-left language chip that once sat here pushed first-sheet sign-ins down and pill taps up, and
+  its users made roughly twice the attempts and signed in far less. A fresh install opens in its
+  REGION's language ([deep-links.md](deep-links.md)); Settings is the one place it changes.
 - **Nothing else on the wall is tappable** — the Terms · Privacy footer stays gone; Play's in-app
   privacy-policy requirement is met by Settings. The wordmark stays English and is the wall's only
   mark; the eyebrow is the splash's alone. **Icon glyphs take NO `shadows`:** Impeller paints a

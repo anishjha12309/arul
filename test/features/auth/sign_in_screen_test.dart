@@ -247,70 +247,62 @@ void main() {
     });
   });
 
-  // The way out of a language you cannot read — the region now picks the wall's language, and a
-  // wrong state guess must be one tap from undone. Everything here is about it NOT being part of the
-  // sign-in attempt: the pill owns that, and a chip that quietly re-entered the Google flow would
-  // put a second surface over the first.
-  group('the language chip', () {
-    testWidgets('sits bottom-left, clear of the panel', (tester) async {
-      await pump(tester);
-      final screen = tester.getRect(find.byType(SignInScreen));
-      final chip = tester.getRect(find.byKey(kSignInLanguageTriggerKey));
-      final panel = tester.getRect(find.byKey(kSignInPanelKey));
-
-      expect(chip.left, 20, reason: 'lined up with the panel inset');
-      expect(chip.bottom, screen.bottom - 16);
-      expect(chip.top, greaterThan(panel.bottom));
-    });
-
-    testWidgets('the pill and the chip are the ONLY tappable things', (
-      tester,
-    ) async {
+  // The wall carries NO language control (owner's call, measured): Google's sheet covers this
+  // screen, so a second control is only reachable by dismissing the sheet first — the people who
+  // reached the old chip made ~4 attempts against under 2 and signed in far less. The region picks
+  // the first-launch language and Settings is where it changes. These pin that it cannot come back.
+  group('the wall has no language control', () {
+    testWidgets('the pill is the ONLY tappable thing', (tester) async {
       final semantics = tester.ensureSemantics();
       await pump(tester);
 
-      expect(find.semantics.byAction(SemanticsAction.tap), findsExactly(2));
+      expect(find.semantics.byAction(SemanticsAction.tap), findsExactly(1));
+      expect(
+        find.bySemanticsIdentifier('arul_signin_pill'),
+        findsOneWidget,
+        reason: 'and the one that is left is the pill',
+      );
+      expect(
+        find.bySemanticsIdentifier('arul_signin_language'),
+        findsNothing,
+        reason: 'no language control may return to the wall',
+      );
       semantics.dispose();
     });
 
-    testWidgets('shows the CURRENT language as its code', (tester) async {
-      await pump(tester, phoneLocales: const [Locale('ta')]);
+    testWidgets('nothing on the wall names or opens a language', (
+      tester,
+    ) async {
+      final l10n = await pump(tester, phoneLocales: const [Locale('ta')]);
 
-      // The CODE, not the native name: two Latin capitals measure the same in every language, so
-      // the chip never resizes and never wraps.
-      expect(find.text('TA'), findsOneWidget);
-      expect(find.text('தமிழ்'), findsNothing);
-      expect(find.byIcon(Icons.translate), findsOneWidget);
-      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
+      // The chip's own marks: the code, the glyph and the chevron that opened the sheet.
+      expect(find.text('TA'), findsNothing);
+      expect(find.text(l10n.settingsLanguage), findsNothing);
+      expect(find.byIcon(Icons.translate), findsNothing);
+      expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
     });
+  });
 
+  // The region still decides what the WALL is written in — only the way to change it moved out.
+  group('the wall speaks the resolved language', () {
     testWidgets('follows the phone when nothing is persisted', (tester) async {
-      await pump(tester, phoneLocales: const [Locale('ml')]);
+      final l10n = await pump(tester, phoneLocales: const [Locale('ml')]);
 
-      expect(find.text('ML'), findsOneWidget);
-      // The whole screen came up in that language, not just the trigger.
-      final l10n = AppLocalizations.of(
-        tester.element(find.byType(SignInScreen).first),
-      );
       expect(l10n.localeName, 'ml');
     });
 
     testWidgets('follows the REGION over the phone', (tester) async {
       await prefs.setString('arul_geo_lang', 'ta');
-      await pump(tester);
+      final l10n = await pump(tester);
 
-      expect(find.text('TA'), findsOneWidget);
-      final l10n = AppLocalizations.of(
-        tester.element(find.byType(SignInScreen).first),
-      );
       expect(l10n.localeName, 'ta');
     });
 
     testWidgets('a region answer landing on the open wall re-renders it', (
       tester,
     ) async {
-      await pump(tester);
-      expect(find.text('EN'), findsOneWidget);
+      final l10n = await pump(tester);
+      expect(l10n.localeName, 'en');
       final container = ProviderScope.containerOf(
         tester.element(find.byType(SignInScreen)),
         listen: false,
@@ -321,128 +313,14 @@ void main() {
           .setGeoHint(lang: 'ta', region: 'TN');
       await tester.pump();
 
-      expect(find.text('TA'), findsOneWidget);
-      final l10n = AppLocalizations.of(
-        tester.element(find.byType(SignInScreen).first),
+      expect(
+        AppLocalizations.of(
+          tester.element(find.byType(SignInScreen).first),
+        ).localeName,
+        'ta',
       );
-      expect(l10n.localeName, 'ta');
       expect(prefs.getString('arul_locale'), isNull, reason: 'a hint only');
     });
-
-    testWidgets('carries a button semantics label', (tester) async {
-      final l10n = await pump(tester);
-      final node = tester.getSemantics(find.byKey(kSignInLanguageTriggerKey));
-
-      // The wrapper names the CONTROL and the label inside it names the current VALUE, so the
-      // merged node reads "Language, English" — a screen-reader user learns both without a second
-      // focus stop. Excluding the child would announce the button and never what it is set to.
-      expect(node.label, startsWith(l10n.settingsLanguage));
-      expect(node.label, contains('EN'));
-      expect(node.flagsCollection.isButton, isTrue);
-    });
-
-    testWidgets('a pick re-renders the screen and PERSISTS as a pick', (
-      tester,
-    ) async {
-      await prefs.setString('arul_geo_lang', 'hi');
-      await pump(tester);
-      expect(find.text('HI'), findsOneWidget);
-
-      await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-      await tester.pumpAndSettle();
-      expect(find.text('Tamil'), findsOneWidget, reason: 'the sheet is up');
-
-      await tester.tap(find.text('Tamil'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('TA'), findsOneWidget, reason: 'chip re-rendered');
-      final l10n = AppLocalizations.of(
-        tester.element(find.byType(SignInScreen).first),
-      );
-      expect(l10n.localeName, 'ta');
-      expect(prefs.getString('arul_locale'), 'ta');
-      expect(prefs.getString('arul_locale_source'), 'pick');
-    });
-
-    testWidgets('opening and picking never touches the sign-in attempt', (
-      tester,
-    ) async {
-      await pump(tester);
-
-      await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Hindi'));
-      await tester.pumpAndSettle();
-
-      expect(auth.signInCalls, 0, reason: 'the trigger is not the pill');
-      expect(auth.abandonCalls, 0);
-      expect(routes, isEmpty);
-    });
-
-    testWidgets('stays tappable while an attempt is in flight', (tester) async {
-      await pump(tester);
-      SignInPhase.exchanging.value = true;
-      await tester.pump();
-
-      await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-      await tester.pumpAndSettle();
-
-      // A user who cannot read the pill is exactly the user with an attempt running.
-      expect(find.text('Kannada'), findsOneWidget);
-      expect(auth.signInCalls, 0);
-    });
-
-    testWidgets('the sheet follows the DEVICE mode, not the app theme', (
-      tester,
-    ) async {
-      // The wall is always dark over video whatever the user picked in Settings, so the app's own
-      // theme mode says nothing about what a sheet rising out of it should look like.
-      tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
-      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
-
-      await pump(tester);
-      await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-      await tester.pumpAndSettle();
-
-      final sheetTheme = Theme.of(tester.element(find.text('Tamil').first));
-      expect(sheetTheme.brightness, Brightness.light);
-
-      // And the other way round. (The English tile carries the native label AND the English name,
-      // which are the same word — dismiss the sheet instead of picking through an ambiguous find.)
-      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
-      await tester.tap(find.text('Tamil'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-      await tester.pumpAndSettle();
-
-      expect(
-        Theme.of(tester.element(find.text('Tamil').first)).brightness,
-        Brightness.dark,
-      );
-    });
-
-    testWidgets(
-      'a session landing with the sheet OPEN still reaches the feed',
-      (tester) async {
-        await pump(tester);
-        await tester.tap(find.byKey(kSignInLanguageTriggerKey));
-        await tester.pumpAndSettle();
-        expect(find.text('Telugu'), findsOneWidget);
-
-        // What the pill does when the Worker exchange lands.
-        final context = tester.element(find.byType(SignInScreen).first);
-        GoRouter.of(context).go('/browse');
-        await tester.pumpAndSettle();
-
-        expect(routes, ['/browse']);
-        expect(
-          find.text('Telugu'),
-          findsNothing,
-          reason: 'no picker may be left over the feed',
-        );
-        expect(find.byType(SignInScreen), findsNothing);
-      },
-    );
   });
 
   // The clock the nudges split on. It reads the app's OWN lifecycle, because a Credential Manager

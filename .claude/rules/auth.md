@@ -16,9 +16,10 @@ Sign-in is the whole install→login funnel and every failure is silent.
   a 24 h cancel suppression takes automatic sign-in too. No warm-ups.
 - **Every ID token carries the per-process nonce; the Worker checks the PAIR** (both absent accepted
   for fielded builds). Never log, toast or track it.
-- **ONE retry line for every failure; no fix line, no help link. The pill is the panel's only
-  button and the bottom-left language chip the wall's ONE other tappable thing** (owner's call).
-  Fixed type; the LAYOUT absorbs long copy — nothing clips.
+- **ONE retry line for every failure; no fix line, no help link. The pill is the wall's ONLY
+  tappable thing** — the sheet covers it, so a second control means dismissing that first; the chip
+  once here doubled attempts and cut sign-ins. Region picks the language, Settings changes it.
+  Fixed type; the LAYOUT absorbs long copy.
 - Classify by typed `code` only; `login_cancelled` is MIXED. **Every failure return goes through
   `_googleFailure`.**
 - The stall guard counts FOREGROUND time and reads the lifecycle every 250 ms. On RESUME,
