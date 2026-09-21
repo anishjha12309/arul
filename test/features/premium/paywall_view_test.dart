@@ -53,7 +53,6 @@ ArulPaywallView _paywall({required bool trialEligible}) => ArulPaywallView(
     label: 'PhonePe',
   ),
   canChangeUpiApp: true,
-  upiAppsKnown: true,
   onBack: () {},
   onChangeUpiApp: () {},
   onPurchase: () {},
@@ -275,7 +274,6 @@ void main() {
             showSocialProof: false,
             selectedUpiApp: null,
             canChangeUpiApp: false,
-            upiAppsKnown: true,
             onBack: () {},
             onChangeUpiApp: () {},
             onPurchase: () {},
@@ -287,13 +285,8 @@ void main() {
         find.textContaining('just applied a live wallpaper'),
         findsNothing,
       );
-      // No installed UPI app → the install prompt takes the selector row's place, and the CTA is
-      // dead: there is nothing on this phone that can take a mandate.
+      // No installed UPI app → no selector row to show, and with no QR route either the CTA is dead.
       expect(find.text('Selected UPI App'), findsNothing);
-      expect(
-        find.text('Install PhonePe or Google Pay to subscribe'),
-        findsOneWidget,
-      );
       expect(find.text('Subscribe Now'), findsOneWidget);
     });
 
@@ -314,7 +307,6 @@ void main() {
             showSocialProof: true,
             selectedUpiApp: null,
             canChangeUpiApp: false,
-            upiAppsKnown: true,
             onBack: () {},
             onChangeUpiApp: () {},
             onPurchase: () => pressed++,
@@ -344,15 +336,19 @@ void main() {
   });
 
   // ─── No mandate-capable app on the phone ────────────────────────────────────
-  // The hosted PhonePe page completed 5 setups in 733. A route that cannot finish is worse than no
-  // route, so the app stops offering one: name the two apps that do complete mandates instead.
+  // 13.4% of everyone who tapped Subscribe landed here. The hosted PhonePe page that used to catch
+  // them completed 4 setups in 790, and the install links that replaced it asked someone mid-checkout
+  // to go and fetch a payment app first. Both are gone: the CTA keeps its own words and opens the QR,
+  // because a phone with nothing installed has exactly one way to pay and that is not a choice to
+  // put in front of anyone.
 
-  group('the install prompt', () {
+  group('no app on the phone', () {
     Future<void> pumpNoApp(
       WidgetTester tester, {
       required bool trialEligible,
-      required bool upiAppsKnown,
       VoidCallback? onPurchase,
+      VoidCallback? onPayByQr,
+      bool purchaseBusy = false,
     }) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -363,49 +359,87 @@ void main() {
           ArulPaywallView(
             trialEligible: trialEligible,
             monthlyPrice: '₹199',
-            purchaseBusy: false,
+            purchaseBusy: purchaseBusy,
             showSocialProof: false,
             selectedUpiApp: null,
             canChangeUpiApp: false,
-            upiAppsKnown: upiAppsKnown,
             onBack: () {},
             onChangeUpiApp: () {},
             onPurchase: onPurchase ?? () {},
+            onPayByQr: onPayByQr,
           ),
         ),
       );
     }
 
-    testWidgets('names the two apps and never promises a trial to someone who '
-        'has spent theirs', (tester) async {
-      await pumpNoApp(tester, trialEligible: true, upiAppsKnown: true);
-      expect(
-        find.text('Install PhonePe or Google Pay to start your free trial'),
-        findsOneWidget,
-      );
-      expect(find.text('PhonePe'), findsOneWidget);
-      expect(find.text('Google Pay'), findsOneWidget);
-    });
-
-    testWidgets('the CTA is DEAD — there is nothing on this phone that can '
-        'take a mandate', (tester) async {
-      var pressed = 0;
+    testWidgets('the CTA opens the QR and says nothing different about it', (
+      tester,
+    ) async {
+      var qr = 0;
+      var bought = 0;
       await pumpNoApp(
         tester,
         trialEligible: true,
-        upiAppsKnown: true,
-        onPurchase: () => pressed++,
+        onPurchase: () => bought++,
+        onPayByQr: () => qr++,
       );
+
+      await tester.tap(find.text('Start Free Trial'));
+
+      expect(qr, 1);
+      // `onPurchase` would target a UPI app that is not on this phone.
+      expect(bought, 0);
+    });
+
+    testWidgets('nothing sits above the CTA any more — no store links, no '
+        'second line to read', (tester) async {
+      await pumpNoApp(tester, trialEligible: true, onPayByQr: () {});
+
+      expect(find.textContaining('Install'), findsNothing);
+      expect(find.text('PhonePe'), findsNothing);
+      expect(find.text('Google Pay'), findsNothing);
+      expect(find.textContaining('scanning a QR'), findsNothing);
+      // And no app row either: there is no app to name.
+      expect(find.text('Selected UPI App'), findsNothing);
+    });
+
+    testWidgets('DEAD while the probe is still out — an empty list is not yet '
+        'an answer', (tester) async {
+      // Loading and "none installed" are both an empty list and mean opposite things. A live CTA
+      // here would open a QR at someone who has PhonePe, one frame before the picker appears.
+      var pressed = 0;
+      await pumpNoApp(tester, trialEligible: true, onPurchase: () => pressed++);
 
       await tester.tap(find.text('Start Free Trial'));
       expect(pressed, 0);
     });
 
-    testWidgets('says NOTHING while the query is still out — an empty list is '
-        'not yet an answer', (tester) async {
-      await pumpNoApp(tester, trialEligible: true, upiAppsKnown: false);
-      expect(find.textContaining('Install PhonePe'), findsNothing);
-      expect(find.text('Selected UPI App'), findsNothing);
+    testWidgets('a checkout already in flight cannot start a second one', (
+      tester,
+    ) async {
+      // Otherwise the Worker refuses the repeat with 409 setup_in_progress, which users read as
+      // payments being broken.
+      var qr = 0;
+      await pumpNoApp(
+        tester,
+        trialEligible: true,
+        purchaseBusy: true,
+        onPayByQr: () => qr++,
+      );
+
+      // Busy swaps the label for the spinner, so the button is found by type, not by its words.
+      expect(find.text('Start Free Trial'), findsNothing);
+      await tester.tap(find.byType(ShrineCta));
+      expect(qr, 0);
+    });
+
+    testWidgets('the paid variant never promises a trial it cannot give', (
+      tester,
+    ) async {
+      await pumpNoApp(tester, trialEligible: false, onPayByQr: () {});
+
+      expect(find.text('Subscribe Now'), findsOneWidget);
+      expect(find.text('Start Free Trial'), findsNothing);
     });
   });
 
@@ -439,7 +473,6 @@ void main() {
               label: 'PhonePe',
             ),
             canChangeUpiApp: true,
-            upiAppsKnown: true,
             resumeAppLabel: 'PhonePe',
             onResume: () {},
             onBack: () {},
@@ -498,7 +531,6 @@ void main() {
               label: 'PhonePe',
             ),
             canChangeUpiApp: true,
-            upiAppsKnown: true,
             resumeAppLabel: 'PhonePe',
             onResume: () => resumed++,
             onBack: () {},
@@ -530,7 +562,6 @@ void main() {
               label: 'PhonePe',
             ),
             canChangeUpiApp: true,
-            upiAppsKnown: true,
             resumeAppLabel: 'PhonePe',
             onResume: () {},
             onBack: () {},

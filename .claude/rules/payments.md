@@ -16,6 +16,9 @@ or status vocabulary from memory.
   resubscribe claims the user's ONE row, so paid days must survive the attempt.
 - **Initiate PARKS a `trialing`/`active`/`paused` mandate in `superseded_mandate_id`, never revokes
   it** — it is still billing; the grant revokes it, every release path restores it.
+- **A `mode: "qr"` initiate still sends a `targetApp`** (PhonePe makes it mandatory) but records
+  `upi_target_app = 'qr'` — the returned `upi://mandate` binds to no app, and filing it under one
+  puts mandates PhonePe never saw into the column that ranks apps by completions.
 - **Never fall back to a web token.** If `sdk/order` returns no top-level `token`, THROW — a web
   token answers PR004 on device while the Worker returns 200.
 - **Never execute inside PhonePe's 24 h notify window**, and treat any unrecognised order state as

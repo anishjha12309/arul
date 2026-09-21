@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -66,12 +65,12 @@ class ArulPaywallView extends StatelessWidget {
     this.onboardingVideo,
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
-    required this.upiAppsKnown,
     this.resumeAppLabel,
     this.onResume,
     required this.onBack,
     required this.onChangeUpiApp,
     required this.onPurchase,
+    this.onPayByQr,
   });
 
   /// One free trial per user. Drives the panel — lead line + ₹2 + badge, or ₹199 + "PER MONTH".
@@ -99,12 +98,14 @@ class ArulPaywallView extends StatelessWidget {
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
 
-  /// Whether the installed-apps query has ANSWERED.
+  /// What the CTA does when no mandate-capable app is installed: put the SAME mandate link on screen
+  /// as a QR for a second phone to scan. It REPLACES [onPurchase] in that case rather than sitting
+  /// beside it — there is one way to pay on such a phone, so it is not a choice to present.
   ///
-  /// Loading and "none installed" are both an empty list, and they mean opposite things: one is a
-  /// sub-second wait, the other is the install prompt plus a dead CTA. Showing the prompt while the
-  /// query is still out would flash "install PhonePe" at someone who has it.
-  final bool upiAppsKnown;
+  /// Non-null is also the signal that the installed-apps probe has ANSWERED. Loading and "none
+  /// installed" are both an empty list and mean opposite things: one is a sub-second wait, the other
+  /// is the QR. So the CTA stays dead until this arrives, and never flashes a wrong affordance.
+  final VoidCallback? onPayByQr;
 
   /// Non-null while a mandate this user already opened is STILL OPEN at PhonePe: the label of the
   /// UPI app holding it. It turns the CTA into "open it again" and says so in the line beneath.
@@ -205,9 +206,9 @@ class ArulPaywallView extends StatelessWidget {
           ],
           // Pinned: the buy decision must never be the thing below the fold.
           _Footer(
+            onPayByQr: onPayByQr,
             dense: video != null && denseFooter,
             trialEligible: trialEligible,
-            upiAppsKnown: upiAppsKnown,
             // Resuming replaces BOTH the label and the line under it: the decision has been made,
             // and the only thing left to say is what has to happen inside the UPI app.
             ctaLabel: resumeAppLabel != null
@@ -1044,12 +1045,12 @@ class _Feature extends StatelessWidget {
 class _Footer extends StatelessWidget {
   const _Footer({
     this.dense = false,
+    this.onPayByQr,
     required this.ctaLabel,
     required this.reassurance,
     required this.busy,
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
-    required this.upiAppsKnown,
     required this.trialEligible,
     required this.onChangeUpiApp,
     required this.onPurchase,
@@ -1062,19 +1063,22 @@ class _Footer extends StatelessWidget {
   final bool busy;
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
-  final bool upiAppsKnown;
-
   final bool trialEligible;
   final VoidCallback onChangeUpiApp;
   final VoidCallback onPurchase;
 
+  /// See [ArulPaywallView.onPayByQr]. Null leaves the install prompt exactly as it was.
+  final VoidCallback? onPayByQr;
+
   @override
   Widget build(BuildContext context) {
     final app = selectedUpiApp;
-    // No app can take the mandate -> there is nothing to buy with, so the CTA is dead until one
-    // appears. The hosted page used to catch this and completed 5 setups in 733: sending someone
-    // somewhere that cannot finish is the failure, not the missing app.
-    final canBuy = app != null;
+    // No app can take the mandate -> the CTA sells the QR instead of an app. It is the SAME button
+    // and the same words: a phone with nothing installed has exactly one way to pay, so naming it is
+    // a decision to make for the user, not a second option to put in front of them. Dead only while
+    // the probe is still out, which is sub-second.
+    final payByQr = app == null ? onPayByQr : null;
+    final canBuy = app != null || payByQr != null;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1085,10 +1089,8 @@ class _Footer extends StatelessWidget {
       child: Column(
         children: [
           if (app == null) ...[
-            if (upiAppsKnown) ...[
-              _InstallUpiPrompt(trialEligible: trialEligible),
-              const SizedBox(height: 14),
-            ],
+            // Nothing above the CTA: no app to name, and the store links that used to sit here asked
+            // someone mid-checkout to go and install a payment app first.
           ] else ...[
             // Label and chip share ONE line only while both fit on it. Past 1.2 the label was
             // ellipsised to "Selected UPI Ap…" — a truncated label naming a payment app is worse
@@ -1141,7 +1143,7 @@ class _Footer extends StatelessWidget {
           ShrineCta(
             label: ctaLabel,
             busy: busy,
-            onPressed: busy || !canBuy ? null : onPurchase,
+            onPressed: busy || !canBuy ? null : (payByQr ?? onPurchase),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1180,99 +1182,6 @@ class _Footer extends StatelessWidget {
   }
 }
 
-/// Shown in the picker's place when NO mandate-capable UPI app is installed.
-///
-/// The hosted PhonePe page used to take this case and completed 5 mandates in 733. Offering a route
-/// that cannot finish is worse than offering none, so the page is gone from the app and the two apps
-/// that actually complete mandates are named instead. The Worker keeps its `targetApp == null`
-/// branch — builds already in the field still send it.
-class _InstallUpiPrompt extends StatelessWidget {
-  const _InstallUpiPrompt({required this.trialEligible});
-
-  /// The line may not promise a trial to someone who has spent theirs.
-  final bool trialEligible;
-
-  /// Play Store deep links. `market://` opens the STORE APP directly; the https form would offer a
-  /// browser first, which is one more place to lose someone who has already agreed to install.
-  static const _links = <(String, String)>[
-    ('PhonePe', 'com.phonepe.app'),
-    ('Google Pay', 'com.google.android.apps.nbu.paisa.user'),
-  ];
-
-  Future<void> _open(String package) async {
-    // Brand names, not localized. `launchUrl` THROWS when nothing can take the intent — a phone
-    // with no Play Store at all — so the https fallback is the second try, not a parallel path.
-    for (final uri in [
-      Uri.parse('market://details?id=$package'),
-      Uri.parse('https://play.google.com/store/apps/details?id=$package'),
-    ]) {
-      try {
-        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
-      } catch (e) {
-        debugPrint('[PremiumPurchase] store link failed for $package: $e');
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      children: [
-        Text(
-          trialEligible
-              ? l10n.premiumInstallUpiTrial
-              : l10n.premiumInstallUpiPaid,
-          textAlign: TextAlign.center,
-          style: ArulTokens.paywallUpiLabel,
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 10,
-          runSpacing: 6,
-          children: [
-            for (final (label, package) in _links)
-              Semantics(
-                link: true,
-                label: label,
-                identifier: 'arul_install_$package',
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTapDown: (_) => ArulHaptics.tap(),
-                  onTap: () => _open(package),
-                  child: SizedBox(
-                    height: ArulTokens.minHitTarget,
-                    child: Center(
-                      widthFactor: 1,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(
-                            color: ArulTokens.paywallBorderControl,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            ArulTokens.pillRadius,
-                          ),
-                        ),
-                        child: Text(label, style: ArulTokens.paywallUpiName),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// The chosen UPI app as a white pill: its own icon, its own name, a caret.
 class _UpiChip extends StatelessWidget {
   const _UpiChip({
     required this.app,

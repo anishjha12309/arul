@@ -259,8 +259,36 @@
   "premiumCtaSubscribe": "Subscribe Now",
   "premiumReassuranceTrial": "₹2 verification, refunded instantly · Cancel anytime",
   "premiumReassurancePaid": "Secured by UPI Autopay · Cancel anytime in one tap",
-  "premiumInstallUpiTrial": "Install PhonePe or Google Pay to start your free trial",
-  "premiumInstallUpiPaid": "Install PhonePe or Google Pay to subscribe",
+  "premiumQrTitleTrial": "Scan to start your free trial",
+  "@premiumQrTitleTrial": {
+    "description": "Title of the QR sheet on the free-trial variant."
+  },
+  "premiumQrTitlePaid": "Scan to subscribe",
+  "@premiumQrTitlePaid": {
+    "description": "Title of the QR sheet when the trial is already spent and the charge is the full price."
+  },
+  "premiumQrInstruction": "Open any UPI app on another phone and scan this code.",
+  "@premiumQrInstruction": {
+    "description": "The one instruction on the QR sheet. 'Another phone' is the point: this phone has no UPI app, which is why the code is here at all."
+  },
+  "premiumQrExpiresIn": "Code expires in {time}",
+  "@premiumQrExpiresIn": {
+    "description": "Countdown under the QR. The deadline is PhonePe's own, read out of the link, so it is short — often five minutes.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "4:32"
+      }
+    }
+  },
+  "premiumQrWaiting": "Waiting for approval…",
+  "@premiumQrWaiting": {
+    "description": "Status line while the server is being polled. Nobody returns to the app on this path, so this line is all the feedback there is until the mandate settles."
+  },
+  "premiumQrCheck": "I have paid",
+  "@premiumQrCheck": {
+    "description": "Button on the QR sheet for someone who has just approved the mandate on the other phone and does not want to wait for the next poll. It only asks the server sooner; it can never settle anything the poll would not."
+  },
   "premiumResumeCta": "Open {app} again",
   "@premiumResumeCta": {
     "description": "The paywall's main button once the user has come back from their UPI app with the mandate still unapproved. It re-opens the SAME mandate link — never a new payment — so it must read as continuing, not as paying twice. {app} is the UPI app's own name from the phone (PhonePe, Google Pay, Paytm), never translated.",

@@ -650,12 +650,26 @@ class AppLocalizationsMl extends AppLocalizations {
       'UPI ഓട്ടോപേ സുരക്ഷ · എപ്പോൾ വേണമെങ്കിലും ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം';
 
   @override
-  String get premiumInstallUpiTrial =>
-      'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക';
+  String get premiumQrTitleTrial =>
+      'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ സ്‌കാൻ ചെയ്യൂ';
 
   @override
-  String get premiumInstallUpiPaid =>
-      'സബ്‌സ്ക്രൈബ് ചെയ്യാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക';
+  String get premiumQrTitlePaid => 'സബ്‌സ്‌ക്രൈബ് ചെയ്യാൻ സ്‌കാൻ ചെയ്യൂ';
+
+  @override
+  String get premiumQrInstruction =>
+      'മറ്റൊരു ഫോണിൽ ഏതെങ്കിലും UPI ആപ്പ് തുറന്ന് ഈ കോഡ് സ്‌കാൻ ചെയ്യൂ.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'കോഡ് $time-ൽ കാലഹരണപ്പെടും';
+  }
+
+  @override
+  String get premiumQrWaiting => 'അംഗീകാരത്തിനായി കാത്തിരിക്കുന്നു…';
+
+  @override
+  String get premiumQrCheck => 'ഞാൻ പണമടച്ചു';
 
   @override
   String premiumResumeCta(String app) {

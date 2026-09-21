@@ -642,12 +642,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'Secured by UPI Autopay · Cancel anytime in one tap';
 
   @override
-  String get premiumInstallUpiTrial =>
-      'Install PhonePe or Google Pay to start your free trial';
+  String get premiumQrTitleTrial => 'Scan to start your free trial';
 
   @override
-  String get premiumInstallUpiPaid =>
-      'Install PhonePe or Google Pay to subscribe';
+  String get premiumQrTitlePaid => 'Scan to subscribe';
+
+  @override
+  String get premiumQrInstruction =>
+      'Open any UPI app on another phone and scan this code.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'Code expires in $time';
+  }
+
+  @override
+  String get premiumQrWaiting => 'Waiting for approval…';
+
+  @override
+  String get premiumQrCheck => 'I have paid';
 
   @override
   String premiumResumeCta(String app) {

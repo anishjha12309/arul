@@ -651,12 +651,26 @@ class AppLocalizationsTa extends AppLocalizations {
       'UPI ஆட்டோபே பாதுகாப்பு · எப்போதும் ஒரே தட்டலில் ரத்து';
 
   @override
-  String get premiumInstallUpiTrial =>
-      'உங்கள் இலவச டிரையலைத் தொடங்க PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்';
+  String get premiumQrTitleTrial =>
+      'உங்கள் இலவச டிரையலைத் தொடங்க ஸ்கேன் செய்யுங்கள்';
 
   @override
-  String get premiumInstallUpiPaid =>
-      'சந்தா செய்ய PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்';
+  String get premiumQrTitlePaid => 'சந்தா செய்ய ஸ்கேன் செய்யுங்கள்';
+
+  @override
+  String get premiumQrInstruction =>
+      'வேறொரு ஃபோனில் ஏதேனும் UPI ஆப்பைத் திறந்து இந்தக் கோடை ஸ்கேன் செய்யுங்கள்.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'கோடு $time-இல் காலாவதியாகும்';
+  }
+
+  @override
+  String get premiumQrWaiting => 'அனுமதிக்காகக் காத்திருக்கிறோம்…';
+
+  @override
+  String get premiumQrCheck => 'நான் செலுத்திவிட்டேன்';
 
   @override
   String premiumResumeCta(String app) {

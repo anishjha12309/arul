@@ -36,8 +36,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumBenefitNew': 'New wallpapers added every week',
     'premiumPrice': '₹199 / month',
     'premiumCta': 'Start free trial',
-    'premiumTrialNote':
-        'One free trial per account. Cancel anytime — you keep access until the period ends.',
+    'premiumTrialNote': 'One free trial per account. Cancel anytime — you keep access until the period ends.',
     'premiumComingSoon': 'Payments arrive with the backend.',
     'settingsTitle': 'Settings',
     'settingsAppearance': 'Appearance',
@@ -50,12 +49,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsPrivacy': 'Privacy policy',
     'settingsVersion': 'Version',
     'uploadTitle': 'Upload your content',
-    'uploadBody':
-        'Share your own wallpaper with the community. We review every submission before it goes live.',
+    'uploadBody': 'Share your own wallpaper with the community. We review every submission before it goes live.',
     'uploadPickCategory': 'Choose a category',
     'uploadPickFile': 'Choose a file',
-    'uploadSpecNote':
-        'Photos: 1080×1920. Videos: 1024×1824, no audio, under 50 MB.',
+    'uploadSpecNote': 'Photos: 1080×1920. Videos: 1024×1824, no audio, under 50 MB.',
     'uploadComingSoon': 'Uploads arrive with the backend.',
     'apply': 'Apply',
     'share': 'Share',
@@ -64,15 +61,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'Lock screen',
     'applyTargetBoth': 'Home and lock screen',
     'applied': 'Wallpaper applied',
-    'appliedLiveFallback':
-        'Live wallpapers aren\'t supported on this phone, so we set a still image instead.',
+    'appliedLiveFallback': 'Live wallpapers aren\'t supported on this phone, so we set a still image instead.',
     'offlineBody': 'You\'re offline. Check your connection and try again.',
     'offlineTitle': 'No internet',
     'offlineFeedBody': 'Turn on the internet to see wallpapers.',
-    'wallpaperShareCaption':
-        'More devotional wallpapers like this one — still and live — on Arul:\n{link}',
-    'referShareMessage':
-        'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n{link}',
+    'wallpaperShareCaption': 'More devotional wallpapers like this one — still and live — on Arul:\n{link}',
+    'referShareMessage': 'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n{link}',
     'tabWallpapers': 'Wallpapers',
     'tabRingtones': 'Ringtones',
     'earn': 'Earn',
@@ -80,11 +74,9 @@ const Map<String, Map<String, String>> kArbStrings = {
     'ringtonePreviewSemantic': 'Preview',
     'ringtonePreviewUnavailable': 'Preview not available yet',
     'ringtonesEmptyTitle': 'Ringtones are coming soon',
-    'ringtonesEmptyBody':
-        'Devotional ringtones are on their way. Check back soon.',
+    'ringtonesEmptyBody': 'Devotional ringtones are on their way. Check back soon.',
     'ringtonesErrorTitle': 'Couldn\'t load ringtones',
-    'ringtoneSetSuccess':
-        'Ringtone set. If it doesn\'t appear, restart your phone.',
+    'ringtoneSetSuccess': 'Ringtone set. If it doesn\'t appear, restart your phone.',
     'ringtoneSetFailed': 'Couldn\'t set the ringtone. Please try again.',
     'ringtoneSetPreparing': 'Preparing…',
     'ringtoneSetDownloading': 'Downloading…',
@@ -118,13 +110,11 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsDeleteAccount': 'Delete account',
     'settingsDeleteConfirmTitle': 'Delete account?',
     'settingsDeleteConfirmBody': 'This can\'t be undone.',
-    'settingsDeleteConfirmBodyPremium':
-        'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.',
+    'settingsDeleteConfirmBodyPremium': 'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.',
     'settingsTerms': 'Terms & Conditions',
     'settingsRefund': 'Refund policy',
     'settingsSupportEmailPrompt': 'Please describe your issue or feedback:',
-    'settingsSupportEmailDetails':
-        'The details below help us resolve your request faster:',
+    'settingsSupportEmailDetails': 'The details below help us resolve your request faster:',
     'settingsNoEmailApp': 'No email app found. Write to us at {email}',
     'settingsEditNameTitle': 'Your name',
     'settingsEditNameSub': 'Shown on wallpapers you upload',
@@ -135,10 +125,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'remindersTitle': 'Reminders',
     'remindersToggleTitle': 'Devotional reminders',
     'remindersToggleSub': 'The weekly day, and every major festival',
-    'remindersScheduleNote':
-        'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.',
-    'remindersPermissionToast':
-        'Notifications are off for Arul. Turn them on in your phone settings to get reminders.',
+    'remindersScheduleNote': 'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.',
+    'remindersPermissionToast': 'Notifications are off for Arul. Turn them on in your phone settings to get reminders.',
     'remindersTimeLabel': 'Reminder time',
     'remindersComingUp': 'Coming up',
     'remindersMonthJan': 'Jan',
@@ -161,22 +149,17 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI Autopay · cancel anytime',
     'premiumTrialPill': '1 DAY FREE',
     'premiumCtaPaid': 'Get Premium',
-    'premiumFootnoteTrial':
-        'Free for 1 day, then {price}/month. UPI Autopay verifies your account with ₹2, refunded instantly. Browsing stays free forever.',
-    'premiumFootnotePaid':
-        '{price} charged today, then renews monthly via UPI Autopay. Cancel anytime. Browsing stays free forever.',
+    'premiumFootnoteTrial': 'Free for 1 day, then {price}/month. UPI Autopay verifies your account with ₹2, refunded instantly. Browsing stays free forever.',
+    'premiumFootnotePaid': '{price} charged today, then renews monthly via UPI Autopay. Cancel anytime. Browsing stays free forever.',
     'premiumComingSoonToast': 'Premium is coming soon.',
     'premiumWelcomeToast': 'Welcome to Arul Premium!',
     'premiumCelebrateTitle': 'You\'re in',
-    'premiumCelebrateBody':
-        'Arul Premium is active. Know someone who would love these wallpapers? Send them one.',
-    'premiumSheetPitch':
-        'Every wallpaper, live and still. Apply and share freely across all six categories.',
+    'premiumCelebrateBody': 'Arul Premium is active. Know someone who would love these wallpapers? Send them one.',
+    'premiumSheetPitch': 'Every wallpaper, live and still. Apply and share freely across all six categories.',
     'premiumKeepBrowsing': 'Keep browsing free',
     'referTitle': 'Refer & Earn',
     'referHeroTitle': 'Gift a friend, earn a month',
-    'referHeroBody':
-        '30 days of free premium for every friend who subscribes with your link',
+    'referHeroBody': '30 days of free premium for every friend who subscribes with your link',
     'referShareWhatsapp': 'Share via WhatsApp',
     'referRewardsLabel': 'Rewards earned',
     'referRewardDays': '{days} days',
@@ -194,8 +177,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleOptional': '(optional)',
     'uploadTitleHint': 'e.g. Meenakshi at dusk',
     'uploadCategoryLabel': 'Category',
-    'uploadRightsCheckbox':
-        'I own the rights to this content or have permission to share it',
+    'uploadRightsCheckbox': 'I own the rights to this content or have permission to share it',
     'uploadSubmitCta': 'Submit for review',
     'uploadFootnote': 'Approved wallpapers appear in the feed with your name',
     'uploadRejectStatic': 'Please choose a JPEG, PNG or WebP image.',
@@ -207,15 +189,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadPickZoneTitleAudio': 'Choose an audio file',
     'uploadPickZoneSubAudio': 'MP3, AAC or M4A',
     'uploadTitleHintRingtone': 'e.g. Kanda Sasti Kavasam',
-    'uploadFootnoteRingtone':
-        'Approved ringtones appear in the Ringtones tab with your name',
-    'uploadShareMomentBodyRingtone':
-        'We\'ll review your ringtone shortly. While you wait — know someone who would enjoy Arul?',
+    'uploadFootnoteRingtone': 'Approved ringtones appear in the Ringtones tab with your name',
+    'uploadShareMomentBodyRingtone': 'We\'ll review your ringtone shortly. While you wait — know someone who would enjoy Arul?',
     'uploadTooLarge': 'File is too large (max {max}).',
     'uploadSuccessToast': 'Submitted for review — thank you!',
     'uploadShareMomentTitle': 'Thank you',
-    'uploadShareMomentBody':
-        'We\'ll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?',
+    'uploadShareMomentBody': 'We\'ll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?',
     'uploadComingSoonToast': 'Upload is coming soon.',
     'premiumNavTitle': 'SUBSCRIPTION',
     'premiumEyebrow': 'PREMIUM',
@@ -228,23 +207,22 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumFeatureDaily': 'Daily New Content',
     'premiumCtaTrial': 'Start Free Trial',
     'premiumCtaSubscribe': 'Subscribe Now',
-    'premiumReassuranceTrial':
-        '₹2 verification, refunded instantly · Cancel anytime',
-    'premiumReassurancePaid':
-        'Secured by UPI Autopay · Cancel anytime in one tap',
-    'premiumInstallUpiTrial':
-        'Install PhonePe or Google Pay to start your free trial',
-    'premiumInstallUpiPaid': 'Install PhonePe or Google Pay to subscribe',
+    'premiumReassuranceTrial': '₹2 verification, refunded instantly · Cancel anytime',
+    'premiumReassurancePaid': 'Secured by UPI Autopay · Cancel anytime in one tap',
+    'premiumQrTitleTrial': 'Scan to start your free trial',
+    'premiumQrTitlePaid': 'Scan to subscribe',
+    'premiumQrInstruction': 'Open any UPI app on another phone and scan this code.',
+    'premiumQrExpiresIn': 'Code expires in {time}',
+    'premiumQrWaiting': 'Waiting for approval…',
+    'premiumQrCheck': 'I have paid',
     'premiumResumeCta': 'Open {app} again',
-    'premiumResumeHintTrial':
-        'Approve the ₹2 verification in {app} to start your trial.',
+    'premiumResumeHintTrial': 'Approve the ₹2 verification in {app} to start your trial.',
     'premiumResumeHintPaid': 'Approve the payment in {app} to continue.',
     'premiumUpiAppGeneric': 'your UPI app',
     'trialNudgeRow': 'Finish setting up your free trial',
     'trialNudgeDismiss': 'Dismiss',
     'trialReminderTitle': 'Your free trial is waiting',
-    'trialReminderBody':
-        'You didn\'t finish setting up. Tap to try again — it takes a moment.',
+    'trialReminderBody': 'You didn\'t finish setting up. Tap to try again — it takes a moment.',
     'premiumSelectedUpiApp': 'Selected UPI App',
     'upiPickerTitle': 'Pay using',
     'upiPickerLastUsed': 'Last used',
@@ -257,15 +235,11 @@ const Map<String, Map<String, String>> kArbStrings = {
     'purchaseCancelled': 'Payment cancelled.',
     'purchaseInterrupted': 'Payment was interrupted. Please try again.',
     'purchaseNotCompleted': 'Payment was not completed. Please try again.',
-    'purchaseInProgress':
-        'A payment setup is already in progress. Please wait a few seconds and try again.',
+    'purchaseInProgress': 'A payment setup is already in progress. Please wait a few seconds and try again.',
     'purchaseUpiLaunchFailed': 'Could not open your UPI app. Please try again.',
-    'purchaseIntentFailed':
-        'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.',
-    'purchaseActivateFailed':
-        'We couldn\'t activate your subscription. Please contact support.',
-    'purchaseConfirmationLate':
-        'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.',
+    'purchaseIntentFailed': 'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.',
+    'purchaseActivateFailed': 'We couldn\'t activate your subscription. Please contact support.',
+    'purchaseConfirmationLate': 'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.',
   },
   'ta': {
     'appName': 'அருள்',
@@ -283,17 +257,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'signInNudgeRetry': 'உள்நுழைய இங்கே தட்டவும்',
     'premiumTitle': 'பிரீமியம்',
     'premiumHeadline': 'அனைத்து வால்பேப்பர்களையும் திறக்கவும்',
-    'premiumSub':
-        'உலாவுவது எப்போதும் இலவசம். அவற்றை உங்களுடையதாக்க பிரீமியம் உதவும்.',
-    'premiumBenefitApply':
-        'எந்த வால்பேப்பரையும் அமைக்கவும் — நிலையான அல்லது லைவ்',
+    'premiumSub': 'உலாவுவது எப்போதும் இலவசம். அவற்றை உங்களுடையதாக்க பிரீமியம் உதவும்.',
+    'premiumBenefitApply': 'எந்த வால்பேப்பரையும் அமைக்கவும் — நிலையான அல்லது லைவ்',
     'premiumBenefitLive': 'முழுத் தரத்தில் லைவ் வீடியோ வால்பேப்பர்கள்',
     'premiumBenefitShare': 'நண்பர்கள் மற்றும் குடும்பத்துடன் பகிரவும்',
     'premiumBenefitNew': 'ஒவ்வொரு வாரமும் புதிய வால்பேப்பர்கள்',
     'premiumPrice': '₹199 / மாதம்',
     'premiumCta': 'இலவச டிரையலைத் தொடங்கு',
-    'premiumTrialNote':
-        'ஒரு கணக்குக்கு ஒரு இலவச டிரையல். எப்போது வேண்டுமானாலும் ரத்து செய்யலாம் — காலம் முடியும் வரை அணுகல் தொடரும்.',
+    'premiumTrialNote': 'ஒரு கணக்குக்கு ஒரு இலவச டிரையல். எப்போது வேண்டுமானாலும் ரத்து செய்யலாம் — காலம் முடியும் வரை அணுகல் தொடரும்.',
     'premiumComingSoon': 'பணம் செலுத்தும் வசதி பின்னர் வரும்.',
     'settingsTitle': 'அமைப்புகள்',
     'settingsAppearance': 'தோற்றம்',
@@ -305,12 +276,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsSupport': 'உதவி தேவை',
     'settingsPrivacy': 'தனியுரிமைக் கொள்கை',
     'settingsVersion': 'பதிப்பு',
-    'uploadBody':
-        'உங்கள் சொந்த வால்பேப்பரை சமூகத்துடன் பகிரவும். வெளியிடுவதற்கு முன் ஒவ்வொன்றையும் நாங்கள் பரிசீலிக்கிறோம்.',
+    'uploadBody': 'உங்கள் சொந்த வால்பேப்பரை சமூகத்துடன் பகிரவும். வெளியிடுவதற்கு முன் ஒவ்வொன்றையும் நாங்கள் பரிசீலிக்கிறோம்.',
     'uploadPickCategory': 'ஒரு பிரிவைத் தேர்ந்தெடுக்கவும்',
     'uploadPickFile': 'ஒரு கோப்பைத் தேர்ந்தெடுக்கவும்',
-    'uploadSpecNote':
-        'படங்கள்: 1080×1920. வீடியோக்கள்: 1024×1824, ஒலி இல்லாமல், 50 MB க்குள்.',
+    'uploadSpecNote': 'படங்கள்: 1080×1920. வீடியோக்கள்: 1024×1824, ஒலி இல்லாமல், 50 MB க்குள்.',
     'uploadComingSoon': 'பதிவேற்றம் பின்னர் வரும்.',
     'apply': 'அமை',
     'share': 'பகிர்',
@@ -319,27 +288,20 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'பூட்டு திரை',
     'applyTargetBoth': 'முகப்பு மற்றும் பூட்டு திரை',
     'applied': 'வால்பேப்பர் அமைக்கப்பட்டது',
-    'appliedLiveFallback':
-        'இந்த ஃபோனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.',
-    'offlineBody':
-        'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+    'appliedLiveFallback': 'இந்த ஃபோனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.',
+    'offlineBody': 'இணைய இணைப்பு இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     'offlineTitle': 'இணையம் இல்லை',
     'offlineFeedBody': 'வால்பேப்பர்களைப் பார்க்க இணையத்தை இயக்கவும்.',
-    'wallpaperShareCaption':
-        'இது போன்ற மேலும் பக்தி வால்பேப்பர்கள் — நிலையானவை மற்றும் லைவ் — Arul-இல்:\n{link}',
-    'referShareMessage':
-        'தென்னிந்திய பக்தி வால்பேப்பர்களுக்காக நான் Arul பயன்படுத்தி வருகிறேன் — அம்மன், முருகன், பெருமாள், சிவன், அசையும் லைவ் வால்பேப்பர்களும் உண்டு. உங்களுக்கும் பிடிக்கும் என்று நினைத்தேன்.\n\n{link}',
+    'wallpaperShareCaption': 'இது போன்ற மேலும் பக்தி வால்பேப்பர்கள் — நிலையானவை மற்றும் லைவ் — Arul-இல்:\n{link}',
+    'referShareMessage': 'தென்னிந்திய பக்தி வால்பேப்பர்களுக்காக நான் Arul பயன்படுத்தி வருகிறேன் — அம்மன், முருகன், பெருமாள், சிவன், அசையும் லைவ் வால்பேப்பர்களும் உண்டு. உங்களுக்கும் பிடிக்கும் என்று நினைத்தேன்.\n\n{link}',
     'tabWallpapers': 'வால்பேப்பர்கள்',
     'ringtonePreviewSemantic': 'முன்னோட்டம்',
     'ringtonePreviewUnavailable': 'முன்னோட்டம் இன்னும் கிடைக்கவில்லை',
     'ringtonesEmptyTitle': 'ரிங்டோன்கள் விரைவில் வருகின்றன',
-    'ringtonesEmptyBody':
-        'பக்தி ரிங்டோன்கள் வழியில் உள்ளன. சிறிது நேரம் கழித்து மீண்டும் பாருங்கள்.',
+    'ringtonesEmptyBody': 'பக்தி ரிங்டோன்கள் வழியில் உள்ளன. சிறிது நேரம் கழித்து மீண்டும் பாருங்கள்.',
     'ringtonesErrorTitle': 'ரிங்டோன்களை ஏற்ற முடியவில்லை',
-    'ringtoneSetSuccess':
-        'ரிங்டோன் அமைக்கப்பட்டது. தெரியவில்லை என்றால், உங்கள் ஃபோனை மறுதொடக்கம் செய்யுங்கள்.',
-    'ringtoneSetFailed':
-        'ரிங்டோனை அமைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+    'ringtoneSetSuccess': 'ரிங்டோன் அமைக்கப்பட்டது. தெரியவில்லை என்றால், உங்கள் ஃபோனை மறுதொடக்கம் செய்யுங்கள்.',
+    'ringtoneSetFailed': 'ரிங்டோனை அமைக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
     'ringtoneSetPreparing': 'தயாராகிறது…',
     'ringtoneSetDownloading': 'பதிவிறக்கம் ஆகிறது…',
     'ringtoneSetApplying': 'ரிங்டோன் அமைக்கப்படுகிறது…',
@@ -347,14 +309,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'cancel': 'ரத்து',
     'errorGenericRetry': 'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.',
     'settingsPremiumSubTrial': 'இலவச டிரையலில் இருக்கிறீர்கள்',
-    'settingsPremiumSubCancelled':
-        'தானியங்கு புதுப்பித்தல் அணைக்கப்பட்டுள்ளது · அணுகல் தொடரும்',
+    'settingsPremiumSubCancelled': 'தானியங்கு புதுப்பித்தல் அணைக்கப்பட்டுள்ளது · அணுகல் தொடரும்',
     'settingsPremiumSubActive': 'நீங்கள் உறுப்பினர்',
     'settingsReferSub': '30 நாள் இலவச பிரீமியம் சம்பாதிக்கவும்',
     'settingsTellFriend': 'நண்பரிடம் சொல்லுங்கள்',
     'settingsTellFriendSub': 'Arul-ஐ ரசிக்கும் ஒருவருக்கு அனுப்புங்கள்',
-    'settingsRemindersSubOn':
-        'வாராந்திர மற்றும் பண்டிகை நினைவூட்டல்கள் இயக்கத்தில்',
+    'settingsRemindersSubOn': 'வாராந்திர மற்றும் பண்டிகை நினைவூட்டல்கள் இயக்கத்தில்',
     'settingsRemindersSubOff': 'பண்டிகை மற்றும் வாராந்திர நினைவூட்டல்கள்',
     'settingsLanguage': 'மொழி',
     'settingsTheme': 'தீம்',
@@ -368,16 +328,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsUploadSub': 'வால்பேப்பர் அல்லது ரிங்டோனைப் பகிரவும்',
     'settingsLogout': 'வெளியேறு',
     'settingsLogoutConfirmTitle': 'வெளியேறவா?',
-    'settingsLogoutConfirmBody':
-        'எப்போது வேண்டுமானாலும் Google மூலம் மீண்டும் உள்நுழையலாம்.',
+    'settingsLogoutConfirmBody': 'எப்போது வேண்டுமானாலும் Google மூலம் மீண்டும் உள்நுழையலாம்.',
     'settingsDeleteAccount': 'கணக்கை நீக்கு',
     'settingsDeleteConfirmTitle': 'கணக்கை நீக்கவா?',
     'settingsDeleteConfirmBody': 'இதை மீட்டெடுக்க முடியாது.',
     'settingsTerms': 'விதிமுறைகள் & நிபந்தனைகள்',
     'settingsRefund': 'பணத்திரும்பக் கொள்கை',
     'settingsSupportEmailPrompt': 'உங்கள் சிக்கல் அல்லது கருத்தை விவரிக்கவும்:',
-    'settingsSupportEmailDetails':
-        'கீழே உள்ள விவரங்கள் உங்கள் கோரிக்கையை விரைவாகத் தீர்க்க உதவும்:',
+    'settingsSupportEmailDetails': 'கீழே உள்ள விவரங்கள் உங்கள் கோரிக்கையை விரைவாகத் தீர்க்க உதவும்:',
     'settingsNoEmailApp': 'மின்னஞ்சல் ஆப் இல்லை. {email} க்கு எழுதுங்கள்',
     'settingsEditNameTitle': 'உங்கள் பெயர்',
     'themeSystemDefault': 'சிஸ்டம் இயல்புநிலை',
@@ -386,10 +344,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'themeDarkSub': 'விளக்கொளி மெரூன்',
     'remindersToggleTitle': 'பக்தி நினைவூட்டல்கள்',
     'remindersToggleSub': 'வாராந்திர நாள், மற்றும் ஒவ்வொரு முக்கிய பண்டிகையும்',
-    'remindersScheduleNote':
-        'ஒவ்வொரு வாரமும் வெள்ளிக்கிழமை ஒரு நினைவூட்டல், மேலும் ஒவ்வொரு முக்கிய பண்டிகைக்கும் சில நாட்கள் முன்பு ஒன்று — பொங்கல், தீபாவளி, நவராத்திரி, சிவராத்திரி மற்றும் பிற. மாதத்திற்கு சுமார் இரண்டு.',
-    'remindersPermissionToast':
-        'Arul-க்கு அறிவிப்புகள் அணைக்கப்பட்டுள்ளன. நினைவூட்டல்கள் பெற உங்கள் ஃபோன் அமைப்புகளில் இயக்கவும்.',
+    'remindersScheduleNote': 'ஒவ்வொரு வாரமும் வெள்ளிக்கிழமை ஒரு நினைவூட்டல், மேலும் ஒவ்வொரு முக்கிய பண்டிகைக்கும் சில நாட்கள் முன்பு ஒன்று — பொங்கல், தீபாவளி, நவராத்திரி, சிவராத்திரி மற்றும் பிற. மாதத்திற்கு சுமார் இரண்டு.',
+    'remindersPermissionToast': 'Arul-க்கு அறிவிப்புகள் அணைக்கப்பட்டுள்ளன. நினைவூட்டல்கள் பெற உங்கள் ஃபோன் அமைப்புகளில் இயக்கவும்.',
     'remindersTimeLabel': 'நினைவூட்டல் நேரம்',
     'remindersComingUp': 'வரப்போவது',
     'remindersMonthJan': 'ஜன',
@@ -412,21 +368,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI ஆட்டோபே · எப்போதும் ரத்து செய்யலாம்',
     'premiumTrialPill': '1 நாள் இலவசம்',
     'premiumCtaPaid': 'பிரீமியம் பெறு',
-    'premiumFootnoteTrial':
-        '1 நாள் இலவசம், பிறகு மாதம் {price}. UPI ஆட்டோபே உங்கள் கணக்கை ₹2 மூலம் சரிபார்க்கும், உடனே திரும்பக் கிடைக்கும். உலாவுவது எப்போதும் இலவசம்.',
-    'premiumFootnotePaid':
-        'இன்று {price} வசூலிக்கப்படும், பிறகு UPI ஆட்டோபே மூலம் மாதந்தோறும் புதுப்பிக்கப்படும். எப்போதும் ரத்து செய்யலாம். உலாவுவது எப்போதும் இலவசம்.',
+    'premiumFootnoteTrial': '1 நாள் இலவசம், பிறகு மாதம் {price}. UPI ஆட்டோபே உங்கள் கணக்கை ₹2 மூலம் சரிபார்க்கும், உடனே திரும்பக் கிடைக்கும். உலாவுவது எப்போதும் இலவசம்.',
+    'premiumFootnotePaid': 'இன்று {price} வசூலிக்கப்படும், பிறகு UPI ஆட்டோபே மூலம் மாதந்தோறும் புதுப்பிக்கப்படும். எப்போதும் ரத்து செய்யலாம். உலாவுவது எப்போதும் இலவசம்.',
     'premiumComingSoonToast': 'பிரீமியம் விரைவில் வருகிறது.',
     'premiumWelcomeToast': 'Arul Premium-க்கு வரவேற்கிறோம்!',
     'premiumCelebrateTitle': 'இனி பிரீமியம் உங்களுடையது',
-    'premiumCelebrateBody':
-        'Arul Premium செயலில் உள்ளது. இந்த வால்பேப்பர்களை ரசிக்கும் ஒருவர் தெரிகிறாரா? ஒன்றை அனுப்புங்கள்.',
-    'premiumSheetPitch':
-        'ஒவ்வொரு வால்பேப்பரும் — லைவ் மற்றும் நிலையானது. ஆறு பிரிவுகளிலும் தடையின்றி அமைக்கவும் பகிரவும்.',
+    'premiumCelebrateBody': 'Arul Premium செயலில் உள்ளது. இந்த வால்பேப்பர்களை ரசிக்கும் ஒருவர் தெரிகிறாரா? ஒன்றை அனுப்புங்கள்.',
+    'premiumSheetPitch': 'ஒவ்வொரு வால்பேப்பரும் — லைவ் மற்றும் நிலையானது. ஆறு பிரிவுகளிலும் தடையின்றி அமைக்கவும் பகிரவும்.',
     'premiumKeepBrowsing': 'இலவசமாக உலாவுங்கள்',
     'referHeroTitle': 'நண்பருக்குப் பரிசு, உங்களுக்கு ஒரு மாதம்',
-    'referHeroBody':
-        'உங்கள் லிங்க் மூலம் சந்தா செய்யும் ஒவ்வொரு நண்பருக்கும் 30 நாள் இலவச பிரீமியம்',
+    'referHeroBody': 'உங்கள் லிங்க் மூலம் சந்தா செய்யும் ஒவ்வொரு நண்பருக்கும் 30 நாள் இலவச பிரீமியம்',
     'referRewardsLabel': 'சம்பாதித்த வெகுமதிகள்',
     'referRewardDays': '{days} நாள்',
     'referStep1': 'உங்கள் லிங்கை நண்பர்கள், குடும்பத்துடன் பகிரவும்',
@@ -440,29 +391,23 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleLabel': 'தலைப்பு',
     'uploadTitleOptional': '(விருப்பம்)',
     'uploadCategoryLabel': 'பிரிவு',
-    'uploadRightsCheckbox':
-        'இந்த உள்ளடக்கத்தின் உரிமை என்னுடையது, அல்லது பகிர அனுமதி உள்ளது',
-    'uploadFootnote':
-        'அனுமதிக்கப்பட்ட வால்பேப்பர்கள் உங்கள் பெயருடன் ஃபீடில் தோன்றும்',
+    'uploadRightsCheckbox': 'இந்த உள்ளடக்கத்தின் உரிமை என்னுடையது, அல்லது பகிர அனுமதி உள்ளது',
+    'uploadFootnote': 'அனுமதிக்கப்பட்ட வால்பேப்பர்கள் உங்கள் பெயருடன் ஃபீடில் தோன்றும்',
     'uploadRejectStatic': 'JPEG, PNG அல்லது WebP படத்தைத் தேர்ந்தெடுக்கவும்.',
     'uploadRejectLive': 'MP4 வீடியோவைத் தேர்ந்தெடுக்கவும்.',
-    'uploadRejectAudio':
-        'MP3, AAC அல்லது M4A ஒலிக் கோப்பைத் தேர்ந்தெடுக்கவும்.',
+    'uploadRejectAudio': 'MP3, AAC அல்லது M4A ஒலிக் கோப்பைத் தேர்ந்தெடுக்கவும்.',
     'uploadKindLabel': 'எதைப் பகிர்கிறீர்கள்?',
     'uploadKindWallpaper': 'வால்பேப்பர்',
     'uploadKindRingtone': 'ரிங்டோன்',
     'uploadPickZoneTitleAudio': 'ஒலிக் கோப்பைத் தேர்ந்தெடுக்கவும்',
     'uploadPickZoneSubAudio': 'MP3, AAC அல்லது M4A',
     'uploadTitleHintRingtone': 'எ.கா. கந்த சஷ்டி கவசம்',
-    'uploadFootnoteRingtone':
-        'அனுமதிக்கப்பட்ட ரிங்டோன்கள் உங்கள் பெயருடன் ரிங்டோன்கள் தாவலில் தோன்றும்',
-    'uploadShareMomentBodyRingtone':
-        'உங்கள் ரிங்டோனை விரைவில் பரிசீலிக்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் ஒருவர் தெரிகிறாரா?',
+    'uploadFootnoteRingtone': 'அனுமதிக்கப்பட்ட ரிங்டோன்கள் உங்கள் பெயருடன் ரிங்டோன்கள் தாவலில் தோன்றும்',
+    'uploadShareMomentBodyRingtone': 'உங்கள் ரிங்டோனை விரைவில் பரிசீலிக்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் ஒருவர் தெரிகிறாரா?',
     'uploadTooLarge': 'கோப்பு மிகப் பெரியது (அதிகபட்சம் {max}).',
     'uploadSuccessToast': 'பரிசீலனைக்கு அனுப்பப்பட்டது — நன்றி!',
     'uploadShareMomentTitle': 'நன்றி',
-    'uploadShareMomentBody':
-        'உங்கள் வால்பேப்பரை விரைவில் பரிசீலிக்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் ஒருவர் தெரிகிறாரா?',
+    'uploadShareMomentBody': 'உங்கள் வால்பேப்பரை விரைவில் பரிசீலிக்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் ஒருவர் தெரிகிறாரா?',
     'uploadComingSoonToast': 'பதிவேற்றம் விரைவில் வருகிறது.',
     'premiumNavTitle': 'சந்தா',
     'premiumEyebrow': 'பிரீமியம்',
@@ -475,48 +420,39 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumFeatureDaily': 'தினமும் புதிய உள்ளடக்கம்',
     'premiumCtaTrial': 'இலவச டிரையலைத் தொடங்கு',
     'premiumCtaSubscribe': 'இப்போதே சந்தா செய்',
-    'premiumReassuranceTrial':
-        '₹2 சரிபார்ப்பு, உடனே திரும்பும் · எப்போதும் ரத்து செய்யலாம்',
-    'premiumReassurancePaid':
-        'UPI ஆட்டோபே பாதுகாப்பு · எப்போதும் ஒரே தட்டலில் ரத்து',
-    'premiumInstallUpiTrial':
-        'உங்கள் இலவச டிரையலைத் தொடங்க PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
-    'premiumInstallUpiPaid':
-        'சந்தா செய்ய PhonePe அல்லது Google Pay-ஐ நிறுவுங்கள்',
+    'premiumReassuranceTrial': '₹2 சரிபார்ப்பு, உடனே திரும்பும் · எப்போதும் ரத்து செய்யலாம்',
+    'premiumReassurancePaid': 'UPI ஆட்டோபே பாதுகாப்பு · எப்போதும் ஒரே தட்டலில் ரத்து',
+    'premiumQrTitleTrial': 'உங்கள் இலவச டிரையலைத் தொடங்க ஸ்கேன் செய்யுங்கள்',
+    'premiumQrTitlePaid': 'சந்தா செய்ய ஸ்கேன் செய்யுங்கள்',
+    'premiumQrInstruction': 'வேறொரு ஃபோனில் ஏதேனும் UPI ஆப்பைத் திறந்து இந்தக் கோடை ஸ்கேன் செய்யுங்கள்.',
+    'premiumQrExpiresIn': 'கோடு {time}-இல் காலாவதியாகும்',
+    'premiumQrWaiting': 'அனுமதிக்காகக் காத்திருக்கிறோம்…',
+    'premiumQrCheck': 'நான் செலுத்திவிட்டேன்',
     'premiumResumeCta': '{app} ஆப்பை மீண்டும் திற',
-    'premiumResumeHintTrial':
-        'உங்கள் டிரையலைத் தொடங்க {app} ஆப்பில் ₹2 சரிபார்ப்பை அனுமதிக்கவும்.',
+    'premiumResumeHintTrial': 'உங்கள் டிரையலைத் தொடங்க {app} ஆப்பில் ₹2 சரிபார்ப்பை அனுமதிக்கவும்.',
     'premiumResumeHintPaid': 'தொடர {app} ஆப்பில் கட்டணத்தை அனுமதிக்கவும்.',
     'premiumUpiAppGeneric': 'உங்கள் UPI',
     'trialNudgeRow': 'உங்கள் இலவச டிரையல் செட்டப்பை முடிக்கவும்',
     'trialNudgeDismiss': 'மூடு',
     'trialReminderTitle': 'உங்கள் இலவச டிரையல் காத்திருக்கிறது',
-    'trialReminderBody':
-        'செட்டப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.',
+    'trialReminderBody': 'செட்டப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.',
     'premiumSelectedUpiApp': 'UPI ஆப்',
     'upiPickerTitle': 'இதன் மூலம் செலுத்துங்கள்',
     'upiPickerLastUsed': 'கடைசியாக பயன்படுத்தியது',
-    'premiumTrialFinePrint':
-        'பிறகு மாதம் {price} ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.',
+    'premiumTrialFinePrint': 'பிறகு மாதம் {price} ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.',
     'premiumPaidFinePrint': '{price}/மாதம் ஆட்டோபே. எப்போதும் ரத்து.',
     'premiumSocialProof': '{city}-ல் {name} லைவ் வால்பேப்பர் அமைத்தார் 🙏',
     'pushChannelName': 'அருள் அப்டேட்கள்',
-    'purchaseErrorNetwork':
-        'இணையம் இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+    'purchaseErrorNetwork': 'இணையம் இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     'purchaseErrorGeneric': 'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.',
     'purchaseCancelled': 'கட்டணம் ரத்து செய்யப்பட்டது.',
     'purchaseInterrupted': 'கட்டணம் தடைபட்டது. மீண்டும் முயற்சிக்கவும்.',
     'purchaseNotCompleted': 'கட்டணம் முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
-    'purchaseInProgress':
-        'கட்டணம் ஏற்கனவே நடந்து கொண்டிருக்கிறது. சில வினாடிகள் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
-    'purchaseUpiLaunchFailed':
-        'உங்கள் UPI ஆப்பைத் திறக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
-    'purchaseIntentFailed':
-        'கட்டணம் செலுத்த முடியவில்லை. ஏதேனும் தொகை பிடிக்கப்பட்டிருந்தால், அது 4–5 நாட்களில் உங்கள் கணக்கிற்குத் திரும்ப வரும்.',
-    'purchaseActivateFailed':
-        'உங்கள் சந்தாவைச் செயல்படுத்த முடியவில்லை. சப்போர்ட்டைத் தொடர்பு கொள்ளவும்.',
-    'purchaseConfirmationLate':
-        'பணம் கிடைத்தது, ஆனால் உறுதிப்படுத்தல் தாமதமாகிறது. ஆப்பை மூடி மீண்டும் திறக்கவும் — உங்கள் சந்தா விரைவில் செயல்படும்.',
+    'purchaseInProgress': 'கட்டணம் ஏற்கனவே நடந்து கொண்டிருக்கிறது. சில வினாடிகள் காத்திருந்து மீண்டும் முயற்சிக்கவும்.',
+    'purchaseUpiLaunchFailed': 'உங்கள் UPI ஆப்பைத் திறக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+    'purchaseIntentFailed': 'கட்டணம் செலுத்த முடியவில்லை. ஏதேனும் தொகை பிடிக்கப்பட்டிருந்தால், அது 4–5 நாட்களில் உங்கள் கணக்கிற்குத் திரும்ப வரும்.',
+    'purchaseActivateFailed': 'உங்கள் சந்தாவைச் செயல்படுத்த முடியவில்லை. சப்போர்ட்டைத் தொடர்பு கொள்ளவும்.',
+    'purchaseConfirmationLate': 'பணம் கிடைத்தது, ஆனால் உறுதிப்படுத்தல் தாமதமாகிறது. ஆப்பை மூடி மீண்டும் திறக்கவும் — உங்கள் சந்தா விரைவில் செயல்படும்.',
   },
   'te': {
     'appName': 'అరుళ్',
@@ -534,16 +470,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'signInNudgeRetry': 'సైన్ ఇన్ చేయడానికి ఇక్కడ నొక్కండి',
     'premiumTitle': 'ప్రీమియం',
     'premiumHeadline': 'ప్రతి వాల్‌పేపర్‌ను అన్‌లాక్ చేయండి',
-    'premiumSub':
-        'బ్రౌజింగ్ ఎప్పుడూ ఉచితం. ప్రీమియం వాటిని మీవిగా చేసుకోవడానికి.',
+    'premiumSub': 'బ్రౌజింగ్ ఎప్పుడూ ఉచితం. ప్రీమియం వాటిని మీవిగా చేసుకోవడానికి.',
     'premiumBenefitApply': 'ఏ వాల్‌పేపర్‌నైనా సెట్ చేయండి — స్థిరం లేదా లైవ్',
     'premiumBenefitLive': 'పూర్తి నాణ్యతలో లైవ్ వీడియో వాల్‌పేపర్లు',
     'premiumBenefitShare': 'స్నేహితులు, కుటుంబంతో పంచుకోండి',
     'premiumBenefitNew': 'ప్రతి వారం కొత్త వాల్‌పేపర్లు',
     'premiumPrice': '₹199 / నెల',
     'premiumCta': 'ఉచిత ట్రయల్ ప్రారంభించు',
-    'premiumTrialNote':
-        'ఖాతాకు ఒక ఉచిత ట్రయల్. ఎప్పుడైనా రద్దు చేయవచ్చు — వ్యవధి ముగిసే వరకు యాక్సెస్ ఉంటుంది.',
+    'premiumTrialNote': 'ఖాతాకు ఒక ఉచిత ట్రయల్. ఎప్పుడైనా రద్దు చేయవచ్చు — వ్యవధి ముగిసే వరకు యాక్సెస్ ఉంటుంది.',
     'premiumComingSoon': 'చెల్లింపులు తర్వాత వస్తాయి.',
     'settingsTitle': 'సెట్టింగ్‌లు',
     'settingsAppearance': 'రూపం',
@@ -555,12 +489,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsSupport': 'సహాయం కావాలి',
     'settingsPrivacy': 'గోప్యతా విధానం',
     'settingsVersion': 'వెర్షన్',
-    'uploadBody':
-        'మీ సొంత వాల్‌పేపర్‌ను కమ్యూనిటీతో పంచుకోండి. ఇది కనిపించే ముందు ప్రతి సమర్పణను మేము సమీక్షిస్తాం.',
+    'uploadBody': 'మీ సొంత వాల్‌పేపర్‌ను కమ్యూనిటీతో పంచుకోండి. ఇది కనిపించే ముందు ప్రతి సమర్పణను మేము సమీక్షిస్తాం.',
     'uploadPickCategory': 'ఒక విభాగాన్ని ఎంచుకోండి',
     'uploadPickFile': 'ఫైల్‌ను ఎంచుకోండి',
-    'uploadSpecNote':
-        'ఫోటోలు: 1080×1920. వీడియోలు: 1024×1824, ఆడియో లేకుండా, 50 MB లోపు.',
+    'uploadSpecNote': 'ఫోటోలు: 1080×1920. వీడియోలు: 1024×1824, ఆడియో లేకుండా, 50 MB లోపు.',
     'uploadComingSoon': 'అప్‌లోడ్‌లు తర్వాత వస్తాయి.',
     'apply': 'సెట్ చేయండి',
     'share': 'పంచుకోండి',
@@ -569,25 +501,19 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'లాక్ స్క్రీన్',
     'applyTargetBoth': 'హోమ్ మరియు లాక్ స్క్రీన్',
     'applied': 'వాల్‌పేపర్ సెట్ చేయబడింది',
-    'appliedLiveFallback':
-        'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లు పని చేయవు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.',
-    'offlineBody':
-        'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.',
+    'appliedLiveFallback': 'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లు పని చేయవు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.',
+    'offlineBody': 'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.',
     'offlineTitle': 'ఇంటర్నెట్ లేదు',
     'offlineFeedBody': 'వాల్‌పేపర్లను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.',
-    'wallpaperShareCaption':
-        'ఇలాంటి మరిన్ని భక్తి వాల్‌పేపర్లు — స్థిరం మరియు లైవ్ — Arulలో:\n{link}',
-    'referShareMessage':
-        'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నాను — అమ్మన్, మురుగన్, పెరుమాళ్, శివన్, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందని అనిపించింది.\n\n{link}',
+    'wallpaperShareCaption': 'ఇలాంటి మరిన్ని భక్తి వాల్‌పేపర్లు — స్థిరం మరియు లైవ్ — Arulలో:\n{link}',
+    'referShareMessage': 'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నాను — అమ్మన్, మురుగన్, పెరుమాళ్, శివన్, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందని అనిపించింది.\n\n{link}',
     'tabWallpapers': 'వాల్‌పేపర్లు',
     'ringtonePreviewSemantic': 'ప్రివ్యూ',
     'ringtonePreviewUnavailable': 'ప్రివ్యూ ఇంకా అందుబాటులో లేదు',
     'ringtonesEmptyTitle': 'రింగ్‌టోన్లు త్వరలో వస్తున్నాయి',
-    'ringtonesEmptyBody':
-        'భక్తి రింగ్‌టోన్లు దారిలో ఉన్నాయి. కాసేపటి తర్వాత మళ్లీ చూడండి.',
+    'ringtonesEmptyBody': 'భక్తి రింగ్‌టోన్లు దారిలో ఉన్నాయి. కాసేపటి తర్వాత మళ్లీ చూడండి.',
     'ringtonesErrorTitle': 'రింగ్‌టోన్లను లోడ్ చేయలేకపోయాం',
-    'ringtoneSetSuccess':
-        'రింగ్‌టోన్ సెట్ అయింది. కనిపించకపోతే, ఫోన్‌ను రీస్టార్ట్ చేయండి.',
+    'ringtoneSetSuccess': 'రింగ్‌టోన్ సెట్ అయింది. కనిపించకపోతే, ఫోన్‌ను రీస్టార్ట్ చేయండి.',
     'ringtoneSetFailed': 'రింగ్‌టోన్ సెట్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.',
     'ringtoneSetPreparing': 'సిద్ధమవుతోంది…',
     'ringtoneSetDownloading': 'డౌన్‌లోడ్ అవుతోంది…',
@@ -622,8 +548,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsTerms': 'నిబంధనలు & షరతులు',
     'settingsRefund': 'రీఫండ్ విధానం',
     'settingsSupportEmailPrompt': 'మీ సమస్య లేదా అభిప్రాయాన్ని వివరించండి:',
-    'settingsSupportEmailDetails':
-        'కింది వివరాలు మీ అభ్యర్థనను వేగంగా పరిష్కరించడానికి సహాయపడతాయి:',
+    'settingsSupportEmailDetails': 'కింది వివరాలు మీ అభ్యర్థనను వేగంగా పరిష్కరించడానికి సహాయపడతాయి:',
     'settingsNoEmailApp': 'ఇమెయిల్ యాప్ కనిపించలేదు. {email} కు రాయండి',
     'settingsEditNameTitle': 'మీ పేరు',
     'themeSystemDefault': 'సిస్టమ్ డిఫాల్ట్',
@@ -632,10 +557,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'themeDarkSub': 'దీపకాంతి మెరూన్',
     'remindersToggleTitle': 'భక్తి రిమైండర్లు',
     'remindersToggleSub': 'వారపు రోజు, ప్రతి ముఖ్య పండుగ',
-    'remindersScheduleNote':
-        'ప్రతి వారం శుక్రవారం ఒక రిమైండర్, ప్రతి ముఖ్య పండుగకు కొన్ని రోజుల ముందు ఒకటి — పొంగల్, దీపావళి, నవరాత్రి, శివరాత్రి, ఇతరాలు. నెలకు సుమారు రెండు.',
-    'remindersPermissionToast':
-        'Arulకు నోటిఫికేషన్లు ఆఫ్‌లో ఉన్నాయి. రిమైండర్లు రావాలంటే ఫోన్ సెట్టింగ్‌లలో ఆన్ చేయండి.',
+    'remindersScheduleNote': 'ప్రతి వారం శుక్రవారం ఒక రిమైండర్, ప్రతి ముఖ్య పండుగకు కొన్ని రోజుల ముందు ఒకటి — పొంగల్, దీపావళి, నవరాత్రి, శివరాత్రి, ఇతరాలు. నెలకు సుమారు రెండు.',
+    'remindersPermissionToast': 'Arulకు నోటిఫికేషన్లు ఆఫ్‌లో ఉన్నాయి. రిమైండర్లు రావాలంటే ఫోన్ సెట్టింగ్‌లలో ఆన్ చేయండి.',
     'remindersTimeLabel': 'రిమైండర్ సమయం',
     'remindersComingUp': 'రాబోయేవి',
     'remindersMonthJan': 'జన',
@@ -658,21 +581,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI ఆటోపే · ఎప్పుడైనా రద్దు చేయవచ్చు',
     'premiumTrialPill': '1 రోజు ఉచితం',
     'premiumCtaPaid': 'ప్రీమియం పొందు',
-    'premiumFootnoteTrial':
-        '1 రోజు ఉచితం, తర్వాత నెలకు {price}. UPI ఆటోపే మీ ఖాతాను ₹2తో ధృవీకరిస్తుంది, వెంటనే వాపసు వస్తుంది. బ్రౌజింగ్ ఎప్పటికీ ఉచితం.',
-    'premiumFootnotePaid':
-        'ఈరోజు {price} వసూలు అవుతుంది, తర్వాత UPI ఆటోపే ద్వారా నెలనెలా రెన్యువల్ అవుతుంది. ఎప్పుడైనా రద్దు చేయవచ్చు. బ్రౌజింగ్ ఎప్పటికీ ఉచితం.',
+    'premiumFootnoteTrial': '1 రోజు ఉచితం, తర్వాత నెలకు {price}. UPI ఆటోపే మీ ఖాతాను ₹2తో ధృవీకరిస్తుంది, వెంటనే వాపసు వస్తుంది. బ్రౌజింగ్ ఎప్పటికీ ఉచితం.',
+    'premiumFootnotePaid': 'ఈరోజు {price} వసూలు అవుతుంది, తర్వాత UPI ఆటోపే ద్వారా నెలనెలా రెన్యువల్ అవుతుంది. ఎప్పుడైనా రద్దు చేయవచ్చు. బ్రౌజింగ్ ఎప్పటికీ ఉచితం.',
     'premiumComingSoonToast': 'ప్రీమియం త్వరలో వస్తుంది.',
     'premiumWelcomeToast': 'Arul Premiumకు స్వాగతం!',
     'premiumCelebrateTitle': 'మీరు ప్రీమియంలో',
-    'premiumCelebrateBody':
-        'Arul Premium యాక్టివ్‌గా ఉంది. ఈ వాల్‌పేపర్లు ఇష్టపడే వారు తెలుసా? ఒకటి పంపండి.',
-    'premiumSheetPitch':
-        'ప్రతి వాల్‌పేపర్ — లైవ్, స్థిరం. ఆరు విభాగాల్లోనూ స్వేచ్ఛగా సెట్ చేయండి, పంచుకోండి.',
+    'premiumCelebrateBody': 'Arul Premium యాక్టివ్‌గా ఉంది. ఈ వాల్‌పేపర్లు ఇష్టపడే వారు తెలుసా? ఒకటి పంపండి.',
+    'premiumSheetPitch': 'ప్రతి వాల్‌పేపర్ — లైవ్, స్థిరం. ఆరు విభాగాల్లోనూ స్వేచ్ఛగా సెట్ చేయండి, పంచుకోండి.',
     'premiumKeepBrowsing': 'ఉచితంగా బ్రౌజ్ చేస్తూ ఉండండి',
     'referHeroTitle': 'స్నేహితుడికి బహుమతి, మీకు ఒక నెల',
-    'referHeroBody':
-        'మీ లింక్‌తో సబ్‌స్క్రైబ్ చేసే ప్రతి స్నేహితుడికీ 30 రోజుల ఉచిత ప్రీమియం',
+    'referHeroBody': 'మీ లింక్‌తో సబ్‌స్క్రైబ్ చేసే ప్రతి స్నేహితుడికీ 30 రోజుల ఉచిత ప్రీమియం',
     'referRewardsLabel': 'సంపాదించిన రివార్డులు',
     'referRewardDays': '{days} రోజులు',
     'referStep1': 'మీ లింక్‌ను స్నేహితులు, కుటుంబంతో పంచుకోండి',
@@ -686,8 +604,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleLabel': 'శీర్షిక',
     'uploadTitleOptional': '(ఐచ్ఛికం)',
     'uploadCategoryLabel': 'విభాగం',
-    'uploadRightsCheckbox':
-        'ఈ కంటెంట్‌పై హక్కులు నాకే ఉన్నాయి, లేదా పంచుకోవడానికి అనుమతి ఉంది',
+    'uploadRightsCheckbox': 'ఈ కంటెంట్‌పై హక్కులు నాకే ఉన్నాయి, లేదా పంచుకోవడానికి అనుమతి ఉంది',
     'uploadFootnote': 'ఆమోదించిన వాల్‌పేపర్లు మీ పేరుతో ఫీడ్‌లో కనిపిస్తాయి',
     'uploadRejectStatic': 'JPEG, PNG లేదా WebP ఫోటోను ఎంచుకోండి.',
     'uploadRejectLive': 'MP4 వీడియోను ఎంచుకోండి.',
@@ -698,15 +615,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadPickZoneTitleAudio': 'ఆడియో ఫైల్‌ను ఎంచుకోండి',
     'uploadPickZoneSubAudio': 'MP3, AAC లేదా M4A',
     'uploadTitleHintRingtone': 'ఉదా. కంద షష్ఠి కవచం',
-    'uploadFootnoteRingtone':
-        'ఆమోదించిన రింగ్‌టోన్లు మీ పేరుతో రింగ్‌టోన్ల ట్యాబ్‌లో కనిపిస్తాయి',
-    'uploadShareMomentBodyRingtone':
-        'మీ రింగ్‌టోన్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?',
+    'uploadFootnoteRingtone': 'ఆమోదించిన రింగ్‌టోన్లు మీ పేరుతో రింగ్‌టోన్ల ట్యాబ్‌లో కనిపిస్తాయి',
+    'uploadShareMomentBodyRingtone': 'మీ రింగ్‌టోన్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?',
     'uploadTooLarge': 'ఫైల్ చాలా పెద్దది (గరిష్ఠం {max}).',
     'uploadSuccessToast': 'సమీక్షకు పంపబడింది — ధన్యవాదాలు!',
     'uploadShareMomentTitle': 'ధన్యవాదాలు',
-    'uploadShareMomentBody':
-        'మీ వాల్‌పేపర్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?',
+    'uploadShareMomentBody': 'మీ వాల్‌పేపర్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?',
     'uploadComingSoonToast': 'అప్‌లోడ్ త్వరలో వస్తుంది.',
     'premiumNavTitle': 'సబ్‌స్క్రిప్షన్',
     'premiumEyebrow': 'ప్రీమియం',
@@ -719,48 +633,39 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumFeatureDaily': 'ప్రతిరోజూ కొత్త కంటెంట్',
     'premiumCtaTrial': 'ఉచిత ట్రయల్ ప్రారంభించు',
     'premiumCtaSubscribe': 'ఇప్పుడే సబ్‌స్క్రైబ్ చేయండి',
-    'premiumReassuranceTrial':
-        '₹2 ధృవీకరణ, వెంటనే వాపసు · ఎప్పుడైనా రద్దు చేయవచ్చు',
+    'premiumReassuranceTrial': '₹2 ధృవీకరణ, వెంటనే వాపసు · ఎప్పుడైనా రద్దు చేయవచ్చు',
     'premiumReassurancePaid': 'UPI ఆటోపే భద్రత · ఎప్పుడైనా ఒకే ట్యాప్‌లో రద్దు',
-    'premiumInstallUpiTrial':
-        'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
-    'premiumInstallUpiPaid':
-        'సబ్‌స్క్రైబ్ చేయడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి',
+    'premiumQrTitleTrial': 'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి స్కాన్ చేయండి',
+    'premiumQrTitlePaid': 'సబ్‌స్క్రైబ్ చేయడానికి స్కాన్ చేయండి',
+    'premiumQrInstruction': 'మరో ఫోన్‌లో ఏదైనా UPI యాప్ తెరిచి ఈ కోడ్‌ను స్కాన్ చేయండి.',
+    'premiumQrExpiresIn': 'కోడ్ {time}లో గడువు ముగుస్తుంది',
+    'premiumQrWaiting': 'ఆమోదం కోసం వేచి ఉన్నాం…',
+    'premiumQrCheck': 'నేను చెల్లించాను',
     'premiumResumeCta': '{app} యాప్‌ను మళ్లీ తెరవండి',
-    'premiumResumeHintTrial':
-        'మీ ట్రయల్ ప్రారంభించడానికి {app} యాప్‌లో ₹2 ధృవీకరణను ఆమోదించండి.',
-    'premiumResumeHintPaid':
-        'కొనసాగించడానికి {app} యాప్‌లో చెల్లింపును ఆమోదించండి.',
+    'premiumResumeHintTrial': 'మీ ట్రయల్ ప్రారంభించడానికి {app} యాప్‌లో ₹2 ధృవీకరణను ఆమోదించండి.',
+    'premiumResumeHintPaid': 'కొనసాగించడానికి {app} యాప్‌లో చెల్లింపును ఆమోదించండి.',
     'premiumUpiAppGeneric': 'మీ UPI',
     'trialNudgeRow': 'మీ ఉచిత ట్రయల్ సెటప్ పూర్తి చేయండి',
     'trialNudgeDismiss': 'మూసివేయి',
     'trialReminderTitle': 'మీ ఉచిత ట్రయల్ వేచి ఉంది',
-    'trialReminderBody':
-        'మీరు సెటప్ పూర్తి చేయలేదు. మళ్లీ ప్రయత్నించడానికి నొక్కండి — ఒక క్షణం చాలు.',
+    'trialReminderBody': 'మీరు సెటప్ పూర్తి చేయలేదు. మళ్లీ ప్రయత్నించడానికి నొక్కండి — ఒక క్షణం చాలు.',
     'premiumSelectedUpiApp': 'UPI యాప్',
     'upiPickerTitle': 'దీని ద్వారా చెల్లించండి',
     'upiPickerLastUsed': 'చివరిగా వాడినది',
-    'premiumTrialFinePrint':
-        'తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
-    'premiumPaidFinePrint':
-        'నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
+    'premiumTrialFinePrint': 'తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
+    'premiumPaidFinePrint': 'నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
     'premiumSocialProof': '{city}-లో {name} లైవ్ వాల్‌పేపర్ సెట్ చేశారు 🙏',
     'pushChannelName': 'అరుళ్ అప్‌డేట్‌లు',
-    'purchaseErrorNetwork':
-        'ఇంటర్నెట్ లేదు. కనెక్షన్ చూసుకుని మళ్లీ ప్రయత్నించండి.',
+    'purchaseErrorNetwork': 'ఇంటర్నెట్ లేదు. కనెక్షన్ చూసుకుని మళ్లీ ప్రయత్నించండి.',
     'purchaseErrorGeneric': 'ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.',
     'purchaseCancelled': 'చెల్లింపు రద్దు చేయబడింది.',
     'purchaseInterrupted': 'చెల్లింపు మధ్యలో ఆగిపోయింది. మళ్లీ ప్రయత్నించండి.',
     'purchaseNotCompleted': 'చెల్లింపు పూర్తి కాలేదు. మళ్లీ ప్రయత్నించండి.',
-    'purchaseInProgress':
-        'చెల్లింపు ఇప్పటికే జరుగుతోంది. కొన్ని సెకన్లు ఆగి మళ్లీ ప్రయత్నించండి.',
+    'purchaseInProgress': 'చెల్లింపు ఇప్పటికే జరుగుతోంది. కొన్ని సెకన్లు ఆగి మళ్లీ ప్రయత్నించండి.',
     'purchaseUpiLaunchFailed': 'మీ UPI యాప్ తెరవలేకపోయాం. మళ్లీ ప్రయత్నించండి.',
-    'purchaseIntentFailed':
-        'చెల్లింపు విఫలమైంది. ఏదైనా మొత్తం కట్ అయి ఉంటే, అది 4–5 రోజుల్లో మీ ఖాతాకు తిరిగి వస్తుంది.',
-    'purchaseActivateFailed':
-        'మీ సబ్‌స్క్రిప్షన్ యాక్టివేట్ చేయలేకపోయాం. సపోర్ట్‌ను సంప్రదించండి.',
-    'purchaseConfirmationLate':
-        'చెల్లింపు అందింది, కానీ నిర్ధారణ ఆలస్యమవుతోంది. యాప్‌ను మూసి మళ్లీ తెరవండి — మీ సబ్‌స్క్రిప్షన్ త్వరలో యాక్టివ్ అవుతుంది.',
+    'purchaseIntentFailed': 'చెల్లింపు విఫలమైంది. ఏదైనా మొత్తం కట్ అయి ఉంటే, అది 4–5 రోజుల్లో మీ ఖాతాకు తిరిగి వస్తుంది.',
+    'purchaseActivateFailed': 'మీ సబ్‌స్క్రిప్షన్ యాక్టివేట్ చేయలేకపోయాం. సపోర్ట్‌ను సంప్రదించండి.',
+    'purchaseConfirmationLate': 'చెల్లింపు అందింది, కానీ నిర్ధారణ ఆలస్యమవుతోంది. యాప్‌ను మూసి మళ్లీ తెరవండి — మీ సబ్‌స్క్రిప్షన్ త్వరలో యాక్టివ్ అవుతుంది.',
   },
   'kn': {
     'appName': 'ಅರುಳ್',
@@ -785,8 +690,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumBenefitNew': 'ಪ್ರತಿ ವಾರ ಹೊಸ ವಾಲ್‌ಪೇಪರ್‌ಗಳು',
     'premiumPrice': '₹199 / ತಿಂಗಳು',
     'premiumCta': 'ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಿ',
-    'premiumTrialNote':
-        'ಖಾತೆಗೆ ಒಂದು ಉಚಿತ ಟ್ರಯಲ್. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ — ಅವಧಿ ಮುಗಿಯುವವರೆಗೆ ಪ್ರವೇಶ ಇರುತ್ತದೆ.',
+    'premiumTrialNote': 'ಖಾತೆಗೆ ಒಂದು ಉಚಿತ ಟ್ರಯಲ್. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ — ಅವಧಿ ಮುಗಿಯುವವರೆಗೆ ಪ್ರವೇಶ ಇರುತ್ತದೆ.',
     'premiumComingSoon': 'ಪಾವತಿಗಳು ನಂತರ ಬರುತ್ತವೆ.',
     'settingsTitle': 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು',
     'settingsAppearance': 'ರೂಪ',
@@ -798,12 +702,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsSupport': 'ಸಹಾಯ ಬೇಕು',
     'settingsPrivacy': 'ಗೌಪ್ಯತಾ ನೀತಿ',
     'settingsVersion': 'ಆವೃತ್ತಿ',
-    'uploadBody':
-        'ನಿಮ್ಮ ಸ್ವಂತ ವಾಲ್‌ಪೇಪರ್ ಅನ್ನು ಸಮುದಾಯದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ. ಅದು ಲೈವ್ ಆಗುವ ಮೊದಲು ನಾವು ಪ್ರತಿ ಸಲ್ಲಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತೇವೆ.',
+    'uploadBody': 'ನಿಮ್ಮ ಸ್ವಂತ ವಾಲ್‌ಪೇಪರ್ ಅನ್ನು ಸಮುದಾಯದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ. ಅದು ಲೈವ್ ಆಗುವ ಮೊದಲು ನಾವು ಪ್ರತಿ ಸಲ್ಲಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತೇವೆ.',
     'uploadPickCategory': 'ವಿಭಾಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ',
     'uploadPickFile': 'ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ',
-    'uploadSpecNote':
-        'ಫೋಟೋಗಳು: 1080×1920. ವೀಡಿಯೊಗಳು: 1024×1824, ಆಡಿಯೋ ಇಲ್ಲದೆ, 50 MB ಒಳಗೆ.',
+    'uploadSpecNote': 'ಫೋಟೋಗಳು: 1080×1920. ವೀಡಿಯೊಗಳು: 1024×1824, ಆಡಿಯೋ ಇಲ್ಲದೆ, 50 MB ಒಳಗೆ.',
     'uploadComingSoon': 'ಅಪ್‌ಲೋಡ್‌ಗಳು ನಂತರ ಬರುತ್ತವೆ.',
     'apply': 'ಸೆಟ್ ಮಾಡಿ',
     'share': 'ಹಂಚಿಕೊಳ್ಳಿ',
@@ -812,25 +714,19 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'ಲಾಕ್ ಪರದೆ',
     'applyTargetBoth': 'ಹೋಮ್ ಮತ್ತು ಲಾಕ್ ಪರದೆ',
     'applied': 'ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಆಗಿದೆ',
-    'appliedLiveFallback':
-        'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳು ಕೆಲಸ ಮಾಡುವುದಿಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಸೆಟ್ ಮಾಡಿದ್ದೇವೆ.',
-    'offlineBody':
-        'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    'appliedLiveFallback': 'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳು ಕೆಲಸ ಮಾಡುವುದಿಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಸೆಟ್ ಮಾಡಿದ್ದೇವೆ.',
+    'offlineBody': 'ನೀವು ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದ್ದೀರಿ. ನಿಮ್ಮ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'offlineTitle': 'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ',
     'offlineFeedBody': 'ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ನೋಡಲು ಇಂಟರ್ನೆಟ್ ಆನ್ ಮಾಡಿ.',
-    'wallpaperShareCaption':
-        'ಇಂತಹ ಇನ್ನಷ್ಟು ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಸ್ಥಿರ ಮತ್ತು ಲೈವ್ — Arul ನಲ್ಲಿ:\n{link}',
-    'referShareMessage':
-        'ದಕ್ಷಿಣ ಭಾರತೀಯ ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗಾಗಿ ನಾನು Arul ಬಳಸುತ್ತಿದ್ದೇನೆ — ಅಮ್ಮನ್, ಮುರುಗನ್, ಪೆರುಮಾಳ್, ಶಿವನ್, ಚಲಿಸುವ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳೂ ಇವೆ. ನಿಮಗೂ ಇಷ್ಟವಾಗುತ್ತದೆ ಅನಿಸಿತು.\n\n{link}',
+    'wallpaperShareCaption': 'ಇಂತಹ ಇನ್ನಷ್ಟು ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳು — ಸ್ಥಿರ ಮತ್ತು ಲೈವ್ — Arul ನಲ್ಲಿ:\n{link}',
+    'referShareMessage': 'ದಕ್ಷಿಣ ಭಾರತೀಯ ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗಾಗಿ ನಾನು Arul ಬಳಸುತ್ತಿದ್ದೇನೆ — ಅಮ್ಮನ್, ಮುರುಗನ್, ಪೆರುಮಾಳ್, ಶಿವನ್, ಚಲಿಸುವ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳೂ ಇವೆ. ನಿಮಗೂ ಇಷ್ಟವಾಗುತ್ತದೆ ಅನಿಸಿತು.\n\n{link}',
     'tabWallpapers': 'ವಾಲ್‌ಪೇಪರ್‌ಗಳು',
     'ringtonePreviewSemantic': 'ಮುನ್ನೋಟ',
     'ringtonePreviewUnavailable': 'ಮುನ್ನೋಟ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ',
     'ringtonesEmptyTitle': 'ರಿಂಗ್‌ಟೋನ್‌ಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತಿವೆ',
-    'ringtonesEmptyBody':
-        'ಭಕ್ತಿ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ದಾರಿಯಲ್ಲಿವೆ. ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ನೋಡಿ.',
+    'ringtonesEmptyBody': 'ಭಕ್ತಿ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ದಾರಿಯಲ್ಲಿವೆ. ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ನೋಡಿ.',
     'ringtonesErrorTitle': 'ರಿಂಗ್‌ಟೋನ್‌ಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ',
-    'ringtoneSetSuccess':
-        'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಆಗಿದೆ. ಕಾಣದಿದ್ದರೆ, ಫೋನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ.',
+    'ringtoneSetSuccess': 'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಆಗಿದೆ. ಕಾಣದಿದ್ದರೆ, ಫೋನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ.',
     'ringtoneSetFailed': 'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಮಾಡಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'ringtoneSetPreparing': 'ಸಿದ್ಧವಾಗುತ್ತಿದೆ…',
     'ringtoneSetDownloading': 'ಡೌನ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ…',
@@ -858,16 +754,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsUploadSub': 'ವಾಲ್‌ಪೇಪರ್ ಅಥವಾ ರಿಂಗ್‌ಟೋನ್ ಹಂಚಿಕೊಳ್ಳಿ',
     'settingsLogout': 'ಲಾಗ್ ಔಟ್',
     'settingsLogoutConfirmTitle': 'ಲಾಗ್ ಔಟ್ ಮಾಡುವುದೇ?',
-    'settingsLogoutConfirmBody':
-        'ಯಾವಾಗ ಬೇಕಾದರೂ Google ಮೂಲಕ ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಬಹುದು.',
+    'settingsLogoutConfirmBody': 'ಯಾವಾಗ ಬೇಕಾದರೂ Google ಮೂಲಕ ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಬಹುದು.',
     'settingsDeleteAccount': 'ಖಾತೆ ಅಳಿಸಿ',
     'settingsDeleteConfirmTitle': 'ಖಾತೆ ಅಳಿಸುವುದೇ?',
     'settingsDeleteConfirmBody': 'ಇದನ್ನು ಮರಳಿ ಪಡೆಯಲಾಗದು.',
     'settingsTerms': 'ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳು',
     'settingsRefund': 'ಮರುಪಾವತಿ ನೀತಿ',
     'settingsSupportEmailPrompt': 'ನಿಮ್ಮ ಸಮಸ್ಯೆ ಅಥವಾ ಅಭಿಪ್ರಾಯವನ್ನು ವಿವರಿಸಿ:',
-    'settingsSupportEmailDetails':
-        'ಕೆಳಗಿನ ವಿವರಗಳು ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ಬೇಗ ಪರಿಹರಿಸಲು ಸಹಾಯ ಮಾಡುತ್ತವೆ:',
+    'settingsSupportEmailDetails': 'ಕೆಳಗಿನ ವಿವರಗಳು ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ಬೇಗ ಪರಿಹರಿಸಲು ಸಹಾಯ ಮಾಡುತ್ತವೆ:',
     'settingsNoEmailApp': 'ಇಮೇಲ್ ಆ್ಯಪ್ ಸಿಗಲಿಲ್ಲ. {email} ಗೆ ಬರೆಯಿರಿ',
     'settingsEditNameTitle': 'ನಿಮ್ಮ ಹೆಸರು',
     'themeSystemDefault': 'ಸಿಸ್ಟಂ ಡೀಫಾಲ್ಟ್',
@@ -876,10 +770,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'themeDarkSub': 'ದೀಪದ ಬೆಳಕಿನ ಮೆರೂನ್',
     'remindersToggleTitle': 'ಭಕ್ತಿ ರಿಮೈಂಡರ್‌ಗಳು',
     'remindersToggleSub': 'ವಾರದ ದಿನ, ಮತ್ತು ಪ್ರತಿ ಪ್ರಮುಖ ಹಬ್ಬ',
-    'remindersScheduleNote':
-        'ಪ್ರತಿ ವಾರ ಶುಕ್ರವಾರ ಒಂದು ರಿಮೈಂಡರ್, ಮತ್ತು ಪ್ರತಿ ಪ್ರಮುಖ ಹಬ್ಬಕ್ಕೆ ಕೆಲವು ದಿನ ಮೊದಲು ಒಂದು — ಪೊಂಗಲ್, ದೀಪಾವಳಿ, ನವರಾತ್ರಿ, ಶಿವರಾತ್ರಿ ಮತ್ತು ಇತರೆ. ತಿಂಗಳಿಗೆ ಸುಮಾರು ಎರಡು.',
-    'remindersPermissionToast':
-        'Arul ಗೆ ಅಧಿಸೂಚನೆಗಳು ಆಫ್ ಆಗಿವೆ. ರಿಮೈಂಡರ್‌ಗಳು ಬರಲು ಫೋನ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಆನ್ ಮಾಡಿ.',
+    'remindersScheduleNote': 'ಪ್ರತಿ ವಾರ ಶುಕ್ರವಾರ ಒಂದು ರಿಮೈಂಡರ್, ಮತ್ತು ಪ್ರತಿ ಪ್ರಮುಖ ಹಬ್ಬಕ್ಕೆ ಕೆಲವು ದಿನ ಮೊದಲು ಒಂದು — ಪೊಂಗಲ್, ದೀಪಾವಳಿ, ನವರಾತ್ರಿ, ಶಿವರಾತ್ರಿ ಮತ್ತು ಇತರೆ. ತಿಂಗಳಿಗೆ ಸುಮಾರು ಎರಡು.',
+    'remindersPermissionToast': 'Arul ಗೆ ಅಧಿಸೂಚನೆಗಳು ಆಫ್ ಆಗಿವೆ. ರಿಮೈಂಡರ್‌ಗಳು ಬರಲು ಫೋನ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಆನ್ ಮಾಡಿ.',
     'remindersTimeLabel': 'ರಿಮೈಂಡರ್ ಸಮಯ',
     'remindersComingUp': 'ಮುಂದೆ ಬರುವುದು',
     'remindersMonthJan': 'ಜನ',
@@ -902,21 +794,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI ಆಟೋಪೇ · ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು',
     'premiumTrialPill': '1 ದಿನ ಉಚಿತ',
     'premiumCtaPaid': 'ಪ್ರೀಮಿಯಂ ಪಡೆಯಿರಿ',
-    'premiumFootnoteTrial':
-        '1 ದಿನ ಉಚಿತ, ನಂತರ ತಿಂಗಳಿಗೆ {price}. UPI ಆಟೋಪೇ ನಿಮ್ಮ ಖಾತೆಯನ್ನು ₹2 ನಿಂದ ಪರಿಶೀಲಿಸುತ್ತದೆ, ತಕ್ಷಣ ಮರಳುತ್ತದೆ. ಬ್ರೌಸಿಂಗ್ ಯಾವಾಗಲೂ ಉಚಿತ.',
-    'premiumFootnotePaid':
-        'ಇಂದು {price} ವಿಧಿಸಲಾಗುತ್ತದೆ, ನಂತರ UPI ಆಟೋಪೇ ಮೂಲಕ ಪ್ರತಿ ತಿಂಗಳು ನವೀಕರಣ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು ಮಾಡಿ. ಬ್ರೌಸಿಂಗ್ ಯಾವಾಗಲೂ ಉಚಿತ.',
+    'premiumFootnoteTrial': '1 ದಿನ ಉಚಿತ, ನಂತರ ತಿಂಗಳಿಗೆ {price}. UPI ಆಟೋಪೇ ನಿಮ್ಮ ಖಾತೆಯನ್ನು ₹2 ನಿಂದ ಪರಿಶೀಲಿಸುತ್ತದೆ, ತಕ್ಷಣ ಮರಳುತ್ತದೆ. ಬ್ರೌಸಿಂಗ್ ಯಾವಾಗಲೂ ಉಚಿತ.',
+    'premiumFootnotePaid': 'ಇಂದು {price} ವಿಧಿಸಲಾಗುತ್ತದೆ, ನಂತರ UPI ಆಟೋಪೇ ಮೂಲಕ ಪ್ರತಿ ತಿಂಗಳು ನವೀಕರಣ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು ಮಾಡಿ. ಬ್ರೌಸಿಂಗ್ ಯಾವಾಗಲೂ ಉಚಿತ.',
     'premiumComingSoonToast': 'ಪ್ರೀಮಿಯಂ ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತದೆ.',
     'premiumWelcomeToast': 'Arul Premium ಗೆ ಸ್ವಾಗತ!',
     'premiumCelebrateTitle': 'ಪ್ರೀಮಿಯಂ ನಿಮ್ಮದು',
-    'premiumCelebrateBody':
-        'Arul Premium ಸಕ್ರಿಯವಾಗಿದೆ. ಈ ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ? ಒಂದನ್ನು ಕಳುಹಿಸಿ.',
-    'premiumSheetPitch':
-        'ಪ್ರತಿ ವಾಲ್‌ಪೇಪರ್ — ಲೈವ್ ಮತ್ತು ಸ್ಥಿರ. ಆರೂ ವಿಭಾಗಗಳಲ್ಲಿ ಮುಕ್ತವಾಗಿ ಸೆಟ್ ಮಾಡಿ, ಹಂಚಿಕೊಳ್ಳಿ.',
+    'premiumCelebrateBody': 'Arul Premium ಸಕ್ರಿಯವಾಗಿದೆ. ಈ ವಾಲ್‌ಪೇಪರ್‌ಗಳನ್ನು ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ? ಒಂದನ್ನು ಕಳುಹಿಸಿ.',
+    'premiumSheetPitch': 'ಪ್ರತಿ ವಾಲ್‌ಪೇಪರ್ — ಲೈವ್ ಮತ್ತು ಸ್ಥಿರ. ಆರೂ ವಿಭಾಗಗಳಲ್ಲಿ ಮುಕ್ತವಾಗಿ ಸೆಟ್ ಮಾಡಿ, ಹಂಚಿಕೊಳ್ಳಿ.',
     'premiumKeepBrowsing': 'ಉಚಿತವಾಗಿ ಬ್ರೌಸ್ ಮಾಡುತ್ತಿರಿ',
     'referHeroTitle': 'ಸ್ನೇಹಿತರಿಗೆ ಉಡುಗೊರೆ, ನಿಮಗೆ ಒಂದು ತಿಂಗಳು',
-    'referHeroBody':
-        'ನಿಮ್ಮ ಲಿಂಕ್‌ನಿಂದ ಚಂದಾದಾರರಾಗುವ ಪ್ರತಿ ಸ್ನೇಹಿತರಿಗೂ 30 ದಿನ ಉಚಿತ ಪ್ರೀಮಿಯಂ',
+    'referHeroBody': 'ನಿಮ್ಮ ಲಿಂಕ್‌ನಿಂದ ಚಂದಾದಾರರಾಗುವ ಪ್ರತಿ ಸ್ನೇಹಿತರಿಗೂ 30 ದಿನ ಉಚಿತ ಪ್ರೀಮಿಯಂ',
     'referRewardsLabel': 'ಗಳಿಸಿದ ರಿವಾರ್ಡ್‌ಗಳು',
     'referRewardDays': '{days} ದಿನ',
     'referStep1': 'ನಿಮ್ಮ ಲಿಂಕ್ ಅನ್ನು ಸ್ನೇಹಿತರು ಮತ್ತು ಕುಟುಂಬದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ',
@@ -930,10 +817,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleLabel': 'ಶೀರ್ಷಿಕೆ',
     'uploadTitleOptional': '(ಐಚ್ಛಿಕ)',
     'uploadCategoryLabel': 'ವಿಭಾಗ',
-    'uploadRightsCheckbox':
-        'ಈ ವಿಷಯದ ಹಕ್ಕುಗಳು ನನ್ನವು, ಅಥವಾ ಹಂಚಿಕೊಳ್ಳಲು ಅನುಮತಿ ಇದೆ',
-    'uploadFootnote':
-        'ಅನುಮೋದಿತ ವಾಲ್‌ಪೇಪರ್‌ಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ಫೀಡ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ',
+    'uploadRightsCheckbox': 'ಈ ವಿಷಯದ ಹಕ್ಕುಗಳು ನನ್ನವು, ಅಥವಾ ಹಂಚಿಕೊಳ್ಳಲು ಅನುಮತಿ ಇದೆ',
+    'uploadFootnote': 'ಅನುಮೋದಿತ ವಾಲ್‌ಪೇಪರ್‌ಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ಫೀಡ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ',
     'uploadRejectStatic': 'JPEG, PNG ಅಥವಾ WebP ಚಿತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ.',
     'uploadRejectLive': 'MP4 ವೀಡಿಯೊ ಆಯ್ಕೆಮಾಡಿ.',
     'uploadRejectAudio': 'MP3, AAC ಅಥವಾ M4A ಆಡಿಯೋ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ.',
@@ -943,15 +828,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadPickZoneTitleAudio': 'ಆಡಿಯೋ ಫೈಲ್ ಆಯ್ಕೆಮಾಡಿ',
     'uploadPickZoneSubAudio': 'MP3, AAC ಅಥವಾ M4A',
     'uploadTitleHintRingtone': 'ಉದಾ. ಕಂದ ಷಷ್ಠಿ ಕವಚಂ',
-    'uploadFootnoteRingtone':
-        'ಅನುಮೋದಿತ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ರಿಂಗ್‌ಟೋನ್‌ಗಳ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ',
-    'uploadShareMomentBodyRingtone':
-        'ನಿಮ್ಮ ರಿಂಗ್‌ಟೋನ್ ಅನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ?',
+    'uploadFootnoteRingtone': 'ಅನುಮೋದಿತ ರಿಂಗ್‌ಟೋನ್‌ಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ರಿಂಗ್‌ಟೋನ್‌ಗಳ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ',
+    'uploadShareMomentBodyRingtone': 'ನಿಮ್ಮ ರಿಂಗ್‌ಟೋನ್ ಅನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ?',
     'uploadTooLarge': 'ಫೈಲ್ ತುಂಬಾ ದೊಡ್ಡದು (ಗರಿಷ್ಠ {max}).',
     'uploadSuccessToast': 'ಪರಿಶೀಲನೆಗೆ ಕಳುಹಿಸಲಾಗಿದೆ — ಧನ್ಯವಾದ!',
     'uploadShareMomentTitle': 'ಧನ್ಯವಾದ',
-    'uploadShareMomentBody':
-        'ನಿಮ್ಮ ವಾಲ್‌ಪೇಪರ್ ಅನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ?',
+    'uploadShareMomentBody': 'ನಿಮ್ಮ ವಾಲ್‌ಪೇಪರ್ ಅನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವವರು ಗೊತ್ತೇ?',
     'uploadComingSoonToast': 'ಅಪ್‌ಲೋಡ್ ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತದೆ.',
     'premiumNavTitle': 'ಚಂದಾದಾರಿಕೆ',
     'premiumEyebrow': 'ಪ್ರೀಮಿಯಂ',
@@ -964,48 +846,39 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumFeatureDaily': 'ಪ್ರತಿದಿನ ಹೊಸ ವಿಷಯ',
     'premiumCtaTrial': 'ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಿ',
     'premiumCtaSubscribe': 'ಈಗಲೇ ಚಂದಾದಾರರಾಗಿ',
-    'premiumReassuranceTrial':
-        '₹2 ಪರಿಶೀಲನೆ, ತಕ್ಷಣ ಮರುಪಾವತಿ · ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ',
-    'premiumReassurancePaid':
-        'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಯಾವಾಗ ಬೇಕಾದರೂ ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು',
-    'premiumInstallUpiTrial':
-        'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
-    'premiumInstallUpiPaid': 'ಚಂದಾದಾರರಾಗಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ',
+    'premiumReassuranceTrial': '₹2 ಪರಿಶೀಲನೆ, ತಕ್ಷಣ ಮರುಪಾವತಿ · ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ',
+    'premiumReassurancePaid': 'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಯಾವಾಗ ಬೇಕಾದರೂ ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು',
+    'premiumQrTitleTrial': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
+    'premiumQrTitlePaid': 'ಸಬ್‌ಸ್ಕ್ರೈಬ್ ಮಾಡಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
+    'premiumQrInstruction': 'ಇನ್ನೊಂದು ಫೋನ್‌ನಲ್ಲಿ ಯಾವುದಾದರೂ UPI ಆ್ಯಪ್ ತೆರೆದು ಈ ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.',
+    'premiumQrExpiresIn': 'ಕೋಡ್ {time}ರಲ್ಲಿ ಅವಧಿ ಮುಗಿಯುತ್ತದೆ',
+    'premiumQrWaiting': 'ಅನುಮೋದನೆಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೇವೆ…',
+    'premiumQrCheck': 'ನಾನು ಪಾವತಿಸಿದ್ದೇನೆ',
     'premiumResumeCta': '{app} ಆ್ಯಪ್ ಅನ್ನು ಮತ್ತೆ ತೆರೆಯಿರಿ',
-    'premiumResumeHintTrial':
-        'ನಿಮ್ಮ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ₹2 ಪರಿಶೀಲನೆಯನ್ನು ಅನುಮೋದಿಸಿ.',
-    'premiumResumeHintPaid':
-        'ಮುಂದುವರಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ಪಾವತಿಯನ್ನು ಅನುಮೋದಿಸಿ.',
+    'premiumResumeHintTrial': 'ನಿಮ್ಮ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ₹2 ಪರಿಶೀಲನೆಯನ್ನು ಅನುಮೋದಿಸಿ.',
+    'premiumResumeHintPaid': 'ಮುಂದುವರಿಸಲು {app} ಆ್ಯಪ್‌ನಲ್ಲಿ ಪಾವತಿಯನ್ನು ಅನುಮೋದಿಸಿ.',
     'premiumUpiAppGeneric': 'ನಿಮ್ಮ UPI',
     'trialNudgeRow': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಿ',
     'trialNudgeDismiss': 'ಮುಚ್ಚಿ',
     'trialReminderTitle': 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಕಾಯುತ್ತಿದೆ',
-    'trialReminderBody':
-        'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.',
+    'trialReminderBody': 'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.',
     'premiumSelectedUpiApp': 'UPI ಆ್ಯಪ್',
     'upiPickerTitle': 'ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ',
     'upiPickerLastUsed': 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು',
-    'premiumTrialFinePrint':
-        'ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.',
+    'premiumTrialFinePrint': 'ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.',
     'premiumPaidFinePrint': '{price}/ತಿಂಗಳು ಆಟೋಪೇ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು.',
     'premiumSocialProof': '{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿದರು 🙏',
     'pushChannelName': 'ಅರುಳ್ ಅಪ್‌ಡೇಟ್‌ಗಳು',
-    'purchaseErrorNetwork':
-        'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ. ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    'purchaseErrorNetwork': 'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ. ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'purchaseErrorGeneric': 'ಏನೋ ತಪ್ಪಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'purchaseCancelled': 'ಪಾವತಿ ರದ್ದಾಗಿದೆ.',
     'purchaseInterrupted': 'ಪಾವತಿ ಮಧ್ಯದಲ್ಲಿ ನಿಂತಿತು. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     'purchaseNotCompleted': 'ಪಾವತಿ ಪೂರ್ಣಗೊಂಡಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
-    'purchaseInProgress':
-        'ಪಾವತಿ ಈಗಾಗಲೇ ನಡೆಯುತ್ತಿದೆ. ಕೆಲವು ಸೆಕೆಂಡ್ ಕಾದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
-    'purchaseUpiLaunchFailed':
-        'ನಿಮ್ಮ UPI ಆ್ಯಪ್ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
-    'purchaseIntentFailed':
-        'ಪಾವತಿ ವಿಫಲವಾಗಿದೆ. ಯಾವುದೇ ಹಣ ಕಡಿತವಾಗಿದ್ದರೆ, ಅದು 4–5 ದಿನಗಳಲ್ಲಿ ನಿಮ್ಮ ಖಾತೆಗೆ ಮರಳಿ ಬರುತ್ತದೆ.',
-    'purchaseActivateFailed':
-        'ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಸಕ್ರಿಯಗೊಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ.',
-    'purchaseConfirmationLate':
-        'ಪಾವತಿ ಬಂದಿದೆ, ಆದರೆ ದೃಢೀಕರಣ ತಡವಾಗುತ್ತಿದೆ. ಆ್ಯಪ್ ಮುಚ್ಚಿ ಮತ್ತೆ ತೆರೆಯಿರಿ — ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಶೀಘ್ರದಲ್ಲೇ ಸಕ್ರಿಯವಾಗುತ್ತದೆ.',
+    'purchaseInProgress': 'ಪಾವತಿ ಈಗಾಗಲೇ ನಡೆಯುತ್ತಿದೆ. ಕೆಲವು ಸೆಕೆಂಡ್ ಕಾದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    'purchaseUpiLaunchFailed': 'ನಿಮ್ಮ UPI ಆ್ಯಪ್ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    'purchaseIntentFailed': 'ಪಾವತಿ ವಿಫಲವಾಗಿದೆ. ಯಾವುದೇ ಹಣ ಕಡಿತವಾಗಿದ್ದರೆ, ಅದು 4–5 ದಿನಗಳಲ್ಲಿ ನಿಮ್ಮ ಖಾತೆಗೆ ಮರಳಿ ಬರುತ್ತದೆ.',
+    'purchaseActivateFailed': 'ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಸಕ್ರಿಯಗೊಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ.',
+    'purchaseConfirmationLate': 'ಪಾವತಿ ಬಂದಿದೆ, ಆದರೆ ದೃಢೀಕರಣ ತಡವಾಗುತ್ತಿದೆ. ಆ್ಯಪ್ ಮುಚ್ಚಿ ಮತ್ತೆ ತೆರೆಯಿರಿ — ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಶೀಘ್ರದಲ್ಲೇ ಸಕ್ರಿಯವಾಗುತ್ತದೆ.',
   },
   'ml': {
     'appName': 'അരുൾ',
@@ -1024,15 +897,13 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumTitle': 'പ്രീമിയം',
     'premiumHeadline': 'എല്ലാ വാൾപേപ്പറുകളും അൺലോക്ക് ചെയ്യുക',
     'premiumSub': 'ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം. പ്രീമിയം അവ നിങ്ങളുടേതാക്കാൻ.',
-    'premiumBenefitApply':
-        'ഏത് വാൾപേപ്പറും സെറ്റ് ചെയ്യുക — നിശ്ചലം അല്ലെങ്കിൽ ലൈവ്',
+    'premiumBenefitApply': 'ഏത് വാൾപേപ്പറും സെറ്റ് ചെയ്യുക — നിശ്ചലം അല്ലെങ്കിൽ ലൈവ്',
     'premiumBenefitLive': 'മുഴുവൻ നിലവാരത്തിൽ ലൈവ് വീഡിയോ വാൾപേപ്പറുകൾ',
     'premiumBenefitShare': 'സുഹൃത്തുക്കളുമായും കുടുംബവുമായും പങ്കിടുക',
     'premiumBenefitNew': 'എല്ലാ ആഴ്ചയും പുതിയ വാൾപേപ്പറുകൾ',
     'premiumPrice': '₹199 / മാസം',
     'premiumCta': 'സൗജന്യ ട്രയൽ ആരംഭിക്കുക',
-    'premiumTrialNote':
-        'ഒരു അക്കൗണ്ടിന് ഒരു സൗജന്യ ട്രയൽ. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം — കാലാവധി തീരും വരെ ആക്‌സസ് ഉണ്ടാകും.',
+    'premiumTrialNote': 'ഒരു അക്കൗണ്ടിന് ഒരു സൗജന്യ ട്രയൽ. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം — കാലാവധി തീരും വരെ ആക്‌സസ് ഉണ്ടാകും.',
     'premiumComingSoon': 'പേയ്‌മെന്റുകൾ പിന്നീട് വരും.',
     'settingsTitle': 'ക്രമീകരണങ്ങൾ',
     'settingsAppearance': 'രൂപം',
@@ -1044,12 +915,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsSupport': 'സഹായം വേണം',
     'settingsPrivacy': 'സ്വകാര്യതാ നയം',
     'settingsVersion': 'പതിപ്പ്',
-    'uploadBody':
-        'നിങ്ങളുടെ സ്വന്തം വാൾപേപ്പർ സമൂഹവുമായി പങ്കിടുക. പ്രസിദ്ധീകരിക്കുന്നതിനു മുൻപ് ഓരോ സമർപ്പണവും ഞങ്ങൾ പരിശോധിക്കുന്നു.',
+    'uploadBody': 'നിങ്ങളുടെ സ്വന്തം വാൾപേപ്പർ സമൂഹവുമായി പങ്കിടുക. പ്രസിദ്ധീകരിക്കുന്നതിനു മുൻപ് ഓരോ സമർപ്പണവും ഞങ്ങൾ പരിശോധിക്കുന്നു.',
     'uploadPickCategory': 'ഒരു വിഭാഗം തിരഞ്ഞെടുക്കുക',
     'uploadPickFile': 'ഒരു ഫയൽ തിരഞ്ഞെടുക്കുക',
-    'uploadSpecNote':
-        'ഫോട്ടോകൾ: 1080×1920. വീഡിയോകൾ: 1024×1824, ഓഡിയോ ഇല്ലാതെ, 50 MB-ൽ താഴെ.',
+    'uploadSpecNote': 'ഫോട്ടോകൾ: 1080×1920. വീഡിയോകൾ: 1024×1824, ഓഡിയോ ഇല്ലാതെ, 50 MB-ൽ താഴെ.',
     'uploadComingSoon': 'അപ്‌ലോഡുകൾ പിന്നീട് വരും.',
     'apply': 'സെറ്റ് ചെയ്യുക',
     'share': 'പങ്കിടുക',
@@ -1058,25 +927,19 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'ലോക്ക് സ്ക്രീൻ',
     'applyTargetBoth': 'ഹോം, ലോക്ക് സ്ക്രീൻ',
     'applied': 'വാൾപേപ്പർ സെറ്റ് ചെയ്തു',
-    'appliedLiveFallback':
-        'ലൈവ് വാൾപേപ്പറുകൾ ഈ ഫോണിൽ പ്രവർത്തിക്കില്ല, അതിനാൽ ഒരു നിശ്ചല ചിത്രം സെറ്റ് ചെയ്തു.',
-    'offlineBody':
-        'നിങ്ങൾ ഓഫ്‌ലൈനിലാണ്. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.',
+    'appliedLiveFallback': 'ലൈവ് വാൾപേപ്പറുകൾ ഈ ഫോണിൽ പ്രവർത്തിക്കില്ല, അതിനാൽ ഒരു നിശ്ചല ചിത്രം സെറ്റ് ചെയ്തു.',
+    'offlineBody': 'നിങ്ങൾ ഓഫ്‌ലൈനിലാണ്. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.',
     'offlineTitle': 'ഇന്റർനെറ്റ് ഇല്ല',
     'offlineFeedBody': 'വാൾപേപ്പറുകൾ കാണാൻ ഇന്റർനെറ്റ് ഓണാക്കുക.',
-    'wallpaperShareCaption':
-        'ഇതുപോലുള്ള കൂടുതൽ ഭക്തി വാൾപേപ്പറുകൾ — നിശ്ചലവും ലൈവും — Arul-ൽ:\n{link}',
-    'referShareMessage':
-        'ദക്ഷിണേന്ത്യൻ ഭക്തി വാൾപേപ്പറുകൾക്കായി ഞാൻ Arul ഉപയോഗിക്കുന്നു — അമ്മൻ, മുരുകൻ, പെരുമാൾ, ശിവൻ, ചലിക്കുന്ന ലൈവ് വാൾപേപ്പറുകളും ഉണ്ട്. നിങ്ങൾക്കും ഇഷ്ടപ്പെടുമെന്ന് തോന്നി.\n\n{link}',
+    'wallpaperShareCaption': 'ഇതുപോലുള്ള കൂടുതൽ ഭക്തി വാൾപേപ്പറുകൾ — നിശ്ചലവും ലൈവും — Arul-ൽ:\n{link}',
+    'referShareMessage': 'ദക്ഷിണേന്ത്യൻ ഭക്തി വാൾപേപ്പറുകൾക്കായി ഞാൻ Arul ഉപയോഗിക്കുന്നു — അമ്മൻ, മുരുകൻ, പെരുമാൾ, ശിവൻ, ചലിക്കുന്ന ലൈവ് വാൾപേപ്പറുകളും ഉണ്ട്. നിങ്ങൾക്കും ഇഷ്ടപ്പെടുമെന്ന് തോന്നി.\n\n{link}',
     'tabWallpapers': 'വാൾപേപ്പറുകൾ',
     'ringtonePreviewSemantic': 'പ്രിവ്യൂ',
     'ringtonePreviewUnavailable': 'പ്രിവ്യൂ ഇപ്പോൾ ലഭ്യമല്ല',
     'ringtonesEmptyTitle': 'റിംഗ്ടോണുകൾ ഉടൻ വരുന്നു',
-    'ringtonesEmptyBody':
-        'ഭക്തി റിംഗ്ടോണുകൾ വഴിയിലുണ്ട്. അൽപസമയത്തിനു ശേഷം വീണ്ടും നോക്കുക.',
+    'ringtonesEmptyBody': 'ഭക്തി റിംഗ്ടോണുകൾ വഴിയിലുണ്ട്. അൽപസമയത്തിനു ശേഷം വീണ്ടും നോക്കുക.',
     'ringtonesErrorTitle': 'റിംഗ്ടോണുകൾ ലോഡ് ചെയ്യാനായില്ല',
-    'ringtoneSetSuccess':
-        'റിംഗ്ടോൺ സെറ്റ് ചെയ്തു. കാണുന്നില്ലെങ്കിൽ ഫോൺ റീസ്റ്റാർട്ട് ചെയ്യുക.',
+    'ringtoneSetSuccess': 'റിംഗ്ടോൺ സെറ്റ് ചെയ്തു. കാണുന്നില്ലെങ്കിൽ ഫോൺ റീസ്റ്റാർട്ട് ചെയ്യുക.',
     'ringtoneSetFailed': 'റിംഗ്ടോൺ സെറ്റ് ചെയ്യാനായില്ല. വീണ്ടും ശ്രമിക്കുക.',
     'ringtoneSetPreparing': 'തയ്യാറാകുന്നു…',
     'ringtoneSetDownloading': 'ഡൗൺലോഡ് ചെയ്യുന്നു…',
@@ -1104,18 +967,15 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsUploadSub': 'വാൾപേപ്പറോ റിംഗ്ടോണോ പങ്കിടുക',
     'settingsLogout': 'ലോഗ് ഔട്ട്',
     'settingsLogoutConfirmTitle': 'ലോഗ് ഔട്ട് ചെയ്യണോ?',
-    'settingsLogoutConfirmBody':
-        'എപ്പോൾ വേണമെങ്കിലും Google ഉപയോഗിച്ച് വീണ്ടും സൈൻ ഇൻ ചെയ്യാം.',
+    'settingsLogoutConfirmBody': 'എപ്പോൾ വേണമെങ്കിലും Google ഉപയോഗിച്ച് വീണ്ടും സൈൻ ഇൻ ചെയ്യാം.',
     'settingsDeleteAccount': 'അക്കൗണ്ട് ഇല്ലാതാക്കുക',
     'settingsDeleteConfirmTitle': 'അക്കൗണ്ട് ഇല്ലാതാക്കണോ?',
     'settingsDeleteConfirmBody': 'ഇത് തിരികെ ലഭിക്കില്ല.',
     'settingsTerms': 'നിബന്ധനകൾ & വ്യവസ്ഥകൾ',
     'settingsRefund': 'റീഫണ്ട് നയം',
     'settingsSupportEmailPrompt': 'നിങ്ങളുടെ പ്രശ്നമോ അഭിപ്രായമോ വിവരിക്കുക:',
-    'settingsSupportEmailDetails':
-        'താഴെയുള്ള വിവരങ്ങൾ നിങ്ങളുടെ അഭ്യർത്ഥന വേഗത്തിൽ പരിഹരിക്കാൻ സഹായിക്കും:',
-    'settingsNoEmailApp':
-        'ഇമെയിൽ ആപ്പ് കണ്ടില്ല. {email} എന്ന വിലാസത്തിൽ എഴുതുക',
+    'settingsSupportEmailDetails': 'താഴെയുള്ള വിവരങ്ങൾ നിങ്ങളുടെ അഭ്യർത്ഥന വേഗത്തിൽ പരിഹരിക്കാൻ സഹായിക്കും:',
+    'settingsNoEmailApp': 'ഇമെയിൽ ആപ്പ് കണ്ടില്ല. {email} എന്ന വിലാസത്തിൽ എഴുതുക',
     'settingsEditNameTitle': 'നിങ്ങളുടെ പേര്',
     'themeSystemDefault': 'സിസ്റ്റം ഡിഫോൾട്ട്',
     'themeSystemSub': 'ഉപകരണ ക്രമീകരണം പിന്തുടരുക',
@@ -1123,10 +983,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'themeDarkSub': 'വിളക്കുവെളിച്ചത്തിലെ മെറൂൺ',
     'remindersToggleTitle': 'ഭക്തി റിമൈൻഡറുകൾ',
     'remindersToggleSub': 'പ്രതിവാര ദിവസവും എല്ലാ പ്രധാന ഉത്സവവും',
-    'remindersScheduleNote':
-        'എല്ലാ ആഴ്ചയും വെള്ളിയാഴ്ച ഒരു റിമൈൻഡർ, ഓരോ പ്രധാന ഉത്സവത്തിനും കുറച്ചു ദിവസം മുൻപ് ഒന്ന് — പൊങ്കൽ, ദീപാവലി, നവരാത്രി, ശിവരാത്രി തുടങ്ങിയവ. മാസത്തിൽ ഏകദേശം രണ്ട്.',
-    'remindersPermissionToast':
-        'Arul-ന് അറിയിപ്പുകൾ ഓഫാണ്. റിമൈൻഡറുകൾ കിട്ടാൻ ഫോൺ ക്രമീകരണങ്ങളിൽ ഓണാക്കുക.',
+    'remindersScheduleNote': 'എല്ലാ ആഴ്ചയും വെള്ളിയാഴ്ച ഒരു റിമൈൻഡർ, ഓരോ പ്രധാന ഉത്സവത്തിനും കുറച്ചു ദിവസം മുൻപ് ഒന്ന് — പൊങ്കൽ, ദീപാവലി, നവരാത്രി, ശിവരാത്രി തുടങ്ങിയവ. മാസത്തിൽ ഏകദേശം രണ്ട്.',
+    'remindersPermissionToast': 'Arul-ന് അറിയിപ്പുകൾ ഓഫാണ്. റിമൈൻഡറുകൾ കിട്ടാൻ ഫോൺ ക്രമീകരണങ്ങളിൽ ഓണാക്കുക.',
     'remindersTimeLabel': 'റിമൈൻഡർ സമയം',
     'remindersComingUp': 'വരാനിരിക്കുന്നത്',
     'remindersMonthJan': 'ജനു',
@@ -1149,21 +1007,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI ഓട്ടോപേ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം',
     'premiumTrialPill': '1 ദിവസം സൗജന്യം',
     'premiumCtaPaid': 'പ്രീമിയം എടുക്കൂ',
-    'premiumFootnoteTrial':
-        '1 ദിവസം സൗജന്യം, പിന്നെ മാസം {price}. UPI ഓട്ടോപേ നിങ്ങളുടെ അക്കൗണ്ട് ₹2 ഉപയോഗിച്ച് പരിശോധിക്കും, ഉടൻ തിരികെ കിട്ടും. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.',
-    'premiumFootnotePaid':
-        'ഇന്ന് {price} ഈടാക്കും, പിന്നീട് UPI ഓട്ടോപേ വഴി എല്ലാ മാസവും പുതുക്കും. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.',
+    'premiumFootnoteTrial': '1 ദിവസം സൗജന്യം, പിന്നെ മാസം {price}. UPI ഓട്ടോപേ നിങ്ങളുടെ അക്കൗണ്ട് ₹2 ഉപയോഗിച്ച് പരിശോധിക്കും, ഉടൻ തിരികെ കിട്ടും. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.',
+    'premiumFootnotePaid': 'ഇന്ന് {price} ഈടാക്കും, പിന്നീട് UPI ഓട്ടോപേ വഴി എല്ലാ മാസവും പുതുക്കും. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം. ബ്രൗസിംഗ് എപ്പോഴും സൗജന്യം.',
     'premiumComingSoonToast': 'പ്രീമിയം ഉടൻ വരുന്നു.',
     'premiumWelcomeToast': 'Arul Premium-ലേക്ക് സ്വാഗതം!',
     'premiumCelebrateTitle': 'നിങ്ങൾ പ്രീമിയത്തിൽ',
-    'premiumCelebrateBody':
-        'Arul Premium സജീവമാണ്. ഈ വാൾപേപ്പറുകൾ ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ? ഒന്ന് അയക്കൂ.',
-    'premiumSheetPitch':
-        'എല്ലാ വാൾപേപ്പറും — ലൈവും നിശ്ചലവും. ആറു വിഭാഗങ്ങളിലും സ്വതന്ത്രമായി സെറ്റ് ചെയ്യുക, പങ്കിടുക.',
+    'premiumCelebrateBody': 'Arul Premium സജീവമാണ്. ഈ വാൾപേപ്പറുകൾ ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ? ഒന്ന് അയക്കൂ.',
+    'premiumSheetPitch': 'എല്ലാ വാൾപേപ്പറും — ലൈവും നിശ്ചലവും. ആറു വിഭാഗങ്ങളിലും സ്വതന്ത്രമായി സെറ്റ് ചെയ്യുക, പങ്കിടുക.',
     'premiumKeepBrowsing': 'സൗജന്യമായി ബ്രൗസ് ചെയ്യൂ',
     'referHeroTitle': 'സുഹൃത്തിന് സമ്മാനം, നിങ്ങൾക്ക് ഒരു മാസം',
-    'referHeroBody':
-        'നിങ്ങളുടെ ലിങ്ക് വഴി സബ്‌സ്ക്രൈബ് ചെയ്യുന്ന ഓരോ സുഹൃത്തിനും 30 ദിവസം സൗജന്യ പ്രീമിയം',
+    'referHeroBody': 'നിങ്ങളുടെ ലിങ്ക് വഴി സബ്‌സ്ക്രൈബ് ചെയ്യുന്ന ഓരോ സുഹൃത്തിനും 30 ദിവസം സൗജന്യ പ്രീമിയം',
     'referRewardsLabel': 'നേടിയ റിവാർഡുകൾ',
     'referRewardDays': '{days} ദിവസം',
     'referStep1': 'നിങ്ങളുടെ ലിങ്ക് സുഹൃത്തുക്കൾക്കും കുടുംബത്തിനും പങ്കിടുക',
@@ -1177,8 +1030,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleLabel': 'തലക്കെട്ട്',
     'uploadTitleOptional': '(നിർബന്ധമല്ല)',
     'uploadCategoryLabel': 'വിഭാഗം',
-    'uploadRightsCheckbox':
-        'ഈ ഉള്ളടക്കത്തിന്റെ അവകാശം എനിക്കാണ്, അല്ലെങ്കിൽ പങ്കിടാൻ അനുമതിയുണ്ട്',
+    'uploadRightsCheckbox': 'ഈ ഉള്ളടക്കത്തിന്റെ അവകാശം എനിക്കാണ്, അല്ലെങ്കിൽ പങ്കിടാൻ അനുമതിയുണ്ട്',
     'uploadFootnote': 'അനുവദിച്ച വാൾപേപ്പറുകൾ നിങ്ങളുടെ പേരോടെ ഫീഡിൽ വരും',
     'uploadRejectStatic': 'JPEG, PNG അല്ലെങ്കിൽ WebP ചിത്രം തിരഞ്ഞെടുക്കുക.',
     'uploadRejectLive': 'MP4 വീഡിയോ തിരഞ്ഞെടുക്കുക.',
@@ -1189,15 +1041,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadPickZoneTitleAudio': 'ഓഡിയോ ഫയൽ തിരഞ്ഞെടുക്കുക',
     'uploadPickZoneSubAudio': 'MP3, AAC അല്ലെങ്കിൽ M4A',
     'uploadTitleHintRingtone': 'ഉദാ. കന്ദ ഷഷ്ഠി കവചം',
-    'uploadFootnoteRingtone':
-        'അനുവദിച്ച റിംഗ്ടോണുകൾ നിങ്ങളുടെ പേരോടെ റിംഗ്ടോൺ ടാബിൽ വരും',
-    'uploadShareMomentBodyRingtone':
-        'നിങ്ങളുടെ റിംഗ്ടോൺ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?',
+    'uploadFootnoteRingtone': 'അനുവദിച്ച റിംഗ്ടോണുകൾ നിങ്ങളുടെ പേരോടെ റിംഗ്ടോൺ ടാബിൽ വരും',
+    'uploadShareMomentBodyRingtone': 'നിങ്ങളുടെ റിംഗ്ടോൺ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?',
     'uploadTooLarge': 'ഫയൽ വളരെ വലുതാണ് (പരമാവധി {max}).',
     'uploadSuccessToast': 'പരിശോധനയ്ക്ക് അയച്ചു — നന്ദി!',
     'uploadShareMomentTitle': 'നന്ദി',
-    'uploadShareMomentBody':
-        'നിങ്ങളുടെ വാൾപേപ്പർ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?',
+    'uploadShareMomentBody': 'നിങ്ങളുടെ വാൾപേപ്പർ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?',
     'uploadComingSoonToast': 'അപ്‌ലോഡ് ഉടൻ വരുന്നു.',
     'premiumNavTitle': 'സബ്‌സ്ക്രിപ്ഷൻ',
     'premiumEyebrow': 'പ്രീമിയം',
@@ -1210,48 +1059,39 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumFeatureDaily': 'എന്നും പുതിയ ഉള്ളടക്കം',
     'premiumCtaTrial': 'സൗജന്യ ട്രയൽ ആരംഭിക്കുക',
     'premiumCtaSubscribe': 'ഇപ്പോൾ സബ്‌സ്ക്രൈബ് ചെയ്യൂ',
-    'premiumReassuranceTrial':
-        '₹2 പരിശോധന, ഉടനടി തിരികെ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം',
-    'premiumReassurancePaid':
-        'UPI ഓട്ടോപേ സുരക്ഷ · എപ്പോൾ വേണമെങ്കിലും ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം',
-    'premiumInstallUpiTrial':
-        'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
-    'premiumInstallUpiPaid':
-        'സബ്‌സ്ക്രൈബ് ചെയ്യാൻ PhonePe അല്ലെങ്കിൽ Google Pay ഇൻസ്റ്റാൾ ചെയ്യുക',
+    'premiumReassuranceTrial': '₹2 പരിശോധന, ഉടനടി തിരികെ · എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം',
+    'premiumReassurancePaid': 'UPI ഓട്ടോപേ സുരക്ഷ · എപ്പോൾ വേണമെങ്കിലും ഒറ്റ ടാപ്പിൽ റദ്ദാക്കാം',
+    'premiumQrTitleTrial': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ തുടങ്ങാൻ സ്‌കാൻ ചെയ്യൂ',
+    'premiumQrTitlePaid': 'സബ്‌സ്‌ക്രൈബ് ചെയ്യാൻ സ്‌കാൻ ചെയ്യൂ',
+    'premiumQrInstruction': 'മറ്റൊരു ഫോണിൽ ഏതെങ്കിലും UPI ആപ്പ് തുറന്ന് ഈ കോഡ് സ്‌കാൻ ചെയ്യൂ.',
+    'premiumQrExpiresIn': 'കോഡ് {time}-ൽ കാലഹരണപ്പെടും',
+    'premiumQrWaiting': 'അംഗീകാരത്തിനായി കാത്തിരിക്കുന്നു…',
+    'premiumQrCheck': 'ഞാൻ പണമടച്ചു',
     'premiumResumeCta': '{app} ആപ്പ് വീണ്ടും തുറക്കൂ',
-    'premiumResumeHintTrial':
-        'നിങ്ങളുടെ ട്രയൽ തുടങ്ങാൻ {app} ആപ്പിൽ ₹2 പരിശോധന അംഗീകരിക്കൂ.',
+    'premiumResumeHintTrial': 'നിങ്ങളുടെ ട്രയൽ തുടങ്ങാൻ {app} ആപ്പിൽ ₹2 പരിശോധന അംഗീകരിക്കൂ.',
     'premiumResumeHintPaid': 'തുടരാൻ {app} ആപ്പിൽ പേയ്‌മെന്റ് അംഗീകരിക്കൂ.',
     'premiumUpiAppGeneric': 'നിങ്ങളുടെ UPI',
     'trialNudgeRow': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ സെറ്റപ്പ് പൂർത്തിയാക്കുക',
     'trialNudgeDismiss': 'അടയ്ക്കുക',
     'trialReminderTitle': 'നിങ്ങളുടെ സൗജന്യ ട്രയൽ കാത്തിരിക്കുന്നു',
-    'trialReminderBody':
-        'സെറ്റപ്പ് നിങ്ങൾ പൂർത്തിയാക്കിയില്ല. വീണ്ടും ശ്രമിക്കാൻ ടാപ്പ് ചെയ്യുക — ഒരു നിമിഷം മതി.',
+    'trialReminderBody': 'സെറ്റപ്പ് നിങ്ങൾ പൂർത്തിയാക്കിയില്ല. വീണ്ടും ശ്രമിക്കാൻ ടാപ്പ് ചെയ്യുക — ഒരു നിമിഷം മതി.',
     'premiumSelectedUpiApp': 'UPI ആപ്പ്',
     'upiPickerTitle': 'ഇതുവഴി അടയ്ക്കൂ',
     'upiPickerLastUsed': 'അവസാനം ഉപയോഗിച്ചത്',
-    'premiumTrialFinePrint':
-        'പിന്നീട് മാസം {price} ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.',
+    'premiumTrialFinePrint': 'പിന്നീട് മാസം {price} ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.',
     'premiumPaidFinePrint': '{price}/മാസം ഓട്ടോപേ. എപ്പോഴും റദ്ദാക്കാം.',
     'premiumSocialProof': '{city}-യിൽ {name} ലൈവ് വാൾപേപ്പർ സെറ്റ് ചെയ്തു 🙏',
     'pushChannelName': 'അരുൾ അപ്ഡേറ്റുകൾ',
-    'purchaseErrorNetwork':
-        'ഇന്റർനെറ്റ് ഇല്ല. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കൂ.',
+    'purchaseErrorNetwork': 'ഇന്റർനെറ്റ് ഇല്ല. കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കൂ.',
     'purchaseErrorGeneric': 'എന്തോ കുഴപ്പം സംഭവിച്ചു. വീണ്ടും ശ്രമിക്കുക.',
     'purchaseCancelled': 'പേയ്‌മെന്റ് റദ്ദായി.',
     'purchaseInterrupted': 'പേയ്‌മെന്റ് തടസ്സപ്പെട്ടു. വീണ്ടും ശ്രമിക്കൂ.',
     'purchaseNotCompleted': 'പേയ്‌മെന്റ് പൂർത്തിയായില്ല. വീണ്ടും ശ്രമിക്കൂ.',
-    'purchaseInProgress':
-        'പേയ്‌മെന്റ് ഇപ്പോൾ നടക്കുകയാണ്. കുറച്ച് സെക്കൻഡ് കാത്ത് വീണ്ടും ശ്രമിക്കൂ.',
-    'purchaseUpiLaunchFailed':
-        'നിങ്ങളുടെ UPI ആപ്പ് തുറക്കാനായില്ല. വീണ്ടും ശ്രമിക്കൂ.',
-    'purchaseIntentFailed':
-        'പേയ്‌മെന്റ് പരാജയപ്പെട്ടു. എന്തെങ്കിലും തുക പിടിച്ചിട്ടുണ്ടെങ്കിൽ, അത് 4–5 ദിവസത്തിനുള്ളിൽ നിങ്ങളുടെ അക്കൗണ്ടിൽ തിരികെ വരും.',
-    'purchaseActivateFailed':
-        'നിങ്ങളുടെ സബ്‌സ്ക്രിപ്ഷൻ ആക്ടിവേറ്റ് ചെയ്യാനായില്ല. സപ്പോർട്ടിനെ ബന്ധപ്പെടൂ.',
-    'purchaseConfirmationLate':
-        'പേയ്‌മെന്റ് ലഭിച്ചു, പക്ഷേ സ്ഥിരീകരണം വൈകുന്നു. ആപ്പ് അടച്ച് വീണ്ടും തുറക്കൂ — നിങ്ങളുടെ സബ്‌സ്ക്രിപ്ഷൻ ഉടൻ ആക്ടീവാകും.',
+    'purchaseInProgress': 'പേയ്‌മെന്റ് ഇപ്പോൾ നടക്കുകയാണ്. കുറച്ച് സെക്കൻഡ് കാത്ത് വീണ്ടും ശ്രമിക്കൂ.',
+    'purchaseUpiLaunchFailed': 'നിങ്ങളുടെ UPI ആപ്പ് തുറക്കാനായില്ല. വീണ്ടും ശ്രമിക്കൂ.',
+    'purchaseIntentFailed': 'പേയ്‌മെന്റ് പരാജയപ്പെട്ടു. എന്തെങ്കിലും തുക പിടിച്ചിട്ടുണ്ടെങ്കിൽ, അത് 4–5 ദിവസത്തിനുള്ളിൽ നിങ്ങളുടെ അക്കൗണ്ടിൽ തിരികെ വരും.',
+    'purchaseActivateFailed': 'നിങ്ങളുടെ സബ്‌സ്ക്രിപ്ഷൻ ആക്ടിവേറ്റ് ചെയ്യാനായില്ല. സപ്പോർട്ടിനെ ബന്ധപ്പെടൂ.',
+    'purchaseConfirmationLate': 'പേയ്‌മെന്റ് ലഭിച്ചു, പക്ഷേ സ്ഥിരീകരണം വൈകുന്നു. ആപ്പ് അടച്ച് വീണ്ടും തുറക്കൂ — നിങ്ങളുടെ സബ്‌സ്ക്രിപ്ഷൻ ഉടൻ ആക്ടീവാകും.',
   },
   'hi': {
     'appName': 'अरुल',
@@ -1269,16 +1109,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'signInNudgeRetry': 'साइन इन करने के लिए यहाँ टैप करें',
     'premiumTitle': 'प्रीमियम',
     'premiumHeadline': 'हर वॉलपेपर अनलॉक करें',
-    'premiumSub':
-        'ब्राउज़ करना हमेशा मुफ़्त है। प्रीमियम उन्हें अपना बनाने के लिए है।',
+    'premiumSub': 'ब्राउज़ करना हमेशा मुफ़्त है। प्रीमियम उन्हें अपना बनाने के लिए है।',
     'premiumBenefitApply': 'कोई भी वॉलपेपर लगाएँ — स्थिर या लाइव',
     'premiumBenefitLive': 'पूरी क्वालिटी में लाइव वीडियो वॉलपेपर',
     'premiumBenefitShare': 'दोस्तों और परिवार के साथ शेयर करें',
     'premiumBenefitNew': 'हर हफ़्ते नए वॉलपेपर',
     'premiumPrice': '₹199 / माह',
     'premiumCta': 'मुफ़्त ट्रायल शुरू करें',
-    'premiumTrialNote':
-        'प्रति अकाउंट एक मुफ़्त ट्रायल। कभी भी रद्द करें — अवधि समाप्त होने तक ऐक्सेस बना रहता है।',
+    'premiumTrialNote': 'प्रति अकाउंट एक मुफ़्त ट्रायल। कभी भी रद्द करें — अवधि समाप्त होने तक ऐक्सेस बना रहता है।',
     'premiumComingSoon': 'भुगतान बाद में आएँगे।',
     'settingsTitle': 'सेटिंग्स',
     'settingsAppearance': 'रूप',
@@ -1290,12 +1128,10 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsSupport': 'मदद चाहिए',
     'settingsPrivacy': 'गोपनीयता नीति',
     'settingsVersion': 'वर्शन',
-    'uploadBody':
-        'अपना वॉलपेपर कम्युनिटी के साथ शेयर करें। हम लाइव होने से पहले हर सबमिशन का रिव्यू करते हैं।',
+    'uploadBody': 'अपना वॉलपेपर कम्युनिटी के साथ शेयर करें। हम लाइव होने से पहले हर सबमिशन का रिव्यू करते हैं।',
     'uploadPickCategory': 'कैटेगरी चुनें',
     'uploadPickFile': 'फ़ाइल चुनें',
-    'uploadSpecNote':
-        'फ़ोटो: 1080×1920. वीडियो: 1024×1824, बिना ऑडियो, 50 MB से कम।',
+    'uploadSpecNote': 'फ़ोटो: 1080×1920. वीडियो: 1024×1824, बिना ऑडियो, 50 MB से कम।',
     'uploadComingSoon': 'अपलोड बाद में आएँगे।',
     'apply': 'लगाएँ',
     'share': 'शेयर करें',
@@ -1304,24 +1140,19 @@ const Map<String, Map<String, String>> kArbStrings = {
     'applyTargetLock': 'लॉक स्क्रीन',
     'applyTargetBoth': 'होम और लॉक स्क्रीन',
     'applied': 'वॉलपेपर लगाया गया',
-    'appliedLiveFallback':
-        'यह फ़ोन लाइव वॉलपेपर नहीं चला सकता, इसलिए हमने एक स्थिर तस्वीर लगा दी।',
+    'appliedLiveFallback': 'यह फ़ोन लाइव वॉलपेपर नहीं चला सकता, इसलिए हमने एक स्थिर तस्वीर लगा दी।',
     'offlineBody': 'आप ऑफ़लाइन हैं। अपना कनेक्शन जाँचें और फिर कोशिश करें।',
     'offlineTitle': 'इंटरनेट नहीं है',
     'offlineFeedBody': 'वॉलपेपर देखने के लिए इंटरनेट चालू करें।',
-    'wallpaperShareCaption':
-        'इस जैसे और भक्ति वॉलपेपर — स्थिर और लाइव — Arul पर:\n{link}',
-    'referShareMessage':
-        'दक्षिण भारतीय भक्ति वॉलपेपर के लिए मुझे Arul बहुत पसंद है — अम्मन, मुरुगन, पेरुमाल, शिवन, और चलने वाले लाइव वॉलपेपर भी। सोचा आपको भी पसंद आएगा।\n\n{link}',
+    'wallpaperShareCaption': 'इस जैसे और भक्ति वॉलपेपर — स्थिर और लाइव — Arul पर:\n{link}',
+    'referShareMessage': 'दक्षिण भारतीय भक्ति वॉलपेपर के लिए मुझे Arul बहुत पसंद है — अम्मन, मुरुगन, पेरुमाल, शिवन, और चलने वाले लाइव वॉलपेपर भी। सोचा आपको भी पसंद आएगा।\n\n{link}',
     'tabWallpapers': 'वॉलपेपर',
     'ringtonePreviewSemantic': 'प्रीव्यू',
     'ringtonePreviewUnavailable': 'प्रीव्यू अभी उपलब्ध नहीं है',
     'ringtonesEmptyTitle': 'रिंगटोन जल्द आ रहे हैं',
-    'ringtonesEmptyBody':
-        'भक्ति रिंगटोन रास्ते में हैं। कुछ समय बाद फिर देखें।',
+    'ringtonesEmptyBody': 'भक्ति रिंगटोन रास्ते में हैं। कुछ समय बाद फिर देखें।',
     'ringtonesErrorTitle': 'रिंगटोन लोड नहीं हो सके',
-    'ringtoneSetSuccess':
-        'रिंगटोन सेट हो गया। दिखाई न दे तो फ़ोन रीस्टार्ट करें।',
+    'ringtoneSetSuccess': 'रिंगटोन सेट हो गया। दिखाई न दे तो फ़ोन रीस्टार्ट करें।',
     'ringtoneSetFailed': 'रिंगटोन सेट नहीं हो सका। फिर से कोशिश करें।',
     'ringtoneSetPreparing': 'तैयार हो रहा है…',
     'ringtoneSetDownloading': 'डाउनलोड हो रहा है…',
@@ -1349,16 +1180,14 @@ const Map<String, Map<String, String>> kArbStrings = {
     'settingsUploadSub': 'वॉलपेपर या रिंगटोन शेयर करें',
     'settingsLogout': 'लॉग आउट',
     'settingsLogoutConfirmTitle': 'लॉग आउट करें?',
-    'settingsLogoutConfirmBody':
-        'आप कभी भी Google से दोबारा साइन इन कर सकते हैं।',
+    'settingsLogoutConfirmBody': 'आप कभी भी Google से दोबारा साइन इन कर सकते हैं।',
     'settingsDeleteAccount': 'अकाउंट मिटाएँ',
     'settingsDeleteConfirmTitle': 'अकाउंट मिटाएँ?',
     'settingsDeleteConfirmBody': 'इसे वापस नहीं लाया जा सकता।',
     'settingsTerms': 'नियम और शर्तें',
     'settingsRefund': 'रिफ़ंड नीति',
     'settingsSupportEmailPrompt': 'कृपया अपनी समस्या या सुझाव लिखें:',
-    'settingsSupportEmailDetails':
-        'नीचे दी गई जानकारी आपका अनुरोध जल्दी हल करने में मदद करती है:',
+    'settingsSupportEmailDetails': 'नीचे दी गई जानकारी आपका अनुरोध जल्दी हल करने में मदद करती है:',
     'settingsNoEmailApp': 'कोई ईमेल ऐप नहीं मिला। हमें {email} पर लिखें',
     'settingsEditNameTitle': 'आपका नाम',
     'themeSystemDefault': 'सिस्टम डिफ़ॉल्ट',
@@ -1367,10 +1196,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'themeDarkSub': 'दीप-प्रकाश मैरून',
     'remindersToggleTitle': 'भक्ति रिमाइंडर',
     'remindersToggleSub': 'साप्ताहिक दिन, और हर बड़ा त्योहार',
-    'remindersScheduleNote':
-        'हर हफ़्ते शुक्रवार को एक रिमाइंडर, और हर बड़े त्योहार से कुछ दिन पहले एक — पोंगल, दीपावली, नवरात्रि, शिवरात्रि वगैरह। महीने में करीब दो।',
-    'remindersPermissionToast':
-        'Arul के लिए नोटिफ़िकेशन बंद हैं। रिमाइंडर पाने के लिए फ़ोन सेटिंग्स में चालू करें।',
+    'remindersScheduleNote': 'हर हफ़्ते शुक्रवार को एक रिमाइंडर, और हर बड़े त्योहार से कुछ दिन पहले एक — पोंगल, दीपावली, नवरात्रि, शिवरात्रि वगैरह। महीने में करीब दो।',
+    'remindersPermissionToast': 'Arul के लिए नोटिफ़िकेशन बंद हैं। रिमाइंडर पाने के लिए फ़ोन सेटिंग्स में चालू करें।',
     'remindersTimeLabel': 'रिमाइंडर का समय',
     'remindersComingUp': 'आने वाले',
     'remindersMonthJan': 'जन',
@@ -1393,21 +1220,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPlanNote': 'UPI ऑटोपे · कभी भी रद्द करें',
     'premiumTrialPill': '1 दिन मुफ़्त',
     'premiumCtaPaid': 'प्रीमियम लें',
-    'premiumFootnoteTrial':
-        '1 दिन मुफ़्त, फिर {price}/माह। UPI ऑटोपे आपका खाता ₹2 से जाँचता है, जो तुरंत वापस हो जाता है। ब्राउज़ करना हमेशा मुफ़्त रहेगा।',
-    'premiumFootnotePaid':
-        'आज {price} लिया जाएगा, फिर UPI ऑटोपे से हर महीने रिन्यू होगा। कभी भी रद्द करें। ब्राउज़ करना हमेशा मुफ़्त रहेगा।',
+    'premiumFootnoteTrial': '1 दिन मुफ़्त, फिर {price}/माह। UPI ऑटोपे आपका खाता ₹2 से जाँचता है, जो तुरंत वापस हो जाता है। ब्राउज़ करना हमेशा मुफ़्त रहेगा।',
+    'premiumFootnotePaid': 'आज {price} लिया जाएगा, फिर UPI ऑटोपे से हर महीने रिन्यू होगा। कभी भी रद्द करें। ब्राउज़ करना हमेशा मुफ़्त रहेगा।',
     'premiumComingSoonToast': 'प्रीमियम जल्द आ रहा है।',
     'premiumWelcomeToast': 'Arul Premium में आपका स्वागत है!',
     'premiumCelebrateTitle': 'बधाई हो',
-    'premiumCelebrateBody':
-        'Arul Premium चालू है। किसी को ये वॉलपेपर पसंद आएँगे? उन्हें एक भेजें।',
-    'premiumSheetPitch':
-        'हर वॉलपेपर — लाइव और स्थिर। छहों कैटेगरी में बेरोक लगाएँ और शेयर करें।',
+    'premiumCelebrateBody': 'Arul Premium चालू है। किसी को ये वॉलपेपर पसंद आएँगे? उन्हें एक भेजें।',
+    'premiumSheetPitch': 'हर वॉलपेपर — लाइव और स्थिर। छहों कैटेगरी में बेरोक लगाएँ और शेयर करें।',
     'premiumKeepBrowsing': 'मुफ़्त में देखते रहें',
     'referHeroTitle': 'दोस्त को तोहफ़ा, आपको एक महीना',
-    'referHeroBody':
-        'आपके लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम',
+    'referHeroBody': 'आपके लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम',
     'referRewardsLabel': 'कमाए रिवॉर्ड',
     'referRewardDays': '{days} दिन',
     'referStep1': 'अपना लिंक दोस्तों और परिवार के साथ शेयर करें',
@@ -1421,8 +1243,7 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadTitleLabel': 'शीर्षक',
     'uploadTitleOptional': '(वैकल्पिक)',
     'uploadCategoryLabel': 'कैटेगरी',
-    'uploadRightsCheckbox':
-        'इस कंटेंट के अधिकार मेरे हैं, या मुझे इसे शेयर करने की अनुमति है',
+    'uploadRightsCheckbox': 'इस कंटेंट के अधिकार मेरे हैं, या मुझे इसे शेयर करने की अनुमति है',
     'uploadFootnote': 'मंज़ूर वॉलपेपर आपके नाम के साथ फ़ीड में दिखेंगे',
     'uploadRejectStatic': 'JPEG, PNG या WebP तस्वीर चुनें।',
     'uploadRejectLive': 'MP4 वीडियो चुनें।',
@@ -1433,15 +1254,12 @@ const Map<String, Map<String, String>> kArbStrings = {
     'uploadPickZoneTitleAudio': 'ऑडियो फ़ाइल चुनें',
     'uploadPickZoneSubAudio': 'MP3, AAC या M4A',
     'uploadTitleHintRingtone': 'जैसे, कंद षष्ठी कवचम',
-    'uploadFootnoteRingtone':
-        'मंज़ूर रिंगटोन आपके नाम के साथ रिंगटोन टैब में दिखेंगे',
-    'uploadShareMomentBodyRingtone':
-        'हम आपके रिंगटोन का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?',
+    'uploadFootnoteRingtone': 'मंज़ूर रिंगटोन आपके नाम के साथ रिंगटोन टैब में दिखेंगे',
+    'uploadShareMomentBodyRingtone': 'हम आपके रिंगटोन का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?',
     'uploadTooLarge': 'फ़ाइल बहुत बड़ी है (अधिकतम {max})।',
     'uploadSuccessToast': 'रिव्यू के लिए भेज दिया — धन्यवाद!',
     'uploadShareMomentTitle': 'धन्यवाद',
-    'uploadShareMomentBody':
-        'हम आपके वॉलपेपर का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?',
+    'uploadShareMomentBody': 'हम आपके वॉलपेपर का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?',
     'uploadComingSoonToast': 'अपलोड जल्द आ रहा है।',
     'premiumNavTitle': 'सब्सक्रिप्शन',
     'premiumEyebrow': 'प्रीमियम',
@@ -1455,23 +1273,21 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumCtaTrial': 'मुफ़्त ट्रायल शुरू करें',
     'premiumCtaSubscribe': 'अभी सब्सक्राइब करें',
     'premiumReassuranceTrial': '₹2 सत्यापन, तुरंत वापस · कभी भी रद्द करें',
-    'premiumReassurancePaid':
-        'UPI ऑटोपे सुरक्षित · कभी भी एक टैप में रद्द करें',
-    'premiumInstallUpiTrial':
-        'अपना मुफ़्त ट्रायल शुरू करने के लिए PhonePe या Google Pay इंस्टॉल करें',
-    'premiumInstallUpiPaid':
-        'सब्सक्राइब करने के लिए PhonePe या Google Pay इंस्टॉल करें',
+    'premiumReassurancePaid': 'UPI ऑटोपे सुरक्षित · कभी भी एक टैप में रद्द करें',
+    'premiumQrTitleTrial': 'अपना मुफ़्त ट्रायल शुरू करने के लिए स्कैन करें',
+    'premiumQrTitlePaid': 'सब्सक्राइब करने के लिए स्कैन करें',
+    'premiumQrInstruction': 'किसी दूसरे फ़ोन पर कोई भी UPI ऐप खोलें और यह कोड स्कैन करें।',
+    'premiumQrExpiresIn': 'कोड {time} में समाप्त होगा',
+    'premiumQrWaiting': 'मंज़ूरी का इंतज़ार है…',
+    'premiumQrCheck': 'मैंने भुगतान कर दिया',
     'premiumResumeCta': '{app} फिर से खोलें',
-    'premiumResumeHintTrial':
-        'अपना ट्रायल शुरू करने के लिए {app} में ₹2 सत्यापन को मंज़ूरी दें।',
-    'premiumResumeHintPaid':
-        'जारी रखने के लिए {app} में भुगतान को मंज़ूरी दें।',
+    'premiumResumeHintTrial': 'अपना ट्रायल शुरू करने के लिए {app} में ₹2 सत्यापन को मंज़ूरी दें।',
+    'premiumResumeHintPaid': 'जारी रखने के लिए {app} में भुगतान को मंज़ूरी दें।',
     'premiumUpiAppGeneric': 'आपका UPI ऐप',
     'trialNudgeRow': 'अपना मुफ़्त ट्रायल सेटअप पूरा करें',
     'trialNudgeDismiss': 'बंद करें',
     'trialReminderTitle': 'आपका मुफ़्त ट्रायल इंतज़ार कर रहा है',
-    'trialReminderBody':
-        'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।',
+    'trialReminderBody': 'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।',
     'premiumSelectedUpiApp': 'UPI ऐप',
     'upiPickerTitle': 'इससे भुगतान करें',
     'upiPickerLastUsed': 'पिछली बार इस्तेमाल',
@@ -1479,21 +1295,16 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumPaidFinePrint': '{price}/माह ऑटोपे से। कभी भी रद्द करें।',
     'premiumSocialProof': '{city} में {name} ने लाइव वॉलपेपर लगाया 🙏',
     'pushChannelName': 'अरुल से अपडेट',
-    'purchaseErrorNetwork':
-        'इंटरनेट नहीं है। कनेक्शन जाँचें और दोबारा कोशिश करें।',
+    'purchaseErrorNetwork': 'इंटरनेट नहीं है। कनेक्शन जाँचें और दोबारा कोशिश करें।',
     'purchaseErrorGeneric': 'कुछ गड़बड़ हो गई। फिर कोशिश करें।',
     'purchaseCancelled': 'भुगतान रद्द हो गया।',
     'purchaseInterrupted': 'भुगतान बीच में रुक गया। दोबारा कोशिश करें।',
     'purchaseNotCompleted': 'भुगतान पूरा नहीं हुआ। दोबारा कोशिश करें।',
-    'purchaseInProgress':
-        'भुगतान पहले से चल रहा है। कुछ सेकंड रुककर दोबारा कोशिश करें।',
+    'purchaseInProgress': 'भुगतान पहले से चल रहा है। कुछ सेकंड रुककर दोबारा कोशिश करें।',
     'purchaseUpiLaunchFailed': 'आपका UPI ऐप नहीं खुल सका। दोबारा कोशिश करें।',
-    'purchaseIntentFailed':
-        'भुगतान नहीं हो सका। अगर कोई रकम कटी है, तो वह 4–5 दिन में आपके खाते में वापस आ जाएगी।',
-    'purchaseActivateFailed':
-        'आपका सब्सक्रिप्शन चालू नहीं हो सका। सपोर्ट से संपर्क करें।',
-    'purchaseConfirmationLate':
-        'भुगतान मिल गया, पर पुष्टि में देर हो रही है। ऐप बंद करके दोबारा खोलें — आपका सब्सक्रिप्शन जल्द चालू हो जाएगा।',
+    'purchaseIntentFailed': 'भुगतान नहीं हो सका। अगर कोई रकम कटी है, तो वह 4–5 दिन में आपके खाते में वापस आ जाएगी।',
+    'purchaseActivateFailed': 'आपका सब्सक्रिप्शन चालू नहीं हो सका। सपोर्ट से संपर्क करें।',
+    'purchaseConfirmationLate': 'भुगतान मिल गया, पर पुष्टि में देर हो रही है। ऐप बंद करके दोबारा खोलें — आपका सब्सक्रिप्शन जल्द चालू हो जाएगा।',
   },
 };
 
@@ -1504,6 +1315,7 @@ const Map<String, List<String>> kArbPlaceholders = {
   'premiumFootnotePaid': ['price'],
   'premiumFootnoteTrial': ['price'],
   'premiumPaidFinePrint': ['price'],
+  'premiumQrExpiresIn': ['time'],
   'premiumResumeCta': ['app'],
   'premiumResumeHintPaid': ['app'],
   'premiumResumeHintTrial': ['app'],

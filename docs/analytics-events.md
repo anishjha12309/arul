@@ -82,8 +82,10 @@ chars; GA4 silently drops longer ones.
 ## The rest of the catalogue
 
 `checkout_started` fires at the TAP, before `/payments/initiate`, so an initiate failure still reads
-as an abandoned checkout. Its `method` (`upi_app`|`phonepe_sdk`) and `target_app` answer "which UPI
-app expires the mandate" — where the paid funnel is actually lost. It is a bare string literal, not
+as an abandoned checkout. Its `method` (`upi_app`|`phonepe_sdk`|`upi_qr`) and `target_app` answer "which
+UPI app expires the mandate" — where the paid funnel is actually lost. `upi_qr` carries NO
+`target_app`: the package it named was never launched and the approval may land on another phone, so
+reporting it would corrupt that ranking. It is a bare string literal, not
 an `ArulEvents` constant.
 
 `paywall_shown` reports the sell ONCE the installed-app probe has ANSWERED — the list arrives
@@ -91,7 +93,11 @@ asynchronously, and reporting the first build stamps `has_upi_app: no` on every 
 opened the paywall. **GA4-only**, pinned off the PostHog list by the gating test. It answers which
 UPI apps a user was actually offered: `has_upi_app`, `upi_app_count`, `upi_apps` (short codes,
 **sorted** — the picker floats the remembered app to the head, and picker order would file one
-installed set under every rotation of it), `default_app`, `trial_eligible`, `variant`
+installed set under every rotation of it), `default_app`, plus `upi_other_count` and `upi_others` — the mandate handlers the
+phone HAS and the allowlist refuses, as RAW package names (a code would hide the very names this
+exists to learn) packed to whole entries inside the 100-char limit, with the count surviving any
+truncation. `has_upi_app: no` beside a non-zero count is not a phone that cannot pay, it is one we
+declined to sell to, and those two were indistinguishable. Then `trial_eligible`, `variant`
 (`trial`|`paid`|`resubscribe`|`unknown`, the last being an entitlement that would not load) and
 `paywall_source`, the gate verb — GA4 owns the bare `source` as a traffic dimension. **Every value
 is a string**: GA4 parses no numeric parameter into an event-scoped custom dimension on APP streams

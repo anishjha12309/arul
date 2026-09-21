@@ -67,6 +67,33 @@ final class PurchaseResumable extends PurchaseState {
   final DateTime expiresAt;
 }
 
+/// The mandate link is on SCREEN as a QR, because this phone has no app that can take it.
+///
+/// 13% of everyone who tapped Subscribe had no mandate-capable UPI app, and the hosted page that
+/// used to catch them completed 4 setups in 790. The `upi://mandate` PhonePe returns carries no app
+/// binding of its own — `targetApp` only steers which app we LAUNCH — so the same link scans from
+/// any UPI app on any phone, and the approval happens on a second device: a family member's.
+///
+/// There is no return-to-app checkpoint on this path. Nobody leaves Arul, so nothing but the server
+/// can witness the approval, and [expiresAt] is the link's own `QRexpire` — never a guessed window,
+/// because a client timeout shorter than PhonePe's would say "expired" while the QR is still live
+/// and a late scan would then set up a mandate the UI had given up on.
+final class PurchaseScannable extends PurchaseState {
+  const PurchaseScannable({
+    required this.intentUrl,
+    required this.merchantOrderId,
+    required this.expiresAt,
+  });
+
+  /// The `upi://mandate?...` link from the initiate, rendered verbatim as the QR payload.
+  final String intentUrl;
+  final String merchantOrderId;
+
+  /// When the link dies at PhonePe — see [PremiumPurchase.intentExpiry]. Production links expire
+  /// 5 minutes after creation, so the countdown this drives is short and must be honest.
+  final DateTime expiresAt;
+}
+
 final class PurchaseSuccess extends PurchaseState {
   const PurchaseSuccess();
 }
@@ -322,6 +349,12 @@ class PremiumPurchase extends _$PremiumPurchase {
   static const _intentMaxWindow = Duration(minutes: 15);
   static const _intentFallbackWindow = Duration(minutes: 10);
 
+  /// QR-path watch. Fast while a scan is plausible, then slowing: nobody returns to the app on this
+  /// path, so the server is the only witness and the loop runs the whole window. A flat 4 s over a
+  /// 5-minute link would be 75 reconciles per attempt, each one a PhonePe call and a Neon wake, for
+  /// a path ~100 people a day reach. It holds at 20 s, and the Check button covers the impatient.
+  static const _qrWatchDelays = [3, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+
   /// While resumable the server is still watched, just slowly — the approval can land at any second
   /// inside the window, and the user is looking at a button, not a spinner.
   static const _resumeWatchDelays = [3, 10, 30, 60];
@@ -330,9 +363,15 @@ class PremiumPurchase extends _$PremiumPurchase {
   ///
   /// [targetApp] selects the direct UPI-intent flow — that app opens onto its AutoPay sheet.
   /// Null → the PhonePe SDK hosted-page flow.
+  ///
+  /// [asQr] takes the SAME link and puts it on screen as a QR instead of firing it at an app, for a
+  /// phone with nothing that can take a mandate. It still names a [targetApp] because PhonePe makes
+  /// `paymentMode.targetApp` mandatory on UPI_INTENT — the package is a formality their API
+  /// requires, the QR is the actual handoff, and the Worker records the difference.
   Future<void> startTrial({
     String? targetApp,
     bool trialEligible = false,
+    bool asQr = false,
   }) async {
     // A resumable attempt owns the screen: its own order is still live at PhonePe, and a second
     // initiate would revoke it. Resume, [switchApp], or the deadline — nothing else moves from
@@ -340,7 +379,10 @@ class PremiumPurchase extends _$PremiumPurchase {
     // state.
     if (state is PurchaseLoading ||
         state is PurchaseProcessing ||
-        state is PurchaseResumable) {
+        state is PurchaseResumable ||
+        // A QR on screen owns its order exactly as a resumable one does: somebody may be scanning
+        // it right now, and a second initiate would revoke the code they are looking at.
+        state is PurchaseScannable) {
       return;
     }
 
@@ -350,9 +392,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     _priceAtStart = _monthlyPriceRupees();
     // The user has committed -> count the checkout BEFORE any network call.
     // So an initiate failure reads as an abandoned checkout, not as nothing having happened.
+    // `upi_qr` is its own method, not `upi_app` with a package: the package was never launched and
+    // the mandate may be approved on a phone that is not this one, so filing it under the app we
+    // happened to name would put it in the breakdown that answers "which app completes a mandate".
     _trackCheckoutStarted(
-      targetApp != null ? 'upi_app' : 'phonepe_sdk',
-      targetApp,
+      asQr ? 'upi_qr' : (targetApp != null ? 'upi_app' : 'phonepe_sdk'),
+      asQr ? null : targetApp,
     );
 
     try {
@@ -360,6 +405,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
         'targetApp': ?targetApp,
+        if (asQr) 'mode': 'qr',
       });
 
       final merchantOrderId = initResp['merchantOrderId'] as String? ?? '';
@@ -376,7 +422,21 @@ class PremiumPurchase extends _$PremiumPurchase {
           );
           return;
         }
-        await _startIntentFlow(intentUrl, targetApp, merchantOrderId);
+        if (asQr) {
+          await _startQrFlow(intentUrl, merchantOrderId);
+        } else {
+          await _startIntentFlow(intentUrl, targetApp, merchantOrderId);
+        }
+        return;
+      }
+
+      // The Worker falls back to the SDK page inside the same request whenever the intent setup
+      // fails, and for a QR attempt that fallback is a dead end by construction: the SDK page needs
+      // a UPI app on THIS phone, which is the one thing we already know is missing. So this path
+      // ends here rather than launching it — the claim is released so the next tap is clean.
+      if (asQr) {
+        if (merchantOrderId.isNotEmpty) await _abandonSetup(merchantOrderId);
+        _fail('qr_unavailable', const PurchaseError(PurchaseErrorKind.generic));
         return;
       }
       final orderId = initResp['orderId'] as String? ?? '';
@@ -567,6 +627,94 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
+  /// Puts the mandate link on screen as a QR and watches the server until it settles or expires.
+  ///
+  /// Nothing is launched, so there is no launch to fail and no app to come back from: the ONLY
+  /// witness to the approval is `/payments/status`, and the deadline is the link's own. The
+  /// unfinished marker is written here for the same reason it is written at a UPI handoff — from
+  /// this moment the attempt is real and unfinished, and most of the people who reach it will never
+  /// touch a terminal path.
+  Future<void> _startQrFlow(String intentUrl, String merchantOrderId) async {
+    final shownAt = _now();
+    _intentUrl = intentUrl;
+    // Deliberately NULL: no app was aimed at, so nothing here may ever be re-fired at one.
+    // `_enterResumable` reads this pair and falls through to the terminal path without it, which is
+    // correct — a QR attempt has no "open again", only the code already on screen.
+    _intentTargetApp = null;
+    _intentLaunchedAt = shownAt;
+    final expiresAt = intentExpiry(intentUrl, shownAt);
+    _intentExpiresAt = expiresAt;
+
+    _setState(
+      PurchaseScannable(
+        intentUrl: intentUrl,
+        merchantOrderId: merchantOrderId,
+        expiresAt: expiresAt,
+      ),
+    );
+    unawaited(_rememberHandoff(merchantOrderId));
+    _intentOrderId = merchantOrderId;
+    try {
+      await _watchScannable(merchantOrderId, expiresAt);
+    } finally {
+      _intentOrderId = null;
+    }
+  }
+
+  /// The live [PurchaseScannable], or null — including whenever the paywall is gone.
+  PurchaseScannable? get _scannableState {
+    if (!ref.mounted) return null;
+    final current = state;
+    return current is PurchaseScannable ? current : null;
+  }
+
+  /// The watch behind [PurchaseScannable] — the same deadline-driven shape as [_watchResumable],
+  /// because the two states have the same problem: a live order nobody in the app can resolve.
+  /// The deadline passing is SILENT ([PurchaseIdle], `payment_failed` counted, nudge armed): nothing
+  /// was ever approved, so the refund line would be a lie, and this audience is not payment-literate
+  /// enough for a failure screen to mean anything (owner's call, same as the resume path).
+  Future<void> _watchScannable(String orderId, DateTime expiresAt) async {
+    final generation = _pollGeneration;
+    for (var i = 0; ; i++) {
+      final step = Duration(
+        seconds:
+            _qrWatchDelays[i < _qrWatchDelays.length
+                ? i
+                : _qrWatchDelays.length - 1],
+      );
+      final remaining = expiresAt.difference(_now());
+      if (remaining <= Duration.zero) {
+        await _autoResolveIntent(orderId, reason: 'qr_expired', silent: true);
+        return;
+      }
+      await Future<void>.delayed(remaining < step ? remaining : step);
+      if (generation != _pollGeneration) return;
+      // Disposed, settled elsewhere, or the user started something else -> not this loop's business.
+      if (_scannableState == null) return;
+      if (!_now().isBefore(expiresAt)) {
+        await _autoResolveIntent(orderId, reason: 'qr_expired', silent: true);
+        return;
+      }
+      if (await _settleFromStatus(orderId)) return;
+    }
+  }
+
+  /// The QR sheet's "I have paid — check" button: one status read, out of turn.
+  ///
+  /// The watch above is deliberately slow by the end of the window, and somebody who has just
+  /// approved a mandate on another phone should not wait 20 s to be told. It cannot settle anything
+  /// the watch would not settle — it is the SAME call — so it never needs its own outcome handling.
+  Future<void> checkQrStatus() async {
+    final scannable = _scannableState;
+    if (scannable == null || _resolvingIntent) return;
+    _resolvingIntent = true;
+    try {
+      await _settleFromStatus(scannable.merchantOrderId);
+    } finally {
+      _resolvingIntent = false;
+    }
+  }
+
   /// Writes the unfinished-trial marker the moment the UPI app takes over.
   ///
   /// Every terminal path below already remembers the attempt — but half of the people who tap the
@@ -618,6 +766,20 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// the user was still able to approve.
   Future<void> pollNowOnResume() async {
     final resumable = _resumableState;
+    // A QR attempt sends nobody anywhere, but the user still leaves Arul — for the camera, or for
+    // the other phone — and a return is the one cheap moment to ask. It stays scannable either way:
+    // the code on screen is still live, and only its own deadline retires it.
+    final scannable = _scannableState;
+    if (scannable != null) {
+      if (_resolvingIntent) return;
+      _resolvingIntent = true;
+      try {
+        await _settleFromStatus(scannable.merchantOrderId);
+      } finally {
+        _resolvingIntent = false;
+      }
+      return;
+    }
     final orderId = resumable?.merchantOrderId ?? _intentOrderId;
     if (orderId == null || _resolvingIntent) return;
     if (resumable == null && !_isProcessing) return;
@@ -660,7 +822,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       // A DISPOSED notifier is not that case — nothing else can settle its order — so it reports.
       if (ref.mounted &&
           state is! PurchaseProcessing &&
-          state is! PurchaseResumable) {
+          state is! PurchaseResumable &&
+          state is! PurchaseScannable) {
         return true;
       }
 
@@ -683,7 +846,9 @@ class PremiumPurchase extends _$PremiumPurchase {
         // left. So "Payment failed. Any amount deducted will be refunded" is false on both halves,
         // and the order is simply over -> [PurchaseIdle], where the CTA reads as the offer again
         // and the next tap opens a fresh one. Still counted, and the nudge still remembers it.
-        if (_resumableState != null) {
+        // A QR that expired is the same fact as a resumable one that did: the code was shown and
+        // never scanned, so nothing was approved and nothing can have been deducted.
+        if (_resumableState != null || _scannableState != null) {
           _trackPaymentFailed('expired', cancelled: false);
           _setState(const PurchaseIdle());
         } else {

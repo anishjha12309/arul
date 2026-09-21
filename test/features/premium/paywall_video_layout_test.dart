@@ -80,7 +80,6 @@ Widget _paywall({required bool withVideo}) => ArulPaywallView(
     label: 'PhonePe',
   ),
   canChangeUpiApp: true,
-  upiAppsKnown: true,
   onBack: () {},
   onChangeUpiApp: () {},
   onPurchase: () {},

@@ -16,7 +16,10 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 
 // The app-side half of the Worker's subscriptions/v2/setup UPI_INTENT path.
-// listUpiApps returns the installed mandate-capable apps -> package, label and icon bytes for the paywall's own picker.
+// listUpiApps answers with BOTH halves of the probe: `offered`, the installed mandate-capable apps on our
+// allowlist -> package, label and icon bytes for the paywall's own picker; and `others`, the packages that
+// answer a mandate intent while the allowlist drops them. `others` is REPORTED, never offered -> it is the
+// only way to tell "this phone cannot pay" apart from "this phone has an app we refuse to show".
 // launch fires PhonePe's returned intentUrl at exactly the chosen package -> the user lands on its AutoPay sheet.
 //
 // TWO gates, and an app must pass BOTH.
@@ -76,7 +79,7 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "listUpiApps" -> result.success(listUpiApps())
+            "listUpiApps" -> result.success(scanUpiApps())
 
             "launch" -> {
                 val url = call.argument<String>("url")
@@ -92,9 +95,30 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
         }
     }
 
-    private fun listUpiApps(): List<Map<String, Any?>> {
+    /**
+     * Both halves of the probe: the apps we OFFER, and the mandate-capable packages we refuse.
+     *
+     * `others` exists because "no UPI app" and "no UPI app ON OUR LIST" are not the same fact, and
+     * only the first justifies a dead CTA. The upi-scheme <intent> in <queries> already makes every
+     * mandate handler visible to the resolver, so naming the ones the allowlist drops costs one set
+     * subtraction and no permission. Reported, never offered: a package still earns the picker with
+     * one real penny drop, never the resolver alone.
+     */
+    private fun scanUpiApps(): Map<String, Any?> {
         val pm = activity.packageManager
         val handlers = mandateHandlers(pm)
+        return mapOf(
+            "offered" to offeredUpiApps(pm, handlers),
+            // Null handlers = the probe itself failed, so we know nothing about what is out there.
+            // An empty list is then the honest answer, never a claim that nothing else is installed.
+            "others" to (handlers?.minus(MANDATE_APPS.toSet())?.sorted() ?: emptyList()),
+        )
+    }
+
+    private fun offeredUpiApps(
+        pm: PackageManager,
+        handlers: Set<String>?,
+    ): List<Map<String, Any?>> {
         val apps = mutableListOf<Map<String, Any?>>()
         for (pkg in MANDATE_APPS) {
             // Null = the probe itself failed -> fall back to the allowlist alone. An empty picker

@@ -643,12 +643,26 @@ class AppLocalizationsKn extends AppLocalizations {
       'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಯಾವಾಗ ಬೇಕಾದರೂ ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು';
 
   @override
-  String get premiumInstallUpiTrial =>
-      'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ';
+  String get premiumQrTitleTrial =>
+      'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
 
   @override
-  String get premiumInstallUpiPaid =>
-      'ಚಂದಾದಾರರಾಗಲು PhonePe ಅಥವಾ Google Pay ಸ್ಥಾಪಿಸಿ';
+  String get premiumQrTitlePaid => 'ಸಬ್‌ಸ್ಕ್ರೈಬ್ ಮಾಡಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
+
+  @override
+  String get premiumQrInstruction =>
+      'ಇನ್ನೊಂದು ಫೋನ್‌ನಲ್ಲಿ ಯಾವುದಾದರೂ UPI ಆ್ಯಪ್ ತೆರೆದು ಈ ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'ಕೋಡ್ $timeರಲ್ಲಿ ಅವಧಿ ಮುಗಿಯುತ್ತದೆ';
+  }
+
+  @override
+  String get premiumQrWaiting => 'ಅನುಮೋದನೆಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೇವೆ…';
+
+  @override
+  String get premiumQrCheck => 'ನಾನು ಪಾವತಿಸಿದ್ದೇನೆ';
 
   @override
   String premiumResumeCta(String app) {

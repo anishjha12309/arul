@@ -7,12 +7,14 @@ UpiApp _app(String package) => UpiApp(packageName: package, label: package);
 
 Map<String, Object?> _props({
   List<UpiApp> apps = const [],
+  List<String> otherPackages = const [],
   String? defaultPackage,
   bool trialEligible = true,
   String variant = 'trial',
 }) => paywallShownProperties(
   source: 'wallpaper_apply',
   apps: apps,
+  otherPackages: otherPackages,
   defaultPackage: defaultPackage,
   trialEligible: trialEligible,
   variant: variant,
@@ -28,6 +30,53 @@ void main() {
       expect(props['upi_apps'], 'none');
       expect(props['upi_app_count'], '0');
       expect(props['default_app'], 'none');
+      expect(props['upi_other_count'], '0');
+      expect(props['upi_others'], 'none');
+    });
+
+    test('a phone we REFUSED reads differently from a phone that cannot pay', () {
+      // The distinction the whole parameter exists for: both report `has_upi_app: no`, and only one
+      // of them is a person without a way to pay. 13% of Subscribe taps sat in this bucket.
+      final cannotPay = _props();
+      final refused = _props(
+        otherPackages: const ['com.csam.icici.bank.imobile'],
+      );
+
+      expect(cannotPay['has_upi_app'], refused['has_upi_app']);
+      expect(cannotPay['upi_other_count'], '0');
+      expect(refused['upi_other_count'], '1');
+      expect(refused['upi_others'], 'com.csam.icici.bank.imobile');
+    });
+
+    test('unoffered packages are RAW and sorted — a code would hide the names '
+        'this parameter exists to learn', () {
+      final props = _props(
+        apps: [_app('com.phonepe.app')],
+        otherPackages: const ['com.msf.kbank.mobile', 'com.axis.mobile'],
+      );
+
+      // `upiAppCode` would file both as `other`; the report needs the names themselves.
+      expect(props['upi_others'], 'com.axis.mobile,com.msf.kbank.mobile');
+      expect(props['upi_other_count'], '2');
+      // Offered and refused are independent axes — having PhonePe says nothing about the rest.
+      expect(props['has_upi_app'], 'yes');
+    });
+
+    test('the pack takes WHOLE names and the count survives the truncation', () {
+      // GA4 drops a parameter value over 100 characters outright, so a long list must lose entries
+      // rather than the parameter. A half-written package name would be worse than a missing one.
+      final many = [
+        for (var i = 0; i < 6; i++) 'com.bank$i.mobile.upi.autopay.handler',
+      ];
+      final props = _props(otherPackages: many);
+      final packed = props['upi_others']! as String;
+
+      expect(packed.length, lessThanOrEqualTo(100));
+      for (final part in packed.split(',')) {
+        expect(many, contains(part), reason: 'no name may be cut mid-value');
+      }
+      // The count is what survives: the phone had 6, the value could only carry some of them.
+      expect(props['upi_other_count'], '4plus');
     });
 
     test('the app list is SORTED, so one installed set is one value', () {
@@ -72,6 +121,11 @@ void main() {
       // then never be broken down in a report. 100 characters is the parameter-value limit.
       final props = _props(
         apps: [_app('com.phonepe.app')],
+        otherPackages: const [
+          'com.csam.icici.bank.imobile',
+          'com.msf.kbank.mobile',
+          'com.bankofbaroda.mconnect',
+        ],
         defaultPackage: 'com.phonepe.app',
         trialEligible: false,
         variant: 'paid',

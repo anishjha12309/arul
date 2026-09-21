@@ -47,9 +47,16 @@ zero completions from a meaningful n. **Never reorder it off observed completion
 self-selected by the position the app already holds. Paytm converts better per chooser than GPay
 (10.5% vs 8.5%) only because reaching it means scrolling past the top two, which selects for
 determined payers; promoting it changes that population and destroys the rate it was promoted for.
-A reorder needs a split test. **No hosted-page fallback in the app** — it completed 5 of 733,
-and a route that cannot finish is worse than none, so a phone with no usable app gets an install
-prompt and a dead CTA. The Worker's `targetApp == null` branch stays for fielded builds.
+A reorder needs a split test. **No hosted-page fallback in the app** — it completed 4 of 790,
+and a route that cannot finish is worse than none. On a phone with no offered app **the CTA itself
+opens an on-screen QR** of the SAME `intentUrl` — it carries no app binding (`targetApp` only steers
+what we LAUNCH), so any UPI app on a second phone scans and approves it. No install prompt and no
+second line: that phone has exactly one way to pay, so naming it is a decision to make FOR the user,
+and store links asked someone mid-checkout to go and fetch a payment app first. Pass `mode: "qr"` on initiate or
+the order files under `com.phonepe.app` and mandates PhonePe never saw enter the column that ranks
+apps by completions. A QR request the Worker answers with the SDK page is a dead end by construction
+(that page needs an app on THIS phone), so the app abandons rather than opening it. The Worker's
+`targetApp == null` branch stays for fielded builds.
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — 1-day
 trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
@@ -171,7 +178,9 @@ itself. Only the severity is wrong.
   open order and starts a fresh checkout with that app in one motion; the same app does nothing. Deadline = the link's
   `QRexpire` (split from the RAW query then percent-decoded; `Uri.queryParameters` turns the bare
   `+05:30` into a space; **production links expire 5 min after creation**, the docs' sample says
-  15), else launch + 10 min, capped at 15 — the setup RESPONSE has no expiry.
+  15), else launch + 10 min, capped at 15 — the setup RESPONSE has no expiry. The QR shares that
+  deadline and that silent reset: a client window shorter than PhonePe's would call a live code
+  expired and let a late scan set up a mandate the UI had given up on.
 
 The billing lifecycle has been proven against UAT plus a local stub — re-prove after a change with
 `.claude/skills/verify-payments/` rather than re-deriving.

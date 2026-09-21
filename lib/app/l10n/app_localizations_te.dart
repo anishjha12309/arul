@@ -644,12 +644,26 @@ class AppLocalizationsTe extends AppLocalizations {
       'UPI ఆటోపే భద్రత · ఎప్పుడైనా ఒకే ట్యాప్‌లో రద్దు';
 
   @override
-  String get premiumInstallUpiTrial =>
-      'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి';
+  String get premiumQrTitleTrial =>
+      'మీ ఉచిత ట్రయల్ ప్రారంభించడానికి స్కాన్ చేయండి';
 
   @override
-  String get premiumInstallUpiPaid =>
-      'సబ్‌స్క్రైబ్ చేయడానికి PhonePe లేదా Google Pay ఇన్‌స్టాల్ చేయండి';
+  String get premiumQrTitlePaid => 'సబ్‌స్క్రైబ్ చేయడానికి స్కాన్ చేయండి';
+
+  @override
+  String get premiumQrInstruction =>
+      'మరో ఫోన్‌లో ఏదైనా UPI యాప్ తెరిచి ఈ కోడ్‌ను స్కాన్ చేయండి.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'కోడ్ $timeలో గడువు ముగుస్తుంది';
+  }
+
+  @override
+  String get premiumQrWaiting => 'ఆమోదం కోసం వేచి ఉన్నాం…';
+
+  @override
+  String get premiumQrCheck => 'నేను చెల్లించాను';
 
   @override
   String premiumResumeCta(String app) {

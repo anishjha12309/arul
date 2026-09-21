@@ -44,6 +44,8 @@ dependencies:
                                 # (ringtone_preview_provider), streamed from CDN
   audio_session: ^0.2.4         # just_audio's own dep, made DIRECT so the
                                 # preview can ask for TRANSIENT audio focus
+  qr_flutter: ^4.1.0            # the mandate link as an on-screen QR for a phone with no UPI
+                                # app — pure Dart, no native code, no permission
   image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
 
   # ── Local notifications (devotional reminders). The reminders themselves are

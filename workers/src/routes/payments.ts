@@ -102,7 +102,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string; targetApp?: string };
+  let body: { plan?: string; targetApp?: string; mode?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -124,6 +124,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     /^[a-zA-Z][a-zA-Z0-9._]{2,100}$/.test(body.targetApp)
       ? body.targetApp
       : null;
+
+  // On-screen QR: the app has NO mandate-capable UPI app and renders the intentUrl for a second
+  // phone to scan. PhonePe makes paymentMode.targetApp mandatory on UPI_INTENT, so the app still
+  // names a package -> the QR is the truth of the handoff and the package is a formality PhonePe
+  // requires. The returned upi://mandate carries no app binding of its own, which is what lets any
+  // scanner take it. Recorded as its own `upi_target_app` value: filing these under com.phonepe.app
+  // would put mandates PhonePe never saw into the column that answers "which app completes one".
+  const qrMode = body.mode === "qr" && targetApp !== null;
+  const recordedTargetApp = qrMode ? "qr" : (targetApp ?? "phonepe_page");
 
   const sql = getDb(env);
   try {
@@ -207,7 +216,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         )
         VALUES (
           ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
-          ${targetApp ?? "phonepe_page"}, ${parkedMandateId}
+          ${recordedTargetApp}, ${parkedMandateId}
         )
         ON CONFLICT (user_id)
         DO UPDATE SET
@@ -308,14 +317,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           targetApp,
           upfrontAmountPaise: trialEligible ? undefined : MONTHLY_PRICE_PAISE,
         });
-        await attachPhonePeOrder(intent.orderId, targetApp);
+        await attachPhonePeOrder(intent.orderId, recordedTargetApp);
         revokeSuperseded();
         console.log(
-          `[payments/initiate] env=${env.PHONEPE_ENV} flow=intent target=${targetApp} ` +
-            `orderId=${intent.orderId} state=${intent.state} trialEligible=${trialEligible}`,
+          `[payments/initiate] env=${env.PHONEPE_ENV} flow=${qrMode ? "qr" : "intent"} ` +
+            `target=${recordedTargetApp} orderId=${intent.orderId} state=${intent.state} ` +
+            `trialEligible=${trialEligible}`,
         );
         return c.json({
-          flow: "intent",
+          flow: qrMode ? "qr" : "intent",
           merchantSubscriptionId,
           merchantOrderId,
           orderId: intent.orderId,

@@ -31,30 +31,58 @@ String upiAppCode(String packageName) => switch (packageName) {
   _ => 'other',
 };
 
+/// What the device probe found: the apps we offer, and the mandate handlers we refuse.
+///
+/// Two fields rather than one list because "this phone cannot pay" and "this phone has a UPI app we
+/// do not offer" are different facts and only the first one justifies a dead CTA. 13% of everyone
+/// who tapped Subscribe reached the SDK path -> that share is worth naming before it is designed for.
+class UpiScan {
+  const UpiScan({required this.apps, required this.otherPackages});
+
+  const UpiScan.empty() : apps = const [], otherPackages = const [];
+
+  /// Offered, in the channel's preference order.
+  final List<UpiApp> apps;
+
+  /// Packages that answer a mandate intent and are NOT on the allowlist, sorted.
+  /// Reported to GA4 only; a package earns the picker with one real penny drop, never the resolver.
+  final List<String> otherPackages;
+}
+
 /// Platform bridge for the direct UPI-intent mandate flow.
 class UpiApps {
   static const _channel = MethodChannel('com.hsrutility.arul/upi_intent');
 
-  /// Installed mandate-capable UPI apps, in the channel's preference order.
-  /// Best-effort -> any failure returns an empty list and the paywall offers the hosted page, no picker.
-  static Future<List<UpiApp>> installed() async {
+  /// The device probe: offered mandate-capable apps plus the mandate handlers the allowlist drops.
+  /// Best-effort -> any failure returns an empty scan and the paywall shows the install prompt.
+  static Future<UpiScan> scan() async {
     try {
-      final raw = await _channel.invokeListMethod<dynamic>('listUpiApps');
-      if (raw == null) return const [];
-      return [
-        for (final entry in raw.whereType<Map<Object?, Object?>>())
-          if (entry['package'] is String && entry['label'] is String)
-            UpiApp(
-              packageName: entry['package']! as String,
-              label: entry['label']! as String,
-              icon: entry['icon'] is Uint8List
-                  ? entry['icon']! as Uint8List
-                  : null,
-            ),
-      ];
+      final raw = await _channel.invokeMapMethod<String, dynamic>(
+        'listUpiApps',
+      );
+      if (raw == null) return const UpiScan.empty();
+      final offered = raw['offered'];
+      final others = raw['others'];
+      return UpiScan(
+        apps: [
+          if (offered is List)
+            for (final entry in offered.whereType<Map<Object?, Object?>>())
+              if (entry['package'] is String && entry['label'] is String)
+                UpiApp(
+                  packageName: entry['package']! as String,
+                  label: entry['label']! as String,
+                  icon: entry['icon'] is Uint8List
+                      ? entry['icon']! as Uint8List
+                      : null,
+                ),
+        ],
+        otherPackages: others is List
+            ? others.whereType<String>().toList(growable: false)
+            : const [],
+      );
     } catch (e) {
       debugPrint('[UpiApps] listUpiApps failed: $e');
-      return const [];
+      return const UpiScan.empty();
     }
   }
 
@@ -88,7 +116,7 @@ class UpiApps {
   }
 }
 
-/// Installed mandate-capable UPI apps for the paywall picker.
+/// The device's UPI-mandate probe for the paywall picker.
 /// The set changes only on an install or uninstall -> keepAlive; re-querying per open buys nothing.
 @Riverpod(keepAlive: true)
-Future<List<UpiApp>> installedUpiApps(Ref ref) => UpiApps.installed();
+Future<UpiScan> installedUpiApps(Ref ref) => UpiApps.scan();
