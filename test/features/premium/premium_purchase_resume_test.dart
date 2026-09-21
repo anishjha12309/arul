@@ -29,6 +29,7 @@ import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
+import 'package:arul/features/premium/domain/trial_nudge.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
 
@@ -522,6 +523,88 @@ void main() {
     );
     // The nudge is remembered exactly as any other dead setup.
     expect(prefs.getKeys(), isNotEmpty);
+    await drain(tester);
+  });
+
+  // ─── The handoff is remembered, not only the ending ───────────────────────
+  // Half of the people who tap the CTA never reach a terminal path: the process dies behind the UPI
+  // app, or they come back and walk off the paywall with the order still open, which disposes the
+  // notifier and ends its watch without an event. The marker is therefore written AT the handoff,
+  // so the feed row and the reminder reach them too, and every settled outcome forgets it.
+
+  testWidgets('the handoff writes the marker before any outcome exists', (
+    tester,
+  ) async {
+    final api = _FakeApi(const ['pending'], intentUrl: _noExpiryUrl);
+    final container = await build(tester, api);
+    unawaited(
+      container
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(targetApp: _phonePe, trialEligible: true),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(launches, hasLength(1));
+    expect(prefs.getString(TrialNudge.orderKey), 'DKS_ORDER_1');
+    expect(TrialNudge.isLive(prefs, DateTime.now()), isTrue);
+    expect(eventsNamed('payment_failed'), isEmpty);
+    await drain(tester);
+  });
+
+  testWidgets('walking off the paywall with the order open keeps the marker', (
+    tester,
+  ) async {
+    final api = _FakeApi(const ['pending'], intentUrl: _noExpiryUrl);
+    final container = await build(tester, api);
+    await launchThenReturn(tester, container);
+    expect(container.read(premiumPurchaseProvider), isA<PurchaseResumable>());
+
+    // The paywall is popped: the autoDispose notifier goes with it and its watch ends silently —
+    // no abandon, no `payment_failed`. This is the walk-away nothing used to remember.
+    container.invalidate(premiumPurchaseProvider);
+    await tester.pump(const Duration(minutes: 20));
+
+    expect(eventsNamed('payment_failed'), isEmpty);
+    expect(TrialNudge.isLive(prefs, DateTime.now()), isTrue);
+    expect(prefs.getString(TrialNudge.orderKey), 'DKS_ORDER_1');
+  });
+
+  testWidgets('an approval forgets the handoff marker', (tester) async {
+    final api = _FakeApi(const ['trialing'], intentUrl: _noExpiryUrl);
+    final container = await build(tester, api);
+    unawaited(
+      container
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(targetApp: _phonePe, trialEligible: true),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+    // Written first — or "it is null afterwards" would hold with no marker ever existing.
+    expect(prefs.getString(TrialNudge.orderKey), 'DKS_ORDER_1');
+
+    unawaited(
+      container.read(premiumPurchaseProvider.notifier).pollNowOnResume(),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(container.read(premiumPurchaseProvider), isA<PurchaseSuccess>());
+    expect(prefs.getInt(TrialNudge.markerKey), isNull);
+    expect(prefs.getString(TrialNudge.orderKey), isNull);
+    await drain(tester);
+  });
+
+  testWidgets('a spent-trial checkout never writes the marker', (tester) async {
+    // The row and the reminder both say "free trial" — a lie to someone abandoning a ₹199 charge.
+    final api = _FakeApi(const ['pending'], intentUrl: _noExpiryUrl);
+    final container = await build(tester, api);
+    unawaited(
+      container
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(targetApp: _phonePe, trialEligible: false),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(launches, hasLength(1));
+    expect(prefs.getInt(TrialNudge.markerKey), isNull);
     await drain(tester);
   });
 

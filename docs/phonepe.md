@@ -79,7 +79,10 @@ and users read it as "payments broken". The short claim window is only the backs
 died without abandoning. The app rides out 409 `setup_in_progress` silently with two retries, and
 **the pairing is load-bearing**: the client retry delays sum to the window, so a stale claim has
 lapsed by the last retry and the message is unreachable for a solo user, while a genuinely concurrent
-attempt still refuses. **Change either side only with the other.**
+attempt still refuses. **Change either side only with the other.** A LINK failure on the initiate
+(DNS miss, the 12 s timeout) is retried under the spinner — 3 attempts, 15 s cap — inside that same
+loop: a first attempt that landed unseen 409s the repeat, and the initiate after the window revokes
+the order nobody was shown. A server ANSWER is never retried.
 
 **A failed setup RESTORES, never just expires.** A resubscribe claims the user's ONE subscriptions
 row, so the claim rides over whatever entitlement that row carried — flipping every failed setup to

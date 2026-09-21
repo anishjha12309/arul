@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_toast.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
@@ -40,6 +41,63 @@ String _monthlyPrice(Map<String, dynamic>? prices) {
   return '₹199';
 }
 
+/// The line a failed checkout shows, in the language the app is running in.
+///
+/// Resolved HERE and not in the notifier: the notifier outlives the paywall and has no locale, and
+/// the toast is raised from a context that does. Exhaustive on purpose — a new kind without a
+/// line is a compile error, never a silent English fallback.
+@visibleForTesting
+String purchaseErrorText(AppLocalizations l10n, PurchaseErrorKind kind) =>
+    switch (kind) {
+      PurchaseErrorKind.generic => l10n.purchaseErrorGeneric,
+      PurchaseErrorKind.network => l10n.purchaseErrorNetwork,
+      PurchaseErrorKind.cancelled => l10n.purchaseCancelled,
+      PurchaseErrorKind.interrupted => l10n.purchaseInterrupted,
+      PurchaseErrorKind.notCompleted => l10n.purchaseNotCompleted,
+      PurchaseErrorKind.inProgress => l10n.purchaseInProgress,
+      PurchaseErrorKind.upiLaunchFailed => l10n.purchaseUpiLaunchFailed,
+      PurchaseErrorKind.intentFailed => l10n.purchaseIntentFailed,
+      PurchaseErrorKind.activateFailed => l10n.purchaseActivateFailed,
+      PurchaseErrorKind.confirmationLate => l10n.purchaseConfirmationLate,
+    };
+
+/// The `paywall_shown` payload — pure, so its shape is pinned by a test, not by a screen.
+///
+/// Every value is a STRING on purpose. GA4 does not parse numeric event-parameter values into
+/// event-scoped custom dimensions on APP streams, so a count sent as `3` is collected and can never
+/// be broken down; a bool is worse, since the GA4 sink coerces it to 1/0. `has_upi_app` rides beside
+/// the app list because two values can never be condensed into GA4's `(other)` row, whatever the
+/// combinations do.
+@visibleForTesting
+Map<String, Object?> paywallShownProperties({
+  required String source,
+  required List<UpiApp> apps,
+  required String? defaultPackage,
+  required bool trialEligible,
+  required String variant,
+}) {
+  // SORTED, not in picker order: the remembered app is floated to the head for the UI, and letting
+  // that order reach the value would file one installed set under as many names as it has orders.
+  final codes = [for (final a in apps) upiAppCode(a.packageName)]..sort();
+  return {
+    // `paywall_source`, never `source` — GA4 already owns `source` as a traffic dimension.
+    'paywall_source': source,
+    'variant': variant,
+    'has_upi_app': codes.isEmpty ? 'no' : 'yes',
+    'upi_app_count': switch (codes.length) {
+      0 => '0',
+      1 => '1',
+      2 => '2',
+      3 => '3',
+      _ => '4plus',
+    },
+    // GA4 drops a parameter value over 100 characters -> six codes is more than can ever install.
+    'upi_apps': codes.isEmpty ? 'none' : codes.take(6).join(','),
+    'default_app': defaultPackage == null ? 'none' : upiAppCode(defaultPackage),
+    'trial_eligible': trialEligible ? 'yes' : 'no',
+  };
+}
+
 /// `14 Jul 2026`. Null in → null out, so callers can hide the row entirely.
 String? _formatDate(DateTime? d) {
   if (d == null) return null;
@@ -69,7 +127,8 @@ String? _formatDate(DateTime? d) {
 ///   • cancelled, still paid-through       → "auto-renew off" + billing + an INLINE Resubscribe.
 ///
 /// `source` is the blocked verb that sent the user here — which entry point actually sells.
-/// Tracking happens at the gate (`ensurePremium`), never here.
+/// The gate fires its own `*_blocked_premium` at `ensurePremium`; the only event raised HERE is
+/// `paywall_shown`, which carries that same verb as `paywall_source`.
 /// This is also the only route that can reach `POST /payments/cancel`.
 class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
@@ -123,6 +182,30 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   /// Cancel-subscription in flight, kept OFF the purchase state machine — the dialog owns feedback.
   bool _cancelBusy = false;
+
+  /// The sell state `paywall_shown` has already reported, null before the first report.
+  String? _paywallShown;
+
+  /// Reports `paywall_shown` ONCE per state of the sell — GA4 only, deliberately off the PostHog
+  /// allow-list ([docs/analytics-events.md]).
+  ///
+  /// The signature is the variant and the INSTALLED APPS, never the whole payload: picking another
+  /// app in the picker moves `default_app` and is a choice inside one view, not a second view.
+  /// Installing one from the prompt does change it, and that second report is the only way the
+  /// prompt's effect on a dead CTA is visible at all.
+  void _trackPaywallShown(Map<String, Object?> properties) {
+    final signature = '${properties['variant']}/${properties['upi_apps']}';
+    if (_paywallShown == signature) return;
+    _paywallShown = signature;
+    // Out of the build phase — `track` reaches a platform channel, which a widget must never do
+    // while it is laying out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(analyticsServiceProvider)
+          .track('paywall_shown', properties: properties);
+    });
+  }
 
   @override
   void initState() {
@@ -341,11 +424,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
           // The warmest moment to ask for a share — they have just decided Arul is worth paying for.
           // Awaited before the pop, so the sheet is never orphaned by this route disappearing.
           unawaited(_celebrate(context));
-        case PurchaseError(:final message, :final cancelled):
+        case PurchaseError(:final kind, :final cancelled):
           // A self-cancelled payment is neutral info, not a red failure — nothing broke.
           showArulToast(
             context,
-            message,
+            purchaseErrorText(l10n, kind),
             kind: cancelled ? ToastKind.info : ToastKind.error,
           );
           ref.read(premiumPurchaseProvider.notifier).reset();
@@ -490,6 +573,24 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             orElse: () => upiApps.first,
           );
 
+    // Reported only once the app probe has ANSWERED: the first build here always has an empty list,
+    // and reporting that would stamp "no UPI app" on every install that ever opened the paywall.
+    if (upiAsync.hasValue) {
+      _trackPaywallShown(
+        paywallShownProperties(
+          source: widget.source,
+          apps: upiAsync.requireValue,
+          defaultPackage: selectedUpiPackage,
+          trialEligible: trialEligible,
+          // No entitlement is the FAILED fetch, which renders the paid copy without knowing it is
+          // right -> its own bucket, so it can never be read as a real trial/paid split.
+          variant: entitlement == null
+              ? 'unknown'
+              : (trialEligible ? 'trial' : 'paid'),
+        ),
+      );
+    }
+
     // The clip is for the TRIAL SELL ONLY — its script ends "start your 1-day trial".
     // That is a lie on the ₹199 variant a spent-trial user sees.
     // `localeProvider` is WATCHED, not read: deferred deliveries can land after the user arrives.
@@ -585,9 +686,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final monthlyPrice = _monthlyPrice(
       ref.watch(appConfigProvider).asData?.value?.prices,
     );
-    final upiApps = _orderedUpiApps(
-      ref.watch(installedUpiAppsProvider).asData?.value ?? const <UpiApp>[],
-    );
+    final upiAsync = ref.watch(installedUpiAppsProvider);
+    final upiApps = _orderedUpiApps(upiAsync.asData?.value ?? const <UpiApp>[]);
     final selectedUpiPackage = _resolvedUpiPackage(upiApps);
     final selectedApp = upiApps.isEmpty
         ? null
@@ -595,6 +695,19 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             (app) => app.packageName == selectedUpiPackage,
             orElse: () => upiApps.first,
           );
+
+    if (upiAsync.hasValue) {
+      _trackPaywallShown(
+        paywallShownProperties(
+          source: widget.source,
+          apps: upiAsync.requireValue,
+          defaultPackage: selectedUpiPackage,
+          // A resubscribe is never a trial — the row already carries a spent `trial_end`.
+          trialEligible: false,
+          variant: 'resubscribe',
+        ),
+      );
+    }
 
     return ArulResubscribeView(
       monthlyPrice: monthlyPrice,

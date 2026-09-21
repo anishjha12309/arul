@@ -1318,7 +1318,7 @@ abstract class AppLocalizations {
   /// **'Approve the payment in {app} to continue.'**
   String premiumResumeHintPaid(String app);
 
-  /// Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences.
+  /// Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences. ta/te/kn/ml add their own word for 'app' AFTER {app} in those lines, so their value here must NOT end in it — it rendered 'your UPI app app'.
   ///
   /// In en, this message translates to:
   /// **'your UPI app'**
@@ -1372,6 +1372,12 @@ abstract class AppLocalizations {
   /// **'Then {price}/month via autopay. Cancel anytime.'**
   String premiumTrialFinePrint(String price);
 
+  /// The price-card fine print on the PAID paywall variant, under the ₹199 lockup. Same sentence as premiumTrialFinePrint without the "Then" — a trial-consumed user is charged the month up front, so nothing precedes it. A commercial statement: the monthly renewal and the cancel-anytime right must both survive translation.
+  ///
+  /// In en, this message translates to:
+  /// **'{price}/month via autopay. Cancel anytime.'**
+  String premiumPaidFinePrint(String price);
+
   /// No description provided for @premiumSocialProof.
   ///
   /// In en, this message translates to:
@@ -1383,6 +1389,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Updates from Arul'**
   String get pushChannelName;
+
+  /// Toast on /premium when the checkout could not reach the server after its retries. The one payment failure the user can fix themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet. Check your connection and try again.'**
+  String get purchaseErrorNetwork;
+
+  /// Toast on /premium for a checkout failure with no more specific line.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get purchaseErrorGeneric;
+
+  /// Neutral toast on /premium when the user backed out of the PhonePe payment page themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment cancelled.'**
+  String get purchaseCancelled;
+
+  /// Toast on /premium when the PhonePe payment page was interrupted before finishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was interrupted. Please try again.'**
+  String get purchaseInterrupted;
+
+  /// Toast on /premium when the PhonePe payment page ended without a completed payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was not completed. Please try again.'**
+  String get purchaseNotCompleted;
+
+  /// Toast on /premium when another payment setup by the same user is still running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment setup is already in progress. Please wait a few seconds and try again.'**
+  String get purchaseInProgress;
+
+  /// Toast on /premium when the chosen UPI app could not be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open your UPI app. Please try again.'**
+  String get purchaseUpiLaunchFailed;
+
+  /// The ONE failure line the UPI-app flow shows. A commercial statement: the refund hedge is conditional ('any amount deducted') and the 4–5 days must survive translation.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.'**
+  String get purchaseIntentFailed;
+
+  /// Toast on /premium when the server reports a terminal state it cannot activate from.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t activate your subscription. Please contact support.'**
+  String get purchaseActivateFailed;
+
+  /// Toast on /premium when the payment may have gone through but the server has not confirmed it yet. A commercial statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.'**
+  String get purchaseConfirmationLate;
 }
 
 class _AppLocalizationsDelegate

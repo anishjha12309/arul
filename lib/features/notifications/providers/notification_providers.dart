@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
+import '../../auth/providers/auth_providers.dart';
 import '../../premium/domain/trial_nudge.dart';
+import '../../premium/providers/entitlement_provider.dart';
 import '../data/notification_service.dart';
 import '../domain/notification_settings.dart';
 
@@ -102,5 +106,17 @@ Future<void> notificationBootstrap(Ref ref) async {
       title: l10n.trialReminderTitle,
       body: l10n.trialReminderBody,
     );
+    // The marker is written when the UPI app takes over, so it can outlive an approval the app
+    // never saw. Entitlement is LAZY — nothing reads it until a gated tap or the feed row — and a
+    // launch that lands on Ringtones or Settings builds neither. Ask now, AFTER the re-arm: a
+    // premium answer resolves the marker and cancels what was just armed. Behind the auth seed, or
+    // the read settles as signed-out before the stored session is known. Never awaited, never
+    // allowed to matter: signed out or offline simply leaves the reminder as it was.
+    unawaited(() async {
+      try {
+        await ref.read(authServiceProvider).initialized;
+        await ref.read(entitlementProvider.future);
+      } catch (_) {}
+    }());
   }
 }

@@ -109,7 +109,17 @@ class ApiAuthService implements AuthService {
     }
 
     BootTrace.mark('authSeed: hasTokens read start');
-    final hasToken = await _api.hasTokens();
+    bool hasToken;
+    try {
+      hasToken = await _api.hasTokens();
+    } catch (e, stack) {
+      // The Android Keystore can refuse the read outright on a low-RAM phone ("Failed to generate
+      // key pair", Android 9). Escaping from here failed [initialized], the splash's await threw
+      // before its `context.go`, and the app sat on the splash on EVERY launch. No readable session
+      // is the same verdict as no session -> the wall, where signing in writes fresh tokens.
+      _crash.recordError(e, stack, reason: 'auth seed: secure storage read');
+      hasToken = false;
+    }
     BootTrace.mark('authSeed: hasTokens read done');
     if (!hasToken) {
       _emit(AuthUserState.unauthenticated());

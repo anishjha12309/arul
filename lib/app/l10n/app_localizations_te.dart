@@ -39,7 +39,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get errorGeneric => 'ఏదో తప్పు జరిగింది.';
 
   @override
-  String get signInCaption => 'దైవత్వం మీ ఇంటిలో';
+  String get signInCaption => 'మీ ఇంటికి దైవం';
 
   @override
   String get signInGoogle => 'Googleతో కొనసాగించండి';
@@ -65,7 +65,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get premiumBenefitApply =>
-      'ఏ వాల్‌పేపర్‌నైనా వర్తింపజేయండి — స్థిరం లేదా లైవ్';
+      'ఏ వాల్‌పేపర్‌నైనా సెట్ చేయండి — స్థిరం లేదా లైవ్';
 
   @override
   String get premiumBenefitLive => 'పూర్తి నాణ్యతలో లైవ్ వీడియో వాల్‌పేపర్లు';
@@ -124,7 +124,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get uploadBody =>
-      'మీ సొంత వాల్‌పేపర్‌ను పంచుకోండి. ప్రతి సమర్పణను మేము సమీక్షిస్తాం.';
+      'మీ సొంత వాల్‌పేపర్‌ను కమ్యూనిటీతో పంచుకోండి. ఇది కనిపించే ముందు ప్రతి సమర్పణను మేము సమీక్షిస్తాం.';
 
   @override
   String get uploadPickCategory => 'ఒక విభాగాన్ని ఎంచుకోండి';
@@ -140,7 +140,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get uploadComingSoon => 'అప్‌లోడ్‌లు తర్వాత వస్తాయి.';
 
   @override
-  String get apply => 'వర్తించు';
+  String get apply => 'సెట్ చేయండి';
 
   @override
   String get share => 'పంచుకోండి';
@@ -162,7 +162,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get appliedLiveFallback =>
-      'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లకు సపోర్ట్ లేదు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.';
+      'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లు పని చేయవు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.';
 
   @override
   String get offlineBody =>
@@ -426,8 +426,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumPerkEvery => 'ప్రతి వాల్‌పేపర్ — స్థిరం, లైవ్';
 
   @override
-  String get premiumPerkApplyShare =>
-      'పరిమితి లేకుండా వర్తింపజేయండి, పంచుకోండి';
+  String get premiumPerkApplyShare => 'పరిమితి లేకుండా సెట్ చేయండి, పంచుకోండి';
 
   @override
   String get premiumPerkNew => 'ప్రతి వారం కొత్తవి';
@@ -461,7 +460,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumWelcomeToast => 'Arul Premiumకు స్వాగతం!';
 
   @override
-  String get premiumCelebrateTitle => 'మీరు చేరారు';
+  String get premiumCelebrateTitle => 'మీరు ప్రీమియంలో';
 
   @override
   String get premiumCelebrateBody =>
@@ -469,7 +468,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get premiumSheetPitch =>
-      'ప్రతి వాల్‌పేపర్ — లైవ్, స్థిరం. ఆరు విభాగాల్లోనూ స్వేచ్ఛగా వర్తింపజేయండి, పంచుకోండి.';
+      'ప్రతి వాల్‌పేపర్ — లైవ్, స్థిరం. ఆరు విభాగాల్లోనూ స్వేచ్ఛగా సెట్ చేయండి, పంచుకోండి.';
 
   @override
   String get premiumKeepBrowsing => 'ఉచితంగా బ్రౌజ్ చేస్తూ ఉండండి';
@@ -615,7 +614,8 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumPerMonthCaption => 'నెలకు';
 
   @override
-  String get premiumTrialLeadPrefix => 'మీ 1 రోజు ఉచిత ట్రయల్ ప్రారంభించండి ';
+  String get premiumTrialLeadPrefix =>
+      'మీ 1 రోజు ఉచిత ట్రయల్ ప్రారంభించడానికి ';
 
   @override
   String get premiumRefundedBadge => 'వెంటనే వాపసు';
@@ -624,7 +624,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumFeatureWallpapers => 'అపరిమిత HD వాల్‌పేపర్లు';
 
   @override
-  String get premiumFeatureRingtones => 'భక్తి రింగ్‌టోన్‌లు';
+  String get premiumFeatureRingtones => 'భక్తి రింగ్‌టోన్లు';
 
   @override
   String get premiumFeatureDaily => 'ప్రతిరోజూ కొత్త కంటెంట్';
@@ -640,7 +640,8 @@ class AppLocalizationsTe extends AppLocalizations {
       '₹2 ధృవీకరణ, వెంటనే వాపసు · ఎప్పుడైనా రద్దు చేయవచ్చు';
 
   @override
-  String get premiumReassurancePaid => 'UPI ఆటోపే భద్రత · ఒకే ట్యాప్‌లో రద్దు';
+  String get premiumReassurancePaid =>
+      'UPI ఆటోపే భద్రత · ఎప్పుడైనా ఒకే ట్యాప్‌లో రద్దు';
 
   @override
   String get premiumInstallUpiTrial =>
@@ -666,7 +667,7 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
-  String get premiumUpiAppGeneric => 'మీ UPI యాప్';
+  String get premiumUpiAppGeneric => 'మీ UPI';
 
   @override
   String get trialNudgeRow => 'మీ ఉచిత ట్రయల్ సెటప్ పూర్తి చేయండి';
@@ -696,10 +697,53 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
+  String premiumPaidFinePrint(String price) {
+    return 'నెలకు $price ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.';
+  }
+
+  @override
   String premiumSocialProof(String name, String city) {
-    return '$city-లో $name లైవ్ వాల్‌పేపర్ పెట్టారు 🙏';
+    return '$city-లో $name లైవ్ వాల్‌పేపర్ సెట్ చేశారు 🙏';
   }
 
   @override
   String get pushChannelName => 'అరుళ్ అప్‌డేట్‌లు';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'ఇంటర్నెట్ లేదు. కనెక్షన్ చూసుకుని మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseErrorGeneric => 'ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseCancelled => 'చెల్లింపు రద్దు చేయబడింది.';
+
+  @override
+  String get purchaseInterrupted =>
+      'చెల్లింపు మధ్యలో ఆగిపోయింది. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseNotCompleted =>
+      'చెల్లింపు పూర్తి కాలేదు. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseInProgress =>
+      'చెల్లింపు ఇప్పటికే జరుగుతోంది. కొన్ని సెకన్లు ఆగి మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'మీ UPI యాప్ తెరవలేకపోయాం. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get purchaseIntentFailed =>
+      'చెల్లింపు విఫలమైంది. ఏదైనా మొత్తం కట్ అయి ఉంటే, అది 4–5 రోజుల్లో మీ ఖాతాకు తిరిగి వస్తుంది.';
+
+  @override
+  String get purchaseActivateFailed =>
+      'మీ సబ్‌స్క్రిప్షన్ యాక్టివేట్ చేయలేకపోయాం. సపోర్ట్‌ను సంప్రదించండి.';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'చెల్లింపు అందింది, కానీ నిర్ధారణ ఆలస్యమవుతోంది. యాప్‌ను మూసి మళ్లీ తెరవండి — మీ సబ్‌స్క్రిప్షన్ త్వరలో యాక్టివ్ అవుతుంది.';
 }

@@ -695,10 +695,53 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String premiumPaidFinePrint(String price) {
+    return '$price/month via autopay. Cancel anytime.';
+  }
+
+  @override
   String premiumSocialProof(String name, String city) {
     return '$name in $city just applied a live wallpaper 🙏';
   }
 
   @override
   String get pushChannelName => 'Updates from Arul';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'No internet. Check your connection and try again.';
+
+  @override
+  String get purchaseErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String get purchaseCancelled => 'Payment cancelled.';
+
+  @override
+  String get purchaseInterrupted =>
+      'Payment was interrupted. Please try again.';
+
+  @override
+  String get purchaseNotCompleted =>
+      'Payment was not completed. Please try again.';
+
+  @override
+  String get purchaseInProgress =>
+      'A payment setup is already in progress. Please wait a few seconds and try again.';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'Could not open your UPI app. Please try again.';
+
+  @override
+  String get purchaseIntentFailed =>
+      'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.';
+
+  @override
+  String get purchaseActivateFailed =>
+      'We couldn\'t activate your subscription. Please contact support.';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.';
 }

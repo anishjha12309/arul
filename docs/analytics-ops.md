@@ -29,7 +29,8 @@ is registered as a custom dimension.** Asking for an unregistered one returns
 the EVENT level, not the PARAMETER level.
 
 Affected: `gis_code` · `ms_since_authenticate` · `description` · `error` · `reason` · `method` ·
-`target_app` · `type` · `category` · `plan` · `late` · `surface`. So "which UPI app expires the
+`target_app` · `type` · `category` · `plan` · `late` · `surface` · `has_upi_app` · `upi_apps` ·
+`upi_app_count` · `default_app` · `paywall_source` · `variant` · `trial_eligible`. So "which UPI app expires the
 mandate" is not answerable off `method`/`target_app` until each is registered in **Admin → Data
 display → Custom definitions** (event-scoped, cap 50). Console only, no code.
 

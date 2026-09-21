@@ -58,6 +58,11 @@ count short of expected in the QA card is the only other signal.
   what is on screen: this runs on every launch, and it wiped unread campaign pushes. The unfinished-trial reminder is therefore re-armed by `notificationBootstrap` AFTER
   `applySettings`, from an instant persisted at abandonment — re-arming from "now" would walk it
   further out on every launch, so the people who open the app most would be the ones never reminded.
+  The marker is written when the UPI app takes over, so it can outlive an approval the app never
+  saw: the re-arm therefore asks entitlement (behind the auth seed, never awaited), and ANY premium
+  read retires marker and reminder. Entitlement is lazy — without the ask, a launch that lands on
+  Ringtones reminds a payer that they "didn't finish". Residual: a payer who never reopens the app
+  before the due time still gets it; the tap lands on their plan, which corrects it.
   Anything one-shot added beside it owes the same treatment.
 - **The trial reminder NEVER requests the notification permission** — it fires from a payment
   failing, which is not an opt-in. No permission means no reminder; the feed row is what covers that

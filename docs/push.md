@@ -144,6 +144,11 @@ returns 404 UNREGISTERED for a dead token and 200 without delivering — proven 
 oldest `token_checked_at` first, deletes the dead ones and stamps the rest; token-less rows unseen for
 7 days go too. It sits behind `PUSH_ENABLED` with the rest of the machinery, and logs only when it
 deleted something. Before it, dead rows piled up between sends and every one cost a delivery.
+**So the registry mirrors who STILL HAS the app, and a low row count is not a registration defect.**
+A new row is checked within a minute and again every hour or two, and about half of installs are
+removed the same day — "rows ÷ sign-ups" over a multi-day cohort reads ~40% and was chased as a
+silent client failure (`getId()`, a hang, a dropped write) for a day. Judge REGISTRATION by coverage
+within 30 minutes of sign-up; judge REACH against GA4 `first_open` minus `app_remove`.
 
 ## Audience — ONE home
 

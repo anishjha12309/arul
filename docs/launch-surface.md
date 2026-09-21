@@ -81,6 +81,10 @@ brown-screen duration fell in two steps, to zero only once both were in.
   persisted first-launch marker reads false and takes the keystore wait, so the picker can never fire
   over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before Firebase** —
   serialising them re-adds real time, and the post-login token write wants the keystore ready.
+- **A secure-storage read that THROWS settles the seed as signed out.** The Android Keystore refuses
+  outright on some low-RAM Android 9 phones ("Failed to generate key pair"). Escaping the seed failed
+  `initialized`, the splash's await threw before its `context.go`, and the app sat on the splash on
+  every launch. Never let the seed future complete with an error — nothing downstream catches it.
 
 ## Dead ends — do not re-attempt
 

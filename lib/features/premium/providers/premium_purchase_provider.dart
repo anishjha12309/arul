@@ -9,6 +9,9 @@ import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/crash/crash_provider.dart';
+import '../../../core/crash/crash_reporter.dart';
+import '../../../core/error/app_exception.dart';
 import '../../../core/upi/upi_apps.dart';
 import 'entitlement_provider.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -68,12 +71,46 @@ final class PurchaseSuccess extends PurchaseState {
   const PurchaseSuccess();
 }
 
+/// What a failed checkout has to SAY, as opposed to the finer `reason` code analytics gets.
+///
+/// The copy lives in the ARBs and is resolved by the screen, where a locale exists: since the
+/// region picks the app language most people run Arul in Tamil, Telugu, Kannada or Malayalam, and
+/// an English sentence at the one moment a payment went wrong is a line most of them cannot read.
+enum PurchaseErrorKind {
+  /// Anything with no better line — "Something went wrong. Please try again."
+  generic,
+
+  /// The link died before the Worker answered — the one failure the user can fix themselves.
+  network,
+
+  /// The user backed out of PhonePe themselves -> a neutral toast, never a red failure.
+  cancelled,
+  interrupted,
+  notCompleted,
+  inProgress,
+  upiLaunchFailed,
+
+  /// The ONE failure line the intent flow ever shows — the refund hedge, stated plainly.
+  intentFailed,
+  activateFailed,
+  confirmationLate,
+}
+
 final class PurchaseError extends PurchaseState {
-  const PurchaseError(this.message, {this.cancelled = false});
-  final String message;
+  const PurchaseError(this.kind);
+
+  final PurchaseErrorKind kind;
 
   /// True when the user backed out of PhonePe themselves -> a neutral toast, never a red failure.
-  final bool cancelled;
+  bool get cancelled => kind == PurchaseErrorKind.cancelled;
+}
+
+/// What one CTA tap may spend on a dead link — see [PremiumPurchase.initiateElapsedCap].
+class _InitiateBudget {
+  _InitiateBudget(this.startedAt);
+
+  final DateTime startedAt;
+  int linkFailures = 0;
 }
 
 /// Manages the PhonePe Standard Checkout trial-start flow.
@@ -100,6 +137,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     // abandonment the user could not see is exactly the one worth remembering. The notifier is
     // keepAlive, so it outlives this autoDispose one and the write always lands.
     _nudge = ref.read(trialNudgeProvider.notifier);
+    _crash = ref.read(crashReporterProvider);
     return const PurchaseIdle();
   }
 
@@ -107,6 +145,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   late AnalyticsService _analytics;
   late TrialConversionCatchUp _catchUp;
   late TrialNudgeNotifier _nudge;
+  late CrashReporter _crash;
 
   /// Whether the attempt in flight is for a FREE TRIAL.
   ///
@@ -333,7 +372,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         if (merchantOrderId.isEmpty) {
           _fail(
             'initiate_incomplete',
-            const PurchaseError('Payment initiation failed. Please try again.'),
+            const PurchaseError(PurchaseErrorKind.generic),
           );
           return;
         }
@@ -354,7 +393,7 @@ class PremiumPurchase extends _$PremiumPurchase {
           environment.isEmpty) {
         _fail(
           'initiate_incomplete',
-          const PurchaseError('Payment initiation failed. Please try again.'),
+          const PurchaseError(PurchaseErrorKind.generic),
         );
         return;
       }
@@ -375,7 +414,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       if (sdkInited != true) {
         _fail(
           'sdk_init_failed',
-          const PurchaseError('PhonePe SDK failed to initialise.'),
+          const PurchaseError(PurchaseErrorKind.generic),
         );
         return;
       }
@@ -406,10 +445,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         // User backed out before the sheet resolved -> release the server's setup claim.
         // So an immediate re-tap starts a fresh flow instead of bouncing off 409 setup_in_progress.
         await _abandonSetup(merchantOrderId);
-        _fail(
-          'user_cancel',
-          const PurchaseError('Payment cancelled.', cancelled: true),
-        );
+        _fail('user_cancel', const PurchaseError(PurchaseErrorKind.cancelled));
         return;
       }
 
@@ -430,17 +466,17 @@ class PremiumPurchase extends _$PremiumPurchase {
         if (sdkError.contains('USER_CANCEL')) {
           _fail(
             'user_cancel',
-            const PurchaseError('Payment cancelled.', cancelled: true),
+            const PurchaseError(PurchaseErrorKind.cancelled),
           );
         } else if (sdkStatus == 'INTERRUPTED') {
           _fail(
             'sdk_interrupted',
-            const PurchaseError('Payment was interrupted. Please try again.'),
+            const PurchaseError(PurchaseErrorKind.interrupted),
           );
         } else {
           _fail(
             'sdk_failed',
-            const PurchaseError('Payment was not completed. Please try again.'),
+            const PurchaseError(PurchaseErrorKind.notCompleted),
           );
         }
         return;
@@ -457,6 +493,8 @@ class PremiumPurchase extends _$PremiumPurchase {
         // Invalidating only the narrow one re-reads the stale detail -> the UI never flips.
         _refreshEntitlement();
         _setState(const PurchaseSuccess());
+        // A marker from an earlier handoff would otherwise outlive the subscription it nags about.
+        await _forgetUnfinished();
         return;
       }
       // A setup of OUR OWN is still running — a double-tap, or a retry over a live first attempt.
@@ -465,28 +503,30 @@ class PremiumPurchase extends _$PremiumPurchase {
       if (e.code == 'setup_in_progress') {
         _fail(
           'setup_in_progress',
-          const PurchaseError(
-            'A payment setup is already in progress. '
-            'Please wait a few seconds and try again.',
-          ),
+          const PurchaseError(PurchaseErrorKind.inProgress),
         );
         return;
       }
-      _fail(
-        'api_error',
-        PurchaseError(
-          e.message.isNotEmpty
-              ? e.message
-              : 'Something went wrong. Please try again.',
-        ),
+      // The Worker's envelope always carries an English sentence. It is for the log: on screen it
+      // was the one checkout failure that stayed English for everyone.
+      debugPrint(
+        '[PremiumPurchase] api_error ${e.status} ${e.code}: ${e.message}',
       );
-    } catch (e) {
+      _fail('api_error', const PurchaseError(PurchaseErrorKind.generic));
+    } catch (e, stack) {
+      // A dead link is not "something went wrong": it is the one failure the person can fix, and
+      // it used to hide inside `unexpected_error` — every DNS miss and 12 s timeout on the initiate
+      // landed here, because the http layer throws its own types, never an [ApiException].
+      // [_postInitiate] has already spent its retries by the time one reaches this line.
+      if (isNetworkError(e)) {
+        _fail('network_error', const PurchaseError(PurchaseErrorKind.network));
+        return;
+      }
       // Never show the raw exception — it can carry SDK or stack detail.
       debugPrint('[PremiumPurchase] unexpected error: $e');
-      _fail(
-        'unexpected_error',
-        const PurchaseError('Something went wrong. Please try again.'),
-      );
+      // With the network cases named, whatever is left is a genuine defect -> make it visible.
+      _crash.recordError(e, stack, reason: 'purchase unexpected_error');
+      _fail('unexpected_error', const PurchaseError(PurchaseErrorKind.generic));
     }
   }
 
@@ -512,13 +552,14 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _abandonSetup(merchantOrderId);
       _fail(
         'upi_launch_failed',
-        const PurchaseError('Could not open your UPI app. Please try again.'),
+        const PurchaseError(PurchaseErrorKind.upiLaunchFailed),
       );
       return;
     }
 
     _setState(const PurchaseProcessing());
     _intentOrderId = merchantOrderId;
+    unawaited(_rememberHandoff(merchantOrderId));
     try {
       await _confirmWithServer(merchantOrderId, delays: _intentPollDelays);
     } finally {
@@ -526,12 +567,40 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// The ONE failure line the intent flow ever shows.
-  /// The audience is not payment-literate -> the app decides, and states the refund hedge plainly.
-  /// No "cancelled vs failed vs interrupted" taxonomy, and no button they must find.
-  static const _intentFailedCopy =
-      'Payment failed. Any amount deducted will be '
-      'refunded to your account within 4–5 days.';
+  /// Writes the unfinished-trial marker the moment the UPI app takes over.
+  ///
+  /// Every terminal path below already remembers the attempt — but half of the people who tap the
+  /// CTA never reach one. They leave the UPI app for the launcher and the process dies behind them,
+  /// or they come back, see the resume button and walk off the paywall, which disposes this notifier
+  /// and ends [_watchResumable] without a word. No `payment_failed`, no marker, so no feed row and
+  /// no reminder for exactly the people both were built for. From the handoff on the attempt IS
+  /// unfinished, so it is written down here and every settled outcome forgets it
+  /// ([TrialNudgeNotifier.resolve]); the feed row forgets it too the moment `/me` reads premium.
+  ///
+  /// Never allowed to cost the checkout: the mandate is already open in another app, so this is
+  /// fired and not awaited — a notification channel that stalls as the activity backgrounds must
+  /// not hold the confirmation poll behind it.
+  Future<void> _rememberHandoff(String merchantOrderId) async {
+    try {
+      await _nudge.remember(merchantOrderId, trialAttempt: _trialAttempt);
+    } catch (e) {
+      debugPrint('[PremiumPurchase] handoff marker not written: $e');
+    }
+  }
+
+  /// Forgets the unfinished-trial marker on a settled checkout, and can never undo the settle:
+  /// a throw from here escaped [startTrial] after success, or restarted the poll it sat inside.
+  Future<void> _forgetUnfinished() async {
+    try {
+      await _nudge.resolve();
+    } catch (e) {
+      debugPrint('[PremiumPurchase] unfinished-trial marker not cleared: $e');
+    }
+  }
+
+  // [PurchaseErrorKind.intentFailed] is the ONE failure line the intent flow ever shows.
+  // The audience is not payment-literate -> the app decides, and states the refund hedge plainly.
+  // No "cancelled vs failed vs interrupted" taxonomy, and no button they must find.
 
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
@@ -605,7 +674,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         );
         _refreshEntitlement();
         _setState(const PurchaseSuccess());
-        await _nudge.resolve();
+        await _forgetUnfinished();
         return true;
       }
       if (serverStatus == 'expired') {
@@ -618,7 +687,7 @@ class PremiumPurchase extends _$PremiumPurchase {
           _trackPaymentFailed('expired', cancelled: false);
           _setState(const PurchaseIdle());
         } else {
-          _fail('expired', const PurchaseError(_intentFailedCopy));
+          _fail('expired', const PurchaseError(PurchaseErrorKind.intentFailed));
         }
         await _nudge.remember(orderId, trialAttempt: _trialAttempt);
         return true;
@@ -666,7 +735,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       _trackPaymentFailed(reason, cancelled: false);
       _setState(const PurchaseIdle());
     } else {
-      _fail(reason, const PurchaseError(_intentFailedCopy));
+      _fail(reason, const PurchaseError(PurchaseErrorKind.intentFailed));
     }
     if (nudge) await _nudge.remember(orderId, trialAttempt: _trialAttempt);
   }
@@ -770,7 +839,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _abandonSetup(resumable.merchantOrderId);
       _fail(
         'upi_launch_failed',
-        const PurchaseError('Could not open your UPI app. Please try again.'),
+        const PurchaseError(PurchaseErrorKind.upiLaunchFailed),
       );
       return;
     }
@@ -916,7 +985,7 @@ class PremiumPurchase extends _$PremiumPurchase {
           );
           _refreshEntitlement();
           _setState(const PurchaseSuccess());
-          await _nudge.resolve();
+          await _forgetUnfinished();
           return;
         }
 
@@ -930,8 +999,8 @@ class PremiumPurchase extends _$PremiumPurchase {
           _fail(
             'expired',
             _intentOrderId != null
-                ? const PurchaseError(_intentFailedCopy)
-                : const PurchaseError('Payment cancelled.', cancelled: true),
+                ? const PurchaseError(PurchaseErrorKind.intentFailed)
+                : const PurchaseError(PurchaseErrorKind.cancelled),
           );
           await _nudge.remember(merchantOrderId, trialAttempt: _trialAttempt);
           return;
@@ -941,9 +1010,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         debugPrint('[PremiumPurchase] terminal server status: $serverStatus');
         _fail(
           'server_terminal',
-          const PurchaseError(
-            'We couldn’t activate your subscription. Please contact support.',
-          ),
+          const PurchaseError(PurchaseErrorKind.activateFailed),
         );
         return;
       } on ApiException catch (e) {
@@ -971,10 +1038,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       // Still counted, because the checkout ended without premium; `reason` separates the two.
       _failUnconfirmed(
         'confirmation_unreachable',
-        const PurchaseError(
-          'Payment received but confirmation is delayed. '
-          'Please restart the app — your subscription will activate shortly.',
-        ),
+        const PurchaseError(PurchaseErrorKind.confirmationLate),
       );
       return;
     }
@@ -990,10 +1054,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
     _failUnconfirmed(
       'confirmation_late',
-      const PurchaseError(
-        'Payment received but confirmation is delayed. '
-        'Please restart the app — your subscription will activate shortly.',
-      ),
+      const PurchaseError(PurchaseErrorKind.confirmationLate),
     );
   }
 
@@ -1013,15 +1074,58 @@ class PremiumPurchase extends _$PremiumPurchase {
   ];
 
   Future<dynamic> _initiateWithRetry(Map<String, Object?> body) async {
+    // ONE budget for the whole tap, drawn on by both loops: a timeout whose request landed comes
+    // back as a 409, and a fresh budget per post let that buy a second full round of timeouts —
+    // about 44 s under a spinner with no way out.
+    final budget = _InitiateBudget(_now());
     for (final delay in _initiateRetryDelays) {
       try {
-        return await _api.post('/payments/initiate', body: body);
+        return await _postInitiate(body, budget);
       } on ApiException catch (e) {
         if (e.code != 'setup_in_progress') rethrow;
         await Future<void>.delayed(delay);
       }
     }
-    return _api.post('/payments/initiate', body: body);
+    return _postInitiate(body, budget);
+  }
+
+  /// The initiate's connectivity budget — the same two knobs `POST /auth/login` runs on, for the
+  /// same two failures measured on this audience's links: fully offline fails INSTANTLY (`Failed
+  /// host lookup`), so the attempt count is what matters; a mid-flow blip surfaces as ApiClient's
+  /// 12 s timeout on a link that recovered seconds earlier, so the elapsed cap is — one more 12 s
+  /// attempt fits inside it, a third never starts.
+  @visibleForTesting
+  static const initiateMaxAttempts = 3;
+  @visibleForTesting
+  static const initiateElapsedCap = Duration(seconds: 15);
+  @visibleForTesting
+  static const initiateBackoff = Duration(milliseconds: 1500);
+
+  /// One `POST /payments/initiate`, retried under the CTA's spinner when the LINK failed.
+  ///
+  /// About 6 in 100 checkouts died here as "Something went wrong" with no second try, on a request
+  /// the person had already committed to. A server ANSWER is never retried — the Worker spoke.
+  /// Safe against a first attempt that landed unseen: the Worker refuses the repeat inside its
+  /// claim window with 409 `setup_in_progress`, which [_initiateWithRetry] rides out, and the
+  /// initiate after that revokes the order nobody was ever shown.
+  /// Timed on [clock], never a [Stopwatch]: the cap has to be reachable from a test.
+  Future<dynamic> _postInitiate(
+    Map<String, Object?> body,
+    _InitiateBudget budget,
+  ) async {
+    while (true) {
+      try {
+        return await _api.post('/payments/initiate', body: body);
+      } catch (e) {
+        if (!isNetworkError(e)) rethrow;
+        budget.linkFailures++;
+        if (budget.linkFailures >= initiateMaxAttempts ||
+            _now().difference(budget.startedAt) >= initiateElapsedCap) {
+          rethrow;
+        }
+        await Future<void>.delayed(initiateBackoff);
+      }
+    }
   }
 
   /// Tells the server the launched setup is dead -> the claim is released and the next initiate is clean.

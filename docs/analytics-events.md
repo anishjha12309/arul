@@ -86,10 +86,25 @@ as an abandoned checkout. Its `method` (`upi_app`|`phonepe_sdk`) and `target_app
 app expires the mandate" — where the paid funnel is actually lost. It is a bare string literal, not
 an `ArulEvents` constant.
 
+`paywall_shown` reports the sell ONCE the installed-app probe has ANSWERED — the list arrives
+asynchronously, and reporting the first build stamps `has_upi_app: no` on every install that ever
+opened the paywall. **GA4-only**, pinned off the PostHog list by the gating test. It answers which
+UPI apps a user was actually offered: `has_upi_app`, `upi_app_count`, `upi_apps` (short codes,
+**sorted** — the picker floats the remembered app to the head, and picker order would file one
+installed set under every rotation of it), `default_app`, `trial_eligible`, `variant`
+(`trial`|`paid`|`resubscribe`|`unknown`, the last being an entitlement that would not load) and
+`paywall_source`, the gate verb — GA4 owns the bare `source` as a traffic dimension. **Every value
+is a string**: GA4 parses no numeric parameter into an event-scoped custom dimension on APP streams
+and the sink coerces a bool to 1/0, so a count sent as a number is collected and can never be broken
+down. It repeats inside one visit only when the installed SET changes, which is the only proof the
+install prompt ever works.
+
 `payment_failed` is GA4-only (a failure is a diagnostic; an ad optimiser fed one trains on the wrong
 outcome) and covers EVERY terminal exit of the purchase notifier through one `_fail()`, so a new error
 path cannot silently skip it. **`reason` is a short stable code, NEVER the user-facing copy**, which
-is prose and would fragment the metric. A resumable intent that ends without approval says
+is prose and would fragment the metric. `network_error` is a dead link on the initiate after its
+retries; `unexpected_error` is what is left — a genuine defect, also recorded to Crashlytics — so
+never compare it across the split. A resumable intent that ends without approval says
 `intent_app_switched` (the user picked ANOTHER UPI app — there is no start-over button) or
 `intent_resume_expired` (the link's deadline); a PhonePe verdict stays `expired`. All three are
 silent on screen: the event counts it, the user sees no failure. Once the resume button was used, `method` reads `upi_app_resumed` on

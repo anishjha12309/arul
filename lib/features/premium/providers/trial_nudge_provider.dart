@@ -33,9 +33,15 @@ class TrialNudgeNotifier extends _$TrialNudgeNotifier {
     final now = DateTime.now();
     final due = TrialNudge.reminderTime(now);
 
-    // Permission is NEVER requested here — this fires from a payment failing, and the row covers
-    // anyone who has not already opted in. `scheduleTrialReminder` answers false when it did not
-    // arm, and the instant is persisted only when it did, so the launch re-arm stays honest.
+    // The marker FIRST, before any platform channel. This now runs as the UPI app takes the screen,
+    // and a process killed behind it is exactly who the marker is for — arming the notification
+    // first put two channel round trips between the tap and the only write that has to survive.
+    await TrialNudge.mark(_prefs, orderId: orderId, now: now);
+    state = true;
+
+    // Permission is NEVER requested here — this fires from a payment the user started, and the row
+    // covers anyone who has not already opted in. `scheduleTrialReminder` answers false when it did
+    // not arm, and the instant is persisted only when it did, so the launch re-arm stays honest.
     //
     // Best-effort, and the marker does not depend on it: the ROW is the half that works for
     // everyone, and a notification layer that is absent or refuses must not cost it.
@@ -53,13 +59,18 @@ class TrialNudgeNotifier extends _$TrialNudgeNotifier {
       debugPrint('[TrialNudge] reminder not armed: $e');
     }
 
-    await TrialNudge.mark(
-      _prefs,
-      orderId: orderId,
-      now: now,
-      dueMs: armed ? due.millisecondsSinceEpoch : null,
-    );
-    state = true;
+    if (!armed) return;
+    // Only a resolve() that ran meanwhile can have removed the marker — an approval that settled
+    // while the notification was still being armed. Its cancel came too early to catch this one.
+    if (_prefs.getInt(TrialNudge.markerKey) == null) {
+      try {
+        await ref.read(notificationServiceProvider).cancelTrialReminder();
+      } catch (e) {
+        debugPrint('[TrialNudge] late reminder not cancelled: $e');
+      }
+      return;
+    }
+    await _prefs.setInt(TrialNudge.reminderDueKey, due.millisecondsSinceEpoch);
   }
 
   /// Hides the row for the rest of this process. The marker stays: they did not finish, they only

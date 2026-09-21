@@ -46,7 +46,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A re-subscribe over a `trialing`/`active`/`paused` row PARKS its mandate (`superseded_mandate_id`), revokes nothing at PhonePe; the grant revokes it, every release path restores it as the live mandate with the ladder intact; cancel and account delete revoke both
 - [ ] `/payments/status` grants the month when a never-converted row's `redemption_order_id` is COMPLETED at PhonePe; the redemption webhook grants only on root `payload.state` COMPLETED
 - [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = install prompt + dead CTA, never the hosted page
-- [ ] An abandoned TRIAL setup (never a spent-trial ₹199 one) marks prefs, shows one dismissible feed row and arms one reminder; a premium read or settled purchase clears both
+- [ ] A TRIAL setup (never a spent-trial ₹199 one) marks prefs AT THE UPI HANDOFF, not at a failure — half of CTA taps die with no terminal event (process killed behind the UPI app, paywall popped while resumable); one dismissible feed row and one reminder; a premium read or settled purchase clears both
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause
 - [ ] The app reads `premium` from `GET /me`, never re-deriving the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row — every other state is a sell
 - [ ] One trial ever: `trial_end` consumed-marker + a delete-account HMAC tombstone (secret NEVER rotates)
@@ -117,7 +117,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 
 ## App-wide
 - [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
-- [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT the paywall (English by decision) and purchase/auth error strings
+- [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT auth error toasts. Checkout failures show a localized `PurchaseErrorKind` line, never the Worker's English `message`
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**
 - [ ] `allowBackup=false`, data-extraction rules, HTTPS-only network config

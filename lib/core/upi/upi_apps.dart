@@ -16,6 +16,21 @@ class UpiApp {
   final Uint8List? icon;
 }
 
+/// Short, stable analytics code for a UPI package — `other` for anything unknown.
+///
+/// The package name is 38 characters of noise in a breakdown, and GA4 does not parse numeric
+/// parameter values into event-scoped custom dimensions on APP streams, so every analytics value
+/// about UPI apps is one of these words. Keep in step with `MANDATE_APPS` in `UpiIntentChannel.kt`:
+/// an app earning a place there without a code here reads as `other` and hides inside that bucket.
+String upiAppCode(String packageName) => switch (packageName) {
+  'com.phonepe.app' => 'phonepe',
+  'com.google.android.apps.nbu.paisa.user' => 'gpay',
+  'net.one97.paytm' => 'paytm',
+  'in.org.npci.upiapp' => 'bhim',
+  'com.phonepe.simulator' => 'ppesim',
+  _ => 'other',
+};
+
 /// Platform bridge for the direct UPI-intent mandate flow.
 class UpiApps {
   static const _channel = MethodChannel('com.hsrutility.arul/upi_intent');

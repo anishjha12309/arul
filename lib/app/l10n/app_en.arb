@@ -293,7 +293,7 @@
   },
   "premiumUpiAppGeneric": "your UPI app",
   "@premiumUpiAppGeneric": {
-    "description": "Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences."
+    "description": "Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences. ta/te/kn/ml add their own word for 'app' AFTER {app} in those lines, so their value here must NOT end in it — it rendered 'your UPI app app'."
   },
   "trialNudgeRow": "Finish setting up your free trial",
   "trialNudgeDismiss": "Dismiss",
@@ -304,6 +304,16 @@
   "upiPickerLastUsed": "Last used",
   "premiumTrialFinePrint": "Then {price}/month via autopay. Cancel anytime.",
   "@premiumTrialFinePrint": {
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "premiumPaidFinePrint": "{price}/month via autopay. Cancel anytime.",
+  "@premiumPaidFinePrint": {
+    "description": "The price-card fine print on the PAID paywall variant, under the ₹199 lockup. Same sentence as premiumTrialFinePrint without the \"Then\" — a trial-consumed user is charged the month up front, so nothing precedes it. A commercial statement: the monthly renewal and the cancel-anytime right must both survive translation.",
     "placeholders": {
       "price": {
         "type": "String",
@@ -327,5 +337,45 @@
   "pushChannelName": "Updates from Arul",
   "@pushChannelName": {
     "description": "Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push."
+  },
+  "purchaseErrorNetwork": "No internet. Check your connection and try again.",
+  "@purchaseErrorNetwork": {
+    "description": "Toast on /premium when the checkout could not reach the server after its retries. The one payment failure the user can fix themselves."
+  },
+  "purchaseErrorGeneric": "Something went wrong. Please try again.",
+  "@purchaseErrorGeneric": {
+    "description": "Toast on /premium for a checkout failure with no more specific line."
+  },
+  "purchaseCancelled": "Payment cancelled.",
+  "@purchaseCancelled": {
+    "description": "Neutral toast on /premium when the user backed out of the PhonePe payment page themselves."
+  },
+  "purchaseInterrupted": "Payment was interrupted. Please try again.",
+  "@purchaseInterrupted": {
+    "description": "Toast on /premium when the PhonePe payment page was interrupted before finishing."
+  },
+  "purchaseNotCompleted": "Payment was not completed. Please try again.",
+  "@purchaseNotCompleted": {
+    "description": "Toast on /premium when the PhonePe payment page ended without a completed payment."
+  },
+  "purchaseInProgress": "A payment setup is already in progress. Please wait a few seconds and try again.",
+  "@purchaseInProgress": {
+    "description": "Toast on /premium when another payment setup by the same user is still running on the server."
+  },
+  "purchaseUpiLaunchFailed": "Could not open your UPI app. Please try again.",
+  "@purchaseUpiLaunchFailed": {
+    "description": "Toast on /premium when the chosen UPI app could not be opened."
+  },
+  "purchaseIntentFailed": "Payment failed. Any amount deducted will be refunded to your account within 4–5 days.",
+  "@purchaseIntentFailed": {
+    "description": "The ONE failure line the UPI-app flow shows. A commercial statement: the refund hedge is conditional ('any amount deducted') and the 4–5 days must survive translation."
+  },
+  "purchaseActivateFailed": "We couldn't activate your subscription. Please contact support.",
+  "@purchaseActivateFailed": {
+    "description": "Toast on /premium when the server reports a terminal state it cannot activate from."
+  },
+  "purchaseConfirmationLate": "Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.",
+  "@purchaseConfirmationLate": {
+    "description": "Toast on /premium when the payment may have gone through but the server has not confirmed it yet. A commercial statement."
   }
 }

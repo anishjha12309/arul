@@ -252,6 +252,9 @@ void main() {
       // The rest are attempts, failures and rare account admin -> Crashlytics, GA4 and Neon questions, not funnel ones.
       for (final event in <String>[
         'wallpaper_engaged',
+        // `paywall_shown` fires on every open of the sell -> volume, and GA4 answers the question
+        // it exists for (which UPI apps was this user offered) without spending the PostHog budget.
+        'paywall_shown',
         'feed_session_ended',
         'subscription_active',
         'referral_shared',

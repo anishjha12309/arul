@@ -705,9 +705,11 @@ class _MonthlyOffer extends StatelessWidget {
           ),
         ),
         const _PriceDivider(),
-        // Contractually fixed — ships verbatim.
+        // The renewal and the cancel-anytime right, fixed in substance — but the substance is what
+        // ships verbatim, not the English. Left hardcoded it was the one English sentence on an
+        // otherwise translated paywall, and it sits directly under the price.
         Text(
-          '$monthlyPrice/month via autopay. Cancel anytime.',
+          AppLocalizations.of(context).premiumPaidFinePrint(monthlyPrice),
           textAlign: TextAlign.center,
           style: ArulTokens.paywallFinePrint,
         ),

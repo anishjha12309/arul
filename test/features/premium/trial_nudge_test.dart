@@ -3,10 +3,14 @@
 // The row and the reminder both say "free trial". Saying that to a user who spent theirs — and was
 // abandoning a ₹199 charge — is the failure this file exists to stop, alongside the plainer one of
 // still nagging someone whose payment actually landed.
+import 'dart:async';
+
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/notifications/data/notification_service.dart';
 import 'package:arul/features/notifications/providers/notification_providers.dart';
+import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/domain/trial_nudge.dart';
+import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/trial_nudge_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,12 +22,16 @@ class _FakeNotifications implements NotificationService {
   DateTime? armedFor;
   int cancels = 0;
 
+  /// Runs INSIDE the arm, where the platform channel round trips are in a real build.
+  FutureOr<void> Function()? onSchedule;
+
   @override
   Future<bool> scheduleTrialReminder({
     required DateTime due,
     required String title,
     required String body,
   }) async {
+    await onSchedule?.call();
     if (!enabled) return false;
     armedFor = due;
     return true;
@@ -105,6 +113,94 @@ void main() {
 
       expect(c.read(trialNudgeProvider), isFalse);
       expect(prefs.getInt(TrialNudge.markerKey), isNotNull);
+    });
+  });
+
+  // The marker is written when the UPI app takes over, so it must survive a process that dies a
+  // moment later, and it must never outlive an approval the app did not see.
+  group('written at the handoff', () {
+    test('the marker lands BEFORE the notification is armed', () async {
+      final c = await container();
+      int? markerWhenArming;
+      notifications.onSchedule = () =>
+          markerWhenArming = prefs.getInt(TrialNudge.markerKey);
+
+      await c
+          .read(trialNudgeProvider.notifier)
+          .remember('DKS_S_5', trialAttempt: true);
+
+      expect(
+        markerWhenArming,
+        isNotNull,
+        reason: 'a kill inside the channel round trip must not cost the marker',
+      );
+      expect(prefs.getInt(TrialNudge.reminderDueKey), isNotNull);
+    });
+
+    test('an approval that settles mid-arm leaves nothing behind', () async {
+      final c = await container();
+      final nudge = c.read(trialNudgeProvider.notifier);
+      // The status poll found the mandate approved while the reminder was still being scheduled.
+      notifications.onSchedule = () => nudge.resolve();
+
+      await nudge.remember('DKS_S_6', trialAttempt: true);
+
+      expect(prefs.getInt(TrialNudge.markerKey), isNull);
+      expect(prefs.getInt(TrialNudge.reminderDueKey), isNull);
+      expect(
+        notifications.cancels,
+        2,
+        reason:
+            'the resolve cancelled too early to catch the arm — cancel it again',
+      );
+    });
+
+    test(
+      'a premium entitlement read retires the marker and the reminder',
+      () async {
+        final c = await container();
+        await c
+            .read(trialNudgeProvider.notifier)
+            .remember('DKS_S_7', trialAttempt: true);
+
+        // The grant landed app-closed; this is the read a later launch makes.
+        final probe = Provider<void>(
+          (ref) =>
+              retireUnfinishedTrial(ref, const Entitlement(isPremium: true)),
+        );
+        c.read(probe);
+        await pumpEventQueue();
+
+        expect(c.read(trialNudgeProvider), isFalse);
+        expect(prefs.getInt(TrialNudge.markerKey), isNull);
+        expect(notifications.cancels, 1);
+      },
+    );
+
+    test('a free read leaves it alone', () async {
+      final c = await container();
+      await c
+          .read(trialNudgeProvider.notifier)
+          .remember('DKS_S_8', trialAttempt: true);
+
+      final probe = Provider<void>(
+        (ref) => retireUnfinishedTrial(ref, const Entitlement.none()),
+      );
+      c.read(probe);
+      await pumpEventQueue();
+
+      expect(prefs.getInt(TrialNudge.markerKey), isNotNull);
+      expect(notifications.cancels, 0);
+    });
+
+    test('a marker that cannot be reached never fails the entitlement', () {
+      // No prefs override -> building the notifier throws. The read must not.
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final probe = Provider<void>(
+        (ref) => retireUnfinishedTrial(ref, const Entitlement(isPremium: true)),
+      );
+      expect(() => c.read(probe), returnsNormally);
     });
   });
 
