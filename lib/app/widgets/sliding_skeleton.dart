@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
+import '../theme/motion.dart';
 
 /// Sliding-gradient skeleton, per the spec: `110deg #14090C 30% → #2A1218 50% → #14090C 70%`,
 /// background-size 200%, 1.8s linear loop.
@@ -24,8 +25,26 @@ class _SlidingSkeletonState extends State<SlidingSkeleton>
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: ArulTokens.skeletonLoop, // 1.8s
-  )..repeat();
+  );
   // TickerMode is inherited from the route -> this parks itself when the page isn't current.
+
+  /// Started from [didChangeDependencies], not the field initializer: `reduceMotion` needs an
+  /// InheritedWidget lookup, and a repeating ticker must never be armed before that answer exists.
+  bool _motionStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionStarted) return;
+    _motionStarted = true;
+    if (context.reduceMotion) {
+      // Parked mid-sweep: a static sheen, the resting state of this loop. Never flat — flat reads
+      // as a dead box rather than a loading one.
+      _c.value = 0.5;
+    } else {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {

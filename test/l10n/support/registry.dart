@@ -220,7 +220,7 @@ class _StubPreview extends RingtonePreviewNotifier {
       const RingtonePreviewState(currentId: 'r1', isPlaying: true);
 
   @override
-  Future<void> toggle(Ringtone ringtone) async {}
+  Future<void> toggle(Ringtone ringtone, {bool? reduceMotion}) async {}
 
   @override
   Future<void> stop() async {}
@@ -462,7 +462,10 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     id: 'apply.sheet',
     unlocalizedEnglish: true,
-    build: () => SheetHost(open: (context) => ApplySheet.show(context)),
+    build: () => SheetHost(
+      open: (context) =>
+          ApplySheet.show(context, wallpaper: kFakeWallpapers.first),
+    ),
   ),
 
   // ── Auth ───────────────────────────────────────────────────────────────

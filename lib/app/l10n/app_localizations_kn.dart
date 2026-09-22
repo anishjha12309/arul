@@ -203,6 +203,12 @@ class AppLocalizationsKn extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'ಮುನ್ನೋಟ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ';
 
   @override
+  String get ringtoneVolumeMuted => 'ಈ ಮುನ್ನೋಟ ಕೇಳಲು ಧ್ವನಿ ಹೆಚ್ಚಿಸಿ';
+
+  @override
+  String get ringtoneCurrentBadge => 'ಪ್ರಸ್ತುತ';
+
+  @override
   String get ringtonesEmptyTitle => 'ರಿಂಗ್‌ಟೋನ್‌ಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತಿವೆ';
 
   @override

@@ -17,6 +17,11 @@ at launch because FCM needs it to exist before a message arrives. No screen prom
   `nextOccurrenceAfter` returns null and the festival is **skipped**: it degrades to "no reminders",
   never a reminder on a wrong day. **Never "fix" it by adding 365 days** — that puts a lunisolar
   festival up to a fortnight out.
+- **The tz database is the `latest_10y` variant, and that is safe here, not a corner cut.** It carries
+  the SAME zone names as `latest` (the generator filters both against one `commonLocations` list) and
+  truncates only transitions to ±5 years; a date past the window resolves on the last kept rule, and
+  Asia/Kolkata has had one since 1945. A DST zone read years past the window would freeze on the wrong
+  half — that is the only thing a revert would buy.
 - Reminders fire `kFestivalLeadDays` ahead and the copy never names a date, so a ±1-day disagreement
   between almanacs is invisible (the Settings "Coming up" card does print it).
 - **Scheduling is inexact (`inexactAllowWhileIdle`) on purpose** — exact alarms are special-access

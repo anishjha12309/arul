@@ -468,8 +468,14 @@ void main() {
           ..._item('sivan0'),
           'renewed_at': '2026-09-15T10:30:00.123456Z',
         });
-        expect(renewed.renewedAt, DateTime.utc(2026, 9, 15, 10, 30, 0, 123, 456));
-        expect(Wallpaper.fromJson(renewed.toJson()).renewedAt, renewed.renewedAt);
+        expect(
+          renewed.renewedAt,
+          DateTime.utc(2026, 9, 15, 10, 30, 0, 123, 456),
+        );
+        expect(
+          Wallpaper.fromJson(renewed.toJson()).renewedAt,
+          renewed.renewedAt,
+        );
 
         final never = Wallpaper.fromJson(_item('sivan1'));
         expect(never.renewedAt, isNull);

@@ -163,6 +163,11 @@ Future<void> _startPostHog(
     kAppLanguageProperty: lang,
     kLanguageSourceProperty: origin.source.key,
     kGeoRegionProperty: origin.geoRegion,
+    // Only when the probe has ALREADY answered — priming an unresolved `mid` would stamp a guess
+    // on the pre-login events. `app.dart` registers the real rung the moment it lands, and
+    // `register` overwrites a primed key, so the two can never disagree.
+    if (DeviceQuality.isResolved)
+      kDeviceTierProperty: DeviceQuality.resolved.name,
   });
   await Posthog().setup(config);
   await PostHogAnalyticsService.started();
@@ -205,6 +210,26 @@ Future<void> _startApp() async {
   PaintingBinding.instance.imageCache
     ..maximumSizeBytes = 32 << 20
     ..maximumSize = 40;
+
+  // Then re-ceiling it by device tier, WITHOUT awaiting: the probe is one channel hop but it sits
+  // on the cold-start path the sign-in funnel is measured on, and the 32 MB default above is the
+  // safe answer for every phone in the meantime. The tier lands inside the splash, long before the
+  // feed decodes anything at scale.
+  //   low  — 24 MB: a 2–3 GB phone is where a thrashing cache turns into an OOM kill.
+  //   mid  — 32 MB: unchanged, the measured line (48 MB peaked at 525 MB PSS on an mt6878).
+  //   high — 40 MB: ~5 wallpapers of headroom on an 8 GB phone, still under that measured 48.
+  unawaited(
+    DeviceQuality.tier.then((tier) {
+      final (bytes, count) = switch (tier) {
+        DeviceTier.low => (24 << 20, 30),
+        DeviceTier.mid => (32 << 20, 40),
+        DeviceTier.high => (40 << 20, 48),
+      };
+      PaintingBinding.instance.imageCache
+        ..maximumSizeBytes = bytes
+        ..maximumSize = count;
+    }),
+  );
 
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.

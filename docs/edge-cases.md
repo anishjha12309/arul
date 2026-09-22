@@ -35,6 +35,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
 - [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time, and a resume with no exchange in flight abandons after the grace, then relaunches ONCE
 - [ ] A RETURN to the wall (paused/hidden ≥ 20 s begun after the last outcome, ≥ 60 s since it, nothing in flight) re-arms the automatic sheet ONCE as `sheet_return`; a cancel on the same foreground stretch never relaunches
+- [ ] A RECONNECT (offline→online after a `networkError`/`unknown` failure or GMS's offline `[16] Account reauth failed` cancel, landing after it settled, resumed, nothing in flight) re-arms the sheet as `sheet_reconnect` — ONE per failure, TWO per signed-out stretch, never after a user's cancel
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
 
@@ -88,6 +89,8 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A category is required for BOTH kinds and approval carries it onto the row; `ringtones.category` is NOT NULL, so the CMS vets it BEFORE copying
 - [ ] The kinds do NOT share a category list — the wrong set files a row under a chip that tab never renders. A submitted `deity` stays NULL
 - [ ] Moderation approve NEVER ships a dimension-violating video as-is
+- [ ] ONE picker per app — guard the CALL, not the widget; the pick zone is a bare `GestureDetector` and a double tap opens a second picker over the first
+- [ ] A pick needs NO permission (Photo Picker / audio `GET_CONTENT`), never a `resolveActivity` pre-flight, and the cached copy is swept at the next pick
 
 ## Notifications, share and deep links
 - [ ] Reminders stay local; a campaign push reaches a phone ONLY through the CMS ([push.md](push.md))

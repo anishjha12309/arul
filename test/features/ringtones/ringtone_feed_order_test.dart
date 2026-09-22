@@ -105,7 +105,12 @@ void main() {
     // here is that the tab's provider reaches it, with the real clock, instead of the All comparator.
     final now = DateTime.now();
     final catalog = [
-      _rt('pinned', feedRank: 10, setCount: 500, publishedAt: now.subtract(const Duration(days: 2))),
+      _rt(
+        'pinned',
+        feedRank: 10,
+        setCount: 500,
+        publishedAt: now.subtract(const Duration(days: 2)),
+      ),
       _rt('debut', publishedAt: now.subtract(const Duration(hours: 1))),
       _rt(
         'renewed',
@@ -114,8 +119,16 @@ void main() {
       ),
     ];
 
-    expect(await feed(catalog, WallpaperCategory.newSlug), ['renewed', 'debut', 'pinned']);
-    expect(await feed(catalog, WallpaperCategory.allSlug), ['pinned', 'debut', 'renewed']);
+    expect(await feed(catalog, WallpaperCategory.newSlug), [
+      'renewed',
+      'debut',
+      'pinned',
+    ]);
+    expect(await feed(catalog, WallpaperCategory.allSlug), [
+      'pinned',
+      'debut',
+      'renewed',
+    ]);
   });
 
   test('with nothing pinned and nothing set, the list IS catalog order', () async {

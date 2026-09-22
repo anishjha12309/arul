@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/arul_tokens.dart';
 import 'deity_art.dart';
+import '../../../app/theme/motion.dart';
 
 /// Everything that makes one tile's GROUND look like itself.
 ///
@@ -131,9 +132,13 @@ class _RingtoneTileState extends State<RingtoneTile>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final media = MediaQuery.of(context);
-    _reduceMotion = media.disableAnimations;
-    _devicePixelRatio = media.devicePixelRatio;
+    // The app-wide accessor, not `disableAnimations` alone -> a low-tier phone holds the flame
+    // still for the same reason an accessibility setting does.
+    _reduceMotion = context.reduceMotion;
+    // `devicePixelRatioOf`, not `MediaQuery.of` -> that depends on EVERY aspect, so a keyboard
+    // inset or a rotation would re-run this and `_syncTicker()` on every visible tile. Both reads
+    // here now depend on exactly the aspect they use.
+    _devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     _syncTicker();
   }
 

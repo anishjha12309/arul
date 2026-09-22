@@ -55,6 +55,8 @@
   "tabWallpapers": "वॉलपेपर",
   "ringtonePreviewSemantic": "प्रीव्यू",
   "ringtonePreviewUnavailable": "प्रीव्यू अभी उपलब्ध नहीं है",
+  "ringtoneVolumeMuted": "यह प्रीव्यू सुनने के लिए आव़ाज़ बढ़ाएँ",
+  "ringtoneCurrentBadge": "मौजूदा",
   "ringtonesEmptyTitle": "रिंगटोन जल्द आ रहे हैं",
   "ringtonesEmptyBody": "भक्ति रिंगटोन रास्ते में हैं। कुछ समय बाद फिर देखें।",
   "ringtonesErrorTitle": "रिंगटोन लोड नहीं हो सके",

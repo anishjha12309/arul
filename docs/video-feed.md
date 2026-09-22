@@ -17,7 +17,9 @@ never with an error.
 - **Detect the silent software-decoder fallback** (`onVideoDecoderInitialized`) and demote the pool
   budget 3 → 2, with a **floor of 2**. Only a real codec error may demote to 1.
 - **Never query decoder capability and assume.** `getMaxSupportedInstances` lies in both directions.
-  Attempt and degrade; the try IS the probe.
+  Attempt and degrade; the try IS the probe. Keep the diagnostic query OFF the main thread:
+  `MediaCodecList`'s first enumeration is a binder round-trip to the codec service that some phones
+  answer in seconds, and on main it ANR'd the first feed frame.
 - **Leaving the Wallpapers tab PAUSES at once and frees the decoders only after a grace period**
   (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild:
   measured on a Nothing A001 at **430 ms with no frame on the video surface**, and **10.4% of frames

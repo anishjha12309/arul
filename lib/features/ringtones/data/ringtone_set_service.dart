@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/api/api_client.dart';
 
@@ -32,6 +34,90 @@ class RingtoneSetException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Where one tone lives on the device — its MediaStore URI and the file name MediaStore filed it
+/// under.
+///
+/// The set's receipt and a later read of the system row produce the SAME shape from the same native
+/// query, so the two are directly comparable. The URI is the identity; the name is the fallback axis,
+/// because a media rescan re-keys the row and strands the URI while the file name survives it.
+class RingtoneRef {
+  const RingtoneRef({required this.uri, this.displayName});
+
+  /// The `content://media/external/audio/media/<id>` the tone was registered under.
+  final String uri;
+
+  /// MediaStore's `DISPLAY_NAME` — the catalog title plus the extension, already uniquified by
+  /// MediaStore if it had to be. Null when the provider refused the column.
+  final String? displayName;
+
+  /// Null for anything that is not a usable pair — an empty URI is no URI, never an empty match.
+  static RingtoneRef? fromChannel(Map<Object?, Object?>? map) {
+    final uri = map?['uri'] as String?;
+    if (uri == null || uri.isEmpty) return null;
+    final name = map?['displayName'] as String?;
+    return RingtoneRef(
+      uri: uri,
+      displayName: (name == null || name.isEmpty) ? null : name,
+    );
+  }
+
+  static RingtoneRef? fromJson(Object? json) =>
+      json is Map<String, dynamic> ? fromChannel(json) : null;
+
+  Map<String, Object?> toJson() => {'uri': uri, 'displayName': displayName};
+}
+
+/// The tones Arul itself installed, keyed by ringtone id.
+///
+/// NOT the answer to "which tone is current" — the system row is, and this is only what that row is
+/// compared AGAINST. A tone the user changed outside Arul matches nothing stored here, which is
+/// exactly how the badge takes itself off.
+class RingtoneRefStore {
+  const RingtoneRefStore(this._prefs);
+
+  final SharedPreferences _prefs;
+
+  /// `arul_*`, the app's prefs convention.
+  static const prefsKey = 'arul_ringtone_uris';
+
+  /// The catalog is tens of tracks, so this cap is never reached in practice — it only stops a long
+  /// run of sets growing the pref without bound. The oldest write goes first, and the tone that is
+  /// current is by definition among the most recent.
+  static const _maxEntries = 32;
+
+  /// Every id Arul has set, oldest write first. Unreadable or corrupt JSON reads as empty.
+  Map<String, RingtoneRef> read() {
+    final raw = _prefs.getString(prefsKey);
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return const {};
+      final out = <String, RingtoneRef>{};
+      for (final entry in decoded.entries) {
+        final ref = RingtoneRef.fromJson(entry.value);
+        if (ref != null) out[entry.key] = ref;
+      }
+      return out;
+    } catch (_) {
+      // A pref written by an older shape, or half-written -> start clean rather than throw.
+      return const {};
+    }
+  }
+
+  /// Records [ref] against [ringtoneId], moving a repeat set to the most-recent end.
+  Future<void> record(String ringtoneId, RingtoneRef ref) async {
+    final next = Map<String, RingtoneRef>.from(read())..remove(ringtoneId);
+    next[ringtoneId] = ref;
+    while (next.length > _maxEntries) {
+      next.remove(next.keys.first);
+    }
+    await _prefs.setString(
+      prefsKey,
+      jsonEncode(next.map((id, r) => MapEntry(id, r.toJson()))),
+    );
+  }
 }
 
 abstract interface class RingtoneSetService {
@@ -63,12 +149,23 @@ abstract interface class RingtoneSetService {
   /// [mime] is the real content type registered with MediaStore.
   /// Both come from the catalog row — the file is named by ringtone id, which the user must not see.
   /// Throws [RingtoneSetException] on failure.
-  Future<void> setRingtone(
+  ///
+  /// Returns the [RingtoneRef] the tone was registered under, so a later read of the system row can
+  /// recognise it. Null means only that the platform gave nothing back — the set still SUCCEEDED and
+  /// nothing but the badge's match is lost.
+  Future<RingtoneRef?> setRingtone(
     File file,
     RingtoneTarget target, {
     required String title,
     required String mime,
   });
+
+  /// The tone the device is ringing with RIGHT NOW, read off `Settings.System` natively.
+  ///
+  /// The system is the source of truth: the user may have changed the tone outside Arul, and nothing
+  /// cached here would know. Null on an absent row, an unreadable one, or no platform at all — an
+  /// unreadable tone is "no badge", never an error the Set flow has to handle.
+  Future<RingtoneRef?> readCurrentRingtone();
 }
 
 class AndroidRingtoneSetService implements RingtoneSetService {
@@ -192,23 +289,42 @@ class AndroidRingtoneSetService implements RingtoneSetService {
       _channel.invokeMethod<void>('openWriteSettings');
 
   @override
-  Future<void> setRingtone(
+  Future<RingtoneRef?> setRingtone(
     File file,
     RingtoneTarget target, {
     required String title,
     required String mime,
   }) async {
     try {
-      await _channel.invokeMethod<void>('setRingtone', {
-        'filePath': file.path,
-        'type': target.androidType,
-        'title': title,
-        'mime': mime,
-      });
+      final registered = await _channel.invokeMapMethod<String, Object?>(
+        'setRingtone',
+        {
+          'filePath': file.path,
+          'type': target.androidType,
+          'title': title,
+          'mime': mime,
+        },
+      );
+      return RingtoneRef.fromChannel(registered);
     } on PlatformException catch (e) {
       // e.message is raw platform text — log it, but surface only the authored message.
       debugPrint('[RingtoneSet] ${e.code}: ${e.message}');
       throw RingtoneSetException(e.message ?? 'Failed to set ringtone');
+    }
+  }
+
+  @override
+  Future<RingtoneRef?> readCurrentRingtone() async {
+    try {
+      return RingtoneRef.fromChannel(
+        await _channel.invokeMapMethod<String, Object?>('currentRingtone'),
+      );
+    } catch (e) {
+      // EVERY failure is the same answer: no badge. A missing plugin (tests, a host with no such
+      // channel), a provider that refuses the read, a malformed payload — none of them is a problem
+      // the Set flow can act on, and none may reach it as a throw.
+      debugPrint('[RingtoneSet] current ringtone unreadable: $e');
+      return null;
     }
   }
 }

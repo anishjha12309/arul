@@ -53,6 +53,13 @@ brown-screen duration fell in two steps, to zero only once both were in.
   slowest on entry-level phones. Nothing is lost: the feed's `VideoPreloadController` re-runs the
   full `prefetchAround` on mount. It runs INLINE, because with the brand beat gone its old post-frame
   `!mounted` bail warmed nothing.
+- **The signed-out first second stays as it is: catalog drain, one poster, FCM registration and
+  Meta's fetch all start at launch** (~200 KB). Holding them behind the credential was built and
+  measured: Google's token step and `/geo` moved within noise on Wi-Fi and LTE, push registration
+  landed 9 s later and the feed's first art ~1 s later on LTE; the only gain was on a 7 KB/s link,
+  where cellular-vs-Wi-Fi sign-in differs by ~2 pp. Speed at login won. Never re-add a gate.
+- **`GET /geo`'s timeout is 12 s, not 5.** There is no second ask, and a miss costs the whole first
+  launch its language; the budget is for a slow LINK, never for a slow Worker. Never awaited.
 - **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
   `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
   splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under

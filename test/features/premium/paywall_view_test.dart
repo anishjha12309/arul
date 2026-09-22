@@ -315,8 +315,11 @@ void main() {
       );
 
       expect(find.text('Subscribe Now'), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      await tester.tap(find.byType(CircularProgressIndicator));
+      // Keyed, not typed: the busy indicator is the branded [ArulSpinner] and the key is what
+      // `resubscribe_view_test` already finds the same widget by.
+      final busy = find.byKey(const ValueKey('shrine-cta-progress'));
+      expect(busy, findsOneWidget);
+      await tester.tap(busy);
       expect(pressed, 0);
     });
 

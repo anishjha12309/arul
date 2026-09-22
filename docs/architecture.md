@@ -37,6 +37,11 @@ straight to `active`. Delete-account writes an HMAC tombstone so re-signup pre-s
 and trial farming is closed. Endpoint facts: [phonepe.md](phonepe.md).
 
 ## Uploads (submissions)
+The pick is OUR channel (`MediaPickChannel`), not a plugin: the Android Photo Picker for a wallpaper
+(androidx `PickVisualMedia` builds the intent and carries Google's own fallbacks), `ACTION_GET_CONTENT`
+on `audio/*` for a ringtone. Neither needs a permission — keep `READ_MEDIA_*` out of the manifest or
+Play's Photo and Video Permissions policy asks this app to justify it. The picked stream is copied to
+`cacheDir/upload_picks/`, swept whole at every pick, and Dart only ever sees the copy's path.
 upload-url presigns PUT to `user/<sub>/submissions/…` only. confirm-upload takes kind `wallpaper` or
 `ringtone` and byte-QCs against THAT kind's role — a fixed role rejects every ringtone; max 10
 pending per user; upserts on unique `file_key`, so retries are idempotent. Approval needs a category

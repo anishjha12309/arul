@@ -55,6 +55,8 @@
   "tabWallpapers": "వాల్‌పేపర్లు",
   "ringtonePreviewSemantic": "ప్రివ్యూ",
   "ringtonePreviewUnavailable": "ప్రివ్యూ ఇంకా అందుబాటులో లేదు",
+  "ringtoneVolumeMuted": "ఈ ప్రివ్యూ వినడానికి వాల్యూమ్ పెంచండి",
+  "ringtoneCurrentBadge": "ప్రస్తుతం",
   "ringtonesEmptyTitle": "రింగ్‌టోన్లు త్వరలో వస్తున్నాయి",
   "ringtonesEmptyBody": "భక్తి రింగ్‌టోన్లు దారిలో ఉన్నాయి. కాసేపటి తర్వాత మళ్లీ చూడండి.",
   "ringtonesErrorTitle": "రింగ్‌టోన్లను లోడ్ చేయలేకపోయాం",

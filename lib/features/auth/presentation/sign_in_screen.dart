@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../theme/arul_tokens.dart';
@@ -41,8 +43,10 @@ const double _kPanelPadY = 25;
 /// This IS a wall, deliberately (owner's call) — every signed-out session lands here, no skip.
 /// Browse and preview being free (§5) is about the MEDIA gate, not about reaching the feed unauthed.
 /// **PHASE CONTRACT:** the screen AUTO-LAUNCHES a Google credential request on its FIRST FRAME,
-/// and once more when the app RETURNS to this wall after an away stretch (never after a cancel on
-/// the same foreground stretch) — the rule is [AuthController.noteAppLifecycle]'s, not the screen's.
+/// once more when the app RETURNS to this wall after an away stretch (never after a cancel on
+/// the same foreground stretch), and once more when the LINK comes back after a network-class
+/// failure — the rules are [AuthController.noteAppLifecycle]'s and
+/// [AuthController.noteConnectivity]'s, never the screen's.
 /// That request is SHEET-FIRST — Credential Manager bottom sheet, then the button flow (SIWG guide).
 /// The wall only works because a surface appears without a tap -> never a silent, no-UI check.
 /// ONE visible Google surface per attempt -> the picker follows only when the sheet drew NOTHING.
@@ -90,6 +94,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     super.initState();
     _outcome = widget.debugOutcome;
     WidgetsBinding.instance.addObserver(this);
+    _watchConnectivity();
     _initAutoLaunch();
   }
 
@@ -106,6 +111,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     if (ref.read(authControllerProvider.notifier).noteAppLifecycle(state)) {
       unawaited(_signIn(auto: true));
     }
+  }
+
+  /// The wall's connectivity feed, beside the lifecycle one and with the same contract: it reports
+  /// readings, the controller owns the rule, and the screen joins whatever that re-arms.
+  ///
+  /// A sign-in that died because the link was down leaves the wall inert — the person watches data
+  /// come back and nothing happens. [AuthController.noteConnectivity] decides whether this is that
+  /// case; a loading or errored snapshot is no reading at all and says nothing either way.
+  void _watchConnectivity() {
+    ref.listenManual(isOnlineProvider, (_, next) {
+      final online = next.value;
+      if (online == null) return;
+      if (ref
+          .read(authControllerProvider.notifier)
+          .noteConnectivity(online: online)) {
+        unawaited(_signIn(auto: true));
+      }
+    });
   }
 
   void _initAutoLaunch() {
@@ -420,12 +443,10 @@ class _SignInPillState extends State<_SignInPill> {
             if (widget.busy)
               const Padding(
                 padding: EdgeInsets.only(right: 12),
-                child: SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.2,
-                    color: ArulTokens.gold,
-                  ),
+                child: ArulSpinner(
+                  size: 20,
+                  strokeWidth: 2.2,
+                  color: ArulTokens.gold,
                 ),
               )
             else

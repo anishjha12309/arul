@@ -243,7 +243,9 @@ void main() {
             publishedAt: now.subtract(const Duration(days: 3)),
             renewedAt: now.subtract(const Duration(hours: 1)),
           ),
-          'id-amman1' => w.copyWith(publishedAt: now.subtract(const Duration(days: 1))),
+          'id-amman1' => w.copyWith(
+            publishedAt: now.subtract(const Duration(days: 1)),
+          ),
           _ => w,
         },
     ];
@@ -258,14 +260,19 @@ void main() {
     h.host.maybeRestoreAfterApply(catalog);
     await tester.pump();
 
-    expect(h.host.restoreCalls, [(index: 1, category: newSlug, wasLive: false)]);
+    expect(h.host.restoreCalls, [
+      (index: 1, category: newSlug, wasLive: false),
+    ]);
     expect(h.container.read(selectedCategoryProvider), newSlug);
     expect(
       feedOrder(newSlug, catalog).take(2).map((w) => w.id),
       ['id-temple0', 'id-amman1'],
       reason: 'index 1 in New is the debut under the renewed wallpaper',
     );
-    expect(feedOrder(WallpaperCategory.allSlug, catalog)[1].id, isNot('id-amman1'));
+    expect(
+      feedOrder(WallpaperCategory.allSlug, catalog)[1].id,
+      isNot('id-amman1'),
+    );
   });
 
   testWidgets(

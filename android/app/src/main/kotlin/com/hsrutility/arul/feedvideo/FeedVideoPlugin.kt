@@ -175,21 +175,25 @@ class FeedVideoPlugin(
     // Budget SoCs often report or enforce 2, below the feed's previous+current+next window of 3.
     // That is the signature of the "third wallpaper never renders" bug.
     // Diagnostic ONLY -> the number lies in both directions, so Dart adapts on real decoder errors instead.
+    // Off the main thread: MediaCodecList's first enumeration is a binder round-trip to the codec
+    // service that some phones answer in seconds -> on main it ANR'd the first feed frame (build 80).
     private var loggedDecoderCaps = false
     private fun logDecoderCapsOnce() {
         if (loggedDecoderCaps) return
         loggedDecoderCaps = true
-        try {
-            for (mime in listOf("video/avc", "video/hevc")) {
-                val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull {
-                    !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, ignoreCase = true) }
-                } ?: continue
-                val max = info.getCapabilitiesForType(mime).maxSupportedInstances
-                Log.i(TAG, "decoder caps: $mime via ${info.name}, maxSupportedInstances=$max")
+        Thread {
+            try {
+                for (mime in listOf("video/avc", "video/hevc")) {
+                    val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull {
+                        !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, ignoreCase = true) }
+                    } ?: continue
+                    val max = info.getCapabilitiesForType(mime).maxSupportedInstances
+                    Log.i(TAG, "decoder caps: $mime via ${info.name}, maxSupportedInstances=$max")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "decoder caps query failed (diagnostic only)", e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "decoder caps query failed (diagnostic only)", e)
-        }
+        }.start()
     }
 
     /** Swaps media on a SURVIVING player: setMediaItem + prepare, no surface churn. */

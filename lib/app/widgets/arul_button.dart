@@ -54,9 +54,17 @@ class _ArulButtonState extends State<ArulButton>
     super.dispose();
   }
 
-  void _springTo(double target) => _c.animateWith(
-    SpringSimulation(Motion.press, _c.value, target, _c.velocity),
-  );
+  /// Holds at 1 — the resting scale — when motion is reduced, so the button never dips and never
+  /// changes size. The haptic on press-down still fires: that is feedback, not animation.
+  void _springTo(double target) {
+    if (context.reduceMotion) {
+      _c.value = 1;
+      return;
+    }
+    _c.animateWith(
+      SpringSimulation(Motion.press, _c.value, target, _c.velocity),
+    );
+  }
 
   bool get _enabled => widget.onPressed != null && !widget.busy;
 

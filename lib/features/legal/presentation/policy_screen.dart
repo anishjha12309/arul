@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/state_views.dart';
 import '../../../core/config/app_config.dart';
 import '../../../theme/arul_tokens.dart';
@@ -350,7 +351,8 @@ class _PolicyScreenState extends State<PolicyScreen> {
                           ),
                           if (_loading)
                             Center(
-                              child: CircularProgressIndicator(
+                              child: ArulSpinner(
+                                size: 36,
                                 strokeWidth: 2.4,
                                 color: accent,
                               ),

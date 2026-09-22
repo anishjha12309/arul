@@ -52,6 +52,14 @@ measured on device. Stop re-deriving it.
   `setVideoScalingMode` as `SurfaceView`-only; on an engine surface it works anyway, and
   `dumpsys SurfaceFlinger` still reports the pre-fix scale factors — only a screenshot correlated
   against both renders proves it.
+- **The player takes the raw `Surface`, never the `SurfaceHolder`, and only from main.** Media3
+  documents `setVideoSurfaceHolder` as requiring the holder's callbacks on the player's application
+  looper, and a wallpaper engine cannot promise that: OEM Android 12 builds fire `surfaceChanged` on
+  the service's own thread, so ExoPlayer's own holder callback hit `verifyApplicationThread` and
+  killed the process ("Unable to stop service", the user dropped to the default wallpaper). Pinning
+  the looper to main was not enough on its own. `setVideoSurface(holder.surface)` registers no
+  Media3 callback; the engine's callbacks reach the player through `onMain`, and an off-main
+  `onSurfaceDestroyed` waits (bounded) for `clearVideoSurface` before the framework frees the Surface.
 - **ONE engine on ONE record.** The chooser commits both home and lock together, so they can never
   hold different live videos.
 - Download the MP4 locally FIRST; release the feed decoder only AFTER the download completes, and
@@ -73,6 +81,11 @@ retry, and a manufacturer-keyed fallback trigger is the mass-misroute. Never use
 pre-flight either — query methods are package-visibility-filtered from API 30 and can report "no
 handler" where the launch would succeed; the try/catch IS the probe. And never the `thumbs/` object:
 it is 640-wide, `-q:v 3`.
+
+**Decode the fallback bitmap BOUNDED** — `inJustDecodeBounds` first, then a power-of-two
+`inSampleSize` against 2× screen width (the parallax room the normalizer may emit) — or Play's vitals
+lint flags the unbounded `decodeFile` and an un-normalized source is decoded whole on a budget phone.
+`ARGB_8888` stays: a 565 re-decode bands the q90 JPEG's gradients.
 
 The native result distinguishes the two outcomes (`{outcome: chooser}` vs
 `{outcome: staticFallback, reason}`) so Dart never has to branch on the `unsupported` code, which

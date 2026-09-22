@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/analytics/analytics_provider.dart';
 import '../core/analytics/analytics_service.dart';
+import '../core/config/build_info.dart';
 import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
 import '../core/providers/locale_provider.dart';
@@ -80,6 +81,16 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       analytics.register(kLanguageSourceProperty, next.source.key);
       analytics.register(kGeoRegionProperty, next.geoRegion);
     }, fireImmediately: true);
+    // How much phone this is, on every later event. One probe per process, so this fires once;
+    // events captured before it lands simply carry no tier rather than a guessed one.
+    unawaited(
+      DeviceQuality.tier.then((tier) {
+        if (!mounted) return;
+        ref
+            .read(analyticsServiceProvider)
+            .register(kDeviceTierProperty, tier.name);
+      }),
+    );
   }
 
   PushOpenHandler? _pushOpen;

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../core/config/build_info.dart';
 import '../../../data/models/wallpaper.dart';
 import '../data/feed_video_player.dart';
 import '../data/wallpaper_prefetch_service.dart';
@@ -180,7 +181,21 @@ class VideoPreloadController extends ChangeNotifier
   /// A REPEATED decoder-class error on one open demotes the budget by one ([_demoteBudget]).
   /// The previous-index slot drops first; worst case is current-only.
   /// Devices that never error never demote.
-  static int _decoderBudget = _poolSize;
+  ///
+  /// **Seeded from [DeviceQuality]**, not from [_poolSize]: a `low` phone starts at 2 rather than
+  /// paying the third `prepare()` failure first. Attempt-and-degrade still owns everything above
+  /// that — the tier only picks where the ladder starts, never where it ends.
+  /// Read through the getter so the seed is taken on FIRST use, after `main()`'s probe lands,
+  /// not at class-load time when the answer is still `mid`.
+  static int? _decoderBudgetSeed;
+
+  static int get _decoderBudget =>
+      _decoderBudgetSeed ??= switch (DeviceQuality.resolved) {
+        DeviceTier.low => _poolSize - 1,
+        DeviceTier.mid || DeviceTier.high => _poolSize,
+      };
+
+  static set _decoderBudget(int value) => _decoderBudgetSeed = value;
 
   /// Effective window radii — budget 3 is previous+current+next, 2 is current+next, 1 current only.
   int get _effKeepBehind => _decoderBudget >= 3 ? _keepBehind : 0;

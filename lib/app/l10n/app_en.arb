@@ -83,6 +83,14 @@
   "ringtoneSet": "Set",
   "ringtonePreviewSemantic": "Preview",
   "ringtonePreviewUnavailable": "Preview not available yet",
+  "ringtoneVolumeMuted": "Turn up the volume to hear this preview",
+  "@ringtoneVolumeMuted": {
+    "description": "Toast shown when a ringtone preview is tapped while the phone’s media volume is at zero or it is on silent — nothing would be heard, so the preview does not start. Keep it an instruction, not an error."
+  },
+  "ringtoneCurrentBadge": "Current",
+  "@ringtoneCurrentBadge": {
+    "description": "Tiny badge on the ringtone row that is the phone’s CURRENT ringtone. One short word; it sits in a pill a few characters wide."
+  },
   "ringtonesEmptyTitle": "Ringtones are coming soon",
   "ringtonesEmptyBody": "Devotional ringtones are on their way. Check back soon.",
   "ringtonesErrorTitle": "Couldn't load ringtones",

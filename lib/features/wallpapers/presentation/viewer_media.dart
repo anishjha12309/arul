@@ -6,6 +6,7 @@ import '../../../app/theme/tokens.dart';
 import '../../../data/models/wallpaper.dart';
 import 'video_preload_controller.dart';
 import 'wallpaper_tile.dart';
+import '../../../app/theme/motion.dart';
 
 /// The media layer of one page: poster below, full image or ExoPlayer texture faded in above.
 ///
@@ -100,7 +101,10 @@ class _LiveTexture extends StatelessWidget {
         valueListenable: slot.ready,
         builder: (context, ready, child) => AnimatedOpacity(
           opacity: ready ? 1 : 0,
-          duration: const Duration(milliseconds: 180),
+          // The reveal lands in one frame instead of fading over the poster.
+          duration: context.reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
           child: child,
         ),
         child: ValueListenableBuilder<Size?>(

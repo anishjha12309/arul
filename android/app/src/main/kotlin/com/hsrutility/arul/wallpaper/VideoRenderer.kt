@@ -15,6 +15,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.hsrutility.arul.BuildConfig
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 // Bridges the Engine's [SurfaceHolder] to Media3 ExoPlayer -> every decision below was earned on budget hardware.
 // ExoPlayer does NOT free the decoder on pause() -> it holds the MediaCodec for the player's whole lifetime.
@@ -56,6 +58,15 @@ import java.util.concurrent.ConcurrentHashMap
 // holder, and the framework's next callback kills the PROCESS, dropping the user to the default
 // wallpaper. So the looper is PINNED to main and every entry point goes through [onMain]. On a
 // device whose engine already runs on main this changes nothing: that is the looper Media3 picked.
+// Pinning alone was not enough. Media3 documents setVideoSurfaceHolder as "the thread that calls the
+// SurfaceHolder.Callback methods must be the thread associated with getApplicationLooper", and a
+// wallpaper engine cannot promise that: several OEM Android 12 builds fire surfaceChanged on the
+// service's own HandlerThread, which walked straight into ExoPlayer's own holder callback and its
+// verifyApplicationThread -> IllegalStateException -> the process. So the player is handed the raw
+// [Surface] via setVideoSurface, on main, and NEVER the holder: the engine's callbacks are already
+// forwarded here through [onMain], so nothing is lost, and Media3 registers no callback of its own.
+// A destroy from off-main waits, bounded, for the player to let go before the framework frees the
+// Surface underneath it.
 @UnstableApi
 class VideoRenderer(private val context: Context) {
 
@@ -64,6 +75,9 @@ class VideoRenderer(private val context: Context) {
 
         /** Grace period before a now-invisible wallpaper releases its decoder. */
         private const val INVISIBLE_RELEASE_DELAY_MS = 500L
+
+        /** How long an off-main surface destroy waits for the player to release the Surface -> see the header. */
+        private const val SURFACE_RELEASE_WAIT_MS = 1_000L
 
         /** The ONE scaling mode. Never derived from display metrics, never a second mode. */
         private const val SCALING_MODE = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
@@ -89,6 +103,30 @@ class VideoRenderer(private val context: Context) {
      *  `detach()` still does; posted otherwise, which keeps call order. */
     private fun onMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post { block() }
+    }
+
+    /** [onMain] that an off-main caller WAITS on, bounded, for the one teardown that must finish
+     *  before the framework's own next step -> a Surface it is about to free. Inline on main. */
+    private fun onMainAwait(timeoutMs: Long, block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            block()
+            return
+        }
+        val done = CountDownLatch(1)
+        mainHandler.post {
+            try {
+                block()
+            } finally {
+                done.countDown()
+            }
+        }
+        try {
+            if (!done.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                Log.w(TAG, "Surface release still pending on main after ${timeoutMs}ms")
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     private val releaseOnIdle = Runnable {
@@ -148,7 +186,8 @@ class VideoRenderer(private val context: Context) {
                 .setLooper(Looper.getMainLooper())
                 .build()
                 .apply {
-                setVideoSurfaceHolder(surfaceHolder)
+                // The raw Surface, never the holder -> read the threading note in the header.
+                setVideoSurface(surfaceHolder.surface)
                 // Aspect-true full-bleed -> set on the PLAYER, not per item, so swapVideo keeps it when it reuses this instance.
                 // A re-created player passes through here again. It is re-asserted later too — see [assertScalingMode].
                 setVideoScalingMode(SCALING_MODE)
@@ -211,7 +250,7 @@ class VideoRenderer(private val context: Context) {
             currentSurfaceHolder = surfaceHolder
             val activePlayer = player
             if (activePlayer != null) {
-                activePlayer.setVideoSurfaceHolder(surfaceHolder)
+                activePlayer.setVideoSurface(surfaceHolder.surface)
                 // Re-attaching an output surface drops the codec's scaling mode -> restate it here,
                 // not only where the player is built.
                 assertScalingMode()
@@ -226,7 +265,9 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    fun onSurfaceDestroyed() = onMain {
+    // Awaited, not merely posted: the framework frees the Surface the moment this returns, and the
+    // player has to have let go of it first (clearVideoSurface inside the release).
+    fun onSurfaceDestroyed() = onMainAwait(SURFACE_RELEASE_WAIT_MS) {
         logd("Surface destroyed")
         mainHandler.removeCallbacks(releaseOnIdle)
         currentSurfaceHolder = null

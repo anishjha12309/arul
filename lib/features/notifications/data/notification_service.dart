@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
+// The 10-year database (five years either side of the data build), a quarter of the default one's
+// 270 KB inside libapp.so. Every reminder lands within a few years, and a date past the truncation
+// still resolves on the zone's last rule — Asia/Kolkata has had one since 1945.
+import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/devotional_event.dart';

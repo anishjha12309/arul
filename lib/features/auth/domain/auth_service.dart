@@ -113,6 +113,11 @@ abstract interface class AuthService {
   /// cold start fires. Analytics only — it changes no surface and no order, it only renames the
   /// sheet on this attempt's events (`sheet_return`) so the two populations stay separable.
   ///
+  /// [reconnected] marks the automatic attempt a RECONNECT re-armed — the link that killed the last
+  /// attempt came back. Analytics only, exactly like [returned], which WINS if both are somehow
+  /// set: the sheet is still the first surface, only its name changes (`sheet_reconnect`), so the
+  /// one re-arm a dead link earns can be priced against the cold-start sheet.
+  ///
   /// [reopened] marks the picker the guard puts back after Google's add-account flow handed the
   /// user back with nothing chosen. Analytics only, like [returned]: it is always a BUTTON-flow
   /// attempt (`auto: false`) and only renames that picker (`button_after_add_account`).
@@ -120,6 +125,7 @@ abstract interface class AuthService {
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reconnected = false,
     bool reopened = false,
   });
 

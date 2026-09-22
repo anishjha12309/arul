@@ -73,9 +73,10 @@ class ArulChip extends StatelessWidget {
       onTapDown: onTap == null ? null : (_) => ArulHaptics.selection(),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      // The browse chip DRAWS 34 and is TAPPED at 44 — the visual is the handoff's and does not
-      // move, the extra 5 above and below is transparent hit area. `opaque` is what makes the
-      // padding tappable rather than decorative. The strips that host it own the matching height.
+      // The browse chip DRAWS 34 and is TAPPED at [ArulTokens.minHitTarget] — the visual is the
+      // handoff's and does not move, the slack above and below is transparent hit area. `opaque` is
+      // what makes the padding tappable rather than decorative. The strips that host it own the
+      // matching height.
       child: variant == ArulChipVariant.category
           ? SizedBox(
               height: ArulTokens.minHitTarget,
@@ -89,7 +90,12 @@ class ArulChip extends StatelessWidget {
   }
 
   /// The browse chip's fixed DRAWN height. Its tap target is [ArulTokens.minHitTarget].
-  static const double _categoryHeight = 34;
+  /// The category chip's VISUAL height. Public because the loading skeletons draw the same pill and
+  /// must not read [categoryStripHeight], which is the hit box -> a skeleton built from the hit box
+  /// shrank to 34 the moment the catalog landed.
+  static const double categoryHeight = 34;
+
+  static const double _categoryHeight = categoryHeight;
 
   /// The height a strip must give a row of [ArulChipVariant.category] chips so the hit area that
   /// surrounds their 34dp visual is not clipped back off.

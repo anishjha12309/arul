@@ -55,6 +55,8 @@
   "tabWallpapers": "വാൾപേപ്പറുകൾ",
   "ringtonePreviewSemantic": "പ്രിവ്യൂ",
   "ringtonePreviewUnavailable": "പ്രിവ്യൂ ഇപ്പോൾ ലഭ്യമല്ല",
+  "ringtoneVolumeMuted": "ഈ പ്രിവ്യൂ കേൾക്കാൻ ശബ്ദം കൂട്ടുക",
+  "ringtoneCurrentBadge": "നിലവിലുള്ളത്",
   "ringtonesEmptyTitle": "റിംഗ്ടോണുകൾ ഉടൻ വരുന്നു",
   "ringtonesEmptyBody": "ഭക്തി റിംഗ്ടോണുകൾ വഴിയിലുണ്ട്. അൽപസമയത്തിനു ശേഷം വീണ്ടും നോക്കുക.",
   "ringtonesErrorTitle": "റിംഗ്ടോണുകൾ ലോഡ് ചെയ്യാനായില്ല",

@@ -15,6 +15,7 @@ import '../features/upload/presentation/upload_screen.dart';
 import 'widgets/english_only.dart';
 import '../features/wallpapers/presentation/feed_screen.dart';
 import 'shell/app_shell.dart';
+import 'theme/motion.dart';
 import 'theme/theme.dart';
 
 /// Routes.
@@ -22,7 +23,8 @@ import 'theme/theme.dart';
 /// Splash decides imperatively: loading stays -> unauthed goes /sign-in -> authed goes /browse.
 /// Wallpapers · Ringtones · Settings are always-alive dock BRANCHES -> Settings is never a push.
 /// Their sub-screens (notifications, premium, refer, upload) stay top-level pushes OVER the shell.
-/// Transitions come from the theme -> a custom pageBuilder here opts the route out of predictive back.
+/// Every push goes through [ArulPushPage] -> read its doc before writing a pageBuilder here: a
+/// plain `CustomTransitionPage` opts the route out of predictive back.
 final router = GoRouter(
   initialLocation: '/',
   // Incoming links — the installed half of every ad/share URL (docs/deep-links.md).
@@ -86,21 +88,28 @@ final router = GoRouter(
     GoRoute(
       path: '/settings/notifications',
       // Whole-screen English (EnglishOnly doc): `remindersTitle` is demoted.
-      builder: (_, _) => const EnglishOnly(child: NotificationSettingsScreen()),
+      pageBuilder: (_, state) =>
+          _push(state, const EnglishOnly(child: NotificationSettingsScreen())),
     ),
-    GoRoute(path: '/refer', builder: (_, _) => const ReferScreen()),
+    GoRoute(
+      path: '/refer',
+      pageBuilder: (_, state) => _push(state, const ReferScreen()),
+    ),
     // Whole-screen English (EnglishOnly doc): four upload keys are demoted.
     GoRoute(
       path: '/upload',
-      builder: (_, _) => const EnglishOnly(child: UploadScreen()),
+      pageBuilder: (_, state) =>
+          _push(state, const EnglishOnly(child: UploadScreen())),
     ),
     // Privacy / Terms, read in-app.
     // Pushed OVER the shell -> the Settings branch's own dock does not paint across it.
     // Push it with `PolicyDoc.route`, never a literal path.
     GoRoute(
       path: '/policy/:doc',
-      builder: (_, state) =>
-          PolicyScreen(doc: PolicyDoc.fromSlug(state.pathParameters['doc'])),
+      pageBuilder: (_, state) => _push(
+        state,
+        PolicyScreen(doc: PolicyDoc.fromSlug(state.pathParameters['doc'])),
+      ),
     ),
     GoRoute(
       path: '/premium',
@@ -109,12 +118,137 @@ final router = GoRouter(
       // `ensurePremium` fires `${source}_blocked_premium` at the GATE before pushing -> never track here.
       // Sheets and dialogs inherit theme from the SCREEN's context, above anything its build wraps.
       // A Theme inside the screen left the UPI picker sheet dark -> pin LIGHT at the ROUTE level.
-      builder: (_, state) => Theme(
-        data: ArulTheme.light(),
-        child: PremiumScreen(
-          source: state.uri.queryParameters['source'] ?? 'unknown',
+      pageBuilder: (_, state) => _push(
+        state,
+        Theme(
+          data: ArulTheme.light(),
+          child: PremiumScreen(
+            source: state.uri.queryParameters['source'] ?? 'unknown',
+          ),
         ),
       ),
     ),
   ],
 );
+
+/// The page every pushed route builds.
+///
+/// go_router's own default page carries key, name, arguments and a restoration id -> a page built
+/// here owes the same four, or a route silently loses its restoration scope.
+ArulPushPage<void> _push(GoRouterState state, Widget child) =>
+    ArulPushPage<void>(
+      key: state.pageKey,
+      name: state.name ?? state.path,
+      arguments: <String, String>{
+        ...state.pathParameters,
+        ...state.uri.queryParameters,
+      },
+      restorationId: state.pageKey.value,
+      child: child,
+    );
+
+/// A pushed screen: the theme's page transition, with ONE branch of our own for reduced motion.
+///
+/// **Predictive back rides on [MaterialRouteTransitionMixin] and nothing else.** The theme's
+/// `PredictiveBackPageTransitionsBuilder` is reached only through it, and that builder is what
+/// mounts the observer Android's back gesture talks to — a route that supplies its own
+/// `transitionsBuilder` (go_router's `CustomTransitionPage`) never mounts it, so the swipe still
+/// pops but the page behind it no longer previews. Measured on Flutter 3.44: the pushed page sits
+/// at dx 0 for the whole drag instead of riding out to 24.8. The same swap also silences the route
+/// BELOW, because `canTransitionTo` refuses a next route that is neither this mixin nor a delegate.
+/// So the shared-axis push stays the theme's `FadeForwardsPageTransitionsBuilder` — the slide+fade
+/// Android 16 itself uses — and only its TIMING is ours.
+class ArulPushPage<T> extends Page<T> {
+  const ArulPushPage({
+    required this.child,
+    super.key,
+    super.name,
+    super.arguments,
+    super.restorationId,
+  });
+
+  final Widget child;
+
+  @override
+  Route<T> createRoute(BuildContext context) => _ArulPushRoute<T>(page: this);
+}
+
+class _ArulPushRoute<T> extends PageRoute<T>
+    with MaterialRouteTransitionMixin<T> {
+  _ArulPushRoute({required ArulPushPage<T> page}) : super(settings: page);
+
+  ArulPushPage<T> get _page => settings as ArulPushPage<T>;
+
+  @override
+  Widget buildContent(BuildContext context) => _page.child;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  String get debugLabel => '${super.debugLabel}(${_page.name})';
+
+  /// The theme's builder asks for 450ms — Android 16's own number, standing in for springs Flutter
+  /// stable does not have. The house's page-level reveal is [Motion.enter].
+  /// Safe against the back gesture: the DRAG is driven by the gesture's own progress, not by this
+  /// duration (the preview measures identically at 450 and at 300); only the commit settles sooner.
+  @override
+  Duration get transitionDuration => Motion.enter;
+
+  @override
+  Duration get reverseTransitionDuration => Motion.enter;
+
+  /// Reduced motion: a plain fade, and the page under it holds still (see [_pushedDelegate]).
+  /// Nothing translates, so a phone that turns battery saver on mid-session sees no re-layout.
+  /// This branch is also the one place predictive back is given up — an unmounted observer is the
+  /// price of not sliding — and the gesture still pops, the binding falls back to a plain pop.
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (context.reduceMotion) {
+      return FadeTransition(
+        opacity: animation.drive(CurveTween(curve: Motion.enterCurve)),
+        child: child,
+      );
+    }
+    return super.buildTransitions(
+      context,
+      animation,
+      secondaryAnimation,
+      child,
+    );
+  }
+
+  /// How the route BELOW this one animates out.
+  ///
+  /// A plain tear-off, never a closure: `didChangeNext` compares this against the lower route's own
+  /// delegate by identity, and a fresh closure each read makes it adopt ours — which then suppresses
+  /// the lower route's secondary animation and freezes the shell mid-push.
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition => _pushedDelegate;
+}
+
+/// The shell's outgoing slide, and its absence under reduced motion.
+///
+/// Returning [child] untouched is what holds the page below still; the animated arm is the theme
+/// builder's own delegate, so a normal push looks exactly as it did before this page existed.
+Widget? _pushedDelegate(
+  BuildContext context,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+  bool allowSnapshotting,
+  Widget? child,
+) {
+  if (context.reduceMotion) return child;
+  return const FadeForwardsPageTransitionsBuilder().delegatedTransition!(
+    context,
+    animation,
+    secondaryAnimation,
+    allowSnapshotting,
+    child,
+  );
+}

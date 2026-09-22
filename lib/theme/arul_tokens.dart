@@ -655,8 +655,15 @@ abstract final class ArulTokens {
   /// Confirm-dialog button height. 46.
   static const double dialogButtonHeight = 46;
 
-  /// Minimum interactive hit target. 44.
-  static const double minHitTarget = 44;
+  /// Minimum interactive hit target. 48.
+  ///
+  /// Android's number, not iOS's 44 — Material's `MaterialTapTargetSize.padded`, the Accessibility
+  /// Scanner's "touch target" check and WCAG 2.2 AA (2.5.8) all measure against 48. Every custom
+  /// tappable in this app is built from this one constant, so the VISUALS never moved when it rose:
+  /// each site centres its own drawn size inside the box and only the transparent hit area grew.
+  /// Where a gap is drawn NEXT to one of these boxes it must be written as `gap - slack`, never as
+  /// a literal, or the box's growth eats the gap — `RingtoneRow.controlGap` is the worked example.
+  static const double minHitTarget = 48;
 
   // Floating dock geometry — constraints in docs/ui-direction.md §Dock; these values are the record.
   // The dock OVERLAYS the branch content -> these are also what a scrolling list must clear.
@@ -1369,7 +1376,7 @@ abstract final class ArulTokens {
   /// Gap from the back ring to the member navigation title.
   static const double premiumMemberNavGap = 10;
 
-  /// Diameter of the visible ring inside the 44px back hit target.
+  /// Diameter of the visible ring inside the [minHitTarget] back hit target.
   static const double premiumMemberBackRingSize = 34;
 
   /// Stroke width of the member back ring and quiet controls.

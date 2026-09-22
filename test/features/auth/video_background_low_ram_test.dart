@@ -21,8 +21,12 @@ void main() {
   void mockLowRam(bool isLow) {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    // The poster rule is now the `low` rung of the device tier -> the probe the widget makes is
+    // `deviceTier`, and `DeviceMemory.isLow` derives from its answer.
     messenger.setMockMethodCallHandler(buildInfo, (call) async {
-      if (call.method == 'isLowRamDevice') return isLow;
+      if (call.method == 'deviceTier') {
+        return <String, Object?>{'tier': isLow ? 'low' : 'high'};
+      }
       return null;
     });
     // The event channel's listen/cancel must not throw -> a no-op handler.
@@ -37,7 +41,7 @@ void main() {
 
   setUp(() {
     videoCalls = <String>[];
-    DeviceMemory.resetForTesting();
+    DeviceQuality.resetForTesting();
   });
 
   tearDown(() {
@@ -46,7 +50,7 @@ void main() {
     messenger.setMockMethodCallHandler(buildInfo, null);
     messenger.setMockMethodCallHandler(feedVideo, null);
     messenger.setMockMethodCallHandler(feedVideoEvents, null);
-    DeviceMemory.resetForTesting();
+    DeviceQuality.resetForTesting();
   });
 
   Future<void> mountAndUnmount(WidgetTester tester) async {
@@ -77,7 +81,38 @@ void main() {
   });
 
   test('DeviceMemory fails open to false when no channel answers', () async {
-    // No mock handler at all -> MissingPluginException -> ordinary phone.
+    // No mock handler at all -> MissingPluginException -> the tier fails open to `mid`, which is
+    // not `low`, so the phone is treated as ordinary and keeps its video.
     expect(await DeviceMemory.isLow, isFalse);
+    expect(DeviceQuality.resolved, DeviceTier.mid);
+  });
+
+  test('an unreadable tier name fails open to mid, never to low', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(buildInfo, (call) async {
+      if (call.method == 'deviceTier') {
+        return <String, Object?>{'tier': 'gibberish'};
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(buildInfo, null));
+    expect(await DeviceQuality.tier, DeviceTier.mid);
+    expect(await DeviceMemory.isLow, isFalse);
+  });
+
+  test('a low tier is what DeviceMemory.isLow reports', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(buildInfo, (call) async {
+      if (call.method == 'deviceTier') {
+        return <String, Object?>{'tier': 'low', 'totalMem': 2800000000};
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(buildInfo, null));
+    expect(await DeviceMemory.isLow, isTrue);
+    expect(DeviceMemory.resolved, isTrue);
+    expect(DeviceQuality.facts['totalMem'], 2800000000);
   });
 }

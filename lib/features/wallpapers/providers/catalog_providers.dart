@@ -376,20 +376,22 @@ List<T> newOrder<T>(
     return b.compareTo(a);
   }
 
-  final renewed = [
-    for (final k in keyed)
-      if (fresh(k.ren)) k,
-  ]..sort((a, b) {
-      final c = newestFirst(a.ren, b.ren);
-      return c != 0 ? c : byUsesThenId(a, b);
-    });
-  final debuts = [
-    for (final k in keyed)
-      if (!fresh(k.ren) && fresh(k.pub)) k,
-  ]..sort((a, b) {
-      final c = newestFirst(a.pub, b.pub);
-      return c != 0 ? c : byUsesThenId(a, b);
-    });
+  final renewed =
+      [
+        for (final k in keyed)
+          if (fresh(k.ren)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.ren, b.ren);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
+  final debuts =
+      [
+        for (final k in keyed)
+          if (!fresh(k.ren) && fresh(k.pub)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.pub, b.pub);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
 
   final head = [...renewed, ...debuts];
   if (head.length >= kNewMinItems) {
@@ -398,13 +400,14 @@ List<T> newOrder<T>(
 
   // Filler: MEMBERSHIP by recency (the next-newest), ORDER by use. Two sorts on purpose — sorting the
   // whole remainder by use would pull in the most-applied rows of all time, not the most recent.
-  final rest = [
-    for (final k in keyed)
-      if (!fresh(k.ren) && !fresh(k.pub)) k,
-  ]..sort((a, b) {
-      final c = newestFirst(a.pub, b.pub);
-      return c != 0 ? c : byUsesThenId(a, b);
-    });
+  final rest =
+      [
+        for (final k in keyed)
+          if (!fresh(k.ren) && !fresh(k.pub)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.pub, b.pub);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
   final filler = rest.take(kNewMinItems - head.length).toList()
     ..sort(byUsesThenId);
   return List<T>.unmodifiable([

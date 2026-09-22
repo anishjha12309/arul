@@ -79,6 +79,30 @@ class FeedCardGeometry {
   /// Inset of the Apply/Share row from the card's left, right and bottom edges.
   static const actionInset = 14.0;
 
+  /// The action row's height, and both its controls'. Pakiza's 52, so the pill and the circle sit on
+  /// one baseline whatever the locale does to the label.
+  ///
+  /// These four live HERE, not on the private widgets that draw them, because the LOADING skeleton
+  /// has to place the same objects at the same sizes and cannot import a private field. A skeleton
+  /// that hand-copies them drifts out of step the first time one is tuned, and a skeleton drifting
+  /// out of step with its row is the exact defect the reel's geometry rules exist to prevent
+  /// ("skeleton and reel read the SAME geometry").
+  static const actionBarHeight = 52.0;
+
+  /// Gap between the Apply pill and the share circle.
+  static const actionGap = 12.0;
+
+  /// The share circle's diameter — square on [actionBarHeight] so the two controls share a baseline.
+  static const shareDiameter = actionBarHeight;
+
+  /// The Apply pill's floor width, so it reads as the dominant action even where the localized verb
+  /// is one short word. The skeleton draws the FLOOR, never a midpoint: real content can then only
+  /// grow into the placeholder, never shrink out of it.
+  static const applyPillMinWidth = 168.0;
+
+  /// Its ceiling, so a long Malayalam verb cannot push the share circle off the card.
+  static const applyPillMaxWidth = 240.0;
+
   /// How much of the next card we aim to reveal — an AIM, not a promise.
   ///
   /// At [cardAspect] the card takes more than the whole reel -> a normal phone clamps to [minPeek].

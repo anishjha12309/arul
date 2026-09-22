@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
+import '../theme/motion.dart';
+import 'arul_spinner.dart';
 
 /// The green primary CTA — `ctaGreen` is the fill for ALL primary CTAs.
 ///
@@ -61,13 +63,7 @@ class _CtaButtonState extends State<CtaButton> {
         widget.expand ? w : IntrinsicWidth(child: w);
 
     final child = widget.busy
-        ? const SizedBox.square(
-            dimension: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-              color: Colors.white,
-            ),
-          )
+        ? const ArulSpinner(size: 22, strokeWidth: 2.4, color: Colors.white)
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -106,8 +102,11 @@ class _CtaButtonState extends State<CtaButton> {
         onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
         onTap: _enabled ? widget.onPressed : null,
         child: AnimatedScale(
-          scale: _pressed ? 0.97 : 1,
-          duration: const Duration(milliseconds: 90),
+          // Parked at the resting scale when motion is reduced; the haptic still answers the press.
+          scale: _pressed && !context.reduceMotion ? 0.97 : 1,
+          duration: context.reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 90),
           child: Opacity(
             opacity: _enabled ? 1 : 0.5,
             // A Container with a non-null alignment fills bounded constraints even at width null ->

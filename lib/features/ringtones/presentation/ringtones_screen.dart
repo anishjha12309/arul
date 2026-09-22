@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,9 +9,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
+import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_earn_button.dart';
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
@@ -25,14 +28,16 @@ import '../data/ringtone_set_service.dart';
 import '../providers/ringtone_catalog_providers.dart';
 import '../providers/ringtone_preview_provider.dart';
 import '../providers/ringtone_set_provider.dart';
+import 'current_ringtone_badge.dart';
 import 'deity_art.dart';
 import 'ringtone_states.dart';
 import 'ringtone_tile.dart';
 
 /// The Ringtones tab — a category-chip browse over rows; preview free, "Set" premium-gated.
 ///
-///   * **One value drives the whole now-playing look** — fill, border, title, button and diya all
-///     read the same `currentId`. No per-row flag can fall out of sync, and clearing it stops audio;
+///   * **One value drives the whole now-playing look** — fill, border, title, button, its position
+///     ring and diya all read the same `currentId`. No per-row flag can fall out of sync, and
+///     clearing it stops audio;
 ///   * **The art is BUNDLED, not fetched** — the catalog carries only a `deity` slug the app maps
 ///     to one of 17 PNGs. Nothing here can 404, so the list has no image loading state at all.
 ///
@@ -190,6 +195,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     ref.watch(entitlementProvider);
 
     // Preview failure → localized toast, once per error tick.
+    // A muted media stream reports through the SAME issue flag (W5) -> one more branch, same toast.
     ref.listen(ringtonePreviewProvider, (prev, next) {
       if (next.hasError && !(prev?.hasError ?? false)) {
         showArulToast(
@@ -197,6 +203,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
           l10n.ringtonePreviewUnavailable,
           kind: ToastKind.error,
         );
+        ref.read(ringtonePreviewProvider.notifier).clearError();
+      } else if (next.isMuted && !(prev?.isMuted ?? false)) {
+        showArulToast(context, l10n.ringtoneVolumeMuted, kind: ToastKind.error);
         ref.read(ringtonePreviewProvider.notifier).clearError();
       }
     });
@@ -340,7 +349,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
 class _RingtoneChips extends ConsumerWidget {
   const _RingtoneChips();
 
-  /// The chips draw 34 and are tapped at 44 -> the strip owes the taller box.
+  /// The chips draw 34 and are tapped at [ArulTokens.minHitTarget] -> the strip owes the taller box.
   static const double _height = ArulChip.categoryStripHeight;
 
   @override
@@ -415,7 +424,10 @@ class _ChipsSkeleton extends StatelessWidget {
           for (final w in _widths) ...[
             Container(
               width: w,
-              height: _RingtoneChips._height,
+              // The PILL's height, not the strip's. `_RingtoneChips._height` is the hit box;
+              // drawing the placeholder at the hit box made the whole rail shrink to 34 the moment
+              // the catalog landed, which is the jump this skeleton exists to prevent.
+              height: ArulChip.categoryHeight,
               decoration: BoxDecoration(
                 color: fill,
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
@@ -484,7 +496,7 @@ class RingtoneRow extends ConsumerWidget {
   final Ringtone ringtone;
   final VoidCallback onSet;
 
-  /// Handoff geometry for the two-line row: `52 + 2×9 = 70` tall.
+  /// Handoff geometry for the two-line row: `56 + 2×9` around a title/subtitle stack that is taller still — read `extentFor`.
   /// The ART drives the height -> a track with no deity makes a shorter text column, not a shorter row.
   static const double coverSize = RingtoneTile.defaultSize;
   static const double _padH = 12;
@@ -502,7 +514,7 @@ class RingtoneRow extends ConsumerWidget {
     const sub = ArulTokens.caption;
     final text =
         scaler.scale(title.fontSize!) * title.height! * _titleMaxLines +
-        _titleSubGap +
+        titleSubGap +
         scaler.scale(sub.fontSize!) * sub.height!;
     return math.max(coverSize, text);
   }
@@ -517,12 +529,27 @@ class RingtoneRow extends ConsumerWidget {
   static const int _titleMaxLines = 2;
 
   /// The gap the deity label sits under the title by.
-  static const double _titleSubGap = 2;
+  /// Public because [RingtonesLoading]'s skeleton row draws the same stack and was hand-keeping a
+  /// copy of it (`ringtone_states.dart`) -> one home, so the two cannot drift.
+  static const double titleSubGap = 2;
 
-  /// The gap the handoff draws between the row's children.
-  /// Both trailing controls centre their visual in a [ArulTokens.minHitTarget] box.
-  /// So the DRAWN gap is this plus that box's own slack — see [_PlayButton].
-  static const double _gap = 12;
+  /// The gap the handoff draws between the row's children — the gap the EYE sees.
+  /// Both trailing controls centre their visual in a [ArulTokens.minHitTarget] box, so next to one
+  /// of those the gap to lay out is [controlGap], not this. Public for the same reason as
+  /// [titleSubGap].
+  static const double gap = 12;
+
+  /// The transparent slack a trailing control's hit box carries on each side of its own visual.
+  ///
+  /// DERIVED, never written down: [ArulTokens.minHitTarget] rose from iOS's 44 to Android's 48 and
+  /// this is the number that absorbed it. The visual stayed 34 and the drawn gap stayed [gap] —
+  /// only the invisible box grew.
+  static const double controlSlack =
+      (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
+
+  /// The gap to LAY OUT beside a trailing control so the gap the eye sees is still [gap].
+  /// A literal here is a bug waiting on the next hit-target change; the skeleton reads this too.
+  static const double controlGap = gap - controlSlack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -530,6 +557,9 @@ class RingtoneRow extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final preview = ref.watch(ringtonePreviewProvider);
+    // A plain read, not a watch -> the NOTIFIER reference itself never changes, so grabbing it here
+    // costs this row no extra rebuild. [_PositionRing] uses it to reach the position stream directly.
+    final previewNotifier = ref.read(ringtonePreviewProvider.notifier);
     final setStateValue = ref.watch(ringtoneSetProvider);
     final setBusy = setStateValue is RingtoneSetLoading;
     final setLoadingThis =
@@ -542,8 +572,6 @@ class RingtoneRow extends ConsumerWidget {
 
     // The medallion keeps its lit overlay through buffering -> no dark → lit flash when it opens.
     final lit = isPlaying || isBuffering;
-
-    final playSlack = (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
 
     return Container(
       // PINNED, never the content's own height — see [innerHeightFor]. A row that grew with its own
@@ -576,7 +604,7 @@ class RingtoneRow extends ConsumerWidget {
             playing: lit,
             size: coverSize,
           ),
-          const SizedBox(width: _gap),
+          const SizedBox(width: gap),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -599,30 +627,54 @@ class RingtoneRow extends ConsumerWidget {
                 // Deliberately NOT tinted by now-playing: a second gold line read as disabled.
                 if (ringtone.deityLabel case final label?)
                   Padding(
-                    padding: const EdgeInsets.only(top: _titleSubGap),
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: ArulTokens.caption.copyWith(
-                        color: isDark
-                            ? ArulTokens.darkMuted
-                            : ArulTokens.lightSecondary,
-                      ),
+                    padding: const EdgeInsets.only(top: titleSubGap),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: ArulTokens.caption.copyWith(
+                              color: isDark
+                                  ? ArulTokens.darkMuted
+                                  : ArulTokens.lightSecondary,
+                            ),
+                          ),
+                        ),
+                        // The tone the SYSTEM currently holds, never a locally remembered id -> a
+                        // tone changed outside Arul matches nothing and the badge simply goes
+                        // ([currentRingtoneIdProvider]); loading and error both render as no badge.
+                        //
+                        // On the SUBTITLE line, not the outer row. Beside the title it ate the
+                        // width the title needs and turned "Venkatesha Garuda Dhvaja" into
+                        // "Venkate sha Ga…" on a 720p phone. The deity label is one short word and
+                        // gives the space up cheaply; the badge is shorter than this line's own
+                        // box at every text scale, so the row's pinned height never moves.
+                        if (ref
+                                .watch(currentRingtoneIdProvider)
+                                .asData
+                                ?.value ==
+                            ringtone.id) ...[
+                          const SizedBox(width: gap),
+                          const CurrentRingtoneBadge(),
+                        ],
+                      ],
                     ),
                   ),
               ],
             ),
           ),
-          SizedBox(width: _gap - playSlack),
+          const SizedBox(width: controlGap),
           _PlayButton(
             playing: isPlaying,
             buffering: isBuffering,
             semanticLabel: l10n.ringtonePreviewSemantic,
+            previewNotifier: previewNotifier,
             onTap: () =>
                 ref.read(ringtonePreviewProvider.notifier).toggle(ringtone),
           ),
-          SizedBox(width: _gap - playSlack),
+          const SizedBox(width: controlGap),
           _SetPill(
             label: l10n.ringtoneSet,
             busy: setLoadingThis,
@@ -634,19 +686,29 @@ class RingtoneRow extends ConsumerWidget {
   }
 }
 
-/// The row's preview toggle — a 34px circle centred in a 44px box.
-/// The handoff is explicit: the VISUAL stays 34 and only the hit area grows.
+/// The row's preview toggle — a 34px circle centred in a [ArulTokens.minHitTarget] box.
+/// The handoff is explicit: the VISUAL stays 34 and only the hit area grows. It grew again when the
+/// hit target went to Android's 48; [RingtoneRow.controlGap] is what absorbed it, so the gap the eye
+/// sees on either side of this control is unchanged.
+///
+/// While lit, [_PositionRing] draws a thin gold ring around the circle (W6) — OUTSIDE the 34px
+/// visual and INSIDE the hit box, so neither the control's size nor its tap target moves for it.
 class _PlayButton extends StatelessWidget {
   const _PlayButton({
     required this.playing,
     required this.buffering,
     required this.semanticLabel,
+    required this.previewNotifier,
     required this.onTap,
   });
 
   final bool playing;
   final bool buffering;
   final String semanticLabel;
+
+  /// Read, never watched, by [_PositionRing]'s own [State] -> a position tick reaches the ring
+  /// alone and never runs this button's, or [RingtoneRow]'s, build method again.
+  final RingtonePreviewNotifier previewNotifier;
   final VoidCallback onTap;
 
   static const double visualSize = 34;
@@ -678,39 +740,220 @@ class _PlayButton extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         child: SizedBox.square(
           dimension: ArulTokens.minHitTarget,
-          child: Center(
-            child: Container(
-              width: visualSize,
-              height: visualSize,
-              decoration: BoxDecoration(
-                color: fill,
-                shape: BoxShape.circle,
-                border: Border.all(color: border),
-                boxShadow: lit ? ArulTokens.nowPlayingButtonGlow : null,
-              ),
-              child: Center(
-                child: buffering
-                    // Not in the handoff, which draws a settled state.
-                    // A CDN stream takes a beat to open, and a dead pause glyph reads as a failed tap.
-                    ? SizedBox.square(
-                        dimension: _glyphSize,
-                        child: CircularProgressIndicator(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: visualSize,
+                height: visualSize,
+                decoration: BoxDecoration(
+                  color: fill,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: border),
+                  boxShadow: lit ? ArulTokens.nowPlayingButtonGlow : null,
+                ),
+                child: Center(
+                  child: buffering
+                      // Not in the handoff, which draws a settled state.
+                      // A CDN stream takes a beat to open, and a dead pause glyph reads as a failed tap.
+                      ? ArulSpinner(
+                          size: _glyphSize,
                           strokeWidth: 2,
                           color: glyph,
+                        )
+                      : _TransportIcon(
+                          playing: playing,
+                          size: _glyphSize,
+                          color: glyph,
                         ),
-                      )
-                    : _TransportIcon(
-                        playing: playing,
-                        size: _glyphSize,
-                        color: glyph,
-                      ),
+                ),
               ),
-            ),
+              // AFTER the button, not before it. The lit button carries `nowPlayingButtonGlow`, an
+              // 8px gold blur with no offset on a 34 circle -> it washes straight across the ring at
+              // radius 18-20 and lifts the faint track toward the elapsed arc's own gold, flattening
+              // the contrast the arc reads by. Painting the ring last keeps that contrast.
+              //
+              // Mounted ONLY while lit -> the ring's play/pause/track-change lifecycle IS its own
+              // widget lifecycle, the same `lit` flag as everything else now-playing in this row
+              // (docs/edge-cases.md: ONE currentId), never a second read of preview state.
+              if (lit)
+                _PositionRing(
+                  previewNotifier: previewNotifier,
+                  reduceMotion: context.reduceMotion,
+                ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// The playing row's elapsed-position ring (W6) — a thin gold arc around [_PlayButton]'s 34px
+/// circle, sized to clear it without growing the hit box either sits inside.
+///
+/// Built ONLY for the duration [_PlayButton] judges the row lit, so this [State]'s own mount/unmount
+/// IS the subscribe/unsubscribe: no separate "am I still the playing row" check is needed anywhere
+/// in here.
+class _PositionRing extends StatefulWidget {
+  const _PositionRing({
+    required this.previewNotifier,
+    required this.reduceMotion,
+  });
+
+  final RingtonePreviewNotifier previewNotifier;
+  final bool reduceMotion;
+
+  /// Outer diameter — clears [_PlayButton.visualSize] (34) on the inside and
+  /// [ArulTokens.minHitTarget] on the outside, so it touches neither. Raising the hit target only
+  /// ever moves the outer clearance further away; this stays fixed to the VISUAL it rings.
+  static const double _diameter = 40;
+  static const double _strokeWidth = 2;
+
+  @override
+  State<_PositionRing> createState() => _PositionRingState();
+}
+
+class _PositionRingState extends State<_PositionRing> {
+  /// Holds the painter's OWN repaint trigger -> a tick here never rebuilds this State, [_PlayButton],
+  /// or [RingtoneRow] above it. Same shape as [RingtoneTileDiyaPainter]'s `flicker` Animation.
+  final ValueNotifier<double> _progress = ValueNotifier<double>(0);
+
+  StreamSubscription<Duration>? _sub;
+  DateTime _lastSample = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// <=30fps: `positionStream` ticks far more often than that on some platforms, so most ticks are
+  /// dropped here rather than queued or painted.
+  static const Duration _sampleInterval = Duration(milliseconds: 33);
+
+  /// [reduceMotion] holds the arc at ONE step per second instead of ~30 -> the same direct value-set
+  /// either way, with no tween between samples, is what makes the slow path read as the arc jumping
+  /// between still positions rather than as a coarser sweep.
+  static const Duration _reducedSampleInterval = Duration(seconds: 1);
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PositionRing old) {
+    super.didUpdateWidget(old);
+    // The shared player is a singleton for the provider's whole lifetime -> this only re-fires on
+    // the edge case of the provider itself being torn down and rebuilt under this same row.
+    if (old.previewNotifier != widget.previewNotifier) {
+      unawaited(_sub?.cancel());
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    try {
+      _sub = widget.previewNotifier.positionStream.listen(
+        _onPosition,
+        onError: (_) {},
+      );
+    } catch (_) {
+      // A preview notifier with no live player under it — reachable only from a test double
+      // standing in for the real one — leaves the ring parked at 0 rather than crashing the row.
+    }
+  }
+
+  void _onPosition(Duration position) {
+    // The subscription is cancelled in dispose() right before `_progress` is disposed; this guard
+    // makes the ordering explicit rather than relying on the stream never dispatching after cancel.
+    if (!mounted) return;
+    final now = DateTime.now();
+    final minInterval = widget.reduceMotion
+        ? _reducedSampleInterval
+        : _sampleInterval;
+    if (now.difference(_lastSample) < minInterval) return;
+    _lastSample = now;
+
+    Duration? clipDuration;
+    try {
+      clipDuration = widget.previewNotifier.clipDuration;
+    } catch (_) {
+      clipDuration = null;
+    }
+    // Null means "no arc yet" (the source is still preparing) -> 0, never a guessed denominator.
+    if (clipDuration == null || clipDuration <= Duration.zero) {
+      _progress.value = 0;
+      return;
+    }
+    final raw = position.inMilliseconds / clipDuration.inMilliseconds;
+    _progress.value = math.min(1.0, math.max(0.0, raw));
+  }
+
+  @override
+  void dispose() {
+    unawaited(_sub?.cancel());
+    _progress.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    // Without this the 30 fps tick marks the nearest boundary dirty, which is the LIST ITEM -> the
+    // row's decoration, both Texts, the transport glyph and the Set pill all repaint with it.
+    // Every sibling that paints on a ticker already has one (ArulSpinner, Skeleton, RingtoneTile).
+    child: SizedBox.square(
+      dimension: _PositionRing._diameter,
+      child: CustomPaint(
+        painter: _PositionRingPainter(
+          progress: _progress,
+          strokeWidth: _PositionRing._strokeWidth,
+        ),
+      ),
+    ),
+  );
+}
+
+/// A faint full track plus a brighter arc for the elapsed fraction — the same two-layer language
+/// [ArulSpinner] already draws, one gold token at two alphas, never a second colour.
+class _PositionRingPainter extends CustomPainter {
+  /// Repaints on every [progress] tick by reading `.value` fresh inside [paint] -> ONE long-lived
+  /// painter instance, never rebuilt per tick, matching [RingtoneTileDiyaPainter]'s `flicker` wiring.
+  _PositionRingPainter({required this.progress, required this.strokeWidth})
+    : super(repaint: progress);
+
+  final ValueListenable<double> progress;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..color = ArulTokens.gold.withValues(alpha: 0.25),
+    );
+
+    // Already clamped to 0–1 where it is set (position ÷ clipDuration) -> paint reads it as-is.
+    final value = progress.value;
+    if (value <= 0) return;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      value * 2 * math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round
+        ..color = ArulTokens.gold,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PositionRingPainter old) =>
+      old.progress != progress || old.strokeWidth != strokeWidth;
 }
 
 /// The play triangle and pause bars, in the handoff's 24-unit viewBox.
@@ -782,7 +1025,7 @@ class _TransportIconPainter extends CustomPainter {
 
 /// The row's commit verb — outlined in both themes and identical whether or not the row is playing.
 /// So the eye never mistakes it for the transport control.
-/// Lays out at the 44px minimum height with the 32px pill centred inside.
+/// Lays out at [ArulTokens.minHitTarget] with the 32px pill centred inside.
 class _SetPill extends StatelessWidget {
   const _SetPill({
     required this.label,
@@ -839,13 +1082,7 @@ class _SetPill extends StatelessWidget {
                   child: Center(
                     widthFactor: 1,
                     child: busy
-                        ? SizedBox.square(
-                            dimension: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: fg,
-                            ),
-                          )
+                        ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
                         : Text(
                             label,
                             maxLines: 1,

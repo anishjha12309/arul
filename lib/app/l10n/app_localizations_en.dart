@@ -202,6 +202,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'Preview not available yet';
 
   @override
+  String get ringtoneVolumeMuted => 'Turn up the volume to hear this preview';
+
+  @override
+  String get ringtoneCurrentBadge => 'Current';
+
+  @override
   String get ringtonesEmptyTitle => 'Ringtones are coming soon';
 
   @override

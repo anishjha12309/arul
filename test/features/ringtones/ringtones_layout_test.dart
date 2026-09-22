@@ -53,7 +53,7 @@ class _StubPreview extends RingtonePreviewNotifier {
       const RingtonePreviewState(currentId: 'r3', isPlaying: true);
 
   @override
-  Future<void> toggle(Ringtone ringtone) async {
+  Future<void> toggle(Ringtone ringtone, {bool? reduceMotion}) async {
     state = state.isPlayingId(ringtone.id)
         ? const RingtonePreviewState()
         : RingtonePreviewState(currentId: ringtone.id, isPlaying: true);

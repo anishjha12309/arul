@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show debugPrint, kDebugMode, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -75,42 +76,123 @@ abstract final class PlayInstall {
   }
 }
 
-/// Whether this phone takes the poster path — the Android Go flag, under 4.5 GiB of total RAM, or
-/// Android 12 and older; never the OS's momentary pressure flag (the native side owns the rule and
-/// the reason, [MainActivity.isLowRamDevice]).
+/// How much this phone can afford: the ONE quality answer the app spends against.
 ///
-/// The auth screens read it to show the splash's still poster instead of the looping video.
-/// One answer per process -> asked once, cached; every later caller gets the same future.
-/// **Fails OPEN** to `false`: no channel (`flutter test`), a platform error, anything unexpected ->
-/// the phone is treated as ordinary and gets the video, never a missing background.
-abstract final class DeviceMemory {
-  static Future<bool>? _isLow;
+/// Three rungs, resolved once per process by the native table in [MainActivity.deviceTier].
+/// `low` is EXACTLY the shipped poster rule (the Go flag, under 4.5 GiB, Android 12L and older) and
+/// nothing may widen it — that population is what the sign-in funnel is read against.
+///
+/// **Tier changes COST, never composition.** No layout branches on it.
+enum DeviceTier {
+  low,
+  mid,
+  high;
 
-  static Future<bool> get isLow => _isLow ??= _probe();
+  /// Parses the native string. Anything unrecognised is [mid] — the fail-open rung.
+  static DeviceTier parse(String? name) => switch (name) {
+    'low' => DeviceTier.low,
+    'high' => DeviceTier.high,
+    _ => DeviceTier.mid,
+  };
+}
 
-  /// The verdict once the probe has landed, else null. Read by the sign-in events, which fire
-  /// after the splash already awaited [isLow] -> stamped on every install that reached the wall.
-  static bool? get resolved => _resolved;
-  static bool? _resolved;
+/// The device tier, asked once and cached for the process.
+///
+/// **Fails open to [DeviceTier.mid]** on every failure path — no channel (`flutter test`), a
+/// platform error, an unparseable answer. Never to `low`, which would cripple a capable phone over
+/// a failed probe; never to `high`, which would overcommit a weak one.
+///
+/// The probe is kicked off in `main()`. [resolved] is the synchronous read for the two callers that
+/// cannot await — the image-cache ceiling and the feed's decoder budget — and answers `mid` until
+/// the probe lands, which is within the splash.
+abstract final class DeviceQuality {
+  static Future<DeviceTier>? _probe;
 
-  static Future<bool> _probe() async {
+  static Future<DeviceTier> get tier => _probe ??= _ask();
+
+  /// The verdict once the probe has landed, else [DeviceTier.mid]. Never null: every caller wants a
+  /// number to spend against, and `mid` is the answer a failed probe gives anyway.
+  static DeviceTier get resolved => _resolved ?? DeviceTier.mid;
+  static DeviceTier? _resolved;
+
+  /// True once the probe has actually answered — separates "mid" from "not asked yet".
+  static bool get isResolved => _resolved != null;
+
+  /// The diagnostic facts behind the rung, logged once per process so a phone that lands on an
+  /// unexpected tier can be identified from one logcat line.
+  static Map<String, Object?> get facts => Map.unmodifiable(_facts);
+  static final Map<String, Object?> _facts = {};
+
+  static Future<DeviceTier> _ask() async {
     try {
-      final low = await _channel.invokeMethod<bool>('isLowRamDevice') ?? false;
-      _resolved = low;
-      return low;
-    } on MissingPluginException {
-      return _resolved = false;
-    } on PlatformException {
-      return _resolved = false;
+      final info = await _channel.invokeMapMethod<String, Object?>(
+        'deviceTier',
+      );
+      final tier = DeviceTier.parse(info?['tier'] as String?);
+      _facts
+        ..clear()
+        ..addAll(info ?? const {});
+      _resolved = tier;
+      debugPrint(
+        'DeviceTier resolved: ${tier.name} '
+        '(totalMem=${info?['totalMem']} sdk=${info?['sdkInt']} '
+        'lowRamFlag=${info?['lowRamFlag']} soc=${info?['soc']})',
+      );
+      return tier;
+    } catch (e) {
+      // Catches EVERYTHING, not just the two channel exceptions: a binding that is not up yet
+      // throws a plain `FlutterError`, and this answer must never fail a launch.
+      _resolved = DeviceTier.mid;
+      debugPrint('DeviceTier resolved: mid (probe failed: $e)');
+      return DeviceTier.mid;
     }
+  }
+
+  /// Pins the tier without a channel, for tests that assert a consumer rather than the probe.
+  @visibleForTesting
+  static void debugSetTier(DeviceTier value) {
+    _resolved = value;
+    _probe = Future<DeviceTier>.value(value);
   }
 
   /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
   static void resetForTesting() {
-    _isLow = null;
+    _probe = null;
     _resolved = null;
+    _facts.clear();
   }
+}
+
+/// The device tier as a provider, for widgets and providers that want to watch it.
+/// Same single probe behind it — a widget and `main()` can never read different tiers.
+@Riverpod(keepAlive: true)
+Future<DeviceTier> deviceTier(Ref ref) => DeviceQuality.tier;
+
+/// Whether this phone takes the poster path — DERIVED from [DeviceQuality]: `tier == low`.
+///
+/// The rule itself lives in the native table ([MainActivity.deviceTier]), whose `low` rung is the
+/// Android Go flag, under 4.5 GiB of total RAM, or Android 12L and older; never the OS's momentary
+/// pressure flag (the reason is on [MainActivity.isLowRamDevice]).
+///
+/// The auth screens read it to show the splash's still poster instead of the looping video.
+/// One answer per process -> asked once, cached; every later caller gets the same future.
+/// **Fails OPEN** to `false`: the tier probe fails to `mid`, so an unexpected phone is treated as
+/// ordinary and gets the video, never a missing background.
+abstract final class DeviceMemory {
+  static Future<bool> get isLow async =>
+      (await DeviceQuality.tier) == DeviceTier.low;
+
+  /// The verdict once the probe has landed, else null. Read by the sign-in events, which fire
+  /// after the splash already awaited [isLow] -> stamped on every install that reached the wall.
+  /// Null until the tier lands, exactly as before — `?DeviceMemory.resolved` drops the key then.
+  static bool? get resolved => DeviceQuality.isResolved
+      ? DeviceQuality.resolved == DeviceTier.low
+      : null;
+
+  /// Drop the cached answer so a test can re-probe under a different mock.
+  @visibleForTesting
+  static void resetForTesting() => DeviceQuality.resetForTesting();
 }
 
 /// The device's `Build.VERSION.SDK_INT`, or null where there is no platform (`flutter test`).

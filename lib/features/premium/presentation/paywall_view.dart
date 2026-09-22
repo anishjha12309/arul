@@ -4,10 +4,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../theme/arul_tokens.dart';
 import 'paywall_ornaments.dart';
+import '../../../app/theme/motion.dart';
 
 /// A letter-spaced display label — "SUBSCRIPTION", "PREMIUM", "PER MONTH", "REFUNDED INSTANTLY".
 ///
@@ -252,12 +254,10 @@ class ArulPaywallLoading extends StatelessWidget {
           _NavRow(onBack: onBack),
           const Expanded(
             child: Center(
-              child: SizedBox.square(
-                dimension: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ArulTokens.paywallMaroon,
-                ),
+              child: ArulSpinner(
+                size: 22,
+                strokeWidth: 2,
+                color: ArulTokens.paywallMaroon,
               ),
             ),
           ),
@@ -311,7 +311,7 @@ class _NavRow extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (_) => ArulHaptics.tap(),
                 onTap: onBack,
-                // The ring is 34; the touch target it sits in is 44.
+                // The ring is 34; the touch target it sits in is [ArulTokens.minHitTarget].
                 child: SizedBox.square(
                   dimension: ArulTokens.minHitTarget,
                   child: Center(
@@ -605,7 +605,10 @@ class _SocialProofPillState extends State<_SocialProofPill> {
     ).premiumSocialProof(_who.$1, _who.$2);
     return ExcludeSemantics(
       child: AnimatedSwitcher(
-        duration: ArulTokens.chromeSettleIn,
+        // The line still rotates; it just cuts instead of cross-fading.
+        duration: context.reduceMotion
+            ? Duration.zero
+            : ArulTokens.chromeSettleIn,
         switchInCurve: ArulTokens.settleCurve,
         switchOutCurve: ArulTokens.settleCurve,
         child: Container(
@@ -1202,8 +1205,9 @@ class _UpiChip extends StatelessWidget {
       label: app.label,
       child: GestureDetector(
         onTap: canChange ? onTap : null,
-        // The pill draws 36 and is tapped at 44 — this one opens the picker that decides which app
-        // takes the mandate, so it is the last control on the page that may be hard to hit.
+        // The pill draws 36 and is tapped at [ArulTokens.minHitTarget] — this one opens the
+        // picker that decides which app takes the mandate, so it is the last control on the page
+        // that may be hard to hit.
         // `opaque`, or the grown box is transparent to the hit test as well as to the eye.
         // `Center(widthFactor: 1)`, never `Container(alignment:)` — an alignment expands the box to
         // its max constraint, and inside the footer's Flexible that is the whole half-row.
@@ -1314,8 +1318,13 @@ class _ShrineCtaState extends State<ShrineCta> {
         onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
         onTap: _enabled ? widget.onPressed : null,
         child: AnimatedScale(
-          scale: _pressed ? ArulTokens.paywallPressScale : 1,
-          duration: ArulTokens.paywallPress,
+          // Parked at the resting scale when motion is reduced; the haptic still answers the press.
+          scale: _pressed && !context.reduceMotion
+              ? ArulTokens.paywallPressScale
+              : 1,
+          duration: context.reduceMotion
+              ? Duration.zero
+              : ArulTokens.paywallPress,
           curve: ArulTokens.settleCurve,
           child: Opacity(
             opacity: _enabled || widget.busy ? 1 : 0.5,
@@ -1342,13 +1351,11 @@ class _ShrineCtaState extends State<ShrineCta> {
                     gradient: ArulTokens.paywallCtaTopLip,
                   ),
                   child: widget.busy
-                      ? const SizedBox.square(
+                      ? const ArulSpinner(
                           key: ValueKey('shrine-cta-progress'),
-                          dimension: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: ArulTokens.paywallOnCta,
-                          ),
+                          size: 22,
+                          strokeWidth: 2.4,
+                          color: ArulTokens.paywallOnCta,
                         )
                       // The buy button may NEVER ellipsise — "இலவச சோதனையைத் தொடங்…" is not a
                       // thing anyone taps. It scales down instead of truncating or wrapping:

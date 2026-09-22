@@ -119,6 +119,7 @@ class AuthController extends _$AuthController {
   /// So no re-arm is needed there — the flag is still false when it matters.
   /// Also re-armed by [noteAppLifecycle] when the user LEFT the wall and came back: a cancel still
   /// never relaunches, but a return after a real away stretch is a fresh visit, not a retry.
+  /// And by [noteConnectivity] when the link that killed the last attempt came back.
   bool _autoLaunched = false;
 
   /// Start of the current away stretch (paused/hidden), cleared on every resume.
@@ -126,13 +127,47 @@ class AuthController extends _$AuthController {
   /// `inactive` is NOT away: that is Google's own surface sitting over us, or a system dialog.
   DateTime? _awaySince;
 
+  /// When the link was last read as DOWN, cleared on every online reading.
+  ///
+  /// The reading is TRANSPORT-level (connectivity_plus reports the transport, never reachability),
+  /// so a Wi-Fi with no internet behind it reads online. That costs nothing here: the transition is
+  /// only ever a permission to retry a failure the link already caused, never a claim of anything.
+  DateTime? _offlineSince;
+
   /// When the last attempt SETTLED — success, cancel, failure, or one of the guard's abandons.
   /// Null until an attempt has run at all, which is also what keeps a define-less build inert.
   DateTime? _lastOutcomeAt;
 
+  /// Whether that settled outcome was a NETWORK-class failure — the only one a reconnect may retry.
+  ///
+  /// `networkError` and the `unknown` bucket, which is where Play services' own token failure lands
+  /// (`[28404] Failed to retrieve an ID token`, seen on device with mobile data off) — see
+  /// `ApiAuthService.mapGoogleSignInException`, plus the ONE cancel GMS words as a network failure
+  /// (`[16] Account reauth failed` from the picker, offline). Every other cancel is a refusal and
+  /// never qualifies; `noPlayServices`, `serverError` and `tokenExchangeFailed` survive a reconnect
+  /// unchanged.
+  bool _lastOutcomeNetworkFailure = false;
+
+  /// Whether THIS failure's one reconnect has already been spent; cleared when the next outcome
+  /// settles -> a link that drops and returns twice over one dead attempt still buys one sheet.
+  bool _reconnectSpent = false;
+
+  /// How many reconnect re-arms ONE signed-out stretch may spend, across every failure in it.
+  ///
+  /// A link that flaps — a lift, a train, a phone at the edge of a cell — delivers an
+  /// offline->online transition every few seconds, and each one lands on a fresh failure of its
+  /// own, so the per-failure allowance alone would let it loop the sheet. Re-armed with the
+  /// automatic launch itself, by [signOut] and [deleteAccount].
+  static const _reconnectsPerStretch = 2;
+  int _reconnectBudget = _reconnectsPerStretch;
+
   /// Set by [noteAppLifecycle], consumed by the next [autoSignIn] -> that attempt reports itself as
   /// the return sheet (`surface: 'sheet_return'`) instead of a cold-start one.
   bool _returnArmed = false;
+
+  /// The same, for [noteConnectivity] -> `surface: 'sheet_reconnect'`. Analytics only; the surface
+  /// ORDER is untouched, so a re-armed attempt is sheet-first exactly like every other automatic one.
+  bool _reconnectArmed = false;
 
   /// One lifecycle transition, from the sign-in wall's observer. Returns true when the caller should
   /// fire the automatic attempt again — the SCREEN stays the single joiner, so the toast and route
@@ -179,30 +214,110 @@ class AuthController extends _$AuthController {
     }
   }
 
+  /// One connectivity reading, from the wall's own listener. Returns true when the caller should
+  /// fire the automatic attempt again — same shape and same contract as [noteAppLifecycle], and the
+  /// SCREEN still decides nothing.
+  ///
+  /// The case, measured on device with mobile data off: the sheet draws, the account tap dies inside
+  /// Play services in 3 s (`[28404] Failed to retrieve an ID token`), the attempt escalates to the
+  /// picker, the second pick fails the same way — and when data comes back NOTHING happens. The
+  /// person is left in front of a pill nobody told them to tap, holding a phone that now works.
+  ///
+  /// Google's Credential Manager guidance forbids an automatic retry after a CANCELLATION and only
+  /// that ("this error indicates a lack of consent"). A link that was down is not a refusal, so this
+  /// one surface is allowed where a re-arm after a cancel never is.
+  ///
+  /// Conditions, all required: an OFFLINE reading came first (the transition is the event, not the
+  /// online reading on its own), the last settled outcome was a network-class failure
+  /// ([_lastOutcomeNetworkFailure]), the transition lands after that outcome settled, nothing in
+  /// flight (the stall guard owns that case), still signed out, and our own UI is RESUMED — a link
+  /// returning behind another app must not push a sheet in front of it.
+  ///
+  /// Bounded twice over, because the link is the one condition that can repeat by itself: ONE
+  /// re-arm per failure ([_reconnectSpent]) and [_reconnectBudget] per signed-out stretch.
+  bool noteConnectivity({required bool online}) {
+    if (!online) {
+      // The FIRST of a run of offline readings owns the stretch; the stream is already `distinct()`.
+      _offlineSince ??= now();
+      return false;
+    }
+    final offline = _offlineSince;
+    // Cleared whatever the verdict -> at most ONE re-arm per drop, never a second online reading's.
+    _offlineSince = null;
+    if (offline == null) return false;
+    final settled = _lastOutcomeAt;
+    if (settled == null) return false;
+    if (!_lastOutcomeNetworkFailure) return false;
+    if (_reconnectSpent || _reconnectBudget <= 0) return false;
+    if (_inFlight != null) return false;
+    if (ref.read(authServiceProvider).currentState.isAuthenticated) {
+      return false;
+    }
+    if (!now().isAfter(settled)) return false;
+    // Null = no binding at all (a bare unit test) = nothing can have backgrounded us, exactly as
+    // the stall guard reads it.
+    final lifecycle = lifecycleProbe();
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      return false;
+    }
+    _reconnectSpent = true;
+    _reconnectBudget--;
+    _autoLaunched = false;
+    _reconnectArmed = true;
+    return true;
+  }
+
   /// Starts a sign-in, or joins the one already running.
   ///
   /// Safe from a button — a tap while a sheet is up gets that sheet's result, never a second sheet.
   /// [auto] passes straight through to the service, which picks the FIRST Google surface.
   /// Not a policy this layer owns.
   /// [returned] is analytics only: it stamps this attempt as the one a RETURN re-armed.
+  /// [reconnected] is the same for the one a RECONNECT re-armed; `returned` wins if both are set.
   Future<AuthResult> signIn(
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reconnected = false,
   }) {
     final existing = _inFlight;
     if (existing != null) return existing;
     final raw = ref
         .read(authServiceProvider)
-        .signInWith(provider, auto: auto, returned: returned);
+        .signInWith(
+          provider,
+          auto: auto,
+          returned: returned,
+          reconnected: reconnected,
+        );
     final started = DateTime.now();
+    // Cleared at the START, not on the settle: [_guard] can return without the classifier below
+    // ever running, and a stale `true` would hand the NEXT reconnect a sheet it never earned.
+    _lastOutcomeNetworkFailure = false;
     late final Future<AuthResult> guarded;
-    guarded = _guard(raw, started, provider, auto, returned).whenComplete(() {
-      // The return rule measures its cooldown from here -> every settle counts, abandons included.
-      _lastOutcomeAt = now();
-      // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
-      if (identical(_inFlight, guarded)) _inFlight = null;
-    });
+    guarded = _guard(raw, started, provider, auto, returned, reconnected)
+        .then((result) {
+          // What the reconnect rule is allowed to retry, decided where the outcome is still typed.
+          _lastOutcomeNetworkFailure =
+              (result is AuthFailure &&
+                  (result.kind == AuthFailureKind.networkError ||
+                      result.kind == AuthFailureKind.unknown)) ||
+              // The PICKER reports an offline pick as a CANCEL — `[16] Account reauth failed`
+              // (device, mobile data off) — so the one cancel worded that way counts too. A person's
+              // refusal is never spelled like this, and the rule still needs the link to have dropped
+              // first, so an account that genuinely needs re-auth cannot loop the sheet.
+              (result is AuthCancelled &&
+                  result.outcome == SignInOutcome.reauthFailed);
+          return result;
+        })
+        .whenComplete(() {
+          // The return rule measures its cooldown from here -> every settle counts, abandons included.
+          _lastOutcomeAt = now();
+          // A fresh outcome, so the reconnect rule's one-per-failure allowance is fresh too.
+          _reconnectSpent = false;
+          // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
+          if (identical(_inFlight, guarded)) _inFlight = null;
+        });
     _inFlight = guarded;
     return guarded;
   }
@@ -242,6 +357,7 @@ class AuthController extends _$AuthController {
     AuthProvider provider,
     bool auto,
     bool returned,
+    bool reconnected,
   ) async {
     // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
@@ -266,7 +382,12 @@ class AuthController extends _$AuthController {
       wasMidFlow = false;
       return ref
           .read(authServiceProvider)
-          .signInWith(provider, auto: auto, returned: returned);
+          .signInWith(
+            provider,
+            auto: auto,
+            returned: returned,
+            reconnected: reconnected,
+          );
     }
 
     // The add-account reopen is ONE-SHOT per attempt, like [relaunched].
@@ -442,14 +563,22 @@ class AuthController extends _$AuthController {
   /// The splash the moment it knows there is no stored session, else the sign-in screen's first frame.
   /// Null once that attempt is spent and settled -> the signal to show the retry pill and stay put.
   /// Without it a cancelled sheet re-launches the instant the splash routes, and nobody escapes.
-  /// [noteAppLifecycle] can re-arm it once for a RETURN; that attempt carries the `sheet_return`
-  /// stamp so the funnel can price the return surface on its own.
+  /// [noteAppLifecycle] can re-arm it once for a RETURN and [noteConnectivity] once for a
+  /// RECONNECT; those attempts carry the `sheet_return` / `sheet_reconnect` stamp so the funnel can
+  /// price each re-arm on its own.
   Future<AuthResult>? autoSignIn(AuthProvider provider) {
     if (_autoLaunched) return _inFlight;
     _autoLaunched = true;
     final returned = _returnArmed;
+    final reconnected = _reconnectArmed;
     _returnArmed = false;
-    final attempt = signIn(provider, auto: true, returned: returned);
+    _reconnectArmed = false;
+    final attempt = signIn(
+      provider,
+      auto: true,
+      returned: returned,
+      reconnected: reconnected,
+    );
     // Record a failure in case it settles before any screen joins; a joiner clears it after toasting.
     // The service never throws — every path returns a result -> no error continuation.
     unawaited(
@@ -466,6 +595,8 @@ class AuthController extends _$AuthController {
   Future<void> signOut() async {
     await ref.read(authServiceProvider).signOut();
     _autoLaunched = false;
+    // A new signed-out stretch -> its own reconnect budget, like its own automatic launch.
+    _reconnectBudget = _reconnectsPerStretch;
   }
 
   /// Permanently deletes the account server-side and clears the session.
@@ -476,5 +607,6 @@ class AuthController extends _$AuthController {
   Future<void> deleteAccount() async {
     await ref.read(authServiceProvider).deleteAccount();
     _autoLaunched = false;
+    _reconnectBudget = _reconnectsPerStretch;
   }
 }

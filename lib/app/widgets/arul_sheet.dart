@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/theme.dart';
+import '../theme/motion.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
 ///
@@ -85,7 +86,24 @@ class _ArulSheetState extends State<ArulSheet>
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: ArulTokens.sheetEnter, // 300ms
-  )..forward();
+  );
+
+  /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup, and the
+  /// sheet must never paint one frame of its +24 offset before that answer exists.
+  bool _motionStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionStarted) return;
+    _motionStarted = true;
+    if (context.reduceMotion) {
+      // Straight to the SETTLED state: full opacity, zero offset. The sheet appears, it does not rise.
+      _c.value = 1;
+    } else {
+      _c.forward();
+    }
+  }
 
   late final Animation<double> _t = CurvedAnimation(
     parent: _c,

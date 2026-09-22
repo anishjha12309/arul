@@ -192,6 +192,7 @@ class ApiAuthService implements AuthService {
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reconnected = false,
     bool reopened = false,
   }) {
     switch (provider) {
@@ -199,6 +200,7 @@ class ApiAuthService implements AuthService {
         return _signInWithGoogle(
           auto: auto,
           returned: returned,
+          reconnected: reconnected,
           reopened: reopened,
         );
     }
@@ -486,14 +488,29 @@ class ApiAuthService implements AuthService {
   /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetReturn = 'sheet_return';
 
-  /// The sheet's reported name for an attempt, given whether a RETURN re-armed it.
+  /// The sheet of an attempt the controller re-armed when the LINK came back after a network-class
+  /// failure, kept apart from both other sheets: it is the only one fired at a person who never
+  /// left and never tapped, so it is the only one whose conversion says whether retrying a dead
+  /// link is worth a surface.
+  /// A VALUE on the existing `surface` property — no new event, no new property.
+  static const _surfaceSheetReconnect = 'sheet_reconnect';
+
+  /// The sheet's reported name for an attempt, given which re-arm fired it.
   ///
   /// A pure one-liner only because the service itself is unconstructable in a unit test (a real
   /// ApiClient, a real analytics sink, GMS): this is the only way the funnel's most load-bearing
-  /// mapping — which `surface` value a return attempt files itself under — is pinnable at all.
+  /// mapping — which `surface` value a re-armed attempt files itself under — is pinnable at all.
+  /// A RETURN wins over a reconnect: the person came back to the app themselves, which is the
+  /// stronger fact about the attempt, and the two must never blend into a third name.
   @visibleForTesting
-  static String sheetSurfaceFor({required bool returned}) =>
-      returned ? _surfaceSheetReturn : _surfaceSheet;
+  static String sheetSurfaceFor({
+    required bool returned,
+    bool reconnected = false,
+  }) => returned
+      ? _surfaceSheetReturn
+      : reconnected
+      ? _surfaceSheetReconnect
+      : _surfaceSheet;
 
   /// The picker the guard reopens ONCE after Google's add-account flow returned with nothing
   /// chosen. Kept apart from a tapped picker: it is the only button surface nobody asked for, so
@@ -618,6 +635,7 @@ class ApiAuthService implements AuthService {
   Future<AuthResult> _signInWithGoogle({
     required bool auto,
     required bool returned,
+    required bool reconnected,
     required bool reopened,
   }) async {
     final attempt = ++_attemptSeq;
@@ -649,9 +667,12 @@ class ApiAuthService implements AuthService {
       // is already past what the sheet had to offer (see AuthService.signInWith
       // and resolveGoogleCredential for the order and its reasons).
       final useSheet = sheetFirst && auto;
-      // The return marker rides the sheet's NAME: an attempt with no sheet is a pill tap, which a
-      // return never is.
-      final sheetSurface = sheetSurfaceFor(returned: returned);
+      // The re-arm markers ride the sheet's NAME: an attempt with no sheet is a pill tap, which
+      // neither a return nor a reconnect ever is.
+      final sheetSurface = sheetSurfaceFor(
+        returned: returned,
+        reconnected: reconnected,
+      );
       final buttonSurface = buttonSurfaceFor(reopened: reopened);
       _analytics.track(
         'login_attempt',

@@ -472,6 +472,18 @@ abstract class AppLocalizations {
   /// **'Preview not available yet'**
   String get ringtonePreviewUnavailable;
 
+  /// Toast shown when a ringtone preview is tapped while the phone’s media volume is at zero or it is on silent — nothing would be heard, so the preview does not start. Keep it an instruction, not an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn up the volume to hear this preview'**
+  String get ringtoneVolumeMuted;
+
+  /// Tiny badge on the ringtone row that is the phone’s CURRENT ringtone. One short word; it sits in a pill a few characters wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get ringtoneCurrentBadge;
+
   /// No description provided for @ringtonesEmptyTitle.
   ///
   /// In en, this message translates to:

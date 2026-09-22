@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
+import 'arul_spinner.dart';
 
 /// Label / icon / busy-spinner interior of [ArulButton].
 ///
@@ -23,10 +24,7 @@ class ButtonContent extends StatelessWidget {
   Widget build(BuildContext context) {
     if (busy) {
       return Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(strokeWidth: 2.4, color: foreground),
-        ),
+        child: ArulSpinner(size: 22, strokeWidth: 2.4, color: foreground),
       );
     }
     return Row(

@@ -5,6 +5,11 @@ const kAppLanguageProperty = 'app_language';
 /// Which rung decided that language: `pick`, `link`, `geo`, `phone` or `default`.
 const kLanguageSourceProperty = 'language_source';
 
+/// The device quality rung this phone resolved to: `low`, `mid` or `high` ([DeviceTier]).
+/// Registered, not evented: it costs no new event and lets any later metric split by how much
+/// phone the person is holding — the split the sign-in and apply funnels keep asking for.
+const kDeviceTierProperty = 'device_tier';
+
 /// The region `GET /geo` reported for this install, raw, or `none` -> how often the region default is right.
 const kGeoRegionProperty = 'geo_region';
 

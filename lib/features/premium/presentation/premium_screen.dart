@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
@@ -1234,13 +1235,10 @@ class _QrMandateSheetState extends ConsumerState<_QrMandateSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ArulTokens.maroon,
-                ),
+              const ArulSpinner(
+                size: 14,
+                strokeWidth: 2,
+                color: ArulTokens.maroon,
               ),
               const SizedBox(width: 10),
               Flexible(
@@ -1264,13 +1262,10 @@ class _QrMandateSheetState extends ConsumerState<_QrMandateSheet> {
                 height: ArulTokens.minHitTarget,
                 child: Center(
                   child: _checking
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: ArulTokens.maroon,
-                          ),
+                      ? const ArulSpinner(
+                          size: 16,
+                          strokeWidth: 2,
+                          color: ArulTokens.maroon,
                         )
                       : Text(
                           l10n.premiumQrCheck,

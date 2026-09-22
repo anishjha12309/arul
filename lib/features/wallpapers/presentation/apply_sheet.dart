@@ -1,29 +1,41 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
+import '../../../core/config/app_config.dart';
+import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/wallpaper_apply_service.dart';
+import 'viewer_media.dart';
+import 'wallpaper_tile.dart';
 
 /// Where to put a STATIC wallpaper (Spec > Apply sheet).
 ///
 /// Three equal cards — Home / Lock / Both, defaulting to Both — and a single green CTA.
 /// Selecting a card only moves the selection; the CTA commits the target.
 /// LIVE wallpapers never reach here — Android's own chooser asks the same question and decides.
-/// `ApplySheet.show(context)` resolves to the picked target, or null when the sheet is dismissed.
+/// The [wallpaper] is carried in so its own still heads the sheet: the thing being placed stays on
+/// screen across the open instead of the sheet rising over an unrelated surface.
+/// `ApplySheet.show(context, wallpaper: w)` resolves to the picked target, or null when dismissed.
 class ApplySheet {
   const ApplySheet._();
 
-  static Future<ApplyTarget?> show(BuildContext context) {
+  static Future<ApplyTarget?> show(
+    BuildContext context, {
+    required Wallpaper wallpaper,
+  }) {
     return showArulSheet<ApplyTarget>(
       context,
-      builder: (_) => const _ApplySheetBody(),
+      builder: (_) => _ApplySheetBody(wallpaper: wallpaper),
     );
   }
 }
 
 class _ApplySheetBody extends StatefulWidget {
-  const _ApplySheetBody();
+  const _ApplySheetBody({required this.wallpaper});
+
+  final Wallpaper wallpaper;
 
   @override
   State<_ApplySheetBody> createState() => _ApplySheetBodyState();
@@ -48,11 +60,20 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Set wallpaper on',
-            style: ArulTokens.sheetTitle.copyWith(
-              color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
-            ),
+          Row(
+            children: [
+              _WallpaperThumb(wallpaper: widget.wallpaper),
+              // 14, as after every other 40px chip in the app (`ArulSheetRow`).
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Set wallpaper on',
+                  style: ArulTokens.sheetTitle.copyWith(
+                    color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
@@ -83,6 +104,63 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
             onPressed: () => Navigator.of(context).pop(_target),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The wallpaper being placed, at the head of the sheet.
+///
+/// Reads the EXACT provider the card under the sheet is already painting — [Wallpaper.posterUrl]
+/// at [WallpaperTile.decodeWidthFor] — so this is an image-cache hit and NOT a second decode.
+/// Decode width is part of the cache key: asking for a thumbnail-sized one would re-decode the
+/// wallpaper and store a third copy of it, which is the cost this head exists to avoid.
+/// Downsampling the 200dp entry into a 40px box happens on the GPU, and is free.
+/// [ViewerMedia.cropAlignment] for the same reason the poster and the texture share it — a
+/// differently cropped still reads as another picture, not as the one under the sheet.
+///
+/// **A miss paints the well and nothing else — this widget never LOADS.** The card that opened the
+/// sheet is still mounted and still painting that entry, so a miss means the cache was evicted
+/// under pressure, and the answer to memory pressure is not to fetch the image again. It is also
+/// what keeps the sheet off the network: [CachedNetworkImageProvider] would reach the cache manager
+/// and, under `flutter test`, path_provider — which has no plugin there.
+class _WallpaperThumb extends StatelessWidget {
+  const _WallpaperThumb({required this.wallpaper});
+
+  final Wallpaper wallpaper;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final provider = ResizeImage.resizeIfNeeded(
+      WallpaperTile.decodeWidthFor(context),
+      null,
+      CachedNetworkImageProvider(wallpaper.posterUrl(AppConfig.cdnBaseUrl)),
+    );
+    // Both links of the chain hand back a SynchronousFuture -> `then` runs before the next line.
+    Object? key;
+    provider.obtainKey(ImageConfiguration.empty).then((k) => key = k);
+    final decoded =
+        key != null && PaintingBinding.instance.imageCache.containsKey(key!);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius),
+      child: SizedBox(
+        width: ArulTokens.iconChipSize,
+        height: ArulTokens.iconChipSize,
+        child: ColoredBox(
+          color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.maroonTintFill07,
+          child: decoded
+              ? Image(
+                  image: provider,
+                  fit: BoxFit.cover,
+                  alignment: ViewerMedia.cropAlignment,
+                  // Decoration beside the title -> announced by nothing, and never a broken glyph.
+                  excludeFromSemantics: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                )
+              : null,
+        ),
       ),
     );
   }

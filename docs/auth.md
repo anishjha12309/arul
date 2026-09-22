@@ -149,6 +149,16 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   ≥ `returnCooldown` (60 s) since that outcome, nothing in flight, signed out. `inactive` is a
   Google surface or a dialog, never "away". Lock/unlock counts as a return. The attempt files under
   `surface=sheet_return` so the return surface is priced apart from the cold-start sheet.
+- **A RECONNECT re-arms the automatic sheet once more** (`AuthController.noteConnectivity`, fed by
+  the wall's `isOnlineProvider` listener). Mobile data off: the sheet draws, the account tap dies in
+  Play services in 3 s (`[28404] Failed to retrieve an ID token`), the picker follows and dies the
+  same way — then data comes back and nothing happens. Google's guide forbids the automatic retry
+  after a CANCELLATION and only that, so a dead LINK is the one failure worth chasing. All required:
+  an offline→online transition (transport-level — a Wi-Fi with no internet reads online), a last
+  outcome of `networkError` or `unknown`, or the picker's offline cancel `[16] Account reauth
+  failed` (never any other cancel, nor `noPlayServices`, `serverError`, `tokenExchangeFailed`), landing after that outcome settled, nothing in flight, signed out, and our
+  own UI RESUMED. ONE per failure and TWO per signed-out stretch, or a flapping link loops the
+  sheet. Files under `surface=sheet_reconnect`.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.

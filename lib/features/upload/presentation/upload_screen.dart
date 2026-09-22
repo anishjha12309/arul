@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,6 +17,7 @@ import '../../../data/models/wallpaper.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
 import '../../ringtones/providers/ringtone_catalog_providers.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
+import '../data/media_pick_service.dart';
 import '../providers/upload_provider.dart';
 
 /// Upload-your-content — WALLPAPERS **and** RINGTONES.
@@ -76,12 +78,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   final _titleController = TextEditingController();
 
-  /// One picker per app: the plugin refuses a second `pickFiles` while its sheet is still up, and
-  /// that refusal is an uncaught PlatformException that takes the process down (5 users in the 8
-  /// days to 10 Sep). The pick zone is a bare GestureDetector, so a double tap is one tap too many.
-  /// Guarding the CALL, not the widget, is what the plugin's own troubleshooting page prescribes,
-  /// and it covers every future caller of [_pickFile] rather than one button's onTap.
+  /// One picker per app. The pick zone is a bare GestureDetector, so a double tap is one tap too
+  /// many: with the old file_picker plugin the second call was an uncaught PlatformException that
+  /// took the process down (5 users in the 8 days to 10 Sep); with our own channel it would open
+  /// a second picker over the first. Guarding the CALL, not the widget, covers every future caller
+  /// of [_pickFile] rather than one button's onTap.
   bool _picking = false;
+
+  static const _picker = MediaPickService();
 
   bool get _isRingtone => _kind == 'ringtone';
 
@@ -123,6 +127,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// Carrying either across submits a value the CMS then refuses at approve.
   void _selectKind(String kind) {
     if (_kind == kind) return;
+    _discardCopy(_filePath);
     setState(() {
       _kind = kind;
       _category = null;
@@ -131,6 +136,16 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       _mimeType = null;
       _fileSize = 0;
     });
+  }
+
+  /// Deletes a cached pick this screen is done with: rejected, replaced, or dropped with its kind.
+  ///
+  /// The copies are ours to delete — the native side only sweeps at engine start, so a pick can
+  /// never pull a file out from under one still shown, still validating, or mid-upload.
+  /// Best effort: a copy that outlives this is cache, and the next engine start sweeps it.
+  void _discardCopy(String? path) {
+    if (path == null) return;
+    unawaited(File(path).delete().then((_) {}, onError: (_) {}));
   }
 
   /// Picks media for the current kind and validates MIME and size against [UploadConstraints].
@@ -148,19 +163,30 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   Future<void> _pickFileOnce() async {
     final l10n = AppLocalizations.of(context);
-    // FileType.audio for a ringtone -> the picker cannot offer images or video in the first place.
-    // The allow-list below is still the enforcing check — some OEM pickers honour the filter loosely.
-    final result = await FilePicker.pickFiles(
-      type: _isRingtone ? FileType.audio : FileType.media,
-    );
-    final file = result?.files.singleOrNull;
-    if (file?.path == null || !mounted) return;
+    // The audio picker for a ringtone, the Photo Picker for a wallpaper -> neither can offer the
+    // other kind's files. The allow-list below is still the enforcing check — some OEM pickers
+    // honour the filter loosely.
+    PickedMedia? picked;
+    try {
+      picked = await _picker.pick(
+        _isRingtone ? MediaPickKind.audio : MediaPickKind.visual,
+      );
+    } on PlatformException {
+      // No picker on the phone, or a provider whose file could not be read -> say so, once.
+      if (mounted) {
+        showArulToast(context, l10n.errorGenericRetry, kind: ToastKind.error);
+      }
+      return;
+    }
+    final file = picked;
+    if (file == null || !mounted) return;
 
-    final name = file!.name;
+    final name = file.name;
     final mime = UploadConstraints.mimeFromName(name);
     final wallpaperType = mime.startsWith('video/') ? 'live' : 'static';
 
     if (!UploadConstraints.allowedTypes(_kind, wallpaperType).contains(mime)) {
+      _discardCopy(file.path);
       showArulToast(
         context,
         // Spelled out per branch, never an interpolated label constant.
@@ -175,8 +201,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       return;
     }
 
-    final size = File(file.path!).lengthSync();
+    final size = File(file.path).lengthSync();
     if (size > UploadConstraints.maxBytes(_kind, wallpaperType)) {
+      _discardCopy(file.path);
       showArulToast(
         context,
         l10n.uploadTooLarge(UploadConstraints.maxLabel(_kind, wallpaperType)),
@@ -185,6 +212,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       return;
     }
 
+    // Accepted -> the pick it replaces is nobody's now.
+    if (_filePath != file.path) _discardCopy(_filePath);
     setState(() {
       _filePath = file.path;
       _fileName = name;
@@ -247,6 +276,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final uploading = ref.watch(uploadProvider) is UploadLoading;
 
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
     final textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText;
@@ -340,9 +370,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   Semantics(
                     container: true,
                     identifier: 'arul_upload_pick',
+                    // Dead while an upload is in flight -> a new pick would replace, and so
+                    // delete, the very file the upload is still reading.
                     child: GestureDetector(
-                      onTapDown: (_) => ArulHaptics.tap(),
-                      onTap: _pickFile,
+                      onTapDown: uploading ? null : (_) => ArulHaptics.tap(),
+                      onTap: uploading ? null : _pickFile,
                       child: CustomPaint(
                         painter: _DashedRectPainter(
                           color: dashColor,
@@ -522,13 +554,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   CtaButton(
                     label: l10n.uploadSubmitCta,
                     identifier: 'arul_upload_submit',
-                    busy: ref.watch(uploadProvider) is UploadLoading,
+                    busy: uploading,
                     fontSize: 15.5,
-                    onPressed:
-                        _canSubmit &&
-                            ref.watch(uploadProvider) is! UploadLoading
-                        ? _submit
-                        : null,
+                    onPressed: _canSubmit && !uploading ? _submit : null,
                   ),
                   const SizedBox(height: 16),
                   Text(

@@ -70,6 +70,52 @@ final class IsPlayInstallProvider
 
 String _$isPlayInstallHash() => r'480d53b3a41a0c637d23325ebad02e5507fbe3c7';
 
+/// The device tier as a provider, for widgets and providers that want to watch it.
+/// Same single probe behind it — a widget and `main()` can never read different tiers.
+
+@ProviderFor(deviceTier)
+final deviceTierProvider = DeviceTierProvider._();
+
+/// The device tier as a provider, for widgets and providers that want to watch it.
+/// Same single probe behind it — a widget and `main()` can never read different tiers.
+
+final class DeviceTierProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<DeviceTier>,
+          DeviceTier,
+          FutureOr<DeviceTier>
+        >
+    with $FutureModifier<DeviceTier>, $FutureProvider<DeviceTier> {
+  /// The device tier as a provider, for widgets and providers that want to watch it.
+  /// Same single probe behind it — a widget and `main()` can never read different tiers.
+  DeviceTierProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'deviceTierProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$deviceTierHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<DeviceTier> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<DeviceTier> create(Ref ref) {
+    return deviceTier(ref);
+  }
+}
+
+String _$deviceTierHash() => r'6f6a06d279a826968fe0d0807278d253fb02f57a';
+
 /// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect
 /// what is actually armed) should be reachable.
 ///

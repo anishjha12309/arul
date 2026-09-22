@@ -67,7 +67,9 @@ dependencies:
   facebook_app_events: ^0.30.1  # Meta ★ conversion events only; OFF until
                                 # META_APP_ID + META_CLIENT_TOKEN are real
   phonepe_payment_sdk: ^3.0.2   # premium — vendored override below (AGP fix)
-  file_picker: ^12.0.0-beta.7   # upload-your-content (FileType.media pick)
+  # NO file_picker: upload-your-content picks through our own MediaPickChannel
+  # (Photo Picker + audio ACTION_GET_CONTENT). The plugin's Android side shipped
+  # Apache Tika — 370 KB of dex for MIME sniffing the extension allow-list never needed.
 
   # ── Firebase — Crashlytics + Performance + Analytics (GA4). SEPARATE from
   # PostHog (our primary product analytics). All run in EVERY real build (debug,

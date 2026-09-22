@@ -87,16 +87,22 @@ void main() {
       final ids = _newIds(all);
       expect(ids, hasLength(kNewMinItems));
       expect(ids.first, 'in'); // a debut, ahead of every filler row
-      expect(ids.last, 'out'); // filler: the newest of the rest, but the least used
+      expect(
+        ids.last,
+        'out',
+      ); // filler: the newest of the rest, but the least used
     });
 
-    test('a null published_at is never IN the window — it can only be filler', () {
-      final all = [..._padding(25), _wp('legacy')];
-      final ids = _newIds(all);
-      expect(ids, hasLength(kNewMinItems));
-      // Nulls sort last, so the 20 dated rows fill the floor first.
-      expect(ids, isNot(contains('legacy')));
-    });
+    test(
+      'a null published_at is never IN the window — it can only be filler',
+      () {
+        final all = [..._padding(25), _wp('legacy')];
+        final ids = _newIds(all);
+        expect(ids, hasLength(kNewMinItems));
+        // Nulls sort last, so the 20 dated rows fill the floor first.
+        expect(ids, isNot(contains('legacy')));
+      },
+    );
   });
 
   group('tier 1 — renewed', () {
@@ -146,7 +152,10 @@ void main() {
       ];
       final ids = _newIds(all);
       expect(ids.first, 'debut');
-      expect(ids.indexOf('stale'), greaterThan(0)); // filler now, placed by use like the rest
+      expect(
+        ids.indexOf('stale'),
+        greaterThan(0),
+      ); // filler now, placed by use like the rest
     });
 
     test('a renew still leads when the row was first published long ago', () {
@@ -163,7 +172,12 @@ void main() {
   group('tier 2 — debuts', () {
     test('newest publish first, regardless of applies or pins', () {
       final all = [
-        _wp('pinned-old', feedRank: 10, applyCount: 900, publishedAt: _daysAgo(5)),
+        _wp(
+          'pinned-old',
+          feedRank: 10,
+          applyCount: 900,
+          publishedAt: _daysAgo(5),
+        ),
         _wp('fresh', feedRank: 900, publishedAt: _daysAgo(1)),
         _wp('middle', applyCount: 40, publishedAt: _daysAgo(3)),
       ];
@@ -214,26 +228,31 @@ void main() {
   });
 
   group('tier 3 — the floor in a quiet week', () {
-    test('a thin week is topped up to 20 with the next-newest, most-used first', () {
-      final all = [
-        for (var i = 0; i < 3; i++) _wp('new$i', publishedAt: _daysAgo(2 + i)),
-        for (var i = 0; i < 30; i++)
-          _wp('old$i', applyCount: i, publishedAt: _daysAgo(30 + i)),
-      ];
-      final ids = _newIds(all);
-      expect(ids, hasLength(kNewMinItems));
-      expect(ids.take(3), ['new0', 'new1', 'new2']);
-      // Membership is RECENCY: old0..old16 are the 17 newest of the rest; old29 is not among them.
-      expect(ids, containsAll([for (var i = 0; i < 17; i++) 'old$i']));
-      expect(ids, isNot(contains('old29')));
-      // Order is USE: old16 has the most applies of the seventeen.
-      expect(ids.skip(3).first, 'old16');
-      expect(ids.last, 'old0');
-    });
+    test(
+      'a thin week is topped up to 20 with the next-newest, most-used first',
+      () {
+        final all = [
+          for (var i = 0; i < 3; i++)
+            _wp('new$i', publishedAt: _daysAgo(2 + i)),
+          for (var i = 0; i < 30; i++)
+            _wp('old$i', applyCount: i, publishedAt: _daysAgo(30 + i)),
+        ];
+        final ids = _newIds(all);
+        expect(ids, hasLength(kNewMinItems));
+        expect(ids.take(3), ['new0', 'new1', 'new2']);
+        // Membership is RECENCY: old0..old16 are the 17 newest of the rest; old29 is not among them.
+        expect(ids, containsAll([for (var i = 0; i < 17; i++) 'old$i']));
+        expect(ids, isNot(contains('old29')));
+        // Order is USE: old16 has the most applies of the seventeen.
+        expect(ids.skip(3).first, 'old16');
+        expect(ids.last, 'old0');
+      },
+    );
 
     test('the most-applied row of all time does not buy its way into New', () {
       final all = [
-        for (var i = 0; i < 20; i++) _wp('recent$i', publishedAt: _daysAgo(30 + i)),
+        for (var i = 0; i < 20; i++)
+          _wp('recent$i', publishedAt: _daysAgo(30 + i)),
         _wp('classic', applyCount: 9999, publishedAt: _daysAgo(500)),
       ];
       expect(_newIds(all), isNot(contains('classic')));
@@ -277,7 +296,12 @@ void main() {
     test('an ordinary chip is unaffected by the window or a renew', () {
       final all = [
         _wp('a', category: 'sivan', applyCount: 5, publishedAt: _daysAgo(400)),
-        _wp('b', category: 'sivan', publishedAt: _daysAgo(1), renewedAt: _daysAgo(1)),
+        _wp(
+          'b',
+          category: 'sivan',
+          publishedAt: _daysAgo(1),
+          renewedAt: _daysAgo(1),
+        ),
         _wp('c', category: 'murugan', publishedAt: _daysAgo(1)),
       ];
       // Most applied first, exactly as before: a renew is New's business only.
@@ -311,17 +335,42 @@ void main() {
       expect(feed[2].id, 'old17'); // the most-set of the 18 newest old rows
     });
 
-    test('ties go by sets then id, not by the list order sort_order and title leave', () {
-      // The drained ringtone list is re-sorted by sort_order/title, so list position is authoring
-      // order there. Built here in title order opposite to id order, with pins that disagree too.
-      final at = _daysAgo(1);
-      final all = [
-        _rt('id-c', title: 'Aaa', sortOrder: 0, feedRank: 10, publishedAt: at),
-        _rt('id-b', title: 'Bbb', sortOrder: 0, feedRank: 20, publishedAt: at),
-        _rt('id-a', title: 'Ccc', sortOrder: 0, feedRank: 30, publishedAt: at),
-      ];
-      final feed = ringtoneFeedOrder(WallpaperCategory.newSlug, all, now: _now);
-      expect(feed.map((r) => r.id), ['id-a', 'id-b', 'id-c']);
-    });
+    test(
+      'ties go by sets then id, not by the list order sort_order and title leave',
+      () {
+        // The drained ringtone list is re-sorted by sort_order/title, so list position is authoring
+        // order there. Built here in title order opposite to id order, with pins that disagree too.
+        final at = _daysAgo(1);
+        final all = [
+          _rt(
+            'id-c',
+            title: 'Aaa',
+            sortOrder: 0,
+            feedRank: 10,
+            publishedAt: at,
+          ),
+          _rt(
+            'id-b',
+            title: 'Bbb',
+            sortOrder: 0,
+            feedRank: 20,
+            publishedAt: at,
+          ),
+          _rt(
+            'id-a',
+            title: 'Ccc',
+            sortOrder: 0,
+            feedRank: 30,
+            publishedAt: at,
+          ),
+        ];
+        final feed = ringtoneFeedOrder(
+          WallpaperCategory.newSlug,
+          all,
+          now: _now,
+        );
+        expect(feed.map((r) => r.id), ['id-a', 'id-b', 'id-c']);
+      },
+    );
   });
 }

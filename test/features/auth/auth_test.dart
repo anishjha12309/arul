@@ -26,10 +26,13 @@ class _FakeAuthService implements AuthService {
   /// The `returned` flag each attempt carried -> "did the RETURN marker reach the service?".
   final List<bool> returnedFlags = [];
 
+  /// The `reconnected` flag each attempt carried -> the same for the RECONNECT marker.
+  final List<bool> reconnectedFlags = [];
+
   /// The `reopened` flag each attempt carried -> "was this the picker put back after add-account?".
   final List<bool> reopenedFlags = [];
 
-  /// Flipped by the tests that need a live session (the return rule must never re-arm over one).
+  /// Flipped by the tests that need a live session (neither re-arm may fire over one).
   bool authed = false;
 
   @override
@@ -37,12 +40,14 @@ class _FakeAuthService implements AuthService {
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reconnected = false,
     bool reopened = false,
   }) {
     final completer = Completer<AuthResult>();
     attempts.add(completer);
     autoFlags.add(auto);
     returnedFlags.add(returned);
+    reconnectedFlags.add(reconnected);
     reopenedFlags.add(reopened);
     return completer.future;
   }
@@ -410,6 +415,226 @@ void main() {
     });
   });
 
+  // With mobile data off the sheet draws, the account tap dies inside Play services in 3s
+  // (`[28404] Failed to retrieve an ID token`), the picker follows and dies the same way — and when
+  // data comes back the wall sits there. Google's guide forbids an automatic retry after a
+  // CANCELLATION and only that, so the link coming back earns one more sheet. These pin which
+  // outcomes qualify and that a flapping link can never loop it.
+  group('AuthController reconnect re-arm', () {
+    late _FakeAuthService auth;
+    late AuthController controller;
+    final t0 = DateTime(2026, 9, 15, 10);
+    late DateTime clock;
+
+    setUp(() {
+      auth = _FakeAuthService();
+      final container = ProviderContainer(
+        overrides: [authServiceProvider.overrideWithValue(auth)],
+      );
+      addTearDown(container.dispose);
+      clock = t0;
+      controller = container.read(authControllerProvider.notifier)
+        // Parenthesised: a bare `() => clock` swallows the cascade below into its body.
+        ..now = (() => clock)
+        ..stallTick = const Duration(milliseconds: 10)
+        // The rule requires OUR UI to be foregrounded -> a link returning behind another app must
+        // not put a sheet in front of it. The stall guard's own budget is 30s of real time, which
+        // no test here spends.
+        ..lifecycleProbe = (() => AppLifecycleState.resumed)
+        // A `noPlayServices` failure asks the native side for Google's dialog; there is none here.
+        ..playServices = _FakeResolver(PlayServicesFix.unresolved);
+    });
+
+    /// The cold-start attempt, dead the way a missing link kills one, settled at [t0].
+    Future<void> coldStartFailed([
+      AuthFailureKind kind = AuthFailureKind.unknown,
+    ]) async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(
+        AuthFailure(
+          message: 'Sign-in didn\'t complete. Check your internet connection…',
+          kind: kind,
+        ),
+      );
+      await first;
+    }
+
+    /// An offline reading followed by an online one, a few seconds apart.
+    bool reconnect({int at = 20}) {
+      clock = t0.add(Duration(seconds: at - 10));
+      expect(controller.noteConnectivity(online: false), isFalse);
+      clock = t0.add(Duration(seconds: at));
+      return controller.noteConnectivity(online: true);
+    }
+
+    for (final kind in const [
+      AuthFailureKind.unknown,
+      AuthFailureKind.networkError,
+    ]) {
+      test('the link coming back after a ${kind.name} failure fires exactly '
+          'ONE attempt, marked as a reconnect', () async {
+        await coldStartFailed(kind);
+
+        expect(reconnect(), isTrue);
+
+        final again = controller.autoSignIn(AuthProvider.google);
+        expect(again, isNotNull, reason: 'the re-arm must un-spend the launch');
+        expect(auth.attempts, hasLength(2));
+        expect(auth.reconnectedFlags, [false, true]);
+        expect(
+          auth.returnedFlags,
+          [false, false],
+          reason: 'nobody left the app — this is not the return surface',
+        );
+        expect(
+          auth.autoFlags,
+          [true, true],
+          reason: 'sheet-first, exactly like the cold-start attempt',
+        );
+
+        auth.settleLast(const AuthCancelled());
+        await again!;
+      });
+    }
+
+    test(
+      "GMS's offline picker cancel — `[16] Account reauth failed` — counts as a "
+      'network failure, so the link coming back fires ONE attempt',
+      () async {
+        final first = controller.autoSignIn(AuthProvider.google)!;
+        auth.settleLast(
+          const AuthCancelled(outcome: SignInOutcome.reauthFailed),
+        );
+        await first;
+
+        expect(reconnect(), isTrue);
+        final again = controller.autoSignIn(AuthProvider.google);
+        expect(again, isNotNull);
+        expect(auth.reconnectedFlags, [false, true]);
+
+        auth.settleLast(const AuthCancelled());
+        await again!;
+      },
+    );
+
+    test('a CANCEL is a refusal, not a dead link — no reconnect ever '
+        'retries it', () async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(const AuthCancelled());
+      await first;
+
+      expect(reconnect(), isFalse);
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('the failures a working link cannot fix are never retried', () async {
+      var at = 20;
+      for (final kind in const [
+        AuthFailureKind.noPlayServices,
+        AuthFailureKind.serverError,
+        AuthFailureKind.tokenExchangeFailed,
+      ]) {
+        final attempt = controller.signIn(AuthProvider.google, auto: true);
+        auth.settleLast(AuthFailure(message: kind.name, kind: kind));
+        await attempt;
+        expect(reconnect(at: at), isFalse, reason: kind.name);
+        at += 40;
+      }
+      expect(auth.attempts, hasLength(3), reason: 'one per attempt, no more');
+    });
+
+    test('an online reading with no offline one behind it is not a '
+        'transition', () async {
+      await coldStartFailed();
+
+      clock = t0.add(const Duration(seconds: 20));
+      expect(controller.noteConnectivity(online: true), isFalse);
+      clock = t0.add(const Duration(seconds: 40));
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('a transition while an attempt is IN FLIGHT joins it, never a second '
+        'surface', () async {
+      await coldStartFailed();
+
+      clock = t0.add(const Duration(seconds: 10));
+      expect(controller.noteConnectivity(online: false), isFalse);
+      final pill = controller.signIn(AuthProvider.google);
+      clock = t0.add(const Duration(seconds: 20));
+      expect(
+        controller.noteConnectivity(online: true),
+        isFalse,
+        reason: 'the stall guard owns an attempt in flight, not this rule',
+      );
+      expect(auth.attempts, hasLength(2));
+
+      auth.settleLast(const AuthCancelled());
+      await pill;
+    });
+
+    test('a flapping link buys TWO re-arms and no more', () async {
+      await coldStartFailed();
+
+      for (final at in const [20, 60]) {
+        expect(reconnect(at: at), isTrue);
+        final again = controller.autoSignIn(AuthProvider.google)!;
+        auth.settleLast(
+          const AuthFailure(message: 'offline', kind: AuthFailureKind.unknown),
+        );
+        await again;
+        // Every settle re-opens the per-failure allowance; the stretch budget is what runs out.
+        clock = t0.add(Duration(seconds: at));
+      }
+      expect(auth.attempts, hasLength(3));
+
+      // The third drop is the same story and gets nothing: a link at the edge of a cell would
+      // otherwise redraw the sheet for as long as it flaps.
+      clock = t0.add(const Duration(seconds: 100));
+      expect(controller.noteConnectivity(online: false), isFalse);
+      clock = t0.add(const Duration(seconds: 120));
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(3));
+    });
+
+    test('ONE re-arm per failure — a second drop over the same dead attempt '
+        'buys nothing', () async {
+      await coldStartFailed();
+
+      expect(reconnect(), isTrue);
+      clock = t0.add(const Duration(seconds: 30));
+      expect(controller.noteConnectivity(online: false), isFalse);
+      clock = t0.add(const Duration(seconds: 40));
+      expect(
+        controller.noteConnectivity(online: true),
+        isFalse,
+        reason:
+            'the failure\'s one re-arm was spent and nothing has settled since',
+      );
+    });
+
+    test('a signed-in user is never handed a sheet by the link', () async {
+      await coldStartFailed();
+      auth.authed = true;
+
+      expect(reconnect(), isFalse);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('a link that returns while our UI is NOT foregrounded opens '
+        'nothing', () async {
+      await coldStartFailed();
+      controller.lifecycleProbe = () => AppLifecycleState.paused;
+
+      expect(reconnect(), isFalse);
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(1));
+    });
+  });
+
   // The OS finishing Google's picker under us (an icon launch on the live task) reaches the app
   // as a `canceled` — in the FRAMEWORK's words, where a user's back-out carries GMS's words.
   // Measured on one phone in one minute; pinned here so the two can never be merged again.
@@ -474,6 +699,28 @@ void main() {
         'changes', () {
       expect(ApiAuthService.sheetSurfaceFor(returned: false), 'sheet');
       expect(ApiAuthService.sheetSurfaceFor(returned: true), 'sheet_return');
+    });
+
+    // Same reasoning for the reconnect sheet: a NAME on the attempt the link coming back re-armed,
+    // never a surface of its own. A return outranks it — that person came back themselves.
+    test('the sheet a reconnect re-armed names itself, and a return still '
+        'wins', () {
+      expect(
+        ApiAuthService.sheetSurfaceFor(returned: false, reconnected: true),
+        'sheet_reconnect',
+      );
+      expect(
+        ApiAuthService.sheetSurfaceFor(returned: true, reconnected: true),
+        'sheet_return',
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'sheet_reconnect',
+          description: 'User cancelled the selector',
+        ),
+        isFalse,
+        reason: 'the reconnect sheet is a sheet — a swipe on it is the user',
+      );
     });
 
     // The reopened picker is a BUTTON surface like any other: an icon relaunch can strip it too,

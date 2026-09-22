@@ -36,6 +36,7 @@ import 'live_mark.dart';
 import 'premium_gate_action.dart';
 import 'video_preload_controller.dart';
 import 'viewer_media.dart';
+import '../../../app/theme/motion.dart';
 
 /// The home surface: a Shorts-style vertical reel of wallpapers, one page each (Spec > Reel feed).
 ///
@@ -393,7 +394,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     if (w.kind == WallpaperKind.live) {
       target = ApplyTarget.both;
     } else {
-      final picked = await ApplySheet.show(context);
+      final picked = await ApplySheet.show(context, wallpaper: w);
       if (picked == null || !mounted) return; // dismissed — not a failure
       target = picked;
     }
@@ -689,7 +690,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           child: IgnorePointer(
             child: AnimatedOpacity(
               opacity: _index == items.length - 1 ? 1 : 0,
-              duration: const Duration(milliseconds: 350),
+              // Same end state, reached in one frame -> the mark is present or absent, never fading.
+              duration: context.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 350),
               curve: Curves.easeOut,
               child: Center(child: _EndOfFeedMark(isDark: isDark)),
             ),
@@ -988,10 +992,10 @@ class _ActionBar extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Both buttons' height, and the row's — Pakiza's 52, so the pill and the
-  /// circle sit on one baseline whatever the locale does to the label. Exported
-  /// because the feed anchors the gate nudge off the bar's top edge.
-  static const double height = 52;
+  /// Both buttons' height, and the row's. Exported because the feed anchors the
+  /// gate nudge off the bar's top edge; the NUMBER lives in [FeedCardGeometry]
+  /// so the loading skeleton places the same objects from the same source.
+  static const double height = FeedCardGeometry.actionBarHeight;
 
   final bool busy;
   final VoidCallback onApply;
@@ -1006,7 +1010,7 @@ class _ActionBar extends StatelessWidget {
         Flexible(
           child: _ApplyPill(label: l10n.apply, onTap: busy ? null : onApply),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: FeedCardGeometry.actionGap),
         _ShareCircle(label: l10n.share, onTap: busy ? null : onShare),
       ],
     );
@@ -1058,7 +1062,10 @@ class _ApplyPill extends StatelessWidget {
             // row has inside an 18dp-guttered card — pill + 12 + a 52 circle.
             child: Container(
               height: _ActionBar.height,
-              constraints: const BoxConstraints(minWidth: 168, maxWidth: 240),
+              constraints: const BoxConstraints(
+                minWidth: FeedCardGeometry.applyPillMinWidth,
+                maxWidth: FeedCardGeometry.applyPillMaxWidth,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 26),
               // Text only, like the reference: an icon would crowd the longer
               // verbs (ta/ml/te set "Apply" as a whole word) and this pill is

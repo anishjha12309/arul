@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:arul/app/l10n/app_localizations.dart';
+import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/auth/data/sign_in_surface_clock.dart';
@@ -28,16 +29,25 @@ class _CountingAuthService implements AuthService {
   /// The `returned` flag of every attempt, in order -> the return re-arm is visible from the screen.
   final List<bool> returnedFlags = [];
 
+  /// The `reconnected` flag of every attempt -> the same for the reconnect re-arm.
+  final List<bool> reconnectedFlags = [];
+
+  /// What the NEXT attempt settles as. A network-class failure is what the reconnect rule needs
+  /// behind it, and nothing else on this screen cares which quiet outcome it gets.
+  AuthResult next = const AuthCancelled();
+
   @override
   Future<AuthResult> signInWith(
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
+    bool reconnected = false,
     bool reopened = false,
   }) {
     signInCalls++;
     returnedFlags.add(returned);
-    return Future.value(const AuthCancelled());
+    reconnectedFlags.add(reconnected);
+    return Future.value(next);
   }
 
   @override
@@ -81,6 +91,7 @@ void main() {
     WidgetTester tester, {
     SignInOutcome? outcome,
     List<Locale> phoneLocales = const [Locale('en')],
+    Stream<bool>? online,
   }) async {
     // The video background and the haptics reach for platform channels that do not exist here.
     for (final name in const [
@@ -118,6 +129,9 @@ void main() {
           sharedPreferencesProvider.overrideWithValue(prefs),
           platformLocalesProvider.overrideWithValue(phoneLocales),
           authServiceProvider.overrideWithValue(auth),
+          // The wall watches the link from its first frame; connectivity_plus has no channel under
+          // `flutter test`, and its EventChannel reports that failure through FlutterError.
+          isOnlineProvider.overrideWith((ref) => online ?? Stream.value(true)),
         ],
         child: Consumer(
           builder: (context, ref, _) => MaterialApp.router(
@@ -223,6 +237,48 @@ void main() {
 
       expect(auth.signInCalls, 2);
       expect(auth.returnedFlags, [false, true]);
+    });
+
+    // Same wire, the other feed: a reading the screen never subscribes to leaves the whole
+    // reconnect rule dead code with every unit test still green.
+    testWidgets('the link coming back after a network failure fires ONE more '
+        'automatic attempt, marked as a reconnect', (tester) async {
+      final link = StreamController<bool>();
+      addTearDown(link.close);
+      auth.next = const AuthFailure(
+        message: 'Sign-in didn\'t complete. Check your internet connection…',
+        kind: AuthFailureKind.unknown,
+      );
+      await pump(tester, online: link.stream);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SignInScreen)),
+        listen: false,
+      );
+      final t0 = DateTime(2026, 9, 15, 10);
+      var clock = t0;
+      final controller = container.read(authControllerProvider.notifier)
+        ..now = (() => clock)
+        ..stallTick = const Duration(milliseconds: 10)
+        ..lifecycleProbe = (() => AppLifecycleState.resumed);
+
+      // The cold-start attempt, dying the way a phone with mobile data off kills one.
+      unawaited(controller.autoSignIn(AuthProvider.google)!);
+      await tester.pump();
+      expect(auth.signInCalls, 1);
+      // The re-armed attempt is the one under test; a second failure would only toast.
+      auth.next = const AuthCancelled();
+
+      clock = t0.add(const Duration(seconds: 10));
+      link.add(false);
+      await tester.pump();
+      clock = t0.add(const Duration(seconds: 20));
+      link.add(true);
+      await tester.pump();
+      await tester.pump();
+
+      expect(auth.signInCalls, 2);
+      expect(auth.reconnectedFlags, [false, true]);
+      expect(auth.returnedFlags, [false, false]);
     });
 
     testWidgets('a resume with no away stretch behind it changes nothing', (

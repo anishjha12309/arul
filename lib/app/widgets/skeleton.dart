@@ -33,9 +33,27 @@ class _SkeletonState extends State<Skeleton>
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: Motion.skeletonSweep,
-  )..repeat();
+  );
   // TickerMode from the route already parks this controller off-page -> a backgrounded feed page
   // requests no frames.
+
+  /// Started from [didChangeDependencies], not the field initializer: `reduceMotion` needs an
+  /// InheritedWidget lookup, and a repeating ticker must never be armed before that answer exists.
+  bool _motionStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionStarted) return;
+    _motionStarted = true;
+    if (context.reduceMotion) {
+      // Parked mid-sweep: a static sheen, the resting state of this loop. Never flat — flat reads
+      // as a dead box rather than a loading one.
+      _c.value = 0.5;
+    } else {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {

@@ -254,6 +254,23 @@
                 android:resource="@xml/video_wallpaper"/>
         </service>
 
+        <!-- Asks Play services to install the backported Photo Picker on Android 7-10 and Go 11-12 ->
+             the upload pick (upload/MediaPickChannel) then gets the same picker there, not the bare
+             documents UI. Never enabled and never exported: it is a declaration Play services reads,
+             not a service that runs. No permission rides with it. -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES"/>
+            </intent-filter>
+            <meta-data
+                android:name="photopicker_activity:0:required"
+                android:value=""/>
+        </service>
+
         <!-- The ACTION_ATTACH_DATA fallback needs a content:// URI for a local image -> this provider mints it. -->
         <provider
             android:name="androidx.core.content.FileProvider"

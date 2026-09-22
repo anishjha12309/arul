@@ -14,6 +14,7 @@ import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/arul_line_icons.dart';
 import '../widgets/english_only.dart';
+import '../theme/motion.dart';
 
 /// The tabbed scaffold around Wallpapers / Ringtones / Settings — everything else pushes OVER it.
 ///
@@ -203,7 +204,13 @@ class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
     super.didUpdateWidget(old);
     if (widget.currentIndex != old.currentIndex) {
       _previous = old.currentIndex;
-      _c.forward(from: 0);
+      // Holds at the RESTING state (the new branch fully opaque) rather than cross-fading -> the
+      // tab still changes, it just changes in one frame.
+      if (context.reduceMotion) {
+        _c.value = 1;
+      } else {
+        _c.forward(from: 0);
+      }
     }
   }
 

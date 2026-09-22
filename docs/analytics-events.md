@@ -56,9 +56,10 @@ succeeding population for its denominator. Both: [auth.md](auth.md).
 `login_surface_shown` (once per attempt, `surface`/`auto`/`ms_to_surface`) proves Google's screen
 appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
 left". `surface` values: `sheet`, `sheet_return` (the automatic attempt a return to the wall
-re-armed), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the guard
-reopens once after Google's add-account flow); a return attempt that escalates to the picker carries
-`sheet_return` on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
+re-armed), `sheet_reconnect` (the one the link coming back after a network-class failure re-armed;
+a return outranks it), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the
+guard reopens once after Google's add-account flow); a re-armed attempt that escalates to the picker
+carries its sheet's name on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
 lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
 100 installs read as "install, then nothing". Expect the measured install→login rate to read LOWER
 from build 74 on — the denominator now includes people it used to miss.

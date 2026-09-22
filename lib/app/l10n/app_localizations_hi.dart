@@ -202,6 +202,12 @@ class AppLocalizationsHi extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'प्रीव्यू अभी उपलब्ध नहीं है';
 
   @override
+  String get ringtoneVolumeMuted => 'यह प्रीव्यू सुनने के लिए आव़ाज़ बढ़ाएँ';
+
+  @override
+  String get ringtoneCurrentBadge => 'मौजूदा';
+
+  @override
   String get ringtonesEmptyTitle => 'रिंगटोन जल्द आ रहे हैं';
 
   @override
