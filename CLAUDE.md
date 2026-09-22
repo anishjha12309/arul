@@ -92,10 +92,12 @@ then debuts, then filler by uses, with no pins → `docs/browse.md`.
 
 ```bash
 flutter pub get && dart run build_runner watch -d      # codegen — generated files are TRACKED
-flutter analyze && flutter test
+flutter analyze && flutter test        # the GATE. Iterate on mcp__dart__analyze_files — 5 min vs instant
 flutter run --dart-define-from-file=env/dev.json
 cd workers && npx tsc --noEmit && npx vitest run && npx wrangler deploy   # deploy IS part of done
 ```
+
+Delegating? Sonnet subagents for mechanical sweeps and bounded searches; the lead keeps the decisions.
 
 ## 8. Definition of done & git
 

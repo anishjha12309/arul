@@ -8,10 +8,18 @@ disable-model-invocation: true
 
 **Run:** `adb devices` (must list one) → `flutter run --dart-define-from-file=env/dev.json`. Release feel: add `--release`. **`dev.json` already points at the LIVE production worker** — it differs from `prod.json` only in `GOOGLE_ANDROID_CLIENT_ID`, so a "dev" run writes real rows. `env/sbx.json` is the only local one (`API_BASE_URL=http://127.0.0.1:8787`, for the verify-payments harness).
 
+**More than one target attached — a phone and an emulator both answer** — and adb then picks for
+you silently. `export ANDROID_SERIAL=<serial>` (from `adb devices`) once per session; every adb
+call and `drive.mjs` honours it. `flutter run` needs its own `-d <serial>`.
+
 **Logcat capture** (save to scratchpad, never the repo):
 ```bash
-adb logcat -c && adb logcat > <scratchpad>/capture.txt   # reproduce, then Ctrl-C
+adb logcat -c && adb logcat --pid=$(adb shell pidof -s com.hsrutility.arul) > <scratchpad>/capture.txt
 ```
+`--pid` drops every other app's lines, so the 256 KiB ring buffer holds the window you care about
+instead of evicting it. Take the pid from `pidof`, never from a `Start proc` log line. System-side
+anchors (`ActivityTaskManager`, `CCodec`, `ANR in`) are emitted by OTHER pids — for those, capture
+unfiltered (`adb logcat -G 16M` first) and grep.
 
 Proven filters — grep the capture, don't eyeball:
 | Problem | grep |
@@ -48,6 +56,8 @@ early `[boot]` marks — each of them cost real time once. Measure on a PROFILE 
 `com.android.vending`, so `flutter run` builds and sideloaded release APKs stay capturable
 (`scrcpy`, `adb exec-out screencap`). A build installed *from Play* blanks screenshots, screen
 recording and the recents thumbnail — driving that one visually is impossible; read logcat instead.
+Raw bytes come back through `exec-out`, never `shell`: `adb shell` translates LF to CRLF and
+corrupts a piped PNG or zip. `shell` acts on the device, `exec-out` streams from it.
 
 **Ringtone Set below Android 10** takes a different code path (public Ringtones dir + a runtime
 `WRITE_EXTERNAL_STORAGE` prompt) than API 29+ — when touching Set, exercise BOTH paths: a modern
@@ -80,10 +90,27 @@ node tools/drive.mjs tap "Ringtones"   # substring match on text/content-desc; -
 node tools/drive.mjs swipe up          # fling the feed (down|left|right, --dist px, --ms n)
 node tools/drive.mjs open "https://arul.hsrutility.com/w/<id>"   # deep link — skip the tapping
 adb shell "am start -a android.intent.action.VIEW -d 'fb<META_APP_ID>://open?ringtone_id=<id>&lang=hi'"  # Meta form — INNER quotes or the phone's shell eats the &
+node tools/drive.mjs wait "Set as wallpaper" --ms 15000   # poll, NEVER sleep — see below
+node tools/drive.mjs wait-gone "Loading"                  # spinner cleared
+node tools/drive.mjs wait-window phonepe                  # an OS/third-party surface took focus
 node tools/drive.mjs current           # focused window: how you detect an OS surface on top
 # also: tap x y · type · key back|wake|… · launch · stop · shot [path] · unlock
 ```
+**Never `sleep N` between a tap and the next step.** A sleep that is long enough on your phone is
+short on a cold Vivo and wasted on a warm Pixel; the `wait*` verbs return the instant the condition
+holds and print what IS on screen when they time out, so a failure names its own cause. Sleep only
+where nothing observable changes.
 A missed `tap` prints what IS on screen, so one failure self-corrects.
+
+**Throttled and offline runs.** A flow that only ever ran on your Wi-Fi is untested: real installs
+sit on Airtel/Jio 4G, and every pre-login timeout fires there first. Throttle the EMULATOR's
+cellular link — `adb emu network speed edge` (or `gprs`) plus `adb emu network delay gsm|edge` —
+and `adb shell svc wifi disable` on it FIRST or nothing is throttled, because Wi-Fi is exempt.
+Verify the throttle took by watching the app's own `/geo` and `version.json` timings, not a
+download: toybox `nc` hangs through the emulator NAT. Windows Mobile Hotspot + `New-NetQosPolicy`
+fails unelevated, and a phone on Jio cannot be forced down to 2G/3G. For plain offline, turn mobile
+data off at the moment of the tap — `svc data enable` leaves `mobile_data=1` while the radio is
+still down, so assert the state you think you set.
 
 **Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
 for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`

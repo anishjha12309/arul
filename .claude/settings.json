@@ -20,7 +20,13 @@
       "Bash(npx tsc*)",
       "Bash(npx vitest*)",
       "Bash(adb devices*)",
-      "Bash(adb logcat*)"
+      "Bash(adb logcat*)",
+      "Bash(adb shell pidof*)",
+      "Bash(adb shell dumpsys*)",
+      "Bash(adb shell getprop*)",
+      "Bash(adb shell wm size*)",
+      "Bash(adb shell am start*)",
+      "Bash(adb exec-out screencap*)"
     ]
   },
   "hooks": {
@@ -78,6 +84,12 @@
             "type": "command",
             "command": "node .claude/hooks/release-commit-reminder.js reconcile",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/dart-analyze-gate.js",
+            "timeout": 15,
+            "statusMessage": "dart analyze gate"
           }
         ]
       }

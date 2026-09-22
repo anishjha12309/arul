@@ -13,6 +13,9 @@
 //   node tools/drive.mjs key <back|home|enter|del|tab|wake|power|recents|KEYCODE_*|n>
 //   node tools/drive.mjs open <uri>               VIEW intent (deep/app link)
 //   node tools/drive.mjs launch [pkg] | stop [pkg]  start / force-stop the app
+//   node tools/drive.mjs wait <label> [--ms n]    poll until it appears (default 10 s) — never sleep
+//   node tools/drive.mjs wait-gone <label> [--ms n]   poll until it disappears (spinner, sheet)
+//   node tools/drive.mjs wait-window <substr> [--ms n]  poll the focused window (OS surface, PhonePe)
 //   node tools/drive.mjs current                  focused window — spots OS surfaces
 //   node tools/drive.mjs shot [path]              PNG screencap (default: OS temp)
 //   node tools/drive.mjs unlock                   wake + dismiss keyguard
@@ -122,6 +125,55 @@ function tapByLabel(q, index) {
   if (!n) fail('--index out of range (' + hits.length + ' matches)');
   adb('shell', 'input', 'tap', String(n.cx), String(n.cy));
   console.log(`tapped (${n.cx},${n.cy}) ${JSON.stringify(n.text || n.desc)}`);
+}
+
+// A fixed sleep guesses; a poll knows -> every wait returns the instant the condition holds, and
+// says what WAS on screen when it does not. dumpXml alone costs ~1 s, so that is the poll floor.
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+const matches = (ns, q) => {
+  const ql = q.toLowerCase();
+  return ns.filter(
+    (n) => n.text.toLowerCase().includes(ql) || n.desc.toLowerCase().includes(ql),
+  );
+};
+
+function waitFor(q, ms, gone) {
+  const deadline = Date.now() + (Number.isFinite(ms) ? ms : 10000);
+  let ns = [];
+  for (;;) {
+    ns = interesting(nodes());
+    const hit = matches(ns, q);
+    if (gone ? !hit.length : hit.length) {
+      console.log((gone ? 'gone: ' : 'found: ') + JSON.stringify(q));
+      return;
+    }
+    if (Date.now() >= deadline) break;
+    sleep(300);
+  }
+  fail(
+    'timed out waiting for ' + JSON.stringify(q) + (gone ? ' to go' : '') +
+      ' — on screen now:\n' + ns.map(fmt).join('\n'),
+  );
+}
+
+function waitWindow(q, ms) {
+  const deadline = Date.now() + (Number.isFinite(ms) ? ms : 10000);
+  let line = '';
+  for (;;) {
+    line = adb('shell', 'dumpsys', 'window')
+      .split('\n')
+      .filter((l) => /mCurrentFocus/.test(l))
+      .map((l) => l.trim())
+      .join(' ');
+    if (line.toLowerCase().includes(q.toLowerCase())) {
+      console.log('focused: ' + line);
+      return;
+    }
+    if (Date.now() >= deadline) break;
+    sleep(250);
+  }
+  fail('timed out waiting for window ' + JSON.stringify(q) + ' — focused now: ' + (line || 'none'));
 }
 
 function screenSize() {
@@ -238,6 +290,21 @@ switch (cmd) {
     adb('shell', 'am', 'force-stop', rest[0] ?? PKG);
     console.log('force-stopped ' + (rest[0] ?? PKG));
     break;
+  case 'wait': {
+    if (!rest[0]) fail('wait <label> [--ms n]');
+    waitFor(rest.join(' '), flags.ms, false);
+    break;
+  }
+  case 'wait-gone': {
+    if (!rest[0]) fail('wait-gone <label> [--ms n]');
+    waitFor(rest.join(' '), flags.ms, true);
+    break;
+  }
+  case 'wait-window': {
+    if (!rest[0]) fail('wait-window <substring> [--ms n]');
+    waitWindow(rest.join(' '), flags.ms);
+    break;
+  }
   case 'current': {
     const win = adb('shell', 'dumpsys', 'window');
     const lines = win
@@ -263,7 +330,8 @@ switch (cmd) {
     break;
   default:
     fail(
-      'usage: node tools/drive.mjs <dump|tap|swipe|type|key|open|launch|stop|current|shot|unlock>\n' +
+      'usage: node tools/drive.mjs <dump|tap|swipe|type|key|open|launch|stop|wait|wait-gone|' +
+        'wait-window|current|shot|unlock>\n' +
         'see the header of this file for details',
     );
 }
