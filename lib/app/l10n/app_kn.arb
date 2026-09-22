@@ -199,6 +199,8 @@
   "premiumSelectedUpiApp": "UPI ಆ್ಯಪ್",
   "upiPickerTitle": "ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ",
   "upiPickerLastUsed": "ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು",
+  "upiPickerQrTitle": "QR ಮೂಲಕ ಪಾವತಿಸಿ",
+  "upiPickerQrSubtitle": "ಇನ್ನೋಂದು ಫೋನ್‌ನಲ್ಲಿ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ",
   "premiumTrialFinePrint": "ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.",
   "premiumPaidFinePrint": "{price}/ತಿಂಗಳು ಆಟೋಪೇ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು.",
   "premiumSocialProof": "{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿದರು 🙏",

@@ -42,15 +42,25 @@ inside the SAME request on any intent failure** — a second initiate bounces of
 Picker apps pass TWO gates: `MANDATE_APPS`, never an open `upi://` query — a pay-only wallet accepts
 the intent then fails the mandate — AND the device resolver against a mandate-SHAPED probe URL,
 which separates the two (Mobikwik answers `upi://pay` only; Paytm uses a different activity for
-each). Earn a place on the list with ONE real ₹2 penny drop, never the resolver alone; lose it on
-zero completions from a meaningful n. **Never reorder it off observed completion rates** — they are
+each). `MANDATE_APPS` IS PhonePe's published mandate set — PhonePe, BHIM, GPay, Paytm, CRED, Amazon
+Pay, SuperMoney — plus the sandbox simulator; the docs name the seven but print no Android package,
+so each id comes from that vendor's own Play listing. Nothing else earns a place without ONE real ₹2
+penny drop. The last three were pulled once on 181 attempts with ZERO completions and restored by
+the owner at the TAIL, which adds them to the picker without moving the default or the ranked four:
+they are the ones to watch. **Never reorder it off observed completion rates** — they are
 self-selected by the position the app already holds. Paytm converts better per chooser than GPay
 (10.5% vs 8.5%) only because reaching it means scrolling past the top two, which selects for
 determined payers; promoting it changes that population and destroys the rate it was promoted for.
 A reorder needs a split test. **No hosted-page fallback in the app** — it completed 4 of 790,
 and a route that cannot finish is worse than none. On a phone with no offered app **the CTA itself
 opens an on-screen QR** of the SAME `intentUrl` — it carries no app binding (`targetApp` only steers
-what we LAUNCH), so any UPI app on a second phone scans and approves it. No install prompt and no
+what we LAUNCH), so any UPI app on a second phone scans and approves it. It is ALSO the picker's
+LAST row wherever apps exist, so the picker opens at ONE app, not two — but a ONE-TIME route: the
+sheet pops the `kUpiPickQr` sentinel in place of a package and nothing reaches `arul_upi_app`, or a
+curious tap would leave the CTA launching an app nobody chose. Over an open order it abandons like
+an app switch, and `switchApp`'s same-app guard MUST skip it — the QR names `com.phonepe.app` as a
+formality, so that guard would otherwise read a route change as "the app you already picked".
+No install prompt and no
 second line: that phone has exactly one way to pay, so naming it is a decision to make FOR the user,
 and store links asked someone mid-checkout to go and fetch a payment app first. Pass `mode: "qr"` on initiate or
 the order files under `com.phonepe.app` and mandates PhonePe never saw enter the column that ranks

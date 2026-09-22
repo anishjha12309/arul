@@ -718,6 +718,12 @@ class AppLocalizationsMl extends AppLocalizations {
   String get upiPickerLastUsed => 'അവസാനം ഉപയോഗിച്ചത്';
 
   @override
+  String get upiPickerQrTitle => 'QR വഴി അടയ്ക്കൂ';
+
+  @override
+  String get upiPickerQrSubtitle => 'മറ്റൊരു ഫോണിൽ സ്കാൻ ചെയ്യൂ';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'പിന്നീട് മാസം $price ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.';
   }

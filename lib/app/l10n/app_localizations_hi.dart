@@ -706,6 +706,12 @@ class AppLocalizationsHi extends AppLocalizations {
   String get upiPickerLastUsed => 'पिछली बार इस्तेमाल';
 
   @override
+  String get upiPickerQrTitle => 'QR से भुगतान करें';
+
+  @override
+  String get upiPickerQrSubtitle => 'दूसरे फ़ोन से स्कैन करें';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'फिर $price/माह ऑटोपे से। कभी भी रद्द करें।';
   }

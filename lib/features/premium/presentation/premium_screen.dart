@@ -88,8 +88,11 @@ Map<String, Object?> paywallShownProperties({
     'variant': variant,
     'has_upi_app': codes.isEmpty ? 'no' : 'yes',
     'upi_app_count': _countBucket(codes.length),
-    // GA4 drops a parameter value over 100 characters -> six codes is more than can ever install.
-    'upi_apps': codes.isEmpty ? 'none' : codes.take(6).join(','),
+    // Packed the same way as the refused names below, rather than cut at a fixed count: the
+    // allowlist grew to PhonePe's full published seven and a hardcoded `take(6)` silently dropped
+    // the last app on any phone carrying them all. Every code is short, so all eight (the seven
+    // plus the sandbox simulator) sit inside GA4's 100-char limit with room to spare.
+    'upi_apps': codes.isEmpty ? 'none' : _packWithinGa4Limit(codes),
     'default_app': defaultPackage == null ? 'none' : upiAppCode(defaultPackage),
     'trial_eligible': trialEligible ? 'yes' : 'no',
     // The apps the phone HAS and the allowlist refuses. `has_upi_app: no` alongside a non-zero
@@ -204,6 +207,15 @@ class _Palette {
 /// most setups die inside the UPI handoff, so the SECOND attempt is the common one — and while
 /// this lived in a State field, every retry silently reset the user to the allowlist head.
 const _kUpiAppKey = 'arul_upi_app';
+
+/// What the picker pops for its QR row, in place of a package name.
+///
+/// A sentinel rather than a package because the QR is not one: it names
+/// [_PremiumScreenState._kQrFormalityPackage] only to satisfy PhonePe's mandatory `targetApp`, and
+/// letting that name come back through the picker would write PhonePe into [_kUpiAppKey] and make
+/// the next visit's CTA silently launch an app the user never chose.
+/// Shaped so no real package can collide with it — a package name has no leading `#`.
+const kUpiPickQr = '#qr';
 
 class _PremiumScreenState extends ConsumerState<PremiumScreen>
     with WidgetsBindingObserver {
@@ -647,6 +659,29 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       ),
     );
     if (picked == null || !mounted) return;
+
+    // The QR is a ONE-TIME route, never a remembered default: nothing is written to [_kUpiAppKey]
+    // and `_selectedUpiPackage` is left alone, so the next visit's CTA still opens their own app.
+    // Someone who taps this out of curiosity keeps the one tap that is strictly faster for them,
+    // and there is no state here to strand — the code dies with its own deadline either way.
+    if (picked == kUpiPickQr) {
+      // An order already open at an app is abandoned first, exactly as switching apps does: two
+      // live mandates on one user is what the server refuses, and `startTrial` would otherwise
+      // refuse this outright and leave a button that does nothing.
+      if (resumable != null) {
+        await ref
+            .read(premiumPurchaseProvider.notifier)
+            .switchApp(
+              _kQrFormalityPackage,
+              trialEligible: trialEligible,
+              asQr: true,
+            );
+        return;
+      }
+      _startQrPurchase(trialEligible: trialEligible);
+      return;
+    }
+
     setState(() => _selectedUpiPackage = picked);
     await ref.read(sharedPreferencesProvider).setString(_kUpiAppKey, picked);
     if (!mounted || resumable == null || picked == resumable.targetApp) return;
@@ -726,7 +761,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
               source: source,
             ),
       selectedUpiApp: selectedApp,
-      canChangeUpiApp: upiApps.length > 1,
+      // Not `length > 1`: the picker is no longer a choice AMONG apps, it also holds the QR
+      // row, so a phone with exactly one UPI app still has two ways to pay and must be able to
+      // open it. At zero apps the CTA already IS the QR and there is nothing to change
+      canChangeUpiApp: upiApps.isNotEmpty,
       resumeAppLabel: _resumeAppLabel(resumable, upiApps, selectedApp),
       onResume: _resume,
       onBack: _leave,
@@ -833,7 +871,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       monthlyPrice: monthlyPrice,
       accessUntil: _formatDate(sub.currentPeriodEnd),
       selectedUpiApp: selectedApp,
-      canChangeUpiApp: upiApps.length > 1,
+      // Not `length > 1`: the picker is no longer a choice AMONG apps, it also holds the QR
+      // row, so a phone with exactly one UPI app still has two ways to pay and must be able to
+      // open it. At zero apps the CTA already IS the QR and there is nothing to change
+      canChangeUpiApp: upiApps.isNotEmpty,
       purchaseBusy: purchaseBusy,
       resumeAppLabel: _resumeAppLabel(resumable, upiApps, selectedApp),
       onResume: _resume,
@@ -926,11 +967,110 @@ class _UpiPickerSheet extends StatelessWidget {
                       onTap: () => Navigator.of(context).pop(app.packageName),
                     ),
                   ),
+                // The same code a phone with NO app gets on its CTA, offered here as a route rather
+                // than a fallback: the mandate link carries no app binding, so a second phone can
+                // approve it whatever is installed on this one. It is deliberately LAST and never
+                // `selected` — one tap on an installed app is strictly faster, so the QR must not
+                // read as the recommendation, and picking it is a one-time choice this sheet's
+                // caller refuses to write to prefs.
+                const _UpiQrOptionRow(),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The QR row at the foot of the picker — [_UpiOptionRow]'s shape without an app behind it.
+///
+/// Built to the same overflow rules as that row, because the same all-or-nothing English demotion
+/// applies: the glyph is fixed and outside the flexible column, and both texts are capped to the
+/// row's own constraints. Never `selected`: nothing is remembered here, so there is no state to
+/// show, and a gold border would claim the CTA is about to do this.
+class _UpiQrOptionRow extends StatelessWidget {
+  const _UpiQrOptionRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      container: true,
+      identifier: 'arul_upi_option_qr',
+      label: l10n.upiPickerQrTitle,
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: () => Navigator.of(context).pop(kUpiPickQr),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: ArulTokens.paywallBorderSoft),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Row(
+              children: [
+                // Sized to the app icons beside it so the column of glyphs stays a straight line.
+                SizedBox.square(
+                  dimension: 44,
+                  child: Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 32,
+                    color: ArulTokens.paywallGoldDeep,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth,
+                          ),
+                          child: Text(
+                            l10n.upiPickerQrTitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: ArulTokens.paywallUpiName.copyWith(
+                              fontSize: 14.5,
+                              height: 1.25,
+                              color: ArulTokens.paywallInkUpi,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth,
+                          ),
+                          child: Text(
+                            l10n.upiPickerQrSubtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: ArulTokens.paywallUpiName.copyWith(
+                              fontSize: 12,
+                              height: 1.3,
+                              color: ArulTokens.paywallInkUpi.withValues(
+                                alpha: 0.62,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

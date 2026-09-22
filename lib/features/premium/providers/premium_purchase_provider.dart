@@ -1036,12 +1036,20 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// `pending` before it answers, so the initiate that follows sees no claim. If the abandon could
   /// not release one (PhonePe unreachable, a row already terminal) `_initiateWithRetry` rides the
   /// 409 out — its delays sum past SETUP_CLAIM_WINDOW_MS, and this claim is minutes old anyway.
+  /// [asQr] re-opens the same mandate as a scannable code instead of launching an app. It is a
+  /// genuine change of route even when the package matches, because the QR names
+  /// `com.phonepe.app` only to satisfy PhonePe's mandatory `targetApp` — so the "same app changes
+  /// nothing" guard below must not swallow it, or picking QR over an open PhonePe order would do
+  /// nothing at all.
   Future<void> switchApp(
     String targetApp, {
     required bool trialEligible,
+    bool asQr = false,
   }) async {
     final resumable = _resumableState;
-    if (resumable == null || resumable.targetApp == targetApp || _switching) {
+    if (resumable == null ||
+        (!asQr && resumable.targetApp == targetApp) ||
+        _switching) {
       return;
     }
     _switching = true;
@@ -1059,7 +1067,11 @@ class PremiumPurchase extends _$PremiumPurchase {
     // the screen — that order is a live subscription now, and a second checkout over it is exactly
     // the double-mandate the server refuses.
     if (!ref.mounted || state is! PurchaseIdle) return;
-    await startTrial(targetApp: targetApp, trialEligible: trialEligible);
+    await startTrial(
+      targetApp: targetApp,
+      trialEligible: trialEligible,
+      asQr: asQr,
+    );
   }
 
   /// True for the one network round-trip in the middle of [switchApp]: the state still says

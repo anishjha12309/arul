@@ -720,6 +720,12 @@ class AppLocalizationsTa extends AppLocalizations {
   String get upiPickerLastUsed => 'கடைசியாக பயன்படுத்தியது';
 
   @override
+  String get upiPickerQrTitle => 'QR மூலம் செலுத்துங்கள்';
+
+  @override
+  String get upiPickerQrSubtitle => 'வேறொரு போனில் ஸ்கேன் செய்யுங்கள்';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'பிறகு மாதம் $price ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.';
   }

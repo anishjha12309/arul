@@ -709,6 +709,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get upiPickerLastUsed => 'Last used';
 
   @override
+  String get upiPickerQrTitle => 'Pay with QR';
+
+  @override
+  String get upiPickerQrSubtitle => 'Scan from another phone';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'Then $price/month via autopay. Cancel anytime.';
   }

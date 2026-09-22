@@ -1402,6 +1402,18 @@ abstract class AppLocalizations {
   /// **'Last used'**
   String get upiPickerLastUsed;
 
+  /// Last row of the UPI picker, under the installed apps. Opens the same scannable mandate code a phone with no UPI app gets on its CTA. A one-time route, never remembered as the default.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with QR'**
+  String get upiPickerQrTitle;
+
+  /// Second line of the QR row in the UPI picker. The mandate link carries no app binding, so it can be approved on any phone — which is the whole reason this row exists beside the installed apps.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan from another phone'**
+  String get upiPickerQrSubtitle;
+
   /// No description provided for @premiumTrialFinePrint.
   ///
   /// In en, this message translates to:

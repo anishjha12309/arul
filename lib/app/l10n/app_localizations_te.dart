@@ -712,6 +712,12 @@ class AppLocalizationsTe extends AppLocalizations {
   String get upiPickerLastUsed => 'చివరిగా వాడినది';
 
   @override
+  String get upiPickerQrTitle => 'QR ద్వారా చెల్లించండి';
+
+  @override
+  String get upiPickerQrSubtitle => 'మరో ఫోన్‌లో స్కాన్ చేయండి';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'తర్వాత నెలకు $price ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.';
   }

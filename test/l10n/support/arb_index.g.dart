@@ -254,6 +254,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'Selected UPI App',
     'upiPickerTitle': 'Pay using',
     'upiPickerLastUsed': 'Last used',
+    'upiPickerQrTitle': 'Pay with QR',
+    'upiPickerQrSubtitle': 'Scan from another phone',
     'premiumTrialFinePrint': 'Then {price}/month via autopay. Cancel anytime.',
     'premiumPaidFinePrint': '{price}/month via autopay. Cancel anytime.',
     'premiumSocialProof': '{name} in {city} just applied a live wallpaper 🙏',
@@ -507,6 +509,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'UPI ஆப்',
     'upiPickerTitle': 'இதன் மூலம் செலுத்துங்கள்',
     'upiPickerLastUsed': 'கடைசியாக பயன்படுத்தியது',
+    'upiPickerQrTitle': 'QR மூலம் செலுத்துங்கள்',
+    'upiPickerQrSubtitle': 'வேறொரு போனில் ஸ்கேன் செய்யுங்கள்',
     'premiumTrialFinePrint':
         'பிறகு மாதம் {price} ஆட்டோபே மூலம். எப்போதும் ரத்து செய்யலாம்.',
     'premiumPaidFinePrint': '{price}/மாதம் ஆட்டோபே. எப்போதும் ரத்து.',
@@ -756,6 +760,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'UPI యాప్',
     'upiPickerTitle': 'దీని ద్వారా చెల్లించండి',
     'upiPickerLastUsed': 'చివరిగా వాడినది',
+    'upiPickerQrTitle': 'QR ద్వారా చెల్లించండి',
+    'upiPickerQrSubtitle': 'మరో ఫోన్‌లో స్కాన్ చేయండి',
     'premiumTrialFinePrint':
         'తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.',
     'premiumPaidFinePrint':
@@ -1007,6 +1013,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'UPI ಆ್ಯಪ್',
     'upiPickerTitle': 'ಇದರ ಮೂಲಕ ಪಾವತಿಸಿ',
     'upiPickerLastUsed': 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು',
+    'upiPickerQrTitle': 'QR ಮೂಲಕ ಪಾವತಿಸಿ',
+    'upiPickerQrSubtitle': 'ಇನ್ನೋಂದು ಫೋನ್‌ನಲ್ಲಿ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
     'premiumTrialFinePrint':
         'ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.',
     'premiumPaidFinePrint': '{price}/ತಿಂಗಳು ಆಟೋಪೇ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು.',
@@ -1258,6 +1266,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'UPI ആപ്പ്',
     'upiPickerTitle': 'ഇതുവഴി അടയ്ക്കൂ',
     'upiPickerLastUsed': 'അവസാനം ഉപയോഗിച്ചത്',
+    'upiPickerQrTitle': 'QR വഴി അടയ്ക്കൂ',
+    'upiPickerQrSubtitle': 'മറ്റൊരു ഫോണിൽ സ്കാൻ ചെയ്യൂ',
     'premiumTrialFinePrint':
         'പിന്നീട് മാസം {price} ഓട്ടോപേ വഴി. എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.',
     'premiumPaidFinePrint': '{price}/മാസം ഓട്ടോപേ. എപ്പോഴും റദ്ദാക്കാം.',
@@ -1507,6 +1517,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'premiumSelectedUpiApp': 'UPI ऐप',
     'upiPickerTitle': 'इससे भुगतान करें',
     'upiPickerLastUsed': 'पिछली बार इस्तेमाल',
+    'upiPickerQrTitle': 'QR से भुगतान करें',
+    'upiPickerQrSubtitle': 'दूसरे फ़ोन से स्कैन करें',
     'premiumTrialFinePrint': 'फिर {price}/माह ऑटोपे से। कभी भी रद्द करें।',
     'premiumPaidFinePrint': '{price}/माह ऑटोपे से। कभी भी रद्द करें।',
     'premiumSocialProof': '{city} में {name} ने लाइव वॉलपेपर लगाया 🙏',

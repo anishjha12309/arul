@@ -26,9 +26,11 @@ import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
+import 'package:arul/core/upi/upi_apps.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
+import 'package:arul/features/premium/presentation/premium_screen.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
 
@@ -405,6 +407,26 @@ void main() {
       expect(channelCalls.where((c) => c.method == 'launch'), isEmpty);
 
       await drain(tester);
+    });
+  });
+
+  // The QR is also the last row of the app picker, so the sheet now pops two kinds of thing: a
+  // package name, which IS written to prefs and becomes the CTA's target forever, and this. A
+  // sentinel that could pass for a package would put `com.phonepe.app` in that key on a phone whose
+  // owner chose the QR — the CTA would then launch an app they never picked, or nothing at all.
+  group('the picker sentinel', () {
+    test('cannot be mistaken for a package name', () {
+      // No package may start with a punctuation character, so nothing the allowlist or the device
+      // probe can produce collides with it.
+      expect(kUpiPickQr.startsWith('#'), isTrue);
+      expect(kUpiPickQr, isNot(contains('.')));
+      expect(kUpiPickQr, isNot(_formalityPackage));
+    });
+
+    test('buckets as `other` if it ever reached analytics, never as an app', () {
+      // It should never get there at all — the QR reports `upi_qr` with a null `target_app`. This
+      // is the floor under that: a leak must not file as a real app in the completions breakdown.
+      expect(upiAppCode(kUpiPickQr), 'other');
     });
   });
 }

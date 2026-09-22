@@ -48,9 +48,15 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
         // Owner's order: PhonePe leads as both the default and the first chip -> it is our own PSP
         // and moves 49% of UPI volume, so its mandate sheet is the one most users already trust.
         // Decouple display order from the default by giving `_resolvedUpiPackage` its own constant.
-        // CRED, Amazon Pay and SuperMoney were removed: 181 recorded mandate attempts between them,
-        // ZERO completions. An app that never finishes one is a dead end however good its docs are.
-        // Do NOT re-add on the strength of the resolver alone -> one real penny-drop per app, watched.
+        // This IS PhonePe's published mandate-supported set, in full: PhonePe, BHIM, GPay, Paytm,
+        // CRED, Amazon Pay and SuperMoney (Autopay integration-steps names the seven; the setup
+        // API's iOS `targetApp` enum is the same seven). Android takes a package name, which those
+        // pages do not print -> each one below is the id on that vendor's own Play listing.
+        // The last three were pulled once — 181 recorded mandate attempts between them, ZERO
+        // completions — and RESTORED on the owner's call. They sit at the TAIL on purpose: the
+        // picker gains them without moving the default or the four ranked below, so a phone whose
+        // only UPI app is CRED can now pay at all. They are the ones to watch, and zero completions
+        // on a meaningful n is the same condition that pulled them before.
         // Ranked by mandates actually SET UP, not by market share: 405 PhonePe · 132 GPay · 37 Paytm
         // · 1 BHIM. GPay sits second because four times as many people finish a mandate in it as in
         // Paytm, whatever the install base says.
@@ -67,6 +73,9 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
             "com.google.android.apps.nbu.paisa.user",
             "net.one97.paytm",
             "in.org.npci.upiapp",
+            "com.dreamplug.androidapp",
+            "in.amazon.mShop.android.shopping",
+            "money.super.payments",
             "com.phonepe.simulator",
         )
 

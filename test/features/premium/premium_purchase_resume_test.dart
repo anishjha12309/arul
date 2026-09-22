@@ -684,6 +684,43 @@ void main() {
     await drain(tester);
   });
 
+  // The picker's QR row reaches `switchApp` naming `com.phonepe.app`, because PhonePe makes
+  // `targetApp` mandatory on UPI_INTENT and the QR has to name something. Over an order already
+  // open at PhonePe that is the SAME package, so the guard above would have read a real change of
+  // route as "picking the app that already holds the order" and done nothing at all — a dead row in
+  // the sheet for the rest of the window.
+  testWidgets('picking QR over an order open at that very app still switches '
+      'route — the same-app guard must not swallow it', (tester) async {
+    final api = _FakeApi(const ['pending'], intentUrl: _noExpiryUrl);
+    final container = await build(tester, api);
+    await launchThenReturn(tester, container);
+
+    unawaited(
+      container
+          .read(premiumPurchaseProvider.notifier)
+          .switchApp(_phonePe, trialEligible: true, asQr: true),
+    );
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(
+      api.abandons,
+      1,
+      reason: 'two live mandates is what the server refuses',
+    );
+    expect(api.initiates, 2);
+    // Nothing is LAUNCHED on the QR route: the code is for another phone to scan.
+    expect(launches, hasLength(1), reason: 'the first launch only');
+    expect(container.read(premiumPurchaseProvider), isA<PurchaseScannable>());
+
+    // Filed under its own method, never `upi_app` with the formality package — that column answers
+    // "which app completes a mandate" and this phone launched nothing.
+    final started = eventsNamed('checkout_started');
+    expect(started, hasLength(2));
+    expect(started.last?['method'], 'upi_qr');
+    expect(started.last?['target_app'], isNull);
+    await drain(tester);
+  });
+
   // ─── The CTA is not a second door ─────────────────────────────────────────
 
   testWidgets('startTrial does nothing while an attempt is resumable', (

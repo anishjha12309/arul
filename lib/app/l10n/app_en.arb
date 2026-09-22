@@ -338,6 +338,14 @@
   "premiumSelectedUpiApp": "Selected UPI App",
   "upiPickerTitle": "Pay using",
   "upiPickerLastUsed": "Last used",
+  "upiPickerQrTitle": "Pay with QR",
+  "@upiPickerQrTitle": {
+    "description": "Last row of the UPI picker, under the installed apps. Opens the same scannable mandate code a phone with no UPI app gets on its CTA. A one-time route, never remembered as the default."
+  },
+  "upiPickerQrSubtitle": "Scan from another phone",
+  "@upiPickerQrSubtitle": {
+    "description": "Second line of the QR row in the UPI picker. The mandate link carries no app binding, so it can be approved on any phone — which is the whole reason this row exists beside the installed apps."
+  },
   "premiumTrialFinePrint": "Then {price}/month via autopay. Cancel anytime.",
   "@premiumTrialFinePrint": {
     "placeholders": {

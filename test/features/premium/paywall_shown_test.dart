@@ -115,6 +115,32 @@ void main() {
       expect(props['upi_app_count'], '4plus');
     });
 
+    test('a phone carrying the WHOLE allowlist reports every app — no code is '
+        'cut off the end of the list', () {
+      // The list is PhonePe's seven published mandate apps plus the sandbox simulator, and it grew
+      // under a packer that took a fixed six: the eighth app vanished from the value while the
+      // count still said `4plus`, so the breakdown disagreed with itself. Every code must survive.
+      final props = _props(
+        apps: [
+          _app('com.phonepe.app'),
+          _app('com.google.android.apps.nbu.paisa.user'),
+          _app('net.one97.paytm'),
+          _app('in.org.npci.upiapp'),
+          _app('com.dreamplug.androidapp'),
+          _app('in.amazon.mShop.android.shopping'),
+          _app('money.super.payments'),
+          _app('com.phonepe.simulator'),
+        ],
+      );
+
+      expect(
+        props['upi_apps'],
+        'amazon,bhim,cred,gpay,paytm,phonepe,ppesim,supermoney',
+      );
+      // Still inside GA4's parameter-value limit, which is what the packer is for.
+      expect((props['upi_apps']! as String).length, lessThanOrEqualTo(100));
+    });
+
     test('every value is a String within GA4 app-stream limits', () {
       // GA4 does not parse numeric parameter values into event-scoped custom dimensions on APP
       // streams, and the GA4 sink coerces a bool to 1/0 -> a numeric value here is collected and can

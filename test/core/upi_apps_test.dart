@@ -14,6 +14,10 @@ const _phonepe = 'com.phonepe.app';
 const _paytm = 'net.one97.paytm';
 const _gpay = 'com.google.android.apps.nbu.paisa.user';
 const _bhim = 'in.org.npci.upiapp';
+const _cred = 'com.dreamplug.androidapp';
+const _amazon = 'in.amazon.mShop.android.shopping';
+const _supermoney = 'money.super.payments';
+const _ppesim = 'com.phonepe.simulator';
 
 UpiApp _app(String pkg) => UpiApp(packageName: pkg, label: pkg);
 
@@ -146,12 +150,44 @@ void main() {
     });
   });
 
+  // The package -> short code map is what every UPI number in GA4 is bucketed by, and it is a
+  // SEPARATE list from the channel's. An app on the allowlist with no code here does not break:
+  // it reads as `other` and disappears into that bucket, which is why the drift is worth pinning.
+  group('upiAppCode', () {
+    test('every allowlisted package has its own code — none falls into '
+        '`other`, where a whole app would hide', () {
+      // Mirrors MANDATE_APPS in UpiIntentChannel.kt: PhonePe's seven published mandate apps plus
+      // the sandbox simulator.
+      const codes = {
+        _phonepe: 'phonepe',
+        _gpay: 'gpay',
+        _paytm: 'paytm',
+        _bhim: 'bhim',
+        _cred: 'cred',
+        _amazon: 'amazon',
+        _supermoney: 'supermoney',
+        _ppesim: 'ppesim',
+      };
+
+      for (final entry in codes.entries) {
+        expect(upiAppCode(entry.key), entry.value, reason: entry.key);
+      }
+      // Distinct codes, or two apps would merge into one row in the breakdown.
+      expect(codes.values.toSet(), hasLength(codes.length));
+    });
+
+    test('a package off the list is `other`, never a crash', () {
+      expect(upiAppCode('com.msf.kbank.mobile'), 'other');
+      expect(upiAppCode(''), 'other');
+    });
+  });
+
   group('UpiApps.ordered', () {
-    // The shipped list after CRED, Amazon Pay and SuperMoney came out.
-    final shortened = [_phonepe, _paytm, _gpay, _bhim].map(_app).toList();
+    // A fixture, not the shipped list — what is pinned here is the ordering, not the membership.
+    final installed = [_phonepe, _paytm, _gpay, _bhim].map(_app).toList();
 
     test('no remembered pick leaves the owner order alone', () {
-      expect(UpiApps.ordered(shortened, null).map((a) => a.packageName), [
+      expect(UpiApps.ordered(installed, null).map((a) => a.packageName), [
         _phonepe,
         _paytm,
         _gpay,
@@ -160,28 +196,28 @@ void main() {
     });
 
     test('the remembered pick leads and nobody is lost behind it', () {
-      final out = UpiApps.ordered(shortened, _gpay);
+      final out = UpiApps.ordered(installed, _gpay);
 
       expect(out.map((a) => a.packageName), [_gpay, _phonepe, _paytm, _bhim]);
-      expect(out, hasLength(shortened.length));
+      expect(out, hasLength(installed.length));
     });
 
     test('a remembered head is already in place — no needless rebuild', () {
       expect(
-        identical(UpiApps.ordered(shortened, _phonepe), shortened),
+        identical(UpiApps.ordered(installed, _phonepe), installed),
         isTrue,
       );
     });
 
     test('a remembered app the probe or an uninstall removed moves nothing', () {
-      // CRED was in MANDATE_APPS and is not any more: someone who picked it still has it in prefs.
-      expect(
-        UpiApps.ordered(
-          shortened,
-          'com.dreamplug.androidapp',
-        ).map((a) => a.packageName),
-        [_phonepe, _paytm, _gpay, _bhim],
-      );
+      // Allowlisted but not on THIS phone: the pick survives in prefs long after the app goes, and
+      // a tail app like CRED is the likely one to be uninstalled.
+      expect(UpiApps.ordered(installed, _cred).map((a) => a.packageName), [
+        _phonepe,
+        _paytm,
+        _gpay,
+        _bhim,
+      ]);
     });
 
     test('an empty list stays empty whatever is remembered', () {

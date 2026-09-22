@@ -711,6 +711,12 @@ class AppLocalizationsKn extends AppLocalizations {
   String get upiPickerLastUsed => 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು';
 
   @override
+  String get upiPickerQrTitle => 'QR ಮೂಲಕ ಪಾವತಿಸಿ';
+
+  @override
+  String get upiPickerQrSubtitle => 'ಇನ್ನೋಂದು ಫೋನ್‌ನಲ್ಲಿ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'ನಂತರ ತಿಂಗಳಿಗೆ $price ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.';
   }

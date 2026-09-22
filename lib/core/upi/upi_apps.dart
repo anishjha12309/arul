@@ -27,6 +27,9 @@ String upiAppCode(String packageName) => switch (packageName) {
   'com.google.android.apps.nbu.paisa.user' => 'gpay',
   'net.one97.paytm' => 'paytm',
   'in.org.npci.upiapp' => 'bhim',
+  'com.dreamplug.androidapp' => 'cred',
+  'in.amazon.mShop.android.shopping' => 'amazon',
+  'money.super.payments' => 'supermoney',
   'com.phonepe.simulator' => 'ppesim',
   _ => 'other',
 };

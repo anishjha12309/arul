@@ -199,6 +199,8 @@
   "premiumSelectedUpiApp": "UPI యాప్",
   "upiPickerTitle": "దీని ద్వారా చెల్లించండి",
   "upiPickerLastUsed": "చివరిగా వాడినది",
+  "upiPickerQrTitle": "QR ద్వారా చెల్లించండి",
+  "upiPickerQrSubtitle": "మరో ఫోన్‌లో స్కాన్ చేయండి",
   "premiumTrialFinePrint": "తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.",
   "premiumPaidFinePrint": "నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.",
   "premiumSocialProof": "{city}-లో {name} లైవ్ వాల్‌పేపర్ సెట్ చేశారు 🙏",
