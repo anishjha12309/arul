@@ -8,20 +8,45 @@ user edits — login then stops syncing from Google) · referral_code(unique) ·
 reward_premium_until (referral credit, read by `isPremium`, decoupled from subscriptions) ·
 app_instance_id, meta_anon_id (**VESTIGIAL** — their only readers were the server GA4/Meta conversion
 reporters, since deleted; nothing writes or reads them, and the columns stay because dropping them is
-a migration) · created_at
+a migration) · **is_internal** (reporting-only, below) · created_at
+
+**`is_internal` is set BY HAND and read only for reporting and test sends:** the unified CMS's
+subscriptions page, and campaign push, where it is the "Test accounts" audience and keeps those phones
+out of a campaign's Sent/Failed/Opened ([push.md](push.md)). No entitlement, payment, catalog or app
+path reads it, so a wrong flag can never cost a user access — it can only move a number on an admin
+page. It exists because the owner's own test trials and Google
+Play's pre-launch robots are ~1.4% of trials but ~4% of CANCELLATIONS. **Enumerate exact addresses.**
+An email substring is unusable on this user base: `%anish%` matches ~35 real paying users (kanishka,
+manisharma, dhanish, nishanth) and `%test%` matches real ones too. The one safe pattern is
+`%@cloudtestlabaccounts.com` — Google's Test Lab domain, never a person.
 
 **subscriptions:** id(PK) · user_id(FK, unique — one row per user) ·
 status(pending|trialing|active|paused|cancelled|expired) · plan · phonepe_subscription_id (**may stay
 NULL** when the webhook is lost and only status-reconcile runs; harmless, the cron addresses PhonePe
 by our `merchant_subscription_id`) · merchant_subscription_id · merchant_order_id · phonepe_order_id ·
 redemption_order_id · trial_end (**one-trial consumed-marker — written once, never cleared**) ·
-current_period_end · next_debit_at · notified_at · retry_count · updated_at
+current_period_end · next_debit_at · notified_at · retry_count · updated_at · upi_target_app (the UPI
+package the mandate was handed to at initiate, or `phonepe_page` for the SDK/hosted page; re-stamped
+when an intent setup falls back, so it names the flow that RAN; NULL predates the column → PostHog
+`subscription_active` reports `unknown`) · superseded_mandate_id (the still-billing mandate a
+re-subscribe replaced, parked until the new setup is approved — revoke on grant, restore on release;
+NULL = nothing parked → `docs/phonepe.md` §Mandate setup)
+
+**Debit tracking on `subscriptions`:** `first_debit_at` · `debit_count` · `paid_paise` — written by EVERY
+statement that grants a paid period (both settles, `run-redemptions`, and the repeat-subscriber ₹199 setup)
+and read ONLY by the unified CMS's subscriptions page. `first_debit_at` is COALESCEd so a renewal never
+moves it; NULL = never debited. Rows debited before the columns existed stay unstamped and NOTHING
+backfills them — so the CMS does not read conversion off `first_debit_at` at all. It counts a granted
+paid period instead (`current_period_end > trial_end`), which is true across the whole history, and
+spends the stamps only on what the period cannot say: Renewed (`debit_count`) and Revenue
+(`paid_paise`). Those two are LOWER BOUNDS for any cohort predating the columns, marked "≥" there.
+Apply the schema BEFORE the Worker.
 
 **wallpapers:** id(PK) · title · type(static|live — a **rendering hint, never a filter**) ·
 **category** (first-class Arul delta: `amman|ayyappan|murugan|perumal|sivan|temples`, free text plus
 an index, so a new category is an insert and not a migration) · tags[] · full_key(R2, public) · mime ·
 duration_ms(null for static) · width · height · bytes · is_published · sort_order · created_at ·
-**apply_count**(bigint, default 0) · apply_score, scored_at (**retired, unread**). No `is_premium` —
+**published_at** · **renewed_at** · **apply_count**(bigint, default 0) · apply_score, scored_at (**retired, unread**). No `is_premium` —
 the gate is in the Worker.
 
 **ringtones:** id(PK) · title · **category** (the same browse axis, but its OWN six values —
@@ -29,10 +54,34 @@ the gate is in the Worker.
 **deity** (free text, nullable, indexed — DISPLAY ONLY, never a browse axis) · cover_key(R2, public,
 nullable — **null on every row; nothing has ever been written under `ringtones/covers/`**) · mime
 (kept in the catalog for set-file extension inference) · duration_ms · bytes · is_published ·
-sort_order · created_at · **set_count**(bigint, default 0) · set_score, scored_at (**retired,
+sort_order · created_at · **published_at** · **renewed_at** · **set_count**(bigint, default 0) · set_score, scored_at (**retired,
 unread**). No `is_premium` — preview is free from the CDN; Set gates through `/media/signed-url` with
 `kind='ringtone'`. Catalog scope `ringtones` strips `duration_ms`/`bytes`. Both keys live under the
 `ringtones/` canonical prefix so the sweep protects audio and covers together.
+
+**`published_at` is stamped by a TRIGGER, never by a caller** (`stamp_published_at`, on both
+tables). Three unrelated things publish — the unified CMS, the bulk importers, manual SQL — and all
+of them do it by flipping `is_published`, so the stamp belongs on that flip and nowhere else. It is
+the DEBUT date the app's New chip ages from, and deliberately not `created_at`, which is import time:
+a batch imported in one month and published the next would otherwise be born too old to ever appear.
+Stamped on the FIRST publish only (`published_at is null` guards it), so pulling a row to fix its
+title and putting it back does not resurface it. No index — nothing filters on it; the app windows
+client-side.
+
+**`renewed_at` is the operator's Renew stamp** (nullable, no default, no backfill, no index —
+`db/schema/19_renewed_at.sql`, 2026-09-15) and tier 1 of the New chip: inside the 7-day window,
+renewed rows lead New, the last renewed on top ([browse.md](browse.md)). It has ONE writer, the
+unified CMS's Feed order page, and it is deliberately not a trigger — resurfacing is an act, never a
+side effect of publishing. That same UPDATE re-stamps `published_at = now()` (the trigger keeps an
+explicit value), so builds before 1.0.0+78 still window the row into New. This replaces clearing
+`published_at` by hand as the way to resurface a row. Unpublishing does not clear it.
+
+**`pre_renew_published_at` makes a Renew undoable** (nullable, no default, no index —
+`db/schema/20_renew_undo.sql`, 2026-09-15). The renew UPDATE keeps the `published_at` it overwrites,
+but only when `renewed_at` was null, so a chain of renews keeps the ORIGINAL debut. The CMS's Undo
+writes it back into `published_at` and nulls both renew columns. CMS bookkeeping only: build-catalog
+deletes it from the catalog JSON. The one row renewed before the column existed (Bala Murugan,
+2026-09-15) had its kept date filled by hand from the catalog built before that renew.
 
 **`feed_rank` is a nullable `integer` on BOTH tables** again (dropped 2026-08-25, restored
 2026-09-02): the hand pin the unified CMS writes, and tier 1 of the feed order. NULL means unpinned
@@ -72,6 +121,12 @@ anything already on a content row are never inserted, so nothing live can be ret
 
 **app_config:** singleton(id=1) · content_version · prices(jsonb) · support_email · policy_urls(jsonb)
 · feature_flags(jsonb) · min_supported_version
+
+**Campaign push** ([push.md](push.md)): push_devices(fid PK, user_id NULL until the phone signs in) ·
+push_campaigns (color, expires_hours 1|6|24) · push_deliveries ((campaign_id, fid) PK — the
+idempotency) · push_opens ((campaign_id, user_id) PK — an open is per PERSON, not per phone). All
+additive: no existing table changed in a way a shipped build can see, so every build in the field kept
+working. A device row is deleted on a 404 UNREGISTERED and after 270 idle days, never on a quota error.
 
 ## Popularity counters
 `apply_count` / `set_count` are incremented in `/media/signed-url` **after** the entitlement check, on

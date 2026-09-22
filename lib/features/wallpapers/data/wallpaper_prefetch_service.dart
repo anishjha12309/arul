@@ -12,30 +12,32 @@ import '../../../data/models/wallpaper.dart';
 /// The **data window** half of the feed's two-window strategy, decoupled from the DECODER window.
 /// Prefetching downloads bytes only — NO ExoPlayer, NO decoder -> many items ahead cost no decoders.
 /// Conflating the two is what made a 3-player preload pool choke budget SoCs: a decoder per slot.
-/// Prefetching on ANY connection favours scroll smoothness over mobile-data thrift, deliberately.
-/// Live previews are small (≤15 MB, typically 2–5 MB) and [_maxCacheObjects] bounds total disk use.
+/// Prefetching on ANY connection favours scroll smoothness over mobile-data thrift, deliberately —
+/// but the window depth is the DATA-PLAN budget: a clip averages ~4.5 MB, so every card the window
+/// reaches costs that whether or not the user ever gets there. [_maxCacheObjects] bounds disk use.
 class WallpaperPrefetchService {
   WallpaperPrefetchService({required this.cdnBaseUrl});
 
   /// CDN base for the public stream URL. MUST match the URL the player opens, or the key misses.
   final String cdnBaseUrl;
 
-  /// How many items AHEAD of the current index to pull to disk. Deliberately large.
+  /// How many items AHEAD of the current index to pull to disk. Deliberately SHALLOW.
   ///
-  /// Prefetch is bytes-only -> a deep window costs network and disk, never the decoder budget.
-  /// The decoder budget is the only thing that actually janks the feed.
-  /// Nearest-first ordering plus capped concurrency -> a deep window never delays the nearest item.
-  /// The cap on real perf cost is [_maxConcurrent], not this number.
-  static const _ahead = 15;
+  /// Prefetch is bytes-only -> the window costs network and disk, never the decoder budget, and
+  /// nearest-first ordering plus [_maxConcurrent] keep the nearest item from waiting. But depth is
+  /// what turns scrolling into data: at 15 the queue never drained while the user swiped, so the
+  /// pipe ran flat out for the whole scroll — ~5 MB/s, 505 MB in 90 s of flinging on a 3 GB Vivo.
+  /// Three covers the next swipe or two and then lets the pipe IDLE until the next page settles,
+  /// so bytes track cards actually reached (~one clip per swipe), not time spent scrolling.
+  static const _ahead = 3;
 
   /// The ahead-window the FIRST pass of a process uses, until [_widened].
   ///
-  /// On a cold sign-in nothing is cached -> the full window enqueued ~40 MB the instant it mounted.
-  /// Three of those downloaded at once, against the one clip the user is staring at.
-  /// That clip waits for bandwidth and paints late — which reads as "the app opened on a still".
-  /// Four ahead keeps the pipe busy for the next swipe or two without crowding the current card.
-  /// The full depth arrives via [widenWindow], by which point the current card has painted.
-  static const _aheadCold = 4;
+  /// On a cold sign-in nothing is cached, and whatever is enqueued downloads against the one clip
+  /// the user is staring at. If that clip waits for bandwidth it paints late — which reads as
+  /// "the app opened on a still". Two ahead keeps the pipe busy for the next swipe without
+  /// crowding the current card. The full depth arrives via [widenWindow], once it has painted.
+  static const _aheadCold = 2;
 
   /// Safety net for [widenWindow] — the widen signal is a first painted FRAME.
   /// A feed whose first item is STATIC never produces one -> the first pass widens on its own.
@@ -52,7 +54,8 @@ class WallpaperPrefetchService {
   static const _maxConcurrent = 3;
 
   /// LRU bound on object COUNT — flutter_cache_manager has no byte cap.
-  /// Scaled with the window so the full look-ahead set survives; the current index's items always do.
+  /// Deliberately far deeper than the window: this cache is what makes a cached cold start open
+  /// every recent card from a local file, so a shallower window must not shrink it.
   static const _maxCacheObjects = 120;
 
   /// Shared across controller re-creations -> the on-disk cache and its LRU survive an apply recreate.
@@ -123,18 +126,54 @@ class WallpaperPrefetchService {
     }
   }
 
+  /// How many `priority` [ensureCached] calls — bytes the user is STARING at — are outstanding.
+  ///
+  /// While any is, [_pump] starts no look-ahead transfer and every non-priority [ensureCached]
+  /// waits, so the visible card owns the pipe. At ~4.5 MB a clip, the two window neighbours plus
+  /// three look-ahead transfers sharing a thin pipe is what made the visible card wait on cards
+  /// nobody had reached yet. It cannot deadlock: a priority call never waits on itself, and it
+  /// fetches through the cache manager directly, joining any transfer of the SAME url already up.
+  int _priorityWaiters = 0;
+
+  /// Completed and cleared the moment [_priorityWaiters] falls to zero.
+  Completer<void>? _priorityIdle;
+
   /// Downloads [url] if needed and completes once its bytes are on disk, returning the local path.
   ///
   /// Null on failure. Unlike [prefetchAround] this AWAITS the transfer.
-  /// So a caller can hold a screen until the first live clip is local, then open from a file.
+  /// So the player can hold the poster until the clip is local, then open from a file.
   /// Safe alongside [prefetchAround] — flutter_cache_manager coalesces concurrent fetches of a URL.
-  Future<String?> ensureCached(String url) async {
+  /// [priority] is the CURRENT card: it jumps every queue, and holds every other transfer.
+  Future<String?> ensureCached(String url, {bool priority = false}) async {
     if (_disposed) return null;
     try {
       final existing = await _cache.getFileFromCache(url);
       if (existing != null) return existing.file.path;
-      final file = await _cache.getSingleFile(url);
-      return file.path;
+      if (!priority) {
+        // Yield to the visible card. Re-checked in a loop: another priority open may start while
+        // this one waits, and a neighbour must never overtake it.
+        while (!_disposed && _priorityIdle != null) {
+          await _priorityIdle!.future;
+        }
+        if (_disposed) return null;
+        // It may have landed while we waited — the priority transfer can be this very url.
+        final landed = await _cache.getFileFromCache(url);
+        if (landed != null) return landed.file.path;
+      }
+      if (priority) {
+        _priorityWaiters++;
+        _priorityIdle ??= Completer<void>();
+      }
+      try {
+        final file = await _cache.getSingleFile(url);
+        return file.path;
+      } finally {
+        if (priority && --_priorityWaiters == 0) {
+          _priorityIdle?.complete();
+          _priorityIdle = null;
+        }
+        if (!_disposed) _pump();
+      }
     } catch (_) {
       // Network or backend failure -> the caller falls back to streaming the CDN URL.
       return null;
@@ -192,7 +231,10 @@ class WallpaperPrefetchService {
   }
 
   void _pump() {
-    while (!_disposed && _active < _maxConcurrent && _queue.isNotEmpty) {
+    while (!_disposed &&
+        _priorityWaiters == 0 &&
+        _active < _maxConcurrent &&
+        _queue.isNotEmpty) {
       final url = _queue.removeFirst();
       _active++;
       unawaited(_download(url));
@@ -220,6 +262,9 @@ class WallpaperPrefetchService {
   /// In-flight transfers are tiny and finish on their own; the disk cache persists.
   void dispose() {
     _disposed = true;
+    // Release anything parked behind the visible card, or its future never completes.
+    _priorityIdle?.complete();
+    _priorityIdle = null;
     _widenTimer?.cancel();
     _widenTimer = null;
     _lastItems = const [];

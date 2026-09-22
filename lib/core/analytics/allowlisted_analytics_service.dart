@@ -33,4 +33,8 @@ class AllowlistedAnalyticsService implements AnalyticsService {
   /// Skipping it leaks one user's events onto the next user's distinct_id on a shared device.
   @override
   void reset() => _inner.reset();
+
+  /// Always forwards — it is not an event, it only adds a property to the events this list admits.
+  @override
+  void register(String key, Object value) => _inner.register(key, value);
 }

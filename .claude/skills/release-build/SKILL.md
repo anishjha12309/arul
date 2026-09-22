@@ -20,10 +20,12 @@ disable-model-invocation: true
    - `release-commit-reminder.js` reminds you to commit after a successful release build left
      source uncommitted (an artifact is only reproducible if its source is in git).
 
-   `isPlayInstall()` now has a SECOND consumer besides FLAG_SECURE: the reminders screen's
-   notification QA tools (`qaToolsEnabled`). So a sideloaded release APK deliberately differs from
-   the store build in two visible ways — screenshots work, and Settings → Reminders shows a TESTING
-   card. Both are intended; neither reaches a Play user. See docs/notifications.md.
+   `isPlayInstall()` has TWO more consumers besides FLAG_SECURE: the reminders screen's
+   notification QA tools (`qaToolsEnabled`) and the `arul_force_low_ram` override on the auth
+   video (docs/launch-surface.md). So a sideloaded release APK deliberately differs from the store
+   build in three ways — screenshots work, Settings → Reminders shows a TESTING card, and the
+   poster-only sign-in can be forced from adb. All intended; none reaches a Play user. See
+   docs/notifications.md.
 
    All three match the command pattern anywhere in a string, so avoid echoing "flutter build
    appbundle" literally in an unrelated command.

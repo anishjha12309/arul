@@ -1,5 +1,5 @@
 ---
-description: Credential Manager sign-in invariants — one surface per attempt, and the nonce.
+description: Credential Manager sign-in invariants — surface, nonce, copy
 paths:
   - "workers/src/routes/auth.ts"
   - "workers/src/lib/jwt.ts"
@@ -8,25 +8,27 @@ paths:
   - "lib/core/auth/**"
 ---
 
-Sign-in is the whole install→login funnel and every failure here is silent: Credential Manager
-reports a configuration error and a user dismissal with the same code.
+- **Auto-launch a Google surface on the first frame**, never a silent check.
+- **At most TWO Google surfaces per attempt**: sheet first, the BUTTON flow after a sheet that
+  drew nothing, failed or was DISMISSED. **Never redraw the One Tap sheet** —
+  a 24 h cancel suppression takes automatic sign-in too. No warm-ups.
+- **Every ID token carries the per-process nonce; the Worker checks the PAIR** (both absent accepted
+  for fielded builds). Never log, toast or track it.
+- **ONE retry line for every failure; no fix line, no help link. The pill is the wall's ONLY
+  tappable thing** — the sheet covers it; the chip here doubled attempts, cut sign-ins. Region
+  picks the language, Settings changes it.
+  Fixed type; the LAYOUT absorbs copy.
+- Classify by typed `code` only; `login_cancelled` is MIXED. **Every failure return goes through
+  `_googleFailure`.**
+- The stall guard counts FOREGROUND time and reads the lifecycle every 250 ms. On RESUME,
+  `exchanging` restarts the clock, else `stallResumeGrace` then `stalled_resumed`. A LOST callback
+  relaunches ONCE, a dismissal never — bar `selectorStripped` and `addAccountAbandoned` (the
+  PICKER once, never the sheet). `POST /auth/login` retries connectivity failures only.
+- `noPlayServices` shows GOOGLE'S update dialog (`PlayServicesChannel`), never our copy.
+- **A RETURN re-arms the automatic sheet ONCE** (`noteAppLifecycle`; `inactive` is not away), and
+  a RECONNECT (`noteConnectivity`): offline→online, network failure or GMS's `[16] reauth`
+  cancel, RESUMED, 2/stretch, never a user cancel.
+- `sheetFirst`/`pickerAfterDismiss` stay BUILD consts — no `app_config.json` on first launch.
 
-- **Auto-launch a Google surface on the first frame** — never a silent, no-UI check.
-- **EXACTLY ONE visible Google surface per attempt.** Sheet first; the picker follows only when the
-  sheet drew NOTHING or could not COMPLETE. A DISMISSED sheet stops the attempt — nudge, no picker,
-  never an automatic retry, which the Credential Manager guide forbids. Warm-ups stay forbidden.
-- **Every ID token carries the per-process nonce and the Worker checks the PAIR**, with both absent
-  accepted so fielded builds keep signing in. Never log, toast or track the value.
-- **`login_cancelled` is a MIXED bucket** — a config error returns `canceled` after the user already
-  picked an account. Split on the message text first, timing second, and note the two events spell it
-  differently: `login_cancelled` carries `description`, `login_failed` carries `error`.
-- Classify by typed `code` only — a string-sniff for "cancel" swallowed real failures. **Every
-  failure return goes through `_googleFailure`**, or the funnel loses the event.
-- The stall guard abandons only on CONTINUOUS FOREGROUND time; backgrounding extends it and returning
-  restarts the clock. `POST /auth/login` retries connectivity-class failures only, inside that
-  budget; a server RESPONSE is never retried.
-- The `sheetFirst` kill switch stays a BUILD const, never a `feature_flags` entry — `app_config.json`
-  is not on disk on a first launch.
-
-Read [docs/auth.md](../../docs/auth.md) before changing any of it; cold-start ordering is in
-[docs/launch-surface.md](../../docs/launch-surface.md).
+Read [docs/auth.md](../../docs/auth.md) first; cold start
+[launch-surface.md](../../docs/launch-surface.md).

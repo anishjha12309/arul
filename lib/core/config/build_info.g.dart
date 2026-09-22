@@ -14,8 +14,9 @@ part of 'build_info.dart';
 /// is the runtime proxy -> only a Play install reports `com.android.vending`.
 /// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
 /// -> the two can never disagree.
-/// **Fails CLOSED**: an unresolvable installer answers `true` -> every caller hides something that
-/// must be absent from the store build.
+///
+/// ONE probe per process, shared by every caller ([PlayInstall]) -> the QA-tools gate and the
+/// PostHog gate can never answer differently about the same build.
 
 @ProviderFor(isPlayInstall)
 final isPlayInstallProvider = IsPlayInstallProvider._();
@@ -26,8 +27,9 @@ final isPlayInstallProvider = IsPlayInstallProvider._();
 /// is the runtime proxy -> only a Play install reports `com.android.vending`.
 /// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
 /// -> the two can never disagree.
-/// **Fails CLOSED**: an unresolvable installer answers `true` -> every caller hides something that
-/// must be absent from the store build.
+///
+/// ONE probe per process, shared by every caller ([PlayInstall]) -> the QA-tools gate and the
+/// PostHog gate can never answer differently about the same build.
 
 final class IsPlayInstallProvider
     extends $FunctionalProvider<AsyncValue<bool>, bool, FutureOr<bool>>
@@ -38,8 +40,9 @@ final class IsPlayInstallProvider
   /// is the runtime proxy -> only a Play install reports `com.android.vending`.
   /// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
   /// -> the two can never disagree.
-  /// **Fails CLOSED**: an unresolvable installer answers `true` -> every caller hides something that
-  /// must be absent from the store build.
+  ///
+  /// ONE probe per process, shared by every caller ([PlayInstall]) -> the QA-tools gate and the
+  /// PostHog gate can never answer differently about the same build.
   IsPlayInstallProvider._()
     : super(
         from: null,
@@ -65,7 +68,53 @@ final class IsPlayInstallProvider
   }
 }
 
-String _$isPlayInstallHash() => r'7a83dca757fabdabb474093d7cc7b16240bb894d';
+String _$isPlayInstallHash() => r'480d53b3a41a0c637d23325ebad02e5507fbe3c7';
+
+/// The device tier as a provider, for widgets and providers that want to watch it.
+/// Same single probe behind it — a widget and `main()` can never read different tiers.
+
+@ProviderFor(deviceTier)
+final deviceTierProvider = DeviceTierProvider._();
+
+/// The device tier as a provider, for widgets and providers that want to watch it.
+/// Same single probe behind it — a widget and `main()` can never read different tiers.
+
+final class DeviceTierProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<DeviceTier>,
+          DeviceTier,
+          FutureOr<DeviceTier>
+        >
+    with $FutureModifier<DeviceTier>, $FutureProvider<DeviceTier> {
+  /// The device tier as a provider, for widgets and providers that want to watch it.
+  /// Same single probe behind it — a widget and `main()` can never read different tiers.
+  DeviceTierProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'deviceTierProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$deviceTierHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<DeviceTier> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<DeviceTier> create(Ref ref) {
+    return deviceTier(ref);
+  }
+}
+
+String _$deviceTierHash() => r'6f6a06d279a826968fe0d0807278d253fb02f57a';
 
 /// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect
 /// what is actually armed) should be reachable.

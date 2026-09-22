@@ -202,7 +202,7 @@ export async function handleDeleteAccount(
   const sql = getDb(env);
   try {
     const rows = await sql`
-      SELECT u.google_sub, s.status, s.merchant_subscription_id, s.trial_end
+      SELECT u.google_sub, s.status, s.merchant_subscription_id, s.superseded_mandate_id, s.trial_end
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
       WHERE u.id = ${sub}
@@ -217,7 +217,13 @@ export async function handleDeleteAccount(
 
     // 1. A mandate may be live under any non-terminal status, 'pending' included -> setup can complete after this read
     if (merchantSubId && status !== null && status !== "cancelled" && status !== "expired") {
-      const revoked = await revokeMandateTolerant(env, merchantSubId);
+      // A re-subscribe PARKS the mandate it replaces -> that one is still billing and must die with the account too
+      const parkedMandateId = (row.superseded_mandate_id as string | null | undefined) ?? null;
+      const revoked =
+        (await revokeMandateTolerant(env, merchantSubId)) &&
+        (parkedMandateId === null ||
+          parkedMandateId === merchantSubId ||
+          (await revokeMandateTolerant(env, parkedMandateId)));
       if (!revoked) {
         return errorResponse(
           502,
@@ -416,6 +422,206 @@ export async function handleMeReferrals(
     c.executionCtx.waitUntil(sql.end());
   }
 }
+
+// ── POST /me/device ──────────────────────────────────────────────────────────
+
+/**
+ * The six shipped app languages, normalised the way the deep-link bounce does it.
+ *
+ * Duplicated by necessity (the Worker has no Dart) -> a seventh language is an edit here, in
+ * `routes/deeplink.ts`'s LANG_RE and in `supportedAppLocales`. Anything unrecognised becomes `en`
+ * rather than being rejected: a phone whose locale this Worker has never heard of must still register
+ * and still receive the English text, not silently drop out of every audience.
+ */
+const PUSH_LANG_RE = /^(en|ta|te|kn|ml|hi)$/;
+
+function normalizePushLang(raw: unknown): string {
+  if (typeof raw !== "string") return "en";
+  const bare = raw.trim().toLowerCase().split(/[-_]/)[0] ?? "";
+  return PUSH_LANG_RE.test(bare) ? bare : "en";
+}
+
+/**
+ * POST /me/device — register (or refresh) this phone in the campaign-push registry.
+ *
+ * ADDITIVE, and that is the backwards-compatibility contract: builds 68-74 never call it, keep
+ * working untouched, and simply cannot be reached by a campaign. There is no backfill — a Firebase
+ * Installation ID only exists once an app asks for one — so expect about a fortnight for a new build
+ * to reach most of the active base.
+ *
+ * ONE PHONE, ONE SIGNED-IN USER. A FID that reappears under a different account is RE-POINTED, never
+ * duplicated: the alternative is the previous owner of a shared phone receiving the new owner's
+ * segment. Every field but `fid` is optional so a later build can send less without a Worker deploy.
+ */
+export async function handleRegisterDevice(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    return errorResponse(400, "invalid_body", "Request body must be valid JSON");
+  }
+
+  const device = readDeviceBody(body);
+  if (!device) return errorResponse(400, "missing_field", "fid is required");
+  const { fid, token, lang, appBuild, androidSdk } = device;
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_devices (fid, user_id, token, lang, app_build, android_sdk, last_seen_at)
+      VALUES (${fid}, ${sub}, ${token}, ${lang}, ${appBuild}, ${androidSdk}, now())
+      ON CONFLICT (fid) DO UPDATE
+        SET user_id      = EXCLUDED.user_id,
+            -- COALESCE, not EXCLUDED: a build that omits the token must not erase one already stored.
+            token        = COALESCE(EXCLUDED.token, push_devices.token),
+            lang         = EXCLUDED.lang,
+            app_build    = COALESCE(EXCLUDED.app_build, push_devices.app_build),
+            android_sdk  = COALESCE(EXCLUDED.android_sdk, push_devices.android_sdk),
+            last_seen_at = now()
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/device] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+interface DeviceBody {
+  fid: string;
+  token: string | null;
+  lang: string;
+  appBuild: number | null;
+  androidSdk: number | null;
+}
+
+/** The body both registration routes accept, normalised once. Null when there is no usable fid. */
+function readDeviceBody(body: Record<string, unknown>): DeviceBody | null {
+  const fid = typeof body["fid"] === "string" ? body["fid"].trim() : "";
+  if (!fid || fid.length > 256) return null;
+  return {
+    fid,
+    token: typeof body["token"] === "string" && body["token"].length > 0 ? body["token"] : null,
+    lang: normalizePushLang(body["lang"]),
+    appBuild: Number.isFinite(Number(body["appBuild"])) ? Math.floor(Number(body["appBuild"])) : null,
+    androidSdk: Number.isFinite(Number(body["androidSdk"])) ? Math.floor(Number(body["androidSdk"])) : null,
+  };
+}
+
+// ── POST /push/device ────────────────────────────────────────────────────────
+
+/** A registration body is a fid, a token and three scalars — far below this. */
+const ANON_DEVICE_BODY_MAX_BYTES = 2048;
+
+/**
+ * POST /push/device — register a phone that has not signed in. No JWT.
+ *
+ * This is what makes "joined in the last hour" and "never signed in" reachable: the app calls it on
+ * every launch while signed out. The upsert NEVER touches `user_id` — a new row gets NULL, and a row
+ * an account already claimed keeps that account, so an unauthenticated caller can refresh a token but
+ * can never detach a phone from its user or attach one to someone else.
+ *
+ * Unauthenticated writes are safe to accept: a junk fid with an unroutable token comes back
+ * UNREGISTERED on its first send and the dispatcher deletes it.
+ */
+export async function handleRegisterAnonDevice(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+
+  const raw = await c.req.text().catch(() => "");
+  if (new TextEncoder().encode(raw).length > ANON_DEVICE_BODY_MAX_BYTES) {
+    return errorResponse(413, "body_too_large", "Request body is too large");
+  }
+  let body: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return errorResponse(400, "invalid_body", "Request body must be valid JSON");
+  }
+
+  const device = readDeviceBody(body);
+  if (!device) return errorResponse(400, "missing_field", "fid is required");
+  const { fid, token, lang, appBuild, androidSdk } = device;
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_devices (fid, token, lang, app_build, android_sdk, last_seen_at)
+      VALUES (${fid}, ${token}, ${lang}, ${appBuild}, ${androidSdk}, now())
+      ON CONFLICT (fid) DO UPDATE
+        SET token        = COALESCE(EXCLUDED.token, push_devices.token),
+            lang         = EXCLUDED.lang,
+            app_build    = COALESCE(EXCLUDED.app_build, push_devices.app_build),
+            android_sdk  = COALESCE(EXCLUDED.android_sdk, push_devices.android_sdk),
+            last_seen_at = now()
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[push/device] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+// ── POST /me/push-opened ─────────────────────────────────────────────────────
+
+/**
+ * POST /me/push-opened — the app reporting that this person tapped a campaign.
+ *
+ * Keyed per USER, not per device: the same person tapping the same campaign on two phones is ONE
+ * open, which is what "Opened 14.8%" has to mean on the CMS card. `ON CONFLICT DO NOTHING` is the
+ * whole dedup — a tap replayed by `getInitialMessage()` on a relaunch must not inflate the number.
+ * A body naming a campaign that does not exist is accepted and ignored, never a 4xx: the app fires
+ * this off the tap path and an error there would be noise in Crashlytics, not information.
+ */
+export async function handlePushOpened(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let campaignId: string | null = null;
+  try {
+    const body = (await c.req.json()) as { campaign_id?: unknown };
+    if (typeof body.campaign_id === "string") campaignId = body.campaign_id.trim();
+  } catch {
+    // fall through to validation
+  }
+  if (!campaignId || !UUID_RE.test(campaignId)) {
+    return errorResponse(400, "invalid_body", "campaign_id is required");
+  }
+
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO push_opens (campaign_id, user_id)
+      SELECT ${campaignId}, ${sub}
+      WHERE EXISTS (SELECT 1 FROM push_campaigns WHERE id = ${campaignId})
+      ON CONFLICT DO NOTHING
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/push-opened] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+/** A campaign id is always a uuid -> anything else is a malformed payload, never a lookup. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

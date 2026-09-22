@@ -25,7 +25,8 @@ in `docs/` (§9). Open defects: `docs/known-issues.md`.
 - Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers
   (static + live video feed) and ringtones; premium via PhonePe UPI Autopay.
 - Three-tab shell behind the floating dock (Wallpapers · Ringtones · Settings). **Settings is a dock
-  branch, not a pushed route.** Reminders are on-device only: no push, and no screen may promise one.
+  branch, not a pushed route.** Local reminders stay on-device; campaign pushes come only from the CMS
+  through the Worker (`docs/push.md`). No screen promises a push.
 - Content lives in the R2 bucket `south-indian-wallpapers`. **Never share a bucket, KV namespace or
   database with another app** — the orphan sweep deletes the other app's media.
 
@@ -72,14 +73,16 @@ client-side → `docs/architecture.md` §Entitlement.
 becomes a filter or a tab; categories are free text, so a new one is an insert, not a migration.
 Order is ONE SQL clause in `build-catalog`, numbered into the catalog's `feed_rank` so it reaches
 installs that never update. Hand pins lead it (`feed_rank ASC NULLS LAST`, NULL = unpinned), then
-lifetime uses, then recency, then `id`. No score → `docs/browse.md`.
+lifetime uses, then recency, then `id`. No score. The New chip alone has its own order — CMS-renewed,
+then debuts, then filler by uses, with no pins → `docs/browse.md`.
 
 ## 6. Secrets & environment
 
 - Never hardcode a key. App: `--dart-define-from-file=env/dev.json` (git-ignored; template
   `env.example.json`). Worker: `npx wrangler secret bulk <file.json>`, **never a shell pipe** — a
   trailing newline once routed production credentials to the sandbox host, and every other secret
-  is still compared untrimmed. Local dev: `workers/.dev.vars`.
+  is still compared untrimmed. Local dev: `workers/.dev.vars`, whose Hyperdrive string points at the
+  Neon `debug` branch, never prod.
 - **`TRIAL_TOMBSTONE_SECRET`: set once, never rotate** — rotation orphans every tombstone and
   re-opens trial farming.
 - `guard-secrets.js` denies any git command that names `env/`, a keystore, `key.properties`,
@@ -112,10 +115,10 @@ usually already there) and update it through the `doc-update` skill. Each entry 
 `docs/<name>.md`. Two are not obvious: **edge-cases** indexes every regression contract — walk it
 before a release — and **architecture** covers routes, entitlement, uploads and the catalog build.
 
-edge-cases · architecture · data-model · browse · ringtones · auth · launch-surface · phonepe ·
-autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
+edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
+phonepe · phonepe-webhook · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
-notifications · ui-direction · perf-measurement
+notifications · push · ui-direction · perf-measurement
 
 ## Compact instructions
 

@@ -51,6 +51,24 @@ abstract class Wallpaper with _$Wallpaper {
     /// Not a pin and not authored anywhere -> it is a position, so never write or sort it server-side.
     /// An older cached catalog built before this field parses as null -> that feed falls back to popularity.
     int? feedRank,
+
+    /// The DEBUT date — when this wallpaper was published, not when it was imported.
+    ///
+    /// Tier 2 of the New chip ([newOrder]), and the reason there is no `createdAt` here:
+    /// created_at is import time, so a batch imported in August and published in September would be
+    /// born too old to ever appear in New. Stamped by a DB trigger on the first publish
+    /// (db/schema/15_published_at.sql), and re-stamped by a CMS Renew alongside [renewedAt].
+    /// Null on a catalog cached before the field existed -> the New chip hides itself rather than
+    /// windowing on nothing (`showNewCategoryProvider`), and returns on its own once a page lands.
+    DateTime? publishedAt,
+
+    /// When an operator last RENEWED this in the CMS — tier 1 of the New chip ([newOrder]): inside
+    /// the 7-day window, renewed rows lead New, the most recent renew on top.
+    ///
+    /// The CMS stamps it together with [publishedAt], so builds before 1.0.0+78, which know only
+    /// [publishedAt], still window the row into New. Null is ordinary (never renewed), and is also what
+    /// a catalog or disk cache from before the column parses to (db/schema/19_renewed_at.sql).
+    DateTime? renewedAt,
   }) = _Wallpaper;
 
   factory Wallpaper.fromJson(Map<String, dynamic> json) =>
@@ -95,7 +113,23 @@ class WallpaperCategory {
   final String label;
 
   static const allSlug = '__all__';
+
+  /// The New chip, the second piece of chrome in both rows.
+  ///
+  /// A SENTINEL, exactly like [allSlug], and for the same reason: New is a WINDOW over the feed,
+  /// not a value any row carries. Keeping it out of the `category` column is what stops it leaking
+  /// into the places a real category reaches — `categoriesProvider` derives chips from the items,
+  /// so the Upload picker (which reads that provider) can never offer it, the CMS never sees it,
+  /// and no import can write it. Both sentinels are `__`-fenced against a real slug colliding.
+  static const newSlug = '__new__';
 }
+
+/// The New chip's label, in EVERY locale (owner's call).
+///
+/// Shared by both rows so they cannot drift. Deliberately NOT an ARB key: the chip sits between
+/// "All" and the title-cased catalog slugs ("Sivan", "Amman"), which are English in all six
+/// locales, and one translated pill in that row reads as a mistake rather than as a translation.
+const String kNewCategoryLabel = 'New';
 
 /// Slug the browse rows pin to the FIRST chip after All, in BOTH tabs (owner's instruction).
 /// Chip-row order ONLY — it never touches `feed_rank` or the order of items inside a chip.
@@ -129,24 +163,31 @@ List<WallpaperCategory> orderedByCms(
   int Function(WallpaperCategory, WallpaperCategory) fallback,
 ) {
   if (order.isEmpty) return categories..sort(fallback);
-  final rank = <String, int>{for (var i = 0; i < order.length; i++) order[i]: i};
-  return categories
-    ..sort((a, b) {
-      final ra = rank[a.slug];
-      final rb = rank[b.slug];
-      if (ra != null && rb != null) return ra.compareTo(rb);
-      if (ra != null) return -1;
-      if (rb != null) return 1;
-      return fallback(a, b);
-    });
+  final rank = <String, int>{
+    for (var i = 0; i < order.length; i++) order[i]: i,
+  };
+  return categories..sort((a, b) {
+    final ra = rank[a.slug];
+    final rb = rank[b.slug];
+    if (ra != null && rb != null) return ra.compareTo(rb);
+    if (ra != null) return -1;
+    if (rb != null) return 1;
+    return fallback(a, b);
+  });
 }
 
 /// One scope's slug list out of `app_config.category_order`, defensively.
 ///
 /// The catalog is JSON off a CDN -> every level can be the wrong shape or absent, and a
 /// throw here would take the whole chip row down. Anything unexpected reads as "no order".
-List<String> categoryOrderFor(Map<String, dynamic>? categoryOrder, String scope) {
+List<String> categoryOrderFor(
+  Map<String, dynamic>? categoryOrder,
+  String scope,
+) {
   final raw = categoryOrder?[scope];
   if (raw is! List) return const <String>[];
-  return raw.whereType<String>().where((s) => s.isNotEmpty).toList(growable: false);
+  return raw
+      .whereType<String>()
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
 }

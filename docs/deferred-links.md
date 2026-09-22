@@ -15,10 +15,13 @@ from inside this repo** without the recipe under each.
       `InstallReferrerService.queueRequest` has **persisted** the target — the ACK is the commit
       point. A process death re-delivers (at-least-once); the screens' read-and-clear consume makes
       it exactly-once.
-- [ ] **Both sides validate**: native accepts `https://arul.hsrutility.com/{w,r}/<uuid>` (any query)
-      or `fb<digits>://open…`; Dart re-parses and ACKs a rejected URL too, or native re-offers it on
-      every Activity creation forever. A rejection logs `W/MainActivity … ignored` — the shipped
-      build is FLAG_SECURE, so **logcat is the only window on a misconfigured ad**.
+- [ ] **Native checks the HOST only** (`https://arul.hsrutility.com/…` or `fb<digits>://open…`);
+      `parseDeepLink` alone decides path and query, and ACKs a URL it rejects, or native re-offers it
+      on every Activity creation forever. **Never add a path rule natively:** one requiring
+      `/w/<uuid>` silently dropped the id-less `/w/?lang=ta` on every Google Ads and Meta install
+      while Dart accepted it — the browser tap through the Worker kept working, so a manual test
+      passed. A drop logs `W/MainActivity … ignored`; the shipped build is FLAG_SECURE, so **logcat
+      is the only window on a misconfigured ad**.
 - [ ] `source` (`google_ads` / `meta`) rides through to `deep_link_opened` and to the persisted
       `pending_deeplink_source`, so a target restored after a process death still reports its channel.
 
@@ -56,9 +59,10 @@ there, never from memory.
       on the capturing launch and `<bits>:<url>` once the timestamp lands — the handled marker stops
       matching and a consumed target re-opens later. (`timestamp` is a Double stored as raw long
       bits.)
-- [ ] The ad group's App URL must be **exactly** `https://arul.hsrutility.com/w/<uuid>` or
-      `/r/<uuid>`, with `?lang=` allowed. Anything deeper, or a non-UUID, is dropped at the native
-      boundary.
+- [ ] The ad group's App URL is any shape `parseDeepLink` reads: `/w/<uuid>?lang=ta`,
+      `/r/<uuid>?lang=ta`, or language-only `/w/?lang=ta`, `/r/?lang=ta`, `/w?lang=ta`, `/?lang=ta`.
+      A Google Ads validator pass proves only the INSTALLED half; prove the install half with the
+      diagnostic DDL below, using the exact URL the ad group carries.
 - [ ] **Eligibility is narrow and account-side:** App campaigns **for installs** only, **AdMob and
       YouTube** inventory only, Android only, deep links **allowlisted** for feed-served dynamic ads,
       and the user must install AND open within **24 h** of the click. Nothing in this repo can widen
@@ -98,9 +102,12 @@ deep link put in the ad set's creative; the call is
 ```bash
 # seam.json: {"DEBUG_INSTALL_REFERRER": "r=<uuid>&lang=ta"}   — stands in for Play's replay
 #        or: {"DEBUG_DEFERRED_LINK": "fb<id>://open?wallpaper_id=<uuid>&lang=hi"} — for GA4F / Meta
+#        or: {"DEBUG_GEO_LANG": "ta"} — stands in for GET /geo; "none" walks an unmapped state
 flutter build apk --debug --split-per-abi --dart-define-from-file=env/dev.json --dart-define-from-file=seam.json
 adb shell pm clear com.hsrutility.arul   # between runs: both seams are once-per-install like the real thing
 ```
+Without the geo seam, the state a fresh install reads depends on the network path, not only the
+place ([known-issues.md](known-issues.md)).
 **A FILE, never `--dart-define=…&lang=…` on the command line** — cmd.exe cuts it at the `&`
 ([known-issues.md](known-issues.md)). The seams feed the SAME `queueRequest` the real callbacks feed,
 so parse → persist → shell → screen → language runs end to end; only the network fetch is skipped.

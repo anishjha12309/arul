@@ -24,28 +24,9 @@ are wrong. Running on **PRODUCTION** credentials. Recurring debits have their ow
 
 ## The webhook
 
-`Authorization: SHA256(username:password)`, deduped by **(event, orderId)** in KV with a 30-day TTL —
-the event MUST be in the key. The order-id prefix is `DKS_`, which is how the shared merchant's
-streams stay distinguishable from Pakiza's `PKZ_`. The registered URL is
-`https://api.hsrutility.com/payments/webhook`, the hsr-cms dispatcher that forwards `DKS_` orders on.
-
-**Order events nest the ids under `payload.paymentFlow`**; state-change events keep them top-level.
-Read via `merchantSubscriptionIdOf()`. The flat read acked every real redemption webhook as "Missing
-merchantSubscriptionId".
-
-Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
-`checkout.order.*` names onto the same branches, so it is safe either way.
-
-⚠ **No PhonePe webhook has ever been processed in production.** The `txn:` prefix in KV holds ZERO
-keys for any event, including setup confirmations, while the server's own `ph:` marks sit in the
-hundreds under the same 30-day TTL — so this is not a stale reading. **The cause is outside this
-repo**: either the events are not ticked on the webhook in the PhonePe Business dashboard, or the
-dispatcher is not forwarding `DKS_`. Until it is fixed the cron is the ONLY channel, and revoked or
-paused mandates are invisible until a debit fails.
-
-One webhook per MERCHANT, shared with Pakiza: Test-Mode, the selected events and the SHA password
-apply to both, and the password is not editable after creation, so the Worker secrets must match it.
-**Events are opt-in per webhook**, so a missing tick sends nothing and logs nothing.
+Never processed in production, and the cause is outside this repo — the cron is the only channel.
+Auth, the KV dedup key, the payload shapes and the dashboard preconditions:
+[phonepe-webhook.md](phonepe-webhook.md). Read it before trusting a webhook with anything.
 
 ## Mandate setup
 
@@ -58,8 +39,34 @@ user lands straight on its AutoPay sheet. Sandbox returns a `ppesim://` link, pr
 
 Initiate takes `targetApp` (opt-in, package-shape validated) and **MUST fall back to the SDK page
 inside the SAME request on any intent failure** — a second initiate bounces off its own claim window.
-Picker apps are a fixed allowlist, never an open `upi://` resolver query: a pay-only wallet accepts
-the intent and then fails the mandate.
+Picker apps pass TWO gates: `MANDATE_APPS`, never an open `upi://` query — a pay-only wallet accepts
+the intent then fails the mandate — AND the device resolver against a mandate-SHAPED probe URL,
+which separates the two (Mobikwik answers `upi://pay` only; Paytm uses a different activity for
+each). `MANDATE_APPS` IS PhonePe's published mandate set — PhonePe, BHIM, GPay, Paytm, CRED, Amazon
+Pay, SuperMoney — plus the sandbox simulator; the docs name the seven but print no Android package,
+so each id comes from that vendor's own Play listing. Nothing else earns a place without ONE real ₹2
+penny drop. The last three were pulled once on 181 attempts with ZERO completions and restored by
+the owner at the TAIL, which adds them to the picker without moving the default or the ranked four:
+they are the ones to watch. **Never reorder it off observed completion rates** — they are
+self-selected by the position the app already holds. Paytm converts better per chooser than GPay
+(10.5% vs 8.5%) only because reaching it means scrolling past the top two, which selects for
+determined payers; promoting it changes that population and destroys the rate it was promoted for.
+A reorder needs a split test. **No hosted-page fallback in the app** — it completed 4 of 790,
+and a route that cannot finish is worse than none. On a phone with no offered app **the CTA itself
+opens an on-screen QR** of the SAME `intentUrl` — it carries no app binding (`targetApp` only steers
+what we LAUNCH), so any UPI app on a second phone scans and approves it. It is ALSO the picker's
+LAST row wherever apps exist, so the picker opens at ONE app, not two — but a ONE-TIME route: the
+sheet pops the `kUpiPickQr` sentinel in place of a package and nothing reaches `arul_upi_app`, or a
+curious tap would leave the CTA launching an app nobody chose. Over an open order it abandons like
+an app switch, and `switchApp`'s same-app guard MUST skip it — the QR names `com.phonepe.app` as a
+formality, so that guard would otherwise read a route change as "the app you already picked".
+No install prompt and no
+second line: that phone has exactly one way to pay, so naming it is a decision to make FOR the user,
+and store links asked someone mid-checkout to go and fetch a payment app first. Pass `mode: "qr"` on initiate or
+the order files under `com.phonepe.app` and mandates PhonePe never saw enter the column that ranks
+apps by completions. A QR request the Worker answers with the SDK page is a dead end by construction
+(that page needs an app on THIS phone), so the app abandons rather than opening it. The Worker's
+`targetApp == null` branch stays for fielded builds.
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — 1-day
 trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
@@ -67,34 +74,63 @@ straight to `active`. `maxAmount: 19900`, `amountType: FIXED`, `frequency: MONTH
 
 `POST /payments/initiate` returns **409 `setup_in_progress`** when a setup is already in flight, kept
 deliberately distinct from **409 `already_subscribed`** — the app treats `already_subscribed` as
-success and must not do the same for an in-flight setup. Initiate is serialized on the user row, and
-superseded mandates are revoked rather than orphaned.
+success and must not do the same for an in-flight setup. Initiate is serialized on the user row.
+
+**A re-subscribe PARKS the mandate it replaces; it is revoked only once the new one is approved.** A
+lapsed trial whose ₹199 is failing (Z9) still has a live mandate climbing the dunning ladder, and its
+owner is exactly who re-taps Subscribe. Revoking that mandate at initiate killed 155 of the 179 such
+mandates checked at PhonePe while 95% of the replacement ₹199 setups were never approved — trials
+that would have paid on a later rung paid nothing. So initiate over a `trialing`/`active`/`paused` row
+writes the old id to `superseded_mandate_id` and touches nothing at PhonePe. Only a `pending` or
+`expired` row's mandate (never approved, or ladder exhausted) is revoked on the spot. Two mandates on
+one user is safe: only the row's `merchant_subscription_id` is ever notified or redeemed. The parked id
+is released by the grant (setup-completed webhook, status COMPLETED reconcile — self-joined so the
+PRIOR value rides back, revoke off the response path), restored by every release path (see below),
+made live again by a redemption webhook that names it (the unapproved newer id is then revoked), and
+revoked with the live one by `/payments/cancel` and account deletion. A `subscription.revoked` for a
+parked id just clears the column.
 
 The claim is released by the app calling **`POST /payments/abandon`** the moment the SDK returns
-non-success: a user backing out and re-tapping must retry INSTANTLY. A lockout long enough to be
-visible shipped once and users read it as "payments broken". The short claim window is only the
-backstop for attempts that died without abandoning. The app rides out 409 `setup_in_progress`
-silently with two retries, and **the pairing is load-bearing**: the sum of the client retry delays
-equals the window, so a stale claim has always lapsed by the last retry and the message is
-unreachable for a solo user, while a genuinely concurrent attempt still refuses. **Change either side
-only with the other.**
+non-success: a user backing out and re-tapping must retry INSTANTLY. A visible lockout shipped once
+and users read it as "payments broken". The short claim window is only the backstop for attempts that
+died without abandoning. The app rides out 409 `setup_in_progress` silently with two retries, and
+**the pairing is load-bearing**: the client retry delays sum to the window, so a stale claim has
+lapsed by the last retry and the message is unreachable for a solo user, while a genuinely concurrent
+attempt still refuses. **Change either side only with the other.** A LINK failure on the initiate
+(DNS miss, the 12 s timeout) is retried under the spinner — 3 attempts, 15 s cap — inside that same
+loop: a first attempt that landed unseen 409s the repeat, and the initiate after the window revokes
+the order nobody was shown. A server ANSWER is never retried.
 
 **A failed setup RESTORES, never just expires.** A resubscribe claims the user's ONE subscriptions
-row, so the claim rides over whatever entitlement that row still carried — and flipping every failed
-setup to `expired` stripped a cancelled-but-live trial when the user backed out at the UPI app. All
-three failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook)
-write `CASE WHEN current_period_end > now() THEN 'cancelled' ELSE 'expired' END`, and the
-setup-completed resurrect matches `('expired','cancelled')` for the same reason — a paid approval
-racing the restore must still grant. `pending` with a live period keeps premium, so entitlement never
-flickers while the sheet is open.
+row, so the claim rides over whatever entitlement that row carried — flipping every failed setup to
+`expired` stripped a cancelled-but-live trial when the user backed out at the UPI app. All three
+failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook) write the
+SAME CASE: a parked `superseded_mandate_id` wins and becomes `merchant_subscription_id` again with
+status `active` when `current_period_end > trial_end`, else `trialing` (ladder columns are never
+touched by the claim, so the cron resumes where it stood); otherwise `current_period_end > now()` →
+`cancelled`, else `expired`. The setup-completed resurrect matches `('expired','cancelled')` for the
+same reason — a paid approval racing the restore must still grant. `pending` with a live period keeps
+premium, so entitlement never flickers while the sheet is open.
+
+**A settled debit the row never learned about is healed by `/payments/status`, not the cron.** The
+cron reconciles `trialing`/`active` rows only; a row that left that set with its `redemption_order_id`
+still open (cancelled in-app, or claimed by a re-subscribe) can have that order COMPLETE afterwards —
+money taken, no premium, two live users. For a `pending`/`cancelled`/`expired`/`paused` row that NEVER
+converted (`current_period_end <= trial_end`), status reads that order and grants the month on
+COMPLETED; the converted gate is what stops a paid period being granted twice. The redemption webhook
+grants only when the ROOT `payload.state` is COMPLETED — PhonePe's transaction-level event carries a
+PENDING order.
 
 **Unpause must REARM the debit clock.** The cron's park nulls `next_debit_at`, so a status-only
 unpause left a row neither cron pass could ever select: "Active" forever, never billed, premium
 silently dead at period end. The `subscription.unpaused` webhook writes `next_debit_at =
 COALESCE(next_debit_at, current_period_end)` and clears `notified_at`, scoped `AND status='paused'`
-so a stray event cannot resurrect a cancelled or expired row. `/payments/status` heals BOTH lost
-webhooks: mandate PAUSED while the row is trialing/active → park; mandate ACTIVE while the row is
-paused → restore and rearm. Abandon checks the live order state first and answers `settled:true`
+so a stray event cannot resurrect a cancelled or expired row. That statement has ONE home,
+`lib/subscription-rearm.ts`, because the cron now heals the same lost event by itself: its hourly
+Pass D re-asks PhonePe about parked pauses and calls the very same restore on an ACTIVE mandate
+([cron.md](cron.md)) — a webhook that has never arrived cannot be the only path back. `/payments/status`
+heals BOTH lost webhooks too: mandate PAUSED while the row is trialing/active → park; mandate ACTIVE
+while the row is paused → restore and rearm. Abandon checks the live order state first and answers `settled:true`
 rather than expiring when PhonePe says COMPLETED, which would strand a paid mandate the webhook can
 no longer grant.
 
@@ -140,6 +176,21 @@ itself. Only the severity is wrong.
   counted twice.
 - **`phonepe_subscription_id` may stay NULL** when the webhook is lost and only status-reconcile
   runs. Harmless: the cron addresses PhonePe by *our* `merchant_subscription_id`.
+- **A return from the UPI app with the order OPEN is RESUMABLE, never a failure.** Most failed
+  setups are `INTENT_EXPIRED` — the approval sheet was reached and not approved — and abandoning on
+  that return revoked a mandate the person could still approve. `PurchaseResumable` keeps the SAME
+  link/app/order: "open again" re-fires it (no initiate, no `checkout_started`) and a slow status
+  watch lets a late approval land. **No "start over" button and no failure toast on this path**
+  (owner's call: users are not technical, keep it automatic, and "any amount deducted will be
+  refunded" is false when nothing was approved): the deadline passing, or PhonePe reporting the
+  order expired, resets the CTA SILENTLY (Idle, `payment_failed` still tracked, nudge armed) and the
+  next tap is a fresh order. **The app chip stays changeable**: picking another app abandons the
+  open order and starts a fresh checkout with that app in one motion; the same app does nothing. Deadline = the link's
+  `QRexpire` (split from the RAW query then percent-decoded; `Uri.queryParameters` turns the bare
+  `+05:30` into a space; **production links expire 5 min after creation**, the docs' sample says
+  15), else launch + 10 min, capped at 15 — the setup RESPONSE has no expiry. The QR shares that
+  deadline and that silent reset: a client window shorter than PhonePe's would call a live code
+  expired and let a late scan set up a mandate the UI had given up on.
 
 The billing lifecycle has been proven against UAT plus a local stub — re-prove after a change with
 `.claude/skills/verify-payments/` rather than re-deriving.

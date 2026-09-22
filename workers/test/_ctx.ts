@@ -78,6 +78,12 @@ export function makeEnv(overrides: Record<string, unknown> = {}): Env {
     PHONEPE_ENV: "SANDBOX",
     CATALOG_BUILD_SECRET: "test-catalog-secret",
     OPS_SECRET: "test-ops-secret",
+    PUSH_SECRET: "test-push-secret",
+    FCM_SA_CLIENT_EMAIL: "fcm@test.iam.gserviceaccount.com",
+    FCM_SA_PRIVATE_KEY: "test-fcm-key",
+    FIREBASE_PROJECT_ID: "arul-test",
+    // OFF by default -> a test that wants the dispatcher to claim must say so explicitly
+    PUSH_ENABLED: "false",
     ALLOWED_ORIGINS: "https://arul.hsrutility.com",
     ...overrides,
   } as unknown as Env;
@@ -90,11 +96,15 @@ export function makeCtx(opts: {
   scheme?: string;
   jsonBody?: unknown;
   invalidJson?: boolean;
+  /** The body as `c.req.text()` returns it, for a handler that caps the size before parsing. */
+  rawBody?: string;
   /** Request URL. A handler deriving an origin from it throws on undefined -> it is defaulted, never optional.
    *  `c.req.query()` reads its search params -> pass the REAL url for any route that takes query arguments. */
   url?: string;
   /** Path parameters, as Hono would have matched them (e.g. `/w/:id`). */
   params?: Record<string, string>;
+  /** Cloudflare's `request.cf`, read as `c.req.raw.cf` -> absent = what the preview and local dev hand a handler. */
+  cf?: Record<string, unknown>;
 }): Context<{ Bindings: Env }> {
   const url = opts.url ?? "https://arul-api.hsrutility.com/test";
   return {
@@ -106,11 +116,16 @@ export function makeCtx(opts: {
           ? `${opts.scheme ?? "Bearer"} ${opts.token}`
           : undefined,
       param: (name: string) => opts.params?.[name],
+      raw: { cf: opts.cf },
       query: (name: string) => new URL(url).searchParams.get(name) ?? undefined,
       json: () =>
         opts.invalidJson
           ? Promise.reject(new Error("bad json"))
           : Promise.resolve(opts.jsonBody),
+      text: () =>
+        Promise.resolve(
+          opts.rawBody ?? (opts.invalidJson ? "{bad json" : JSON.stringify(opts.jsonBody ?? null)),
+        ),
     },
     // The third arg mirrors Hono's -> extra response headers -> keep the signature identical or tests drift from prod
     json: (body: unknown, status = 200, headers?: Record<string, string>) =>

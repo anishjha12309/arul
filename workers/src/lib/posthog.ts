@@ -25,6 +25,11 @@ interface FirstConversion {
   amountPaise?: number | null;
   /** The row's `updated_at` as RETURNED by the UPDATE -> stable across a resend -> this is what makes `uuid` dedupe. */
   occurredAt?: Date | string | null;
+  /**
+   * `subscriptions.upi_target_app`: the UPI package the mandate was handed to at initiate, or
+   * `phonepe_page` for the SDK/hosted page. Null/undefined = a row that predates the column.
+   */
+  targetApp?: string | null;
 }
 
 const FALLBACK_AMOUNT_PAISE = 19900;
@@ -104,6 +109,9 @@ export async function reportPostHogFirstConversion(
           order_id: purchase.transactionId,
           value: amountPaise / 100,
           currency: "INR",
+          // Same key the app puts on `checkout_started` -> "which UPI app completes a mandate" and
+          // "which app expires one" read off one axis. `unknown` = a row older than the column.
+          target_app: purchase.targetApp ?? "unknown",
           $lib: "arul-worker",
         },
       }),

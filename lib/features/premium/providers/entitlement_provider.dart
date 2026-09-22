@@ -10,6 +10,7 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../domain/entitlement.dart';
 import 'trial_conversion_catch_up.dart';
+import 'trial_nudge_provider.dart';
 
 /// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a cached or JWT claim.
 ///
@@ -45,8 +46,34 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
     debugPrint('[entitlement] trial catch-up skipped: $e');
   }
 
+  retireUnfinishedTrial(ref, entitlement);
+
   return entitlement;
 });
+
+/// A premium read retires the unfinished-trial marker, HERE and not only in the feed row.
+///
+/// The marker is written when the UPI app takes over, so an approval the app never saw (killed
+/// behind PhonePe, confirmation unreachable) leaves it live with a reminder armed — and someone
+/// who comes back through a ringtone link or sits on Settings never builds that row. Every late
+/// grant passes through the entitlement read; none of them should be told "you didn't finish".
+/// Guarded twice over, sync and async: a marker must never fail the entitlement.
+@visibleForTesting
+void retireUnfinishedTrial(Ref ref, Entitlement entitlement) {
+  if (!entitlement.isPremium) return;
+  try {
+    final nudge = ref.read(trialNudgeProvider.notifier);
+    // A microtask, as the feed row does: resolve() writes another provider's state, which
+    // Riverpod forbids from inside a provider that is still building.
+    unawaited(
+      Future.microtask(nudge.resolve).catchError((Object e) {
+        debugPrint('[entitlement] unfinished-trial marker not cleared: $e');
+      }),
+    );
+  } catch (e) {
+    debugPrint('[entitlement] unfinished-trial marker not cleared: $e');
+  }
+}
 
 /// The gate's view of [entitlementDetailProvider]: just "may this user act?".
 /// Invalidating [entitlementDetailProvider] cascades here automatically.

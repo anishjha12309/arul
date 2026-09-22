@@ -1,12 +1,24 @@
-# Crons — the three triggers and the cold-connection hazard
+# Crons — the four triggers and the cold-connection hazard
 
 Read before adding, splitting or "simplifying" a scheduled handler. Declared in
-`workers/wrangler.toml [triggers]` as `crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]`.
+`workers/wrangler.toml [triggers]` as
+`crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *", "* * * * *"]`.
+
+## Every-minute `* * * * *` — campaign push dispatch only
+
+Its own invocation for the same reason autopay has one: a 60k-phone drain must never share a wall
+clock or a subrequest budget with the catalog rebuild. Claims NOTHING while `PUSH_ENABLED` is not
+exactly `"true"`, and logs nothing on an idle minute — at 1,440 ticks a day a line per tick buries
+everything else. The one exception is the registry prune an idle tick runs instead (`[push] prune:`),
+which logs only when it actually dropped something. Rules, claim loop and kill switch: [push.md](push.md).
 
 ## Quarter-hour `*/15 * * * *` — autopay only, its own invocation
 
 **Workers Paid gives one invocation 10,000 subrequests, so the ceiling is the 15-minute cron wall
-clock, not the subrequest cap.** PhonePe calls are sequential at ~1 s each, so the scan is budgeted
+clock, not the subrequest cap.** A cron on an interval UNDER an hour (this one and the every-minute
+push tick) also gets only **30 s of CPU time** per invocation; the hourly and daily crons get 15 min.
+Time spent awaiting PhonePe or Neon is not CPU, so 600 sequential calls fit, but any per-row hashing or
+JSON work added here is charged against that 30 s (Workers limits page, "CPU time per Cron Trigger"). PhonePe calls are sequential at ~1 s each, so the scan is budgeted
 at 600 calls and throughput comes from run size AND cadence.
 
 **Autopay is NOT part of the hourly handler**, and putting it back re-creates the failure that split
@@ -24,7 +36,27 @@ re-notified by Pass A used to be executed by Pass B in the same run, every run. 
 PhonePe's 48 h retry window (aged from `notified_at`) is reconciled on the **top-of-hour tick only**:
 it can settle only through PhonePe's own retries, so polling it every tick starved fresh executes.
 
-## Hourly `0 * * * *`
+**That deferral is a bound in Pass B's `WHERE`, not just a skip in its loop.** The loop runs below
+`LIMIT MAX_ROWS_PER_PASS`, so a row it had already ruled out still spent one of the 200 slots — 56 of
+150 fetched, measured in production. Slots are the scarce resource, not calls (a tick spends ~100 of
+its 600), and the row cap is exactly what starves fresh debits behind an old head. `isTopOfHourTick()`
+is read ONCE per run and shared by the bound and the skip: a scan long enough to outlive a 15-minute
+boundary must not fetch a row under one rule and drop it under the other.
+
+**Pass D re-asks about parked pauses, on the top-of-hour tick only, at most `MAX_PAUSED_RECHECK` = 50
+status calls.** A `paused` row has `next_debit_at` NULL and a status outside `('trialing','active')`,
+which is precisely what removes it from both passes — so nothing here ever looked at it again, and the
+only ways back were the `subscription.unpaused` webhook, **never once delivered in production**
+([phonepe-webhook.md](phonepe-webhook.md)), and the user happening to open the paywall. Someone who
+paused in their UPI app and unpaused there was therefore never billed again. Pass D reads the mandate
+oldest-`updated_at` first: ACTIVE restores and rearms the row through the same statement the webhook
+uses (`lib/subscription-rearm.ts` — one copy, or the two drift and one of them forgets the clock),
+a terminal state parks it `cancelled`, and anything else leaves it alone but still moves `updated_at`
+so a backlog over the cap rotates through successive hours. It spends the same per-run call budget as
+the passes above and checks it per row, so a debit always outranks it. One paused row is also enough to
+bound the KV idle marker (`autopay:next_work_at`, which lets a provably empty tick skip the DB
+entirely): while one exists the marker may never reach past the next top of the hour, or a quiet
+population would skip every `:00` tick — the marker outlives them — and the recheck would never run.
 
 1. **build-catalog** — a no-op if `content_version` is unchanged, so most hours only rewrite
    `app_config.json` and `version.json` (whose `built_at` moves on every successful run; the
@@ -49,6 +81,17 @@ The unconditional backstop for whatever the on-change hourly sweep missed.
    Daily and not hourly: popularity is a sort key, and refreshing it hourly would re-download the
    whole catalog on every client 24× a day. A quiet day is a no-op rather than a forced re-download.
 
+## Rehearse a cron change before it ships
+
+`node tools/cron-rehearse.mjs hourly|daily|autopay` fires ONE trigger through a local `wrangler dev
+--test-scheduled` against the Neon `debug` branch with local KV/R2 and PostHog blackholed, so nothing
+it does can reach production. It refuses `--remote`, refuses to run unless the local Hyperdrive string
+is the debug branch, and refuses autopay unless `.dev.vars` says `PHONEPE_ENV=SANDBOX` and
+`--allow-autopay` is passed — autopay talks to PhonePe. The scheduled handler answers `/__scheduled`
+at once and works in `ctx.waitUntil` -> read the `[cron] … complete` lines it streams afterwards,
+not the HTTP status. The canonical sweep has a preview for the same reason: `POST
+/internal/sweep-canonical?dry_run=1` returns `wouldDelete` and deletes nothing.
+
 ## Sweep failsafes — do not weaken either
 
 - **Zero referenced keys ABORTS that prefix** rather than reading "no references" as "delete
@@ -59,8 +102,20 @@ The unconditional backstop for whatever the on-change hourly sweep missed.
 
 ## Cold-connection hazard — the crons' one real failure mode
 
-This Worker idles for hours (browse never touches the DB), so Neon suspends and Hyperdrive's pooled
-connection goes stale. The first query of a cron run then lands on a severed socket, and postgres.js
+**Arul's Neon endpoint never scales to zero** (`suspend_timeout_seconds = -1`, owner's call): the
+compute was already awake ~95% of the month, so always-on costs under a dollar over the 0.25 CU floor
+and removes the 1–2 s wake from the last few percent of first logins. **The autoscaling ceiling is
+1 CU** (owner's call): the compute averages ~0.33 CU while awake and browse never touches the DB, so
+the ceiling is the only setting that can blow the budget — at 8 CU a runaway cron bills ~$620/month,
+at 1 CU ~$77 worst case. Raise it only on evidence from `pg_stat_statements` (installed) that queries
+queue at 1 CU. Pakiza's endpoint still suspends and still carries the 8 CU ceiling — its traffic is
+too thin to pay for always-on. The defences below stay load-bearing: Neon's weekly maintenance window restarts the
+compute and severs the pooled socket exactly like a suspend did, and **Hyperdrive itself closes an
+origin connection idle for 10 minutes** (Hyperdrive limits page), which is shorter than the gap between
+quarter-hour ticks — so the first query of a tick can still land on a fresh connection whatever Neon does.
+
+Before that, this Worker idled for hours (browse never touches the DB), so Neon suspended and
+Hyperdrive's pooled connection went stale. The first query of a cron run then lands on a severed socket, and postgres.js
 defaults `connect_timeout` to **30 s** — longer than a scheduled invocation can afford — so the run
 hangs for its full budget and is killed by the runtime, taking the rebuild AND the renewal scan with
 it. Observed in Pakiza: killed the hourly cron for hours before anyone noticed, because a dead cron

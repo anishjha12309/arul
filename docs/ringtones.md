@@ -7,8 +7,9 @@ shared with wallpapers: [browse.md](browse.md).
 ## The two axes
 
 **`category` is the browse axis and it is NOT the wallpaper set**: the five deities
-(`perumal·murugan·sivan·amman·ayyappan`) plus **`others`** for tracks belonging to none of them
-(Hanuman, Ganesha, gurus) — and **no `temples`**. Each tab derives its chips from its own catalog, so
+(`perumal·murugan·sivan·amman·ayyappan`) and **no `temples`**. `others` is RETIRED — the CMS no longer
+has it and the app must never offer it; `compareRingtoneCategories`' others-last rule and the art
+fallbacks stay so an old catalog still renders. Each tab derives its chips from its own catalog, so
 the two lists differing is correct, not a bug.
 
 **`deity` is a second, DISPLAY-ONLY axis** — row art and subtitle, never browse: no chip filters on
@@ -61,6 +62,11 @@ warms the provider post-first-frame so the first tap lands on a ready list.
   `RecoverableSecurityException`; skip them and let MediaStore uniquify, or re-setting any
   pre-reinstall tone breaks permanently.
 - Set has a re-entrancy guard, same as apply and share: a double tap must not run two flows.
+- **The tone download streams into `<name>.part`, renames only on success, and KEEPS the `.part` on
+  failure so the next tap resumes with `Range`** — one shape with the wallpaper twin, whose rules
+  (`200` restart, `416` drop, everything else keeps the bytes) are in
+  [wallpaper-apply.md](wallpaper-apply.md). Without the rename MediaStore could register a truncated
+  tone under the real name.
 
 ## Preview
 
@@ -70,6 +76,12 @@ warms the provider post-first-frame so the first tap lands on a ready list.
 ONE shared `just_audio` player for ALL previews: starting a track stops the previous, so only one
 decoder is ever held (the feed's video pool shares the device). Every now-playing affordance derives
 from the ONE `currentId`; clearing it stops the audio, never just dims the row.
+
+Focus is **`GAIN_TRANSIENT`**, configured through `audio_session` (a direct dependency for that one
+reason) — just_audio's own default is the permanent `music()` gain, which kills the user's music for
+the rest of the session. It also takes focus on play and **never abandons it**, so every path back to
+idle — pause, completed, error, stop, HOME — has to `setActive(false)` itself. HOME stops the player
+too: the tab lives in an IndexedStack, so nothing else would.
 
 ## Row art
 

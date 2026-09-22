@@ -180,4 +180,4 @@ final class NotificationBootstrapProvider
 }
 
 String _$notificationBootstrapHash() =>
-    r'85fbfa04a8240eebafd8dd77ee45ae3e182b2507';
+    r'455e3140acae0ebf06c9489d936e548b5bed39cb';

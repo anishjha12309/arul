@@ -9,6 +9,8 @@ import '../../../app/widgets/arul_chip.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
+import '../../../app/theme/motion.dart';
+import 'feed_card_geometry.dart';
 
 /// The seven feed category labels, verbatim from the design — the first is chrome, the rest catalog.
 /// Title-cased at the call site if the catalog ever yields a raw slug.
@@ -28,18 +30,28 @@ class FeedChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
     final selected = ref.watch(selectedCategoryProvider);
+    final showNew = ref.watch(showNewCategoryProvider);
 
     // A loaded catalog with NO categories -> collapse, never a 34px band of nothing under the title.
     // The loading case never reaches here — FeedChipsSkeleton holds the height, so nothing jumps.
     if (categories.isEmpty) return const SizedBox.shrink();
 
+    // All, then New, then the catalog's own chips. Both leaders are CHROME built here, which is why
+    // neither can reach `categoriesProvider` — and so neither can reach the Upload picker, which
+    // reads that provider to decide what a user may submit into. A window is not a submittable
+    // category. `orderedByCms` sorts only what came off the catalog, so an operator's drag can
+    // never move these two either.
     final items = <WallpaperCategory>[
       const WallpaperCategory(WallpaperCategory.allSlug, _kAllLabel),
+      if (showNew)
+        const WallpaperCategory(WallpaperCategory.newSlug, kNewCategoryLabel),
       ...categories,
     ];
 
     return SizedBox(
-      height: 34,
+      // The chips draw 34 and are tapped at [ArulTokens.minHitTarget] -> the strip owes the taller
+      // box or the hit area it gains is clipped straight back off. The row still sits in equal air.
+      height: ArulChip.categoryStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
@@ -53,6 +65,7 @@ class FeedChips extends ConsumerWidget {
             label: c.label,
             selected: c.slug == selected,
             variant: ArulChipVariant.category,
+            identifier: 'arul_chip_${c.slug}',
             onTap: () =>
                 ref.read(selectedCategoryProvider.notifier).select(c.slug),
           );
@@ -73,17 +86,18 @@ class FeedChipsSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fill = isDark
-        ? ArulTokens.ivory.withValues(alpha: 0.08)
+        ? ArulTokens.cardBgDark045
         : ArulTokens.maroonTintFill08;
     return SizedBox(
-      height: 34,
+      // Matches the real chip row it stands in for -> the strip must not resize when they land.
+      height: ArulChip.categoryStripHeight,
       child: Row(
         children: [
           const SizedBox(width: ArulTokens.screenPadding),
           for (final w in _skeletonWidths) ...[
             Container(
               width: w,
-              height: 32,
+              height: ArulChip.categoryHeight,
               decoration: BoxDecoration(
                 color: fill,
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
@@ -116,6 +130,32 @@ class FeedLoading extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             const SlidingSkeleton(),
+
+            // The card's OWN chrome, not the wallpaper's -> the scrim and the Apply/Share row sit in
+            // the same place on EVERY card regardless of what lands, so they belong in the skeleton
+            // (W9). The live mark does NOT join them: it is conditional on `wallpaper.kind`, data the
+            // loading state does not have yet -> a guess would pop a glyph OFF a static card (most of
+            // the catalog) rather than prevent a pop, which is worse than showing nothing.
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: FeedCardGeometry.scrimHeight,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: ArulTokens.feedBottomScrim,
+                  ),
+                ),
+              ),
+            ),
+            const Positioned(
+              left: FeedCardGeometry.actionInset,
+              right: FeedCardGeometry.actionInset,
+              bottom: FeedCardGeometry.actionInset,
+              child: IgnorePointer(child: _ActionBarSkeleton()),
+            ),
+
             Center(
               child: _OpacityPulse(
                 child: Column(
@@ -140,6 +180,45 @@ class FeedLoading extends StatelessWidget {
   }
 }
 
+/// Stand-in for the card's Apply pill + Share circle (`_ActionBar` in feed_screen.dart) -> both sit
+/// on EVERY card regardless of content, unlike the live mark, so they belong here (see [FeedLoading]).
+///
+/// Every number comes from [FeedCardGeometry], the SAME source `_ActionBar`/`_ApplyPill`/
+/// `_ShareCircle` read -> the skeleton cannot drift out of step with the row it stands in for, which
+/// is the whole point of a content-shaped skeleton. The pill uses the FLOOR width, so real content
+/// can only grow into this placeholder, never shrink out of it.
+class _ActionBarSkeleton extends StatelessWidget {
+  const _ActionBarSkeleton();
+
+  static const double _barHeight = FeedCardGeometry.actionBarHeight;
+  static const double _pillFloorWidth = FeedCardGeometry.applyPillMinWidth;
+  static const double _shareDiameter = FeedCardGeometry.shareDiameter;
+  static const double _gap = FeedCardGeometry.actionGap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: _pillFloorWidth,
+          height: _barHeight,
+          child: SlidingSkeleton(
+            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+          ),
+        ),
+        const SizedBox(width: _gap),
+        SizedBox.square(
+          dimension: _shareDiameter,
+          child: SlidingSkeleton(
+            borderRadius: BorderRadius.circular(_shareDiameter / 2),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Opacity pulse .55 ↔ 1 over 2s — transform and opacity only.
 class _OpacityPulse extends StatefulWidget {
   const _OpacityPulse({required this.child});
@@ -155,7 +234,23 @@ class _OpacityPulseState extends State<_OpacityPulse>
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 2),
-  )..repeat(reverse: true);
+  );
+
+  /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup.
+  bool _motionStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionStarted) return;
+    _motionStarted = true;
+    if (context.reduceMotion) {
+      // Parked at full opacity, the bright end of the pulse — the resting state, never the dim one.
+      _c.value = 1;
+    } else {
+      _c.repeat(reverse: true);
+    }
+  }
 
   late final Animation<double> _opacity = Tween<double>(
     begin: 0.55,
@@ -221,7 +316,11 @@ class FeedEmpty extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+          Semantics(
+            container: true,
+            identifier: 'arul_feed_browse_all',
+            child: _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+          ),
         ],
       ),
     );
@@ -315,6 +414,7 @@ class FeedError extends StatelessWidget {
             label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
+            identifier: 'arul_feed_retry',
             height: 46,
             fontSize: 14,
             expand: false,

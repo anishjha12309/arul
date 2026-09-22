@@ -1,35 +1,44 @@
 ---
-description: Local reminders only; festival dates are data.
+description: Local reminders are on-device; campaign pushes come only from the CMS.
 paths:
   - "lib/features/notifications/**"
+  - "lib/features/push/**"
   - "android/app/src/main/res/raw/**"
 ---
 
-Local reminders via `flutter_local_notifications` — **no FCM, no Worker, nothing leaves the device,
-and no screen may promise a push channel.**
+TWO features, one plugin. **Reminders** are on-device. **Campaign pushes** come only from the CMS
+through the Worker, never from the app. No screen promises either.
 
-Deliberate decisions that look wrong; do not "fix" them:
+Campaign invariants ([docs/push.md](../../docs/push.md)):
 
-- **Festival dates are DATA, not computation.** Lunisolar dates are astronomy no Dart package
-  computes to a standard worth putting in front of a devotee. When the table runs out the festival is
-  **skipped** — it degrades to "no reminders", never a reminder on a wrong day. Never "fix" it by
-  adding 365 days; that puts a lunisolar festival up to a fortnight out. **Nothing warns you when it
-  runs out**: the test asserts a fixed floor and never reads the clock, so it keeps passing while
-  festivals stop arming.
-- **Scheduling is inexact on purpose** — exact alarms are special-access and show on the Play listing.
-- QA tools gate on `kDebugMode` **OR** not `isPlayInstall()`. The second half is the point: a
-  sideloaded RELEASE build keeps the tools, because every failure worth catching reproduces only in a
-  release build.
+- **`arul_updates_v1` is created at LAUNCH, not at opt-in**, and its id is immutable once a device has
+  seen it. FCM falls back to the manifest default when the channel does not exist yet, and on
+  Android 8–12 the channel IS the user's only control. The NAME is mutable and is localized.
+- **The permission prompt fires once per install**, on the first feed frame AFTER sign-in, never on
+  the wall or during the Google flow — a stacked dialog costs sign-ins. Denied is final.
+- **Notification messages only**, never data-only. **Registering no `onBackgroundMessage` handler is
+  what keeps the Flutter isolate out — the plugin's receiver does not check first**, it enqueues its
+  background service for every message and the executor then finds no callback handle. Register one
+  anywhere and that gate opens for every message, on phones whose battery manager kills isolates.
+- **Send by `token`, not `fid`.** The REST reference says the opposite; a real device answered 404
+  UNREGISTERED to the fid and 200 to the token on an identical payload. `SEND_BY` is the one switch.
+- **An unreadable payload opens the app** — unknown `dest`, deleted item, retired category. Never a
+  crash, never an error screen. Registration failures are swallowed into Crashlytics.
+
+Reminder decisions that look wrong; do not "fix" them:
+
+- **Festival dates are DATA, not computation** — lunisolar dates are astronomy no Dart package
+  computes well enough to put in front of a devotee. When the table runs out the festival is
+  **skipped**, never fired on a wrong day; never "fix" it by adding 365 days. **Nothing warns you
+  when it runs out**: the test asserts a fixed floor and never reads the clock.
 
 Traps:
 
 - **`keep.xml` is not optional.** The notification icons are resolved by NAME, R8 strips them, and
   ONLY release builds throw.
-- **Festival alarms are one-shot** — the root-widget bootstrap re-arms on every launch, and
-  `RECEIVE_BOOT_COMPLETED` plus the boot receiver cover reboots. Lose either and reminders end.
-- **The small icon cannot be the launcher icon** — Android keeps only its ALPHA and tints the result,
-  so a coloured icon renders as a white square.
-- **A channel's sound is immutable once created.** Adding the chime means bumping the channel ids in
-  the SAME change and listing the old ones as legacy, or every existing install ignores it.
+- **Festival alarms are one-shot** — the root-widget bootstrap re-arms every launch, the boot receiver
+  covers reboots. Lose either and reminders end.
+- **A channel's sound is immutable once created.** Adding the chime means bumping the reminder channel
+  ids in the SAME change and listing the old ones as legacy.
 
 Read [docs/notifications.md](../../docs/notifications.md).

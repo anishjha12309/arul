@@ -38,11 +38,35 @@ All**, and `DeepLinkLocaleSync` (above `MaterialApp`) applies the language live.
 | Not installed, Google App Campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
 | Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
 
-**The link's language ALWAYS wins** (owner's call) — over the device default and over a language the
-user picked in Settings. It goes through `LocaleNotifier.setLocale`, so Settings shows it as the
-current choice. The GA4-only event `deep_link_opened` (`kind`, `source`, id) fires on every landing;
-it is deliberately NOT on the PostHog allow-list and not a Meta ★ event
-([analytics-events.md](analytics-events.md)).
+A **campaign push** is a sixth delivery into the same slot, and the only one carrying no URL:
+`CategoryLinkTarget` and `PremiumLinkTarget` exist for it alone, no parser emits them, and its
+targets are stamped `DeepLinkSource.push` so `deep_link_opened` never reports a push as an ad click
+([push.md](push.md)). Category and premium are acted on immediately rather than parked — only the
+wallpaper and ringtone shapes go through the typed takes.
+
+**Language precedence: an explicit pick > the link > the REGION (fresh installs, once) > the phone >
+English.** A link's language always wins over what the user picked earlier (owner's call) because it
+goes through `LocaleNotifier.setLocale`, which PERSISTS — so it is an explicit pick from then on, and
+Settings shows it as the current choice.
+
+**The region is read ONCE per install.** Only a fresh install's first process sets
+`arul_geo_pending`; the splash asks `GET /geo` (Cloudflare's `request.cf`) beside the warm-up, again
+each cold start until an answer lands, then never — an update never asks, so no existing install is
+re-languaged. The answer lives in `arul_geo_lang`, BESIDE `arul_locale`, never in it: Settings never
+shows a guess as a choice, and a pick or a link still overrides it.
+
+Only India maps (the list is `routes/geo.ts`), and `regionCode` is scoped to its country — `US`+`TN`
+is Tennessee. Delhi, Maharashtra and Gujarat stay unmapped by decision: Delhi's language-switchers
+pick South-Indian languages more often than Hindi. `GEO_LANG_ENABLED` in the Worker's `[vars]` is the
+brake — anything but `"true"` answers `lang: null` while `region` keeps flowing for measurement.
+
+No region answer → the phone's own locale order, first supported LANGUAGE only (`ta-MY` is Tamil).
+**That phone fallback is never written to `arul_locale`**: persisting it would freeze the app to
+whatever the phone said on the first launch, so a later phone-language change would stop moving the
+app, and Settings would show a language nobody chose as if they had. Every screen that names the
+current language reads the resolved value, never the stored one. The GA4-only event
+`deep_link_opened` (`kind`, `source`, id) fires on every landing; it is deliberately NOT on the
+PostHog allow-list and not a Meta ★ event ([analytics-events.md](analytics-events.md)).
 
 Traps, all of which fail SILENTLY — nothing logs. The first four drop the link into a browser; the
 rest keep the app but lose the target:

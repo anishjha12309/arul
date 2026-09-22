@@ -25,7 +25,18 @@ const ROUTES = [
   },
   {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
-    docs: ["docs/phonepe.md"],
+    docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
+  },
+  // Must outrank the generic cron row below: push-dispatch IS a cron, but its rules are its own.
+  {
+    when: [
+      "workers/src/cron/push-dispatch.ts",
+      "workers/src/lib/fcm.ts",
+      "workers/src/lib/push-audience.ts",
+      "lib/features/push/**",
+      "db/schema/17_push.sql",
+    ],
+    docs: ["docs/push.md", "docs/edge-cases.md §Push"],
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],
@@ -64,6 +75,16 @@ const ROUTES = [
       "lib/features/wallpapers/presentation/apply_restore.dart",
     ],
     docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
+  },
+  // The region rung of the language precedence: the resolver, the one-shot ask and the route that
+  // answers it. Ahead of the generic routes row -> first match wins.
+  {
+    when: [
+      "lib/core/providers/locale_provider.dart",
+      "lib/core/providers/geo_language_service.dart",
+      "workers/src/routes/geo.ts",
+    ],
+    docs: ["docs/deep-links.md §Language precedence", "workers/README.md §Routes"],
   },
   {
     when: ["workers/src/lib/referral.ts", "lib/features/referral/**"],
@@ -113,6 +134,11 @@ const ROUTES = [
   {
     when: ["lib/theme/**", "lib/app/theme/**"],
     docs: ["docs/ui-direction.md", ".claude/rules/theming.md"],
+  },
+  // Ahead of the browse row -> first match wins, and the geometry file is under its glob.
+  {
+    when: ["lib/features/wallpapers/**/feed_card_geometry.dart", "lib/features/wallpapers/**/*reel*"],
+    docs: ["docs/feed-card.md"],
   },
   {
     when: ["workers/src/cron/build-catalog.ts", "workers/src/lib/feed-score.ts", "lib/features/wallpapers/**"],

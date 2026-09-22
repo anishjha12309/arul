@@ -1,0 +1,17 @@
+-- Arul — the internal-account flag, read ONLY by the unified CMS's subscriptions page.
+-- The owner's own test trials and Google Play's pre-launch robots live in the same tables as real
+-- users. They are ~1.4% of trials but ~4% of CANCELLATIONS, which is the number they distort most.
+--
+-- WHY A FLAG AND NOT AN EMAIL PATTERN. Substring matching is unusable on this user base: '%anish%'
+-- matches ~35 real paying users (kanishka, manisharma, dhanish, nishanth, muthumani) and '%test%'
+-- matches real ones too. The set is small and known, so it is enumerated by hand, once:
+--   update users set is_internal = true where email = any(array[...]);
+-- Google Play's Test Lab robots are the one safe pattern — that domain is Google's, never a person:
+--   update users set is_internal = true where email ilike '%@cloudtestlabaccounts.com';
+--
+-- Nothing in the app writes it and NO entitlement, payment or catalog path reads it: an internal
+-- account still pays, is still gated, and still receives its debits. Reporting is the only consumer,
+-- so a wrong flag can never cost a user access — it can only move a number on an admin page.
+-- No index: every consumer aggregates the whole table, which a partial index cannot help.
+-- Additive and idempotent: safe on a fresh install (after 01_identity.sql) and on the live DB alone.
+alter table users add column if not exists is_internal boolean not null default false;

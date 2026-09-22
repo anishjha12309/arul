@@ -24,7 +24,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get feedEmptyTitle => 'यहाँ अभी कुछ नहीं है';
 
   @override
-  String get feedEmptyBody => 'कोई दूसरी श्रेणी आज़माएँ।';
+  String get feedEmptyBody => 'कोई दूसरी कैटेगरी आज़माएँ।';
 
   @override
   String get feedErrorTitle => 'वॉलपेपर लोड नहीं हो सके';
@@ -39,18 +39,19 @@ class AppLocalizationsHi extends AppLocalizations {
   String get errorGeneric => 'कुछ गड़बड़ हो गई।';
 
   @override
-  String get signInHeadline => 'जगाने लायक वॉलपेपर';
-
-  @override
-  String get signInBody =>
-      'लगाने, साझा करने और अपना संग्रह सहेजने के लिए साइन इन करें।';
+  String get signInCaption => 'दिव्यता को घर लाएँ';
 
   @override
   String get signInGoogle => 'Google से जारी रखें';
 
   @override
-  String get signInTerms =>
-      'जारी रखकर आप हमारी शर्तें और गोपनीयता नीति स्वीकार करते हैं।';
+  String get signInSubtitleIdle => 'शुरू करने के लिए अकाउंट चुनें';
+
+  @override
+  String get signInSubtitleExchanging => 'साइन इन हो रहा है…';
+
+  @override
+  String get signInNudgeRetry => 'साइन इन करने के लिए यहाँ टैप करें';
 
   @override
   String get premiumTitle => 'प्रीमियम';
@@ -66,10 +67,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumBenefitApply => 'कोई भी वॉलपेपर लगाएँ — स्थिर या लाइव';
 
   @override
-  String get premiumBenefitLive => 'पूरी गुणवत्ता में लाइव वीडियो वॉलपेपर';
+  String get premiumBenefitLive => 'पूरी क्वालिटी में लाइव वीडियो वॉलपेपर';
 
   @override
-  String get premiumBenefitShare => 'दोस्तों और परिवार के साथ साझा करें';
+  String get premiumBenefitShare => 'दोस्तों और परिवार के साथ शेयर करें';
 
   @override
   String get premiumBenefitNew => 'हर हफ़्ते नए वॉलपेपर';
@@ -82,7 +83,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get premiumTrialNote =>
-      'प्रति खाता एक मुफ़्त ट्रायल। कभी भी रद्द करें — अवधि समाप्त होने तक पहुँच बनी रहती है।';
+      'प्रति अकाउंट एक मुफ़्त ट्रायल। कभी भी रद्द करें — अवधि समाप्त होने तक ऐक्सेस बना रहता है।';
 
   @override
   String get premiumComingSoon => 'भुगतान बाद में आएँगे।';
@@ -103,7 +104,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get themeDark => 'डार्क';
 
   @override
-  String get settingsContent => 'सामग्री';
+  String get settingsContent => 'कंटेंट';
 
   @override
   String get settingsAbout => 'बारे में';
@@ -115,17 +116,17 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsPrivacy => 'गोपनीयता नीति';
 
   @override
-  String get settingsVersion => 'संस्करण';
+  String get settingsVersion => 'वर्शन';
 
   @override
   String get uploadTitle => 'Upload your content';
 
   @override
   String get uploadBody =>
-      'अपना वॉलपेपर साझा करें। हम हर सबमिशन की समीक्षा करते हैं।';
+      'अपना वॉलपेपर कम्युनिटी के साथ शेयर करें। हम लाइव होने से पहले हर सबमिशन का रिव्यू करते हैं।';
 
   @override
-  String get uploadPickCategory => 'श्रेणी चुनें';
+  String get uploadPickCategory => 'कैटेगरी चुनें';
 
   @override
   String get uploadPickFile => 'फ़ाइल चुनें';
@@ -141,7 +142,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get apply => 'लगाएँ';
 
   @override
-  String get share => 'साझा करें';
+  String get share => 'शेयर करें';
 
   @override
   String get applyTargetTitle => 'वॉलपेपर लगाएँ';
@@ -201,6 +202,12 @@ class AppLocalizationsHi extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'प्रीव्यू अभी उपलब्ध नहीं है';
 
   @override
+  String get ringtoneVolumeMuted => 'यह प्रीव्यू सुनने के लिए आव़ाज़ बढ़ाएँ';
+
+  @override
+  String get ringtoneCurrentBadge => 'मौजूदा';
+
+  @override
   String get ringtonesEmptyTitle => 'रिंगटोन जल्द आ रहे हैं';
 
   @override
@@ -242,13 +249,10 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'लगाना और साझा करना अनलॉक करें';
-
-  @override
   String get settingsPremiumSubTrial => 'आप मुफ़्त ट्रायल पर हैं';
 
   @override
-  String get settingsPremiumSubCancelled => 'ऑटो-रिन्यू बंद · पहुँच जारी है';
+  String get settingsPremiumSubCancelled => 'ऑटो-रिन्यू बंद · ऐक्सेस जारी है';
 
   @override
   String get settingsPremiumSubActive => 'आप सदस्य हैं';
@@ -278,13 +282,25 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsNeedHelp => 'मदद चाहिए?';
 
   @override
-  String get settingsNeedHelpSub => 'सपोर्ट से संपर्क करें';
+  String get settingsNeedHelpSub => 'सपोर्ट और सब्सक्रिप्शन';
 
   @override
-  String get settingsUpload => 'अपनी सामग्री अपलोड करें';
+  String get settingsHelpSupport => 'सपोर्ट से संपर्क करें';
 
   @override
-  String get settingsUploadSub => 'वॉलपेपर या रिंगटोन साझा करें';
+  String get settingsHelpSupportSub => 'ईमेल से हमें लिखें';
+
+  @override
+  String get settingsHelpManage => 'सब्सक्रिप्शन मैनेज करें';
+
+  @override
+  String get settingsHelpDeleteSub => 'आपका अकाउंट हट जाता है';
+
+  @override
+  String get settingsUpload => 'अपना कंटेंट अपलोड करें';
+
+  @override
+  String get settingsUploadSub => 'वॉलपेपर या रिंगटोन शेयर करें';
 
   @override
   String get settingsLogout => 'लॉग आउट';
@@ -297,18 +313,17 @@ class AppLocalizationsHi extends AppLocalizations {
       'आप कभी भी Google से दोबारा साइन इन कर सकते हैं।';
 
   @override
-  String get settingsDeleteAccount => 'खाता मिटाएँ';
+  String get settingsDeleteAccount => 'अकाउंट मिटाएँ';
 
   @override
-  String get settingsDeleteConfirmTitle => 'खाता मिटाएँ?';
+  String get settingsDeleteConfirmTitle => 'अकाउंट मिटाएँ?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'इससे आपका खाता, पसंदीदा और रिवॉर्ड हमेशा के लिए हट जाएँगे।';
+  String get settingsDeleteConfirmBody => 'इसे वापस नहीं लाया जा सकता।';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'नियम और शर्तें';
@@ -406,16 +421,13 @@ class AppLocalizationsHi extends AppLocalizations {
   String get remindersMonthDec => 'दिस';
 
   @override
-  String get premiumBrandTitle => 'Arul Premium';
-
-  @override
   String get premiumScreenSubline => 'पूरा संग्रह, आपकी स्क्रीन पर जीवंत';
 
   @override
   String get premiumPerkEvery => 'हर वॉलपेपर — स्थिर और लाइव';
 
   @override
-  String get premiumPerkApplyShare => 'बिना किसी सीमा के लगाएँ और साझा करें';
+  String get premiumPerkApplyShare => 'बिना किसी सीमा के लगाएँ और शेयर करें';
 
   @override
   String get premiumPerkNew => 'हर हफ़्ते नए वॉलपेपर';
@@ -449,7 +461,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumWelcomeToast => 'Arul Premium में आपका स्वागत है!';
 
   @override
-  String get premiumCelebrateTitle => 'आप जुड़ गए';
+  String get premiumCelebrateTitle => 'बधाई हो';
 
   @override
   String get premiumCelebrateBody =>
@@ -457,7 +469,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get premiumSheetPitch =>
-      'हर वॉलपेपर — लाइव और स्थिर। छहों श्रेणियों में बेरोक लगाएँ और साझा करें।';
+      'हर वॉलपेपर — लाइव और स्थिर। छहों कैटेगरी में बेरोक लगाएँ और शेयर करें।';
 
   @override
   String get premiumKeepBrowsing => 'मुफ़्त में देखते रहें';
@@ -470,7 +482,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get referHeroBody =>
-      'आपकी लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम';
+      'आपके लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम';
 
   @override
   String get referShareWhatsapp => 'Share via WhatsApp';
@@ -487,19 +499,19 @@ class AppLocalizationsHi extends AppLocalizations {
   String get referHowItWorks => 'How it works';
 
   @override
-  String get referStep1 => 'अपनी लिंक दोस्तों और परिवार के साथ साझा करें';
+  String get referStep1 => 'अपना लिंक दोस्तों और परिवार के साथ शेयर करें';
 
   @override
-  String get referStep2 => 'वे Arul इंस्टॉल करके प्रीमियम लेते हैं';
+  String get referStep2 => 'वे Arul इंस्टॉल करके प्रीमियम सब्सक्राइब करते हैं';
 
   @override
-  String get referStep3 => '30 दिन मुफ़्त प्रीमियम आपके खाते में आ जाता है';
+  String get referStep3 => '30 दिन मुफ़्त प्रीमियम आपके अकाउंट में आ जाता है';
 
   @override
   String get referEmpty => 'अभी कोई रेफ़रल नहीं — एक शेयर में पहला दोस्त';
 
   @override
-  String get referShareCta => 'Arul साझा करें';
+  String get referShareCta => 'Arul शेयर करें';
 
   @override
   String get referNotNow => 'अभी नहीं';
@@ -523,11 +535,11 @@ class AppLocalizationsHi extends AppLocalizations {
   String get uploadTitleHint => 'e.g. Meenakshi at dusk';
 
   @override
-  String get uploadCategoryLabel => 'श्रेणी';
+  String get uploadCategoryLabel => 'कैटेगरी';
 
   @override
   String get uploadRightsCheckbox =>
-      'इस सामग्री के अधिकार मेरे हैं, या मुझे इसे साझा करने की अनुमति है';
+      'इस कंटेंट के अधिकार मेरे हैं, या मुझे इसे शेयर करने की अनुमति है';
 
   @override
   String get uploadSubmitCta => 'Submit for review';
@@ -546,7 +558,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get uploadRejectAudio => 'MP3, AAC या M4A ऑडियो फ़ाइल चुनें।';
 
   @override
-  String get uploadKindLabel => 'आप क्या साझा कर रहे हैं?';
+  String get uploadKindLabel => 'आप क्या शेयर कर रहे हैं?';
 
   @override
   String get uploadKindWallpaper => 'वॉलपेपर';
@@ -569,7 +581,7 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get uploadShareMomentBodyRingtone =>
-      'हम आपके रिंगटोन की जल्द समीक्षा करेंगे। तब तक — किसी को Arul पसंद आएगा?';
+      'हम आपके रिंगटोन का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?';
 
   @override
   String uploadTooLarge(String max) {
@@ -577,20 +589,20 @@ class AppLocalizationsHi extends AppLocalizations {
   }
 
   @override
-  String get uploadSuccessToast => 'समीक्षा के लिए भेज दिया — धन्यवाद!';
+  String get uploadSuccessToast => 'रिव्यू के लिए भेज दिया — धन्यवाद!';
 
   @override
   String get uploadShareMomentTitle => 'धन्यवाद';
 
   @override
   String get uploadShareMomentBody =>
-      'हम आपके वॉलपेपर की जल्द समीक्षा करेंगे। तब तक — किसी को Arul पसंद आएगा?';
+      'हम आपके वॉलपेपर का जल्द रिव्यू करेंगे। तब तक — किसी को Arul पसंद आएगा?';
 
   @override
   String get uploadComingSoonToast => 'अपलोड जल्द आ रहा है।';
 
   @override
-  String get premiumNavTitle => 'सदस्यता';
+  String get premiumNavTitle => 'सब्सक्रिप्शन';
 
   @override
   String get premiumEyebrow => 'प्रीमियम';
@@ -602,13 +614,14 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumPerMonthCaption => 'प्रति माह';
 
   @override
-  String get premiumTrialLeadPrefix => 'अपना 1 दिन का मुफ़्त ट्रायल शुरू करें ';
+  String get premiumTrialLeadPrefix =>
+      'अपना 1 दिन का मुफ़्त ट्रायल शुरू करने के लिए ';
 
   @override
   String get premiumRefundedBadge => 'तुरंत वापस';
 
   @override
-  String get premiumFeatureWallpapers => 'असीमित HD वॉलपेपर';
+  String get premiumFeatureWallpapers => 'अनलिमिटेड HD वॉलपेपर';
 
   @override
   String get premiumFeatureRingtones => 'भक्ति रिंगटोन';
@@ -620,7 +633,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumCtaTrial => 'मुफ़्त ट्रायल शुरू करें';
 
   @override
-  String get premiumCtaSubscribe => 'अभी सदस्यता लें';
+  String get premiumCtaSubscribe => 'अभी सब्सक्राइब करें';
 
   @override
   String get premiumReassuranceTrial =>
@@ -628,7 +641,60 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get premiumReassurancePaid =>
-      'UPI ऑटोपे सुरक्षित · एक टैप में रद्द करें';
+      'UPI ऑटोपे सुरक्षित · कभी भी एक टैप में रद्द करें';
+
+  @override
+  String get premiumQrTitleTrial =>
+      'अपना मुफ़्त ट्रायल शुरू करने के लिए स्कैन करें';
+
+  @override
+  String get premiumQrTitlePaid => 'सब्सक्राइब करने के लिए स्कैन करें';
+
+  @override
+  String get premiumQrInstruction =>
+      'किसी दूसरे फ़ोन पर कोई भी UPI ऐप खोलें और यह कोड स्कैन करें।';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'कोड $time में समाप्त होगा';
+  }
+
+  @override
+  String get premiumQrWaiting => 'मंज़ूरी का इंतज़ार है…';
+
+  @override
+  String get premiumQrCheck => 'मैंने भुगतान कर दिया';
+
+  @override
+  String premiumResumeCta(String app) {
+    return '$app फिर से खोलें';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'अपना ट्रायल शुरू करने के लिए $app में ₹2 सत्यापन को मंज़ूरी दें।';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'जारी रखने के लिए $app में भुगतान को मंज़ूरी दें।';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'आपका UPI ऐप';
+
+  @override
+  String get trialNudgeRow => 'अपना मुफ़्त ट्रायल सेटअप पूरा करें';
+
+  @override
+  String get trialNudgeDismiss => 'बंद करें';
+
+  @override
+  String get trialReminderTitle => 'आपका मुफ़्त ट्रायल इंतज़ार कर रहा है';
+
+  @override
+  String get trialReminderBody =>
+      'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।';
 
   @override
   String get premiumSelectedUpiApp => 'UPI ऐप';
@@ -640,12 +706,63 @@ class AppLocalizationsHi extends AppLocalizations {
   String get upiPickerLastUsed => 'पिछली बार इस्तेमाल';
 
   @override
+  String get upiPickerQrTitle => 'QR से भुगतान करें';
+
+  @override
+  String get upiPickerQrSubtitle => 'दूसरे फ़ोन से स्कैन करें';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'फिर $price/माह ऑटोपे से। कभी भी रद्द करें।';
+  }
+
+  @override
+  String premiumPaidFinePrint(String price) {
+    return '$price/माह ऑटोपे से। कभी भी रद्द करें।';
   }
 
   @override
   String premiumSocialProof(String name, String city) {
     return '$city में $name ने लाइव वॉलपेपर लगाया 🙏';
   }
+
+  @override
+  String get pushChannelName => 'अरुल से अपडेट';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'इंटरनेट नहीं है। कनेक्शन जाँचें और दोबारा कोशिश करें।';
+
+  @override
+  String get purchaseErrorGeneric => 'कुछ गड़बड़ हो गई। फिर कोशिश करें।';
+
+  @override
+  String get purchaseCancelled => 'भुगतान रद्द हो गया।';
+
+  @override
+  String get purchaseInterrupted =>
+      'भुगतान बीच में रुक गया। दोबारा कोशिश करें।';
+
+  @override
+  String get purchaseNotCompleted => 'भुगतान पूरा नहीं हुआ। दोबारा कोशिश करें।';
+
+  @override
+  String get purchaseInProgress =>
+      'भुगतान पहले से चल रहा है। कुछ सेकंड रुककर दोबारा कोशिश करें।';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'आपका UPI ऐप नहीं खुल सका। दोबारा कोशिश करें।';
+
+  @override
+  String get purchaseIntentFailed =>
+      'भुगतान नहीं हो सका। अगर कोई रकम कटी है, तो वह 4–5 दिन में आपके खाते में वापस आ जाएगी।';
+
+  @override
+  String get purchaseActivateFailed =>
+      'आपका सब्सक्रिप्शन चालू नहीं हो सका। सपोर्ट से संपर्क करें।';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'भुगतान मिल गया, पर पुष्टि में देर हो रही है। ऐप बंद करके दोबारा खोलें — आपका सब्सक्रिप्शन जल्द चालू हो जाएगा।';
 }

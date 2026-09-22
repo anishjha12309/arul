@@ -32,6 +32,10 @@ class InstallReferrerService {
   static const _kPendingSource = 'pending_deeplink_source';
   static const _kPendingLang = 'pending_deeplink_lang';
   static const _kChecked = 'install_referrer_checked';
+  static const _kInstallChannel = 'install_channel';
+  static const _kInstallSource = 'install_utm_source';
+  static const _kInstallCampaign = 'install_utm_campaign';
+  static const _kInstallLink = 'install_link_kind';
 
   /// The shareable Play Store link that embeds [code] for attribution.
   ///
@@ -108,6 +112,82 @@ class InstallReferrerService {
 
   /// Extract our referral code from a raw install-referrer string.
   /// Handles both the "ref=CODE" query form we set and a bare code, and rejects junk.
+  /// Where this install came from, read off the Play referrer ONCE and stamped on every sign-in
+  /// event — the split PostHog could not make on its own ("is the Tamil Nadu gap the ad audience?").
+  ///
+  /// `install_channel`: `google_ads` (a `gclid`, or utm_source google / utm_medium cpc), `meta_ads`
+  /// (utm_source naming facebook/instagram/meta), `organic` (Play's own `google-play`/`organic`
+  /// pair), `share` (a friend's referral code), `link` (one of our /w or /r links with no ad tag),
+  /// `other` (some other utm_source) or `unknown` (a referrer with none of the above). No referrer at
+  /// all stamps nothing. `install_utm_source` / `install_utm_campaign` are the raw tags, clipped.
+  @visibleForTesting
+  static Map<String, String> parseAttribution(String raw) {
+    Map<String, String> params;
+    try {
+      params = Uri.splitQueryString(raw.trim());
+    } catch (_) {
+      return const {};
+    }
+    String? clip(String? v, int max) {
+      final t = v?.trim().toLowerCase();
+      if (t == null || t.isEmpty) return null;
+      return t.length <= max ? t : t.substring(0, max);
+    }
+
+    final source = clip(params['utm_source'], 40);
+    final medium = clip(params['utm_medium'], 40);
+    final campaign = clip(params['utm_campaign'], 60);
+    final String channel;
+    if (params.containsKey('gclid') ||
+        source == 'google' ||
+        source == 'google_ads' ||
+        source == 'adwords' ||
+        medium == 'cpc') {
+      channel = 'google_ads';
+    } else if (source != null &&
+        (source.contains('facebook') ||
+            source.contains('instagram') ||
+            source.contains('meta') ||
+            source == 'fb' ||
+            source == 'ig')) {
+      channel = 'meta_ads';
+    } else if (source == 'google-play' && medium == 'organic') {
+      channel = 'organic';
+    } else if (parseReferralCode(raw) != null) {
+      channel = 'share';
+    } else if (params.containsKey('w') ||
+        params.containsKey('r') ||
+        params.containsKey('screen')) {
+      channel = 'link';
+    } else if (source != null) {
+      channel = 'other';
+    } else {
+      channel = 'unknown';
+    }
+    return {
+      _kInstallChannel: channel,
+      _kInstallSource: ?source,
+      _kInstallCampaign: ?campaign,
+    };
+  }
+
+  /// The persisted attribution as event properties; empty until the referrer has landed.
+  ///
+  /// An install that arrived on a wallpaper or ringtone link carries it as a suffix on the SAME
+  /// property — `google_ads+wallpaper`, `meta_ads+ringtone` — so no new parameter exists and the
+  /// part before `+` still reads as the channel. A link with no referrer answer yet is `unknown+…`.
+  Map<String, Object> get attributionProps {
+    final link = _nonEmpty(_prefs.getString(_kInstallLink));
+    final channel =
+        _nonEmpty(_prefs.getString(_kInstallChannel)) ??
+        (link == null ? null : 'unknown');
+    return {
+      _kInstallChannel: ?(link == null ? channel : '$channel+$link'),
+      _kInstallSource: ?_nonEmpty(_prefs.getString(_kInstallSource)),
+      _kInstallCampaign: ?_nonEmpty(_prefs.getString(_kInstallCampaign)),
+    };
+  }
+
   @visibleForTesting
   static String? parseReferralCode(String? raw) {
     if (raw == null) return null;
@@ -191,6 +271,10 @@ class InstallReferrerService {
     }
 
     if (raw != null) {
+      final attribution = parseAttribution(raw);
+      for (final MapEntry(:key, :value) in attribution.entries) {
+        await _prefs.setString(key, value);
+      }
       final code = parseReferralCode(raw);
       if (code != null) {
         await _prefs.setString(_kPendingCode, code);
@@ -228,6 +312,8 @@ class InstallReferrerService {
   /// Persisting BEFORE the live request is load-bearing -> a process death is re-seeded at startup.
   /// Last write wins across kinds — a ringtone replaces a pending wallpaper, never both keys.
   /// A tab-only target is NOT persisted: losing that race just lands the user on the default tab.
+  /// Only install-time deliveries reach here, so the kind is also kept for [attributionProps] — and,
+  /// unlike the pending target, never cleared once the tab has shown it.
   Future<void> queueTarget(DeepLinkTarget target) async {
     switch (target) {
       case WallpaperLinkTarget(:final id, :final source):
@@ -236,6 +322,7 @@ class InstallReferrerService {
         await _prefs.setString(_kPendingWallpaper, normalized);
         await _prefs.remove(_kPendingRingtone);
         await _prefs.setString(_kPendingSource, source.key);
+        await _prefs.setString(_kInstallLink, target.kind);
         ArulDeepLink.requestTarget(
           WallpaperLinkTarget(normalized, source: source),
         );
@@ -245,10 +332,16 @@ class InstallReferrerService {
         await _prefs.setString(_kPendingRingtone, normalized);
         await _prefs.remove(_kPendingWallpaper);
         await _prefs.setString(_kPendingSource, source.key);
+        await _prefs.setString(_kInstallLink, target.kind);
         ArulDeepLink.requestTarget(
           RingtoneLinkTarget(normalized, source: source),
         );
+      // Not persisted, handed straight to the live app. A tab-only target loses nothing by losing
+      // the startup race; the other two are push-only (no URL parses into a category or the premium
+      // screen), so nothing deferred can ever reach this branch carrying one.
       case TabLinkTarget():
+      case CategoryLinkTarget():
+      case PremiumLinkTarget():
         ArulDeepLink.requestTarget(target);
     }
   }

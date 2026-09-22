@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest.dart' as tzdata;
+// The 10-year database (five years either side of the data build), a quarter of the default one's
+// 270 KB inside libapp.so. Every reminder lands within a few years, and a date past the truncation
+// still resolves on the zone's last rule — Asia/Kolkata has had one since 1945.
+import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../domain/devotional_event.dart';
@@ -41,8 +44,9 @@ class NotificationAudit {
 
 /// Owns the [FlutterLocalNotificationsPlugin] and turns [NotificationSettings] into local alarms.
 ///
-/// Fully on-device: **no FCM, no network, no server** -> no content ever leaves the phone.
-/// That is also why there is no push channel to promise users elsewhere in the app.
+/// The REMINDERS are fully on-device: no network, no server, nothing leaves the phone.
+/// This class also creates the CAMPAIGN channel ([updatesChannelId]) but never posts to it — FCM shows
+/// those itself, and the channel has to exist before a message arrives (docs/push.md).
 ///
 ///  * **Weekly** ([weeklyDevotionalDays]) — a native recurring alarm, armed once, repeated by the OS;
 ///  * **Festivals** ([festivalEvents]) — one-shot; a lunisolar festival has no recurrence rule.
@@ -61,6 +65,9 @@ class NotificationService {
   // The KEYS are the identity, never these numbers.
   static const _weeklyIdBase = 1000;
   static const _festivalIdBase = 2000;
+
+  /// The unfinished-trial reminder. One at a time, so ONE id, clear of both ranges above.
+  static const _trialReminderId = 3000;
   static const _testId = 9999;
 
   /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.
@@ -92,6 +99,23 @@ class NotificationService {
   static const _festivalChannelId = 'arul_festivals_v1';
   static const _festivalChannelName = 'Festival reminders';
 
+  /// The CMS campaign channel (docs/push.md). Created by THIS class even though nothing here ever
+  /// posts to it: FCM shows those notifications itself, and the id in the payload has to already
+  /// exist on the device or FCM silently falls back to the manifest's default channel.
+  ///
+  /// Created at EVERY launch, never at opt-in, and that is the point on Android 8–12: those phones
+  /// have no runtime permission, so the channel IS the user's control — and a phone that upgrades to
+  /// 13 later is auto-granted only if a channel already exists and notifications were not disabled.
+  /// **The id is immutable once a device has seen it** — a new one appears as a second, empty toggle
+  /// in system settings. Getting it right the first time is the whole reason for the `_v1` suffix.
+  static const updatesChannelId = 'arul_updates_v1';
+
+  /// Fallback until [setUpdatesChannelName] supplies the user's language. Name and description ARE
+  /// mutable (importance may only be lowered, sound never changes), so renaming costs one Binder call.
+  static const _defaultUpdatesChannelName = 'Updates from Arul';
+
+  String _updatesChannelName = _defaultUpdatesChannelName;
+
   /// Superseded channels, deleted on init -> no stale duplicates in the system notification settings.
   static const _legacyChannelIds = <String>[];
 
@@ -109,6 +133,12 @@ class NotificationService {
   /// Set once the router exists -> a notification tap opens the feed on the right category.
   /// Null until then — an early tap just opens the app, which is the correct fallback.
   void Function(String category)? onOpenCategory;
+
+  /// Tapped the unfinished-trial reminder — the paywall, not a category.
+  void Function()? onOpenTrialReminder;
+
+  /// Payload marking [_trialReminderId], distinguishable from every category slug.
+  static const trialReminderPayload = 'arul_trial_reminder';
 
   /// One-time setup: timezone database, plugin init, channel creation.
   /// Prompts for NO permission — that is opt-in ([requestPermissions]). Single-flight via [_initFuture].
@@ -151,12 +181,39 @@ class NotificationService {
             sound: _chime,
           ),
         ),
+        android.createNotificationChannel(_updatesChannel()),
         for (final id in _legacyChannelIds)
           android.deleteNotificationChannel(channelId: id),
       ],
     ]);
 
     _initialized = true;
+  }
+
+  /// The campaign channel. `defaultImportance`, not high: these are ours to send, not the user's to
+  /// expect, so they belong in the shade rather than as a heads-up banner over whatever they are
+  /// doing. No custom sound — referencing the absent `arul_bell` raw resource fails channel creation
+  /// outright, which would take the reminder channels down with it.
+  AndroidNotificationChannel _updatesChannel() => AndroidNotificationChannel(
+    updatesChannelId,
+    _updatesChannelName,
+    description: 'New wallpapers, ringtones and offers',
+    importance: Importance.defaultImportance,
+  );
+
+  /// Rename the campaign channel into the user's language, and on every later language change.
+  ///
+  /// Re-creating with the same id UPDATES the name; only importance (downward) and the sound are
+  /// pinned. Cheap enough to call whenever the locale settles, and a no-op before [initialize].
+  Future<void> setUpdatesChannelName(String name) async {
+    if (name.isEmpty || name == _updatesChannelName) return;
+    _updatesChannelName = name;
+    if (!_initialized) return;
+    try {
+      await _android?.createNotificationChannel(_updatesChannel());
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] updates channel rename failed: $e');
+    }
   }
 
   /// Resolve the device IANA zone → `tz.local`. Independent of plugin init, so it overlaps it.
@@ -175,6 +232,11 @@ class NotificationService {
   void _onTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;
+    // The one payload that is not a category. Checked first — a slug can never collide with it.
+    if (payload == trialReminderPayload) {
+      onOpenTrialReminder?.call();
+      return;
+    }
     onOpenCategory?.call(payload);
   }
 
@@ -203,6 +265,36 @@ class NotificationService {
     }
   }
 
+  /// The same MainActivity channel shape the ringtone Set uses for `WRITE_SETTINGS`:
+  /// ask whether the grant screen is the only route left, then deep-link to it.
+  static const _settingsChannel = MethodChannel(
+    'com.hsrutility.arul/notification_settings',
+  );
+
+  /// True when the permission is refused AND Android will no longer show its dialog.
+  /// Only meaningful right after a [requestPermissions] that came back false.
+  Future<bool> notificationsBlocked() async {
+    try {
+      return await _settingsChannel.invokeMethod<bool>(
+            'notificationsBlocked',
+          ) ??
+          false;
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] blocked check failed: $e');
+      return false;
+    }
+  }
+
+  /// Opens Android's notification page for Arul — the toast names phone settings,
+  /// so the tap has to land there rather than leaving the user to find it.
+  Future<void> openNotificationSettings() async {
+    try {
+      await _settingsChannel.invokeMethod<void>('openNotificationSettings');
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] open settings failed: $e');
+    }
+  }
+
   /// Whether the OS currently allows posting — it can be revoked in settings at any time.
   ///
   /// Null means UNKNOWN, never denied -> reading it as no would wipe a valid opt-in on an OEM build.
@@ -211,9 +303,18 @@ class NotificationService {
 
   /// Cancels everything and re-schedules from [settings] — idempotent, safe on every change and launch.
   /// Accepting notifications enables the WHOLE set; there are no per-event opt-ins.
+  /// Cancels everything and re-schedules from [settings].
+  ///
+  /// It cancels every PENDING one, including the unfinished-trial reminder, which these settings do
+  /// not own: ids are derived from list INDEXES, so a reordered or shortened list leaves orphans that
+  /// only a cancel-all reaches. `notificationBootstrap` re-arms the trial reminder afterwards from its
+  /// persisted instant — that ordering is the contract, and it is why the instant is persisted.
+  ///
+  /// PENDING only, never the plugin's `cancelAll`: that also clears what is ON SCREEN, campaign pushes
+  /// included, and this runs on every launch — opening Arul from its icon wiped unread campaigns.
   Future<void> applySettings(NotificationSettings settings) async {
     if (!_initialized) await initialize();
-    await _plugin.cancelAll();
+    await _plugin.cancelAllPendingNotifications();
     if (!settings.masterEnabled) return;
 
     // Exact alarms need a special-access permission that shows on the Play listing -> inexact.
@@ -224,11 +325,12 @@ class NotificationService {
     await _scheduleFestivals(settings, mode);
   }
 
-  Future<void> cancelAll() async {
-    // cancelAll on an UN-initialised plugin silently no-ops, and setup is deferred off startup.
+  /// Disarms every scheduled reminder; what is already on screen (campaign pushes too) stays.
+  Future<void> cancelAllPending() async {
+    // A cancel on an UN-initialised plugin silently no-ops, and setup is deferred off startup.
     // So self-initialise here; initialize() is single-flight and never triggers a second setup.
     if (!_initialized) await initialize();
-    await _plugin.cancelAll();
+    await _plugin.cancelAllPendingNotifications();
   }
 
   Future<void> _scheduleWeekly(
@@ -384,6 +486,49 @@ class NotificationService {
       festivalsExpected: festivalEvents.length,
       titles: armed.map((n) => n.title ?? '(untitled)').toList(),
     );
+  }
+
+  /// Arms the ONE unfinished-trial reminder for [due]. False when nothing was scheduled.
+  ///
+  /// NEVER requests the permission: this fires from a payment failing, which is not an opt-in to
+  /// notifications. A user who has not already said yes simply gets no reminder — the row on the
+  /// feed is what covers them.
+  Future<bool> scheduleTrialReminder({
+    required DateTime due,
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) await initialize();
+    if (await areNotificationsEnabled() != true) return false;
+    final when = tz.TZDateTime.from(due, tz.local);
+    if (!when.isAfter(tz.TZDateTime.now(tz.local))) return false;
+    try {
+      await _plugin.zonedSchedule(
+        id: _trialReminderId,
+        title: title,
+        body: body,
+        scheduledDate: when,
+        // The EXISTING weekly channel, never a new one: a channel's sound is immutable once created
+        // and a new id would show up as a second toggle in the system settings for one reminder.
+        notificationDetails: _details(
+          _weeklyChannelId,
+          _weeklyChannelName,
+          body: body,
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: trialReminderPayload,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[TrialNudge] reminder not scheduled: $e');
+      return false;
+    }
+  }
+
+  /// Drops the unfinished-trial reminder — the trial was finished, or the marker aged out.
+  Future<void> cancelTrialReminder() async {
+    if (!_initialized) await initialize();
+    await _plugin.cancel(id: _trialReminderId);
   }
 
   /// Fires a one-off notification [delay] from now -> the user confirms reminders actually arrive.

@@ -15,6 +15,10 @@ paths:
 - **Schemes are hand-specified, NOT `ColorScheme.fromSeed`** — it invents its own secondary and
   tertiary. **Never seed from device wallpaper or dynamic color.**
 - Light, Dark and System are all required, and the choice is persisted.
+- **Every animation routes through `context.reduceMotion`** (`lib/app/theme/motion.dart`) and HOLDS at
+  its resting state rather than being removed. It is true on `MediaQuery.disableAnimations` (a11y and
+  battery saver) or `DeviceTier.low`. Arm repeating controllers from `didChangeDependencies`.
+- **`DeviceQuality` tiers buy COST, never composition** — never branch layout on the tier.
 - **The UI is Arul's own** — never clone Pakiza's look or sync a theme change. The single exception is
   `ArulEarnButton`, a deliberate port (CLAUDE.md §0).
 - Perf rules SHAPE the design and are not optional polish: no glassmorphism anywhere including the

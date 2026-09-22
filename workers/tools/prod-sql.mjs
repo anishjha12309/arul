@@ -19,10 +19,12 @@ import postgres from "postgres";
 
 const args = process.argv.slice(2);
 const allowWrite = args.includes("--write");
-const statement = args.filter((a) => a !== "--write")[0];
+// `--debug` targets the `debug` Neon branch (DEBUG_DATABASE_URL) instead of production (DATABASE_URL).
+const useDebug = args.includes("--debug");
+const statement = args.filter((a) => a !== "--write" && a !== "--debug")[0];
 
 if (!statement || !statement.trim()) {
-  console.error('usage: node tools/prod-sql.mjs [--write] "<SQL>"');
+  console.error('usage: node tools/prod-sql.mjs [--write] [--debug] "<SQL>"');
   process.exit(2);
 }
 
@@ -47,17 +49,25 @@ if (/^\s*(update|delete)\b/i.test(stripped) && !/\bwhere\b/i.test(stripped)) {
   process.exit(1);
 }
 
+// Named variable, not "the first postgres:// in the file" — .dev.vars holds several, and the debug
+// branch must never be reachable by accident from a prod command or the other way round.
+const key = useDebug ? "DEBUG_DATABASE_URL" : "DATABASE_URL";
 const m = fs
   .readFileSync(new URL("../.dev.vars", import.meta.url), "utf8")
-  .match(/postgres(?:ql)?:\/\/[^\s"']+/);
+  .match(new RegExp(`^${key}=\\s*"?(postgres(?:ql)?:\\/\\/[^\\s"']+)`, "m"));
 if (!m) {
-  console.error("No postgres connection string found in workers/.dev.vars");
+  console.error(`No ${key} in workers/.dev.vars`);
   process.exit(1);
 }
 
-if (isWrite) console.warn(`[prod-sql] WRITING to production: ${stripped.slice(0, 120)}`);
+// The target word is the one signal a human reads before a write lands — keep it loud and exact.
+if (isWrite) {
+  console.warn(
+    `[prod-sql] WRITING to ${useDebug ? "debug branch" : "production"}: ${stripped.slice(0, 120)}`,
+  );
+}
 
-const sql = postgres(m[0], { ssl: "require", prepare: false, connect_timeout: 10 });
+const sql = postgres(m[1], { ssl: "require", prepare: false, connect_timeout: 10 });
 try {
   console.log(JSON.stringify(await sql.unsafe(stripped), null, 2));
 } finally {

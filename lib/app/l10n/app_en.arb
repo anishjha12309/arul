@@ -10,10 +10,11 @@
   "feedErrorBody": "Check your connection and try again.",
   "retry": "Retry",
   "errorGeneric": "Something went wrong.",
-  "signInHeadline": "Wallpapers worth waking up to",
-  "signInBody": "Sign in to apply, share and keep your collection across devices.",
+  "signInCaption": "Bring the divine home",
   "signInGoogle": "Continue with Google",
-  "signInTerms": "By continuing you agree to our Terms and Privacy Policy.",
+  "signInSubtitleIdle": "Choose an account to start",
+  "signInSubtitleExchanging": "Signing you in…",
+  "signInNudgeRetry": "Click here to sign in",
   "premiumTitle": "Premium",
   "premiumHeadline": "Unlock every wallpaper",
   "premiumSub": "Browsing is always free. Premium is for making them yours.",
@@ -82,6 +83,14 @@
   "ringtoneSet": "Set",
   "ringtonePreviewSemantic": "Preview",
   "ringtonePreviewUnavailable": "Preview not available yet",
+  "ringtoneVolumeMuted": "Turn up the volume to hear this preview",
+  "@ringtoneVolumeMuted": {
+    "description": "Toast shown when a ringtone preview is tapped while the phone’s media volume is at zero or it is on silent — nothing would be heard, so the preview does not start. Keep it an instruction, not an error."
+  },
+  "ringtoneCurrentBadge": "Current",
+  "@ringtoneCurrentBadge": {
+    "description": "Tiny badge on the ringtone row that is the phone’s CURRENT ringtone. One short word; it sits in a pill a few characters wide."
+  },
   "ringtonesEmptyTitle": "Ringtones are coming soon",
   "ringtonesEmptyBody": "Devotional ringtones are on their way. Check back soon.",
   "ringtonesErrorTitle": "Couldn't load ringtones",
@@ -95,7 +104,6 @@
   "errorGenericRetry": "Something went wrong. Please try again.",
   "settingsFallbackName": "Your account",
   "settingsFallbackEmail": "Signed in with Google",
-  "settingsPremiumSubLocked": "Unlock apply & share",
   "settingsPremiumSubTrial": "You're on the free trial",
   "settingsPremiumSubCancelled": "Auto-renew off · access continues",
   "settingsPremiumSubActive": "You're a member",
@@ -107,7 +115,11 @@
   "settingsLanguage": "Language",
   "settingsTheme": "Theme",
   "settingsNeedHelp": "Need help?",
-  "settingsNeedHelpSub": "Contact support",
+  "settingsNeedHelpSub": "Support and subscription",
+  "settingsHelpSupport": "Contact support",
+  "settingsHelpSupportSub": "Write to us by email",
+  "settingsHelpManage": "Manage subscription",
+  "settingsHelpDeleteSub": "Remove your account",
   "settingsUpload": "Upload your content",
   "settingsUploadSub": "Share a wallpaper or ringtone",
   "settingsLogout": "Logout",
@@ -115,8 +127,8 @@
   "settingsLogoutConfirmBody": "You can sign back in anytime with Google.",
   "settingsDeleteAccount": "Delete account",
   "settingsDeleteConfirmTitle": "Delete account?",
-  "settingsDeleteConfirmBody": "This removes your account, favourites and rewards for good.",
-  "settingsDeleteConfirmBodyPremium": "This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.",
+  "settingsDeleteConfirmBody": "This can't be undone.",
+  "settingsDeleteConfirmBodyPremium": "Premium ends now. The days left aren't refunded, and a new account won't get a free trial.",
   "settingsTerms": "Terms & Conditions",
   "settingsRefund": "Refund policy",
   "settingsSupportEmailPrompt": "Please describe your issue or feedback:",
@@ -155,7 +167,6 @@
   "remindersMonthOct": "Oct",
   "remindersMonthNov": "Nov",
   "remindersMonthDec": "Dec",
-  "premiumBrandTitle": "Arul Premium",
   "premiumScreenSubline": "The full collection, alive on your screen",
   "premiumPerkEvery": "Every wallpaper, still and live",
   "premiumPerkApplyShare": "Apply and share without limits",
@@ -256,11 +267,97 @@
   "premiumCtaSubscribe": "Subscribe Now",
   "premiumReassuranceTrial": "₹2 verification, refunded instantly · Cancel anytime",
   "premiumReassurancePaid": "Secured by UPI Autopay · Cancel anytime in one tap",
+  "premiumQrTitleTrial": "Scan to start your free trial",
+  "@premiumQrTitleTrial": {
+    "description": "Title of the QR sheet on the free-trial variant."
+  },
+  "premiumQrTitlePaid": "Scan to subscribe",
+  "@premiumQrTitlePaid": {
+    "description": "Title of the QR sheet when the trial is already spent and the charge is the full price."
+  },
+  "premiumQrInstruction": "Open any UPI app on another phone and scan this code.",
+  "@premiumQrInstruction": {
+    "description": "The one instruction on the QR sheet. 'Another phone' is the point: this phone has no UPI app, which is why the code is here at all."
+  },
+  "premiumQrExpiresIn": "Code expires in {time}",
+  "@premiumQrExpiresIn": {
+    "description": "Countdown under the QR. The deadline is PhonePe's own, read out of the link, so it is short — often five minutes.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "4:32"
+      }
+    }
+  },
+  "premiumQrWaiting": "Waiting for approval…",
+  "@premiumQrWaiting": {
+    "description": "Status line while the server is being polled. Nobody returns to the app on this path, so this line is all the feedback there is until the mandate settles."
+  },
+  "premiumQrCheck": "I have paid",
+  "@premiumQrCheck": {
+    "description": "Button on the QR sheet for someone who has just approved the mandate on the other phone and does not want to wait for the next poll. It only asks the server sooner; it can never settle anything the poll would not."
+  },
+  "premiumResumeCta": "Open {app} again",
+  "@premiumResumeCta": {
+    "description": "The paywall's main button once the user has come back from their UPI app with the mandate still unapproved. It re-opens the SAME mandate link — never a new payment — so it must read as continuing, not as paying twice. {app} is the UPI app's own name from the phone (PhonePe, Google Pay, Paytm), never translated.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumResumeHintTrial": "Approve the ₹2 verification in {app} to start your trial.",
+  "@premiumResumeHintTrial": {
+    "description": "Replaces the reassurance line while a mandate is waiting to be approved, on the free-trial variant. The audience is not payment-literate: say the one thing that has to happen, in the app it has to happen in. ₹2 is the penny-drop the trial mandate charges and refunds.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumResumeHintPaid": "Approve the payment in {app} to continue.",
+  "@premiumResumeHintPaid": {
+    "description": "The same waiting-for-approval line on the paid variant, where there is no trial and no ₹2 — the first charge is the monthly price.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "PhonePe"
+      }
+    }
+  },
+  "premiumUpiAppGeneric": "your UPI app",
+  "@premiumUpiAppGeneric": {
+    "description": "Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences. ta/te/kn/ml add their own word for 'app' AFTER {app} in those lines, so their value here must NOT end in it — it rendered 'your UPI app app'."
+  },
+  "trialNudgeRow": "Finish setting up your free trial",
+  "trialNudgeDismiss": "Dismiss",
+  "trialReminderTitle": "Your free trial is waiting",
+  "trialReminderBody": "You didn't finish setting up. Tap to try again — it takes a moment.",
   "premiumSelectedUpiApp": "Selected UPI App",
   "upiPickerTitle": "Pay using",
   "upiPickerLastUsed": "Last used",
+  "upiPickerQrTitle": "Pay with QR",
+  "@upiPickerQrTitle": {
+    "description": "Last row of the UPI picker, under the installed apps. Opens the same scannable mandate code a phone with no UPI app gets on its CTA. A one-time route, never remembered as the default."
+  },
+  "upiPickerQrSubtitle": "Scan from another phone",
+  "@upiPickerQrSubtitle": {
+    "description": "Second line of the QR row in the UPI picker. The mandate link carries no app binding, so it can be approved on any phone — which is the whole reason this row exists beside the installed apps."
+  },
   "premiumTrialFinePrint": "Then {price}/month via autopay. Cancel anytime.",
   "@premiumTrialFinePrint": {
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "premiumPaidFinePrint": "{price}/month via autopay. Cancel anytime.",
+  "@premiumPaidFinePrint": {
+    "description": "The price-card fine print on the PAID paywall variant, under the ₹199 lockup. Same sentence as premiumTrialFinePrint without the \"Then\" — a trial-consumed user is charged the month up front, so nothing precedes it. A commercial statement: the monthly renewal and the cancel-anytime right must both survive translation.",
     "placeholders": {
       "price": {
         "type": "String",
@@ -280,5 +377,49 @@
         "example": "Madurai"
       }
     }
+  },
+  "pushChannelName": "Updates from Arul",
+  "@pushChannelName": {
+    "description": "Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push."
+  },
+  "purchaseErrorNetwork": "No internet. Check your connection and try again.",
+  "@purchaseErrorNetwork": {
+    "description": "Toast on /premium when the checkout could not reach the server after its retries. The one payment failure the user can fix themselves."
+  },
+  "purchaseErrorGeneric": "Something went wrong. Please try again.",
+  "@purchaseErrorGeneric": {
+    "description": "Toast on /premium for a checkout failure with no more specific line."
+  },
+  "purchaseCancelled": "Payment cancelled.",
+  "@purchaseCancelled": {
+    "description": "Neutral toast on /premium when the user backed out of the PhonePe payment page themselves."
+  },
+  "purchaseInterrupted": "Payment was interrupted. Please try again.",
+  "@purchaseInterrupted": {
+    "description": "Toast on /premium when the PhonePe payment page was interrupted before finishing."
+  },
+  "purchaseNotCompleted": "Payment was not completed. Please try again.",
+  "@purchaseNotCompleted": {
+    "description": "Toast on /premium when the PhonePe payment page ended without a completed payment."
+  },
+  "purchaseInProgress": "A payment setup is already in progress. Please wait a few seconds and try again.",
+  "@purchaseInProgress": {
+    "description": "Toast on /premium when another payment setup by the same user is still running on the server."
+  },
+  "purchaseUpiLaunchFailed": "Could not open your UPI app. Please try again.",
+  "@purchaseUpiLaunchFailed": {
+    "description": "Toast on /premium when the chosen UPI app could not be opened."
+  },
+  "purchaseIntentFailed": "Payment failed. Any amount deducted will be refunded to your account within 4–5 days.",
+  "@purchaseIntentFailed": {
+    "description": "The ONE failure line the UPI-app flow shows. A commercial statement: the refund hedge is conditional ('any amount deducted') and the 4–5 days must survive translation."
+  },
+  "purchaseActivateFailed": "We couldn't activate your subscription. Please contact support.",
+  "@purchaseActivateFailed": {
+    "description": "Toast on /premium when the server reports a terminal state it cannot activate from."
+  },
+  "purchaseConfirmationLate": "Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.",
+  "@purchaseConfirmationLate": {
+    "description": "Toast on /premium when the payment may have gone through but the server has not confirmed it yet. A commercial statement."
   }
 }

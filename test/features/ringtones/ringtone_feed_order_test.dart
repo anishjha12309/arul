@@ -23,6 +23,8 @@ Ringtone _rt(
   String category = 'murugan',
   int setCount = 0,
   int? feedRank,
+  DateTime? publishedAt,
+  DateTime? renewedAt,
 }) => Ringtone(
   id: id,
   title: id,
@@ -30,6 +32,8 @@ Ringtone _rt(
   audioKey: '$id.mp3',
   setCount: setCount,
   feedRank: feedRank,
+  publishedAt: publishedAt,
+  renewedAt: renewedAt,
 );
 
 void main() {
@@ -96,18 +100,46 @@ void main() {
     },
   );
 
-  test(
-    'with nothing pinned and nothing set, the list IS catalog order',
-    () async {
-      // The zero state is the intended default, not a fallback -> every comparison falls through to catalog position.
-      // build-catalog already emits that order -> nothing client-side re-derives it.
-      final catalog = [
-        _rt('a', category: 'amman'),
-        _rt('b', category: 'sivan'),
-        _rt('c', category: 'others'),
-      ];
+  test('the New chip leads with the renewed track, not the pin', () async {
+    // New has its own order (test/features/wallpapers/new_category_test.dart proves the tiers) -> pinned
+    // here is that the tab's provider reaches it, with the real clock, instead of the All comparator.
+    final now = DateTime.now();
+    final catalog = [
+      _rt(
+        'pinned',
+        feedRank: 10,
+        setCount: 500,
+        publishedAt: now.subtract(const Duration(days: 2)),
+      ),
+      _rt('debut', publishedAt: now.subtract(const Duration(hours: 1))),
+      _rt(
+        'renewed',
+        publishedAt: now.subtract(const Duration(hours: 3)),
+        renewedAt: now.subtract(const Duration(hours: 3)),
+      ),
+    ];
 
-      expect(await feed(catalog, WallpaperCategory.allSlug), ['a', 'b', 'c']);
-    },
-  );
+    expect(await feed(catalog, WallpaperCategory.newSlug), [
+      'renewed',
+      'debut',
+      'pinned',
+    ]);
+    expect(await feed(catalog, WallpaperCategory.allSlug), [
+      'pinned',
+      'debut',
+      'renewed',
+    ]);
+  });
+
+  test('with nothing pinned and nothing set, the list IS catalog order', () async {
+    // The zero state is the intended default, not a fallback -> every comparison falls through to catalog position.
+    // build-catalog already emits that order -> nothing client-side re-derives it.
+    final catalog = [
+      _rt('a', category: 'amman'),
+      _rt('b', category: 'sivan'),
+      _rt('c', category: 'others'),
+    ];
+
+    expect(await feed(catalog, WallpaperCategory.allSlug), ['a', 'b', 'c']);
+  });
 }

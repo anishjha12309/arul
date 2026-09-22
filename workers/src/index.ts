@@ -21,6 +21,7 @@ import {
   handleRingtoneLink,
   handleRootLink,
 } from "./routes/deeplink.js";
+import { handleGeo } from "./routes/geo.js";
 import {
   handleInitiate,
   handleWebhook,
@@ -36,6 +37,9 @@ import {
   handleMeSubscription,
   handleMeSubmissions,
   handleMeReferrals,
+  handleRegisterDevice,
+  handleRegisterAnonDevice,
+  handlePushOpened,
 } from "./routes/me.js";
 import {
   handleBuildCatalog,
@@ -43,11 +47,15 @@ import {
   handleSweepCanonical,
   handleRunRedemptions,
   handleRefund,
+  handlePushCount,
+  handlePushDispatch,
+  handlePushTest,
 } from "./routes/internal.js";
 import { buildCatalog, refreshPopularityOrder } from "./cron/build-catalog.js";
 import { sweepSubmissions } from "./cron/sweep-submissions.js";
 import { sweepCanonical } from "./cron/sweep-canonical.js";
 import { runAutopayNotify } from "./cron/autopay-notify.js";
+import { runPushDispatch, sweepPush } from "./cron/push-dispatch.js";
 
 // ── App ───────────────────────────────────────────────────────────────────────
 
@@ -76,6 +84,9 @@ app.use("/*", async (c, next) => {
 app.get("/.well-known/assetlinks.json", handleAssetLinks);
 app.get("/w/:id", handleWallpaperLink);
 app.get("/r/:id", handleRingtoneLink);
+// Hono routes strictly -> a pasted `/w/<id>/?lang=ta` 404ed at every visitor without the app
+app.get("/w/:id/", handleWallpaperLink);
+app.get("/r/:id/", handleRingtoneLink);
 // `/w/?lang=hi` is a language-only campaign link and the app's pathPrefix filter already matches it
 // A 404 here -> the same URL opens the app for one person and an error page for the next -> redirect instead
 // Ad ops paste both slash forms -> register both
@@ -85,6 +96,10 @@ app.get("/r/", handleRingtoneLink);
 app.get("/r", handleRingtoneLink);
 // The bare link domain only (never the API host) — see handleRootLink.
 app.get("/", handleRootLink);
+
+// ── Region hint (PUBLIC — the app's first launch, no JWT) ─────────────────────
+// Read once per fresh install from request.cf -> host-agnostic, so pre-rename workers.dev installs get it too
+app.get("/geo", handleGeo); // routes/geo.ts -> no DB, no KV, no limiter
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);
@@ -111,6 +126,10 @@ app.delete("/me", handleDeleteAccount); // revoke mandate → tombstone → casc
 app.get("/me/subscription", handleMeSubscription);
 app.get("/me/submissions", handleMeSubmissions);
 app.get("/me/referrals", handleMeReferrals);
+// Campaign push (docs/push.md). ADDITIVE — builds 68-74 never call either and keep working untouched.
+app.post("/me/device", handleRegisterDevice);       // JWT — register this phone's FID in the registry
+app.post("/me/push-opened", handlePushOpened);      // JWT — this person tapped campaign <id>
+app.post("/push/device", handleRegisterAnonDevice); // PUBLIC — a signed-out phone; never writes user_id
 
 // ── Internal routes ───────────────────────────────────────────────────────────
 app.post("/internal/build-catalog", handleBuildCatalog);
@@ -118,6 +137,11 @@ app.post("/internal/sweep-submissions", handleSweepSubmissions);
 app.post("/internal/sweep-canonical", handleSweepCanonical);
 app.post("/internal/run-redemptions", handleRunRedemptions); // testing: force notify+execute
 app.post("/internal/refund", handleRefund);                  // operator/support: ₹199 refund
+// Campaign push, guarded by PUSH_SECRET -> a THIRD secret: one string must not both rebuild the
+// catalog and message every user. Literal paths, and none of them collides with a /:id route here.
+app.post("/internal/push/count", handlePushCount);       // CMS composer's live audience counts
+app.post("/internal/push/dispatch", handlePushDispatch); // "send now" -> starts a pass in seconds
+app.post("/internal/push/test", handlePushTest);         // "send to my phone" -> is_internal devices only
 
 // Authoring lives in the unified CMS worker (hsr-cms) -> this worker has no /admin -> see README
 // hsr-cms reaches it through the ARUL_API service binding + /internal/build-catalog
@@ -203,6 +227,30 @@ const worker: WorkerType = {
       );
     }
 
+    // "* * * * *" -> campaign push. ITS OWN invocation like autopay: a 60k-phone drain must never
+    // share a wall clock or a subrequest budget with the catalog rebuild, and a send that stops
+    // halfway is invisible — nobody reports a notification that never arrived.
+    // Claims nothing at all while PUSH_ENABLED is not exactly "true" (runPushDispatch checks first).
+    if (event.cron === "* * * * *") {
+      ctx.waitUntil(
+        runPushDispatch(env)
+          .then((result) => {
+            // Silent on an idle minute -> at 1,440 ticks a day a line per tick buries every
+            // console.error in the retention window, and those are this Worker's only failure signal.
+            // The disabled state still gets ONE line an hour, so a dark switch leaves a breadcrumb
+            // rather than looking identical to a cron that never fires.
+            if (result.started + result.attempted > 0) {
+              console.log("[cron] Push dispatch:", JSON.stringify(result));
+            } else if (result.skipped && new Date().getUTCMinutes() === 0) {
+              console.log(`[cron] Push dispatch idle — ${result.skipped}`);
+            }
+          })
+          .catch((err: unknown) => {
+            console.error("[cron] Push dispatch failed:", err);
+          }),
+      );
+    }
+
     // "30 21 * * *" -> off-peak -> unconditional sweeps for what the on-change sweep and inline cleanups miss
     if (event.cron === "30 21 * * *") {
       console.log("[cron] Running daily canonical + submission sweeps");
@@ -220,6 +268,17 @@ const worker: WorkerType = {
           console.log("[cron] Submission sweep complete:", JSON.stringify(result));
         }).catch((err: unknown) => {
           console.error("[cron] Submission sweep failed:", err);
+        }),
+      );
+
+      // Push retention: 30-day delivery rows, 270-day dead registrations (FCM's own GC horizon), and
+      // uploaded `push/` pictures nothing references. That prefix sits OUTSIDE CANONICAL_PREFIXES, so
+      // the canonical sweep never sees it — this is its only cleanup.
+      ctx.waitUntil(
+        sweepPush(env).then((result) => {
+          console.log("[cron] Push sweep complete:", JSON.stringify(result));
+        }).catch((err: unknown) => {
+          console.error("[cron] Push sweep failed:", err);
         }),
       );
 

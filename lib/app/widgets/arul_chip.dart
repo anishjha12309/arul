@@ -28,6 +28,7 @@ class ArulChip extends StatelessWidget {
     required this.selected,
     this.onTap,
     this.variant = ArulChipVariant.feed,
+    this.identifier,
   });
 
   final String label;
@@ -35,44 +36,70 @@ class ArulChip extends StatelessWidget {
   final VoidCallback? onTap;
   final ArulChipVariant variant;
 
+  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
+  /// the UI layer and survives every locale.
+  /// Never announced and never visible — see that folder's README for the list.
+  final String? identifier;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final (Color bg, Color border, Color fg) = _palette(isDark);
 
-    return GestureDetector(
+    final Widget visual = Container(
+      // The browse row is a fixed 34 tall with 16 side padding; the other two size off the label.
+      height: variant == ArulChipVariant.category ? _categoryHeight : null,
+      alignment: variant == ArulChipVariant.category ? Alignment.center : null,
+      padding: variant == ArulChipVariant.category
+          ? const EdgeInsets.symmetric(horizontal: 16)
+          // ArulTokens.chip pins `height: 1` -> the label's box lost the theme's 1.45 leading, ~6px.
+          // So vertical padding is 10, not the spec's 7 -> the chip stays the size it always was.
+          : const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: (selected ? ArulTokens.chipActive : ArulTokens.chip).copyWith(
+          color: fg,
+        ),
+      ),
+    );
+
+    final chip = GestureDetector(
       // A chip picks between values -> the lightest tick, never a button press, and on press-DOWN.
       onTapDown: onTap == null ? null : (_) => ArulHaptics.selection(),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        // The browse row is a fixed 34 tall with 16 side padding; the other two size off the label.
-        height: variant == ArulChipVariant.category ? _categoryHeight : null,
-        alignment: variant == ArulChipVariant.category
-            ? Alignment.center
-            : null,
-        padding: variant == ArulChipVariant.category
-            ? const EdgeInsets.symmetric(horizontal: 16)
-            // ArulTokens.chip pins `height: 1` -> the label's box lost the theme's 1.45 leading, ~6px.
-            // So vertical padding is 10, not the spec's 7 -> the chip stays the size it always was.
-            : const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          border: Border.all(color: border),
-        ),
-        child: Text(
-          label,
-          style: (selected ? ArulTokens.chipActive : ArulTokens.chip).copyWith(
-            color: fg,
-          ),
-        ),
-      ),
+      // The browse chip DRAWS 34 and is TAPPED at [ArulTokens.minHitTarget] — the visual is the
+      // handoff's and does not move, the slack above and below is transparent hit area. `opaque` is
+      // what makes the padding tappable rather than decorative. The strips that host it own the
+      // matching height.
+      child: variant == ArulChipVariant.category
+          ? SizedBox(
+              height: ArulTokens.minHitTarget,
+              child: Center(widthFactor: 1, child: visual),
+            )
+          : visual,
     );
+
+    if (identifier == null) return chip;
+    return Semantics(container: true, identifier: identifier, child: chip);
   }
 
-  /// The browse chip's fixed height.
-  static const double _categoryHeight = 34;
+  /// The browse chip's fixed DRAWN height. Its tap target is [ArulTokens.minHitTarget].
+  /// The category chip's VISUAL height. Public because the loading skeletons draw the same pill and
+  /// must not read [categoryStripHeight], which is the hit box -> a skeleton built from the hit box
+  /// shrank to 34 the moment the catalog landed.
+  static const double categoryHeight = 34;
+
+  static const double _categoryHeight = categoryHeight;
+
+  /// The height a strip must give a row of [ArulChipVariant.category] chips so the hit area that
+  /// surrounds their 34dp visual is not clipped back off.
+  static const double categoryStripHeight = ArulTokens.minHitTarget;
 
   (Color, Color, Color) _palette(bool isDark) {
     switch (variant) {

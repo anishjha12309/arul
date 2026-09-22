@@ -182,6 +182,58 @@ void main() {
     });
   });
 
+  // Every shape an ad group's App URL or a Meta creative has realistically carried, as a Google Ads or Meta deferred
+  // delivery hands it over. Native now passes any URL on our host -> this parser is the only gate, so each must keep
+  // its language. `/w/?lang=ta` was dropped natively on every Google Ads install before that.
+  group('ad App URL shapes keep their language', () {
+    for (final (url, lang) in [
+      ('https://arul.hsrutility.com/w/?lang=ta', 'ta'),
+      ('https://arul.hsrutility.com/r/?lang=ta', 'ta'),
+      ('https://arul.hsrutility.com/w?lang=te', 'te'),
+      ('https://arul.hsrutility.com/r?lang=kn', 'kn'),
+      ('https://arul.hsrutility.com/?lang=ml', 'ml'),
+      ('https://arul.hsrutility.com?lang=hi', 'hi'),
+      ('https://arul.hsrutility.com/w/$_w?lang=TA', 'ta'),
+      ('https://arul.hsrutility.com/w/$_w/?lang=ta-IN', 'ta'),
+      ('https://Arul.HSRutility.com/w/?lang=ta', 'ta'),
+    ]) {
+      test(url, () {
+        final req = parseDeepLink(url, source: DeepLinkSource.googleAds);
+        expect(req, isNotNull);
+        expect(req!.lang, lang);
+      });
+    }
+
+    // The drop was about the SHAPE, never the language -> every shipped code on every id-less shape.
+    test('every shipped language on every id-less shape', () {
+      for (final lang in ['en', 'ta', 'te', 'kn', 'ml', 'hi']) {
+        for (final path in [
+          '/w/',
+          '/w',
+          '/r/',
+          '/r',
+          '/',
+          '/w/$_w',
+          '/r/$_r',
+        ]) {
+          final url = 'https://arul.hsrutility.com$path?lang=$lang';
+          expect(
+            parseDeepLink(url, source: DeepLinkSource.googleAds)?.lang,
+            lang,
+            reason: url,
+          );
+        }
+      }
+    });
+
+    test('the no-slash ringtone form still opens the Ringtones tab', () {
+      expect(
+        _parse('https://arul.hsrutility.com/r?lang=ta')?.target,
+        const TabLinkTarget(ArulTab.ringtones),
+      );
+    });
+  });
+
   group('query form on our own host', () {
     test('wallpaper_id / ringtone_id are accepted on https too', () {
       // A creative built in the reference style but on our host still resolves -> the path form is what we document.

@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
+import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -42,6 +43,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 /// Answers the three purchase endpoints in memory -> `/payments/status` walks [statuses] and repeats the last.
@@ -109,6 +113,8 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        // The purchase notifier captures the trial-nudge notifier in build(), which reads prefs.
+        sharedPreferencesProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWith((ref) => api),
         analyticsServiceProvider.overrideWith((ref) => analytics),
         appConfigProvider.overrideWith(
@@ -170,8 +176,15 @@ void main() {
 
       expect(api.statusCalls, 3, reason: 'settled on the third poll, stopped');
       expect(api.abandons, 0);
+      // The SAME process ran the checkout -> the conversion names the handoff it came through.
       expect(eventsNamed('trial_started'), [
-        {'plan': 'monthly', 'order_id': 'DKS_ORDER_1', 'value': 199.0},
+        {
+          'plan': 'monthly',
+          'order_id': 'DKS_ORDER_1',
+          'value': 199.0,
+          'method': 'upi_app',
+          'target_app': 'com.phonepe.app',
+        },
       ]);
       expect(prefs.getString(TrialConversionCatchUp.prefsKey), 'DKS_ORDER_1');
       expect(eventsNamed('checkout_started'), hasLength(1));
@@ -315,15 +328,19 @@ void main() {
     },
   );
 
-  // Coming back from the UPI app without paying is the COMMON case -> the checkpoint resolves at network speed.
-  // No timed grace of any size -> a 14 s ladder and a 2 s beat were both tried and rejected on device.
-  // PhonePe still reported the order PENDING at every sample -> the extra polls returned what the first one did.
-  // Nothing is lost by resolving immediately -> `/payments/abandon` re-reads the LIVE order and answers settled:true.
-  // The setup webhook resurrects an approval that races the release.
+  // Coming back from the UPI app without approving is the COMMON case -> the checkpoint resolves at
+  // network speed, with no timed grace of any size: a 14 s ladder and a 2 s beat were both tried and
+  // rejected on device, because PhonePe still reported the order PENDING at every sample.
+  // What the checkpoint resolves TO changed: the order is still open, so it becomes resumable, and
+  // the claim is NOT released. 84.4% of failed setups are INTENT_EXPIRED — the sheet was reached and
+  // not approved — and abandoning here revoked a mandate the user could still have approved.
   // Re-introduce a delay of even one second and the short pump below leaves the flow unresolved.
+  // The full resume state machine lives in premium_purchase_resume_test.dart.
   testWidgets('resume checkpoint resolves without waiting out any grace', (
     tester,
   ) async {
+    PremiumPurchase.clock = () => tester.binding.clock.now();
+    addTearDown(() => PremiumPurchase.clock = DateTime.now);
     final api = _FakeApi(const ['pending']);
     final container = await build(tester, api);
     final purchaseSub = container.listen(premiumPurchaseProvider, (_, _) {});
@@ -345,14 +362,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(
-      api.abandons,
-      1,
-      reason: 'the claim must be released immediately, not after a wait',
+      container.read(premiumPurchaseProvider),
+      isA<PurchaseResumable>(),
+      reason:
+          'resolved immediately, and into the order the user can still finish',
     );
-    expect(container.read(premiumPurchaseProvider), isA<PurchaseError>());
+    expect(
+      api.abandons,
+      0,
+      reason: 'a live mandate must survive the return that did not approve it',
+    );
 
     // Resolving above SILENCED the background poll via _pollGeneration rather than cancelling its timers.
     // So drain it here -> otherwise the harness fails for a pending timer and buries the two assertions that matter.
-    await tester.pump(const Duration(seconds: 200));
+    // Past the window the resumable watch abandons the dead link and stops by itself.
+    await tester.pump(const Duration(minutes: 20));
+    expect(api.abandons, 1);
   });
 }

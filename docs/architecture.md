@@ -37,6 +37,11 @@ straight to `active`. Delete-account writes an HMAC tombstone so re-signup pre-s
 and trial farming is closed. Endpoint facts: [phonepe.md](phonepe.md).
 
 ## Uploads (submissions)
+The pick is OUR channel (`MediaPickChannel`), not a plugin: the Android Photo Picker for a wallpaper
+(androidx `PickVisualMedia` builds the intent and carries Google's own fallbacks), `ACTION_GET_CONTENT`
+on `audio/*` for a ringtone. Neither needs a permission — keep `READ_MEDIA_*` out of the manifest or
+Play's Photo and Video Permissions policy asks this app to justify it. The picked stream is copied to
+`cacheDir/upload_picks/`, swept whole at every pick, and Dart only ever sees the copy's path.
 upload-url presigns PUT to `user/<sub>/submissions/…` only. confirm-upload takes kind `wallpaper` or
 `ringtone` and byte-QCs against THAT kind's role — a fixed role rejects every ringtone; max 10
 pending per user; upserts on unique `file_key`, so retries are idempotent. Approval needs a category
@@ -69,7 +74,14 @@ exposes no `/admin` of its own.**
 
 ## Schema (Neon) — [data-model.md](data-model.md), DDL in `db/schema/`
 users · subscriptions · wallpapers · ringtones · content_submissions · referrals · trial_tombstones ·
-app_config (singleton). **No RLS** — the Worker scopes every parameterized query to the verified sub.
+app_config (singleton) · push_devices/campaigns/deliveries/opens ([push.md](push.md)). **No RLS** —
+the Worker scopes every parameterized query to the verified sub.
+
+## Campaign push — [push.md](push.md)
+The CMS writes `push_campaigns` and reads audience counts over `ARUL_API`; this Worker's
+`* * * * *` cron sends over FCM HTTP v1. The Firebase service-account key lives HERE and is never
+handed to the CMS, so a bug on that page can mis-address a campaign but cannot send one.
+`PUSH_SECRET` guards `/internal/push/*` — a THIRD secret, never `CATALOG_BUILD_SECRET`.
 
 ## Security
 JWT HS256: access 60 m, refresh 60 d rotating, jti denylisted in KV. idToken verified against Google

@@ -27,7 +27,10 @@ mixin _$Ringtone {
 /// Counted server-side in `/media/signed-url`; a ringtone has no share path, so every grant is a set.
  int get setCount;/// Tier 1, ahead of [setCount] — the same semantics and null contract as [Wallpaper.feedRank].
 /// Both tabs order through the one `orderedByUse`.
- int? get feedRank;
+ int? get feedRank;/// Debut date — the same contract and the same null case as [Wallpaper.publishedAt].
+/// NOT [createdAt], which is import time; the two differ by however long a batch sat unpublished.
+ DateTime? get publishedAt;/// Last CMS Renew — tier 1 of New, the same contract and null case as [Wallpaper.renewedAt].
+ DateTime? get renewedAt;
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -40,16 +43,16 @@ $RingtoneCopyWith<Ringtone> get copyWith => _$RingtoneCopyWithImpl<Ringtone>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other.tags, tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt)&&(identical(other.renewedAt, renewedAt) || other.renewedAt == renewedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount,feedRank);
+int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount,feedRank,publishedAt,renewedAt);
 
 @override
 String toString() {
-  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount, feedRank: $feedRank)';
+  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount, feedRank: $feedRank, publishedAt: $publishedAt, renewedAt: $renewedAt)';
 }
 
 
@@ -60,7 +63,7 @@ abstract mixin class $RingtoneCopyWith<$Res>  {
   factory $RingtoneCopyWith(Ringtone value, $Res Function(Ringtone) _then) = _$RingtoneCopyWithImpl;
 @useResult
 $Res call({
- String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount, int? feedRank
+ String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount, int? feedRank, DateTime? publishedAt, DateTime? renewedAt
 });
 
 
@@ -77,7 +80,7 @@ class _$RingtoneCopyWithImpl<$Res>
 
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,Object? feedRank = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,Object? renewedAt = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -91,7 +94,9 @@ as String?,sortOrder: null == sortOrder ? _self.sortOrder : sortOrder // ignore:
 as int,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,setCount: null == setCount ? _self.setCount : setCount // ignore: cast_nullable_to_non_nullable
 as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
-as int?,
+as int?,publishedAt: freezed == publishedAt ? _self.publishedAt : publishedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,renewedAt: freezed == renewedAt ? _self.renewedAt : renewedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 
@@ -176,10 +181,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Ringtone() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   return orElse();
 
 }
@@ -197,10 +202,10 @@ return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)  $default,) {final _that = this;
 switch (_that) {
 case _Ringtone():
-return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -217,10 +222,10 @@ return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String title,  String category,  String? deity,  List<String> tags,  String audioKey,  String? coverKey,  String? mime,  int sortOrder,  DateTime? createdAt,  int setCount,  int? feedRank,  DateTime? publishedAt,  DateTime? renewedAt)?  $default,) {final _that = this;
 switch (_that) {
 case _Ringtone() when $default != null:
-return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank);case _:
+return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that.audioKey,_that.coverKey,_that.mime,_that.sortOrder,_that.createdAt,_that.setCount,_that.feedRank,_that.publishedAt,_that.renewedAt);case _:
   return null;
 
 }
@@ -232,7 +237,7 @@ return $default(_that.id,_that.title,_that.category,_that.deity,_that.tags,_that
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class _Ringtone extends Ringtone {
-  const _Ringtone({required this.id, required this.title, this.category = 'other', this.deity, final  List<String> tags = const <String>[], required this.audioKey, this.coverKey, this.mime, this.sortOrder = 0, this.createdAt, this.setCount = 0, this.feedRank}): _tags = tags,super._();
+  const _Ringtone({required this.id, required this.title, this.category = 'other', this.deity, final  List<String> tags = const <String>[], required this.audioKey, this.coverKey, this.mime, this.sortOrder = 0, this.createdAt, this.setCount = 0, this.feedRank, this.publishedAt, this.renewedAt}): _tags = tags,super._();
   factory _Ringtone.fromJson(Map<String, dynamic> json) => _$RingtoneFromJson(json);
 
 @override final  String id;
@@ -265,6 +270,11 @@ class _Ringtone extends Ringtone {
 /// Tier 1, ahead of [setCount] — the same semantics and null contract as [Wallpaper.feedRank].
 /// Both tabs order through the one `orderedByUse`.
 @override final  int? feedRank;
+/// Debut date — the same contract and the same null case as [Wallpaper.publishedAt].
+/// NOT [createdAt], which is import time; the two differ by however long a batch sat unpublished.
+@override final  DateTime? publishedAt;
+/// Last CMS Renew — tier 1 of New, the same contract and null case as [Wallpaper.renewedAt].
+@override final  DateTime? renewedAt;
 
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
@@ -279,16 +289,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Ringtone&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.category, category) || other.category == category)&&(identical(other.deity, deity) || other.deity == deity)&&const DeepCollectionEquality().equals(other._tags, _tags)&&(identical(other.audioKey, audioKey) || other.audioKey == audioKey)&&(identical(other.coverKey, coverKey) || other.coverKey == coverKey)&&(identical(other.mime, mime) || other.mime == mime)&&(identical(other.sortOrder, sortOrder) || other.sortOrder == sortOrder)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.setCount, setCount) || other.setCount == setCount)&&(identical(other.feedRank, feedRank) || other.feedRank == feedRank)&&(identical(other.publishedAt, publishedAt) || other.publishedAt == publishedAt)&&(identical(other.renewedAt, renewedAt) || other.renewedAt == renewedAt));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(_tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount,feedRank);
+int get hashCode => Object.hash(runtimeType,id,title,category,deity,const DeepCollectionEquality().hash(_tags),audioKey,coverKey,mime,sortOrder,createdAt,setCount,feedRank,publishedAt,renewedAt);
 
 @override
 String toString() {
-  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount, feedRank: $feedRank)';
+  return 'Ringtone(id: $id, title: $title, category: $category, deity: $deity, tags: $tags, audioKey: $audioKey, coverKey: $coverKey, mime: $mime, sortOrder: $sortOrder, createdAt: $createdAt, setCount: $setCount, feedRank: $feedRank, publishedAt: $publishedAt, renewedAt: $renewedAt)';
 }
 
 
@@ -299,7 +309,7 @@ abstract mixin class _$RingtoneCopyWith<$Res> implements $RingtoneCopyWith<$Res>
   factory _$RingtoneCopyWith(_Ringtone value, $Res Function(_Ringtone) _then) = __$RingtoneCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount, int? feedRank
+ String id, String title, String category, String? deity, List<String> tags, String audioKey, String? coverKey, String? mime, int sortOrder, DateTime? createdAt, int setCount, int? feedRank, DateTime? publishedAt, DateTime? renewedAt
 });
 
 
@@ -316,7 +326,7 @@ class __$RingtoneCopyWithImpl<$Res>
 
 /// Create a copy of Ringtone
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,Object? feedRank = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? category = null,Object? deity = freezed,Object? tags = null,Object? audioKey = null,Object? coverKey = freezed,Object? mime = freezed,Object? sortOrder = null,Object? createdAt = freezed,Object? setCount = null,Object? feedRank = freezed,Object? publishedAt = freezed,Object? renewedAt = freezed,}) {
   return _then(_Ringtone(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -330,7 +340,9 @@ as String?,sortOrder: null == sortOrder ? _self.sortOrder : sortOrder // ignore:
 as int,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,setCount: null == setCount ? _self.setCount : setCount // ignore: cast_nullable_to_non_nullable
 as int,feedRank: freezed == feedRank ? _self.feedRank : feedRank // ignore: cast_nullable_to_non_nullable
-as int?,
+as int?,publishedAt: freezed == publishedAt ? _self.publishedAt : publishedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,renewedAt: freezed == renewedAt ? _self.renewedAt : renewedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,
   ));
 }
 

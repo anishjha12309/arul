@@ -21,6 +21,7 @@ import {
   reportPostHogSubscriptionCancel,
 } from "../lib/posthog.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
+import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import {
   setupSubscription,
   setupSubscriptionIntent,
@@ -68,6 +69,7 @@ interface PriorSubscription {
   trial_end: unknown;
   status: string;
   merchant_subscription_id: string | null;
+  superseded_mandate_id: string | null;
   current_period_end: unknown;
   updated_at: unknown;
 }
@@ -100,7 +102,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string; targetApp?: string };
+  let body: { plan?: string; targetApp?: string; mode?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -122,6 +124,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     /^[a-zA-Z][a-zA-Z0-9._]{2,100}$/.test(body.targetApp)
       ? body.targetApp
       : null;
+
+  // On-screen QR: the app has NO mandate-capable UPI app and renders the intentUrl for a second
+  // phone to scan. PhonePe makes paymentMode.targetApp mandatory on UPI_INTENT, so the app still
+  // names a package -> the QR is the truth of the handoff and the package is a formality PhonePe
+  // requires. The returned upi://mandate carries no app binding of its own, which is what lets any
+  // scanner take it. Recorded as its own `upi_target_app` value: filing these under com.phonepe.app
+  // would put mandates PhonePe never saw into the column that answers "which app completes one".
+  const qrMode = body.mode === "qr" && targetApp !== null;
+  const recordedTargetApp = qrMode ? "qr" : (targetApp ?? "phonepe_page");
 
   const sql = getDb(env);
   try {
@@ -147,8 +158,8 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       await tx`SELECT 1 FROM users WHERE id = ${sub} FOR UPDATE`;
 
       const prior = await tx<PriorSubscription[]>`
-        SELECT trial_end, status, merchant_subscription_id, current_period_end,
-               updated_at
+        SELECT trial_end, status, merchant_subscription_id, superseded_mandate_id,
+               current_period_end, updated_at
         FROM subscriptions WHERE user_id = ${sub} LIMIT 1
       `;
       const existing = prior[0] ?? null;
@@ -179,17 +190,33 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
       // Whatever mandate this row pointed at is about to become unreachable -> capture it UNDER the lock
       // Otherwise a losing concurrent request revokes the WINNER's mandate, using an id it read before the race
+      // A trialing/active/paused row whose period lapsed is a mandate STILL BILLING -> its dunning ladder is running
+      // Revoking it here killed 155 of 179 such mandates checked at PhonePe, while 95% of the replacements were never approved
+      // So PARK it: the grant on the new mandate revokes it, a failed or abandoned setup hands the row back to it
+      // Only a pending or expired row's mandate is revoked now -> never approved, or the ladder already gave up on it
+      // A parked id already on the row rides along -> a second re-subscribe over an unapproved one must not lose it
+      const keepAlive =
+        existing !== null &&
+        existing.merchant_subscription_id !== null &&
+        (existing.status === "trialing" || existing.status === "active" || existing.status === "paused");
+      const parkedMandateId = keepAlive
+        ? existing.merchant_subscription_id
+        : (existing?.superseded_mandate_id ?? null);
       const superseded =
-        existing && existing.merchant_subscription_id && existing.status !== "cancelled"
+        existing &&
+        existing.merchant_subscription_id &&
+        (existing.status === "pending" || existing.status === "expired")
           ? existing.merchant_subscription_id
           : null;
 
       await tx`
         INSERT INTO subscriptions (
-          user_id, status, plan, merchant_subscription_id, merchant_order_id
+          user_id, status, plan, merchant_subscription_id, merchant_order_id, upi_target_app,
+          superseded_mandate_id
         )
         VALUES (
-          ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId}
+          ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
+          ${recordedTargetApp}, ${parkedMandateId}
         )
         ON CONFLICT (user_id)
         DO UPDATE SET
@@ -197,9 +224,17 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           plan                     = EXCLUDED.plan,
           merchant_subscription_id = EXCLUDED.merchant_subscription_id,
           merchant_order_id        = EXCLUDED.merchant_order_id,
+          upi_target_app           = EXCLUDED.upi_target_app,
+          superseded_mandate_id    = EXCLUDED.superseded_mandate_id,
           phonepe_order_id         = NULL,
           updated_at               = now()
       `;
+      if (keepAlive) {
+        console.log(
+          `[payments/initiate] parked live mandate ${existing.merchant_subscription_id} for user ${sub} — ` +
+            `revoked only once the new setup is approved`,
+        );
+      }
 
       return {
         conflict: false,
@@ -230,10 +265,13 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     // Attach PhonePe's order id to the row already claimed above, SCOPED to the claimed merchant_order_id
     // A later initiate may have superseded this claim while PhonePe answered -> this must not stamp the newer mandate
     // Zero rows updated is the CORRECT outcome there -> the newer request owns the row
-    const attachPhonePeOrder = async (phonepeOrderId: string) => {
+    // `upiTargetApp` is re-stamped here because the flow can CHANGE after the claim: an intent setup
+    // that fails falls back to the hosted page, and the row must say which one actually ran.
+    const attachPhonePeOrder = async (phonepeOrderId: string, upiTargetApp: string) => {
       await sql`
         UPDATE subscriptions
         SET phonepe_order_id = ${phonepeOrderId},
+            upi_target_app   = ${upiTargetApp},
             updated_at       = now()
         WHERE user_id = ${sub}
           AND merchant_order_id = ${merchantOrderId}
@@ -279,14 +317,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           targetApp,
           upfrontAmountPaise: trialEligible ? undefined : MONTHLY_PRICE_PAISE,
         });
-        await attachPhonePeOrder(intent.orderId);
+        await attachPhonePeOrder(intent.orderId, recordedTargetApp);
         revokeSuperseded();
         console.log(
-          `[payments/initiate] env=${env.PHONEPE_ENV} flow=intent target=${targetApp} ` +
-            `orderId=${intent.orderId} state=${intent.state} trialEligible=${trialEligible}`,
+          `[payments/initiate] env=${env.PHONEPE_ENV} flow=${qrMode ? "qr" : "intent"} ` +
+            `target=${recordedTargetApp} orderId=${intent.orderId} state=${intent.state} ` +
+            `trialEligible=${trialEligible}`,
         );
         return c.json({
-          flow: "intent",
+          flow: qrMode ? "qr" : "intent",
           merchantSubscriptionId,
           merchantOrderId,
           orderId: intent.orderId,
@@ -335,7 +374,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         `trialEligible=${trialEligible}`,
     );
 
-    await attachPhonePeOrder(ppResult.orderId);
+    await attachPhonePeOrder(ppResult.orderId, "phonepe_page");
     revokeSuperseded();
 
     // The Flutter SDK's startTransaction needs the SDK order token, returned as
@@ -483,6 +522,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
     // The dashboard webhook must have the subscription.setup.order.* events SELECTED or PhonePe never sends them
     if (
       event === "checkout.order.completed" ||
+      event === "checkout.setup.order.completed" ||
       event === "subscription.setup.order.completed"
     ) {
       // Mandate setup succeeded. ONE FREE TRIAL PER USER, decided off trial_end
@@ -490,6 +530,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // trial_end NOT NULL -> initiate authorized this mandate with a real ₹199 TRANSACTION -> 'active' for a month
       // The CASE expressions read the row's OLD trial_end under Postgres SET semantics -> decide and write in ONE statement
       // COALESCE keeps the ORIGINAL trial_end forever -> that column is the consumed-marker, not a date to refresh
+      // The ELSE branch is itself a ₹199 debit -> the three debit-tracking columns move on it and ONLY on it
+      // Same rule as the cron settle: first_debit_at is stamped once, the count and paise total grow every time
       const trialEnd = new Date(Date.now() + TRIAL_MS);
       const paidEnd = addOneMonth(new Date());
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
@@ -514,6 +556,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                                             ELSE ${paidEnd.toISOString()}::timestamptz END,
             notified_at              = NULL,
             retry_count              = 0,
+            first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                            ELSE COALESCE(first_debit_at, now()) END,
+            debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+            paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
             updated_at               = now()
         WHERE merchant_subscription_id = ${merchantSubId}
           AND status = 'pending'
@@ -543,6 +589,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                                               ELSE ${paidEnd.toISOString()}::timestamptz END,
               notified_at              = NULL,
               retry_count              = 0,
+              first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                              ELSE COALESCE(first_debit_at, now()) END,
+              debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+              paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
               updated_at               = now()
           WHERE merchant_subscription_id = ${merchantSubId}
             AND merchant_order_id = ${pp.merchantOrderId ?? ""}
@@ -596,6 +646,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         );
       }
 
+      if (row) {
+        await releaseSupersededMandate(c, sql, merchantSubId);
+      }
+
       if (row?.status === "active") {
         // A repeat subscriber paid ₹199 at setup -> that IS a paid debit -> the referral reward applies here too
         await grantReferralReward(sql, row.user_id);
@@ -610,6 +664,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
 
     } else if (
       event === "checkout.order.failed" ||
+      event === "checkout.setup.order.failed" ||
       event === "subscription.setup.order.failed"
     ) {
       // Mandate setup failed, on either setup surface -> RESTORE, never simply expire
@@ -619,12 +674,32 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // That is entitled to what they paid for, with no future debits -> exactly where they stood before Resubscribe
       await sql`
         UPDATE subscriptions
-        SET status     = CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                              THEN 'cancelled' ELSE 'expired' END,
-            updated_at = now()
+        SET status                   = CASE
+                                           -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
+                                           WHEN superseded_mandate_id IS NOT NULL
+                                           THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
+                                                     THEN 'active' ELSE 'trialing' END
+                                           ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
+                                                     THEN 'cancelled' ELSE 'expired' END
+                                           END,
+            merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
+            superseded_mandate_id    = NULL,
+            updated_at               = now()
         WHERE merchant_subscription_id = ${merchantSubId}
           AND status = 'pending'
       `;
+
+    } else if (
+      (event === "subscription.redemption.order.completed" ||
+        event === "subscription.redemption.transaction.completed") &&
+      typeof pp.state === "string" &&
+      pp.state !== "COMPLETED"
+    ) {
+      // PhonePe: "always use the root-level payload.state" -> a transaction.completed can carry an order still PENDING
+      // The order event, or the cron's reconcile, grants once the ORDER is COMPLETED -> nothing to do here
+      console.log(
+        `[payments/webhook] ${event} for sub ${merchantSubId} carries state=${pp.state} — not a settled order, no grant`,
+      );
 
     } else if (
       event === "subscription.redemption.order.completed" ||
@@ -638,26 +713,44 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
 
       const activated = await sql<
-        { user_id: string; prior_status: string; updated_at?: Date | string | null }[]
+        {
+          user_id: string;
+          prior_status: string;
+          updated_at?: Date | string | null;
+          upi_target_app?: string | null;
+          prior_mandate_id?: string | null;
+        }[]
       >`
         UPDATE subscriptions AS s
         SET status                  = 'active',
+            merchant_subscription_id = ${merchantSubId},
+            superseded_mandate_id   = NULL,
             phonepe_subscription_id = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
             current_period_end      = ${nextEnd.toISOString()},
             next_debit_at           = ${nextEnd.toISOString()},
             notified_at             = NULL,
             retry_count             = 0,
+            first_debit_at          = COALESCE(s.first_debit_at, now()),
+            debit_count             = s.debit_count + 1,
+            paid_paise              = s.paid_paise + 19900,
             updated_at              = now()
         FROM subscriptions AS prior
-        WHERE s.merchant_subscription_id = ${merchantSubId}
+        WHERE (s.merchant_subscription_id = ${merchantSubId} OR s.superseded_mandate_id = ${merchantSubId})
           AND prior.id = s.id
-        RETURNING s.user_id, prior.status AS prior_status, s.updated_at
+        RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.upi_target_app,
+                  prior.merchant_subscription_id AS prior_mandate_id
       `;
 
       console.log(`[payments/webhook] Active for sub ${merchantSubId}, period_end=${nextEnd.toISOString()}`);
 
       // Referral reward -> this user just made a paid debit -> only the FIRST ever grants, via the status<>'rewarded' guard
       if (activated.length > 0) {
+        // The debit landed on a PARKED mandate while a re-subscribe was pending -> the paid mandate is the live one again
+        // The newer setup was never approved (it is what the row held) -> retire it so nothing can approve it later
+        const priorMandateId = activated[0].prior_mandate_id ?? null;
+        if (priorMandateId && priorMandateId !== merchantSubId) {
+          revokeInBackground(c, priorMandateId, "payments/webhook");
+        }
         await grantReferralReward(sql, activated[0].user_id);
         // NO ad-platform conversion is reported from the server -> GA4 `purchase` and Meta `Subscribe` are BOTH gone
         // One conversion action fed by two source types desynchronises attribution -> see cron/autopay-notify.ts
@@ -672,6 +765,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
             amountPaise: typeof pp.amount === "number" ? pp.amount : null,
             occurredAt: activated[0].updated_at ?? null,
+            targetApp: activated[0].upi_target_app ?? null,
           });
         }
       }
@@ -716,6 +810,14 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           priorStatus: parked[0].prior_status,
           occurredAt: parked[0].updated_at ?? null,
         });
+      } else {
+        // A PARKED mandate the user revoked mid-re-subscribe -> there is nothing to hand the row back to any more
+        await sql`
+          UPDATE subscriptions
+          SET superseded_mandate_id = NULL,
+              updated_at            = now()
+          WHERE superseded_mandate_id = ${merchantSubId}
+        `;
       }
 
     } else if (event === "subscription.paused") {
@@ -727,25 +829,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       `;
 
     } else if (event === "subscription.unpaused") {
-      // Resume -> back to active, or trialing while still inside the trial window
-      // REARM THE DEBIT CLOCK -> the cron's park path NULLs next_debit_at when it discovers a pause
-      // Restoring only `status` left a row neither pass's `next_debit_at <= …` filter can ever select
-      // The app then said "Active" forever, nothing billed, and premium died silently at period end
-      // COALESCE keeps a webhook-paused row's original schedule; notified_at = NULL makes Pass A re-notify first
-      // Scoped to status='paused' -> an unpause must never resurrect a cancelled or expired row
-      // Their next_debit_at is gone ON PURPOSE -> restoring it would resume billing someone who stopped
-      await sql`
-        UPDATE subscriptions
-        SET status        = CASE
-                              WHEN trial_end IS NOT NULL AND trial_end > now()
-                              THEN 'trialing' ELSE 'active'
-                            END,
-            next_debit_at = COALESCE(next_debit_at, current_period_end),
-            notified_at   = NULL,
-            updated_at    = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-          AND status = 'paused'
-      `;
+      // Resume -> back to active, or trialing while still inside the trial window, with the DEBIT CLOCK REARMED
+      // The statement lives in lib/subscription-rearm.ts: the cron's Pass D heals this same lost event
+      // hourly, and one restore written twice is a restore that will one day disagree with itself
+      await rearmUnpausedSubscription(sql, { merchantSubscriptionId: merchantSubId });
 
     } else if (
       event === "pg.refund.accepted" ||
@@ -796,7 +883,8 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         id, user_id, status, plan,
         merchant_subscription_id, merchant_order_id, phonepe_order_id,
         phonepe_subscription_id, current_period_end, trial_end,
-        next_debit_at, notified_at, retry_count, updated_at
+        next_debit_at, notified_at, retry_count, updated_at,
+        redemption_order_id, superseded_mandate_id
       FROM subscriptions
       WHERE user_id = ${sub}
       LIMIT 1
@@ -854,6 +942,10 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
                                                 ELSE ${paidEnd.toISOString()}::timestamptz END,
                 notified_at              = NULL,
                 retry_count              = 0,
+                first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
+                                                ELSE COALESCE(first_debit_at, now()) END,
+                debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
+                paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
                 updated_at               = now()
             WHERE user_id = ${sub}
               AND status  = 'pending'
@@ -871,6 +963,9 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
               // The same paid-debit semantics as the webhook path -> idempotent, so both landing is harmless
               await grantReferralReward(sql, updated[0].user_id);
             }
+            if (merchantSubId) {
+              await releaseSupersededMandate(c, sql, merchantSubId);
+            }
           }
         } else if (
           (orderStatus.state === "FAILED" || orderStatus.state === "EXPIRED") &&
@@ -884,9 +979,17 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           // Without the restore it STRIPPED a live trial
           const failed = await sql<{ status: string }[]>`
             UPDATE subscriptions
-            SET status     = CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                                  THEN 'cancelled' ELSE 'expired' END,
-                updated_at = now()
+            SET status                   = CASE
+                                               -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
+                                               WHEN superseded_mandate_id IS NOT NULL
+                                               THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
+                                                         THEN 'active' ELSE 'trialing' END
+                                               ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
+                                                         THEN 'cancelled' ELSE 'expired' END
+                                               END,
+                merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
+                superseded_mandate_id    = NULL,
+                updated_at               = now()
             WHERE user_id = ${sub}
               AND status  = 'pending'
             RETURNING status
@@ -955,21 +1058,10 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           (row.status as string) === "paused"
         ) {
           // Lost-unpause heal -> the same restore AND rearm as the unpaused webhook -> the rearm is not optional
-          const restored = await sql<
-            { status: string; next_debit_at: unknown }[]
-          >`
-            UPDATE subscriptions
-            SET status        = CASE
-                                  WHEN trial_end IS NOT NULL AND trial_end > now()
-                                  THEN 'trialing' ELSE 'active'
-                                END,
-                next_debit_at = COALESCE(next_debit_at, current_period_end),
-                notified_at   = NULL,
-                updated_at    = now()
-            WHERE user_id = ${sub}
-              AND status = 'paused'
-            RETURNING status, next_debit_at
-          `;
+          // Literally the same statement: three callers, one home, none of them able to forget the clock
+          const restored = await rearmUnpausedSubscription(sql, {
+            subscriptionId: row.id as string,
+          });
           if (restored[0]) {
             row.status = restored[0].status;
             row.next_debit_at = restored[0].next_debit_at;
@@ -977,6 +1069,88 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         }
       } catch (ppErr) {
         console.warn("[payments/status] PhonePe subscription status failed:", ppErr);
+      }
+    }
+
+    // ── A debit that settled while nobody was looking ───────────────────────
+    // The cron reconciles trialing/active rows only. A row that left that set with its redemption order still open
+    // (cancelled in-app, or claimed by a re-subscribe) can have that order COMPLETE afterwards -> money taken, no premium
+    // Two live users were found that way. Only a row that NEVER converted qualifies -> a paid period is never granted twice
+    const redemptionOrderId = (row.redemption_order_id as string | null | undefined) ?? null;
+    const trialEndAt = toDate(row.trial_end);
+    const periodEndAt = toDate(row.current_period_end);
+    const neverConverted =
+      trialEndAt !== null && (periodEndAt === null || periodEndAt.getTime() <= trialEndAt.getTime());
+    if (
+      redemptionOrderId &&
+      neverConverted &&
+      ["pending", "cancelled", "expired", "paused"].includes(row.status as string)
+    ) {
+      try {
+        const order = await getOrderStatus(env, redemptionOrderId);
+        if (order.state === "COMPLETED") {
+          const nextEnd = addOneMonth(new Date());
+          // The mandate that was debited is the live one -> a parked id wins over an unapproved replacement
+          const healed = await sql<
+            {
+              status: string;
+              current_period_end: unknown;
+              next_debit_at: unknown;
+              updated_at?: Date | string | null;
+              upi_target_app?: string | null;
+              merchant_subscription_id: string | null;
+              prior_mandate_id: string | null;
+            }[]
+          >`
+            UPDATE subscriptions AS s
+            SET status                   = 'active',
+                merchant_subscription_id = COALESCE(s.superseded_mandate_id, s.merchant_subscription_id),
+                superseded_mandate_id    = NULL,
+                current_period_end       = ${nextEnd.toISOString()},
+                next_debit_at            = ${nextEnd.toISOString()},
+                notified_at              = NULL,
+                retry_count              = 0,
+                redemption_order_id      = NULL,
+                first_debit_at           = COALESCE(s.first_debit_at, now()),
+                debit_count              = s.debit_count + 1,
+                paid_paise               = s.paid_paise + 19900,
+                updated_at               = now()
+            FROM subscriptions AS prior
+            WHERE s.user_id = ${sub}
+              AND prior.id = s.id
+              AND s.redemption_order_id = ${redemptionOrderId}
+              AND s.trial_end IS NOT NULL
+              AND (s.current_period_end IS NULL OR s.current_period_end <= s.trial_end)
+            RETURNING s.status, s.current_period_end, s.next_debit_at, s.updated_at, s.upi_target_app,
+                      s.merchant_subscription_id, prior.merchant_subscription_id AS prior_mandate_id
+          `;
+          if (healed[0]) {
+            console.warn(
+              `[payments/status] order ${redemptionOrderId} COMPLETED at PhonePe while row was '${row.status}' — ` +
+                `granted the paid month for user ${sub}`,
+            );
+            row.status = healed[0].status;
+            row.current_period_end = healed[0].current_period_end;
+            row.next_debit_at = healed[0].next_debit_at;
+            row.merchant_subscription_id = healed[0].merchant_subscription_id;
+            if (
+              healed[0].prior_mandate_id &&
+              healed[0].prior_mandate_id !== healed[0].merchant_subscription_id
+            ) {
+              revokeInBackground(c, healed[0].prior_mandate_id, "payments/status");
+            }
+            await grantReferralReward(sql, sub);
+            await reportPostHogFirstConversion(env, {
+              userId: sub,
+              transactionId: redemptionOrderId,
+              amountPaise: MONTHLY_PRICE_PAISE,
+              occurredAt: healed[0].updated_at ?? null,
+              targetApp: healed[0].upi_target_app ?? null,
+            });
+          }
+        }
+      } catch (ppErr) {
+        console.warn("[payments/status] redemption order status failed:", ppErr);
       }
     }
 
@@ -1022,7 +1196,7 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
   const sql = getDb(env);
   try {
     const rows = await sql`
-      SELECT merchant_subscription_id, status
+      SELECT merchant_subscription_id, superseded_mandate_id, status
       FROM subscriptions
       WHERE user_id = ${sub}
       LIMIT 1
@@ -1033,6 +1207,7 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
     }
 
     const merchantSubId = rows[0].merchant_subscription_id as string | null;
+    const parkedMandateId = (rows[0].superseded_mandate_id as string | null | undefined) ?? null;
     const status = rows[0].status as string;
 
     if (status === "cancelled" || status === "expired") {
@@ -1046,7 +1221,12 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
 
     // Tolerates the already-inactive case -> a user who revoked in their UPI app is already at the desired end state
     // Only a mandate PhonePe still reports LIVE is a genuine failure worth asking the user to retry
-    const revoked = await revokeMandateTolerant(env, merchantSubId);
+    // "Cancel" means every mandate of theirs -> a PARKED one (re-subscribe pending) is still billing too
+    const revoked =
+      (await revokeMandateTolerant(env, merchantSubId)) &&
+      (parkedMandateId === null ||
+        parkedMandateId === merchantSubId ||
+        (await revokeMandateTolerant(env, parkedMandateId)));
     if (!revoked) {
       return errorResponse(
         502,
@@ -1058,10 +1238,11 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
     // Stop future debits locally -> keep entitlement to current_period_end -> cancelling is not a refund
     const cancelled = (await sql`
       UPDATE subscriptions
-      SET status        = 'cancelled',
-          next_debit_at = NULL,
-          notified_at   = NULL,
-          updated_at    = now()
+      SET status                = 'cancelled',
+          superseded_mandate_id = NULL,
+          next_debit_at         = NULL,
+          notified_at           = NULL,
+          updated_at            = now()
       WHERE user_id = ${sub}
       RETURNING updated_at
     `) as unknown as { updated_at?: Date | string | null }[];
@@ -1157,9 +1338,17 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
     // That is the entitlement the user already owned -> expiring here stripped a live trial on a backed-out resubscribe
     const released = await sql<{ id: string }[]>`
       UPDATE subscriptions
-      SET status     = CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                            THEN 'cancelled' ELSE 'expired' END,
-          updated_at = now()
+      SET status                   = CASE
+                                         -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
+                                         WHEN superseded_mandate_id IS NOT NULL
+                                         THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
+                                                   THEN 'active' ELSE 'trialing' END
+                                         ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
+                                                   THEN 'cancelled' ELSE 'expired' END
+                                         END,
+          merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
+          superseded_mandate_id    = NULL,
+          updated_at               = now()
       WHERE user_id = ${sub}
         AND merchant_order_id = ${merchantOrderId}
         AND status = 'pending'
@@ -1206,6 +1395,46 @@ export function handleCallback(c: Context<{ Bindings: Env }>): Response {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * The approval of a re-subscribe. The mandate initiate PARKED (superseded_mandate_id) has been replaced by an
+ * approved one -> revoke it now, and clear the column in the same statement so a retried webhook cannot revoke twice.
+ * Self-join so the PRIOR value rides back -> RETURNING alone would hand back the NULL just written.
+ */
+async function releaseSupersededMandate(
+  c: Context<{ Bindings: Env }>,
+  sql: ReturnType<typeof getDb>,
+  merchantSubId: string,
+): Promise<void> {
+  const rows = (await sql`
+    UPDATE subscriptions AS s
+    SET superseded_mandate_id = NULL
+    FROM subscriptions AS prior
+    WHERE s.merchant_subscription_id = ${merchantSubId}
+      AND prior.id = s.id
+      AND prior.superseded_mandate_id IS NOT NULL
+    RETURNING prior.superseded_mandate_id AS stale_mandate_id
+  `) as unknown as { stale_mandate_id?: string | null }[];
+  const stale = rows[0]?.stale_mandate_id;
+  if (typeof stale === "string" && stale && stale !== merchantSubId) {
+    revokeInBackground(c, stale, "payments/release");
+  }
+}
+
+/** Best-effort revoke OFF the response path -> a PhonePe hiccup must never fail the grant that triggered it. */
+function revokeInBackground(c: Context<{ Bindings: Env }>, merchantSubId: string, tag: string): void {
+  c.executionCtx.waitUntil(
+    revokeMandateTolerant(c.env, merchantSubId)
+      .then((revoked) => {
+        if (!revoked) {
+          console.error(`[${tag}] mandate ${merchantSubId} may STILL BE LIVE at PhonePe — manual revoke required`);
+        }
+      })
+      .catch((err: unknown) => {
+        console.error(`[${tag}] revoke of ${merchantSubId} threw:`, err);
+      }),
+  );
+}
 
 function addOneMonth(date: Date): Date {
   const d = new Date(date);

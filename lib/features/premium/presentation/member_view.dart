@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/widgets/arul_spinner.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import 'paywall_ornaments.dart';
@@ -477,13 +478,11 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
             ),
             child: widget.busy
                 ? const Center(
-                    child: SizedBox.square(
+                    child: ArulSpinner(
                       key: ValueKey('member-cancel-progress'),
-                      dimension: ArulTokens.premiumMemberProgressSize,
-                      child: CircularProgressIndicator(
-                        strokeWidth: ArulTokens.premiumMemberProgressStroke,
-                        color: ArulTokens.paywallMaroon,
-                      ),
+                      size: ArulTokens.premiumMemberProgressSize,
+                      strokeWidth: ArulTokens.premiumMemberProgressStroke,
+                      color: ArulTokens.paywallMaroon,
                     ),
                   )
                 : const Stack(

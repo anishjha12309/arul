@@ -35,23 +35,29 @@ class LiveMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox.square(
-      dimension: diameter,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: ArulTokens.overMediaInkFill,
-          shape: BoxShape.circle,
-          border: Border.fromBorderSide(
-            BorderSide(color: ArulTokens.overMediaGlassBorder),
+    // `arul_live_mark` is the one machine-readable tell of a live card — the mark is already the
+    // ONLY signal on screen. Never announced.
+    return Semantics(
+      container: true,
+      identifier: 'arul_live_mark',
+      child: const SizedBox.square(
+        dimension: diameter,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: ArulTokens.overMediaInkFill,
+            shape: BoxShape.circle,
+            border: Border.fromBorderSide(
+              BorderSide(color: ArulTokens.overMediaGlassBorder),
+            ),
           ),
-        ),
-        // An Icon lays itself out at its own size inside the parent's constraints -> without this
-        // Center it hangs off the disc's top-left.
-        child: Center(
-          child: Icon(
-            Icons.play_arrow_rounded,
-            size: glyphSize,
-            color: ArulTokens.ivory,
+          // An Icon lays itself out at its own size inside the parent's constraints -> without this
+          // Center it hangs off the disc's top-left.
+          child: Center(
+            child: Icon(
+              Icons.play_arrow_rounded,
+              size: glyphSize,
+              color: ArulTokens.ivory,
+            ),
           ),
         ),
       ),

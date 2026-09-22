@@ -24,11 +24,17 @@ import 'package:arul/app/theme/theme.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
+import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
+import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
 import 'package:arul/features/notifications/presentation/notification_settings_screen.dart';
+import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
+import 'package:arul/features/premium/domain/entitlement.dart';
+import 'package:arul/features/premium/presentation/trial_nudge_row.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
+import 'package:arul/features/premium/providers/trial_nudge_provider.dart';
 import 'package:arul/features/referral/presentation/refer_screen.dart';
 import 'package:arul/features/referral/presentation/share_moment_sheet.dart';
 import 'package:arul/features/ringtones/presentation/ringtone_states.dart';
@@ -37,6 +43,7 @@ import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dar
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
 import 'package:arul/features/settings/presentation/confirm_dialog.dart';
 import 'package:arul/features/settings/presentation/edit_name_sheet.dart';
+import 'package:arul/features/settings/presentation/help_sheet.dart';
 import 'package:arul/features/settings/presentation/language_sheet.dart';
 import 'package:arul/features/settings/presentation/settings_screen.dart';
 import 'package:arul/features/settings/presentation/theme_sheet.dart';
@@ -80,6 +87,12 @@ class ScreenEntry {
   /// Localize the screen and the assertion FAILS -> that is the signal to delete the flag in the same change.
   /// Found by this audit's coverage check, with translations already sitting unused in the ARBs (docs/known-issues.md).
   final bool unlocalizedEnglish;
+}
+
+/// An unfinished trial, without writing the marker into the shared prefs every other entry reads.
+class _NudgeShowing extends TrialNudgeNotifier {
+  @override
+  bool build() => true;
 }
 
 /// Overrides every entry needs, whatever it is.
@@ -207,7 +220,7 @@ class _StubPreview extends RingtonePreviewNotifier {
       const RingtonePreviewState(currentId: 'r1', isPlaying: true);
 
   @override
-  Future<void> toggle(Ringtone ringtone) async {}
+  Future<void> toggle(Ringtone ringtone, {bool? reduceMotion}) async {}
 
   @override
   Future<void> stop() async {}
@@ -245,6 +258,19 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     id: 'feed.offline',
     build: () => Scaffold(body: FeedError(offline: true, onRetry: () {})),
+  ),
+  ScreenEntry(
+    // Only ever seen by someone whose mandate setup died at the UPI app, so the matrix has to be
+    // told to build it: the marker lives in prefs and no pumped state would set it.
+    id: 'feed.trial_nudge',
+    build: () => const Padding(
+      padding: EdgeInsets.only(top: 12),
+      child: TrialNudgeRow(),
+    ),
+    overrides: [
+      ..._online(premium: false),
+      trialNudgeProvider.overrideWith(_NudgeShowing.new),
+    ],
   ),
   ScreenEntry(
     id: 'feed.chips',
@@ -320,6 +346,28 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     textField: true,
     build: () =>
         SheetHost(open: (context) async => showEditNameSheet(context, 'Anish')),
+  ),
+  // Two variants, because the Manage row's presence is what changes between them and its sub is
+  // the longest string in the sheet.
+  ScreenEntry(
+    id: 'settings.help_sheet',
+    build: () => SheetHost(open: (context) async => showHelpSheet(context)),
+  ),
+  ScreenEntry(
+    id: 'settings.help_sheet.trialing',
+    build: () => SheetHost(open: (context) async => showHelpSheet(context)),
+    overrides: [
+      entitlementDetailProvider.overrideWith(
+        (ref) async => Entitlement(
+          isPremium: true,
+          subscription: SubscriptionModel(
+            id: 'sub_1',
+            userId: 'u_1',
+            status: SubscriptionStatus.trialing,
+          ),
+        ),
+      ),
+    ],
   ),
   ScreenEntry(
     id: 'settings.confirm_logout',
@@ -414,15 +462,22 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     id: 'apply.sheet',
     unlocalizedEnglish: true,
-    build: () => SheetHost(open: (context) => ApplySheet.show(context)),
+    build: () => SheetHost(
+      open: (context) =>
+          ApplySheet.show(context, wallpaper: kFakeWallpapers.first),
+    ),
   ),
 
   // ── Auth ───────────────────────────────────────────────────────────────
-  ScreenEntry(
-    id: 'signin.screen',
-    unlocalizedEnglish: true,
-    build: () => const SignInScreen(),
-  ),
+  // Idle plus every failure the screen can speak to -> the nudge lines are the ONE place the app
+  // writes a different sentence per outcome, so a translation that only fits in the idle state
+  // would ship unmeasured. `debugOutcome` renders one without running an attempt.
+  ScreenEntry(id: 'signin.screen', build: () => const SignInScreen()),
+  for (final outcome in SignInOutcome.values)
+    ScreenEntry(
+      id: 'signin.${outcome.name}',
+      build: () => SignInScreen(debugOutcome: outcome),
+    ),
 
   // ── The dock ───────────────────────────────────────────────────────────
   ScreenEntry(
@@ -482,7 +537,14 @@ Widget buildHarness({
   );
 
   return ProviderScope(
-    overrides: [...kBaseOverrides, ...entry.overrides],
+    overrides: [
+      ...kBaseOverrides,
+      // The app resolves its own locale from the PHONE when nothing is persisted, and screens that
+      // show the current language (the sign-in trigger) read that, not `MaterialApp.locale`.
+      // Without this the Tamil run would render an English trigger and measure the wrong string.
+      platformLocalesProvider.overrideWithValue([Locale(locale)]),
+      ...entry.overrides,
+    ],
     child: MaterialApp.router(
       debugShowCheckedModeBanner: false,
       locale: Locale(locale),

@@ -47,14 +47,38 @@ brown-screen duration fell in two steps, to zero only once both were in.
 
 ## The splash's own decisions
 
-- **Splash media warm is AUTH-GATED.** A signed-out session warms a handful of posters and ZERO live
-  MP4 bytes; the full warm fighting the sign-in's own network calls (Google token mint, Firebase id,
-  `POST /auth/login`) for one pipe WAS the slow first login. Nothing is lost: the feed's
-  `VideoPreloadController` re-runs the full `prefetchAround` on mount. It runs INLINE, because with
-  the brand beat gone its old post-frame `!mounted` bail warmed nothing.
+- **Splash media warm is AUTH-GATED.** A signed-out session warms ONE poster and ZERO live MP4
+  bytes; the full warm fighting the sign-in's own network calls (Google token mint, Firebase id,
+  `POST /auth/login`) for one pipe WAS the slow first login, and Google's own credential step is
+  slowest on entry-level phones. Nothing is lost: the feed's `VideoPreloadController` re-runs the
+  full `prefetchAround` on mount. It runs INLINE, because with the brand beat gone its old post-frame
+  `!mounted` bail warmed nothing.
+- **The signed-out first second stays as it is: catalog drain, one poster, FCM registration and
+  Meta's fetch all start at launch** (~200 KB). Holding them behind the credential was built and
+  measured: Google's token step and `/geo` moved within noise on Wi-Fi and LTE, push registration
+  landed 9 s later and the feed's first art ~1 s later on LTE; the only gain was on a 7 KB/s link,
+  where cellular-vs-Wi-Fi sign-in differs by ~2 pp. Speed at login won. Never re-add a gate.
+- **`GET /geo`'s timeout is 12 s, not 5.** There is no second ask, and a miss costs the whole first
+  launch its language; the budget is for a slow LINK, never for a slow Worker. Never awaited.
+- **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
+  `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
+  splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under
+  4.5 GiB total RAM (a 4 GB phone reports ~3.6, a 6 GB ~5.5, so every 4 GB phone qualifies and no
+  6 GB phone does), and Android 12 and older. **Never add the OS's `lowMemory` pressure flag**: it is
+  set at random on the cold start right after a Play install, so capable Android 13+ phones got the
+  poster by chance, first-sheet dismissals rose on exactly those tiers both times it shipped, and the
+  phones it touched cannot be identified in analytics. Everything under the RAM line or on Android
+  12 and older is already on the poster, so the flag can only take video away from phones that
+  need it to wait through Google's sheet. The probe fails OPEN to the video: a missing channel or
+  a platform error must never leave a bare background. To test the poster path on a capable phone:
+  sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
+  per process), then `settings delete global arul_force_low_ram`. The override is gated on
+  `!isPlayInstall()` like the QA tools — armed on a Play build it does nothing, verified on device.
 - **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
   may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
   the first-content gap).
+- **`GET /geo` fires beside the API warm-up and is NEVER awaited.** The wall may paint in the phone's
+  language and flip live when the answer lands; gating routing on it re-adds the wait ruled out above.
 - **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
   what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
   second picker.
@@ -64,6 +88,10 @@ brown-screen duration fell in two steps, to zero only once both were in.
   persisted first-launch marker reads false and takes the keystore wait, so the picker can never fire
   over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before Firebase** —
   serialising them re-adds real time, and the post-login token write wants the keystore ready.
+- **A secure-storage read that THROWS settles the seed as signed out.** The Android Keystore refuses
+  outright on some low-RAM Android 9 phones ("Failed to generate key pair"). Escaping the seed failed
+  `initialized`, the splash's await threw before its `context.go`, and the app sat on the splash on
+  every launch. Never let the seed future complete with an error — nothing downstream catches it.
 
 ## Dead ends — do not re-attempt
 

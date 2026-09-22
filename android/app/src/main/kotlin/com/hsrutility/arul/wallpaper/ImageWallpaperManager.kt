@@ -260,7 +260,7 @@ class ImageWallpaperManager(private val context: Context) {
     }
 
     private inline fun withDecodedBitmap(imageFile: File, block: (Bitmap) -> Unit) {
-        val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
+        val bitmap = decodeBounded(imageFile)
             ?: throw IllegalArgumentException(
                 "Failed to decode prepared wallpaper bitmap: ${imageFile.name}"
             )
@@ -269,6 +269,28 @@ class ImageWallpaperManager(private val context: Context) {
         } finally {
             if (!bitmap.isRecycled) bitmap.recycle()
         }
+    }
+
+    // Bounds first, then a power-of-two sample against the largest wallpaper the normalizer emits
+    // (home may carry twice the screen width as parallax room). The file IS the normalizer's own
+    // output, so the sample is 1 in practice; a source that ever arrived here un-normalized would
+    // otherwise be decoded whole on a budget phone (Play's vitals lint flags exactly that decode).
+    // ARGB_8888 stays: the bitmap fallback is the OEM path where the stream write silently no-ops,
+    // and a 565 re-decode of the q90 JPEG would band its gradients.
+    private fun decodeBounded(imageFile: File): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(imageFile.absolutePath, bounds)
+        val metrics = context.resources.displayMetrics
+        val maxWidth = (metrics.widthPixels.coerceAtLeast(1)) * 2
+        val maxHeight = metrics.heightPixels.coerceAtLeast(1)
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= maxWidth &&
+            bounds.outHeight / (sample * 2) >= maxHeight
+        ) {
+            sample *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return BitmapFactory.decodeFile(imageFile.absolutePath, options)
     }
 
     private fun sleepBetweenSequentialWrites() {

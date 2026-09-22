@@ -655,8 +655,15 @@ abstract final class ArulTokens {
   /// Confirm-dialog button height. 46.
   static const double dialogButtonHeight = 46;
 
-  /// Minimum interactive hit target. 44.
-  static const double minHitTarget = 44;
+  /// Minimum interactive hit target. 48.
+  ///
+  /// Android's number, not iOS's 44 — Material's `MaterialTapTargetSize.padded`, the Accessibility
+  /// Scanner's "touch target" check and WCAG 2.2 AA (2.5.8) all measure against 48. Every custom
+  /// tappable in this app is built from this one constant, so the VISUALS never moved when it rose:
+  /// each site centres its own drawn size inside the box and only the transparent hit area grew.
+  /// Where a gap is drawn NEXT to one of these boxes it must be written as `gap - slack`, never as
+  /// a literal, or the box's growth eats the gap — `RingtoneRow.controlGap` is the worked example.
+  static const double minHitTarget = 48;
 
   // Floating dock geometry — constraints in docs/ui-direction.md §Dock; these values are the record.
   // The dock OVERLAYS the branch content -> these are also what a scrolling list must clear.
@@ -804,11 +811,17 @@ abstract final class ArulTokens {
   /// Secondary ink `#6B5A41` — the social-proof pill, the trial lead line, "Selected UPI App".
   static const Color paywallInkSecondary = Color(0xFF6B5A41);
 
-  /// Muted ink — the fine print under the price, and the UPI caret. `#8B7355`.
-  static const Color paywallInkMuted = Color(0xFF8B7355);
+  /// Muted ink — the fine print under the price, and the UPI caret. `#7D684D`.
+  ///
+  /// Darkened from `#8B7355` (4.09:1 on [paywallPanelFill]'s foot) to clear WCAG AA. The rung sits
+  /// barely above [paywallInkFaint] because AA leaves no room between them on a cream ground.
+  static const Color paywallInkMuted = Color(0xFF7D684D);
 
-  /// Faint ink — the struck-through price and the reassurance line. `#A3926F`.
-  static const Color paywallInkFaint = Color(0xFFA3926F);
+  /// Faint ink — the struck-through price and the reassurance line. `#7D6E50`.
+  ///
+  /// Darkened from `#A3926F` (2.77:1) — a struck price is still the price, and the reassurance line
+  /// is body copy; both owe AA. It stays the LIGHTEST readable rung, not a decorative one.
+  static const Color paywallInkFaint = Color(0xFF7D6E50);
 
   /// Gold label ink — "PER MONTH", the tagline. `#A3814A`.
   static const Color paywallInkGold = Color(0xFFA3814A);
@@ -1363,7 +1376,7 @@ abstract final class ArulTokens {
   /// Gap from the back ring to the member navigation title.
   static const double premiumMemberNavGap = 10;
 
-  /// Diameter of the visible ring inside the 44px back hit target.
+  /// Diameter of the visible ring inside the [minHitTarget] back hit target.
   static const double premiumMemberBackRingSize = 34;
 
   /// Stroke width of the member back ring and quiet controls.

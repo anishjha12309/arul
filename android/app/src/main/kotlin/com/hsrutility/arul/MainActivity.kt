@@ -1,7 +1,10 @@
 package com.hsrutility.arul
 
 import android.Manifest
+import android.app.ActivityManager
+import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.Context
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
@@ -15,14 +18,17 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
 import com.facebook.applinks.AppLinkData
+import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
+import com.hsrutility.arul.upload.MediaPickChannel
 import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -43,6 +49,41 @@ class MainActivity : FlutterFragmentActivity() {
         // Exposes isPlayInstall() to Dart -> the reminders screen gates its QA tools on it.
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
 
+        private const val NOTIFICATION_SETTINGS_CHANNEL = "com.hsrutility.arul/notification_settings"
+
+        // Below this the phone is "low memory" for the auth video: a 4 GB phone reports ~3.6 GiB
+        // and a 6 GB phone ~5.5 GiB -> 4.5 GiB puts every 4 GB phone on the poster and no 6 GB phone.
+        // Half of the handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
+        private const val LOW_RAM_TOTAL_BYTES = 4608L * 1024 * 1024
+
+        // QA-only override for the rule above -> honoured on sideloads only (see isLowRamDevice).
+        private const val FORCE_LOW_RAM_SETTING = "arul_force_low_ram"
+
+        // The `high` line: an 8 GB phone reports ~7.3 GiB and a 6 GB phone ~5.5 GiB -> 7 GiB puts
+        // every 8 GB phone on `high` and no 6 GB phone. Between this and LOW_RAM_TOTAL_BYTES is `mid`.
+        private const val HIGH_RAM_TOTAL_BYTES = 7168L * 1024 * 1024
+
+        // Tier names, matched verbatim by the Dart [DeviceTier] parser.
+        private const val TIER_LOW = "low"
+        private const val TIER_MID = "mid"
+        private const val TIER_HIGH = "high"
+
+        // SoC families that must never reach `high` however much RAM the phone carries.
+        // Matched as a PREFIX against a lowercased `Build.SOC_MODEL`. Caps at `mid`, never at `low`.
+        //
+        // `mt68` is here on measurement, not on reputation: docs/perf-measurement.md records a
+        // heavy browse peaking at 525 MB PSS on an **mt6878** with a 48 MB image cache, which is
+        // why the shipped ceiling is 32. An 8 GB mt6878 would otherwise clear the RAM line and be
+        // handed the `high` ceiling the same phone was measured failing.
+        // The rest are families whose concurrent hardware decoder sessions run out early.
+        private val BUDGET_SOC_PREFIXES = listOf(
+            "mt65", "mt66", "mt67", "mt68", // Helio A/G/P and Dimensity 7000-class
+            "sm4", "sm6",                   // Snapdragon 4xx / 6xx
+            "msm", "sdm",                   // older Snapdragon naming
+            "ums", "t6", "t7",              // Unisoc Tiger
+            "exynos7", "exynos8",           // budget Exynos
+        )
+
         // Firebase's documented deferred-deep-link storage -> the SDK may write it before OR after Flutter attaches.
         // So onCreate buffers the value and the channel serves both an initial pull and a later push.
         private const val GOOGLE_DDL_PREFS = "google.analytics.deferred.deeplink.prefs"
@@ -60,14 +101,13 @@ class MainActivity : FlutterFragmentActivity() {
         private const val SOURCE_GOOGLE_ADS = "google_ads"
         private const val SOURCE_META = "meta"
         private const val DEEP_LINK_HOST = "arul.hsrutility.com"
-        private val UUID_RE =
-            Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     }
 
     private var wallpaperApplyChannel: WallpaperApplyChannel? = null
     private var feedVideoPlugin: FeedVideoPlugin? = null
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
+    private var mediaPickChannel: MediaPickChannel? = null
     private var deferredLinkChannel: MethodChannel? = null
     private var googleDeferredPrefs: SharedPreferences? = null
     private var googleDeferredListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -121,6 +161,102 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    // The ONE device-quality answer for the whole process, resolved natively and read by Dart
+    // through [DeviceQuality]. Three rungs, and the rule is this table — never scattered conditionals:
+    //
+    //   | Tier   | Rule, first match wins                                                          |
+    //   | ------ | ------------------------------------------------------------------------------- |
+    //   | low    | isLowRamDevice() below — the Go flag, under 4.5 GiB, or Android 12L and older   |
+    //   | mid    | SOC_MODEL in a budget family, or total RAM under 7 GiB                          |
+    //   | high   | everything else: Android 13+, 7 GiB or more, and not a budget SoC               |
+    //
+    // **`low` is EXACTLY today's poster rule and nothing else may widen it.** That population is
+    // what the sign-in funnel is read against, and two builds that let a fourth signal in lost
+    // Android 13+ sign-ins. SOC_MODEL therefore only ever caps a phone at `mid`; it can never
+    // create a `low`.
+    //
+    // **Fails open to `mid`**, never to `low`: a probe that throws must not cripple a capable phone.
+    private fun deviceTier(): String {
+        return try {
+            if (isLowRamDevice()) return TIER_LOW
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(info)
+            if (info.totalMem < HIGH_RAM_TOTAL_BYTES) return TIER_MID
+            if (isBudgetSoc()) return TIER_MID
+            TIER_HIGH
+        } catch (e: Exception) {
+            Log.w(TAG, "deviceTier probe failed, defaulting to mid", e)
+            TIER_MID
+        }
+    }
+
+    // `Build.SOC_MODEL` is API 31+ and OEMs may return UNKNOWN — both cases answer false, which
+    // leaves the phone on whatever RAM and SDK already decided. A match only ever caps at `mid`.
+    // The families listed are the ones whose hardware decoder sessions run out at 2 on this feed.
+    private fun isBudgetSoc(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        val soc = Build.SOC_MODEL?.lowercase() ?: return false
+        if (soc.isEmpty() || soc == Build.UNKNOWN.lowercase()) return false
+        // PREFIX match only. A `contains` would let a two-character family like "t6" match
+        // anywhere in an unrelated model string and demote a flagship by accident.
+        return BUDGET_SOC_PREFIXES.any { soc.startsWith(it) }
+    }
+
+    // The diagnostic payload behind the tier — logged once per process on the Dart side so a phone
+    // that lands on an unexpected rung can be identified from a single logcat line.
+    private fun deviceTierInfo(): Map<String, Any?> {
+        val am = try {
+            getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        } catch (e: Exception) {
+            null
+        }
+        val info = ActivityManager.MemoryInfo()
+        try {
+            am?.getMemoryInfo(info)
+        } catch (e: Exception) {
+            // Leave the zeroed MemoryInfo — this map is diagnostics, never the rule.
+        }
+        return mapOf(
+            "tier" to deviceTier(),
+            "totalMem" to info.totalMem,
+            "sdkInt" to Build.VERSION.SDK_INT,
+            "lowRamFlag" to (am?.isLowRamDevice ?: false),
+            "soc" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else null,
+        )
+    }
+
+    // The auth screens' looping video background is skipped on phones this answers true for.
+    // `isLowRamDevice` alone is the Android Go flag -> a 2–3 GB non-Go phone reports false, and those
+    // are exactly the handsets where Google's sign-in step measured 2–3× slower -> total RAM decides too.
+    // Also the `low` rung of [deviceTier] — one rule, two readers, so they can never disagree.
+    private fun isLowRamDevice(): Boolean {
+        return try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(info)
+            // QA seam: a capable phone cannot be made low-RAM, so `adb shell settings put global
+            // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
+            // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
+            val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
+            // Three STABLE facts only: the Go flag, total RAM, Android 12 and older. They name the
+            // poster population in analytics and give the same answer on every launch.
+            // NEVER `info.lowMemory`: it is the OS's moment-in-time pressure bit (availMem under the
+            // kill threshold), and it is routinely set on the cold start right after a Play install,
+            // so capable Android 13+ phones got the still poster at random. Both builds that carried
+            // it lost Android 13+ sign-ins (more first-sheet dismissals, same speed as human swipes)
+            // while the phones it touched could not be identified afterwards. Phones under the RAM
+            // line or on Android 12 and older are already on the poster, so the flag can only ever
+            // hurt. The video is what keeps capable phones waiting through Google's sheet.
+            (!isPlayInstall() && forced) ||
+                am.isLowRamDevice ||
+                info.totalMem < LOW_RAM_TOTAL_BYTES ||
+                Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -132,8 +268,7 @@ class MainActivity : FlutterFragmentActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "getDeferredDeepLinks" ->
-                        result.success(pendingDeferredLinks.values.toList())
+                    "getDeferredDeepLinks" -> result.success(pendingDeferredLinks.values.toList())
                     "ackDeferredDeepLink" -> {
                         val token = call.argument<String>("token")
                         if (token == null || !pendingDeferredLinks.containsKey(token)) {
@@ -189,6 +324,14 @@ class MainActivity : FlutterFragmentActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isPlayInstall" -> result.success(isPlayInstall())
+                "isLowRamDevice" -> result.success(isLowRamDevice())
+                // The three-rung quality ladder plus the facts behind it -> Dart logs one line per
+                // process and splits every later metric by tier.
+                "deviceTier" -> result.success(deviceTierInfo())
+                // Stamped on the push registry row so a delivery gap can be read per Android
+                // generation — the permission model, the channel rules and the trampoline rules all
+                // change with it, and nothing else in the payload says which phone this is.
+                "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 else -> result.notImplemented()
             }
         }
@@ -206,6 +349,39 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
+
+        // Google's own Update / Enable dialog for a phone whose Play services cannot sign in.
+        // Stateless and activity-scoped -> it needs no disposal.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PlayServicesChannel.CHANNEL,
+        ).setMethodCallHandler(PlayServicesChannel(this))
+
+        // Upload-your-content's file pick on the system pickers -> its result comes back through
+        // onActivityResult below, and the copy it makes runs on a coroutine the disposal cancels.
+        val mediaPick = MediaPickChannel(this)
+        mediaPickChannel = mediaPick
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            MediaPickChannel.CHANNEL,
+        ).setMethodCallHandler(mediaPick)
+
+        // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
+        // Android stops showing its dialog once the user has refused twice, so the toggle would
+        // otherwise be a dead tap behind a toast naming a screen with no way to reach it.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFICATION_SETTINGS_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "notificationsBlocked" -> result.success(notificationsBlocked())
+                "openNotificationSettings" -> {
+                    openNotificationSettingsScreen()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 
         // Ringtone set -> WRITE_SETTINGS check and deep-link, MediaStore register, then the default-tone set.
         MethodChannel(
@@ -229,6 +405,9 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     result.success(null)
                 }
+
+                // Never fails: the badge it feeds is a nicety, and an unreadable row is simply no badge.
+                "currentRingtone" -> result.success(readCurrentRingtone())
 
                 "setRingtone" -> {
                     val filePath = call.argument<String>("filePath")
@@ -277,6 +456,8 @@ class MainActivity : FlutterFragmentActivity() {
         videoThumbnailChannel = null
         shareWatermarkChannel?.dispose()
         shareWatermarkChannel = null
+        mediaPickChannel?.dispose()
+        mediaPickChannel = null
         deferredLinkChannel?.setMethodCallHandler(null)
         deferredLinkChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
@@ -309,9 +490,8 @@ class MainActivity : FlutterFragmentActivity() {
         val raw = prefs.getString(GOOGLE_DDL_KEY, null)?.trim().orEmpty()
         if (raw.isEmpty()) return
         if (!isAppLinkUrl(raw)) {
-            // An ad group's App URL must be /w/<uuid> or /r/<uuid> (a ?lang= query is fine) -> anything else is dropped.
-            // Dropping it silently is invisible -> the shipped build is FLAG_SECURE, so logcat is the only window.
-            Log.w(TAG, "Deferred deep link ignored: not a /w/ or /r/ App Link")
+            // Not our host -> dropped. Dropping it silently is invisible -> the shipped build is FLAG_SECURE, so logcat is the only window.
+            Log.w(TAG, "Deferred deep link ignored: not an arul.hsrutility.com link")
             return
         }
 
@@ -324,6 +504,9 @@ class MainActivity : FlutterFragmentActivity() {
 
     // The URL an ad's deep-link field carried, for a user who installed from it (docs/deferred-links.md §Meta).
     // fetchDeferredAppLinkData asks Meta's Graph API once -> it logs NO app event -> attribution is unaffected.
+    // Called from Dart's FIRST pull, never onCreate: a Graph POST in the first second of a fresh
+    // install shared the link with the sign-in and the catalog, and on a 7 KB/s connection that
+    // queue starved all three. An ad target one sign-in late still lands before the feed does.
     // The SDK was already initialised by its manifest ContentProvider -> this Activity does not init it.
     // A null callback means "no link" AND "network failed" -> retry over the first launches, capped at META_MAX_ATTEMPTS.
     // Never throws -> a deferred link is never worth a crash on the launch path.
@@ -356,16 +539,16 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** `https://arul.hsrutility.com/w/<uuid>` or `/r/<uuid>`, any query. */
+    /**
+     * Any `https://arul.hsrutility.com/…` URL. Only the HOST is checked here; Dart's `parseDeepLink` decides what the
+     * path and query mean, and ACKs what it rejects. A path rule here once required `/w/<uuid>`, so the id-less
+     * `/w/?lang=ta` the ads carried was dropped on every Google Ads install while the Dart parser accepted it.
+     */
     private fun isAppLinkUrl(raw: String): Boolean {
         return try {
             val uri = Uri.parse(raw)
-            val parts = uri.pathSegments
             uri.scheme.equals("https", ignoreCase = true) &&
-                uri.host.equals(DEEP_LINK_HOST, ignoreCase = true) &&
-                parts.size == 2 &&
-                (parts[0] == "w" || parts[0] == "r") &&
-                UUID_RE.matches(parts[1])
+                uri.host.equals(DEEP_LINK_HOST, ignoreCase = true)
         } catch (_: Exception) {
             false
         }
@@ -436,6 +619,46 @@ class MainActivity : FlutterFragmentActivity() {
         Log.e(TAG, "No settings screen resolvable for WRITE_SETTINGS grant")
     }
 
+    // Not granted AND Android will no longer show its dialog -> only Settings can turn it back on.
+    // shouldShowRequestPermissionRationale is false BEFORE the first ask too, so this is only ever
+    // read AFTER a request came back denied, where false can only mean "refused for good".
+    private fun notificationsBlocked(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED &&
+                !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            // Below 13 there is no runtime permission — the app-level switch is the only gate.
+            !NotificationManagerCompat.from(this).areNotificationsEnabled()
+        }
+
+    // Same fallback chain as WRITE_SETTINGS: the per-app notification page, then app details,
+    // which resolves everywhere. A tap that opens nothing is preferable to a crash.
+    private fun openNotificationSettingsScreen() {
+        val candidates = mutableListOf<Intent>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            candidates.add(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName),
+            )
+        }
+        candidates.add(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+        for (intent in candidates) {
+            try {
+                startActivity(intent)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "notification settings intent unresolvable, trying fallback", e)
+            }
+        }
+        Log.e(TAG, "No settings screen resolvable for notification permission")
+    }
+
     // The PhonePe plugin completes a `lateinit var result` that startTransaction() sets -> a fresh instance has none.
     // A process recreate behind B2bPgActivity replays the result into that fresh plugin -> UninitializedPropertyAccessException.
     // It fires exactly as the user returns from paying, on low-memory phones -> swallow it here.
@@ -443,6 +666,8 @@ class MainActivity : FlutterFragmentActivity() {
     // Deliberately narrow -> only that exception class is caught, everything else propagates.
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        // The upload pick is ours, not a plugin's -> it never reaches the plugin chain below.
+        if (mediaPickChannel?.onActivityResult(requestCode, resultCode, data) == true) return
         try {
             @Suppress("DEPRECATION")
             super.onActivityResult(requestCode, resultCode, data)
@@ -490,6 +715,11 @@ class MainActivity : FlutterFragmentActivity() {
         completeRingtoneSet(path, title, mime, type, result)
     }
 
+    // Off the main thread: the set is a MediaStore query + delete + insert, a whole-file copy through
+    // the provider and a Settings write, every one a binder round-trip or disk write that a busy
+    // media provider on a budget phone answers in seconds -> inline in the channel handler it held
+    // the platform thread for the whole of it (an input-dispatch ANR on build 80). Nothing here
+    // touches a View; only the reply crosses back to main, where MethodChannel.Result must be called.
     private fun completeRingtoneSet(
         filePath: String,
         title: String?,
@@ -497,14 +727,31 @@ class MainActivity : FlutterFragmentActivity() {
         type: Int,
         result: MethodChannel.Result,
     ) {
-        try {
-            setRingtoneFromFile(filePath, title, mime, type)
-            result.success(null)
-        } catch (e: SecurityException) {
-            result.error("PERMISSION_DENIED", e.message, null)
-        } catch (e: Exception) {
-            result.error("SET_FAILED", e.message, null)
-        }
+        Thread {
+            var payload: Map<String, String?>? = null
+            var errorCode = "SET_FAILED"
+            var errorMessage: String? = null
+            try {
+                // The URI and the name we just registered ride back so the app can recognise its own tone
+                // in a LATER read of the system row -> the name is MediaStore's, which may have uniquified it.
+                // Canonical on the way out as well as the way in ([canonicalRingtoneUri]) -> the two sides
+                // are only ever compared in one form.
+                val contentUri = canonicalRingtoneUri(setRingtoneFromFile(filePath, title, mime, type))
+                payload = mapOf(
+                    "uri" to contentUri.toString(),
+                    "displayName" to ringtoneDisplayName(contentUri),
+                )
+            } catch (e: SecurityException) {
+                errorCode = "PERMISSION_DENIED"
+                errorMessage = e.message
+            } catch (e: Exception) {
+                errorMessage = e.message
+            }
+            runOnUiThread {
+                val ok = payload
+                if (ok != null) result.success(ok) else result.error(errorCode, errorMessage, null)
+            }
+        }.start()
     }
 
     // The download is named by catalog id -> the user must never see that -> the catalog title becomes the picker name.
@@ -551,13 +798,14 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    /** Returns the MediaStore URI now installed as the [type] tone. */
     @Suppress("DEPRECATION")
     private fun setRingtoneFromFile(
         filePath: String,
         title: String?,
         mime: String?,
         type: Int,
-    ) {
+    ): Uri {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
             !Settings.System.canWrite(this)
         ) {
@@ -647,6 +895,65 @@ class MainActivity : FlutterFragmentActivity() {
 
         RingtoneManager.setActualDefaultRingtoneUri(this, type, contentUri)
         if (type == RingtoneManager.TYPE_RINGTONE) applyPerSimRingtones(contentUri)
+        return contentUri
+    }
+
+    // The tone the phone is ACTUALLY ringing with -> read back off the system, never anything we cached,
+    // because Settings or another app can change it and Arul never hears about that.
+    // The AOSP default is the one row `setActualDefaultRingtoneUri` always writes, so it is the answer
+    // even on the dual-SIM skins [applyPerSimRingtones] also mirrors to.
+    // Every read is wrapped on its own, like the per-SIM writes: this feeds a badge, and a badge must
+    // never cost a set that already worked. A throw or a null is simply "no badge" -> see [ringtoneDisplayName].
+    private fun readCurrentRingtone(): Map<String, String?>? {
+        val uri =
+            try {
+                RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE)
+            } catch (e: Exception) {
+                // API 31+ throws on a row the framework declares `@hide` -> presence, never a value.
+                Log.w(TAG, "Default ringtone read unavailable (non-critical)", e)
+                null
+            } ?: return null
+        val canonical = canonicalRingtoneUri(uri)
+        return mapOf(
+            "uri" to canonical.toString(),
+            "displayName" to ringtoneDisplayName(canonical),
+        )
+    }
+
+    // The framework does NOT store the URI it was handed: it prefixes the calling user and appends its
+    // own query, so a tone inserted as `content://media/external/audio/media/123` reads back on
+    // Android 10+ as `content://0@media/external/audio/media/123?title=Foo&soundOnly=1`.
+    // Read off an A001 on API 36; the same set on an API 28 Vivo reads back verbatim, which is why
+    // string equality LOOKED fine. Both sides go through here so the app compares one stable form,
+    // and the stripped URI is also the one MediaStore will answer a DISPLAY_NAME query for.
+    private fun canonicalRingtoneUri(uri: Uri): Uri {
+        val authority = uri.authority ?: return uri
+        return uri.buildUpon()
+            .authority(authority.substringAfterLast('@'))
+            .clearQuery()
+            .fragment(null)
+            .build()
+    }
+
+    // MediaStore's DISPLAY_NAME behind [uri] -> the second axis the app matches on when the stored URI
+    // no longer resolves, because a media rescan re-keys the row while the file name survives it.
+    // Its own try/catch: a provider that refuses this query must still leave the URI itself usable.
+    private fun ringtoneDisplayName(uri: Uri): String? {
+        if (uri.scheme != ContentResolver.SCHEME_CONTENT) return null
+        return try {
+            contentResolver.query(
+                uri,
+                arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Ringtone display-name read failed (non-critical)", e)
+            null
+        }
     }
 
     // setActualDefaultRingtoneUri writes only the AOSP default -> dual-SIM skins read their OWN Settings.System row.

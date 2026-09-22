@@ -23,6 +23,12 @@ _Ringtone _$RingtoneFromJson(Map<String, dynamic> json) => _Ringtone(
       : DateTime.parse(json['created_at'] as String),
   setCount: (json['set_count'] as num?)?.toInt() ?? 0,
   feedRank: (json['feed_rank'] as num?)?.toInt(),
+  publishedAt: json['published_at'] == null
+      ? null
+      : DateTime.parse(json['published_at'] as String),
+  renewedAt: json['renewed_at'] == null
+      ? null
+      : DateTime.parse(json['renewed_at'] as String),
 );
 
 Map<String, dynamic> _$RingtoneToJson(_Ringtone instance) => <String, dynamic>{
@@ -38,4 +44,6 @@ Map<String, dynamic> _$RingtoneToJson(_Ringtone instance) => <String, dynamic>{
   'created_at': instance.createdAt?.toIso8601String(),
   'set_count': instance.setCount,
   'feed_rank': instance.feedRank,
+  'published_at': instance.publishedAt?.toIso8601String(),
+  'renewed_at': instance.renewedAt?.toIso8601String(),
 };

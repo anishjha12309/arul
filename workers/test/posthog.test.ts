@@ -59,7 +59,29 @@ describe("reportPostHogFirstConversion", () => {
       order_id: "DKS_x_R_1",
       value: 199,
       currency: "INR",
+      // A row that predates `upi_target_app` says so, never a blank or a guess.
+      target_app: "unknown",
     });
+  });
+
+  it("carries the row's UPI app as target_app — the same key the app puts on checkout_started", async () => {
+    const env = makeEnv();
+
+    await reportPostHogFirstConversion(env, { ...CONVERSION, targetApp: "com.phonepe.app" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.properties.target_app).toBe("com.phonepe.app");
+  });
+
+  it("names the hosted page when the mandate went through the PhonePe SDK path", async () => {
+    const env = makeEnv();
+
+    await reportPostHogFirstConversion(env, { ...CONVERSION, targetApp: "phonepe_page" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.properties.target_app).toBe("phonepe_page");
   });
 
   it("sends the SAME uuid AND timestamp for the same transaction — PostHog dedupes on [timestamp, distinct_id, event, uuid]", async () => {

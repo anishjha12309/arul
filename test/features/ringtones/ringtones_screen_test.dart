@@ -60,7 +60,7 @@ class _StubPreview extends RingtonePreviewNotifier {
   RingtonePreviewState build() => const RingtonePreviewState();
 
   @override
-  Future<void> toggle(Ringtone ringtone) async {
+  Future<void> toggle(Ringtone ringtone, {bool? reduceMotion}) async {
     if (state.currentId == ringtone.id) {
       if (state.isPlaying) {
         halts.add('pause:${ringtone.id}');
@@ -106,6 +106,9 @@ class _RecordingAnalytics implements AnalyticsService {
 
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
@@ -483,7 +486,7 @@ void main() {
       await tester.pump(); // the post-frame jump
 
       final list = tester.widget<ListView>(find.byType(ListView).last);
-      final extent = RingtoneRow.extent + 10;
+      final extent = RingtoneRow.extentFor(TextScaler.noScaling) + 10;
       expect(list.controller?.offset, 20 * extent);
       // The target row is the first one laid out at the top edge.
       final rowTop = tester.getTopLeft(
@@ -519,7 +522,10 @@ void main() {
         WallpaperCategory.allSlug,
       );
       final list = tester.widget<ListView>(find.byType(ListView).last);
-      expect(list.controller?.offset, 20 * (RingtoneRow.extent + 10));
+      expect(
+        list.controller?.offset,
+        20 * (RingtoneRow.extentFor(TextScaler.noScaling) + 10),
+      );
     });
 
     testWidgets('an unknown id is silently ignored', (tester) async {

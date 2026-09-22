@@ -31,6 +31,11 @@ Light and dark are both required, and the choice is persisted.
   height is what the reel card geometry is solved against, so moving it resizes the card.
 - `ArulChipVariant.category` is the browse chip on both tabs; `.surface` is the Upload screen's FORM
   chip — a different thing. **No rule under the chips**; the row sits in equal air.
+- **Every custom tappable is built from `ArulTokens.minHitTarget` = 48**, Android's number, not
+  iOS's 44 (Material `padded`, the Accessibility Scanner, WCAG 2.5.8). The DRAWN size never changes
+  with it — each control centres its visual (chip 34, transport 34, back ring 34, UPI pill 36) in
+  the box and only transparent hit area grows. A gap drawn beside one of those boxes is written as
+  `gap - slack`, never a literal, or raising the target eats the gap: `RingtoneRow.controlGap`.
 - **Settings lives in the dock, never the header.** The feed's header gear is deliberately gone.
 - The wordmark is the literal text `Arul` in Marcellus. அருள் = grace / divine blessing — it does NOT
   mean "the South" (that was the working title); never gloss it so. Copy tone: warm, festive, plain —
@@ -95,6 +100,20 @@ owner — splash and sign-in keep the lotus video; don't re-propose a static art
 - Feed pages get no keep-alive and no extra `RepaintBoundary` (`PageView.builder` adds one already).
   Images decode at display size and the image cache is capped in `main.dart` — a 1080×1920 wallpaper
   is ~8.3 MB of RGBA regardless of file size.
+- **Device tier, not a boolean.** `DeviceQuality` resolves `low`/`mid`/`high` ONCE per process from
+  the native table in `MainActivity.deviceTier()` and fails open to `mid`. `low` is exactly the
+  shipped poster rule and nothing may widen it — that population is what the sign-in funnel is read
+  against. Tier buys COST, never composition: decoder budget seed, image-cache ceiling, animation
+  budget. **Never branch layout on it.** `Build.SOC_MODEL` may cap a phone at `mid` and can never
+  create a `low`; `mt68` is on that list because an mt6878 is the phone the 48 MB cache was measured
+  failing on (§Perf-measurement).
+- **One reduce-motion answer: `context.reduceMotion`** (`lib/app/theme/motion.dart`), true when
+  `MediaQuery.disableAnimations` is set — the accessibility setting AND Android's battery saver — or
+  the tier is `low`. Every animation in `lib/app/widgets/**` and `lib/features/**` routes through it.
+  **Animations HOLD at their resting state, they are not removed**: a sweep parks mid-gradient rather
+  than going flat, a sheet opens at its settled offset rather than at +24, a press scale stays at 1,
+  a haptic still fires. Nothing changes position when the flag flips. Arm a repeating controller from
+  `didChangeDependencies`, never a field initializer — the lookup needs an InheritedWidget.
 - **Material 3 Expressive is NOT in `package:flutter/material.dart`.** Material was decoupled into
   the `material_ui` package, whose changelog says it merely copies the framework's Material code —
   no Expressive component set in any release. Do not chase it. Premium here = the brand system above

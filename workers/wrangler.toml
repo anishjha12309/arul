@@ -24,6 +24,7 @@ preview_urls = false
 # The project api key is a secret (wrangler secret bulk) -> never a [vars] entry
 POSTHOG_HOST = "https://us.i.posthog.com"
 
+
 # Served in /.well-known/assetlinks.json -> anyone can curl it -> [vars], not a secret
 # Play re-signs every AAB -> upload-key-only values fail on every Play install -> list the Play App Signing cert
 # App Link failures log NOTHING (links just open a browser) -> the console page has been wrong -> read the cert off the device
@@ -31,6 +32,26 @@ POSTHOG_HOST = "https://us.i.posthog.com"
 #   1st = the cert Play ACTUALLY signs with (every Play install)
 #   2nd/3rd = console-reported app-signing + upload certs, so sideloaded release APKs verify too
 ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:61:7A:50:84:9E:B6:53:75:CA:E2:1A:D2:5F,EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
+
+# ─── [vars] ──────────────────────────────────────────────────────────────────
+# THE TWO KEYS ABOVE ARE NOT IN THIS TABLE ON PURPOSE. They are bare top-level keys with no [vars]
+# header, so wrangler discards them with a warning and the same-named SECRETS are what actually serve
+# (docs/known-issues.md). Moving them in here would make the toml's three-fingerprint
+# ANDROID_CERT_SHA256 overwrite the live two-fingerprint secret and change what assetlinks.json
+# serves -> that is an open decision, not a side effect of adding a switch.
+# This table holds only keys that have never had a secret. It sits ABOVE the first [[table]] and below
+# every bare top-level key, which is the one position where both kinds deploy as written.
+[vars]
+# Campaign-push kill switch (docs/push.md). "true" and nothing else turns sends on; any other value,
+# or none, means the minute cron and /internal/push/dispatch claim NOTHING.
+# /internal/push/test and /internal/push/count keep working with it off -> that is what lets the whole
+# chain be proven on the owner's own phones while production stays dark.
+# Flipping it to "true" is the OWNER's call, not an agent's.
+PUSH_ENABLED = "true"
+# Region-language kill switch for GET /geo (routes/geo.ts). "true" and nothing else answers `lang`;
+# any other value answers `lang: null` with country/region intact -> fresh installs fall back to the
+# phone's language while the accuracy measurement keeps flowing. Turning it off = edit here, deploy.
+GEO_LANG_ENABLED = "true"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>
@@ -87,8 +108,12 @@ namespace_id = "2003"
 # 0 * * * *    -> build-catalog, then sweep-canonical only when the catalog changed
 # */15 * * * * -> autopay notify/execute ONLY; folding it into the hourly run blew the subrequest cap
 # 30 21 * * *  -> (03:00 IST, off-peak) unconditional sweeps + the popularity content_version bump
+# * * * * *    -> campaign push dispatch ONLY; its own invocation for the same reason autopay has one,
+#                 and a scheduled campaign is picked up here without the CMS calling anything
+#                 Idle ticks log nothing and touch no binding while PUSH_ENABLED is not "true"
+# Deploying ships this list -> a removed line silently removes that cron
 [triggers]
-crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *"]
+crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *", "* * * * *"]
 
 # ─── Custom domain (API) ─────────────────────────────────────────────────────
 # `custom_domain = true` -> wrangler makes the CF domain + DNS record on deploy -> no dashboard step, no zone id
@@ -123,6 +148,13 @@ custom_domain = true
 # PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
 # PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
 # CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
+# PUSH_SECRET  FCM_SA_CLIENT_EMAIL  FCM_SA_PRIVATE_KEY  FIREBASE_PROJECT_ID
+# PUSH_SECRET guards /internal/push/* and is handed to the CMS as ARUL_PUSH_SECRET -> a THIRD secret,
+#   because CATALOG_BUILD_SECRET must never also authorize "message every user"
+# The FCM pair is the Firebase console service-account key (Project settings -> Service accounts ->
+#   Generate new private key); set via `secret bulk` from that JSON, so the PEM carries literal 
+
+#   -> lib/fcm.ts normalises exactly that and nothing else
 # OPS_SECRET is operator-only and MOVES REAL MONEY: /internal/run-redemptions debits ₹199, /internal/refund
 # CATALOG_BUILD_SECRET is handed to the CMS -> one string must never authorize "rebuild" AND "charge everybody"
 # OPS_SECRET fails closed when unset -> a 401 on a money route means the wrong secret -> never widen it
@@ -135,3 +167,11 @@ custom_domain = true
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+# ─── Placement ─────────────────────────────────────────────────────────────────
+# Every DB route does 2–3 Hyperdrive round trips to Neon in ap-southeast-1, and about a fifth of Indian
+# traffic enters Cloudflare in Europe (Jio peering -> MRS), so those requests paid EU->SIN per hop.
+# Smart placement runs the Worker near Neon instead of near the user -> one long hop, not three.
+# Browse never reaches this Worker (edge-cached catalog), so nothing latency-sensitive moves away from users.
+[placement]
+mode = "smart"

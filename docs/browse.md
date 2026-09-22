@@ -1,8 +1,8 @@
 # Browse — feed order and the reel card
 
-Read before touching `workers/src/cron/build-catalog.ts`, `workers/src/lib/feed-score.ts`,
-`lib/features/wallpapers/providers/**` or `feed_card_geometry.dart`. The category axis itself is
-CLAUDE.md §5b. Ringtone browse: [ringtones.md](ringtones.md).
+Read before touching `workers/src/cron/build-catalog.ts`, `workers/src/lib/feed-score.ts` or
+`lib/features/wallpapers/providers/**`. The category axis itself is CLAUDE.md §5b.
+Ringtone browse: [ringtones.md](ringtones.md). Card geometry: [feed-card.md](feed-card.md).
 
 ## Order is ONE SQL clause
 
@@ -26,8 +26,9 @@ clause is the counter order alone. Never fold NULL to 0: 0 is a valid top pin. I
 which is what stops a bulk drop displacing the pinned head; curation must never be parked in
 `sort_order`, because every import resets it and the pins die silently.
 
-The same order applies on every chip, so a filtered view can never contradict All: **a category IS
-All restricted to that category.** Never add a per-chip rank.
+The same order applies on All and every category chip, so a category view can never contradict All:
+**a category IS All restricted to that category.** Never add a per-chip rank. The New chip is the
+one exception and has its own order — see below.
 
 **The chip ROW's own order is a different thing entirely** and does not live here: it is the
 operator's, set by dragging on the unified CMS's Categories page, shipped as
@@ -49,7 +50,48 @@ rebuilds; without both the phone keeps its cached `app_config.json` and the orde
 - **`sort_order` no longer participates in feed order at all.** Imports own it, so leading with it
   meant the feed was really ordered by import sequence with popularity breaking ties. The column is
   still stored and still editable in the CMS; nothing reads it for order.
-- The CMS ordering page is READ-ONLY and copies this clause verbatim. Keep the two in step.
+- The CMS feed-order page copies this clause verbatim. Keep the two in step.
+
+## The New chip
+
+**A WINDOW over the feed, not a category any row carries.** Sentinel slug (`__new__`), built as
+chrome beside All in both chip rows, so it never reaches `categoriesProvider` — which is what keeps
+it out of the Upload picker, the CMS and every import. Never give a row this `category` value.
+
+**Client-side, and it has to be:** the hourly build is a no-op while `content_version` holds, so a
+server-stamped `is_new` would freeze a row as new through a quiet week. `newOrder`
+(catalog_providers.dart) windows at read time; the catalog only carries the columns.
+
+**New has its OWN order — the one chip that is not All restricted** (owner's call, 2026-09-15, build
+1.0.0+78). Three tiers, the first two inside `kNewWindow` (7 days, inclusive):
+
+1. **Renewed** — `renewed_at` in the window, most recent renew first. The operator taps **Renew** on a
+   row of the unified CMS's Feed order page; renew five and they stack, the last one on top.
+2. **Debuts** — every other row with `published_at` in the window, newest publish first.
+3. **Filler** — only when 1 + 2 hold fewer than `kNewMinItems` (20): the next-newest rows by
+   `published_at` make up the floor, shown most-used first.
+
+- **Pins play NO part in New.** Ties in every tier go by uses DESC, then `id` — never by the catalog's
+  `feed_rank`, which is a position with the pins baked in. A bulk publish is one transaction, so a
+  whole batch shares one `published_at`; that is the tie the rule is for. `id` rather than list index
+  because the drained ringtone list is re-sorted by `sort_order`/title.
+- **A CMS Renew writes `renewed_at = now()` AND `published_at = now()`** in one UPDATE, with the
+  `content_version` bump (db/schema/19_renewed_at.sql). Re-stamping `published_at` is what lets builds
+  before 1.0.0+78 — which window on `published_at` alone, in their old pins-then-applies order — still
+  show a renewed row in New. The date it overwrites is kept in `pre_renew_published_at` (first renew
+  of a chain only), and the CMS's **Undo** writes it back and clears both renew columns, so the row
+  returns exactly where it was (db/schema/20_renew_undo.sql). The app needs nothing for Undo: a null
+  `renewed_at` is simply not tier 1. A renew older than the window is just a date again.
+- **`published_at`, never `created_at`** — created_at is import time, so a batch imported long before
+  it went live would be born too old to appear. Debut date, DB-trigger stamped
+  ([data-model.md](data-model.md)).
+- **`kNewMinItems` is a FLOOR, not a cap.** Everything inside `kNewWindow` is in — a 40-row drop
+  shows all 40; a thin week tops up by recency to 20, an empty one serves the newest 20. A cap would
+  hide half a bulk drop behind All for a week. Membership of the filler is by RECENCY and only its
+  order is by use — sorting the whole remainder by use would pull in the most-applied rows of all time.
+- **Nothing in the scope carrying `published_at` → no chip** (`showNewCategoryProvider` and its
+  ringtone twin, each on its own scope). An install on a page built before the column would serve the
+  top of All under the wrong name.
 
 ## What was removed and may not come back
 
@@ -82,49 +124,12 @@ failing to parse.
 ## Where a saved position resolves
 
 Apply-restore resolves its saved page index through `feedOrder()` — the index is a position in the
-SERVED list, and raw catalog order restores the wrong wallpaper whenever the saved chip was All. A
+SERVED list, and raw catalog order restores the wrong wallpaper whenever the saved chip was All. The
+chip saved beside it is the one the user was ON (`selectedCategoryProvider`), never the wallpaper's
+own `category`: before 1.0.0+78 an apply from All or New saved the latter and restored onto a
+category chip at a foreign index. A
 deep link resolves the same way (always on All); a ringtone link goes through `ringtoneFeedOrder` and
 lands the row at the TOP of All. The link's `lang` always wins over the user's Settings pick
 ([deep-links.md](deep-links.md)).
 
-## Reel card geometry
-
-**All of it lives in `feed_card_geometry.dart`, pinned by its test.** The numbers are Shubh's tile
-(owner's instruction, measured from Shubh's own accessibility tree on a Nothing A001): 16 dp gutters,
-16 dp gap, 24 radius, peek pinned at `minPeek` (25), **1:1.86 asked** and no floor. `card + gap +
-peek + floor` fills the reel exactly. Re-measure Shubh (`uiautomator dump` — its screenshots are
-FLAG_SECURE-blank) before moving a knob.
-
-- **The card is HEIGHT-CLAMPED on a real phone, so `cardAspect` is a request and the reel decides
-  what ships.** Read the solved size, never the constant. `gutter` buys WIDTH only; `minPeek` is the
-  only knob that buys height.
-- **The floor is split either side of the reel** — `headroom` above, `underhang` below, with
-  `underhang` carrying the odd pixel so the two sum exactly. It is frequently ZERO, because at 1.86
-  the card consumes the whole reel on an ordinary phone; it earns its keep on tall screens. Anything
-  screen-anchored offsets by `underhang + peek + gap`, **not** the whole floor.
-- Short-screen degradation, in order: floor, then peek down to `minPeek`, only then the card. A card
-  taller than its viewport cannot snap.
-- **1.78 (9:16) is a BOUNDARY, not a dial.** Above it the crop is horizontal and cheap; below it it
-  flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases
-  the window UP for that case and is LIVE on the phones this ships to — do not delete it as unused.
-- Skeleton and reel must read the SAME geometry, or the card resizes when the first page lands.
-- Rejected shapes, do not revisit: device-aspect 1:2.22 · Pakiza's 1:1.63 verbatim · short-and-wide
-  1:1.40.
-
-## The live mark
-
-A live card is marked by `LiveMark` ONLY — a 24 dp glass disc with a play glyph, top-right, and
-**STATIC**: it shares a card with a live `Texture`, so the cheapest mark is one that never asks for a
-frame. **Never text** — the `LIVE` pill it replaced shipped untranslated English in six locales.
-
-Its inset is **22, not the action row's 14**: at 14 it rides the corner arc and reads as stuck to the
-rim. **No shadow** (owner's call): it shipped with the rail glyphs' dark halo as insurance against
-washing out on a white temple, and on the real catalog that halo read as a black smudge on every
-wallpaper — a louder failure than the one it insured against. Contrast comes from a dark fill INSIDE
-the disc; a shadow bleeds outside the object onto the artwork, which is the whole difference.
-
-**The two over-media glass objects share a RIM (`overMediaGlassBorder`) but NOT a fill**, and that
-split is deliberate: the Share circle sits inside the bottom scrim so it can be the bright half
-(`overMediaGlassFill`, ivory); `LiveMark` sits on raw artwork where the ground is unknown, so it must
-be the dark half (`overMediaInkFill`). Ivory chrome on a white marble temple is invisible at ANY
-alpha — raising it makes it whiter, not clearer. Never unify the two fills.
+Reel card geometry and the live mark: [feed-card.md](feed-card.md).

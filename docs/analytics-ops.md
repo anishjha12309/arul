@@ -29,7 +29,8 @@ is registered as a custom dimension.** Asking for an unregistered one returns
 the EVENT level, not the PARAMETER level.
 
 Affected: `gis_code` · `ms_since_authenticate` · `description` · `error` · `reason` · `method` ·
-`target_app` · `type` · `category` · `plan` · `late` · `surface`. So "which UPI app expires the
+`target_app` · `type` · `category` · `plan` · `late` · `surface` · `has_upi_app` · `upi_apps` ·
+`upi_app_count` · `default_app` · `paywall_source` · `variant` · `trial_eligible`. So "which UPI app expires the
 mandate" is not answerable off `method`/`target_app` until each is registered in **Admin → Data
 display → Custom definitions** (event-scoped, cap 50). Console only, no code.
 
@@ -77,6 +78,33 @@ The privacy policy must disclose Meta, Google/Firebase and advertiser-ID collect
 pages are its own and are not shared with Pakiza, so a change there lands in this app alone
 (CLAUDE.md §1).
 
+## Only a PLAY install reports to PostHog
+
+**No sideloaded build — release APK or debug — may reach PostHog** (owner's rule). A release APK on a
+developer's phone and a store install are the same `release` binary, so without a gate every
+on-device pass writes itself into the funnel and the panel starts measuring the people building the
+app. `PlayInstall` (`core/config/build_info.dart`) asks the native installer check FLAG_SECURE
+already rides, ONCE per process, in `main()` before `Posthog().setup()`; the verdict is cached and
+read synchronously when the sink is assembled, so the first event is already gated.
+
+- **It fails toward PLAY.** A platform error or an unresolvable installer answers "Play": dropping a
+  real user's events costs more than admitting a developer's. A MISSING channel is different — no
+  platform at all is `flutter test` or a host build, which reports nothing.
+- **GA4, Meta and Crashlytics are NOT gated.** GA4 is the complete record and the only Google Ads
+  conversion source, and a crash from a test build is wanted. Changing that is the owner's call.
+- Under `--dart-define=DIAG=true` startup logs one line naming the decision, so a device pass can
+  tell at a glance whether it is being counted.
+- **The consequence when reading PostHog:** a sideloaded build is invisible there, so an on-device
+  walkthrough proves nothing about the funnel — check GA4 for it. When the PostHog sink ITSELF is
+  under test (what a capture carries), install the APK with Play named as the installer —
+  `adb shell pm install -i com.android.vending /data/local/tmp/<apk>` after an `adb push` — and the
+  gate reads "Play"; the test phone's events stay behind the project's test-account filter. Never
+  on a phone that is not in that filter, and never on top of a Play copy: the debug key cannot
+  update it, so uninstall first and reinstall from Play afterwards.
+- **Event order in PostHog is per-batch, not per-capture.** `timestamp` is corrected by each
+  batch's clock skew, so two events from one launch can swap places by hundreds of ms; `created_at`
+  keeps the order the phone actually sent them in.
+
 ## Reading the data — rules that prevent wrong conclusions
 
 Event definitions are in [analytics-events.md](analytics-events.md); these are the traps in
@@ -109,3 +137,12 @@ interpreting what they record.
   `ph:<event>:<txn>` to KV **only** on an accepted send, stamped with the row's RETURNED
   `updated_at`, not `now()` — PostHog dedupes on `[timestamp, distinct_id, event, uuid]`, so a
   wall-clock stamp had made the deterministic `uuid` inert.
+- **`login_cancelled` is a MIXED bucket — never read it as "users who dismissed the sheet".** Per
+  `google_sign_in_android`'s README a config error (wrong signing SHA, wrong package name
+  server-side, wrong `serverClientId`) returns `canceled` *after the user picked an account*, and the
+  plugin cannot tell that from a real cancellation. Split on the message TEXT first, timing second —
+  timing alone under-splits, because the clock starts at the auto-launch, not the sheet, so a
+  scripted dismissal lands inside the failure band. **The two events spell the message
+  differently**: `login_cancelled` carries `description`, `login_failed` carries `error`, so a query
+  splitting "on `description`" returns nothing for `login_failed`. Contract:
+  [auth.md](auth.md) §Failure handling.

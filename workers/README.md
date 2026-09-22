@@ -25,6 +25,7 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 | POST | /payments/{initiate,status,cancel,abandon} | Bearer | Autopay mandate lifecycle; initiate 409s `setup_in_progress` vs `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback; idempotent via KV orderId dedupe |
 | GET | /payments/callback | — | Post-mandate browser redirect |
+| GET | /geo | — | A fresh install's region hint from `request.cf` alone (no DB, KV or limiter): `{country, region, lang}`, `no-store`; `lang` only for mapped Indian states while `GEO_LANG_ENABLED` is exactly `"true"` |
 | GET | /me | Bearer | Identity **+ the subscription row in one query** (LEFT JOIN) — one cold-start round-trip |
 | GET/POST | /me/{subscription,submissions,referrals} · /me/profile | Bearer | Scoped to verified sub. `/me/subscription` is kept only for old builds |
 | DELETE | /me | Bearer | Revoke mandate → trial tombstone (HMAC, never-rotate secret) → cascade → denylist |
@@ -76,7 +77,7 @@ compared untrimmed. `CF_ZONE_ID`/`CF_PURGE_TOKEN` are gone from `env.ts` and set
 ## Dev / deploy
 ```bash
 npm install
-npm run dev      # wrangler dev — needs .dev.vars (DATABASE_URL + WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE)
+npm run dev      # wrangler dev — needs .dev.vars; its WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE points at the Neon `debug` branch, never prod
 npm run build && npm test
 npx wrangler deploy   # deploy IS part of "done" (CF login admin@hsrutility.com; see deploy-worker skill)
 ```

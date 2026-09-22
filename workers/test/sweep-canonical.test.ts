@@ -180,15 +180,47 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     wallpaperKeys: string[],
     ringtoneKeys: string[],
     objectsByPrefix: Record<string, string[]>,
+    options?: { dryRun?: boolean },
   ) {
     const sql = makeSql(wallpaperKeys, ringtoneKeys);
     vi.doMock("../src/lib/db.js", () => ({ getDb: () => sql }));
     vi.resetModules();
     const { sweepCanonical } = await import("../src/cron/sweep-canonical.js");
     const r2 = makeR2(objectsByPrefix);
-    const result = await sweepCanonical({ R2: r2.bucket } as never);
+    const result = await sweepCanonical({ R2: r2.bucket } as never, options);
     return { result, deleted: r2.deleted };
   }
+
+  it("dry run lists exactly what the real run would delete, and deletes nothing", async () => {
+    const referenced = Array.from({ length: 30 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
+    const objects = {
+      "wallpapers/": [...referenced, "wallpapers/murugan/orphan.mp4"],
+      "ringtones/": ["ringtones/murugan/a.mp3", "ringtones/sivan/orphan.mp3"],
+    };
+    const dry = await run(referenced, ["ringtones/murugan/a.mp3"], objects, { dryRun: true });
+    expect(dry.deleted).toEqual([]); // R2 never touched
+    expect(dry.result.deleted).toBe(0);
+    expect(dry.result.wouldDelete?.sort()).toEqual(
+      ["ringtones/sivan/orphan.mp3", "wallpapers/murugan/orphan.mp4"].sort(),
+    );
+    // The real run reclaims precisely the previewed set -> the preview is trustworthy
+    const real = await run(referenced, ["ringtones/murugan/a.mp3"], objects);
+    expect(real.deleted.sort()).toEqual(dry.result.wouldDelete!.sort());
+    expect(real.result.wouldDelete).toBeUndefined();
+  });
+
+  it("dry run still honours the failsafes — a refused prefix previews nothing", async () => {
+    const objects = Array.from({ length: 40 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
+    const { result, deleted } = await run(
+      ["wallpapers/murugan/0.mp4"],
+      ["ringtones/murugan/a.mp3"],
+      { "wallpapers/": objects, "ringtones/": ["ringtones/murugan/a.mp3"] },
+      { dryRun: true },
+    );
+    expect(deleted).toEqual([]);
+    expect(result.aborted).toBe(true);
+    expect(result.wouldDelete).toEqual([]);
+  });
 
   it("an empty wallpapers table can NOT authorize deleting wallpaper objects", async () => {
     const { result, deleted } = await run(

@@ -29,11 +29,14 @@ import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
+import '../../premium/presentation/trial_nudge_row.dart';
+import '../../push/providers/push_providers.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
 import 'video_preload_controller.dart';
 import 'viewer_media.dart';
+import '../../../app/theme/motion.dart';
 
 /// The home surface: a Shorts-style vertical reel of wallpapers, one page each (Spec > Reel feed).
 ///
@@ -146,6 +149,16 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // maybeOpenDeepLink runs from build() -> a target landing on an already-built screen (warm App
     // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+
+    // THE one POST_NOTIFICATIONS prompt (docs/push.md), on the first home-feed frame after sign-in.
+    // Here and nowhere earlier: a system dialog stacked on Credential Manager is exactly the
+    // interruption that costs sign-ins, and sign-in percentage is the number this app is judged on.
+    // By the time this frame draws the person is already in. Spent once per install, grant or deny.
+    // Post-frame so it never shares a frame with the feed's first paint.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(pushPermissionProvider).promptOnce());
+    });
   }
 
   void _onDeepLinkChanged() {
@@ -381,7 +394,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     if (w.kind == WallpaperKind.live) {
       target = ApplyTarget.both;
     } else {
-      final picked = await ApplySheet.show(context);
+      final picked = await ApplySheet.show(context, wallpaper: w);
       if (picked == null || !mounted) return; // dismissed — not a failure
       target = picked;
     }
@@ -392,7 +405,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           w,
           target: target,
           feedPageIndex: _index,
-          category: w.category,
+          // The CHIP the user is on, never the wallpaper's own category: `_index` is a position in
+          // that chip's served list, and apply_restore re-selects this slug and jumps to it. Saving
+          // `w.category` restored an All or New apply onto a category chip at a foreign index.
+          category: ref.read(selectedCategoryProvider),
           // The wallpaper engine / chooser preview needs the hardware decoders the feed holds ->
           // a budget SoC has only a handful -> release them for the duration.
           releaseVideoDecoders: _video.releaseDecoders,
@@ -553,9 +569,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 titleStyle: ArulTokens.wordmarkHeader,
                 titleDrop: 1.5,
                 actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
-                chips: feed is AsyncLoading
-                    ? const FeedChipsSkeleton()
-                    : const FeedChips(),
+                // The nudge sits ABOVE the strip and inside the same slot, so it scrolls and
+                // cross-fades with the header rather than floating over the reel. It renders
+                // nothing at all unless there is an unfinished trial -> for everyone else this
+                // band is the height the reel geometry was always solved against.
+                chips: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const TrialNudgeRow(),
+                    if (feed is AsyncLoading)
+                      const FeedChipsSkeleton()
+                    else
+                      const FeedChips(),
+                  ],
+                ),
               ),
 
               Expanded(
@@ -663,7 +690,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           child: IgnorePointer(
             child: AnimatedOpacity(
               opacity: _index == items.length - 1 ? 1 : 0,
-              duration: const Duration(milliseconds: 350),
+              // Same end state, reached in one frame -> the mark is present or absent, never fading.
+              duration: context.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 350),
               curve: Curves.easeOut,
               child: Center(child: _EndOfFeedMark(isDark: isDark)),
             ),
@@ -962,10 +992,10 @@ class _ActionBar extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Both buttons' height, and the row's — Pakiza's 52, so the pill and the
-  /// circle sit on one baseline whatever the locale does to the label. Exported
-  /// because the feed anchors the gate nudge off the bar's top edge.
-  static const double height = 52;
+  /// Both buttons' height, and the row's. Exported because the feed anchors the
+  /// gate nudge off the bar's top edge; the NUMBER lives in [FeedCardGeometry]
+  /// so the loading skeleton places the same objects from the same source.
+  static const double height = FeedCardGeometry.actionBarHeight;
 
   final bool busy;
   final VoidCallback onApply;
@@ -980,7 +1010,7 @@ class _ActionBar extends StatelessWidget {
         Flexible(
           child: _ApplyPill(label: l10n.apply, onTap: busy ? null : onApply),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: FeedCardGeometry.actionGap),
         _ShareCircle(label: l10n.share, onTap: busy ? null : onShare),
       ],
     );
@@ -1005,6 +1035,7 @@ class _ApplyPill extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
+      identifier: 'arul_feed_apply',
       child: Opacity(
         opacity: disabled ? 0.55 : 1,
         child: Material(
@@ -1031,21 +1062,31 @@ class _ApplyPill extends StatelessWidget {
             // row has inside an 18dp-guttered card — pill + 12 + a 52 circle.
             child: Container(
               height: _ActionBar.height,
-              constraints: const BoxConstraints(minWidth: 168, maxWidth: 240),
+              constraints: const BoxConstraints(
+                minWidth: FeedCardGeometry.applyPillMinWidth,
+                maxWidth: FeedCardGeometry.applyPillMaxWidth,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 26),
               // Text only, like the reference: an icon would crowd the longer
               // verbs (ta/ml/te set "Apply" as a whole word) and this pill is
               // already the only thing that can be tapped down here.
+              // The ceiling is a hard 240 and the verb may not be cut: at 320dp
+              // with the OS at 1.3, Tamil's whole-word "Apply" was ellipsised
+              // inside it. So the label shrinks to fit the pill it is given,
+              // exactly as the sign-in title does — the pill's width is the
+              // reference and the type gives way, never the other way round.
               child: Center(
                 widthFactor: 1,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: ArulTokens.button.copyWith(
-                    fontSize: 16,
-                    color: ArulTokens.maroon,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: ArulTokens.button.copyWith(
+                      fontSize: 16,
+                      color: ArulTokens.maroon,
+                    ),
                   ),
                 ),
               ),
@@ -1073,6 +1114,7 @@ class _ShareCircle extends StatelessWidget {
       button: true,
       enabled: !disabled,
       label: label,
+      identifier: 'arul_feed_share',
       child: Opacity(
         opacity: disabled ? 0.55 : 1,
         child: Material(

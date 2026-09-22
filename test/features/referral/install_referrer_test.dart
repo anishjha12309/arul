@@ -67,6 +67,74 @@ void main() {
   // The deferred half of a deep link -> an ad or share tap by someone WITHOUT the app.
   // The Worker's /w/:id or /r/:id sends them to Play with `ref=<code>&w=<id>&lang=<code>` (or `r=<id>`).
   // Play replays that on first launch -> these turn it back into what to open and in which language.
+  // The Play referrer is the one place the app learns whether an install was bought or found.
+  // Stamped on every sign-in event -> "does the ad audience sign in less?" becomes one breakdown.
+  group('InstallReferrerService.parseAttribution', () {
+    test('a Google Ads install: gclid, or utm google/cpc', () {
+      expect(
+        InstallReferrerService.parseAttribution(
+          'gclid=abc123&utm_source=google&utm_medium=cpc&utm_campaign=TN_Murugan',
+        ),
+        {
+          'install_channel': 'google_ads',
+          'install_utm_source': 'google',
+          'install_utm_campaign': 'tn_murugan',
+        },
+      );
+      expect(InstallReferrerService.parseAttribution('gclid=abc123'), {
+        'install_channel': 'google_ads',
+      });
+    });
+
+    test('a Meta install names facebook or instagram', () {
+      expect(
+        InstallReferrerService.parseAttribution(
+          'utm_source=apps.instagram.com&utm_medium=social',
+        )['install_channel'],
+        'meta_ads',
+      );
+    });
+
+    test("Play's own organic pair", () {
+      expect(
+        InstallReferrerService.parseAttribution(
+          'utm_source=google-play&utm_medium=organic',
+        )['install_channel'],
+        'organic',
+      );
+    });
+
+    test(
+      'a friend link is share, our own /w link is link, nothing is unknown',
+      () {
+        expect(
+          InstallReferrerService.parseAttribution(
+            'ref=ABCD1234&w=0f2b3a1e-7d4c-4e8b-9a0f-1c2d3e4f5a6b',
+          )['install_channel'],
+          'share',
+        );
+        expect(
+          InstallReferrerService.parseAttribution(
+            'w=0f2b3a1e-7d4c-4e8b-9a0f-1c2d3e4f5a6b&lang=ta',
+          )['install_channel'],
+          'link',
+        );
+        expect(
+          InstallReferrerService.parseAttribution('foo=bar')['install_channel'],
+          'unknown',
+        );
+      },
+    );
+
+    test('raw tags are lower-cased and clipped, never dropped for case', () {
+      final props = InstallReferrerService.parseAttribution(
+        'utm_source=Google&utm_campaign=${'x' * 80}',
+      );
+      expect(props['install_utm_source'], 'google');
+      expect(props['install_utm_campaign']!.length, 60);
+    });
+  });
+
   group('InstallReferrerService referrer payload parsing', () {
     const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
     const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';
@@ -271,6 +339,34 @@ void main() {
       expect(s.pendingTarget, isNull);
       expect(s.pendingLang, isNull);
       expect(ArulDeepLink.pendingTarget, isNull);
+    });
+
+    test(
+      'the install link rides on install_channel and outlives the pending target',
+      () async {
+        final s = await service({
+          'install_channel': 'meta_ads',
+          'install_utm_source': 'fb',
+        });
+        expect(s.attributionProps['install_channel'], 'meta_ads');
+
+        await s.queueTarget(
+          const RingtoneLinkTarget(rid, source: DeepLinkSource.meta),
+        );
+        await s.clearPendingTarget();
+        expect(s.attributionProps, {
+          'install_channel': 'meta_ads+ringtone',
+          'install_utm_source': 'fb',
+        });
+      },
+    );
+
+    test('a link before the referrer answers reads unknown+kind', () async {
+      final s = await service();
+      expect(s.attributionProps, isEmpty);
+      await s.queueTarget(const WallpaperLinkTarget(id));
+      await s.queueTarget(const TabLinkTarget(ArulTab.ringtones));
+      expect(s.attributionProps['install_channel'], 'unknown+wallpaper');
     });
 
     test(

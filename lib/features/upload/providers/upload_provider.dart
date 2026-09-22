@@ -102,7 +102,7 @@ class UploadNotifier extends Notifier<UploadState> {
   /// Three steps: presigned R2 PUT URL from the Worker, PUT the bytes to R2, record for moderation.
   ///
   /// [category] is REQUIRED for both kinds — approval copies into `<kind>s/<category>/…`.
-  /// The two kinds do NOT share a category list: ringtones drop `temples` and add `others`.
+  /// The two kinds do NOT share a category list: ringtones drop `temples`.
   Future<void> submit({
     required String kind,
     required String filePath,

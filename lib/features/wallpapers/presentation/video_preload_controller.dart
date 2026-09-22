@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../core/config/build_info.dart';
 import '../../../data/models/wallpaper.dart';
 import '../data/feed_video_player.dart';
 import '../data/wallpaper_prefetch_service.dart';
@@ -180,7 +181,21 @@ class VideoPreloadController extends ChangeNotifier
   /// A REPEATED decoder-class error on one open demotes the budget by one ([_demoteBudget]).
   /// The previous-index slot drops first; worst case is current-only.
   /// Devices that never error never demote.
-  static int _decoderBudget = _poolSize;
+  ///
+  /// **Seeded from [DeviceQuality]**, not from [_poolSize]: a `low` phone starts at 2 rather than
+  /// paying the third `prepare()` failure first. Attempt-and-degrade still owns everything above
+  /// that — the tier only picks where the ladder starts, never where it ends.
+  /// Read through the getter so the seed is taken on FIRST use, after `main()`'s probe lands,
+  /// not at class-load time when the answer is still `mid`.
+  static int? _decoderBudgetSeed;
+
+  static int get _decoderBudget =>
+      _decoderBudgetSeed ??= switch (DeviceQuality.resolved) {
+        DeviceTier.low => _poolSize - 1,
+        DeviceTier.mid || DeviceTier.high => _poolSize,
+      };
+
+  static set _decoderBudget(int value) => _decoderBudgetSeed = value;
 
   /// Effective window radii — budget 3 is previous+current+next, 2 is current+next, 1 current only.
   int get _effKeepBehind => _decoderBudget >= 3 ? _keepBehind : 0;
@@ -208,6 +223,14 @@ class VideoPreloadController extends ChangeNotifier
   /// So a fast fling triggers no `open()` churn; reconcile runs once the feed rests.
   bool _settling = false;
   Timer? _settleTimer;
+
+  /// How long the pool survives after the user leaves the Wallpapers tab.
+  ///
+  /// Emptying it costs three `MediaCodec` instantiations to rebuild — measured at 430 ms with no
+  /// frame on the video surface, and 10.4% of frames over 33 ms across a tab-switch window. That is
+  /// worth paying when the user has actually gone; it is pure loss when they tap straight back.
+  static const _leaveGrace = Duration(seconds: 3);
+  Timer? _leaveTimer;
 
   /// The fixed reuse pool — grows lazily to [_poolSize], then is reused for the session.
   /// Cleared only by [releaseDecoders] and [dispose].
@@ -295,8 +318,31 @@ class VideoPreloadController extends ChangeNotifier
   /// The native handler releases codec and surface synchronously before replying.
   /// The apply flow AWAITS this before the native call -> the OS finds the decoders free.
   /// Fire-and-forget call sites — lifecycle pause, screen dispose — just ignore the future.
+  /// Leaving the Wallpapers tab: stop NOW, free the decoders only if the user stays away.
+  ///
+  /// The pause is what the immediate release was really buying — no audio and no decode behind the
+  /// ringtone list — and it is free. Freeing the decoders is the expensive half, and it is the only
+  /// half a quick return can make pointless, so it waits [_leaveGrace].
+  ///
+  /// Deliberately NOT used by the other three release paths, which must stay immediate: the apply
+  /// flow AWAITS a release so the OS finds decoders free, backgrounding hands them to the OEM
+  /// chooser, and [detach] is a teardown. Only the tab switch can be undone.
+  void releaseDecodersOnLeave() {
+    if (_disposed) return;
+    _pauseAll();
+    _leaveTimer?.cancel();
+    _leaveTimer = Timer(_leaveGrace, () {
+      _leaveTimer = null;
+      unawaited(releaseDecoders());
+    });
+  }
+
   Future<void> releaseDecoders() async {
     if (_disposed) return;
+    // An immediate release supersedes a deferred one -> never free twice, and never let a pending
+    // timer fire into a pool the apply flow or a backgrounding already emptied.
+    _leaveTimer?.cancel();
+    _leaveTimer = null;
     // Cancel any pending settle -> the timer cannot reassign a player right after a release.
     _settleTimer?.cancel();
     _settling = false;
@@ -323,6 +369,10 @@ class VideoPreloadController extends ChangeNotifier
   /// A no-op while backgrounded — the resume path owns that case — and idempotent when serving.
   void reclaimDecoders() {
     if (_disposed || _appPaused) return;
+    // Returning inside [_leaveGrace] cancels the pending release, so the pool was never emptied and
+    // this reconcile is a resume rather than three MediaCodec instantiations.
+    _leaveTimer?.cancel();
+    _leaveTimer = null;
     _reconcile();
   }
 
@@ -530,6 +580,9 @@ class VideoPreloadController extends ChangeNotifier
     // Without this the new card renders the OLD wallpaper at full opacity until the lookup resolves.
     // So hide it NOW, synchronously, before the notify and long before open() would reset it.
     pooled.handle.resetForReassign();
+    // And stop the OLD clip looping meanwhile: on a cold cache the re-open waits for a whole
+    // download, and every lap of the previous card's clip would cost a decode for nothing.
+    unawaited(pooled.handle.pause());
     // Do NOT stamp openedUrl here — it is recorded only once open() is actually invoked.
     // A setup that abandons before opening then leaves it null and the next reconcile re-opens.
     // Stamping early made reconcile treat a never-opened player as served: the poster-until-Apply wedge.
@@ -614,11 +667,28 @@ class VideoPreloadController extends ChangeNotifier
     // Capture the network URL now — it is both the disk-cache key and the streaming fallback.
     final url = _prefetch.urlFor(_wallpapers[index]);
 
-    // Prefer the prefetched local FILE -> instant first frame, no network round trip.
-    // Falls back to the CDN URL when the data window has not reached this item, streaming +faststart.
-    final localPath = await _prefetch.cachedPathOrNull(url);
+    // Open the local FILE, never a CDN stream.
+    //
+    // Streaming an item the data window has not reached yet is what the card cannot survive: the
+    // clip's own bitrate is 1.3–9.8 Mbit/s, ExoPlayer starts after 250ms of media and holds 2–4s,
+    // and REPEAT_MODE_ONE re-reads the media from position 0 on EVERY loop (the back buffer is 0),
+    // so a looping stream re-downloads the whole clip once per lap for as long as the card is up.
+    // Measured cold on one card, 3 min: 310 MB streamed vs 0.1 MB from a warm file. Under the
+    // clip's bitrate that under-run freezes the texture on its opening frame — which IS the poster
+    // image — so the card reads as "the poster came back", every lap.
+    //
+    // So AWAIT the transfer instead. [ensureCached] coalesces with the prefetcher's own fetch
+    // (flutter_cache_manager keys running downloads by url), so this costs no second request, and
+    // the poster stays up meanwhile — the design already makes that the loading state.
+    var localPath = await _prefetch.cachedPathOrNull(url);
+    localPath ??= await _prefetch.ensureCached(
+      url,
+      // The card on screen jumps every queue; the two window neighbours wait for it.
+      priority: index == _currentIndex,
+    );
 
-    // A fling may have reassigned this player, or released the pool, while we awaited the lookup.
+    // A fling may have reassigned this player, or released the pool, while we awaited the transfer.
+    // Re-checked AFTER the await, which can now be seconds long on a thin pipe.
     // A moved openToken means a newer open() owns it -> abandon, or we stomp its media.
     if (_disposed ||
         pooled.openToken != token ||
@@ -635,6 +705,7 @@ class VideoPreloadController extends ChangeNotifier
     // playWhenReady false still decodes and PAINTS a first frame -> a paused neighbour is ready.
     // The current index passes true. Re-opening a reused player swaps media without the surface.
     // Looping, so the short preview repeats seamlessly.
+    // `url` is reached only when the transfer FAILED — a stream is the last resort, never the plan.
     await pooled.handle.open(
       localPath ?? url,
       playWhenReady: playWhenReady,
@@ -674,6 +745,16 @@ class VideoPreloadController extends ChangeNotifier
     pooled.retriesThisOpen++;
 
     if (!_isDecoderError(codeName)) {
+      // A network or source failure AFTER this open already painted is not a card to rescue —
+      // the wallpaper is on screen. Re-opening would reset the first-frame flag, drop the card to
+      // its poster mid-play and restart the clip from zero: the visible interruption the owner
+      // reported. Leave the texture where it is; the next reconcile re-opens if it is really dead.
+      if (pooled.handle.firstFrame.value) {
+        debugPrint(
+          'FeedVideo: $codeName on index $index after paint — keeping the frame',
+        );
+        return;
+      }
       // An open or source failure means the open may simply not have taken.
       // Shrinking the decoder window would not help -> do NOT demote.
       // Null the opened identity and re-open once, rather than wedge the card on its poster.
@@ -834,6 +915,7 @@ class VideoPreloadController extends ChangeNotifier
   void dispose() {
     _disposed = true;
     _settleTimer?.cancel();
+    _leaveTimer?.cancel();
     // Do NOT dispose _prefetch — it is the shared app-scoped instance and outlives this controller.
     // A remount then keeps the same disk cache and in-flight queue. The provider disposes it.
     WidgetsBinding.instance.removeObserver(this);

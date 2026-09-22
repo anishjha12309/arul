@@ -39,18 +39,19 @@ class AppLocalizationsKn extends AppLocalizations {
   String get errorGeneric => 'ಏನೋ ತಪ್ಪಾಗಿದೆ.';
 
   @override
-  String get signInHeadline => 'ಎಚ್ಚರಗೊಳ್ಳಲು ಯೋಗ್ಯವಾದ ವಾಲ್‌ಪೇಪರ್‌ಗಳು';
-
-  @override
-  String get signInBody =>
-      'ಅನ್ವಯಿಸಲು, ಹಂಚಿಕೊಳ್ಳಲು ಮತ್ತು ನಿಮ್ಮ ಸಂಗ್ರಹವನ್ನು ಉಳಿಸಲು ಸೈನ್ ಇನ್ ಮಾಡಿ.';
+  String get signInCaption => 'ದೈವಿಕತೆ ಮನೆಗೆ ಬರಲಿ';
 
   @override
   String get signInGoogle => 'Google ಮೂಲಕ ಮುಂದುವರಿಸಿ';
 
   @override
-  String get signInTerms =>
-      'ಮುಂದುವರಿಯುವ ಮೂಲಕ ನಮ್ಮ ನಿಯಮಗಳು ಮತ್ತು ಗೌಪ್ಯತಾ ನೀತಿಯನ್ನು ಒಪ್ಪುತ್ತೀರಿ.';
+  String get signInSubtitleIdle => 'ಪ್ರಾರಂಭಿಸಲು ಖಾತೆಯನ್ನು ಆರಿಸಿ';
+
+  @override
+  String get signInSubtitleExchanging => 'ಸೈನ್ ಇನ್ ಆಗುತ್ತಿದೆ…';
+
+  @override
+  String get signInNudgeRetry => 'ಸೈನ್ ಇನ್ ಮಾಡಲು ಇಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ';
 
   @override
   String get premiumTitle => 'ಪ್ರೀಮಿಯಂ';
@@ -64,7 +65,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get premiumBenefitApply =>
-      'ಯಾವುದೇ ವಾಲ್‌ಪೇಪರ್ ಅನ್ವಯಿಸಿ — ಸ್ಥಿರ ಅಥವಾ ಲೈವ್';
+      'ಯಾವುದೇ ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿ — ಸ್ಥಿರ ಅಥವಾ ಲೈವ್';
 
   @override
   String get premiumBenefitLive => 'ಪೂರ್ಣ ಗುಣಮಟ್ಟದ ಲೈವ್ ವೀಡಿಯೊ ವಾಲ್‌ಪೇಪರ್‌ಗಳು';
@@ -92,7 +93,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsTitle => 'ಸೆಟ್ಟಿಂಗ್‌ಗಳು';
 
   @override
-  String get settingsAppearance => 'ಗೋಚರತೆ';
+  String get settingsAppearance => 'ರೂಪ';
 
   @override
   String get themeSystem => 'ಸಿಸ್ಟಂ';
@@ -123,7 +124,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get uploadBody =>
-      'ನಿಮ್ಮ ಸ್ವಂತ ವಾಲ್‌ಪೇಪರ್ ಹಂಚಿಕೊಳ್ಳಿ. ಪ್ರತಿ ಸಲ್ಲಿಕೆಯನ್ನು ನಾವು ಪರಿಶೀಲಿಸುತ್ತೇವೆ.';
+      'ನಿಮ್ಮ ಸ್ವಂತ ವಾಲ್‌ಪೇಪರ್ ಅನ್ನು ಸಮುದಾಯದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ. ಅದು ಲೈವ್ ಆಗುವ ಮೊದಲು ನಾವು ಪ್ರತಿ ಸಲ್ಲಿಕೆಯನ್ನು ಪರಿಶೀಲಿಸುತ್ತೇವೆ.';
 
   @override
   String get uploadPickCategory => 'ವಿಭಾಗವನ್ನು ಆಯ್ಕೆಮಾಡಿ';
@@ -133,13 +134,13 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get uploadSpecNote =>
-      'ಫೋಟೋಗಳು: 1080×1920. ವೀಡಿಯೊಗಳು: 1024×1824, ಆಡಿಯೊ ಇಲ್ಲದೆ, 50 MB ಒಳಗೆ.';
+      'ಫೋಟೋಗಳು: 1080×1920. ವೀಡಿಯೊಗಳು: 1024×1824, ಆಡಿಯೋ ಇಲ್ಲದೆ, 50 MB ಒಳಗೆ.';
 
   @override
   String get uploadComingSoon => 'ಅಪ್‌ಲೋಡ್‌ಗಳು ನಂತರ ಬರುತ್ತವೆ.';
 
   @override
-  String get apply => 'ಅನ್ವಯಿಸಿ';
+  String get apply => 'ಸೆಟ್ ಮಾಡಿ';
 
   @override
   String get share => 'ಹಂಚಿಕೊಳ್ಳಿ';
@@ -148,20 +149,20 @@ class AppLocalizationsKn extends AppLocalizations {
   String get applyTargetTitle => 'ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿ';
 
   @override
-  String get applyTargetHome => 'ಮುಖ್ಯ ಪರದೆ';
+  String get applyTargetHome => 'ಹೋಮ್ ಪರದೆ';
 
   @override
   String get applyTargetLock => 'ಲಾಕ್ ಪರದೆ';
 
   @override
-  String get applyTargetBoth => 'ಮುಖ್ಯ ಮತ್ತು ಲಾಕ್ ಪರದೆ';
+  String get applyTargetBoth => 'ಹೋಮ್ ಮತ್ತು ಲಾಕ್ ಪರದೆ';
 
   @override
   String get applied => 'ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಆಗಿದೆ';
 
   @override
   String get appliedLiveFallback =>
-      'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗೆ ಬೆಂಬಲ ಇಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಹೊಂದಿಸಿದ್ದೇವೆ.';
+      'ಈ ಫೋನ್‌ನಲ್ಲಿ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳು ಕೆಲಸ ಮಾಡುವುದಿಲ್ಲ, ಆದ್ದರಿಂದ ಸ್ಥಿರ ಚಿತ್ರವನ್ನು ಸೆಟ್ ಮಾಡಿದ್ದೇವೆ.';
 
   @override
   String get offlineBody =>
@@ -202,6 +203,12 @@ class AppLocalizationsKn extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'ಮುನ್ನೋಟ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ';
 
   @override
+  String get ringtoneVolumeMuted => 'ಈ ಮುನ್ನೋಟ ಕೇಳಲು ಧ್ವನಿ ಹೆಚ್ಚಿಸಿ';
+
+  @override
+  String get ringtoneCurrentBadge => 'ಪ್ರಸ್ತುತ';
+
+  @override
   String get ringtonesEmptyTitle => 'ರಿಂಗ್‌ಟೋನ್‌ಗಳು ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತಿವೆ';
 
   @override
@@ -213,11 +220,11 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get ringtoneSetSuccess =>
-      'ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗಿದೆ. ಕಾಣದಿದ್ದರೆ, ಫೋನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ.';
+      'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಆಗಿದೆ. ಕಾಣದಿದ್ದರೆ, ಫೋನ್ ಅನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ.';
 
   @override
   String get ringtoneSetFailed =>
-      'ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+      'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಮಾಡಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
 
   @override
   String get ringtoneSetPreparing => 'ಸಿದ್ಧವಾಗುತ್ತಿದೆ…';
@@ -226,7 +233,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get ringtoneSetDownloading => 'ಡೌನ್‌ಲೋಡ್ ಆಗುತ್ತಿದೆ…';
 
   @override
-  String get ringtoneSetApplying => 'ರಿಂಗ್‌ಟೋನ್ ಹೊಂದಿಸಲಾಗುತ್ತಿದೆ…';
+  String get ringtoneSetApplying => 'ರಿಂಗ್‌ಟೋನ್ ಸೆಟ್ ಮಾಡಲಾಗುತ್ತಿದೆ…';
 
   @override
   String get save => 'ಉಳಿಸಿ';
@@ -242,9 +249,6 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get settingsFallbackEmail => 'Signed in with Google';
-
-  @override
-  String get settingsPremiumSubLocked => 'ಅನ್ವಯಿಸಲು, ಹಂಚಿಕೊಳ್ಳಲು ಅನ್‌ಲಾಕ್ ಮಾಡಿ';
 
   @override
   String get settingsPremiumSubTrial => 'ನೀವು ಉಚಿತ ಟ್ರಯಲ್‌ನಲ್ಲಿದ್ದೀರಿ';
@@ -281,7 +285,19 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsNeedHelp => 'ಸಹಾಯ ಬೇಕೇ?';
 
   @override
-  String get settingsNeedHelpSub => 'ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ';
+  String get settingsNeedHelpSub => 'ಬೆಂಬಲ ಮತ್ತು ಚಂದಾದಾರಿಕೆ';
+
+  @override
+  String get settingsHelpSupport => 'ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ';
+
+  @override
+  String get settingsHelpSupportSub => 'ಇಮೇಲ್‌ನಲ್ಲಿ ನಮಗೆ ಬರೆಯಿರಿ';
+
+  @override
+  String get settingsHelpManage => 'ಚಂದಾದಾರಿಕೆ ನಿರ್ವಹಿಸಿ';
+
+  @override
+  String get settingsHelpDeleteSub => 'ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಅಳಿಸುತ್ತದೆ';
 
   @override
   String get settingsUpload => 'ನಿಮ್ಮ ವಿಷಯವನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ';
@@ -306,12 +322,11 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'ಖಾತೆ ಅಳಿಸುವುದೇ?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'ಇದು ನಿಮ್ಮ ಖಾತೆ, ಮೆಚ್ಚಿನವು ಮತ್ತು ರಿವಾರ್ಡ್‌ಗಳನ್ನು ಶಾಶ್ವತವಾಗಿ ಅಳಿಸುತ್ತದೆ.';
+  String get settingsDeleteConfirmBody => 'ಇದನ್ನು ಮರಳಿ ಪಡೆಯಲಾಗದು.';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'ನಿಯಮಗಳು ಮತ್ತು ಷರತ್ತುಗಳು';
@@ -410,16 +425,13 @@ class AppLocalizationsKn extends AppLocalizations {
   String get remindersMonthDec => 'ಡಿಸೆಂ';
 
   @override
-  String get premiumBrandTitle => 'Arul Premium';
-
-  @override
   String get premiumScreenSubline => 'ಪೂರ್ಣ ಸಂಗ್ರಹ, ನಿಮ್ಮ ಪರದೆಯ ಮೇಲೆ ಜೀವಂತ';
 
   @override
   String get premiumPerkEvery => 'ಪ್ರತಿ ವಾಲ್‌ಪೇಪರ್ — ಸ್ಥಿರ ಮತ್ತು ಲೈವ್';
 
   @override
-  String get premiumPerkApplyShare => 'ಮಿತಿಯಿಲ್ಲದೆ ಅನ್ವಯಿಸಿ ಮತ್ತು ಹಂಚಿಕೊಳ್ಳಿ';
+  String get premiumPerkApplyShare => 'ಮಿತಿಯಿಲ್ಲದೆ ಸೆಟ್ ಮಾಡಿ ಮತ್ತು ಹಂಚಿಕೊಳ್ಳಿ';
 
   @override
   String get premiumPerkNew => 'ಪ್ರತಿ ವಾರ ಹೊಸ ಸೇರ್ಪಡೆಗಳು';
@@ -453,7 +465,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get premiumWelcomeToast => 'Arul Premium ಗೆ ಸ್ವಾಗತ!';
 
   @override
-  String get premiumCelebrateTitle => 'ನೀವು ಸೇರಿದ್ದೀರಿ';
+  String get premiumCelebrateTitle => 'ಪ್ರೀಮಿಯಂ ನಿಮ್ಮದು';
 
   @override
   String get premiumCelebrateBody =>
@@ -461,7 +473,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get premiumSheetPitch =>
-      'ಪ್ರತಿ ವಾಲ್‌ಪೇಪರ್ — ಲೈವ್ ಮತ್ತು ಸ್ಥಿರ. ಆರೂ ವಿಭಾಗಗಳಲ್ಲಿ ಮುಕ್ತವಾಗಿ ಅನ್ವಯಿಸಿ, ಹಂಚಿಕೊಳ್ಳಿ.';
+      'ಪ್ರತಿ ವಾಲ್‌ಪೇಪರ್ — ಲೈವ್ ಮತ್ತು ಸ್ಥಿರ. ಆರೂ ವಿಭಾಗಗಳಲ್ಲಿ ಮುಕ್ತವಾಗಿ ಸೆಟ್ ಮಾಡಿ, ಹಂಚಿಕೊಳ್ಳಿ.';
 
   @override
   String get premiumKeepBrowsing => 'ಉಚಿತವಾಗಿ ಬ್ರೌಸ್ ಮಾಡುತ್ತಿರಿ';
@@ -492,7 +504,7 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get referStep1 =>
-      'ನಿಮ್ಮ ಲಿಂಕ್ ಅನ್ನು ಸ್ನೇಹಿತರು, ಕುಟುಂಬದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ';
+      'ನಿಮ್ಮ ಲಿಂಕ್ ಅನ್ನು ಸ್ನೇಹಿತರು ಮತ್ತು ಕುಟುಂಬದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ';
 
   @override
   String get referStep2 =>
@@ -608,7 +620,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get premiumPerMonthCaption => 'ತಿಂಗಳಿಗೆ';
 
   @override
-  String get premiumTrialLeadPrefix => 'ನಿಮ್ಮ 1 ದಿನದ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಿ ';
+  String get premiumTrialLeadPrefix => 'ನಿಮ್ಮ 1 ದಿನದ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು ';
 
   @override
   String get premiumRefundedBadge => 'ತಕ್ಷಣ ಮರುಪಾವತಿ';
@@ -634,7 +646,60 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get premiumReassurancePaid =>
-      'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು';
+      'UPI ಆಟೋಪೇ ಸುರಕ್ಷತೆ · ಯಾವಾಗ ಬೇಕಾದರೂ ಒಂದೇ ಟ್ಯಾಪ್‌ನಲ್ಲಿ ರದ್ದು';
+
+  @override
+  String get premiumQrTitleTrial =>
+      'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
+
+  @override
+  String get premiumQrTitlePaid => 'ಸಬ್‌ಸ್ಕ್ರೈಬ್ ಮಾಡಲು ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
+
+  @override
+  String get premiumQrInstruction =>
+      'ಇನ್ನೊಂದು ಫೋನ್‌ನಲ್ಲಿ ಯಾವುದಾದರೂ UPI ಆ್ಯಪ್ ತೆರೆದು ಈ ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'ಕೋಡ್ $timeರಲ್ಲಿ ಅವಧಿ ಮುಗಿಯುತ್ತದೆ';
+  }
+
+  @override
+  String get premiumQrWaiting => 'ಅನುಮೋದನೆಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೇವೆ…';
+
+  @override
+  String get premiumQrCheck => 'ನಾನು ಪಾವತಿಸಿದ್ದೇನೆ';
+
+  @override
+  String premiumResumeCta(String app) {
+    return '$app ಆ್ಯಪ್ ಅನ್ನು ಮತ್ತೆ ತೆರೆಯಿರಿ';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'ನಿಮ್ಮ ಟ್ರಯಲ್ ಪ್ರಾರಂಭಿಸಲು $app ಆ್ಯಪ್‌ನಲ್ಲಿ ₹2 ಪರಿಶೀಲನೆಯನ್ನು ಅನುಮೋದಿಸಿ.';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'ಮುಂದುವರಿಸಲು $app ಆ್ಯಪ್‌ನಲ್ಲಿ ಪಾವತಿಯನ್ನು ಅನುಮೋದಿಸಿ.';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'ನಿಮ್ಮ UPI';
+
+  @override
+  String get trialNudgeRow => 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಿ';
+
+  @override
+  String get trialNudgeDismiss => 'ಮುಚ್ಚಿ';
+
+  @override
+  String get trialReminderTitle => 'ನಿಮ್ಮ ಉಚಿತ ಟ್ರಯಲ್ ಕಾಯುತ್ತಿದೆ';
+
+  @override
+  String get trialReminderBody =>
+      'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.';
 
   @override
   String get premiumSelectedUpiApp => 'UPI ಆ್ಯಪ್';
@@ -646,12 +711,63 @@ class AppLocalizationsKn extends AppLocalizations {
   String get upiPickerLastUsed => 'ಕೊನೆಯದಾಗಿ ಬಳಸಿದ್ದು';
 
   @override
+  String get upiPickerQrTitle => 'QR ಮೂಲಕ ಪಾವತಿಸಿ';
+
+  @override
+  String get upiPickerQrSubtitle => 'ಇನ್ನೋಂದು ಫೋನ್‌ನಲ್ಲಿ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'ನಂತರ ತಿಂಗಳಿಗೆ $price ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.';
   }
 
   @override
-  String premiumSocialProof(String name, String city) {
-    return '$city-ನಲ್ಲಿ $name ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಹಾಕಿದರು 🙏';
+  String premiumPaidFinePrint(String price) {
+    return '$price/ತಿಂಗಳು ಆಟೋಪೇ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು.';
   }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-ನಲ್ಲಿ $name ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿದರು 🙏';
+  }
+
+  @override
+  String get pushChannelName => 'ಅರುಳ್ ಅಪ್‌ಡೇಟ್‌ಗಳು';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ. ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseErrorGeneric => 'ಏನೋ ತಪ್ಪಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseCancelled => 'ಪಾವತಿ ರದ್ದಾಗಿದೆ.';
+
+  @override
+  String get purchaseInterrupted =>
+      'ಪಾವತಿ ಮಧ್ಯದಲ್ಲಿ ನಿಂತಿತು. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseNotCompleted => 'ಪಾವತಿ ಪೂರ್ಣಗೊಂಡಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseInProgress =>
+      'ಪಾವತಿ ಈಗಾಗಲೇ ನಡೆಯುತ್ತಿದೆ. ಕೆಲವು ಸೆಕೆಂಡ್ ಕಾದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'ನಿಮ್ಮ UPI ಆ್ಯಪ್ ತೆರೆಯಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get purchaseIntentFailed =>
+      'ಪಾವತಿ ವಿಫಲವಾಗಿದೆ. ಯಾವುದೇ ಹಣ ಕಡಿತವಾಗಿದ್ದರೆ, ಅದು 4–5 ದಿನಗಳಲ್ಲಿ ನಿಮ್ಮ ಖಾತೆಗೆ ಮರಳಿ ಬರುತ್ತದೆ.';
+
+  @override
+  String get purchaseActivateFailed =>
+      'ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಸಕ್ರಿಯಗೊಳಿಸಲು ಆಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಬೆಂಬಲವನ್ನು ಸಂಪರ್ಕಿಸಿ.';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'ಪಾವತಿ ಬಂದಿದೆ, ಆದರೆ ದೃಢೀಕರಣ ತಡವಾಗುತ್ತಿದೆ. ಆ್ಯಪ್ ಮುಚ್ಚಿ ಮತ್ತೆ ತೆರೆಯಿರಿ — ನಿಮ್ಮ ಚಂದಾದಾರಿಕೆ ಶೀಘ್ರದಲ್ಲೇ ಸಕ್ರಿಯವಾಗುತ್ತದೆ.';
 }

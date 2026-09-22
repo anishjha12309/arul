@@ -9,7 +9,6 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
@@ -27,14 +26,16 @@ import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
+import 'help_sheet.dart';
 import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
-/// Settings — profile card, one rows-card, muted logout, demoted delete link, faint legal line.
+/// Settings — profile card, one rows-card, muted logout, policy footer.
 ///
 /// Identity comes from the auth state, with neutral stand-ins while it loads.
 /// Edit-name persists via `POST /me/profile`, and language drives the app locale.
-/// Logout and delete-account run the real auth actions before routing back to sign-in.
+/// Support, the plan and account deletion all live behind the Need help? row's sheet; logout and
+/// delete run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -43,24 +44,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  /// English name ↔ locale code for the language sheet — the visual labels are the sheet's own.
-  /// Persistence goes through [LocaleNotifier].
-  static const _languageCodes = {
-    'English': 'en',
-    'Tamil': 'ta',
-    'Telugu': 'te',
-    'Kannada': 'kn',
-    'Malayalam': 'ml',
-    'Hindi': 'hi',
-  };
-
-  String _languageName(String code) => _languageCodes.entries
-      .firstWhere(
-        (e) => e.value == code,
-        orElse: () => _languageCodes.entries.first,
-      )
-      .key;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -81,7 +64,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final email = (authEmail != null && authEmail.isNotEmpty)
         ? authEmail
         : l10n.settingsFallbackEmail;
-    final language = _languageName(ref.watch(localeProvider).languageCode);
+    // The EFFECTIVE language, so a phone-language default shows here as what the user is reading.
+    final language = appLanguageName(ref.watch(localeProvider).languageCode);
 
     // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
     // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
@@ -91,17 +75,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final notificationsSub = notificationsOn
         ? l10n.settingsRemindersSubOn
         : l10n.settingsRemindersSubOff;
-
-    // The premium subtitle reflects the REAL plan; while it resolves, fall back to the upsell.
-    // The Manage screen re-reads it anyway -> a momentary understatement costs nothing.
-    // Claiming a membership the user does not have would.
-    final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
-    final premiumSub = switch (entitlement?.subscription?.status) {
-      _ when entitlement?.isPremium != true => l10n.settingsPremiumSubLocked,
-      SubscriptionStatus.trialing => l10n.settingsPremiumSubTrial,
-      SubscriptionStatus.cancelled => l10n.settingsPremiumSubCancelled,
-      _ => l10n.settingsPremiumSubActive,
-    };
 
     return Scaffold(
       backgroundColor: bg,
@@ -136,16 +109,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
                     rows: [
-                      // First row — the plan is the most consequential thing in Settings.
-                      _RowData(
-                        glyph: (color) => GopuramMark(size: 19, color: color),
-                        title: l10n.premiumBrandTitle,
-                        sub: premiumSub,
-                        onTap: () => context.push('/premium?source=settings'),
-                      ),
                       _RowData(
                         icon: Icons.card_giftcard,
                         title: l10n.referTitle,
+                        identifier: 'arul_settings_refer',
                         sub: l10n.settingsReferSub,
                         onTap: () => context.push('/refer'),
                       ),
@@ -154,6 +121,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.ios_share_rounded,
                         title: l10n.settingsTellFriend,
+                        identifier: 'arul_settings_tell_friend',
                         sub: l10n.settingsTellFriendSub,
                         onTap: () =>
                             tellAFriend(context, ref, source: 'settings'),
@@ -161,12 +129,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       _RowData(
                         icon: Icons.notifications_active_outlined,
                         title: l10n.remindersTitle,
+                        identifier: 'arul_settings_reminders',
                         sub: notificationsSub,
                         onTap: () => context.push('/settings/notifications'),
                       ),
                       _RowData(
                         icon: Icons.translate,
                         title: l10n.settingsLanguage,
+                        identifier: 'arul_settings_language',
                         sub: language,
                         onTap: () => _pickLanguage(language),
                       ),
@@ -174,60 +144,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         // Follows the selection — a fixed moon on a row reading "Light" was stale.
                         icon: themeModeIcon(themeMode),
                         title: l10n.settingsTheme,
+                        identifier: 'arul_settings_theme',
                         sub: themeModeLabel(l10n, themeMode),
                         onTap: () => showThemeSheet(context),
                       ),
                       _RowData(
                         icon: Icons.help_outline,
                         title: l10n.settingsNeedHelp,
-                        // Subscription has its own row now -> pointing a mailto at it would be a lie.
+                        identifier: 'arul_settings_help',
+                        // FIXED, not state-aware (owner's call): the sheet behind it is where a
+                        // stuck user goes, whatever their plan.
                         sub: l10n.settingsNeedHelpSub,
-                        onTap: _support,
+                        onTap: _needHelp,
                       ),
                       _RowData(
                         icon: Icons.upload,
                         title: l10n.settingsUpload,
+                        identifier: 'arul_settings_upload',
                         sub: l10n.settingsUploadSub,
                         onTap: () => context.push('/upload'),
                       ),
                     ],
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  _LogoutButton(onTap: _logout),
-                  const SizedBox(height: ArulTokens.contentGap),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    // Deleting is the app's one irreversible act -> the strongest beat, twice.
-                    onTapDown: (_) => ArulHaptics.heavy(),
-                    onTap: _delete,
-                    // TextDecoration.underline sits hard on the baseline -> a hand-drawn 3px rule.
-                    // Line-height collapses to 1.0 first, or body's 1.5 leading drops the rule away.
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            l10n.settingsDeleteAccount,
-                            textAlign: TextAlign.center,
-                            style: ArulTokens.body.copyWith(
-                              height: 1,
-                              color: isDark
-                                  ? ArulTokens.darkTextSecondary
-                                  : ArulTokens.lightSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Container(
-                            height: 1,
-                            width: 98,
-                            color: isDark
-                                ? ArulTokens.darkTextSecondary
-                                : ArulTokens.lightSecondary,
-                          ),
-                        ],
-                      ),
-                    ),
+                  Semantics(
+                    container: true,
+                    identifier: 'arul_settings_logout',
+                    child: _LogoutButton(onTap: _logout),
                   ),
+                  // Delete lives in the Need help? sheet now -> one home, and it stops being a
+                  // demoted link the eye finds on the way past the version number.
                   const SizedBox(height: 18),
                   const _PolicyFooter(),
                 ],
@@ -259,9 +205,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _pickLanguage(String current) async {
     final next = await showLanguageSheet(context, current);
-    final code = _languageCodes[next];
+    final code = next == null ? null : appLanguageCodeFor(next);
     if (code == null) return;
-    await ref.read(localeProvider.notifier).setLocale(Locale(code));
+    await ref
+        .read(localeProvider.notifier)
+        .setLocale(Locale(code), source: LanguageSource.pick);
+  }
+
+  /// Opens the help sheet and runs whatever came back.
+  ///
+  /// The sheet resolves a choice and nothing else -> every action runs from THIS context, with the
+  /// sheet already gone: a confirm dialog raised under a closing sheet loses its route, and a toast
+  /// belongs over Settings, not over something on its way out.
+  Future<void> _needHelp() async {
+    final action = await showHelpSheet(context);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case HelpAction.support:
+        await _support();
+      case HelpAction.manage:
+        unawaited(context.push('/premium?source=settings'));
+      case HelpAction.delete:
+        await _delete();
+    }
   }
 
   Future<void> _logout() async {
@@ -514,6 +480,7 @@ class _RowData {
     required this.title,
     required this.sub,
     required this.onTap,
+    required this.identifier,
   }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
   /// A Material icon — the default for the utility rows.
@@ -529,6 +496,11 @@ class _RowData {
   final String title;
   final String sub;
   final VoidCallback onTap;
+
+  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
+  /// the UI layer and survives every locale.
+  /// Never announced and never visible — see that folder's README for the list.
+  final String identifier;
 }
 
 /// A single rounded card holding all five rows, hairline-divided.
@@ -586,52 +558,58 @@ class _SettingsRow extends StatelessWidget {
     // The chevron's exact alphas have no token — darkMuted and lightFaint are the nearest neutrals.
     final chevronColor = isDark ? ArulTokens.darkMuted : ArulTokens.lightFaint;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // Every settings row presses the same, push or sheet.
-      // The sheet itself stays silent — the tap that opened it already answered the finger.
-      onTapDown: (_) => ArulHaptics.tap(),
-      onTap: data.onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: ArulTokens.iconChipSize,
-              height: ArulTokens.iconChipSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius),
+    return Semantics(
+      container: true,
+      identifier: data.identifier,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Every settings row presses the same, push or sheet.
+        // The sheet itself stays silent — the tap that opened it already answered the finger.
+        onTapDown: (_) => ArulHaptics.tap(),
+        onTap: data.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: ArulTokens.iconChipSize,
+                height: ArulTokens.iconChipSize,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(
+                    ArulTokens.iconChipRadius,
+                  ),
+                ),
+                child:
+                    data.glyph?.call(iconColor) ??
+                    Icon(
+                      data.icon,
+                      size: ArulTokens.iconChipIconSize,
+                      color: iconColor,
+                    ),
               ),
-              child:
-                  data.glyph?.call(iconColor) ??
-                  Icon(
-                    data.icon,
-                    size: ArulTokens.iconChipIconSize,
-                    color: iconColor,
-                  ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data.title,
-                    style: ArulTokens.rowTitle.copyWith(color: titleColor),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    data.sub,
-                    style: ArulTokens.rowSub.copyWith(color: subColor),
-                  ),
-                ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data.title,
+                      style: ArulTokens.rowTitle.copyWith(color: titleColor),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      data.sub,
+                      style: ArulTokens.rowSub.copyWith(color: subColor),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right, size: 20, color: chevronColor),
-          ],
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right, size: 20, color: chevronColor),
+            ],
+          ),
         ),
       ),
     );
@@ -705,17 +683,27 @@ class _FooterLink extends StatelessWidget {
     return Semantics(
       link: true,
       label: label,
+      identifier: 'arul_policy_${doc.name}',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),
         // In-app, NEVER the browser — the policy is a pushed screen with its own back arrow.
         // A route, not an intent that can find no handler, so there is nothing to guard.
         onTap: () => context.push(doc.route),
-        child: Text(
-          label,
-          style: ArulTokens.body.copyWith(
-            fontWeight: FontWeight.w500,
-            color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+        // A 20dp line of text is not a tap target. The label does not move — it centres in a
+        // [ArulTokens.minHitTarget] box and the air around it becomes tappable, which is what
+        // `opaque` above is for. The Wrap centres the separators against the taller run.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: ArulTokens.minHitTarget),
+          child: Center(
+            widthFactor: 1,
+            child: Text(
+              label,
+              style: ArulTokens.body.copyWith(
+                fontWeight: FontWeight.w500,
+                color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+              ),
+            ),
           ),
         ),
       ),

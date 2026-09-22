@@ -10,9 +10,9 @@ paths:
 
 Every trap here fails SILENTLY — nothing logs.
 
-- **Two link shapes are supported, nothing else**: the https App Link (`/w/<uuid>`, `/r/<uuid>`, or
-  the id-less form with its TRAILING SLASH) and the Meta `fb<id>://open?…` scheme. Build https links
-  with `InstallReferrerService`, never by hand.
+- **Two link shapes only**: https App Link (`/w/<uuid>`, `/r/<uuid>`, id-less `/w/` `/w` `/r/` `/r`
+  `/`) and Meta `fb<id>://open?…`. Each shape needs a manifest filter, a Worker ROUTE (handler tests
+  skip Hono's strict router) and `parseDeepLink`; native checks the host ONLY.
 - **Intent-filters are never merged across schemes.** A filter matches the cross product of its
   schemes and hosts, so merging registers nonsense hosts and puts a custom scheme under `autoVerify`.
 - **ONE level of encoding on `referrer`.** Double-encoding hands the app a single key literally named

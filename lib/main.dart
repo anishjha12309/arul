@@ -17,13 +17,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/analytics/analytics_events.dart';
+import 'core/analytics/analytics_service.dart';
+import 'core/analytics/posthog_analytics_service.dart';
 import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
+import 'core/providers/geo_language_service.dart';
+import 'core/providers/locale_provider.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
 import 'features/notifications/providers/notification_providers.dart';
@@ -61,17 +66,13 @@ Future<void> main() async {
       unawaited(ApiClient.warmSecureStorage());
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
-      // The three collection toggles are independent platform-channel calls -> run them concurrently.
+      // The three collection toggles are re-affirmations: Crashlytics, Performance and Analytics all
+      // collect BY DEFAULT and their native SDKs start from the manifest before Dart runs (the app-start
+      // trace and first_open are native). Awaiting them here put three Binder round trips ahead of the
+      // first frame for nothing -> they run after the first frame (see `_affirmCollection`).
       // GA4 is PostHog's mirror AND the Google Ads conversion source -> link the Firebase project ↔
       // the Ads account in the console; no code. Events go through `GoogleAnalyticsService` behind the
       // `AnalyticsService` seam.
-      // Enabling COLLECTION (not per-event) is also what turns on auto-collected first_open/screen_view.
-      await Future.wait([
-        FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
-        FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
-        FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true),
-      ]);
-      BootTrace.mark('firebase init done');
 
       // Assigning `recordFlutterFatalError` straight to `FlutterError.onError` swallows the default
       // presenter -> a layout error paints its banner with ZERO logcat output (no "RenderFlex
@@ -143,8 +144,33 @@ void _maybeEnableFlutterDriver() {
 /// call site (the allow-list governs only those), GA4 auto-collects `first_open` for the same moment,
 /// and a name with a space is not a legal GA4 event name.
 /// A capture before native init finishes is DROPPED -> await `setup()` first.
-Future<void> _startPostHog(PostHogConfig config) async {
+/// `app_language`, `language_source` and `geo_region` are primed BEFORE setup, synchronously, read
+/// straight from prefs because Riverpod does not exist yet -> every capture carries the language the
+/// app opened in, including the sheet-first `login_attempt` that fires between native setup and the
+/// register round trip (`PostHogAnalyticsService.track`).
+Future<void> _startPostHog(
+  PostHogConfig config,
+  SharedPreferences prefs,
+) async {
+  final phone = WidgetsBinding.instance.platformDispatcher.locales;
+  final lang = resolveAppLocale(
+    prefs.getString(appLocalePrefsKey),
+    prefs.getString(geoLangPrefsKey),
+    phone,
+  ).languageCode;
+  final origin = resolveLanguageOrigin(prefs, phone);
+  PostHogAnalyticsService.prime({
+    kAppLanguageProperty: lang,
+    kLanguageSourceProperty: origin.source.key,
+    kGeoRegionProperty: origin.geoRegion,
+    // Only when the probe has ALREADY answered — priming an unresolved `mid` would stamp a guess
+    // on the pre-login events. `app.dart` registers the real rung the moment it lands, and
+    // `register` overwrites a primed key, so the two can never disagree.
+    if (DeviceQuality.isResolved)
+      kDeviceTierProperty: DeviceQuality.resolved.name,
+  });
   await Posthog().setup(config);
+  await PostHogAnalyticsService.started();
   if (!AnalyticsCohort.isFreshInstall) return;
   await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }
@@ -185,15 +211,25 @@ Future<void> _startApp() async {
     ..maximumSizeBytes = 32 << 20
     ..maximumSize = 40;
 
-  // The native Meta SDK auto-initialises and auto-logs install/launch from the AndroidManifest
-  // meta-data (app id + client token baked in from dart-defines) -> `activateApp()` only re-affirms
-  // the launch event; the ★ conversions go explicitly through `MetaAnalyticsService`.
-  // Key-less dev builds and `flutter test` have no platform channel -> gate on `metaEnabled`,
-  // mirroring the PostHog guard and `analyticsServiceProvider`.
-  // Startup work regardless of Firebase -> it lives here on the shared path.
-  if (AppConfig.metaEnabled) {
-    unawaited(FacebookAppEvents().activateApp());
-  }
+  // Then re-ceiling it by device tier, WITHOUT awaiting: the probe is one channel hop but it sits
+  // on the cold-start path the sign-in funnel is measured on, and the 32 MB default above is the
+  // safe answer for every phone in the meantime. The tier lands inside the splash, long before the
+  // feed decodes anything at scale.
+  //   low  — 24 MB: a 2–3 GB phone is where a thrashing cache turns into an OOM kill.
+  //   mid  — 32 MB: unchanged, the measured line (48 MB peaked at 525 MB PSS on an mt6878).
+  //   high — 40 MB: ~5 wallpapers of headroom on an 8 GB phone, still under that measured 48.
+  unawaited(
+    DeviceQuality.tier.then((tier) {
+      final (bytes, count) = switch (tier) {
+        DeviceTier.low => (24 << 20, 30),
+        DeviceTier.mid => (32 << 20, 40),
+        DeviceTier.high => (40 << 20, 48),
+      };
+      PaintingBinding.instance.imageCache
+        ..maximumSizeBytes = bytes
+        ..maximumSize = count;
+    }),
+  );
 
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.
@@ -216,18 +252,46 @@ Future<void> _startApp() async {
   // SDK that never started cannot autocapture.
   // The cohort draw is persisted in prefs -> this must stay BELOW the prefs await.
   // Mirrored in Pakiza -> keep both in sync.
-  if (AppConfig.posthogEnabled && AnalyticsCohort.resolve(prefs)) {
+  // No SIDELOADED build reports to PostHog (owner's rule) -> resolve the installer BEFORE the SDK
+  // starts, so the very first event is already gated and a developer's on-device pass never lands
+  // in the product funnel. One probe per process; every later reader gets the cached verdict.
+  await PlayInstall.resolved;
+  debugPrint(
+    '[Analytics] PostHog sink: ${PlayInstall.isPlay ? "on (Play install)" : "OFF (sideloaded)"}',
+  );
+
+  // Called UNCONDITIONALLY, never as the last term of an `&&`. `resolve` returns cohort membership
+  // but its other job is to set `AnalyticsCohort.isFreshInstall`, which the splash reads to skip the
+  // first secure-storage read (`api_auth_service` authSeed) — a decision about STARTUP, not about
+  // analytics. Short-circuited behind `isPlay`, that flag stayed false on every non-Play install and
+  // the splash paid the keystore master-key setup before it could ask Google for an account: 2937ms
+  // vs 643ms to `signIn: google surface opening`, measured on a vivo 1916 / Android 9 fresh install.
+  // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
+  // build we can ever put on a test phone — measures the same startup path real users get.
+  final inCohort = AnalyticsCohort.resolve(prefs);
+  // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
+  GeoLanguageService.markIfFreshInstall(
+    prefs,
+    freshInstall: AnalyticsCohort.isFreshInstall,
+  );
+  if (AppConfig.posthogEnabled && PlayInstall.isPlay && inCohort) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
       ..captureApplicationLifecycleEvents = false
       ..sessionReplay = false
       ..surveys = false
+      // Send every event the moment it is captured. The default batches 20 events or 30 s, and a
+      // person who opens the app, meets the Google sheet and leaves inside that window takes the
+      // install AND the sign-in outcome with them -> 6 in 100 installs read as "install, then
+      // nothing", and some never registered at all. The journey is a handful of events per person,
+      // so one request each costs nothing that matters.
+      ..flushAt = 1
       ..debug = kDebugMode;
     // `setup()` does native init and opens the SDK's first network work -> awaiting it here puts that
     // on the critical path to the first frame for every panel member -> fire-and-forget, matching the
     // contract every other PostHog call already uses (`PostHogAnalyticsService`).
     // Nothing captures before the first user action anyway — lifecycle autocapture is off above.
-    unawaited(_startPostHog(config));
+    unawaited(_startPostHog(config, prefs));
   }
 
   // The Play Install Referrer is read once per install: the referral code for the first sign-in, and,
@@ -305,5 +369,28 @@ Future<void> _startApp() async {
   // would cost latency, never correctness.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(notificationService.initialize().catchError((Object _) {}));
+    unawaited(_affirmCollection());
   });
+}
+
+/// Re-affirms the collection defaults AFTER the first frame, off the sign-in's critical path.
+///
+/// Every SDK here already collects by default and starts natively from the manifest, so nothing is
+/// lost by the wait: crashes before this point are still caught by the native SDK, the app-start
+/// trace and `first_open` are native, and the Meta SDK auto-logs the install and launch itself
+/// (`activateApp()` only re-affirms the launch event; the ★ conversions go through
+/// `MetaAnalyticsService`). What the wait buys is four Binder round trips out of the window between
+/// process start and Google's account sheet, on exactly the phones where that window is longest.
+/// Key-less dev builds and `flutter test` have no platform channel -> the same gates as before.
+Future<void> _affirmCollection() async {
+  if (AppConfig.firebaseEnabled) {
+    await Future.wait([
+      FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true),
+      FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
+      FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true),
+    ]).catchError((Object _) => <void>[]);
+  }
+  if (AppConfig.metaEnabled) {
+    await FacebookAppEvents().activateApp().catchError((Object _) {});
+  }
 }

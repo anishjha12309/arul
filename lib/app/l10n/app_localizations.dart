@@ -166,17 +166,11 @@ abstract class AppLocalizations {
   /// **'Something went wrong.'**
   String get errorGeneric;
 
-  /// No description provided for @signInHeadline.
+  /// No description provided for @signInCaption.
   ///
   /// In en, this message translates to:
-  /// **'Wallpapers worth waking up to'**
-  String get signInHeadline;
-
-  /// No description provided for @signInBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in to apply, share and keep your collection across devices.'**
-  String get signInBody;
+  /// **'Bring the divine home'**
+  String get signInCaption;
 
   /// No description provided for @signInGoogle.
   ///
@@ -184,11 +178,23 @@ abstract class AppLocalizations {
   /// **'Continue with Google'**
   String get signInGoogle;
 
-  /// No description provided for @signInTerms.
+  /// No description provided for @signInSubtitleIdle.
   ///
   /// In en, this message translates to:
-  /// **'By continuing you agree to our Terms and Privacy Policy.'**
-  String get signInTerms;
+  /// **'Choose an account to start'**
+  String get signInSubtitleIdle;
+
+  /// No description provided for @signInSubtitleExchanging.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing you in…'**
+  String get signInSubtitleExchanging;
+
+  /// No description provided for @signInNudgeRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Click here to sign in'**
+  String get signInNudgeRetry;
 
   /// No description provided for @premiumTitle.
   ///
@@ -466,6 +472,18 @@ abstract class AppLocalizations {
   /// **'Preview not available yet'**
   String get ringtonePreviewUnavailable;
 
+  /// Toast shown when a ringtone preview is tapped while the phone’s media volume is at zero or it is on silent — nothing would be heard, so the preview does not start. Keep it an instruction, not an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn up the volume to hear this preview'**
+  String get ringtoneVolumeMuted;
+
+  /// Tiny badge on the ringtone row that is the phone’s CURRENT ringtone. One short word; it sits in a pill a few characters wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get ringtoneCurrentBadge;
+
   /// No description provided for @ringtonesEmptyTitle.
   ///
   /// In en, this message translates to:
@@ -544,12 +562,6 @@ abstract class AppLocalizations {
   /// **'Signed in with Google'**
   String get settingsFallbackEmail;
 
-  /// No description provided for @settingsPremiumSubLocked.
-  ///
-  /// In en, this message translates to:
-  /// **'Unlock apply & share'**
-  String get settingsPremiumSubLocked;
-
   /// No description provided for @settingsPremiumSubTrial.
   ///
   /// In en, this message translates to:
@@ -619,8 +631,32 @@ abstract class AppLocalizations {
   /// No description provided for @settingsNeedHelpSub.
   ///
   /// In en, this message translates to:
-  /// **'Contact support'**
+  /// **'Support and subscription'**
   String get settingsNeedHelpSub;
+
+  /// No description provided for @settingsHelpSupport.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact support'**
+  String get settingsHelpSupport;
+
+  /// No description provided for @settingsHelpSupportSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to us by email'**
+  String get settingsHelpSupportSub;
+
+  /// No description provided for @settingsHelpManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage subscription'**
+  String get settingsHelpManage;
+
+  /// No description provided for @settingsHelpDeleteSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove your account'**
+  String get settingsHelpDeleteSub;
 
   /// No description provided for @settingsUpload.
   ///
@@ -667,13 +703,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'This removes your account, favourites and rewards for good.'**
+  /// **'This can\'t be undone.'**
   String get settingsDeleteConfirmBody;
 
   /// No description provided for @settingsDeleteConfirmBodyPremium.
   ///
   /// In en, this message translates to:
-  /// **'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.'**
+  /// **'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.'**
   String get settingsDeleteConfirmBodyPremium;
 
   /// No description provided for @settingsTerms.
@@ -855,12 +891,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dec'**
   String get remindersMonthDec;
-
-  /// No description provided for @premiumBrandTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Arul Premium'**
-  String get premiumBrandTitle;
 
   /// No description provided for @premiumScreenSubline.
   ///
@@ -1270,6 +1300,90 @@ abstract class AppLocalizations {
   /// **'Secured by UPI Autopay · Cancel anytime in one tap'**
   String get premiumReassurancePaid;
 
+  /// Title of the QR sheet on the free-trial variant.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to start your free trial'**
+  String get premiumQrTitleTrial;
+
+  /// Title of the QR sheet when the trial is already spent and the charge is the full price.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to subscribe'**
+  String get premiumQrTitlePaid;
+
+  /// The one instruction on the QR sheet. 'Another phone' is the point: this phone has no UPI app, which is why the code is here at all.
+  ///
+  /// In en, this message translates to:
+  /// **'Open any UPI app on another phone and scan this code.'**
+  String get premiumQrInstruction;
+
+  /// Countdown under the QR. The deadline is PhonePe's own, read out of the link, so it is short — often five minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Code expires in {time}'**
+  String premiumQrExpiresIn(String time);
+
+  /// Status line while the server is being polled. Nobody returns to the app on this path, so this line is all the feedback there is until the mandate settles.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for approval…'**
+  String get premiumQrWaiting;
+
+  /// Button on the QR sheet for someone who has just approved the mandate on the other phone and does not want to wait for the next poll. It only asks the server sooner; it can never settle anything the poll would not.
+  ///
+  /// In en, this message translates to:
+  /// **'I have paid'**
+  String get premiumQrCheck;
+
+  /// The paywall's main button once the user has come back from their UPI app with the mandate still unapproved. It re-opens the SAME mandate link — never a new payment — so it must read as continuing, not as paying twice. {app} is the UPI app's own name from the phone (PhonePe, Google Pay, Paytm), never translated.
+  ///
+  /// In en, this message translates to:
+  /// **'Open {app} again'**
+  String premiumResumeCta(String app);
+
+  /// Replaces the reassurance line while a mandate is waiting to be approved, on the free-trial variant. The audience is not payment-literate: say the one thing that has to happen, in the app it has to happen in. ₹2 is the penny-drop the trial mandate charges and refunds.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve the ₹2 verification in {app} to start your trial.'**
+  String premiumResumeHintTrial(String app);
+
+  /// The same waiting-for-approval line on the paid variant, where there is no trial and no ₹2 — the first charge is the monthly price.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve the payment in {app} to continue.'**
+  String premiumResumeHintPaid(String app);
+
+  /// Stands in for {app} in the resume lines when the app's own name cannot be read from the phone. Must read naturally inside those sentences. ta/te/kn/ml add their own word for 'app' AFTER {app} in those lines, so their value here must NOT end in it — it rendered 'your UPI app app'.
+  ///
+  /// In en, this message translates to:
+  /// **'your UPI app'**
+  String get premiumUpiAppGeneric;
+
+  /// No description provided for @trialNudgeRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish setting up your free trial'**
+  String get trialNudgeRow;
+
+  /// No description provided for @trialNudgeDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get trialNudgeDismiss;
+
+  /// No description provided for @trialReminderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your free trial is waiting'**
+  String get trialReminderTitle;
+
+  /// No description provided for @trialReminderBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You didn\'t finish setting up. Tap to try again — it takes a moment.'**
+  String get trialReminderBody;
+
   /// No description provided for @premiumSelectedUpiApp.
   ///
   /// In en, this message translates to:
@@ -1288,17 +1402,101 @@ abstract class AppLocalizations {
   /// **'Last used'**
   String get upiPickerLastUsed;
 
+  /// Last row of the UPI picker, under the installed apps. Opens the same scannable mandate code a phone with no UPI app gets on its CTA. A one-time route, never remembered as the default.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with QR'**
+  String get upiPickerQrTitle;
+
+  /// Second line of the QR row in the UPI picker. The mandate link carries no app binding, so it can be approved on any phone — which is the whole reason this row exists beside the installed apps.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan from another phone'**
+  String get upiPickerQrSubtitle;
+
   /// No description provided for @premiumTrialFinePrint.
   ///
   /// In en, this message translates to:
   /// **'Then {price}/month via autopay. Cancel anytime.'**
   String premiumTrialFinePrint(String price);
 
+  /// The price-card fine print on the PAID paywall variant, under the ₹199 lockup. Same sentence as premiumTrialFinePrint without the "Then" — a trial-consumed user is charged the month up front, so nothing precedes it. A commercial statement: the monthly renewal and the cancel-anytime right must both survive translation.
+  ///
+  /// In en, this message translates to:
+  /// **'{price}/month via autopay. Cancel anytime.'**
+  String premiumPaidFinePrint(String price);
+
   /// No description provided for @premiumSocialProof.
   ///
   /// In en, this message translates to:
   /// **'{name} in {city} just applied a live wallpaper 🙏'**
   String premiumSocialProof(String name, String city);
+
+  /// Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates from Arul'**
+  String get pushChannelName;
+
+  /// Toast on /premium when the checkout could not reach the server after its retries. The one payment failure the user can fix themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet. Check your connection and try again.'**
+  String get purchaseErrorNetwork;
+
+  /// Toast on /premium for a checkout failure with no more specific line.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong. Please try again.'**
+  String get purchaseErrorGeneric;
+
+  /// Neutral toast on /premium when the user backed out of the PhonePe payment page themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment cancelled.'**
+  String get purchaseCancelled;
+
+  /// Toast on /premium when the PhonePe payment page was interrupted before finishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was interrupted. Please try again.'**
+  String get purchaseInterrupted;
+
+  /// Toast on /premium when the PhonePe payment page ended without a completed payment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment was not completed. Please try again.'**
+  String get purchaseNotCompleted;
+
+  /// Toast on /premium when another payment setup by the same user is still running on the server.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment setup is already in progress. Please wait a few seconds and try again.'**
+  String get purchaseInProgress;
+
+  /// Toast on /premium when the chosen UPI app could not be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open your UPI app. Please try again.'**
+  String get purchaseUpiLaunchFailed;
+
+  /// The ONE failure line the UPI-app flow shows. A commercial statement: the refund hedge is conditional ('any amount deducted') and the 4–5 days must survive translation.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.'**
+  String get purchaseIntentFailed;
+
+  /// Toast on /premium when the server reports a terminal state it cannot activate from.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t activate your subscription. Please contact support.'**
+  String get purchaseActivateFailed;
+
+  /// Toast on /premium when the payment may have gone through but the server has not confirmed it yet. A commercial statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.'**
+  String get purchaseConfirmationLate;
 }
 
 class _AppLocalizationsDelegate

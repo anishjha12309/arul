@@ -44,12 +44,25 @@ class FeedVideoPlugin(
         private const val TAG = "FeedVideoPlugin"
 
         // A looping short preview never needs a deep buffer -> keep the demuxer budget small.
-        // A small bufferForPlaybackMs paints the first frame after a small read -> faster first paint on 4G.
+        // A small bufferForPlaybackMs paints the first frame after a small read -> faster first paint.
         // Media3 constraints: maxBufferMs >= minBufferMs, and bufferForPlaybackMs <= minBufferMs.
+        // These are the LOCAL-playback figures: every feed open is a file:// path (the Dart side
+        // downloads first), and DefaultLoadControl.LOCAL_PLAYBACK_SCHEMES covers file/asset.
         private const val MIN_BUFFER_MS = 2_000
         private const val MAX_BUFFER_MS = 4_000
         private const val BUFFER_FOR_PLAYBACK_MS = 250
         private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_000
+
+        // http(s) is the LAST RESORT (a failed download), and clips are <=10s at 1.3-9.8 Mbit/s.
+        // Starting on 250ms of a clip whose bitrate beats the pipe under-runs within the second, and
+        // every loop re-reads from zero, so a shallow streaming buffer stutters on a lap forever.
+        // Buffer the whole clip before the first frame instead: the poster covers the wait, and the
+        // lap that follows plays from memory. Split from the local figures via Media3's
+        // setBufferDurationsMsForStreaming, so an open from a file is unaffected.
+        private const val STREAM_MIN_BUFFER_MS = 12_000
+        private const val STREAM_MAX_BUFFER_MS = 20_000
+        private const val STREAM_BUFFER_FOR_PLAYBACK_MS = 10_000
+        private const val STREAM_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 10_000
     }
 
     private val methodChannel = MethodChannel(messenger, METHOD_CHANNEL).also {
@@ -162,21 +175,25 @@ class FeedVideoPlugin(
     // Budget SoCs often report or enforce 2, below the feed's previous+current+next window of 3.
     // That is the signature of the "third wallpaper never renders" bug.
     // Diagnostic ONLY -> the number lies in both directions, so Dart adapts on real decoder errors instead.
+    // Off the main thread: MediaCodecList's first enumeration is a binder round-trip to the codec
+    // service that some phones answer in seconds -> on main it ANR'd the first feed frame (build 80).
     private var loggedDecoderCaps = false
     private fun logDecoderCapsOnce() {
         if (loggedDecoderCaps) return
         loggedDecoderCaps = true
-        try {
-            for (mime in listOf("video/avc", "video/hevc")) {
-                val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull {
-                    !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, ignoreCase = true) }
-                } ?: continue
-                val max = info.getCapabilitiesForType(mime).maxSupportedInstances
-                Log.i(TAG, "decoder caps: $mime via ${info.name}, maxSupportedInstances=$max")
+        Thread {
+            try {
+                for (mime in listOf("video/avc", "video/hevc")) {
+                    val info = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull {
+                        !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, ignoreCase = true) }
+                    } ?: continue
+                    val max = info.getCapabilitiesForType(mime).maxSupportedInstances
+                    Log.i(TAG, "decoder caps: $mime via ${info.name}, maxSupportedInstances=$max")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "decoder caps query failed (diagnostic only)", e)
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "decoder caps query failed (diagnostic only)", e)
-        }
+        }.start()
     }
 
     /** Swaps media on a SURVIVING player: setMediaItem + prepare, no surface churn. */
@@ -272,11 +289,17 @@ class FeedVideoPlugin(
             producer.setCallback(this)
 
             val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
+                .setBufferDurationsMsForLocalPlayback(
                     MIN_BUFFER_MS,
                     MAX_BUFFER_MS,
                     BUFFER_FOR_PLAYBACK_MS,
                     BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+                )
+                .setBufferDurationsMsForStreaming(
+                    STREAM_MIN_BUFFER_MS,
+                    STREAM_MAX_BUFFER_MS,
+                    STREAM_BUFFER_FOR_PLAYBACK_MS,
+                    STREAM_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
                 )
                 .build()
 

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Static apply needs WallpaperManager -> normal permission, auto-granted -> live uses the chooser and needs none. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
@@ -14,8 +15,10 @@
 
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- Prompted on Android 13+ only when the user turns reminders on -> never at launch. -->
-    <!-- Nothing is scheduled while the master toggle is off -> the permission stays unasked. -->
+    <!-- Prompted on Android 13+ once, right after the first successful sign-in (campaign pushes), and
+         when the user turns local reminders on -> never at launch, never on the sign-in wall.
+         The FCM SDK (>= 23.0.6) declares this permission itself -> this line is the app's own
+         declaration and the two merge, they do not conflict. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Reminders are one-shot alarms -> a reboot drops every pending one -> this re-arms them via the boot receiver below. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -55,11 +58,15 @@
             android:value="true"/>
         <!-- The predictive-back flag defaults to FALSE on Android 13-15 -> without it the gesture is dead on most installs. -->
         <!-- Flutter 3.38+ supplies the page transition -> nothing app-side draws it. -->
+        <!-- clearTaskOnLaunch: Google's account picker runs INSIDE this task. Swipe home out of it, lose the -->
+        <!-- process, tap the icon -> Android resumes the dead picker with no app behind it (picking lands on -->
+        <!-- the home screen). The flag strips everything above MainActivity on an icon launch; recents keep it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
+            android:clearTaskOnLaunch="true"
             android:theme="@style/LaunchTheme"
             android:screenOrientation="portrait"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|colorMode"
@@ -117,6 +124,35 @@
                     android:host="arul.hsrutility.com"
                     android:pathPrefix="/r/"/>
             </intent-filter>
+            <!-- The same links typed without the trailing slash, and the bare domain -> `/w?lang=ta`, `/?lang=ta`. -->
+            <!-- pathPrefix="/w/" does not match "/w" -> without these an INSTALLED phone opened a browser and lost the language. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/w"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/r"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/"/>
+            </intent-filter>
             <!-- fb<APP_ID>://open?wallpaper_id=…&lang=… (or ?screen=ringtones&ringtone_id=…) is what FB/IG launch for an INSTALLED user. -->
             <!-- The id reuses the SDK meta-data's META_APP_ID placeholder -> the scheme can never drift from the SDK's app. -->
             <!-- A key-less dev build resolves to a bare "fb" scheme -> nothing ever sends it -> harmless. -->
@@ -131,6 +167,37 @@
                     android:host="open"/>
             </intent-filter>
         </activity>
+
+        <!-- Campaign pushes (docs/push.md). FCM reads these three when it posts a notification message
+             with the app in the background or dead — no app code runs at all, so a value missing here
+             is a wrong-looking notification nothing in Dart can correct.
+             The channel MUST already exist on the device or FCM falls back to this default id, so
+             NotificationService creates arul_updates_v1 at EVERY launch, not at opt-in.
+             ic_notification is resolved BY NAME -> keep.xml is what stops R8 stripping it in release. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="arul_updates_v1"/>
+
+        <!-- Coloured campaigns are data-only and drawn by ArulMessagingService, which SUBCLASSES the
+             plugin's service (onNewToken still reaches Dart). One service may own MESSAGING_EVENT ->
+             the plugin's own declaration is removed here rather than left to a priority race.
+             Plain campaigns never reach it: Play services posts a notification message itself. -->
+        <service
+            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
+            tools:node="remove"/>
+        <service
+            android:name=".push.ArulMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
 
         <!-- The Flutter tool reads this to generate GeneratedPluginRegistrant -> never delete it. -->
         <meta-data
@@ -185,6 +252,23 @@
             <meta-data
                 android:name="android.service.wallpaper"
                 android:resource="@xml/video_wallpaper"/>
+        </service>
+
+        <!-- Asks Play services to install the backported Photo Picker on Android 7-10 and Go 11-12 ->
+             the upload pick (upload/MediaPickChannel) then gets the same picker there, not the bare
+             documents UI. Never enabled and never exported: it is a declaration Play services reads,
+             not a service that runs. No permission rides with it. -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false"
+            tools:ignore="MissingClass">
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES"/>
+            </intent-filter>
+            <meta-data
+                android:name="photopicker_activity:0:required"
+                android:value=""/>
         </service>
 
         <!-- The ACTION_ATTACH_DATA fallback needs a content:// URI for a local image -> this provider mints it. -->

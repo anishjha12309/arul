@@ -11,8 +11,11 @@ import type { Context } from "hono";
 import { buildCatalog } from "../cron/build-catalog.js";
 import { sweepSubmissions } from "../cron/sweep-submissions.js";
 import { sweepCanonical } from "../cron/sweep-canonical.js";
+import { pushEnabled, runPushDispatch, runPushTest } from "../cron/push-dispatch.js";
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
+import type { PushCampaign } from "../lib/fcm.js";
+import { audienceQuery, parseAudience } from "../lib/push-audience.js";
 import {
   notifyRedemption,
   executeRedemption,
@@ -106,9 +109,12 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
     );
   }
 
+  // `?dry_run=1` -> decide everything, delete nothing, return `wouldDelete` -> read it BEFORE the real call
+  // R2 has no versioning -> this is the only preview an operator gets of the one action with no undo
+  const dryRun = c.req.query("dry_run") === "1";
   try {
-    const result = await sweepCanonical(env);
-    return c.json({ ok: true, result });
+    const result = await sweepCanonical(env, { dryRun });
+    return c.json({ ok: true, dryRun, result });
   } catch (err) {
     console.error("[internal/sweep-canonical] error:", err);
     return Response.json(
@@ -233,6 +239,9 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
                 notified_at         = NULL,
                 redemption_order_id = NULL,
                 retry_count         = 0,
+                first_debit_at      = COALESCE(first_debit_at, now()),
+                debit_count         = debit_count + 1,
+                paid_paise          = paid_paise + 19900,
                 updated_at          = now()
             WHERE id = ${row.id as string}
           `;
@@ -361,6 +370,154 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
       { status: 502 },
     );
   }
+}
+
+// ── Campaign push routes (the CMS's Notifications page) ──────────────────────
+//   Auth: Bearer PUSH_SECRET -> a THIRD secret, deliberately.
+//   CATALOG_BUILD_SECRET already lives in the CMS to trigger rebuilds; one string must never
+//   authorize "rebuild the catalog" AND "message every user". OPS_SECRET moves money and stays
+//   nowhere near the CMS. Fails closed when unset, exactly like authorizeOps.
+
+/**
+ * POST /internal/push/count { audience } -> { devices }
+ *
+ * The composer's live counts. The SQL lives in lib/push-audience.ts and NOWHERE else -> a copy in the
+ * CMS would be a number that disagrees with what the send actually reaches.
+ */
+export async function handlePushCount(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const env = c.env;
+  if (!authorizePush(c, env)) {
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const audience = parseAudience(body?.["audience"]);
+  if (!audience) {
+    return Response.json(
+      { error: { code: "invalid_body", message: "audience is required and must be a known kind" } },
+      { status: 400 },
+    );
+  }
+
+  const sql = getDb(env);
+  try {
+    const rows = (await sql`
+      SELECT count(*)::int AS n FROM (${audienceQuery(sql, audience)}) q
+    `) as unknown as { n: number }[];
+    return c.json({ devices: rows[0]?.n ?? 0 });
+  } catch (err) {
+    console.error("[internal/push/count] error:", err);
+    return Response.json(
+      { error: { code: "server_error", message: "Could not count phones" } },
+      { status: 500 },
+    );
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+/**
+ * POST /internal/push/dispatch { campaign_id } -> 202
+ *
+ * "Send now" only. A scheduled campaign needs no call at all — the minute cron picks it up on its own,
+ * and this exists so the operator sees movement within seconds rather than at the next tick.
+ * The campaign id is accepted for the log line; the dispatcher claims every due campaign regardless,
+ * which is what keeps one code path for both doors.
+ */
+export async function handlePushDispatch(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const env = c.env;
+  if (!authorizePush(c, env)) {
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
+  }
+  if (!pushEnabled(env)) {
+    console.log("[internal/push/dispatch] PUSH_ENABLED is not \"true\" — nothing claimed");
+    return c.json({ ok: true, dispatched: false, reason: "disabled" }, 202);
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const campaignId = typeof body?.["campaign_id"] === "string" ? body["campaign_id"] : "(all due)";
+  console.log(`[internal/push/dispatch] starting a dispatch pass for ${campaignId}`);
+
+  c.executionCtx.waitUntil(
+    runPushDispatch(env)
+      .then((r: unknown) => console.log("[internal/push/dispatch] pass complete:", JSON.stringify(r)))
+      .catch((err: unknown) => console.error("[internal/push/dispatch] pass failed:", err)),
+  );
+  return c.json({ ok: true, dispatched: true }, 202);
+}
+
+/**
+ * POST /internal/push/test { campaign_id } -> { sent, failed, errors }
+ *
+ * "Send to my phone". Reaches ONLY `users.is_internal` devices and touches neither the campaign's
+ * counters nor its status, so a draft can be tested as many times as the editor likes.
+ * IGNORES PUSH_ENABLED on purpose: proving the chain on the owner's phones while production is dark is
+ * the entire reason the switch exists.
+ */
+export async function handlePushTest(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const env = c.env;
+  if (!authorizePush(c, env)) {
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
+  }
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const campaignId = body?.["campaign_id"];
+  if (typeof campaignId !== "string" || campaignId.length === 0) {
+    return Response.json(
+      { error: { code: "invalid_body", message: "campaign_id is required" } },
+      { status: 400 },
+    );
+  }
+
+  const sql = getDb(env);
+  let campaign: PushCampaign | null = null;
+  try {
+    const rows = (await sql`
+      SELECT id, texts, dest, dest_id, image_url, color, expires_hours
+      FROM push_campaigns WHERE id = ${campaignId} LIMIT 1
+    `) as unknown as PushCampaign[];
+    campaign = rows[0] ?? null;
+  } catch (err) {
+    console.error("[internal/push/test] lookup failed:", err);
+    return Response.json(
+      { error: { code: "server_error", message: "Could not read that notification" } },
+      { status: 500 },
+    );
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+  if (!campaign) {
+    return Response.json(
+      { error: { code: "not_found", message: "No such notification" } },
+      { status: 404 },
+    );
+  }
+
+  try {
+    const result = await runPushTest(env, campaign);
+    return c.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("[internal/push/test] send failed:", err);
+    return Response.json(
+      { error: { code: "fcm_error", message: String(err) } },
+      { status: 502 },
+    );
+  }
+}
+
+/**
+ * Authorize a push route. PUSH_SECRET and nothing else.
+ * FAILS CLOSED when unset -> an unconfigured Worker refuses to message anyone rather than accept any bearer
+ */
+function authorizePush(c: Context<{ Bindings: Env }>, env: Env): boolean {
+  const expected = env.PUSH_SECRET ?? "";
+  if (!expected) {
+    console.error("[internal] PUSH_SECRET is not set — refusing push route");
+    return false;
+  }
+  const token = (c.req.header("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return false;
+  return timingSafeEqual(token, expected);
 }
 
 /** Monthly price in paise, and the refund ceiling -> mirrored in payments.ts -> change both together. */

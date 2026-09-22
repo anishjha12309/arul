@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/motion.dart';
 
 /// The Refer & Earn entry in a browse tab's header band — ONE control, shared by both tabs.
 ///
@@ -30,6 +31,9 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   /// One wiggle, and the pause between them. Pakiza's 550ms / 3s.
   static const Duration _wiggleDuration = Duration(milliseconds: 550);
   static const Duration _wiggleGap = Duration(seconds: 3);
+
+  /// How often the reduced-motion branch re-reads the flag. Long on purpose — see [_schedule].
+  static const Duration _reducedRecheckGap = Duration(minutes: 1);
 
   /// Pill metrics — all Pakiza's.
   /// The gift glyph carries its own side-bearing -> an even 16/16 looks adrift -> padding is ASYMMETRIC.
@@ -77,6 +81,20 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   void _schedule() {
     _timer = Timer(_wiggleGap, () {
       if (!mounted) return;
+      // Holds at angle 0 — the parcel simply sits there.
+      //
+      // Re-armed on a LONG cadence, not the wiggle's own 3 s: the flag is re-read so battery saver
+      // switched on mid-session still stops the next wiggle, but at 3 s this branch was a permanent
+      // heartbeat that rebuilt the Transform every tick to redraw the same angle, on exactly the
+      // low-tier phones the flag exists to protect. `DeviceTier.low` cannot flip at all within a
+      // process, so nothing needs 3 s resolution here.
+      if (context.reduceMotion) {
+        _c.value = 0;
+        _timer = Timer(_reducedRecheckGap, () {
+          if (mounted) _schedule();
+        });
+        return;
+      }
       _c.forward(from: 0).whenComplete(() {
         if (mounted) _schedule();
       });

@@ -18,6 +18,13 @@ enum DeepLinkSource {
   /// Meta deferred deep link (`AppLinkData.fetchDeferredAppLinkData`).
   meta,
 
+  /// A campaign notification tapped on the phone (`docs/push.md`).
+  ///
+  /// A push target parks in the same one-shot slot as a link's, so the tab that shows it fires
+  /// `deep_link_opened` either way. Without a value of its own every campaign tap would report as
+  /// `app_link` and quietly inflate the channel that ad spend is read against.
+  push,
+
   /// The `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` test seams.
   debug;
 
@@ -27,6 +34,7 @@ enum DeepLinkSource {
     DeepLinkSource.installReferrer => 'install_referrer',
     DeepLinkSource.googleAds => 'google_ads',
     DeepLinkSource.meta => 'meta',
+    DeepLinkSource.push => 'push',
     DeepLinkSource.debug => 'debug',
   };
 
@@ -34,10 +42,15 @@ enum DeepLinkSource {
       .firstWhere((s) => s.key == key, orElse: () => DeepLinkSource.appLink);
 }
 
-/// What a link asked the app to show. One of three shapes:
+/// What a link asked the app to show. One of five shapes:
 ///   · [WallpaperLinkTarget] — a wallpaper by id; the feed jumps to it on All.
 ///   · [RingtoneLinkTarget]  — a ringtone by id; the Ringtones tab scrolls it to the top of All.
 ///   · [TabLinkTarget]       — just a tab (`screen=ringtones` with no id).
+///   · [CategoryLinkTarget]  — the browse feed filtered to one category.
+///   · [PremiumLinkTarget]   — the premium screen.
+///
+/// The last two are reachable ONLY from a campaign push, never from a URL: no ad or share link
+/// parses into either, so nothing in `deep_link_parser.dart` emits them.
 sealed class DeepLinkTarget {
   const DeepLinkTarget({required this.source});
 
@@ -136,6 +149,66 @@ final class TabLinkTarget extends DeepLinkTarget {
 
   @override
   String toString() => 'TabLinkTarget(${tab.name}, ${source.key})';
+}
+
+/// The browse feed filtered to one category — a campaign push's "Opens: a category".
+///
+/// Its [tab] is Wallpapers because that is the only tab a category chip filters; the handler selects
+/// the category BEFORE routing, exactly as the local reminder's `onOpenCategory` does, so the feed's
+/// first build already filters and there is no flash of the previous category.
+/// A slug the catalog no longer carries must land on the feed, never on an empty screen or an error.
+final class CategoryLinkTarget extends DeepLinkTarget {
+  const CategoryLinkTarget(this.slug, {super.source = DeepLinkSource.appLink});
+
+  final String slug;
+
+  @override
+  ArulTab get tab => ArulTab.wallpapers;
+
+  @override
+  String get kind => 'category';
+
+  @override
+  Map<String, Object?> get analyticsProperties => {
+    ...super.analyticsProperties,
+    'category': slug,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is CategoryLinkTarget &&
+      other.slug == slug &&
+      other.source == source;
+
+  @override
+  int get hashCode => Object.hash(CategoryLinkTarget, slug, source);
+
+  @override
+  String toString() => 'CategoryLinkTarget($slug, ${source.key})';
+}
+
+/// The premium screen — a campaign push's "Opens: premium screen".
+///
+/// It is a PUSHED route over the shell, not a dock branch, so it has no tab of its own; [tab] answers
+/// Wallpapers only because the sealed contract needs an answer for the shell underneath.
+final class PremiumLinkTarget extends DeepLinkTarget {
+  const PremiumLinkTarget({super.source = DeepLinkSource.appLink});
+
+  @override
+  ArulTab get tab => ArulTab.wallpapers;
+
+  @override
+  String get kind => 'premium';
+
+  @override
+  bool operator ==(Object other) =>
+      other is PremiumLinkTarget && other.source == source;
+
+  @override
+  int get hashCode => Object.hash(PremiumLinkTarget, source);
+
+  @override
+  String toString() => 'PremiumLinkTarget(${source.key})';
 }
 
 class _DeepLinkNotifier extends ChangeNotifier {

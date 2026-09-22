@@ -35,10 +35,34 @@ class RingtonesLoading extends StatelessWidget {
 class _SkeletonRow extends StatelessWidget {
   const _SkeletonRow();
 
+  /// Read off [RingtoneRow], never re-typed. This was a hand-kept copy of a private constant, and
+  /// the hit-target raise is exactly the event that class of copy loses to: the gap BESIDE the two
+  /// trailing controls moved from 7 to 5 when their boxes went 44 -> 48, and a literal here would
+  /// have slid the skeleton's play button 4px sideways against the row that replaces it.
+  static const double _titleSubGap = RingtoneRow.titleSubGap;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaler = MediaQuery.textScalerOf(context);
+
+    // One line of each style -> the common case a real row renders. RingtoneRow.innerHeightFor
+    // reserves room for a full TWO-line title so a long one never resizes the row, but a bar can only
+    // stand in for typical content, not an arbitrary worst case -> see skeleton_geometry_test.dart for
+    // what that means for the bar's WIDTH (not asserted) versus its origin and height (asserted to
+    // the pixel).
+    final titleBarHeight =
+        scaler.scale(ArulTokens.rowTitleTracked.fontSize!) *
+        ArulTokens.rowTitleTracked.height!;
+    final subtitleBarHeight =
+        scaler.scale(ArulTokens.caption.fontSize!) * ArulTokens.caption.height!;
+
     return Container(
+      key: const Key('ringtoneSkeletonRow'),
+      // PINNED to RingtoneRow's own formula, never this widget's own content -> sizing from the Row's
+      // children alone left the skeleton a few px short of the real row, because the title+subtitle
+      // text stack is taller than the art at rest (W9) -> read the same source the real row reads.
+      height: RingtoneRow.extentFor(scaler),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight,
@@ -49,31 +73,54 @@ class _SkeletonRow extends StatelessWidget {
               : ArulTokens.cardBorderLight,
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
           SizedBox.square(
+            key: const Key('ringtoneSkeletonArt'),
             dimension: RingtoneRow.coverSize,
-            child: Skeleton(
+            child: const Skeleton(
               borderRadius: BorderRadius.all(
                 Radius.circular(ArulTokens.coverRadius),
               ),
             ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: RingtoneRow.gap),
           Expanded(
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: 0.82,
-              child: SizedBox(
-                height: 14,
-                child: Skeleton(
-                  borderRadius: BorderRadius.all(Radius.circular(7)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 0.82,
+                  child: SizedBox(
+                    key: const Key('ringtoneSkeletonTitle'),
+                    height: titleBarHeight,
+                    child: const Skeleton(
+                      borderRadius: BorderRadius.all(Radius.circular(7)),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: _titleSubGap),
+                // The deity line -> what the row actually carries under the title, not a second
+                // copy of the title bar standing in for both lines at once.
+                FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 0.42,
+                  child: SizedBox(
+                    key: const Key('ringtoneSkeletonSubtitle'),
+                    height: subtitleBarHeight,
+                    child: const Skeleton(
+                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(width: 7),
+          const SizedBox(width: RingtoneRow.controlGap),
           SizedBox.square(
+            key: const Key('ringtoneSkeletonPlay'),
             dimension: ArulTokens.minHitTarget,
             child: Center(
               child: SizedBox.square(
@@ -84,8 +131,9 @@ class _SkeletonRow extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: 7),
+          const SizedBox(width: RingtoneRow.controlGap),
           SizedBox(
+            key: const Key('ringtoneSkeletonSet'),
             width: 62,
             height: ArulTokens.minHitTarget,
             child: Center(

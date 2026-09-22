@@ -23,6 +23,13 @@ class ApiException implements Exception {
   bool get isPremiumRequired => status == 403 && code == 'premium_required';
   bool get isUnauthorized => status == 401;
 
+  /// The refresh token is retired for good -> [ApiClient.clearTokens] has ALREADY run and the wall
+  /// is the next screen. This is a sign-out, not a defect, which is why `isNonCrashError` demotes
+  /// it. A TRANSIENT refresh failure is deliberately NOT this (see `refresh_unavailable`): those
+  /// keep the stored tokens, and calling them a session expiry would sign a payer out for a blip.
+  bool get isSessionExpired =>
+      code == 'invalid_refresh' || code == 'invalid_refresh_response';
+
   @override
   String toString() => 'ApiException($status, $code): $message';
 }

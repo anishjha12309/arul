@@ -10,8 +10,9 @@ part of 'analytics_provider.dart';
 // ignore_for_file: type=lint, type=warning
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
-///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+///   * PostHog — [postHogAllowedEvents] only, for [AnalyticsCohort] members, and **only from a PLAY
+///     install** ([PlayInstall]). SDK lifecycle autocapture is OFF -> the one event outside this
+///     list is `Application Installed`;
 ///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
 ///   * Meta App Events — ★ conversion events only.
 ///
@@ -23,8 +24,9 @@ final analyticsServiceProvider = AnalyticsServiceProvider._();
 
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
 ///
-///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
-///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+///   * PostHog — [postHogAllowedEvents] only, for [AnalyticsCohort] members, and **only from a PLAY
+///     install** ([PlayInstall]). SDK lifecycle autocapture is OFF -> the one event outside this
+///     list is `Application Installed`;
 ///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
 ///   * Meta App Events — ★ conversion events only.
 ///
@@ -41,8 +43,9 @@ final class AnalyticsServiceProvider
     with $Provider<AnalyticsService> {
   /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.
   ///
-  ///   * PostHog — [postHogAllowedEvents] only, and only for [AnalyticsCohort] members. SDK lifecycle
-  ///     autocapture is OFF -> the one event outside this list is `Application Installed`;
+  ///   * PostHog — [postHogAllowedEvents] only, for [AnalyticsCohort] members, and **only from a PLAY
+  ///     install** ([PlayInstall]). SDK lifecycle autocapture is OFF -> the one event outside this
+  ///     list is `Application Installed`;
   ///   * GA4/Firebase — EVERY event at 100% plus the ★→standard mappings; the complete, unsampled record;
   ///   * Meta App Events — ★ conversion events only.
   ///
@@ -81,4 +84,4 @@ final class AnalyticsServiceProvider
   }
 }
 
-String _$analyticsServiceHash() => r'9a9f69a14754d46f766cd8f260538481237a5107';
+String _$analyticsServiceHash() => r'7742b10a69652db5ce833ab63e52cf99a0243260';

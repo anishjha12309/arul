@@ -49,16 +49,22 @@ look for is a version pointer that stops moving, never a loud failure.
    trigger` (PG 14+; `01_identity.sql:60`).
 2. **Get explicit user approval before running anything destructive (DROP / DELETE / ALTER-narrowing)
    on prod.**
-3. Apply with `workers/tools/prod-sql.mjs`. It reads the connection string out of git-ignored
-   `workers/.dev.vars` itself, so it never lands in shell history, and it refuses a write unless you
-   pass `--write`:
+3. **Apply to the `debug` branch first, then to prod — the same file both times.** Reset `debug`
+   from production (§Debug branch), run the file with `--debug`, check the shape with step 4's
+   `--debug` reads, and only then repeat without the flag. Prod never sees a statement that has not
+   already run once on a fresh copy of itself. `workers/tools/prod-sql.mjs` reads the connection
+   string out of git-ignored `workers/.dev.vars` by NAME (`DATABASE_URL`, or `DEBUG_DATABASE_URL`
+   with `--debug`), so it never lands in shell history, and it refuses a write unless you pass
+   `--write`:
 
    ```powershell
    # PowerShell (this repo's primary shell) — from workers/
+   node tools/prod-sql.mjs --write --debug ([IO.File]::ReadAllText((Resolve-Path ..\db\schema\<FILE>.sql)))
    node tools/prod-sql.mjs --write ([IO.File]::ReadAllText((Resolve-Path ..\db\schema\<FILE>.sql)))
    ```
    ```bash
    # Git Bash / POSIX — from workers/
+   node tools/prod-sql.mjs --write --debug "$(cat ../db/schema/<FILE>.sql)"
    node tools/prod-sql.mjs --write "$(cat ../db/schema/<FILE>.sql)"
    ```
 
@@ -68,8 +74,9 @@ look for is a version pointer that stops moving, never a loud failure.
    trips no usage guard, prints no warning, exits 0 and outputs `[]`, byte-identical to a successful
    apply. Never `Get-Content -Raw` without `-Encoding UTF8` either: PowerShell 5.1 decodes UTF-8 as
    single-byte chars, so a non-ASCII default or `check` constraint reaches prod as mojibake.
-   **`[prod-sql] WRITING to production:` is the only signal anything is being applied — if you do
-   not see it, nothing was applied, whatever the exit code says.** Step 4 is what catches it.
+   **`[prod-sql] WRITING to production:` (or `… to debug branch:`) is the only signal anything is
+   being applied — if you do not see it, nothing was applied, whatever the exit code says. Read the
+   target word before pressing enter on a prod run.** Step 4 is what catches it.
 
    Guards: any write without `--write` is refused outright, and an unqualified `UPDATE`/`DELETE` (no
    `WHERE`) is refused **as the first statement**. That second guard is not anchored per-statement,
@@ -91,3 +98,23 @@ look for is a version pointer that stops moving, never a loud failure.
 5. Catalog-affected? Bump `content_version` and rebuild (content-ops skill) — the browse feed never
    reads the DB, so a schema change alone changes nothing users see.
 6. Worker code depends on the change? Apply the migration FIRST, then deploy (deploy-worker skill).
+
+## Debug branch
+
+Neon project `Arul` has two branches: `production` (PROTECTED — cannot be deleted or reset, and every
+child gets its own passwords) and `debug`, a child of production with its own scale-to-zero compute
+capped at 1 CU. `debug` is a throwaway copy of prod data: local `wrangler dev` writes there (the
+Hyperdrive string in `.dev.vars`), the tools reach it with `--debug`, and every migration rehearses
+there. It costs nothing while idle and only its changed pages count as storage.
+
+- **Reset before a rehearsal**, so the copy is current and yesterday's experiment is gone: Neon MCP
+  `reset_from_parent` on branch `debug`. Its connection string survives a reset.
+- **Drifted beyond repair?** Delete `debug` and recreate it from production (MCP `create_branch`,
+  compute min 0.25 / max 1 / suspend 300). The password changes -> refresh `DEBUG_DATABASE_URL` and
+  `WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` in `.dev.vars` from MCP
+  `get_connection_string` — never paste a string into the shell or a commit.
+- **Never point `DATABASE_URL` at debug** — that is the prod handle the read-only helper and every
+  runbook assume. The two tools resolve the variable by NAME, so a mistyped flag fails loudly
+  instead of landing on the wrong database.
+- A separate "backup" branch is not needed: production keeps 7 days of point-in-time history (the
+  Launch maximum). Before a risky migration take a one-off branch of production and delete it after.

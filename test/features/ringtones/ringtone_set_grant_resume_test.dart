@@ -40,12 +40,19 @@ class _FakeSetService implements RingtoneSetService {
   }
 
   @override
-  Future<void> setRingtone(
+  Future<RingtoneRef?> setRingtone(
     File file,
     RingtoneTarget target, {
     required String title,
     required String mime,
-  }) async => sets.add(title);
+  }) async {
+    sets.add(title);
+    return null;
+  }
+
+  /// No platform here -> the current-tone badge is simply absent, which is its own valid answer.
+  @override
+  Future<RingtoneRef?> readCurrentRingtone() async => null;
 }
 
 class _NoopAnalytics implements AnalyticsService {
@@ -57,6 +64,9 @@ class _NoopAnalytics implements AnalyticsService {
   void screen(String name, {Map<String, Object?>? properties}) {}
   @override
   void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }
 
 const _tone = Ringtone(

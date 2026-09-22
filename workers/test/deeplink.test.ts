@@ -14,6 +14,7 @@ import {
   handleRingtoneLink,
   handleRootLink,
 } from "../src/routes/deeplink.js";
+import worker from "../src/index.js";
 
 const PLAY_SHA =
   "EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3";
@@ -390,6 +391,41 @@ describe("ilang (share install-language)", () => {
     expect(location.searchParams.get("referrer")).toBe(
       `w=${WALLPAPER_ID}&lang=hi`,
     );
+  });
+});
+
+// The handler tests above bypass Hono's router -> a shape with no ROUTE 404s in production while they stay green
+// So every link shape ad ops realistically paste goes through the real Worker here
+describe("real router: every pasted link shape reaches Play with its language", () => {
+  it.each([
+    [`/w/${WALLPAPER_ID}?lang=ta`, `w=${WALLPAPER_ID}&lang=ta`],
+    [`/w/${WALLPAPER_ID}/?lang=ta`, `w=${WALLPAPER_ID}&lang=ta`],
+    [`/r/${RINGTONE_ID}/?lang=ta`, `r=${RINGTONE_ID}&lang=ta`],
+    ["/w/?lang=ta", "lang=ta"],
+    ["/w?lang=ta", "lang=ta"],
+    ["/r/?lang=ta", "screen=ringtones&lang=ta"],
+    ["/r?lang=ta", "screen=ringtones&lang=ta"],
+    ["/?lang=ta", "lang=ta"],
+  ])("%s", async (path, referrer) => {
+    const res = await worker.fetch(
+      new Request(`https://arul.hsrutility.com${path}`),
+      makeEnv() as never,
+      { waitUntil() {}, passThroughOnException() {} } as never,
+    );
+    expect((await dest(res)).searchParams.get("referrer")).toBe(referrer);
+  });
+
+  // The shape decides whether a link survives, never the language -> all six shipped codes on every shape
+  it.each(["en", "ta", "te", "kn", "ml", "hi"])("keeps lang=%s on every shape", async (lang) => {
+    for (const path of ["/w/", "/w", "/r/", "/r", "/", `/w/${WALLPAPER_ID}/`, `/r/${RINGTONE_ID}`]) {
+      const res = await worker.fetch(
+        new Request(`https://arul.hsrutility.com${path}?lang=${lang}`),
+        makeEnv() as never,
+        { waitUntil() {}, passThroughOnException() {} } as never,
+      );
+      const referrer = (await dest(res)).searchParams.get("referrer") ?? "";
+      expect(referrer.split("&"), path).toContain(`lang=${lang}`);
+    }
   });
 });
 

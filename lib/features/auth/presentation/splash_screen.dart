@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/perf/boot_trace.dart';
+import '../../../core/providers/geo_language_service.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
@@ -17,6 +18,7 @@ import '../../wallpapers/providers/wallpaper_prefetch_provider.dart';
 import '../domain/auth_service.dart';
 import '../providers/auth_providers.dart';
 import 'widgets/video_background.dart';
+import '../../../app/theme/motion.dart';
 
 /// The launch screen.
 ///
@@ -48,9 +50,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// Post-login the feed's own VideoPreloadController re-runs `prefetchAround` -> nothing is lost.
   static const _thumbWarmCount = 16;
 
-  /// The signed-out slice — the first screenful of posters, so the post-login feed shows real art.
-  /// A few hundred KB, which cannot crowd the auth calls.
-  static const _preAuthThumbWarmCount = 4;
+  /// The signed-out slice — ONE poster, so the post-login feed's first card shows real art.
+  /// Tens of KB at most: nothing to crowd Google's sign-in step or the auth calls, which measured
+  /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
+  static const _preAuthThumbWarmCount = 1;
 
   /// The warm-up runs once per splash, on the first catalog data to land — disk snapshot or drain.
   bool _mediaWarmed = false;
@@ -63,7 +66,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _hairlineController = AnimationController(
       vsync: this,
       duration: ArulTokens.hairlineLoop,
-    )..repeat();
+    );
 
     // Open the API connection now -> POST /auth/login, moments away, pays no DNS, TLS or cold start.
     // Never awaited, never retried, never able to fail anything (ApiClient.warmUp).
@@ -74,6 +77,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .warmUp()
           .then((_) => BootTrace.mark('splash: API warm-up settled')),
     );
+    // A fresh install's region hint, asked once -> the wall flips live when it lands.
+    // Never awaited and never on the routing path -> the splash still routes the moment the seed settles.
+    unawaited(ref.read(geoLanguageServiceProvider).fetchOnce());
 
     // Warm the catalog while the wordmark is up, then the first screenful of feed media.
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
@@ -193,6 +199,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final authed =
         AppConfig.hasBackend &&
         ref.read(authServiceProvider).currentState.isAuthenticated;
+
     BootTrace.mark('splash: routing to ${authed ? '/browse' : '/sign-in'}');
     context.go(authed ? '/browse' : '/sign-in');
   }
@@ -256,6 +263,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         ),
       ),
     );
+  }
+
+  /// Armed here rather than at construction: `reduceMotion` needs an InheritedWidget lookup, and
+  /// the splash is the FIRST screen a low-tier phone builds — the one place a loop must not start
+  /// before the tier is known.
+  bool _motionStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_motionStarted) return;
+    _motionStarted = true;
+    if (context.reduceMotion) {
+      // Parked at the centre: the gold bar sits fully visible under the wordmark. The splash's only
+      // "working" signal must stay legible when it stops moving.
+      _hairlineController.value = 0.5;
+    } else {
+      _hairlineController.repeat();
+    }
   }
 
   /// 120×2px gold hairline with a sliding gradient, 1.6s linear loop. No spinner — the spec is firm.

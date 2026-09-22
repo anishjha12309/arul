@@ -72,7 +72,26 @@ class GoogleAnalyticsService implements AnalyticsService {
   }
 
   @override
-  void reset() => unawaited(_analytics.resetAnalyticsData());
+  void reset() => unawaited(_resetKeepingRegistered());
+
+  /// A GA4 USER property — the SDK stamps it on every event logged after it is set, which is the
+  /// per-event cut [AnalyticsService.register] asks for. Invisible in reports until it is registered
+  /// as a user-scoped custom dimension. Names ≤24 chars, values ≤36 -> a language code fits both.
+  @override
+  void register(String key, Object value) {
+    _registered[key] = value.toString();
+    unawaited(_analytics.setUserProperty(name: key, value: value.toString()));
+  }
+
+  final _registered = <String, String>{};
+
+  /// `resetAnalyticsData` clears the user properties with the app instance id -> re-apply AFTER it.
+  Future<void> _resetKeepingRegistered() async {
+    await _analytics.resetAnalyticsData();
+    for (final e in _registered.entries) {
+      await _analytics.setUserProperty(name: e.key, value: e.value);
+    }
+  }
 
   /// Revenue for Google Ads ROAS. `value` may be a num or a numeric string; null when absent.
   double? _value(Map<String, Object?>? props) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../theme/arul_tokens.dart';
@@ -16,6 +17,8 @@ class ArulResubscribeView extends StatelessWidget {
     required this.selectedUpiApp,
     required this.canChangeUpiApp,
     required this.purchaseBusy,
+    this.resumeAppLabel,
+    this.onResume,
     required this.onBack,
     required this.onChangeUpiApp,
     required this.onResubscribe,
@@ -26,12 +29,23 @@ class ArulResubscribeView extends StatelessWidget {
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
   final bool purchaseBusy;
+
+  /// Same contract as the paywall's: non-null = a mandate this user opened is still live in that
+  /// UPI app. A resubscribe dies in the UPI handoff exactly as a first purchase does, so the way
+  /// back into it has to be here too — the screen differs, the half-finished mandate does not.
+  /// No way OUT either, for the same reason it is gone from the paywall: the deadline retires the
+  /// order by itself. The selector stays changeable throughout, exactly as on the paywall.
+  final String? resumeAppLabel;
+  final VoidCallback? onResume;
+
   final VoidCallback onBack;
   final VoidCallback onChangeUpiApp;
   final VoidCallback onResubscribe;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final resuming = resumeAppLabel != null;
     return PaywallGround(
       child: Column(
         children: [
@@ -85,6 +99,8 @@ class ArulResubscribeView extends StatelessWidget {
                   ),
                   _PremiumUpiSelector(
                     app: selectedUpiApp!,
+                    // Live even while a mandate is open: picking another app abandons that order
+                    // and starts a fresh one there, rather than locking them to one wallet.
                     canChange: canChangeUpiApp,
                     enabled: !purchaseBusy,
                     onChange: onChangeUpiApp,
@@ -92,10 +108,14 @@ class ArulResubscribeView extends StatelessWidget {
                 ],
                 const SizedBox(height: ArulTokens.premiumResubscribeCtaTop),
                 ShrineCta(
-                  label: 'Resubscribe',
+                  label: resuming
+                      ? l10n.premiumResumeCta(resumeAppLabel!)
+                      : 'Resubscribe',
                   busy: purchaseBusy,
                   bottomLotus: true,
-                  onPressed: purchaseBusy ? null : onResubscribe,
+                  onPressed: purchaseBusy
+                      ? null
+                      : (resuming ? onResume : onResubscribe),
                 ),
                 const SizedBox(
                   height: ArulTokens.premiumResubscribeCtaLotusClearance,
@@ -108,8 +128,12 @@ class ArulResubscribeView extends StatelessWidget {
                     horizontal: ArulTokens.premiumResubscribeFootnoteInset,
                   ),
                   child: Text(
-                    'Resubscribing sets up a fresh UPI Autopay mandate at '
-                    '$monthlyPrice a month.',
+                    // Resuming says the ONE thing left to do, in the footnote's slot. A resubscribe
+                    // is never a trial -> always the paid line.
+                    resuming
+                        ? l10n.premiumResumeHintPaid(resumeAppLabel!)
+                        : 'Resubscribing sets up a fresh UPI Autopay mandate at '
+                              '$monthlyPrice a month.',
                     textAlign: TextAlign.center,
                     style: ArulTokens.premiumResubscribeFootnote,
                   ),

@@ -65,6 +65,16 @@ export interface CanonicalSweepResult {
   aborted: boolean;
   /** Per-prefix refusal reason -> it reaches the cron log -> that log is the operator's only triage surface. */
   abortedPrefixes: Record<string, string>;
+  /** Dry run only: every key the real sweep WOULD delete, so an operator reads the list before anything is lost. */
+  wouldDelete?: string[];
+}
+
+export interface CanonicalSweepOptions {
+  /**
+   * Decide everything, delete nothing. R2 has no versioning -> a sweep is the one action with no undo ->
+   * the operator door runs this first and reads `wouldDelete`. The crons never pass it.
+   */
+  dryRun?: boolean;
 }
 
 /** Null = safe to execute; a string = the human-readable refusal. Kept pure so it tests without R2 or Neon. */
@@ -111,7 +121,11 @@ export function selectCanonicalKeysToDelete(
   return out;
 }
 
-export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
+export async function sweepCanonical(
+  env: Env,
+  options: CanonicalSweepOptions = {},
+): Promise<CanonicalSweepResult> {
+  const dryRun = options.dryRun === true;
   const sql = getDb(env);
   const result: CanonicalSweepResult = {
     scanned: 0,
@@ -120,6 +134,7 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
     errors: 0,
     aborted: false,
     abortedPrefixes: {},
+    ...(dryRun ? { wouldDelete: [] } : {}),
   };
 
   try {
@@ -201,6 +216,13 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
 
       result.kept += candidates.length - toDelete.length;
 
+      // Same decision, same failsafes, no delete -> the list is exactly what the real run would reclaim
+      if (dryRun) {
+        result.wouldDelete!.push(...toDelete);
+        console.log(`[sweep-canonical] DRY RUN ${prefix} — would delete ${toDelete.length} of ${candidates.length}`);
+        continue;
+      }
+
       for (const key of toDelete) {
         try {
           await env.R2.delete(key);
@@ -215,6 +237,8 @@ export async function sweepCanonical(env: Env): Promise<CanonicalSweepResult> {
 
     return result;
   } finally {
-    await sql.end();
+    // Tearing down an already-severed socket can itself reject, and inside a finally that rejection
+    // REPLACES the return value -> a finished sweep would read as a failed one (docs/cron.md)
+    await sql.end().catch(() => {});
   }
 }

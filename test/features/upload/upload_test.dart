@@ -188,31 +188,27 @@ void main() {
       },
     );
 
-    test(
-      'upload-url request scopes the key to user/<id>/submissions/',
-      () async {
-        String? sentKey;
-        final c = await container(
-          auth: AuthUserState.authenticated(userId: 'u1'),
-          mock: MockClient((req) async {
-            sentKey =
-                (jsonDecode(req.body) as Map<String, dynamic>)['key']
-                    as String?;
-            // Return no uploadUrl -> the flow stops before the un-mockable R2 PUT.
-            return http.Response(
-              '{}',
-              200,
-              headers: {'content-type': 'application/json'},
-            );
-          }),
-        );
-        addTearDown(c.dispose);
+    test('upload-url request scopes the key to user/<id>/submissions/', () async {
+      String? sentKey;
+      final c = await container(
+        auth: AuthUserState.authenticated(userId: 'u1'),
+        mock: MockClient((req) async {
+          sentKey =
+              (jsonDecode(req.body) as Map<String, dynamic>)['key'] as String?;
+          // Return no uploadUrl -> the flow stops before the un-mockable R2 PUT.
+          return http.Response(
+            '{}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(c.dispose);
 
-        await submit(c);
-        expect(sentKey, startsWith('user/u1/submissions/'));
-        expect(sentKey, endsWith('_pic.jpg'));
-      },
-    );
+      await submit(c);
+      expect(sentKey, startsWith('user/u1/submissions/'));
+      expect(sentKey, endsWith('_pic.jpg'));
+    });
 
     test(
       'a ringtone submit sends kind=ringtone with the audio content-type',
@@ -269,8 +265,13 @@ class _FakeAuth implements AuthService {
   Future<void> get initialized => Future.value();
 
   @override
-  Future<AuthResult> signInWith(AuthProvider provider, {bool auto = false}) =>
-      throw UnimplementedError();
+  Future<AuthResult> signInWith(
+    AuthProvider provider, {
+    bool auto = false,
+    bool returned = false,
+    bool reconnected = false,
+    bool reopened = false,
+  }) => throw UnimplementedError();
 
   @override
   void abandonPendingSignIn() {}

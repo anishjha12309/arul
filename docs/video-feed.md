@@ -17,7 +17,52 @@ never with an error.
 - **Detect the silent software-decoder fallback** (`onVideoDecoderInitialized`) and demote the pool
   budget 3 → 2, with a **floor of 2**. Only a real codec error may demote to 1.
 - **Never query decoder capability and assume.** `getMaxSupportedInstances` lies in both directions.
-  Attempt and degrade; the try IS the probe.
+  Attempt and degrade; the try IS the probe. Keep the diagnostic query OFF the main thread:
+  `MediaCodecList`'s first enumeration is a binder round-trip to the codec service that some phones
+  answer in seconds, and on main it ANR'd the first feed frame.
+- **Leaving the Wallpapers tab PAUSES at once and frees the decoders only after a grace period**
+  (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild:
+  measured on a Nothing A001 at **430 ms with no frame on the video surface**, and **10.4% of frames
+  over 33 ms** across a tab-switch window against 3.9% idle. The pause is what stops audio and decode
+  behind the ringtone list, and it is free; only the freeing is worth deferring. The other three
+  release paths stay IMMEDIATE and must: the apply flow AWAITS one so the OS finds decoders free,
+  backgrounding hands them to the OEM chooser, and `detach()` is a teardown.
+
+## The feed opens FILES. A CDN stream is a failure path, never the plan
+
+`_setupAndOpen` awaits `ensureCached` and opens the local path; the poster covers the wait, and the
+http(s) URL is reached only when that transfer failed. Streaming looked cheaper — a first frame after
+250 ms instead of a whole download — and is unusable here for three reasons that compound:
+
+- Clips run **1.3–9.8 Mbit/s** (the ceiling is 15 MB, not a bitrate), so any pipe under the clip's
+  own rate under-runs within a second.
+- **`REPEAT_MODE_ONE` re-reads the media from zero on every lap** — `DefaultLoadControl`'s back
+  buffer is 0 — so a looping stream re-downloads the whole clip once per lap, for as long as the
+  card is on screen, and never consults the copy the prefetcher has since written to disk. Parked on
+  one card for three minutes: **310 MB streamed against 0.1 MB from a warm file.**
+- The prefetcher is fetching the SAME url through `dart:io` at the same time. Two clients, two
+  transfers, no sharing.
+
+An under-run freezes the texture on the clip's opening frame, which IS the poster image — so the
+card reads as "the poster came back, then the video returned", every lap. **A rebuffer is not what
+hides a texture; only a re-`open()` is**, and the one that fires mid-play is `_onPlayerError`'s
+non-decoder branch: it must leave an already-painted card alone, or a network blip restarts the clip
+from zero in front of the user. The decoder-error retry and budget demotion are a different class and
+stay as they are.
+
+The current card jumps every queue (`ensureCached(priority:)`): while its bytes are landing, the two
+window neighbours and the whole look-ahead queue hold. Without that a neighbour's clip painted seven
+seconds before the card the user was looking at.
+
+## The data window is the data-plan budget
+
+`WallpaperPrefetchService` pulls upcoming MP4 BYTES to disk, no decoders, so depth never janks —
+but a clip averages ~4.5 MB and the window reaches cards the user may never. **Keep the look-ahead
+shallow (3; 2 until the first card paints).** At 15 the queue never drained while the user swiped:
+the pipe ran flat out at ~5 MB/s for the whole scroll (505 MB in 90 s on a 3 GB Vivo), and bytes
+tracked time spent scrolling, not cards reached. The 160 ms settle debounce already stops mid-fling
+pages from enqueuing; the disk LRU (120 objects) stays deep so a cached cold start opens from files.
+Encode size is not the lever — the 15 MB ceiling is quality-first by the owner's call.
 
 ## The reveal — why an undecoded live card looks static
 

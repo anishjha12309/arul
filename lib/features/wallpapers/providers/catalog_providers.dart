@@ -279,19 +279,166 @@ class SelectedCategory extends Notifier<String> {
 
 /// The list the feed serves for [slug] — the ONE definition of feed order.
 ///
-/// EVERY chip runs the same comparator; a category chip is All restricted to one category.
-/// The invariant: a filtered view can never contradict All.
-/// It holds because the comparator is a TOTAL order whose last tier is catalog position.
-/// Position in the filtered list is monotonic in the full one -> restricting cannot reverse a pair.
+/// All and every category chip run the same comparator; a category chip is All restricted to one
+/// category. The invariant: a category view can never contradict All. It holds because the
+/// comparator is a TOTAL order whose last tier is catalog position, and position in the filtered list
+/// is monotonic in the full one -> restricting cannot reverse a pair.
+///
+/// NEW IS THE ONE EXCEPTION, on purpose (owner's call, 2026-09-15): it is not All restricted, it has
+/// its own order — renewed, then debuts, then filler by applies ([newOrder]). Pins play no part in it.
+///
 /// [apply_restore] resolves its saved page index through this too — a position in the SERVED list.
 /// Validating it against any other ordering restores a post-apply restart to a different wallpaper.
-List<Wallpaper> feedOrder(String slug, List<Wallpaper> all) => orderedByUse(
-  slug == WallpaperCategory.allSlug
-      ? all
-      : all.where((w) => w.category == slug).toList(growable: false),
-  (w) => w.applyCount,
-  rank: (w) => w.feedRank,
-);
+List<Wallpaper> feedOrder(String slug, List<Wallpaper> all, {DateTime? now}) =>
+    switch (slug) {
+      WallpaperCategory.newSlug => newOrder(
+        all,
+        id: (w) => w.id,
+        publishedAt: (w) => w.publishedAt,
+        renewedAt: (w) => w.renewedAt,
+        useCount: (w) => w.applyCount,
+        now: now ?? DateTime.now(),
+      ),
+      _ => orderedByUse(
+        slug == WallpaperCategory.allSlug
+            ? all
+            : all.where((w) => w.category == slug).toList(growable: false),
+        (w) => w.applyCount,
+        rank: (w) => w.feedRank,
+      ),
+    };
+
+/// How far back "New" reaches — for a renew and a debut alike. Everything inside this window is in
+/// the chip, however much that is — a 40-item drop shows all 40 (owner's call). The window is the
+/// rule; [kNewMinItems] only rescues a quiet one. The CMS marks a renew current for this same span
+/// (Unified CMS feed-order.tsx `RENEW_WINDOW_MS`) — change one, change the other.
+const Duration kNewWindow = Duration(days: 7);
+
+/// The floor under [kNewWindow], so the chip is never thin. A week with 3 publishes shows those 3
+/// plus the 17 next-newest of any age; a week with none shows the newest 20. A FLOOR, never a cap.
+const int kNewMinItems = 20;
+
+/// The New chip: which rows it holds AND their order. Three tiers, the first two inside [kNewWindow]:
+///
+///   1. RENEWED — [renewedAt] in the window, most recent renew first. An operator's CMS Renew puts a
+///      row back on top; renew five and they stack, the last one placed on top (owner's call).
+///   2. DEBUTS — every other row with [publishedAt] in the window, newest publish first.
+///   3. FILLER — only when 1 + 2 hold fewer than [kNewMinItems]: the next-newest rows by
+///      [publishedAt] (nulls last) make up the floor, and are shown most-used first.
+///
+/// TIES go by [useCount] descending, then [id] ascending — in every tier. Never by `feedRank` or
+/// list position: the catalog's `feed_rank` is a position with the CMS pins baked into it, and pins
+/// must play NO part in New (owner's call). A bulk publish is one transaction, so a whole batch shares
+/// one [publishedAt]; that is the tie this rule exists for. [id] makes the order total — `List.sort`
+/// is not stable — and, unlike list index, it is the same for wallpapers and ringtones, whose drained
+/// list is re-sorted by `sort_order`/title.
+///
+/// A renewed row is ONE row: tier 1 wins, whatever its [publishedAt] (a renew re-stamps both anyway).
+/// A null [publishedAt] sorts LAST and can only ever arrive as filler: it means the row predates the
+/// field, never that it is new. A renew older than the window is just a date — the row competes on
+/// [publishedAt] like any other.
+///
+/// [now] is required, not read from the clock in here — the window is a boundary a test has to be
+/// able to stand on either side of. The window is INCLUSIVE at exactly 7 days.
+List<T> newOrder<T>(
+  List<T> all, {
+  required String Function(T) id,
+  required DateTime? Function(T) publishedAt,
+  required DateTime? Function(T) renewedAt,
+  required int Function(T) useCount,
+  required DateTime now,
+}) {
+  if (all.isEmpty) return const [];
+  final cutoff = now.subtract(kNewWindow);
+  bool fresh(DateTime? at) => at != null && !at.isBefore(cutoff);
+
+  // Decorate-sort-undecorate: read every key ONCE per row, not twice per comparison.
+  final keyed = [
+    for (final row in all)
+      (
+        row: row,
+        id: id(row),
+        uses: useCount(row),
+        pub: publishedAt(row),
+        ren: renewedAt(row),
+      ),
+  ];
+  int byUsesThenId(_NewKey<T> a, _NewKey<T> b) {
+    final byUses = b.uses.compareTo(a.uses); // most used first
+    return byUses != 0 ? byUses : a.id.compareTo(b.id);
+  }
+
+  int newestFirst(DateTime? a, DateTime? b) {
+    if (a == null || b == null) {
+      if (a == null && b == null) return 0;
+      return a == null ? 1 : -1; // nulls last
+    }
+    return b.compareTo(a);
+  }
+
+  final renewed =
+      [
+        for (final k in keyed)
+          if (fresh(k.ren)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.ren, b.ren);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
+  final debuts =
+      [
+        for (final k in keyed)
+          if (!fresh(k.ren) && fresh(k.pub)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.pub, b.pub);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
+
+  final head = [...renewed, ...debuts];
+  if (head.length >= kNewMinItems) {
+    return List<T>.unmodifiable([for (final k in head) k.row]);
+  }
+
+  // Filler: MEMBERSHIP by recency (the next-newest), ORDER by use. Two sorts on purpose — sorting the
+  // whole remainder by use would pull in the most-applied rows of all time, not the most recent.
+  final rest =
+      [
+        for (final k in keyed)
+          if (!fresh(k.ren) && !fresh(k.pub)) k,
+      ]..sort((a, b) {
+        final c = newestFirst(a.pub, b.pub);
+        return c != 0 ? c : byUsesThenId(a, b);
+      });
+  final filler = rest.take(kNewMinItems - head.length).toList()
+    ..sort(byUsesThenId);
+  return List<T>.unmodifiable([
+    for (final k in head) k.row,
+    for (final k in filler) k.row,
+  ]);
+}
+
+/// One row as [newOrder] reads it — each key read once.
+typedef _NewKey<T> = ({
+  T row,
+  String id,
+  int uses,
+  DateTime? pub,
+  DateTime? ren,
+});
+
+/// Whether the New chip may be offered on the Wallpapers row.
+///
+/// The chip needs `published_at`, which only a catalog built after db/schema/15_published_at.sql
+/// carries. An install holding an older cached page would otherwise show a "New" chip whose window
+/// matched nothing and whose 20-item floor served the top of All under a wrong name. One row with
+/// the field is enough — the field is emitted for the whole scope or not at all, and the chip
+/// appears by itself on the next drain.
+final showNewCategoryProvider = Provider<bool>((ref) {
+  final all = switch (ref.watch(catalogProvider)) {
+    AsyncData(:final value) => value,
+    _ => const <Wallpaper>[],
+  };
+  return all.any((w) => w.publishedAt != null);
+});
 
 /// The three-tier feed order (CLAUDE.md §5b), for any catalog list with a rank and a use counter:
 ///

@@ -301,9 +301,17 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 // ── Public app_config.json ────────────────────────────────────────────────────
 
 /**
- * Coerce a jsonb column to a real object.
- * `fetch_types:false` returns jsonb as the raw JSON STRING -> passing it through double-encodes it in the catalog
- * AppConfigModel.fromJson then fails to parse -> parse here, and pass real objects through unchanged
+ * Coerce a jsonb column to a real object, for LEGACY ROWS ONLY.
+ *
+ * This comment used to blame `fetch_types:false` for returning jsonb as a raw string. That is wrong,
+ * and believing it is how the same bug reached the push composer: jsonb comes back parsed whatever
+ * fetch_types says. The cause was always on the WRITE side, in the CMS — postgres.js reads a
+ * `::jsonb` cast out of the template and stringifies the value itself, so the CMS's
+ * `${JSON.stringify(x)}::jsonb` encoded twice and stored a jsonb STRING holding JSON. The CMS now
+ * passes the object through sql.json; rows written before that still hold a string.
+ *
+ * Keep this until no such row is left, then delete it — a reader that silently repairs its input is
+ * why nothing surfaced for months. AppConfigModel.fromJson cannot parse a double-encoded blob.
  */
 function asJsonObject(v: unknown): unknown {
   if (typeof v === "string") {
@@ -566,6 +574,12 @@ async function buildScope(
   // A dropped column is always-null or unread today -> re-add it to the keep-set the moment a model starts reading it
   // `category` is ALWAYS emitted -> it is the browse axis the feed chips filter on
   // `created_at` STAYS on both -> postgres.js emits ISO-8601 "…Z", which Dart's DateTime.parse consumes directly
+  // `published_at` STAYS on both too, and is a DIFFERENT date -> created_at is when the row was IMPORTED
+  // It is what the app's New chip windows on, entirely client-side -> the chip must not depend on a rebuild
+  // The hourly build is a no-op while content_version holds, so a server-stamped is_new flag would freeze
+  // Null here means never published -> impossible on a published row once db/schema/15_published_at.sql lands
+  // `renewed_at` STAYS on both as well -> tier 1 of New (a CMS Renew), windowed client-side exactly like published_at
+  // It is not in either delete list below, so SELECT * carries it -> deleting it would silently flatten New's top tier
   // Ringtone `mime` STAYS -> set-as-ringtone infers the file extension from it
   // `apply_count`/`set_count` are emitted as the lifetime number the CMS and older installs read
   // They are also what the ORDER BY sorted on -> but the app must NOT re-sort -> `feed_rank` already encodes it
@@ -581,6 +595,8 @@ async function buildScope(
 
     r["feed_rank"] = rankFor(i);
     delete r["scored_at"];
+    // The CMS's Undo bookkeeping (db/schema/20_renew_undo.sql) -> never content, and no model reads it
+    delete r["pre_renew_published_at"];
 
     if (scope === "wallpapers") {
       r["apply_count"] = pgBigintToNumber(r["apply_count"]);

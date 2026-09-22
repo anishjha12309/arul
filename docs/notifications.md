@@ -1,17 +1,27 @@
 # Notifications — traps only
 
-Local reminders via `flutter_local_notifications` — **no FCM, no Worker, nothing leaves the device,
-and no screen may promise a push channel.**
+Local reminders via `flutter_local_notifications` — **on-device only: no network, no server, nothing
+leaves the phone.** Campaign pushes are a SEPARATE feature with separate rules
+([push.md](push.md)); the only thing the two share is this class, which creates the campaign channel
+at launch because FCM needs it to exist before a message arrives. No screen promises either.
 
 ## Deliberate decisions that look wrong — do not "fix"
 
 - Permission is requested **on opt-in only**, never at launch; `syncWithSystem()` flips the toggle
-  off if the user revokes it in system settings.
+  off if the user revokes it in system settings. Refused twice, Android stops showing its dialog, so
+  the toggle deep-links to `ACTION_APP_NOTIFICATION_SETTINGS` — same MainActivity-channel shape as
+  Set's `WRITE_SETTINGS`, gated on `shouldShowRequestPermissionRationale` being false after a request
+  came back denied. The toggle is NOT parked: granting there costs one more tap on return.
 - **Festival dates are DATA, not computation** — lunisolar dates are astronomy no Dart package
   computes to a standard worth putting in front of a devotee. When the table runs out
   `nextOccurrenceAfter` returns null and the festival is **skipped**: it degrades to "no reminders",
   never a reminder on a wrong day. **Never "fix" it by adding 365 days** — that puts a lunisolar
   festival up to a fortnight out.
+- **The tz database is the `latest_10y` variant, and that is safe here, not a corner cut.** It carries
+  the SAME zone names as `latest` (the generator filters both against one `commonLocations` list) and
+  truncates only transitions to ±5 years; a date past the window resolves on the last kept rule, and
+  Asia/Kolkata has had one since 1945. A DST zone read years past the window would freeze on the wrong
+  half — that is the only thing a revert would buy.
 - Reminders fire `kFestivalLeadDays` ahead and the copy never names a date, so a ±1-day disagreement
   between almanacs is invisible (the Settings "Coming up" card does print it).
 - **Scheduling is inexact (`inexactAllowWhileIdle`) on purpose** — exact alarms are special-access
@@ -47,6 +57,27 @@ count short of expected in the QA card is the only other signal.
   colour, not the file. The coloured mark is the LARGE icon, and that one is the launcher art
   recomposed.
 - **Android suppresses notifications for the foreground app** — minimise before judging a QA send.
+- **`applySettings` cancels EVERY pending notification, including ones these settings do not own.**
+  Ids come from list INDEXES, so a reordered or shortened list leaves orphans only a cancel-all
+  reaches — `cancelAllPendingNotifications`, **never the plugin's `cancelAll`**, which also clears
+  what is on screen: this runs on every launch, and it wiped unread campaign pushes. The unfinished-trial reminder is therefore re-armed by `notificationBootstrap` AFTER
+  `applySettings`, from an instant persisted at abandonment — re-arming from "now" would walk it
+  further out on every launch, so the people who open the app most would be the ones never reminded.
+  The marker is written when the UPI app takes over, so it can outlive an approval the app never
+  saw: the re-arm therefore asks entitlement (behind the auth seed, never awaited), and ANY premium
+  read retires marker and reminder. Entitlement is lazy — without the ask, a launch that lands on
+  Ringtones reminds a payer that they "didn't finish". Residual: a payer who never reopens the app
+  before the due time still gets it; the tap lands on their plan, which corrects it.
+  Anything one-shot added beside it owes the same treatment.
+- **The trial reminder NEVER requests the notification permission** — it fires from a payment
+  failing, which is not an opt-in. No permission means no reminder; the feed row is what covers that
+  user. It rides the EXISTING weekly channel: a channel's sound is immutable once created, and a new
+  id would show up as a second toggle in the system settings for one reminder.
+- **The master toggle does not own the trial reminder.** It is a follow-up to a payment the user
+  started, not a devotional reminder, and `masterEnabled` defaults OFF — gating it there made it
+  dead code for the fresh installs that abandon most. Its only gate is the OS permission, which on
+  13+ is itself an explicit grant. So the re-arm runs after BOTH bootstrap branches, not inside the
+  enabled one.
 
 ## Adding the chime
 

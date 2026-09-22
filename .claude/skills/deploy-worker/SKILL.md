@@ -16,14 +16,19 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    ([vendor](https://developers.cloudflare.com/workers/ci-cd/builds/troubleshoot/) reads it the
    other way round, as a wrong `account_id`; for this repo the pin is correct and the login is not).
    A `10000 Authentication error` (403) is a token/permission problem, NOT a wrong account.
-3. Deploy: `npx wrangler deploy`. Record the version id — report it.
-4. Confirm it answers live. Both hostnames are the same deploy and both must keep working:
-   `arul-api.hsrutility.com` is the `custom_domain` route wrangler owns, and
-   `arul-api.twilight-smoke-d495.workers.dev` still serves every already-installed build
-   (`workers_dev = true` is load-bearing — dropping it silently kills those installs).
-   ```bash
-   curl -s https://arul-api.hsrutility.com/nonexistent          # JSON 404 envelope = alive
-   ```
+3. **Cron file changed?** Rehearse it first, locally, against the Neon `debug` branch — never prod:
+   `node tools/cron-rehearse.mjs hourly|daily` (autopay needs `--allow-autopay` and refuses unless
+   `.dev.vars` says `PHONEPE_ENV=SANDBOX`). KV/R2 are the local simulation, PostHog is blackholed,
+   and the handler's `[cron] … complete` lines must appear before you ship.
+4. Deploy: `node tools/deploy-safe.mjs` — never a bare `wrangler deploy`. It deploys, probes BOTH
+   hostnames plus the CDN pointer (`tools/smoke.mjs`: JSON 404 envelope, unauthenticated `/me` =
+   401, `catalog/version.json` has `built_at`), and on a failed probe runs `wrangler rollback --yes`
+   to the previous version and exits 1. Record the version id it prints — report it. Both hostnames
+   are the same deploy and both must keep working: `arul-api.hsrutility.com` is the `custom_domain`
+   route wrangler owns, and `arul-api.twilight-smoke-d495.workers.dev` still serves every
+   already-installed build (`workers_dev = true` is load-bearing — dropping it silently kills those
+   installs). A deploy that never landed is NOT rolled back — rollback only follows a landed deploy
+   that failed the probe, or it would undo the last good version.
    Content-affecting change? Rebuild and read the pointer — with **GET, never `curl -I`**; HEAD
    reports `DYNAMIC` for assets that cache fine (docs/caching.md):
    ```bash
@@ -36,9 +41,11 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    OTHER secret is still compared untrimmed. Full list: workers/README.md. Never echo a value.
    `OPS_SECRET` gates the money-moving internal routes (`run-redemptions`, `refund`) and fails closed
    when unset — that is the safe state, so leave it unset unless an operator run needs it.
-6. Deploying does not restart anything on the app side, but it DOES ship cron changes: all THREE
-   triggers in `[triggers]` (`0 * * * *` hourly, `*/15 * * * *` autopay, `30 21 * * *` daily sweep)
-   come from wrangler.toml, so a removed line silently removes a cron. Cron behaviour: docs/cron.md.
+6. Deploying does not restart anything on the app side, but it DOES ship cron changes: all FOUR
+   triggers in `[triggers]` (`0 * * * *` hourly, `*/15 * * * *` autopay, `30 21 * * *` daily sweep,
+   `* * * * *` campaign push) come from wrangler.toml, so a removed line silently removes a cron.
+   The per-minute one is deliberate and claims nothing while `PUSH_ENABLED` is not exactly `"true"`.
+   Cron behaviour: docs/cron.md.
 7. `wrangler.toml` warns rather than failing on a misplaced key — read the `--dry-run` output.
    `POSTHOG_HOST` and `ANDROID_CERT_SHA256` currently sit at top level with no `[vars]` table and are
    DISCARDED (docs/known-issues.md); the deployed secret is what serves.

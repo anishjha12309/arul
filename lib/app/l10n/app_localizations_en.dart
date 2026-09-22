@@ -39,18 +39,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorGeneric => 'Something went wrong.';
 
   @override
-  String get signInHeadline => 'Wallpapers worth waking up to';
-
-  @override
-  String get signInBody =>
-      'Sign in to apply, share and keep your collection across devices.';
+  String get signInCaption => 'Bring the divine home';
 
   @override
   String get signInGoogle => 'Continue with Google';
 
   @override
-  String get signInTerms =>
-      'By continuing you agree to our Terms and Privacy Policy.';
+  String get signInSubtitleIdle => 'Choose an account to start';
+
+  @override
+  String get signInSubtitleExchanging => 'Signing you in…';
+
+  @override
+  String get signInNudgeRetry => 'Click here to sign in';
 
   @override
   String get premiumTitle => 'Premium';
@@ -201,6 +202,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'Preview not available yet';
 
   @override
+  String get ringtoneVolumeMuted => 'Turn up the volume to hear this preview';
+
+  @override
+  String get ringtoneCurrentBadge => 'Current';
+
+  @override
   String get ringtonesEmptyTitle => 'Ringtones are coming soon';
 
   @override
@@ -243,9 +250,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'Unlock apply & share';
-
-  @override
   String get settingsPremiumSubTrial => 'You\'re on the free trial';
 
   @override
@@ -279,7 +283,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsNeedHelp => 'Need help?';
 
   @override
-  String get settingsNeedHelpSub => 'Contact support';
+  String get settingsNeedHelpSub => 'Support and subscription';
+
+  @override
+  String get settingsHelpSupport => 'Contact support';
+
+  @override
+  String get settingsHelpSupportSub => 'Write to us by email';
+
+  @override
+  String get settingsHelpManage => 'Manage subscription';
+
+  @override
+  String get settingsHelpDeleteSub => 'Remove your account';
 
   @override
   String get settingsUpload => 'Upload your content';
@@ -304,12 +320,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'Delete account?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'This removes your account, favourites and rewards for good.';
+  String get settingsDeleteConfirmBody => 'This can\'t be undone.';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'Terms & Conditions';
@@ -406,9 +421,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get remindersMonthDec => 'Dec';
-
-  @override
-  String get premiumBrandTitle => 'Arul Premium';
 
   @override
   String get premiumScreenSubline =>
@@ -636,6 +648,58 @@ class AppLocalizationsEn extends AppLocalizations {
       'Secured by UPI Autopay · Cancel anytime in one tap';
 
   @override
+  String get premiumQrTitleTrial => 'Scan to start your free trial';
+
+  @override
+  String get premiumQrTitlePaid => 'Scan to subscribe';
+
+  @override
+  String get premiumQrInstruction =>
+      'Open any UPI app on another phone and scan this code.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'Code expires in $time';
+  }
+
+  @override
+  String get premiumQrWaiting => 'Waiting for approval…';
+
+  @override
+  String get premiumQrCheck => 'I have paid';
+
+  @override
+  String premiumResumeCta(String app) {
+    return 'Open $app again';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'Approve the ₹2 verification in $app to start your trial.';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'Approve the payment in $app to continue.';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'your UPI app';
+
+  @override
+  String get trialNudgeRow => 'Finish setting up your free trial';
+
+  @override
+  String get trialNudgeDismiss => 'Dismiss';
+
+  @override
+  String get trialReminderTitle => 'Your free trial is waiting';
+
+  @override
+  String get trialReminderBody =>
+      'You didn\'t finish setting up. Tap to try again — it takes a moment.';
+
+  @override
   String get premiumSelectedUpiApp => 'Selected UPI App';
 
   @override
@@ -645,12 +709,64 @@ class AppLocalizationsEn extends AppLocalizations {
   String get upiPickerLastUsed => 'Last used';
 
   @override
+  String get upiPickerQrTitle => 'Pay with QR';
+
+  @override
+  String get upiPickerQrSubtitle => 'Scan from another phone';
+
+  @override
   String premiumTrialFinePrint(String price) {
     return 'Then $price/month via autopay. Cancel anytime.';
+  }
+
+  @override
+  String premiumPaidFinePrint(String price) {
+    return '$price/month via autopay. Cancel anytime.';
   }
 
   @override
   String premiumSocialProof(String name, String city) {
     return '$name in $city just applied a live wallpaper 🙏';
   }
+
+  @override
+  String get pushChannelName => 'Updates from Arul';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'No internet. Check your connection and try again.';
+
+  @override
+  String get purchaseErrorGeneric => 'Something went wrong. Please try again.';
+
+  @override
+  String get purchaseCancelled => 'Payment cancelled.';
+
+  @override
+  String get purchaseInterrupted =>
+      'Payment was interrupted. Please try again.';
+
+  @override
+  String get purchaseNotCompleted =>
+      'Payment was not completed. Please try again.';
+
+  @override
+  String get purchaseInProgress =>
+      'A payment setup is already in progress. Please wait a few seconds and try again.';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'Could not open your UPI app. Please try again.';
+
+  @override
+  String get purchaseIntentFailed =>
+      'Payment failed. Any amount deducted will be refunded to your account within 4–5 days.';
+
+  @override
+  String get purchaseActivateFailed =>
+      'We couldn\'t activate your subscription. Please contact support.';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.';
 }

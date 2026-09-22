@@ -39,18 +39,19 @@ class AppLocalizationsTa extends AppLocalizations {
   String get errorGeneric => 'ஏதோ தவறு நடந்தது.';
 
   @override
-  String get signInHeadline => 'விழித்தெழ வைக்கும் வால்பேப்பர்கள்';
-
-  @override
-  String get signInBody =>
-      'பயன்படுத்தவும், பகிரவும், உங்கள் சேகரிப்பைச் சேமிக்கவும் உள்நுழையவும்.';
+  String get signInCaption => 'தெய்வீகம் இல்லத்திற்கு வரட்டும்';
 
   @override
   String get signInGoogle => 'Google மூலம் தொடரவும்';
 
   @override
-  String get signInTerms =>
-      'தொடர்வதன் மூலம் எங்கள் விதிமுறைகள் மற்றும் தனியுரிமைக் கொள்கையை ஏற்கிறீர்கள்.';
+  String get signInSubtitleIdle => 'கணக்கைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get signInSubtitleExchanging => 'உள்நுழைகிறது…';
+
+  @override
+  String get signInNudgeRetry => 'உள்நுழைய இங்கே தட்டவும்';
 
   @override
   String get premiumTitle => 'பிரீமியம்';
@@ -60,11 +61,11 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get premiumSub =>
-      'உலாவுவது எப்போதும் இலவசம். பிரீமியம் அவற்றை உங்களுடையதாக்க.';
+      'உலாவுவது எப்போதும் இலவசம். அவற்றை உங்களுடையதாக்க பிரீமியம் உதவும்.';
 
   @override
   String get premiumBenefitApply =>
-      'எந்த வால்பேப்பரையும் பயன்படுத்தவும் — நிலையான அல்லது லைவ்';
+      'எந்த வால்பேப்பரையும் அமைக்கவும் — நிலையான அல்லது லைவ்';
 
   @override
   String get premiumBenefitLive => 'முழுத் தரத்தில் லைவ் வீடியோ வால்பேப்பர்கள்';
@@ -79,11 +80,11 @@ class AppLocalizationsTa extends AppLocalizations {
   String get premiumPrice => '₹199 / மாதம்';
 
   @override
-  String get premiumCta => 'இலவச சோதனையைத் தொடங்கு';
+  String get premiumCta => 'இலவச டிரையலைத் தொடங்கு';
 
   @override
   String get premiumTrialNote =>
-      'ஒரு கணக்குக்கு ஒரு இலவச சோதனை. எப்போது வேண்டுமானாலும் ரத்து செய்யலாம் — காலம் முடியும் வரை அணுகல் தொடரும்.';
+      'ஒரு கணக்குக்கு ஒரு இலவச டிரையல். எப்போது வேண்டுமானாலும் ரத்து செய்யலாம் — காலம் முடியும் வரை அணுகல் தொடரும்.';
 
   @override
   String get premiumComingSoon => 'பணம் செலுத்தும் வசதி பின்னர் வரும்.';
@@ -123,7 +124,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get uploadBody =>
-      'உங்கள் சொந்த வால்பேப்பரைப் பகிரவும். ஒவ்வொன்றையும் நாங்கள் பரிசீலிக்கிறோம்.';
+      'உங்கள் சொந்த வால்பேப்பரை சமூகத்துடன் பகிரவும். வெளியிடுவதற்கு முன் ஒவ்வொன்றையும் நாங்கள் பரிசீலிக்கிறோம்.';
 
   @override
   String get uploadPickCategory => 'ஒரு பிரிவைத் தேர்ந்தெடுக்கவும்';
@@ -139,7 +140,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get uploadComingSoon => 'பதிவேற்றம் பின்னர் வரும்.';
 
   @override
-  String get apply => 'பயன்படுத்து';
+  String get apply => 'அமை';
 
   @override
   String get share => 'பகிர்';
@@ -161,7 +162,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get appliedLiveFallback =>
-      'இந்த போனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.';
+      'இந்த ஃபோனில் லைவ் வால்பேப்பர்கள் இயங்காது, எனவே நிலையான படத்தை அமைத்தோம்.';
 
   @override
   String get offlineBody =>
@@ -200,6 +201,13 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get ringtonePreviewUnavailable => 'முன்னோட்டம் இன்னும் கிடைக்கவில்லை';
+
+  @override
+  String get ringtoneVolumeMuted =>
+      'இந்த முன்னோட்டத்தைக் கேட்க ஒலியை அதிகரிக்கவும்';
+
+  @override
+  String get ringtoneCurrentBadge => 'தற்போதையது';
 
   @override
   String get ringtonesEmptyTitle => 'ரிங்டோன்கள் விரைவில் வருகின்றன';
@@ -244,10 +252,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsFallbackEmail => 'Signed in with Google';
 
   @override
-  String get settingsPremiumSubLocked => 'பயன்படுத்தவும், பகிரவும் திறக்க';
-
-  @override
-  String get settingsPremiumSubTrial => 'இலவச சோதனையில் இருக்கிறீர்கள்';
+  String get settingsPremiumSubTrial => 'இலவச டிரையலில் இருக்கிறீர்கள்';
 
   @override
   String get settingsPremiumSubCancelled =>
@@ -284,7 +289,19 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsNeedHelp => 'உதவி தேவையா?';
 
   @override
-  String get settingsNeedHelpSub => 'சப்போர்ட்டைத் தொடர்பு கொள்ளவும்';
+  String get settingsNeedHelpSub => 'சப்போர்ட் மற்றும் சந்தா';
+
+  @override
+  String get settingsHelpSupport => 'சப்போர்ட்டைத் தொடர்பு கொள்ளவும்';
+
+  @override
+  String get settingsHelpSupportSub => 'மின்னஞ்சலில் எங்களுக்கு எழுதுங்கள்';
+
+  @override
+  String get settingsHelpManage => 'சந்தாவை நிர்வகிக்கவும்';
+
+  @override
+  String get settingsHelpDeleteSub => 'உங்கள் கணக்கை அகற்றவும்';
 
   @override
   String get settingsUpload => 'உங்கள் உள்ளடக்கத்தைப் பதிவேற்றவும்';
@@ -309,12 +326,11 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsDeleteConfirmTitle => 'கணக்கை நீக்கவா?';
 
   @override
-  String get settingsDeleteConfirmBody =>
-      'இது உங்கள் கணக்கு, விருப்பங்கள் மற்றும் வெகுமதிகளை நிரந்தரமாக நீக்கும்.';
+  String get settingsDeleteConfirmBody => 'இதை மீட்டெடுக்க முடியாது.';
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'This removes your account, favourites and rewards for good.\n\nYour Arul Premium subscription will be cancelled and any time left on it is lost — no refund. Signing up again will not restore it, and you will not get another free trial.';
+      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
 
   @override
   String get settingsTerms => 'விதிமுறைகள் & நிபந்தனைகள்';
@@ -414,9 +430,6 @@ class AppLocalizationsTa extends AppLocalizations {
   String get remindersMonthDec => 'டிச';
 
   @override
-  String get premiumBrandTitle => 'Arul Premium';
-
-  @override
   String get premiumScreenSubline =>
       'முழு சேகரிப்பு, உங்கள் திரையில் உயிர்ப்புடன்';
 
@@ -425,7 +438,7 @@ class AppLocalizationsTa extends AppLocalizations {
       'ஒவ்வொரு வால்பேப்பரும் — நிலையானது மற்றும் லைவ்';
 
   @override
-  String get premiumPerkApplyShare => 'வரம்பில்லாமல் பயன்படுத்தவும் பகிரவும்';
+  String get premiumPerkApplyShare => 'வரம்பில்லாமல் அமைக்கவும் பகிரவும்';
 
   @override
   String get premiumPerkNew => 'ஒவ்வொரு வாரமும் புதிய வரவுகள்';
@@ -459,7 +472,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get premiumWelcomeToast => 'Arul Premium-க்கு வரவேற்கிறோம்!';
 
   @override
-  String get premiumCelebrateTitle => 'நீங்கள் இணைந்துவிட்டீர்கள்';
+  String get premiumCelebrateTitle => 'இனி பிரீமியம் உங்களுடையது';
 
   @override
   String get premiumCelebrateBody =>
@@ -467,7 +480,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get premiumSheetPitch =>
-      'ஒவ்வொரு வால்பேப்பரும் — லைவ் மற்றும் நிலையானது. ஆறு பிரிவுகளிலும் தடையின்றி பயன்படுத்தவும் பகிரவும்.';
+      'ஒவ்வொரு வால்பேப்பரும் — லைவ் மற்றும் நிலையானது. ஆறு பிரிவுகளிலும் தடையின்றி அமைக்கவும் பகிரவும்.';
 
   @override
   String get premiumKeepBrowsing => 'இலவசமாக உலாவுங்கள்';
@@ -480,7 +493,7 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get referHeroBody =>
-      'உங்கள் இணைப்பு மூலம் சந்தா செய்யும் ஒவ்வொரு நண்பருக்கும் 30 நாள் இலவச பிரீமியம்';
+      'உங்கள் லிங்க் மூலம் சந்தா செய்யும் ஒவ்வொரு நண்பருக்கும் 30 நாள் இலவச பிரீமியம்';
 
   @override
   String get referShareWhatsapp => 'Share via WhatsApp';
@@ -490,14 +503,14 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String referRewardDays(int days) {
-    return '$days நாட்கள்';
+    return '$days நாள்';
   }
 
   @override
   String get referHowItWorks => 'How it works';
 
   @override
-  String get referStep1 => 'உங்கள் இணைப்பை நண்பர்கள், குடும்பத்துடன் பகிரவும்';
+  String get referStep1 => 'உங்கள் லிங்கை நண்பர்கள், குடும்பத்துடன் பகிரவும்';
 
   @override
   String get referStep2 =>
@@ -616,11 +629,10 @@ class AppLocalizationsTa extends AppLocalizations {
   String get premiumPerMonthCaption => 'மாதம் ஒன்றுக்கு';
 
   @override
-  String get premiumTrialLeadPrefix =>
-      'உங்கள் 1 நாள் இலவச சோதனையைத் தொடங்குங்கள் ';
+  String get premiumTrialLeadPrefix => 'உங்கள் 1 நாள் இலவச டிரையலைத் தொடங்க ';
 
   @override
-  String get premiumRefundedBadge => 'உடனே திரும்பக் கிடைக்கும்';
+  String get premiumRefundedBadge => 'உடனே திரும்பும்';
 
   @override
   String get premiumFeatureWallpapers => 'வரம்பற்ற HD வால்பேப்பர்கள்';
@@ -632,7 +644,7 @@ class AppLocalizationsTa extends AppLocalizations {
   String get premiumFeatureDaily => 'தினமும் புதிய உள்ளடக்கம்';
 
   @override
-  String get premiumCtaTrial => 'இலவச சோதனையைத் தொடங்கு';
+  String get premiumCtaTrial => 'இலவச டிரையலைத் தொடங்கு';
 
   @override
   String get premiumCtaSubscribe => 'இப்போதே சந்தா செய்';
@@ -643,16 +655,75 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get premiumReassurancePaid =>
-      'UPI ஆட்டோபே பாதுகாப்பு · ஒரே தட்டலில் ரத்து';
+      'UPI ஆட்டோபே பாதுகாப்பு · எப்போதும் ஒரே தட்டலில் ரத்து';
+
+  @override
+  String get premiumQrTitleTrial =>
+      'உங்கள் இலவச டிரையலைத் தொடங்க ஸ்கேன் செய்யுங்கள்';
+
+  @override
+  String get premiumQrTitlePaid => 'சந்தா செய்ய ஸ்கேன் செய்யுங்கள்';
+
+  @override
+  String get premiumQrInstruction =>
+      'வேறொரு ஃபோனில் ஏதேனும் UPI ஆப்பைத் திறந்து இந்தக் கோடை ஸ்கேன் செய்யுங்கள்.';
+
+  @override
+  String premiumQrExpiresIn(String time) {
+    return 'கோடு $time-இல் காலாவதியாகும்';
+  }
+
+  @override
+  String get premiumQrWaiting => 'அனுமதிக்காகக் காத்திருக்கிறோம்…';
+
+  @override
+  String get premiumQrCheck => 'நான் செலுத்திவிட்டேன்';
+
+  @override
+  String premiumResumeCta(String app) {
+    return '$app ஆப்பை மீண்டும் திற';
+  }
+
+  @override
+  String premiumResumeHintTrial(String app) {
+    return 'உங்கள் டிரையலைத் தொடங்க $app ஆப்பில் ₹2 சரிபார்ப்பை அனுமதிக்கவும்.';
+  }
+
+  @override
+  String premiumResumeHintPaid(String app) {
+    return 'தொடர $app ஆப்பில் கட்டணத்தை அனுமதிக்கவும்.';
+  }
+
+  @override
+  String get premiumUpiAppGeneric => 'உங்கள் UPI';
+
+  @override
+  String get trialNudgeRow => 'உங்கள் இலவச டிரையல் செட்டப்பை முடிக்கவும்';
+
+  @override
+  String get trialNudgeDismiss => 'மூடு';
+
+  @override
+  String get trialReminderTitle => 'உங்கள் இலவச டிரையல் காத்திருக்கிறது';
+
+  @override
+  String get trialReminderBody =>
+      'செட்டப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.';
 
   @override
   String get premiumSelectedUpiApp => 'UPI ஆப்';
 
   @override
-  String get upiPickerTitle => 'இதன் மூலம் செலுத்து';
+  String get upiPickerTitle => 'இதன் மூலம் செலுத்துங்கள்';
 
   @override
   String get upiPickerLastUsed => 'கடைசியாக பயன்படுத்தியது';
+
+  @override
+  String get upiPickerQrTitle => 'QR மூலம் செலுத்துங்கள்';
+
+  @override
+  String get upiPickerQrSubtitle => 'வேறொரு போனில் ஸ்கேன் செய்யுங்கள்';
 
   @override
   String premiumTrialFinePrint(String price) {
@@ -660,7 +731,54 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
-  String premiumSocialProof(String name, String city) {
-    return '$city-ல் $name லைவ் வால்பேப்பர் போட்டார் 🙏';
+  String premiumPaidFinePrint(String price) {
+    return '$price/மாதம் ஆட்டோபே. எப்போதும் ரத்து.';
   }
+
+  @override
+  String premiumSocialProof(String name, String city) {
+    return '$city-ல் $name லைவ் வால்பேப்பர் அமைத்தார் 🙏';
+  }
+
+  @override
+  String get pushChannelName => 'அருள் அப்டேட்கள்';
+
+  @override
+  String get purchaseErrorNetwork =>
+      'இணையம் இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseErrorGeneric =>
+      'ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseCancelled => 'கட்டணம் ரத்து செய்யப்பட்டது.';
+
+  @override
+  String get purchaseInterrupted =>
+      'கட்டணம் தடைபட்டது. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseNotCompleted =>
+      'கட்டணம் முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseInProgress =>
+      'கட்டணம் ஏற்கனவே நடந்து கொண்டிருக்கிறது. சில வினாடிகள் காத்திருந்து மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseUpiLaunchFailed =>
+      'உங்கள் UPI ஆப்பைத் திறக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get purchaseIntentFailed =>
+      'கட்டணம் செலுத்த முடியவில்லை. ஏதேனும் தொகை பிடிக்கப்பட்டிருந்தால், அது 4–5 நாட்களில் உங்கள் கணக்கிற்குத் திரும்ப வரும்.';
+
+  @override
+  String get purchaseActivateFailed =>
+      'உங்கள் சந்தாவைச் செயல்படுத்த முடியவில்லை. சப்போர்ட்டைத் தொடர்பு கொள்ளவும்.';
+
+  @override
+  String get purchaseConfirmationLate =>
+      'பணம் கிடைத்தது, ஆனால் உறுதிப்படுத்தல் தாமதமாகிறது. ஆப்பை மூடி மீண்டும் திறக்கவும் — உங்கள் சந்தா விரைவில் செயல்படும்.';
 }
