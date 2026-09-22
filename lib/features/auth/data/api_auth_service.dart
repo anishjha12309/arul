@@ -12,6 +12,7 @@ import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
+import '../../premium/domain/post_signin_paywall.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
@@ -782,6 +783,8 @@ class ApiAuthService implements AuthService {
             'nonce': ?GoogleSignInInit.nonce,
             // Null-aware elements: dropped entirely when absent.
             'referralCode': ?referralCode,
+            // This build can open the paywall after sign-in -> a new account may be put in the test.
+            PostSigninPaywall.requestFlag: true,
           },
           requiresAuth: false,
         ),
@@ -836,6 +839,10 @@ class ApiAuthService implements AuthService {
 
       final displayName = user['displayName'] as String? ?? account.displayName;
       final email = user['email'] as String?;
+      // Noted BEFORE the authenticated emit -> the feed's first frame, which that emit routes to,
+      // must find it already set.
+      final paywallTest = user['paywallTest'] as String?;
+      PostSigninPaywall.note(paywallTest);
 
       _emit(
         AuthUserState.authenticated(
@@ -877,6 +884,8 @@ class ApiAuthService implements AuthService {
           // Present only when the exchange was saved by the network retry —
           // the field readout for whether the retry earns its keep.
           if (exchangeRetried) 'exchange_retried': true,
+          // Side of the after-sign-in paywall test; absent when this account is not in it.
+          'paywall_test': ?paywallTest,
         },
       );
 

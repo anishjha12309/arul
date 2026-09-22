@@ -8,7 +8,12 @@ user edits — login then stops syncing from Google) · referral_code(unique) ·
 reward_premium_until (referral credit, read by `isPremium`, decoupled from subscriptions) ·
 app_instance_id, meta_anon_id (**VESTIGIAL** — their only readers were the server GA4/Meta conversion
 reporters, since deleted; nothing writes or reads them, and the columns stay because dropping them is
-a migration) · **is_internal** (reporting-only, below) · created_at
+a migration) · **is_internal** (reporting-only, below) · paywall_test (below) · created_at
+
+**`paywall_test` is written ONCE, in the INSERT that creates the account** — `paywall`|`control` for a
+new, trial-eligible account whose build sent `postSigninPaywall`, NULL for everyone else, never
+updated. Read the after-sign-in paywall test from this column, not by recomputing the id split: old
+builds and tombstoned re-signups share the id space but never entered. Query: `24_paywall_test.sql`.
 
 **`is_internal` is set BY HAND and read only for reporting and test sends:** the unified CMS's
 subscriptions page, and campaign push, where it is the "Test accounts" audience and keeps those phones

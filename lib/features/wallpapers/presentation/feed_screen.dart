@@ -29,6 +29,7 @@ import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
+import '../../premium/domain/post_signin_paywall.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../push/providers/push_providers.dart';
 import 'feed_states.dart';
@@ -155,10 +156,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // interruption that costs sign-ins, and sign-in percentage is the number this app is judged on.
     // By the time this frame draws the person is already in. Spent once per install, grant or deny.
     // Post-frame so it never shares a frame with the feed's first paint.
+    // The after-sign-in paywall test's "paywall" side opens /premium FIRST and asks on its close ->
+    // never a system dialog on top of the price.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(ref.read(pushPermissionProvider).promptOnce());
+      unawaited(_openPostSigninPaywallThenPrompt());
     });
+  }
+
+  Future<void> _openPostSigninPaywallThenPrompt() async {
+    if (PostSigninPaywall.take()) {
+      await context.push('/premium?source=${PostSigninPaywall.source}');
+      if (!mounted) return;
+    }
+    await ref.read(pushPermissionProvider).promptOnce();
   }
 
   void _onDeepLinkChanged() {

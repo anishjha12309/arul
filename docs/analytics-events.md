@@ -100,7 +100,8 @@ exists to learn) packed to whole entries inside the 100-char limit, with the cou
 truncation. `has_upi_app: no` beside a non-zero count is not a phone that cannot pay, it is one we
 declined to sell to, and those two were indistinguishable. Then `trial_eligible`, `variant`
 (`trial`|`paid`|`resubscribe`|`unknown`, the last being an entitlement that would not load) and
-`paywall_source`, the gate verb — GA4 owns the bare `source` as a traffic dimension. **Every value
+`paywall_source`, the gate verb (`post_signin` = the after-sign-in paywall test, whose side also rides
+`login_success` as `paywall_test`) — GA4 owns the bare `source` as a traffic dimension. **Every value
 is a string**: GA4 parses no numeric parameter into an event-scoped custom dimension on APP streams
 and the sink coerces a bool to 1/0, so a count sent as a number is collected and can never be broken
 down. It repeats inside one visit only when the installed SET changes, which is the only proof the

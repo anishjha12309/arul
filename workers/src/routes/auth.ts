@@ -23,6 +23,7 @@ import { getDb } from "../lib/db.js";
 import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
+import { paywallTestSide, type PaywallTestSide } from "../lib/paywall-test.js";
 
 // ── POST /auth/login ─────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     idToken?: string;
     referralCode?: string;
     nonce?: string;
+    postSigninPaywall?: boolean;
   };
   try {
     body = await c.req.json();
@@ -92,6 +94,8 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     let userId: string;
     let displayName: string | null;
     let referralCode: string;
+    // After-sign-in paywall test side -> assigned ONLY to a brand-new account below, null for everyone else
+    let paywallTest: PaywallTestSide | null = null;
 
     // The returning user is the common case -> ONE statement, never SELECT-then-UPDATE
     // This round trip sits between the account picker and the feed -> every sequential query is visible latency
@@ -115,18 +119,27 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       referralCode = row.referral_code as string;
     } else {
       // New user -> generate a referral code and insert -> a unique-violation retries once with a fresh code
+      // The id is minted HERE, not by the column default -> the test side derives from it and rides the SAME
+      // INSERT -> the first login gains no round trip. The tombstone branch below clears it again.
+      const newUserId = crypto.randomUUID();
+      paywallTest =
+        body.postSigninPaywall === true && env.POST_SIGNIN_PAYWALL_TEST === "true"
+          ? paywallTestSide(newUserId)
+          : null;
       const insertUser = async (): Promise<
         Array<Record<string, unknown>>
       > => {
         referralCode = generateReferralCode();
         try {
           return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code)
+            INSERT INTO users (id, google_sub, email, display_name, referral_code, paywall_test)
             VALUES (
+              ${newUserId},
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
-              ${referralCode}
+              ${referralCode},
+              ${paywallTest}
             )
             RETURNING id, display_name, referral_code
           `;
@@ -134,12 +147,14 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           if (!isUniqueViolation(insertErr)) throw insertErr;
           referralCode = generateReferralCode();
           return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code)
+            INSERT INTO users (id, google_sub, email, display_name, referral_code, paywall_test)
             VALUES (
+              ${newUserId},
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
-              ${referralCode}
+              ${referralCode},
+              ${paywallTest}
             )
             RETURNING id, display_name, referral_code
           `;
@@ -181,6 +196,11 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           VALUES (${userId}, 'expired', ${tomb[0].trial_end as Date})
           ON CONFLICT (user_id) DO NOTHING
         `;
+        // No free trial left to start -> out of the paywall test, or its trial read would count a ₹199 sell
+        if (paywallTest !== null) {
+          paywallTest = null;
+          await sql`UPDATE users SET paywall_test = NULL WHERE id = ${userId}`;
+        }
       }
 
       // New user only -> attribute the install to a referrer -> best-effort, a bad code must never break sign-in
@@ -205,6 +225,8 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         displayName,
         email: googleClaims.email ?? null,
         referralCode,
+        // "paywall" -> the app opens /premium right after this sign-in; "control" -> it does not; null -> not in the test
+        paywallTest,
       },
     });
   } catch (err) {

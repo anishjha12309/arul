@@ -122,6 +122,14 @@ export interface Env {
    */
   GEO_LANG_ENABLED?: string;
 
+  /**
+   * After-sign-in paywall test switch, `"true"` or anything else -> wrangler.toml [vars], NOT a secret.
+   *
+   * Anything but the exact string "true" assigns NO side -> every new account reads `paywallTest: null` and
+   * nobody is shown the paywall -> turning it off stops new entries, the accounts already split keep their side
+   */
+  POST_SIGNIN_PAYWALL_TEST?: string;
+
   // ── PostHog capture — the ONLY server-side analytics sink (lib/posthog.ts) ──
   // GA4 and Meta server reporting were removed -> one conversion must have ONE data source -> never re-add them
   /**

@@ -24,6 +24,7 @@ vi.mock("../src/lib/google.js", () => ({
 }));
 
 import { handleLogin, handleRefresh, handleLogout } from "../src/routes/auth.js";
+import { paywallTestSide } from "../src/lib/paywall-test.js";
 import { verifyGoogleIdToken } from "../src/lib/google.js";
 
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
@@ -177,6 +178,119 @@ describe("POST /auth/login", () => {
     const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
     expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
+  });
+
+  // ── After-sign-in paywall test ─────────────────────────────────────────────
+  // The side rides the account-creating INSERT, derived from the id the Worker minted for it
+  // Only a client that says it can show the paywall enters, and only while the switch reads exactly "true"
+  describe("paywall test side", () => {
+    function newUserLogin(opts: {
+      capable?: boolean;
+      switchOn?: boolean;
+      tombstone?: boolean;
+    }) {
+      vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+        sub: "google-sub-new",
+        email: "new@example.com",
+        email_verified: true,
+        name: "New",
+        nonce: undefined,
+      });
+      // Routed like routedSql, except the users INSERT echoes the id the Worker sent
+      // -> the handler must report the side of the id it actually wrote
+      const calls: Array<{ text: string; values: unknown[] }> = [];
+      const fn = vi.fn((...args: unknown[]) => {
+        const text = (args[0] as string[]).join("¤");
+        calls.push({ text, values: args.slice(1) });
+        if (/INSERT INTO users/.test(text)) {
+          return Promise.resolve([
+            { id: args[1] as string, display_name: "New", referral_code: "NEWCODE3" },
+          ]);
+        }
+        if (/trial_tombstones/.test(text)) {
+          return Promise.resolve(opts.tombstone ? [{ trial_end: TRIAL_END }] : []);
+        }
+        return Promise.resolve([]);
+      });
+      const sql = Object.assign(fn, { end: vi.fn().mockResolvedValue(undefined) });
+      const env = makeEnv({
+        TRIAL_TOMBSTONE_SECRET: TOMB_SECRET,
+        POST_SIGNIN_PAYWALL_TEST: opts.switchOn === false ? "false" : "true",
+      });
+      (env as unknown as { _testSql: unknown })._testSql = sql;
+      const jsonBody: Record<string, unknown> = { idToken: "valid" };
+      if (opts.capable !== false) jsonBody.postSigninPaywall = true;
+      return { res: handleLogin(makeCtx({ env, jsonBody })), calls };
+    }
+
+    async function readSide(res: Promise<Response>) {
+      const r = await res;
+      expect(r.status).toBe(200);
+      const body = (await r.json()) as { user: { id: string; paywallTest: unknown } };
+      return body.user;
+    }
+
+    it("a capable new account gets the side of the id written with it", async () => {
+      const { res, calls } = newUserLogin({});
+      const user = await readSide(res);
+      expect(user.paywallTest).toBe(paywallTestSide(user.id));
+      const insert = calls.find((c) => /INSERT INTO users/.test(c.text))!;
+      expect(insert.values[0]).toBe(user.id);
+      expect(insert.values).toContain(user.paywallTest);
+    });
+
+    it("an older build (no capability flag) is never assigned", async () => {
+      const { res, calls } = newUserLogin({ capable: false });
+      expect((await readSide(res)).paywallTest).toBeNull();
+      const insert = calls.find((c) => /INSERT INTO users/.test(c.text))!;
+      expect(insert.values.at(-1)).toBeNull();
+    });
+
+    it("switch off -> no side", async () => {
+      const { res } = newUserLogin({ switchOn: false });
+      expect((await readSide(res)).paywallTest).toBeNull();
+    });
+
+    it("a re-created account with a tombstone is taken back out", async () => {
+      // An even id -> "paywall" is what gets written, so the clear must follow
+      const spy = vi
+        .spyOn(crypto, "randomUUID")
+        .mockReturnValue("00000000-0000-4000-8000-000000000000");
+      try {
+        const { res, calls } = newUserLogin({ tombstone: true });
+        expect((await readSide(res)).paywallTest).toBeNull();
+        expect(calls.find((c) => /INSERT INTO users/.test(c.text))!.values.at(-1)).toBe("paywall");
+        const clear = calls.find((c) => /UPDATE users SET paywall_test = NULL/.test(c.text));
+        expect(clear?.values).toContain("00000000-0000-4000-8000-000000000000");
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("a returning account is never in the test", async () => {
+      vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+        sub: "google-sub-1",
+        email: "aisha@example.com",
+        email_verified: true,
+        name: "Aisha",
+        nonce: undefined,
+      });
+      const { env } = envWithSql([
+        { id: USER_ID, display_name: "Aisha", display_name_custom: false, referral_code: "ABCD2345" },
+      ]);
+      (env as unknown as Record<string, unknown>).POST_SIGNIN_PAYWALL_TEST = "true";
+      const res = handleLogin(
+        makeCtx({ env, jsonBody: { idToken: "valid", postSigninPaywall: true } }),
+      );
+      expect((await readSide(res)).paywallTest).toBeNull();
+    });
+
+    it("splits on the id's last hex digit", () => {
+      expect(paywallTestSide("00000000-0000-4000-8000-000000000000")).toBe("paywall");
+      expect(paywallTestSide("00000000-0000-4000-8000-00000000000a")).toBe("paywall");
+      expect(paywallTestSide("00000000-0000-4000-8000-000000000001")).toBe("control");
+      expect(paywallTestSide("00000000-0000-4000-8000-00000000000f")).toBe("control");
+    });
   });
 
   // ── Nonce ──────────────────────────────────────────────────────────────────
