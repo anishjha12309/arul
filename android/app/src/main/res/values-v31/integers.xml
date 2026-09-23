@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 4 = singleInstancePerTask (API 31+). A launch never reuses a task whose ROOT is not MainActivity, -->
+    <!-- so a task left holding only Google's sign-in surface after a process death gets a fresh Arul task. -->
+    <integer name="main_launch_mode">4</integer>
+</resources>

@@ -18,6 +18,10 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   Android ≤11 "attempted, then nothing" and relaunch-pair buckets. OEM behaviour, nothing app-side
   to fix; the wall's recovery path itself walks clean on that phone (icon return relaunches once,
   Recents keeps the sheet, a later return re-arms). Not shown for other ≤11 OEMs.
+- **Android ≤11 still reopens a dead Google sheet** after a crash or force-stop WHILE it is in
+  front: `singleInstancePerTask` is API 31+, so those phones keep singleTop and the icon returns the
+  orphaned surface ([auth.md](auth.md)). Two Backs clear it. Expected by mechanism, never walked
+  on a ≤11 phone. No manifest-only fix exists there: nothing of Arul's runs on that icon tap.
 - **A legacy `GoogleSignIn` fallback cannot be built:** Google removed the Google Sign-In APIs
   from `play-services-auth` in 22.0.0; `google_sign_in_android` pins 21.6.0, the last version that
   ships them, and drops them on its next bump. `activityClosed` (~1% of installs) stays

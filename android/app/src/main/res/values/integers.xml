@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MainActivity's android:launchMode, as the raw ActivityInfo value -> 1 = singleTop. -->
+    <!-- Android 12+ overrides this in values-v31 (singleInstancePerTask) -> see the manifest's MainActivity comment. -->
+    <!-- API 24-30 must stay 1: they read the raw int and know no mode 4 -> it would silently become "standard". -->
+    <integer name="main_launch_mode">1</integer>
+</resources>

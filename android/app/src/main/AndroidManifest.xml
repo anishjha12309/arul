@@ -61,10 +61,14 @@
         <!-- clearTaskOnLaunch: Google's account picker runs INSIDE this task. Swipe home out of it, lose the -->
         <!-- process, tap the icon -> Android resumes the dead picker with no app behind it (picking lands on -->
         <!-- the home screen). The flag strips everything above MainActivity on an icon launch; recents keep it. -->
+        <!-- It only acts on the ROOT: a crash or force-stop WHILE the sheet is in front removes MainActivity -->
+        <!-- itself, Google's sheet becomes the root, and the icon brings back that sheet with no app. -->
+        <!-- launchMode is singleInstancePerTask on Android 12+ (values-v31) -> a launch never reuses a task -->
+        <!-- whose root is not MainActivity -> the icon opens a fresh Arul. singleTop below 12 (values/integers.xml). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="@integer/main_launch_mode"
             android:taskAffinity=""
             android:clearTaskOnLaunch="true"
             android:theme="@style/LaunchTheme"

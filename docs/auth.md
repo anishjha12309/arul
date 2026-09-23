@@ -31,10 +31,19 @@ config error and a user dismissal with the same code.
   `GetSignInWithGoogleOption` is the remedy Google's guide names for a dismissal and is not that
   surface. Reports `surface=button_after_dismiss` so the second chance can be priced. The cooldown
   resets by clearing GMS storage, or toggle it from the dialer: `*#*#66382723#*#*`.
-- **Google's surfaces live INSIDE this app's task and outlive its process.** Swipe home out of a
-  picker, lose the process, tap the icon: Android resumes the dead picker with no app behind it, and
-  a pick lands on the home screen (reproduced on device). `clearTaskOnLaunch` on `MainActivity`
-  strips everything above it on an icon launch; recents are untouched. Keep it.
+- **Google's surfaces live INSIDE this app's task and outlive its process.** Credential Manager
+  launches them from the activity context. Home, lose the process, tap the icon: the dead picker
+  returns with no app behind it. `clearTaskOnLaunch` strips everything above `MainActivity` on an
+  icon launch; recents are untouched. Keep it — but it acts on the task ROOT only.
+- **A death WHILE the surface is in front (crash, ANR close, force-stop) makes Google's selector the
+  ROOT**: MainActivity's record goes with the process, and the icon brought back the dead sheet over
+  the home screen — Continue went nowhere. `singleInstancePerTask` never reuses a task whose root is
+  not MainActivity, so the icon opens a fresh Arul; the dead task stays hidden (its root is excluded
+  from Recents). Plain `am kill` cannot reproduce it (a visible process is spared) — use `am crash`.
+- **`launchMode` is `@integer/main_launch_mode`: 4 in `values-v31`, singleTop below.** API ≤30 reads
+  a raw `singleInstancePerTask` as `standard`: a second app stacked on a warm link, a restart on a
+  push tap. So Android ≤11 keeps the dead sheet. Never `singleTask` (AOSP `complyActivityFlags`): it
+  adds MainActivity ABOVE the dead root, and the next icon tap's reset finishes it.
 - **A pill tap SKIPS the sheet** (`signInWith(auto: false)`). Google's stated reasons for the button
   flow — sheet dismissed, no accounts, accounts needing re-auth — are exactly why the user taps.
 - **Sheet-first is not the reverted warm-up**, which ran the sheet *ahead of* a picker it would open
@@ -118,8 +127,8 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   to "taking too long" on device.
 - **An icon tap on a live task is the OS, not the user.** `clearTaskOnLaunch` strips Google's
   surface: a stripped sheet delivers nothing (the grace path), a stripped PICKER delivers a
-  `canceled` nobody made. The launcher brings the task forward WITHOUT `onNewIntent` (measured), so
-  the tell is the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
+  `canceled` nobody made. Any `onNewIntent` carries only the launcher's MAIN intent, so the tell is
+  the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
   framework closing the session says `User cancelled the selector` — on the BUTTON surface that is
   `SignInOutcome.selectorStripped` and relaunches once as `surface_stripped`; on the sheet the
   same words are the user's swipe. Recents keeps the surface and needs none of this.

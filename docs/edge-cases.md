@@ -30,6 +30,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] At most TWO Google surfaces per attempt; a DISMISSED sheet escalates ONCE to the button flow, never a second One Tap pass
 - [ ] A return from Google's add-account flow reopens the PICKER once (never the sheet, never twice); a Play services failure shows GOOGLE'S update dialog, checked against Credential Manager's floor
 - [ ] A failed sign-in shows ONE retry line; the wall has no links and no language control — the pill is its ONLY tappable thing; `clearTaskOnLaunch` stays on MainActivity
+- [ ] `am crash` with Google's sheet in front, then the icon → a fresh Arul, never the dead sheet (API 31+, `main_launch_mode`)
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
