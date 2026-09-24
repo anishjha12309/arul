@@ -18,6 +18,7 @@ import '../features/settings/providers/theme_mode_provider.dart';
 import '../features/wallpapers/providers/catalog_providers.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
+import 'safe_back_button_dispatcher.dart';
 import 'theme/theme.dart';
 
 class ArulApp extends ConsumerStatefulWidget {
@@ -64,6 +65,25 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     );
     unawaited(_pushOpen!.start());
 
+    // A session that dies mid-use -> the wall, as a cold start with a dead session already gets.
+    // The splash (`/`) routes on its own and the wall needs nothing; every other screen is signed-in
+    // UI whose gated calls would all fail. Sign-out and delete land here too, harmlessly.
+    ref.listenManual(authStateStreamProvider, (previous, next) {
+      final wasSignedIn = previous?.value?.isAuthenticated ?? false;
+      if (!wasSignedIn || (next.value?.isAuthenticated ?? true)) return;
+      final path = router.routerDelegate.currentConfiguration.uri.path;
+      if (path == '/' || path == '/sign-in') return;
+      ref.read(authControllerProvider.notifier).sessionEnded();
+      router.go('/sign-in');
+    });
+
+    _backButton = SafeBackButtonDispatcher(
+      rootNavigator: router.routerDelegate.navigatorKey,
+      onError: (error, stack) => ref
+          .read(crashReporterProvider)
+          .recordError(error, stack, reason: 'router back'),
+    );
+
     // The UI language on EVERY event, not only on the person at sign-in: pre-login events (install,
     // the sign-in wall) otherwise carry no language, and a `lang=` link applying mid-launch is
     // exactly what the funnel needs to see. Fires now and on each change (link or Settings).
@@ -95,6 +115,7 @@ class _ArulAppState extends ConsumerState<ArulApp> {
 
   PushOpenHandler? _pushOpen;
   PushTapRouter? _pushTaps;
+  late final SafeBackButtonDispatcher _backButton;
 
   @override
   void dispose() {
@@ -123,7 +144,12 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       child: MaterialApp.router(
         title: 'Arul',
         debugShowCheckedModeBanner: false,
-        routerConfig: router,
+        // The router's parts rather than `routerConfig`: that is the only way to hand it a back
+        // dispatcher of our own -> see SafeBackButtonDispatcher for the go_router crash it contains.
+        routerDelegate: router.routerDelegate,
+        routeInformationParser: router.routeInformationParser,
+        routeInformationProvider: router.routeInformationProvider,
+        backButtonDispatcher: _backButton,
         theme: ArulTheme.light(),
         darkTheme: ArulTheme.dark(),
         themeMode: ref.watch(themeModeProvider),

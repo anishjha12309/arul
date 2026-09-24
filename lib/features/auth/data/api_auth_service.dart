@@ -49,6 +49,9 @@ class ApiAuthService implements AuthService {
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
     // `_initialized`, which completes when this seed does.
     _initialized = _seedInitialState();
+    // A refresh that proves the session dead mid-process is the same verdict the seed reaches on a
+    // cold start -> signed out. Without it the UI stayed signed in and every gated call failed.
+    _api.sessionEnded.listen((_) => _endSession());
   }
 
   late final Future<void> _initialized;
@@ -166,13 +169,21 @@ class ApiAuthService implements AuthService {
     } on ApiException catch (e) {
       if (e.status == 401) {
         await _api.clearTokens();
-        _crash.setUserId(null);
-        _emit(AuthUserState.unauthenticated());
+        _endSession();
       }
       // Other statuses (offline, 5xx): keep the optimistic authenticated state.
     } catch (_) {
       // Network error: keep the optimistic authenticated state.
     }
+  }
+
+  /// A session that died on its own — no sign-out, so Google's credential state is left alone and
+  /// a one-account phone can be signed straight back in. Idempotent: a refresh failure and the
+  /// seed's own 401 can both land for one death.
+  void _endSession() {
+    if (!_current.isAuthenticated) return;
+    _crash.setUserId(null);
+    _emit(AuthUserState.unauthenticated());
   }
 
   void _emit(AuthUserState state) {

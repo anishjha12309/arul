@@ -975,6 +975,41 @@ void main() {
       expect(await pending, isA<AuthSuccess>());
     });
 
+    test('a strip of an AUTOMATIC attempt reopens the PICKER, never the '
+        'One Tap sheet the user already dismissed', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google, auto: true);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      lifecycle = AppLifecycleState.resumed;
+      auth.settleLast(
+        const AuthCancelled(outcome: SignInOutcome.selectorStripped),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      expect(auth.attempts, hasLength(2));
+      expect(auth.autoFlags, [true, false], reason: 'button flow only');
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
+    test('a LOST callback of an automatic attempt still reruns it whole — '
+        'nobody answered that surface', () async {
+      var lifecycle = AppLifecycleState.paused;
+      controller.lifecycleProbe = () => lifecycle;
+
+      final pending = controller.signIn(AuthProvider.google, auto: true);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      lifecycle = AppLifecycleState.resumed;
+
+      await Future<void>.delayed(const Duration(milliseconds: 70));
+      expect(auth.attempts, hasLength(2));
+      expect(auth.autoFlags, [true, true]);
+      auth.settleLast(const AuthSuccess(userId: 'u1'));
+      expect(await pending, isA<AuthSuccess>());
+    });
+
     test(
       'a second strip after the one relaunch is returned, never looped',
       () async {

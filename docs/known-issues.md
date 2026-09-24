@@ -60,10 +60,23 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   broken today — the device verifies against the first — but the file no longer describes the
   deployment. Decide whether to restore `[vars]` and drop the secret, or delete the dead keys, and
   whether the third fingerprint belongs. Same class as the `[triggers]` trap below.
-- **go_router 17.3.0 `popRoute` throws `Null check operator` on a system Back while a shell
-  navigator is unmounted** (`_findCurrentNavigators`; a transient state around the splash redirect
-  or a resume, on Android without predictive back). Upstream fix flutter/packages#12111 was open when
-  last read; 18.x is a `material_ui` migration, not that fix. Nothing app-side short of a fork.
+- **go_router's `popRoute` throws `Null check operator` on a system Back while a shell navigator is
+  unmounted** (`_findCurrentNavigators`, flutter/flutter#188993; same code through 18.0.1). The binding
+  reported it FATAL, then `SystemNavigator.pop()` closed the app. `SafeBackButtonDispatcher` contains
+  it (non-fatal `router back`, then pops the root navigator or declines) — which is why `ArulApp` hands
+  MaterialApp the router's PARTS, not `routerConfig`. Drop both once flutter/packages#12111 ships.
+- **Flutter's engine ANRs with main waiting in `FlutterJNI.nativeSurfaceCreated` /
+  `onSurfaceDestroyed`** — a surface created on the return from Google's sheet, or destroyed on a
+  backgrounding. It spans OPPO, vivo, Redmi, Samsung, itel, Lava and a Pixel on Android 11–14,
+  including phones Flutter already runs on OpenGL, so Impeller is not the lever (owner's call: no
+  app change). Upstream: flutter/flutter#169585 open; #174748 traced one to the merged
+  platform/UI thread. Re-read on every Flutter upgrade.
+- **Android 12's `surface_stripped` rate (~2% of sign-in attempters vs ~0.2% on 11 and 13) is
+  unexplained.** Its `User canceled the selector` is Play services' own selector ([auth.md](auth.md));
+  no back-out or icon strip on a 12L emulator produced it. It follows a dismissed One Tap sheet.
+- **The Keystore fallback has never run on a phone that refuses with error -41** — only against a
+  corrupted key blob on an Android 9 emulator ([launch-surface.md](launch-surface.md)). Count the
+  non-fatal `keystore refused` and `login_success` on Android 8.1/9 after the build ships.
 - **No PhonePe webhook has ever been delivered, and it measurably costs row accuracy.** Cause and
   evidence: [phonepe-webhook.md](phonepe-webhook.md). A full read of all 185 live mandates found **6
   rows (3.2%) drifted** — 4 `REVOKED` and 2 `PAUSED` at PhonePe while Neon still says `trialing`, the

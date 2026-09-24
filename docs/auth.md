@@ -130,8 +130,11 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   `canceled` nobody made. Any `onNewIntent` carries only the launcher's MAIN intent, so the tell is
   the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
   framework closing the session says `User cancelled the selector` — on the BUTTON surface that is
-  `SignInOutcome.selectorStripped` and relaunches once as `surface_stripped`; on the sheet the
-  same words are the user's swipe. Recents keeps the surface and needs none of this.
+  `SignInOutcome.selectorStripped` and reopens the PICKER once as `surface_stripped`, never the sheet
+  the user already dismissed; on the sheet the same words are the user's swipe. Recents keeps the
+  surface and needs none of this. Below Android 14 the American `User canceled the selector` is Play
+  services' own `identitycredentials` selector, which androidx.credentials 1.6 routes every request
+  through on GMS ≥ 25.24; a back-out or an icon strip on Android 12L never produced it.
 - A cancel stays TOAST-less; the retry line is the only feedback. **A DISMISSED sheet is never
   auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A user's
   cancel SETTLES the future inside the grace and never reaches that path; the launcher's
@@ -187,5 +190,11 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
 
 JWT HS256: access 60 m, refresh 60 d rotating, old jti denylisted in KV. **Entitlement is never
 authoritative in the token** — `prm` is a UI hint ([architecture.md](architecture.md) §Entitlement).
+
+**A refresh that proves the session dead ends it mid-use** (`ApiClient.sessionEnded` → signed out →
+`ArulApp` sends any signed-in screen to the wall and re-arms the automatic sheet). Google's credential
+state is left alone, so a one-account phone signs straight back in. Without it the UI stayed signed
+in and every gated call failed with `no_refresh_token` until a cold start. Where tokens live when the
+Keystore refuses: [launch-surface.md](launch-surface.md).
 The sign-in background video is a shared ref-counted player with a 2 s dispose grace, so a screen
 swap cannot kill it.

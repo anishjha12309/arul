@@ -6,9 +6,7 @@ paths:
   - "lib/features/wallpapers/data/wallpaper_apply_service.dart"
 ---
 
-**`android/**/wallpaper/**` is deliberately byte-identical to Pakiza's** (owner's call, modulo
-identifiers). Keep the two in step when either changes, and never re-add the in-place live swap Arul
-used to carry.
+Never re-add the in-place live swap Arul used to carry.
 
 - **Static apply hands the OS a bitmap ALREADY centre-cropped to the display aspect.** With a wider
   bitmap and no hint the OS keeps the slack as parallax room anchored LEFT and the launcher pans
@@ -26,5 +24,6 @@ used to carry.
 - **The player gets the raw `Surface`, never the `SurfaceHolder`, only from main.** Media3 wants the
   holder's callbacks on its own looper; OEM engine threads break that and the process dies.
 - Release the feed decoder only AFTER the download completes; await it before the native call.
+- **The engine's private copy is file IO → `ioExecutor`, never an engine callback** (it was an ANR).
 
 Read [docs/wallpaper-apply.md](../../docs/wallpaper-apply.md) before changing any of it.

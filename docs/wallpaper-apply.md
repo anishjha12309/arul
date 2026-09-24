@@ -2,9 +2,7 @@
 
 Read before touching `android/**/wallpaper/**` or `wallpaper_apply_provider.dart`.
 
-**`android/**/wallpaper/**` is deliberately byte-identical to Pakiza's** (owner's call, modulo
-identifiers). Keep the two in step when either changes, and do not re-add the in-place live swap Arul
-used to carry.
+Do not re-add the in-place live swap Arul used to carry.
 
 **The download streams into `<name>.part` and renames only on success, and the `.part` is KEPT on
 failure.** The rename is atomic, so the final name is never a truncated file the "exists and
@@ -62,6 +60,10 @@ measured on device. Stop re-deriving it.
   `onSurfaceDestroyed` waits (bounded) for `clearVideoSurface` before the framework frees the Surface.
 - **ONE engine on ONE record.** The chooser commits both home and lock together, so they can never
   hold different live videos.
+- **Adopt the engine's private copy on the service's IO thread, never on an engine callback.** The
+  framework attaches an engine and calls `onSurfaceChanged` on the service's main thread; a
+  multi-megabyte copy there was an ANR on budget storage. The result posts back to the thread that
+  asked, and a copy that lands for a superseded source or a destroyed engine is deleted.
 - Download the MP4 locally FIRST; release the feed decoder only AFTER the download completes, and
   await that before the native call.
 

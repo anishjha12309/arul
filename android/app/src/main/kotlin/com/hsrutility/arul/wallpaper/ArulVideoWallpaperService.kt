@@ -1,10 +1,14 @@
 package com.hsrutility.arul.wallpaper
 
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 // The system binds to THIS service when the user selects the app as their live wallpaper.
 // It loops the downloaded MP4 via [VideoRenderer], independently of the Flutter app -> it survives an app kill.
@@ -16,6 +20,9 @@ import java.io.File
 // No per-surface pinning -> identical behaviour on every Android version.
 // Every callback is wrapped -> a player must never crash the service.
 // Each engine plays its OWN private copy -> dual home/lock engines and a mid-run re-apply never yank a file from a decoder.
+// That copy is megabytes of file IO -> it runs on [ioExecutor], NEVER on the engine's callback thread.
+// The framework attaches an engine and delivers onSurfaceChanged on the service's main thread, and a copy
+// there on a budget phone's storage was an ANR ("slow IO operations").
 class ArulVideoWallpaperService : WallpaperService() {
 
     companion object {
@@ -34,7 +41,25 @@ class ArulVideoWallpaperService : WallpaperService() {
         private const val ORPHAN_SWEEP_AGE_MS = 60L * 60L * 1000L // 1 hour
     }
 
+    /** Private copies, their deletes and the orphan sweep -> one thread, so two engines never contend. */
+    private val ioExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+
     override fun onCreateEngine(): Engine = VideoWallpaperEngine()
+
+    override fun onDestroy() {
+        ioExecutor.shutdown()
+        super.onDestroy()
+    }
+
+    /** Queues [task] on [ioExecutor]; false once the service is going and the executor is shut. */
+    private fun runIo(task: () -> Unit): Boolean =
+        try {
+            ioExecutor.execute(task)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "IO task rejected", e)
+            false
+        }
 
     inner class VideoWallpaperEngine : Engine() {
 
@@ -45,6 +70,14 @@ class ArulVideoWallpaperService : WallpaperService() {
 
         /** The prefs source the private copy was adopted from -> the staleness check reads it. */
         private var adoptedSourcePath: String? = null
+
+        /** The source a background copy is running for -> a second trigger joins it instead of copying twice. */
+        private var adoptingSource: String? = null
+
+        /** Bumped by every adopt and by [onDestroy] -> a copy that lands for a superseded request is dropped. */
+        private var adoptGeneration = 0
+
+        private var destroyed = false
 
         // Set by the first onSurfaceChanged carrying a non-zero size, cleared when the surface goes.
         // Nothing decodes before it: the engine's final width and height arrive with onSurfaceChanged,
@@ -92,16 +125,21 @@ class ArulVideoWallpaperService : WallpaperService() {
             // Deliberately does NOT start the renderer -> onSurfaceChanged owns that, once it has geometry.
         }
 
+        // This engine's copy already exists -> start now (a stat, no copy). Otherwise adopt one in the
+        // background; [showAdopted] starts the renderer when it lands.
         private fun startRenderer(holder: SurfaceHolder) {
+            val existing = enginePrivatePath
+            if (existing != null && File(existing).existsNonEmpty()) {
+                createRenderer(existing, holder)
+            } else {
+                adoptSource()
+            }
+        }
+
+        private fun createRenderer(videoPath: String, holder: SurfaceHolder) {
             try {
-                val videoPath = resolveEnginePrivatePath()
                 val enableAudio = prefs.getBoolean(KEY_ENABLE_AUDIO, false)
                 val loop = prefs.getBoolean(KEY_LOOP, true)
-
-                if (videoPath.isNullOrBlank()) {
-                    Log.w(TAG, "No playable video for this engine; showing blank surface.")
-                    return
-                }
 
                 videoRenderer = VideoRenderer(applicationContext).apply {
                     audioEnabled = enableAudio
@@ -114,55 +152,70 @@ class ArulVideoWallpaperService : WallpaperService() {
             }
         }
 
-        // Adopt a private copy of the new source FIRST -> a failed copy keeps the old video playing.
-        // Only then drop the stale copy and swap the running player in place.
-        // Unlinking the old copy mid-decode is safe because the decoder's fd stays valid -> overwriting it would not be.
+        // A new source -> adopt a private copy of it FIRST. The old video keeps playing meanwhile, and a
+        // failed copy leaves it playing for good; [onAdopted] swaps the player once the copy lands.
         private fun onSourceVideoChanged() {
-            val newSource = configuredSourcePath()
-            if (newSource == adoptedSourcePath) return
+            if (configuredSourcePath() == adoptedSourcePath) return
+            adoptSource()
+        }
 
-            val stalePrivate = enginePrivatePath
-            enginePrivatePath = null
-            val newPrivate = resolveEnginePrivatePath()
-            if (newPrivate == null) {
-                enginePrivatePath = stalePrivate // keep playing what we have
+        // Copies the configured source into this engine's private copy on [ioExecutor] and hands the
+        // result back to the thread that asked. The copy is established once and reused across surface
+        // recreations, and kept IN MEMORY, never in prefs -> sibling home/lock engines must not share or
+        // delete each other's copy.
+        private fun adoptSource() {
+            val source = configuredSourcePath()
+            if (source.isNullOrBlank()) {
+                Log.e(TAG, "No source video to adopt")
                 return
             }
-            if (stalePrivate != null && stalePrivate != newPrivate) {
-                File(stalePrivate).delete()
+            if (source == adoptingSource) return // already copying it; that copy starts the renderer
+            val generation = ++adoptGeneration
+            val replyTo = Handler(Looper.myLooper() ?: Looper.getMainLooper())
+            val queued = runIo {
+                val copy = copyToEnginePrivate(File(source))
+                if (copy != null) sweepOrphanPrivateCopies(keep = copy.absolutePath)
+                replyTo.post { onAdopted(generation, source, copy) }
             }
+            adoptingSource = if (queued) source else null
+        }
 
+        private fun onAdopted(generation: Int, source: String, copy: File?) {
+            if (destroyed || generation != adoptGeneration) {
+                // Superseded or torn down while copying -> this copy belongs to nobody.
+                if (copy != null) runIo { copy.delete() }
+                return
+            }
+            adoptingSource = null
+            if (copy == null) return // keep playing what we have
+
+            val stalePrivate = enginePrivatePath
+            enginePrivatePath = copy.absolutePath
+            adoptedSourcePath = source
+            // Unlinking the old copy mid-decode is safe because the decoder's fd stays valid -> overwriting it would not be.
+            if (stalePrivate != null && stalePrivate != copy.absolutePath) {
+                runIo { File(stalePrivate).delete() }
+            }
+            showAdopted(copy.absolutePath)
+        }
+
+        private fun showAdopted(path: String) {
             if (!surfaceSized) return // the next sized onSurfaceChanged picks it up
             val renderer = videoRenderer
             if (renderer != null) {
-                renderer.swapVideo(newPrivate, surfaceHolder, adoptedSourcePath ?: newPrivate)
+                renderer.swapVideo(path, surfaceHolder, adoptedSourcePath ?: path)
             } else {
-                // The first apply landed on a blank-surface engine -> there was no video at start.
-                startRenderer(surfaceHolder)
+                // The first start, or the first apply landing on a blank-surface engine.
+                createRenderer(path, surfaceHolder)
             }
         }
 
-        // Returns this engine's private copy, established once and reused across surface recreations.
-        // Kept IN MEMORY, never in prefs -> sibling home/lock engines must not share or delete each other's copy.
-        private fun resolveEnginePrivatePath(): String? {
-            enginePrivatePath?.let { existing ->
-                if (File(existing).existsNonEmpty()) return existing
-            }
-
-            val source = configuredSourcePath()
-            if (source.isNullOrBlank() || !File(source).existsNonEmpty()) {
-                Log.e(TAG, "No source video to adopt (path=$source)")
+        // [ioExecutor] only.
+        private fun copyToEnginePrivate(source: File): File? {
+            if (!source.existsNonEmpty()) {
+                Log.e(TAG, "No source video to adopt (path=${source.path})")
                 return null
             }
-
-            val copy = copyToEnginePrivate(File(source)) ?: return null
-            enginePrivatePath = copy.absolutePath
-            adoptedSourcePath = source
-            sweepOrphanPrivateCopies(keep = copy.absolutePath)
-            return enginePrivatePath
-        }
-
-        private fun copyToEnginePrivate(source: File): File? {
             return try {
                 val dir = File(applicationContext.filesDir, ENGINE_PRIVATE_DIR)
                 if (!dir.exists() && !dir.mkdirs()) {
@@ -186,6 +239,7 @@ class ArulVideoWallpaperService : WallpaperService() {
             }
         }
 
+        // [ioExecutor] only.
         private fun sweepOrphanPrivateCopies(keep: String) {
             try {
                 val now = System.currentTimeMillis()
@@ -240,6 +294,8 @@ class ArulVideoWallpaperService : WallpaperService() {
         }
 
         override fun onDestroy() {
+            destroyed = true
+            adoptGeneration++
             try {
                 prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
             } catch (e: Exception) {
@@ -253,7 +309,7 @@ class ArulVideoWallpaperService : WallpaperService() {
             }
             // Delete this engine's private copy now that its player is released.
             try {
-                enginePrivatePath?.let { File(it).delete() }
+                enginePrivatePath?.let { path -> runIo { File(path).delete() } }
                 enginePrivatePath = null
                 adoptedSourcePath = null
             } catch (e: Exception) {

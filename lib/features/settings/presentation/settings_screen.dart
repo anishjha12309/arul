@@ -243,7 +243,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       message: l10n.settingsLogoutConfirmBody,
       confirmLabel: l10n.settingsLogout,
     );
-    if (ok != true) return;
+    // Unmounted = the session ended while the dialog was open and the wall already replaced
+    // Settings -> nothing is left to sign out of, and `ref` is dead.
+    if (ok != true || !mounted) return;
     // Best-effort server logout plus a local token clear — never throws for the offline case.
     await ref.read(authControllerProvider.notifier).signOut();
     if (mounted) context.go('/sign-in');
@@ -265,7 +267,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : l10n.settingsDeleteConfirmBody,
       confirmLabel: l10n.settingsDeleteAccount,
     );
-    if (ok != true) return;
+    // Same as [_logout]: a session that ended under the dialog leaves no account to delete here.
+    if (ok != true || !mounted) return;
     // GA4-only, deliberately off the PostHog allow-list — account state lives in Neon, exactly.
     // These exist so churn and delete FAILURES show in the free, unsampled record.
     // A failing delete is otherwise a support problem we only hear about by email.

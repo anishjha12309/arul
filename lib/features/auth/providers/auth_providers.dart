@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
@@ -17,7 +19,26 @@ import '../domain/sign_in_outcome.dart';
 part 'auth_providers.g.dart';
 
 @Riverpod(keepAlive: true)
-ApiClient apiClient(Ref ref) => ApiClient();
+ApiClient apiClient(Ref ref) => ApiClient(
+  plainStore: _resolvedPrefs(ref),
+  onKeystoreRefused: (error, stack) => ref
+      .read(crashReporterProvider)
+      .recordError(
+        error,
+        stack,
+        reason: 'keystore refused: session in app-private storage',
+      ),
+);
+
+/// `main()` overrides [sharedPreferencesProvider] before `runApp`; a container that never ran it
+/// (tests) has none, and the session store then keeps today's behaviour with no fallback.
+SharedPreferences? _resolvedPrefs(Ref ref) {
+  try {
+    return ref.read(sharedPreferencesProvider);
+  } catch (_) {
+    return null;
+  }
+}
 
 @Riverpod(keepAlive: true)
 AuthService authService(Ref ref) => ApiAuthService(
@@ -375,7 +396,10 @@ class AuthController extends _$AuthController {
         result is AuthCancelled &&
         result.outcome == SignInOutcome.selectorStripped;
 
-    Future<AuthResult> relaunch(String kind) {
+    // A LOST callback reruns the attempt as it was: nobody answered the surface. A STRIPPED picker
+    // reopens the PICKER only — the sheet in front of it was already dismissed, and a redrawn One
+    // Tap sheet counts toward Google's 24 h cancel suppression.
+    Future<AuthResult> relaunch(String kind, {bool pickerOnly = false}) {
       relaunched = true;
       _abandonStalled(kind: kind);
       sinceForeground = DateTime.now();
@@ -384,7 +408,7 @@ class AuthController extends _$AuthController {
           .read(authServiceProvider)
           .signInWith(
             provider,
-            auto: auto,
+            auto: auto && !pickerOnly,
             returned: returned,
             reconnected: reconnected,
           );
@@ -447,7 +471,7 @@ class AuthController extends _$AuthController {
       }
       if (settled != null) {
         if (stripped(settled)) {
-          raw = relaunch('surface_stripped');
+          raw = relaunch('surface_stripped', pickerOnly: true);
           continue;
         }
         final recovery = await recover(settled);
@@ -485,7 +509,7 @@ class AuthController extends _$AuthController {
         }
         if (late != null) {
           if (stripped(late)) {
-            raw = relaunch('surface_stripped');
+            raw = relaunch('surface_stripped', pickerOnly: true);
             continue;
           }
           final recovery = await recover(late);
@@ -596,6 +620,13 @@ class AuthController extends _$AuthController {
     await ref.read(authServiceProvider).signOut();
     _autoLaunched = false;
     // A new signed-out stretch -> its own reconnect budget, like its own automatic launch.
+    _reconnectBudget = _reconnectsPerStretch;
+  }
+
+  /// A session that died on its own mid-process (its refresh token is dead) -> a new signed-out
+  /// stretch, exactly as after [signOut]: its own automatic sheet and reconnect budget.
+  void sessionEnded() {
+    _autoLaunched = false;
     _reconnectBudget = _reconnectsPerStretch;
   }
 

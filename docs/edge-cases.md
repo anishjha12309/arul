@@ -21,6 +21,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] EVERY live apply opens the system chooser; the notifier finishes IDLE and never claims success
 - [ ] `SCALE_TO_FIT_WITH_CROPPING` set in `VideoRenderer.initialize()`, never from display metrics
 - [ ] ONE engine on ONE record — home and lock cannot hold different live videos
+- [ ] The engine's private copy is adopted on the service's IO thread, never on an engine callback (an ANR)
 - [ ] The static fallback fires on EXACTLY TWO signals: no live-wallpaper feature, or both chooser launches throwing; never anything else
 - [ ] OEM live-wallpaper restrictions caught → a localized error, never a crash
 
@@ -39,6 +40,9 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A RECONNECT (offline→online after a `networkError`/`unknown` failure or GMS's offline `[16] Account reauth failed` cancel, landing after it settled, resumed, nothing in flight) re-arms the sheet as `sheet_reconnect` — ONE per failure, TWO per signed-out stretch, never after a user's cancel
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
+- [ ] A stripped picker (`selectorStripped`) reopens the PICKER once, never the dismissed sheet
+- [ ] A refresh that proves the session dead signs the UI out and sends any signed-in screen to the wall
+- [ ] A Keystore refusal moves the session to app-private storage, sticky per install (`arul_keystore_refused`)
 
 ## Premium / payments
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user
@@ -123,6 +127,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
 - [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT auth error toasts. Checkout failures show a localized `PurchaseErrorKind` line, never the Worker's English `message`
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
+- [ ] A system Back never escapes go_router's `popRoute` — `SafeBackButtonDispatcher` records it non-fatal
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**
 - [ ] `allowBackup=false`, data-extraction rules, HTTPS-only network config
 - [ ] `FLAG_SECURE` set in `MainActivity.onCreate` (not the manifest — it must survive the apply recreate) **only when `isPlayInstall()`**, fail-CLOSED; a guard denies any `.aab` that loses it

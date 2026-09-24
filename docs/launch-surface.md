@@ -88,10 +88,16 @@ brown-screen duration fell in two steps, to zero only once both were in.
   persisted first-launch marker reads false and takes the keystore wait, so the picker can never fire
   over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before Firebase** —
   serialising them re-adds real time, and the post-login token write wants the keystore ready.
-- **A secure-storage read that THROWS settles the seed as signed out.** The Android Keystore refuses
-  outright on some low-RAM Android 9 phones ("Failed to generate key pair"). Escaping the seed failed
-  `initialized`, the splash's await threw before its `context.go`, and the app sat on the splash on
-  every launch. Never let the seed future complete with an error — nothing downstream catches it.
+- **A Keystore refusal moves the session to app-private storage.** Some Android 8.1/9 keymasters
+  answer every key generation or load with `KeyStoreException: Memory allocation failed` (error -41),
+  RSA and AES alike, on every retry: Google and `POST /auth/login` succeeded, then the token write
+  threw, so those phones never held a session. No `AndroidOptions` cipher helps, and changing it
+  migrates every healthy install. `ApiClient` switches to SharedPreferences (out of backup and device
+  transfer) on the first refusal and stays there for the install (`arul_keystore_refused`), so one
+  session never splits across two stores; the non-fatal `keystore refused` counts the phones.
+- **Any other secure-storage read that THROWS settles the seed as signed out.** Escaping the seed
+  failed `initialized`, the splash's await threw before its `context.go`, and the app sat on the
+  splash on every launch. Never let the seed future complete with an error — nothing catches it.
 
 ## Dead ends — do not re-attempt
 
