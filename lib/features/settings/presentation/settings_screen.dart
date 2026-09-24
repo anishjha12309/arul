@@ -24,6 +24,7 @@ import '../../notifications/providers/notification_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
+import '../../../app/widgets/arul_icon_tap.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
 import 'help_sheet.dart';
@@ -65,7 +66,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? authEmail
         : l10n.settingsFallbackEmail;
     // The EFFECTIVE language, so a phone-language default shows here as what the user is reading.
-    final language = appLanguageName(ref.watch(localeProvider).languageCode);
+    final languageCode = ref.watch(localeProvider).languageCode;
+    final language = appLanguageName(languageCode);
+    // The row shows the autonym (தமிழ், not "Tamil") — the word a speaker recognises; the sheet
+    // still trades in the English NAME, which is why `language` stays what it was.
+    final languageShown = appLanguageNativeNames[languageCode] ?? language;
 
     // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
     // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
@@ -137,7 +142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         icon: Icons.translate,
                         title: l10n.settingsLanguage,
                         identifier: 'arul_settings_language',
-                        sub: language,
+                        sub: languageShown,
                         onTap: () => _pickLanguage(language),
                       ),
                       _RowData(
@@ -398,6 +403,9 @@ class _ProfileCard extends StatelessWidget {
   final String initial;
   final VoidCallback onEdit;
 
+  /// Transparent hit area either side of the 20 px pencil inside its 48 box.
+  static const double _pencilSlack = (ArulTokens.minHitTarget - 20) / 2;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -406,9 +414,15 @@ class _ProfileCard extends StatelessWidget {
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
     final pencilColor = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(ArulTokens.cardPadding16),
+      padding: const EdgeInsets.fromLTRB(
+        ArulTokens.cardPadding16,
+        ArulTokens.cardPadding16,
+        ArulTokens.cardPadding16 - _pencilSlack,
+        ArulTokens.cardPadding16,
+      ),
       decoration: BoxDecoration(
         gradient: isDark ? ArulTokens.silkDark : ArulTokens.silkLight,
         border: Border.all(
@@ -461,11 +475,17 @@ class _ProfileCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          // The pencil draws 20 inside a 48 box. The card's right padding gives up the 14 px of
+          // slack (16 → 2), so the glyph's right edge stays on the same inner line as before and the
+          // box is real hit area on both sides — a Transform would have painted the slack outside
+          // its own bounds, where the hit test never reaches. The old 8 px gap is inside the slack.
+          ArulIconTap(
+            icon: Icons.edit,
+            size: 20,
+            color: pencilColor,
+            label: l10n.settingsEditNameTitle,
+            identifier: 'arul_settings_edit_name',
             onTap: onEdit,
-            child: Icon(Icons.edit, size: 20, color: pencilColor),
           ),
         ],
       ),

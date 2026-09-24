@@ -1077,8 +1077,8 @@ class _UpiQrOptionRow extends StatelessWidget {
 
 /// One app in the picker, built so no translation can overflow it.
 ///
-/// The overflow matrix demotes an overflowing KEY, and one demoted key sends the whole section
-/// English (`EnglishOnly`) -> on this screen that is all-or-nothing, so the row has to be safe by
+/// The overflow matrix demotes an overflowing KEY to English everywhere -> on this screen that is
+/// all-or-nothing, so the row has to be safe by
 /// CONSTRUCTION rather than by measurement. Three rules do it: the icon is fixed and sits outside
 /// the flexible column, name and badge share a `Wrap` so a long locale drops the badge to its own
 /// line instead of pushing the row over, and every text is capped to the row's OWN constraints.

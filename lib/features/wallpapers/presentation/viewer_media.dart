@@ -71,7 +71,7 @@ class ViewerMedia extends StatelessWidget {
               // RGBA decode cost ignores file size (~8.3 MB at 1080x1920) -> decode at the screen's
               // width, never the image's own.
               memCacheWidth: fullWidth,
-              fadeInDuration: const Duration(milliseconds: 180),
+              fadeInDuration: Motion.imageFade,
               placeholder: (_, _) => const SizedBox.shrink(),
               errorWidget: (_, _, _) => const SizedBox.shrink(),
             )
@@ -102,9 +102,7 @@ class _LiveTexture extends StatelessWidget {
         builder: (context, ready, child) => AnimatedOpacity(
           opacity: ready ? 1 : 0,
           // The reveal lands in one frame instead of fading over the poster.
-          duration: context.reduceMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 180),
+          duration: context.reduceMotion ? Duration.zero : Motion.imageFade,
           child: child,
         ),
         child: ValueListenableBuilder<Size?>(

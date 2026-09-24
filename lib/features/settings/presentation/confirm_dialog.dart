@@ -5,7 +5,7 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// A centred confirm dialog — 24px margins, r22, gold-35% border on `#1A0B0F`.
-/// Title 18px/600, message 13.5px secondary, two 46px r999 buttons: outlined Cancel, solid confirm.
+/// Title 18px/600, message 13.5px secondary, two 48px r999 buttons: outlined Cancel, solid confirm.
 ///
 /// The dialog only RESOLVES the answer — `true` on confirm, `false` or `null` on cancel.
 /// The CALLER runs the real action (logout, delete account) on `true`.
@@ -136,7 +136,7 @@ class _ConfirmDialog extends StatelessWidget {
   }
 }
 
-/// One 46px r999 dialog button — filled is solid maroon; outlined is transparent with a hairline.
+/// One 48px r999 dialog button — filled is solid maroon; outlined is a hairline on the fill's own alpha-0.
 class _DialogButton extends StatefulWidget {
   const _DialogButton({
     required this.label,
@@ -167,12 +167,14 @@ class _DialogButtonState extends State<_DialogButton> {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = widget.filled
-        ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
-        : Colors.transparent;
     final Color textColor = widget.filled
         ? ArulTokens.ivory
         : (widget.textColor ?? ArulTokens.darkText);
+    // Cancel answers the finger too: a faint tint of its own ink while pressed, and the fill's own
+    // alpha-0 at rest — never `Colors.transparent`, which is transparent BLACK.
+    final Color bg = widget.filled
+        ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
+        : textColor.withValues(alpha: _pressed ? 0.10 : 0);
 
     return Semantics(
       button: true,
@@ -190,7 +192,7 @@ class _DialogButtonState extends State<_DialogButton> {
         onTapCancel: () => setState(() => _pressed = false),
         onTap: widget.onTap,
         child: Container(
-          height: ArulTokens.dialogButtonHeight, // 46
+          height: ArulTokens.dialogButtonHeight,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,

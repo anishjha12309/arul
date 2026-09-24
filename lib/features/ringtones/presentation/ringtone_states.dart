@@ -296,7 +296,8 @@ class RingtonesError extends StatelessWidget {
             label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
-            height: 46,
+            // Compact, but never under Android's 48 dp target.
+            height: ArulTokens.minHitTarget,
             fontSize: 14,
             expand: false,
           ),

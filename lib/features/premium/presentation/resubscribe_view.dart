@@ -177,7 +177,7 @@ class _PremiumUpiSelector extends StatelessWidget {
             vertical: ArulTokens.premiumResubscribeUpiVertical,
           ),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ArulTokens.paywallPillFill,
             border: Border.all(color: ArulTokens.paywallBorderControl),
             borderRadius: BorderRadius.circular(
               ArulTokens.premiumResubscribeUpiRadius,

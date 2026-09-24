@@ -40,6 +40,9 @@ abstract final class ArulTokens {
   /// ctaGreen hover / pressed. `#1C9450`.
   static const Color ctaGreenHover = Color(0xFF1C9450);
 
+  /// Glyph and label ON a [ctaGreen] fill. Pure white — the ivory reads dirty on green.
+  static const Color onCta = Color(0xFFFFFFFF);
+
   // Dark theme text ladder — Spec > Colors > Dark theme.
 
   /// Dark theme primary text. `#FAF5EC` (== [ivory]).
@@ -653,7 +656,9 @@ abstract final class ArulTokens {
   static const double signInPillHeight = 56;
 
   /// Confirm-dialog button height. 46.
-  static const double dialogButtonHeight = 46;
+  /// Android's 48 dp target — the dialog's two buttons are the commit affordance of logout,
+  /// delete and cancel-subscription, the last place a tap may miss.
+  static const double dialogButtonHeight = minHitTarget;
 
   /// Minimum interactive hit target. 48.
   ///
@@ -841,6 +846,13 @@ abstract final class ArulTokens {
 
   /// Social-proof pill rim. `#E0D4B4`.
   static const Color paywallBorderPill = Color(0xFFE0D4B4);
+
+  /// The white fill of the paywall's pills (social proof, the UPI chip) — pure white, not the
+  /// cream, so they lift off [paywallCream].
+  static const Color paywallPillFill = Color(0xFFFFFFFF);
+
+  /// The mute disc over the onboarding clip. `rgba(46,29,20,.70)` — dark enough on any frame.
+  static const Color paywallMuteFill = Color(0xB32E1D14);
 
   /// The 1px rules flanking "PREMIUM" — gold nearest the word, fading out; the right one is mirrored.
   static const LinearGradient paywallBrandRule = LinearGradient(

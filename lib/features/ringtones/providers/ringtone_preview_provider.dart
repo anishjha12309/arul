@@ -94,6 +94,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   /// alongside the player in `ref.onDispose`; see [_handleInterruption] / [_handleBecomingNoisy].
   StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
   StreamSubscription<void>? _becomingNoisySub;
+  StreamSubscription<PlayerState>? _playerStateSub;
 
   /// Bumped by every action that decides what the player's volume should be next -> a ramp whose
   /// captured generation has gone stale stops writing volume, whether it lost the race to a new
@@ -155,7 +156,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     );
 
     // Mirror player state changes into Riverpod state.
-    _player.playerStateStream.listen((ps) {
+    _playerStateSub = _player.playerStateStream.listen((ps) {
       if (ps.processingState == ProcessingState.completed) {
         // Track finished -> return to idle so the card resets to ▶. Nothing left to fade, and
         // interruption bookkeeping about a track that is now gone would only mislead the next one.
@@ -176,6 +177,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       _lifecycle?.dispose();
       unawaited(_interruptionSub?.cancel());
       unawaited(_becomingNoisySub?.cancel());
+      unawaited(_playerStateSub?.cancel());
       unawaited(_releaseFocus());
       _player.dispose();
     });

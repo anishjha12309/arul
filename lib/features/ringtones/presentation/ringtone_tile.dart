@@ -122,8 +122,8 @@ class _RingtoneTileState extends State<RingtoneTile>
   /// `ease-in-out … alternate` — the easing applies per direction, so the reverse is the same curve.
   late final Animation<double> _flicker = CurvedAnimation(
     parent: _controller,
-    curve: Curves.easeInOut,
-    reverseCurve: Curves.easeInOut,
+    curve: Motion.swayCurve,
+    reverseCurve: Motion.swayCurve,
   );
 
   bool _reduceMotion = false;

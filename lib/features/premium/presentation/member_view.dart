@@ -458,7 +458,9 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
           onTapDown: disabled
               ? null
               : (_) {
-                  ArulHaptics.tap();
+                  // Ending a paid subscription is the destructive commit — the same beat as
+                  // account delete, so the hand learns one weight for "this takes something away".
+                  ArulHaptics.heavy();
                   setState(() => _pressed = true);
                 },
           onTapUp: disabled ? null : (_) => setState(() => _pressed = false),

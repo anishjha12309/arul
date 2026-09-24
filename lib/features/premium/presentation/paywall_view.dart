@@ -604,31 +604,38 @@ class _SocialProofPillState extends State<_SocialProofPill> {
       context,
     ).premiumSocialProof(_who.$1, _who.$2);
     return ExcludeSemantics(
-      child: AnimatedSwitcher(
-        // The line still rotates; it just cuts instead of cross-fading.
-        duration: context.reduceMotion
-            ? Duration.zero
-            : ArulTokens.chromeSettleIn,
-        switchInCurve: ArulTokens.settleCurve,
-        switchOutCurve: ArulTokens.settleCurve,
-        child: Container(
-          key: ValueKey(line),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: ArulTokens.paywallBorderPill),
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          ),
-          child: Text(
-            line,
-            // TWO lines, not one. The longest pairing ("Tiruchirappalli" + a Kannada verb phrase)
-            // ellipsised at 360dp, and English did the same at 1.3x text scale — a ticker that
-            // ends in "..." reads as a bug, not as chrome. The pill grows into the header's slack;
-            // in `dense` mode there is none, and the whole pill is dropped before it ever wraps.
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: ArulTokens.paywallPill,
+      child: Padding(
+        // The pill grows to two lines at a large OS font size -> it keeps the screen's
+        // gutter rather than running edge to edge with its round ends cut.
+        padding: const EdgeInsets.symmetric(
+          horizontal: ArulTokens.screenPadding,
+        ),
+        child: AnimatedSwitcher(
+          // The line still rotates; it just cuts instead of cross-fading.
+          duration: context.reduceMotion
+              ? Duration.zero
+              : ArulTokens.chromeSettleIn,
+          switchInCurve: ArulTokens.settleCurve,
+          switchOutCurve: ArulTokens.settleCurve,
+          child: Container(
+            key: ValueKey(line),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: ArulTokens.paywallPillFill,
+              border: Border.all(color: ArulTokens.paywallBorderPill),
+              borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+            ),
+            child: Text(
+              line,
+              // TWO lines, not one. The longest pairing ("Tiruchirappalli" + a Kannada verb phrase)
+              // ellipsised at 360dp, and English did the same at 1.3x text scale — a ticker that
+              // ends in "..." reads as a bug, not as chrome. The pill grows into the header's slack;
+              // in `dense` mode there is none, and the whole pill is dropped before it ever wraps.
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: ArulTokens.paywallPill,
+            ),
           ),
         ),
       ),
@@ -1185,7 +1192,7 @@ class _Footer extends StatelessWidget {
   }
 }
 
-class _UpiChip extends StatelessWidget {
+class _UpiChip extends StatefulWidget {
   const _UpiChip({
     required this.app,
     required this.canChange,
@@ -1197,14 +1204,34 @@ class _UpiChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_UpiChip> createState() => _UpiChipState();
+}
+
+class _UpiChipState extends State<_UpiChip> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final app = widget.app;
+    final canChange = widget.canChange;
     final icon = app.icon;
     return Semantics(
       container: true,
+      button: canChange,
       identifier: 'arul_paywall_upi_chip',
       label: app.label,
       child: GestureDetector(
-        onTap: canChange ? onTap : null,
+        // It picks between UPI apps -> the picker's own tick on press-DOWN, and the medallion
+        // fill while pressed; a money-flow control that answered nothing read as decoration.
+        onTapDown: canChange
+            ? (_) {
+                ArulHaptics.selection();
+                setState(() => _pressed = true);
+              }
+            : null,
+        onTapUp: canChange ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: canChange ? () => setState(() => _pressed = false) : null,
+        onTap: canChange ? widget.onTap : null,
         // The pill draws 36 and is tapped at [ArulTokens.minHitTarget] — this one opens the
         // picker that decides which app takes the mandate, so it is the last control on the page
         // that may be hard to hit.
@@ -1219,7 +1246,9 @@ class _UpiChip extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _pressed
+                    ? ArulTokens.paywallMedallionFill
+                    : ArulTokens.paywallPillFill,
                 border: Border.all(color: ArulTokens.paywallBorderControl),
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
               ),

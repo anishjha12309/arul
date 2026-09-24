@@ -118,11 +118,17 @@ abstract class AppLocalizations {
   /// **'SOUTH INDIAN WALLPAPERS'**
   String get appTagline;
 
-  /// No description provided for @categoryAll.
+  /// The first browse chip on both tabs. ONE short everyday word.
   ///
   /// In en, this message translates to:
   /// **'All'**
   String get categoryAll;
+
+  /// The New chip beside All on both browse rows — a WINDOW of recent items, not a category. ONE short everyday word for "new (ones)".
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get categoryNew;
 
   /// No description provided for @feedLiveBadge.
   ///
@@ -142,6 +148,18 @@ abstract class AppLocalizations {
   /// **'Try another category.'**
   String get feedEmptyBody;
 
+  /// Outlined pill under the empty-category state; taps back to the All chip. A short verb phrase ("see all").
+  ///
+  /// In en, this message translates to:
+  /// **'Browse all'**
+  String get feedBrowseAll;
+
+  /// One line under the gopuram while the first catalog page loads. Short; on screen for well under a second on a warm cache.
+  ///
+  /// In en, this message translates to:
+  /// **'Bringing your wallpapers…'**
+  String get feedLoadingBody;
+
   /// No description provided for @feedErrorTitle.
   ///
   /// In en, this message translates to:
@@ -154,7 +172,7 @@ abstract class AppLocalizations {
   /// **'Check your connection and try again.'**
   String get feedErrorBody;
 
-  /// No description provided for @retry.
+  /// Compact pill with a refresh icon under every error card. ONE or two short words ("again" reads fine beside the icon).
   ///
   /// In en, this message translates to:
   /// **'Retry'**
@@ -322,7 +340,7 @@ abstract class AppLocalizations {
   /// **'Version'**
   String get settingsVersion;
 
-  /// No description provided for @uploadTitle.
+  /// Upload screen title; the slot is tight even for English at 320 dp. Two short words at most ("Upload").
   ///
   /// In en, this message translates to:
   /// **'Upload your content'**
@@ -388,10 +406,10 @@ abstract class AppLocalizations {
   /// **'Lock screen'**
   String get applyTargetLock;
 
-  /// No description provided for @applyTargetBoth.
+  /// Label under the phone icon on the third apply-target card (Home / Lock / Both). The three cards share one row on a 360 dp phone, ~100 dp each — ONE short everyday word meaning 'both'.
   ///
   /// In en, this message translates to:
-  /// **'Home and lock screen'**
+  /// **'Both'**
   String get applyTargetBoth;
 
   /// No description provided for @applied.
@@ -442,7 +460,7 @@ abstract class AppLocalizations {
   /// **'Wallpapers'**
   String get tabWallpapers;
 
-  /// No description provided for @tabRingtones.
+  /// Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the Earn chip — use the short everyday (often singular, transliterated) word, never a long plural.
   ///
   /// In en, this message translates to:
   /// **'Ringtones'**
@@ -454,7 +472,7 @@ abstract class AppLocalizations {
   /// **'Earn'**
   String get earn;
 
-  /// No description provided for @ringtoneSet.
+  /// The Set pill on every ringtone row, max 120 dp wide. ONE short verb; the transliterated "set" is fine where that is what people say.
   ///
   /// In en, this message translates to:
   /// **'Set'**

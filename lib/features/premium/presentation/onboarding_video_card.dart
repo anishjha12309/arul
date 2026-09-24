@@ -259,7 +259,7 @@ class _MuteButton extends StatelessWidget {
               height: 28,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xB32E1D14),
+                color: ArulTokens.paywallMuteFill,
               ),
               child: Icon(
                 muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,

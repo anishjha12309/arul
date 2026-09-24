@@ -1,9 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/wallpaper_apply_service.dart';
@@ -44,15 +46,31 @@ class _ApplySheetBody extends StatefulWidget {
 class _ApplySheetBodyState extends State<_ApplySheetBody> {
   ApplyTarget _target = ApplyTarget.both; // Spec: default Both
 
-  static const _cards = <(ApplyTarget, IconData, String, String)>[
-    (ApplyTarget.home, Icons.home_rounded, 'Home screen', 'arul_apply_home'),
-    (ApplyTarget.lock, Icons.lock_rounded, 'Lock screen', 'arul_apply_lock'),
-    (ApplyTarget.both, Icons.smartphone_rounded, 'Both', 'arul_apply_both'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Every word on this sheet is an ARB key -> it renders in the user's language, not the author's.
+    final cards = <(ApplyTarget, IconData, String, String)>[
+      (
+        ApplyTarget.home,
+        Icons.home_rounded,
+        l10n.applyTargetHome,
+        'arul_apply_home',
+      ),
+      (
+        ApplyTarget.lock,
+        Icons.lock_rounded,
+        l10n.applyTargetLock,
+        'arul_apply_lock',
+      ),
+      (
+        ApplyTarget.both,
+        Icons.smartphone_rounded,
+        l10n.applyTargetBoth,
+        'arul_apply_both',
+      ),
+    ];
     return Padding(
       // Spec: pad 18 20 24; the grabber + its padding come from ArulSheet.
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
@@ -67,7 +85,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Set wallpaper on',
+                  l10n.applyTargetTitle,
                   style: ArulTokens.sheetTitle.copyWith(
                     color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
                   ),
@@ -77,30 +95,37 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
           ),
           const SizedBox(height: 16),
 
-          Row(
-            children: [
-              for (var i = 0; i < _cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                Expanded(
-                  child: _TargetCard(
-                    icon: _cards[i].$2,
-                    label: _cards[i].$3,
-                    identifier: _cards[i].$4,
-                    selected: _target == _cards[i].$1,
-                    onTap: () => setState(() => _target = _cards[i].$1),
+          // A translated label can wrap where English sits on one line -> the three cards share the
+          // tallest one's height, so a two-line Tamil card never leaves its neighbours short.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: _TargetCard(
+                      icon: cards[i].$2,
+                      label: cards[i].$3,
+                      identifier: cards[i].$4,
+                      selected: _target == cards[i].$1,
+                      onTap: () => setState(() => _target = cards[i].$1),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 16),
 
           CtaButton(
-            label: 'Apply wallpaper',
+            label: l10n.apply,
             identifier: 'arul_apply_confirm',
             icon: Icons.wallpaper_rounded,
             height: ArulTokens.ctaHeight50,
             fontSize: 15.5,
+            // The commit press of the sheet -> the same weight as the feed's Apply pill.
+            haptic: ArulHapticStyle.firm,
             onPressed: () => Navigator.of(context).pop(_target),
           ),
         ],
@@ -204,9 +229,14 @@ class _TargetCard extends StatelessWidget {
 
     return Semantics(
       container: true,
+      button: true,
+      label: label,
       identifier: identifier,
       selected: selected,
+      excludeSemantics: true,
       child: GestureDetector(
+        // A card picks between values -> the lightest tick, on press-DOWN, like every other picker.
+        onTapDown: (_) => ArulHaptics.selection(),
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
@@ -231,8 +261,7 @@ class _TargetCard extends StatelessWidget {
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
+                style: ArulTokens.body.copyWith(
                   fontWeight: FontWeight.w500,
                   color: labelColor,
                 ),

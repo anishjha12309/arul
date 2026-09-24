@@ -11,6 +11,7 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../domain/devotional_event.dart';
 import '../providers/notification_providers.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Settings sub-screen for devotional reminders — one master switch plus the time they fire.
 /// Accepting it enables the WHOLE set, the weekly day and every festival; no per-festival opt-ins.
@@ -67,25 +68,13 @@ class _NotificationSettingsScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Same header block as Settings, so the two read as one surface.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (context.canPop()) context.pop();
-                    },
-                    child: Icon(Icons.arrow_back, size: 24, color: headerColor),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    l10n.remindersTitle,
-                    style: ArulTokens.screenTitle.copyWith(color: headerColor),
-                  ),
-                ],
-              ),
+            ArulPushedHeader(
+              title: l10n.remindersTitle,
+              color: headerColor,
+              identifier: 'arul_reminders_back',
+              onBack: () {
+                if (context.canPop()) context.pop();
+              },
             ),
 
             Expanded(

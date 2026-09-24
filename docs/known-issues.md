@@ -60,40 +60,25 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   broken today — the device verifies against the first — but the file no longer describes the
   deployment. Decide whether to restore `[vars]` and drop the secret, or delete the dead keys, and
   whether the third fingerprint belongs. Same class as the `[triggers]` trap below.
-- **Three shipped surfaces are hardcoded English and never read `AppLocalizations`** — a Tamil user
-  sees English on them. `apply_sheet.dart` has ZERO `l10n.` references (title plus three targets) and
-  `FeedEmpty` hardcodes its title, body and "Browse all"; translations sit unused in the ARBs and
-  "Browse all" has no key at all. The l10n matrix pins this: those registry entries carry
-  `unlocalizedEnglish: true`, which ASSERTS the screen attributes keys in `en` and none in the other
-  five — localize one and the assertion fails, the signal to delete the flag in the same change.
-  (Sign-in was the fourth, now localized.) The third is LATENT: the feed's All chip is the literal
-  `_kAllLabel = 'All'` while the ringtones tab reads `l10n.categoryAll`. They agree today only
-  because `categoryAll` is demoted; restore its translations and one tab localizes.
-- **Three English-baseline layout defects the l10n matrix records and cannot fix by demotion** (a
-  slot too small for English is too small for every language). `english_baseline.g.dart` is the
-  generated subtraction set keeping the suite green on them; `flutter test test/l10n/` shows them.
-  Upload overflows right at 320dp/1.3 · the Refer CTA truncates "Share via WhatsApp" there · Settings
-  truncates its fallback email. The profile row's email ellipsis is designed. The envelope also
-  carries a non-gating `411x891@1.3-sweep` frame — a modern phone at accessibility text size, added
-  after an on-device sweep found the language sheet overflowing.
+- **go_router 17.3.0 `popRoute` throws `Null check operator` on a system Back while a shell
+  navigator is unmounted** (`_findCurrentNavigators`; a transient state around the splash redirect
+  or a resume, on Android without predictive back). Upstream fix flutter/packages#12111 was open when
+  last read; 18.x is a `material_ui` migration, not that fix. Nothing app-side short of a fork.
 - **No PhonePe webhook has ever been delivered, and it measurably costs row accuracy.** Cause and
   evidence: [phonepe-webhook.md](phonepe-webhook.md). A full read of all 185 live mandates found **6
   rows (3.2%) drifted** — 4 `REVOKED` and 2 `PAUSED` at PhonePe while Neon still says `trialing`, the
   two states only the webhook reports. The revoked ones keep climbing the dunning ladder against a
   dead mandate. `POST /payments/status` per subscriber parks them; the durable fix is the webhook.
-- **The portrait lock does not hold on Android 16 — the same leak Pakiza already closed.**
-  `screenOrientation="portrait"` is SILENTLY IGNORED at targetSdk 36: platform_compat
-  `UNIVERSAL_RESIZABLE_BY_DEFAULT` (357141415, `enableSinceTargetSdk=36`) makes every activity
-  resizable and free to rotate. Google documents it as large-screens-only (sw≥600dp); **it is not** —
-  reproduced against Pakiza on a Nothing A001 at **sw411dp**, where MainActivity went landscape.
-  Arul's manifest is identical (neither `android:resizeableActivity` nor the compat property appears
-  in `android/`), so it rotates too — nobody has looked. **Fix,
-  verified on device in Pakiza:** `android:resizeableActivity="false"` on MainActivity AND the
-  `<application>` property `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` = `"true"`.
-  The property is what holds; the attributes alone do not, and Google calls the opt-out temporary.
 
 ## Traps already paid for
 
+- **The manifest's `screenOrientation="portrait"` ALONE is ignored at targetSdk 36** — platform_compat
+  `UNIVERSAL_RESIZABLE_BY_DEFAULT` (357141415) frees every activity to rotate, phones included. What
+  holds Arul upright is the RUNTIME request, `SystemChrome.setPreferredOrientations` in `main()`:
+  forced landscape (`user_rotation=1`, accelerometer off) on an Android 16 A001 with the feed up
+  stayed `ROTATION_0`, `requestedOrientation=PORTRAIT`. Never trade that call for a manifest
+  attribute; the documented opt-out, if it ever fails, is `android:resizeableActivity="false"` plus
+  the `<application>` property `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`.
 - **A wallpaper engine surface gets NO aspect handling for free** — fixed in both repos
   ([wallpaper-apply.md](wallpaper-apply.md)). Media3 documents `setVideoScalingMode` as
   `SurfaceView`-only; on an engine surface it works ANYWAY, and `dumpsys SurfaceFlinger` still shows

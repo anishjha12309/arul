@@ -8,6 +8,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../theme/arul_tokens.dart';
 import '../domain/devotional_event.dart';
 import '../domain/notification_settings.dart';
 
@@ -86,11 +87,11 @@ class NotificationService {
   static const _sound = RawResourceAndroidNotificationSound('arul_bell');
   static AndroidNotificationSound? get _chime => _kChimeBundled ? _sound : null;
 
-  /// Arul gold (`ArulTokens.gold`) — tints the app name and accent line so the post reads as ours.
+  /// Arul gold — tints the app name and accent line so the post reads as ours.
   ///
-  /// A boot receiver can drive this class with no Flutter UI alive at all.
-  /// So it must not depend on anything needing a BuildContext -> hard-coded, never imported.
-  static const _accent = Color(0xFFD4A017);
+  /// A boot receiver can drive this class with no Flutter UI alive at all, which is fine: the
+  /// token is a compile-time const and needs no BuildContext, so the one palette stays the source.
+  static const _accent = ArulTokens.gold;
 
   // A channel's SOUND is immutable once it exists on a device -> the `_v1` suffix is load-bearing.
   // Bundling the chime later needs a NEW id, with the old one added to _legacyChannelIds.

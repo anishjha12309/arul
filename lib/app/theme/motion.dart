@@ -27,11 +27,35 @@ abstract final class Motion {
   static const settle = Duration(milliseconds: 250);
   static const settleCurve = Curves.easeOut;
 
+  /// An image arriving from cache or the network, and the live texture over its poster. 180ms —
+  /// short enough that a cached poster reads as "already there", long enough that a decoded one
+  /// never pops.
+  static const imageFade = Duration(milliseconds: 180);
+
+  /// The dip a button makes under the finger. Quicker than [quick]: it must read as the press
+  /// itself, not as a state change that followed it.
+  static const pressDip = Duration(milliseconds: 90);
+
+  /// Something arriving in the periphery — the end-of-feed mark breathing in behind the last card.
+  /// A breath, not a flip; nothing the eye is waiting on.
+  static const breathe = Duration(milliseconds: 350);
+
+  /// The alternating loops: a flame's sway, an empty state's pulse, the Earn parcel's rattle.
+  /// Ease-in-out both ways, so the turn at each end is soft.
+  static const swayCurve = Curves.easeInOut;
+
   /// The skeleton sliding-gradient loop. The spec: 1.8s linear.
   static const skeletonSweep = Duration(milliseconds: 1800);
 
   /// Splash hairline loader loop. The spec: 1.6s linear.
   static const hairlineSweep = Duration(milliseconds: 1600);
+
+  /// One full in-and-out of the feed's first-load pulse.
+  static const loadingPulse = Duration(seconds: 2);
+
+  /// One Earn-button wiggle, and the rest between wiggles.
+  static const wiggle = Duration(milliseconds: 550);
+  static const wiggleGap = Duration(seconds: 3);
 
   /// Press feedback on the primary CTA — the ONE place a physical overshoot earns its controller.
   /// `withDurationAndBounce` is the duration+bounce model -> drive it with a SpringSimulation

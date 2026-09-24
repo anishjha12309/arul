@@ -6,6 +6,7 @@ import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/motion.dart';
+import 'arul_screen_header.dart';
 
 /// The Refer & Earn entry in a browse tab's header band — ONE control, shared by both tabs.
 ///
@@ -28,9 +29,9 @@ class ArulEarnButton extends StatefulWidget {
 
 class _ArulEarnButtonState extends State<ArulEarnButton>
     with SingleTickerProviderStateMixin {
-  /// One wiggle, and the pause between them. Pakiza's 550ms / 3s.
-  static const Duration _wiggleDuration = Duration(milliseconds: 550);
-  static const Duration _wiggleGap = Duration(seconds: 3);
+  /// One wiggle, and the pause between them — the reference chip's cadence, held in [Motion].
+  static const Duration _wiggleDuration = Motion.wiggle;
+  static const Duration _wiggleGap = Motion.wiggleGap;
 
   /// How often the reduced-motion branch re-reads the flag. Long on purpose — see [_schedule].
   static const Duration _reducedRecheckGap = Duration(minutes: 1);
@@ -41,6 +42,9 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   static const double _padRight = ArulTokens.contentGap; // 16
   static const double _gap = 8;
   static const double _emojiSize = 17;
+
+  /// The label's ceiling at OS font scale 1.3: "பரிசு" fits, "സമ്മാനം" shrank — so ml uses നേടൂ.
+  static const double _labelMaxWidth = 84;
 
   /// **Where the button sits — THE knob. Edit this and nothing else.**
   ///
@@ -65,7 +69,7 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
     TweenSequenceItem(tween: Tween(begin: 0.22, end: -0.22), weight: 2),
     TweenSequenceItem(tween: Tween(begin: -0.22, end: 0.22), weight: 2),
     TweenSequenceItem(tween: Tween(begin: 0.22, end: 0.0), weight: 1),
-  ]).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+  ]).animate(CurvedAnimation(parent: _c, curve: Motion.swayCurve));
 
   Timer? _timer;
 
@@ -125,58 +129,83 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
           onTapDown: (_) => ArulHaptics.tap(),
           onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
-          child: Container(
-            height: ArulTokens.headerControlSize,
-            padding: const EdgeInsets.only(left: _padLeft, right: _padRight),
-            decoration: BoxDecoration(
-              gradient: isDark
-                  ? ArulTokens.earnFillDark
-                  : ArulTokens.earnFillLight,
-              borderRadius: BorderRadius.circular(
-                ArulTokens.headerButtonRadius,
-              ),
-              border: Border.all(
-                color: isDark
-                    ? ArulTokens.earnBorderDark
-                    : ArulTokens.earnBorderLight,
-              ),
-              // Light only: the dark fill is already brighter than its surface -> no lift needed there.
-              boxShadow: isDark ? null : ArulTokens.controlLift,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RepaintBoundary(
-                  child: AnimatedBuilder(
-                    animation: _wiggle,
-                    builder: (context, child) => Transform.rotate(
-                      angle: _wiggle.value,
-                      // About the BOTTOM-centre, not the middle -> a parcel rattled, not a badge on a pin.
-                      origin: const Offset(0, 6),
-                      child: child,
-                    ),
-                    child: const Text(
-                      '🎁',
-                      style: TextStyle(fontSize: _emojiSize),
-                    ),
-                  ),
+          // Tapped across the whole header band (48, Android's target); drawn at 34 inside the
+          // band's own insets, so the pill sits exactly where it did — see ArulScreenHeader.
+          child: SizedBox(
+            height: ArulScreenHeader.bandHeight,
+            child: Padding(
+              padding: ArulScreenHeader.bandPadding,
+              child: Container(
+                height: ArulTokens.headerControlSize,
+                padding: const EdgeInsets.only(
+                  left: _padLeft,
+                  right: _padRight,
                 ),
-                const SizedBox(width: _gap),
-                Text(
-                  l10n.earn,
-                  style: TextStyle(
-                    color: isDark ? ArulTokens.gold : ArulTokens.goldInkLight,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    letterSpacing: 0.2,
-                    // Arul's `bodyMedium` carries `height: 1.45` and a Text merges into it -> a 20px
-                    // line box for 14px of type.
-                    // Flutter puts ~79% of that slack above the baseline -> the word sat visibly low.
-                    height: 1,
-                    leadingDistribution: TextLeadingDistribution.even,
+                decoration: BoxDecoration(
+                  gradient: isDark
+                      ? ArulTokens.earnFillDark
+                      : ArulTokens.earnFillLight,
+                  borderRadius: BorderRadius.circular(
+                    ArulTokens.headerButtonRadius,
                   ),
+                  border: Border.all(
+                    color: isDark
+                        ? ArulTokens.earnBorderDark
+                        : ArulTokens.earnBorderLight,
+                  ),
+                  // Light only: the dark fill is already brighter than its surface -> no lift needed there.
+                  boxShadow: isDark ? null : ArulTokens.controlLift,
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RepaintBoundary(
+                      child: AnimatedBuilder(
+                        animation: _wiggle,
+                        builder: (context, child) => Transform.rotate(
+                          angle: _wiggle.value,
+                          // About the BOTTOM-centre, not the middle -> a parcel rattled, not a badge on a pin.
+                          origin: const Offset(0, 6),
+                          child: child,
+                        ),
+                        child: const Text(
+                          '🎁',
+                          style: TextStyle(fontSize: _emojiSize),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: _gap),
+                    // ONE short word in every locale (ARB description), but a 1.3× OS font size can
+                    // still make it wide -> a ceiling and a shrink, never a wider pill that squeezes
+                    // the screen title beside it.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: _labelMaxWidth,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.earn,
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: isDark
+                                ? ArulTokens.gold
+                                : ArulTokens.goldInkLight,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            letterSpacing: 0.2,
+                            // Arul's `bodyMedium` carries `height: 1.45` and a Text merges into
+                            // it -> a 20px line box for 14px of type. Flutter puts ~79% of that
+                            // slack above the baseline -> the word sat visibly low.
+                            height: 1,
+                            leadingDistribution: TextLeadingDistribution.even,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

@@ -370,7 +370,7 @@ class _RingtoneChips extends ConsumerWidget {
     final items = <WallpaperCategory>[
       WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll),
       if (ref.watch(showNewRingtoneCategoryProvider))
-        const WallpaperCategory(WallpaperCategory.newSlug, kNewCategoryLabel),
+        WallpaperCategory(WallpaperCategory.newSlug, l10n.categoryNew),
       ...categories,
     ];
 
@@ -560,11 +560,18 @@ class RingtoneRow extends ConsumerWidget {
     // A plain read, not a watch -> the NOTIFIER reference itself never changes, so grabbing it here
     // costs this row no extra rebuild. [_PositionRing] uses it to reach the position stream directly.
     final previewNotifier = ref.read(ringtonePreviewProvider.notifier);
-    final setStateValue = ref.watch(ringtoneSetProvider);
-    final setBusy = setStateValue is RingtoneSetLoading;
-    final setLoadingThis =
-        setStateValue is RingtoneSetLoading &&
-        setStateValue.ringtoneId == ringtone.id;
+    // Two booleans, not the whole state: a Set's download rewrites `progress` on every chunk,
+    // and watching the object would rebuild EVERY visible row per chunk — a stutter under the
+    // finger of anyone scrolling while a Set is in flight. A record compares by value, so this
+    // row rebuilds only when one of the two flags flips.
+    final (setBusy, setLoadingThis) = ref.watch(
+      ringtoneSetProvider.select(
+        (s) => (
+          s is RingtoneSetLoading,
+          s is RingtoneSetLoading && s.ringtoneId == ringtone.id,
+        ),
+      ),
+    );
 
     // ONE value drives every now-playing affordance in this row.
     final isPlaying = preview.isPlayingId(ringtone.id);
@@ -1039,12 +1046,18 @@ class _SetPill extends StatelessWidget {
 
   static const double _visualHeight = 32;
 
-  /// The widest the pill may grow.
+  /// The widest the pill may grow — the width English "Set" takes at a 1.3× OS font size.
   ///
-  /// English "Set" is ~56, but Malayalam is far longer and the OS font size can double it.
-  /// A Row lays its inflexible children out FIRST -> unbounded, the pill pushes the row off screen.
-  /// Past this width the label ellipsises instead — a clipped verb beats a broken row.
-  static const double _maxWidth = 120;
+  /// A Row lays its inflexible children out FIRST, so every dp this pill grows is a dp the title
+  /// column loses: the Tamil and Malayalam verbs at 1.3× took ~25 dp from it and song titles broke
+  /// mid-word ("Venkate / sha"). A CONSTANT ceiling, not one that scales: at 1.0 every verb fits
+  /// under it unshrunk, and at 1.3 the column keeps exactly the width the English build gives it,
+  /// so a title that fits in English fits in Tamil. Past the ceiling the LABEL shrinks — a smaller
+  /// verb beats a broken title, and both beat a clipped one.
+  static const double _maxWidth = 66;
+
+  /// Side padding inside the pill. Tighter than a chip's 16 so a 4-glyph verb fits at 1.0 unshrunk.
+  static const double _padding = 12;
 
   @override
   Widget build(BuildContext context) {
@@ -1054,7 +1067,6 @@ class _SetPill extends StatelessWidget {
         : ArulTokens.maroonBorder18;
     final fg = isDark ? ArulTokens.ivoryText86 : ArulTokens.maroon;
     final disabled = onTap == null;
-
     return Semantics(
       button: true,
       enabled: !disabled,
@@ -1074,7 +1086,7 @@ class _SetPill extends StatelessWidget {
                 constraints: const BoxConstraints(maxWidth: _maxWidth),
                 child: Container(
                   height: _visualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: _padding),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
                     border: Border.all(color: border),
@@ -1083,11 +1095,13 @@ class _SetPill extends StatelessWidget {
                     widthFactor: 1,
                     child: busy
                         ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
-                        : Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: ArulTokens.chipActive.copyWith(color: fg),
+                        : FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              style: ArulTokens.chipActive.copyWith(color: fg),
+                            ),
                           ),
                   ),
                 ),

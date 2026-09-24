@@ -18,6 +18,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get categoryAll => 'All';
 
   @override
+  String get categoryNew => 'New';
+
+  @override
   String get feedLiveBadge => 'Live';
 
   @override
@@ -25,6 +28,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get feedEmptyBody => 'Try another category.';
+
+  @override
+  String get feedBrowseAll => 'Browse all';
+
+  @override
+  String get feedLoadingBody => 'Bringing your wallpapers…';
 
   @override
   String get feedErrorTitle => 'Couldn\'t load wallpapers';
@@ -154,7 +163,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get applyTargetLock => 'Lock screen';
 
   @override
-  String get applyTargetBoth => 'Home and lock screen';
+  String get applyTargetBoth => 'Both';
 
   @override
   String get applied => 'Wallpaper applied';

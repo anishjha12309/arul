@@ -361,13 +361,17 @@ class _SignInPillState extends State<_SignInPill> {
 
   Widget _pill(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) {
-        ArulHaptics.tap();
-        _setPressed(true);
-      },
+      // In flight the pill is inert: no dip, no haptic, no second attempt from a repeat tap. The
+      // spinner in the trailing slot is the whole answer to a finger that lands here.
+      onTapDown: widget.busy
+          ? null
+          : (_) {
+              ArulHaptics.tap();
+              _setPressed(true);
+            },
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),
-      onTap: widget.onTap,
+      onTap: widget.busy ? null : widget.onTap,
       child: Container(
         // A MINIMUM, not a height. A wrapped subtitle, or a script that sets ~40% taller per line
         // (Devanagari) at a large OS text size, does not fit a fixed box. The pill GROWS instead of

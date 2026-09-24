@@ -628,7 +628,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
                             AsyncData(:final value) when value.isEmpty =>
                               FeedEmpty(
-                                categoryLabel: _selectedLabel(),
                                 onBrowseAll: () => ref
                                     .read(selectedCategoryProvider.notifier)
                                     .select(WallpaperCategory.allSlug),
@@ -654,21 +653,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     );
   }
 
-  String _selectedLabel() {
-    final slug = ref.read(selectedCategoryProvider);
-    for (final c in ref.read(categoriesProvider)) {
-      if (c.slug == slug) return c.label;
-    }
-    return '';
-  }
-
   Widget _buildReel(List<Wallpaper> items, FeedCardGeometry geo, double h) {
     _syncFeed(items);
 
-    final apply = ref.watch(wallpaperApplyProvider);
-    final share = ref.watch(wallpaperShareProvider);
+    // One bool for the reel: an apply/share download rewrites `progress` per chunk, and watching
+    // the whole state here would rebuild the pager and both action pills on every chunk. Only
+    // [_TransferProgress] follows the number.
     final busy =
-        apply is WallpaperApplyLoading || share is WallpaperSharePreparing;
+        ref.watch(
+          wallpaperApplyProvider.select((s) => s is WallpaperApplyLoading),
+        ) ||
+        ref.watch(
+          wallpaperShareProvider.select((s) => s is WallpaperSharePreparing),
+        );
 
     final m = geo.margin;
 
@@ -702,10 +699,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             child: AnimatedOpacity(
               opacity: _index == items.length - 1 ? 1 : 0,
               // Same end state, reached in one frame -> the mark is present or absent, never fading.
-              duration: context.reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 350),
-              curve: Curves.easeOut,
+              duration: context.reduceMotion ? Duration.zero : Motion.breathe,
+              curve: Motion.settleCurve,
               child: Center(child: _EndOfFeedMark(isDark: isDark)),
             ),
           ),
@@ -785,25 +780,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         ),
 
         // In-flight transfer bar for an apply/share download.
-        if (apply is WallpaperApplyLoading || share is WallpaperSharePreparing)
+        if (busy)
           Positioned(
             top: 0,
             left: m.left,
             right: m.right,
-            child: _TransferProgress(
-              progress: switch ((apply, share)) {
-                (
-                  WallpaperApplyLoading(
-                    stage: WallpaperApplyStage.downloading,
-                    :final progress,
-                  ),
-                  _,
-                ) =>
-                  progress,
-                (_, WallpaperSharePreparing(:final progress)) => progress,
-                _ => null,
-              },
-            ),
+            child: const _TransferProgress(),
           ),
       ],
     );
@@ -1078,26 +1060,39 @@ class _ApplyPill extends StatelessWidget {
                 maxWidth: FeedCardGeometry.applyPillMaxWidth,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 26),
-              // Text only, like the reference: an icon would crowd the longer
-              // verbs (ta/ml/te set "Apply" as a whole word) and this pill is
-              // already the only thing that can be tapped down here.
+              // Glyph + word (owner's call): a primary action for a low-literacy
+              // audience is never a word alone, and the glyph is the one the
+              // apply sheet's CTA already wears. The pill is still the only
+              // thing that can be tapped down here.
               // The ceiling is a hard 240 and the verb may not be cut: at 320dp
               // with the OS at 1.3, Tamil's whole-word "Apply" was ellipsised
-              // inside it. So the label shrinks to fit the pill it is given,
-              // exactly as the sign-in title does — the pill's width is the
-              // reference and the type gives way, never the other way round.
+              // inside it. So glyph and label shrink TOGETHER to fit the pill
+              // they are given, exactly as the sign-in title does — the pill's
+              // width is the reference and the type gives way, never the other
+              // way round.
               child: Center(
                 widthFactor: 1,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    style: ArulTokens.button.copyWith(
-                      fontSize: 16,
-                      color: ArulTokens.maroon,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.wallpaper_rounded,
+                        size: 20,
+                        color: ArulTokens.maroon,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        style: ArulTokens.button.copyWith(
+                          fontSize: 16,
+                          color: ArulTokens.maroon,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1166,13 +1161,34 @@ class _ShareCircle extends StatelessWidget {
 /// and the divider, so the `viewPadding.top` this used to add was a leftover
 /// from the full-bleed layout and dropped the bar into the middle of the card's
 /// top edge.
-class _TransferProgress extends StatelessWidget {
-  const _TransferProgress({required this.progress});
-
-  final double? progress;
+class _TransferProgress extends ConsumerWidget {
+  const _TransferProgress();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // This bar alone re-renders per download chunk; the reel that mounts it watches a bool.
+    // Apply reports a number only while downloading (its other stages are indeterminate).
+    final applyProgress = ref.watch(
+      wallpaperApplyProvider.select(
+        (s) => switch (s) {
+          WallpaperApplyLoading(
+            stage: WallpaperApplyStage.downloading,
+            :final progress,
+          ) =>
+            progress,
+          _ => null,
+        },
+      ),
+    );
+    final shareProgress = ref.watch(
+      wallpaperShareProvider.select(
+        (s) => switch (s) {
+          WallpaperSharePreparing(:final progress) => progress,
+          _ => null,
+        },
+      ),
+    );
+    final progress = applyProgress ?? shareProgress;
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: ArulTokens.feedTopScrim),
       child: SizedBox(

@@ -13,7 +13,6 @@ import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/arul_line_icons.dart';
-import '../widgets/english_only.dart';
 import '../theme/motion.dart';
 
 /// The tabbed scaffold around Wallpapers / Ringtones / Settings — everything else pushes OVER it.
@@ -120,7 +119,14 @@ class _AppShellState extends ConsumerState<AppShell> {
       ref.read(videoPreloadControllerProvider).reclaimDecoders();
     }
     if (from == AppShell.ringtonesBranch) {
-      unawaited(ref.read(ringtonePreviewProvider.notifier).stop());
+      // `stop()` writes the notifier's state at once, and didUpdateWidget runs INSIDE a build ->
+      // Riverpod refuses a provider write mid-build (a debug assert; in release the write lands
+      // while dependents are half-built). One microtask later is after this frame's build phase and
+      // before its paint, so the preview still stops before the branch is out of sight.
+      Future.microtask(() {
+        if (!mounted) return;
+        unawaited(ref.read(ringtonePreviewProvider.notifier).stop());
+      });
     }
   }
 
@@ -138,29 +144,23 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       // The dock FLOATS -> branch content runs full-bleed behind it and scrolls under the capsule.
       extendBody: true,
       body: widget.navigationShell,
-      // `tabRingtones` is demoted (EnglishOnly doc) -> one English tab among translated ones read as
-      // a defect -> the whole dock is English.
-      // The Builder is what puts the label lookup UNDER the override.
-      bottomNavigationBar: EnglishOnly(
-        child: Builder(
-          builder: (context) {
-            final en = AppLocalizations.of(context);
-            return ArulNavDock(
-              currentIndex: widget.navigationShell.currentIndex,
-              onTap: _onTap,
-              items: [
-                // Tab and screen are the same word -> one ARB key; only the tab reads it overridden.
-                (glyph: ArulLineGlyph.wallpapers, label: en.tabWallpapers),
-                (glyph: ArulLineGlyph.ringtones, label: en.tabRingtones),
-                (glyph: ArulLineGlyph.settings, label: en.settingsTitle),
-              ],
-            );
-          },
-        ),
+      // The dock speaks the user's language: the three labels are short everyday words in every
+      // locale (the plural forms that once overflowed were replaced, not demoted), and the cell's
+      // FittedBox still shrinks any word an OS font size makes too wide.
+      bottomNavigationBar: ArulNavDock(
+        currentIndex: widget.navigationShell.currentIndex,
+        onTap: _onTap,
+        items: [
+          // Tab and screen are the same word -> one ARB key for both.
+          (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
+          (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
+          (glyph: ArulLineGlyph.settings, label: l10n.settingsTitle),
+        ],
       ),
     );
   }

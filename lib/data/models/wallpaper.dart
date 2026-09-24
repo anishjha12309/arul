@@ -124,13 +124,6 @@ class WallpaperCategory {
   static const newSlug = '__new__';
 }
 
-/// The New chip's label, in EVERY locale (owner's call).
-///
-/// Shared by both rows so they cannot drift. Deliberately NOT an ARB key: the chip sits between
-/// "All" and the title-cased catalog slugs ("Sivan", "Amman"), which are English in all six
-/// locales, and one translated pill in that row reads as a mistake rather than as a translation.
-const String kNewCategoryLabel = 'New';
-
 /// Slug the browse rows pin to the FIRST chip after All, in BOTH tabs (owner's instruction).
 /// Chip-row order ONLY — it never touches `feed_rank` or the order of items inside a chip.
 const String sivanCategorySlug = 'sivan';

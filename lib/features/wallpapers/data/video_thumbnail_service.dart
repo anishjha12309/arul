@@ -19,9 +19,18 @@ class VideoThumbnailService {
   final MethodChannel _channel;
 
   /// In-flight and completed lookups -> a fling that rebuilds a tile issues ONE native call.
+  /// Bounded: a long session through a catalog without `thumbs/` objects would otherwise grow it
+  /// to catalog size and keep it. Insertion order is the eviction order; the frame itself stays on
+  /// disk, so a re-lookup is one cheap native call, never a second decode.
   final Map<String, Future<File?>> _inFlight = {};
+  static const _maxEntries = 64;
 
   Future<File?> thumbnail(String videoUrl) {
+    final memo = _inFlight[videoUrl];
+    if (memo != null) return memo;
+    while (_inFlight.length >= _maxEntries) {
+      _inFlight.remove(_inFlight.keys.first);
+    }
     return _inFlight.putIfAbsent(videoUrl, () async {
       try {
         final path = await _channel.invokeMethod<String>('thumbnail', {

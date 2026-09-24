@@ -8,6 +8,7 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Refer & Earn — a silk hero card with the WhatsApp CTA, a rewards card, a "how it works" card.
 ///
@@ -72,30 +73,12 @@ class ReferScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header: back arrow + Marcellus title. Spec > Refer & Earn.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                ArulTokens.screenPadding - 4,
-                6,
-                ArulTokens.screenPadding,
-                10,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: Icon(Icons.arrow_back_rounded, color: textPrimary),
-                    tooltip: MaterialLocalizations.of(
-                      context,
-                    ).backButtonTooltip,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    l10n.referTitle,
-                    style: ArulTokens.screenTitle.copyWith(color: textPrimary),
-                  ),
-                ],
-              ),
+            // Header: the one pushed-screen header. Spec > Refer & Earn.
+            ArulPushedHeader(
+              title: l10n.referTitle,
+              color: textPrimary,
+              identifier: 'arul_refer_back',
+              onBack: () => context.pop(),
             ),
             Expanded(
               child: ListView(

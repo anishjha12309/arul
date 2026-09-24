@@ -12,7 +12,6 @@ import '../features/referral/presentation/refer_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/upload/presentation/upload_screen.dart';
-import 'widgets/english_only.dart';
 import '../features/wallpapers/presentation/feed_screen.dart';
 import 'shell/app_shell.dart';
 import 'theme/motion.dart';
@@ -87,19 +86,16 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/settings/notifications',
-      // Whole-screen English (EnglishOnly doc): `remindersTitle` is demoted.
       pageBuilder: (_, state) =>
-          _push(state, const EnglishOnly(child: NotificationSettingsScreen())),
+          _push(state, const NotificationSettingsScreen()),
     ),
     GoRoute(
       path: '/refer',
       pageBuilder: (_, state) => _push(state, const ReferScreen()),
     ),
-    // Whole-screen English (EnglishOnly doc): four upload keys are demoted.
     GoRoute(
       path: '/upload',
-      pageBuilder: (_, state) =>
-          _push(state, const EnglishOnly(child: UploadScreen())),
+      pageBuilder: (_, state) => _push(state, const UploadScreen()),
     ),
     // Privacy / Terms, read in-app.
     // Pushed OVER the shell -> the Settings branch's own dock does not paint across it.

@@ -3,12 +3,30 @@
   "appName": "Arul",
   "appTagline": "SOUTH INDIAN WALLPAPERS",
   "categoryAll": "All",
+  "categoryNew": "New",
+  "@categoryNew": {
+    "description": "The New chip beside All on both browse rows — a WINDOW of recent items, not a category. ONE short everyday word for \"new (ones)\"."
+  },
+  "@categoryAll": {
+    "description": "The first browse chip on both tabs. ONE short everyday word."
+  },
   "feedLiveBadge": "Live",
   "feedEmptyTitle": "Nothing here yet",
   "feedEmptyBody": "Try another category.",
+  "feedBrowseAll": "Browse all",
+  "feedLoadingBody": "Bringing your wallpapers…",
+  "@feedLoadingBody": {
+    "description": "One line under the gopuram while the first catalog page loads. Short; on screen for well under a second on a warm cache."
+  },
+  "@feedBrowseAll": {
+    "description": "Outlined pill under the empty-category state; taps back to the All chip. A short verb phrase (\"see all\")."
+  },
   "feedErrorTitle": "Couldn't load wallpapers",
   "feedErrorBody": "Check your connection and try again.",
   "retry": "Retry",
+  "@retry": {
+    "description": "Compact pill with a refresh icon under every error card. ONE or two short words (\"again\" reads fine beside the icon)."
+  },
   "errorGeneric": "Something went wrong.",
   "signInCaption": "Bring the divine home",
   "signInGoogle": "Continue with Google",
@@ -37,6 +55,9 @@
   "settingsPrivacy": "Privacy policy",
   "settingsVersion": "Version",
   "uploadTitle": "Upload your content",
+  "@uploadTitle": {
+    "description": "Upload screen title; the slot is tight even for English at 320 dp. Two short words at most (\"Upload\")."
+  },
   "uploadBody": "Share your own wallpaper with the community. We review every submission before it goes live.",
   "uploadPickCategory": "Choose a category",
   "uploadPickFile": "Choose a file",
@@ -47,7 +68,10 @@
   "applyTargetTitle": "Set wallpaper on",
   "applyTargetHome": "Home screen",
   "applyTargetLock": "Lock screen",
-  "applyTargetBoth": "Home and lock screen",
+  "applyTargetBoth": "Both",
+  "@applyTargetBoth": {
+    "description": "Label under the phone icon on the third apply-target card (Home / Lock / Both). The three cards share one row on a 360 dp phone, ~100 dp each — ONE short everyday word meaning 'both'."
+  },
   "applied": "Wallpaper applied",
   "appliedLiveFallback": "Live wallpapers aren't supported on this phone, so we set a still image instead.",
   "@appliedLiveFallback": {
@@ -76,11 +100,17 @@
   },
   "tabWallpapers": "Wallpapers",
   "tabRingtones": "Ringtones",
+  "@tabRingtones": {
+    "description": "Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the Earn chip — use the short everyday (often singular, transliterated) word, never a long plural."
+  },
   "earn": "Earn",
   "@earn": {
     "description": "Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase."
   },
   "ringtoneSet": "Set",
+  "@ringtoneSet": {
+    "description": "The Set pill on every ringtone row, max 120 dp wide. ONE short verb; the transliterated \"set\" is fine where that is what people say."
+  },
   "ringtonePreviewSemantic": "Preview",
   "ringtonePreviewUnavailable": "Preview not available yet",
   "ringtoneVolumeMuted": "Turn up the volume to hear this preview",

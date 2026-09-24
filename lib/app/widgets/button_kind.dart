@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/arul_tokens.dart';
 import '../theme/tokens.dart';
 
 enum ArulButtonKind {
@@ -16,7 +17,7 @@ enum ArulButtonKind {
 extension ArulButtonPalette on ArulButtonKind {
   /// (background, foreground) for this kind.
   (Color, Color) colors(ColorScheme scheme) => switch (this) {
-    ArulButtonKind.primary => (ArulColors.cta, Colors.white),
+    ArulButtonKind.primary => (ArulColors.cta, ArulTokens.onCta),
     ArulButtonKind.gold => (ArulColors.gold, ArulColors.ink),
     ArulButtonKind.quiet => (
       scheme.onSurface.withValues(alpha: 0.08),

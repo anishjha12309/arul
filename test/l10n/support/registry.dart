@@ -238,18 +238,13 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   // ── Wallpapers tab states ──────────────────────────────────────────────
   ScreenEntry(
     id: 'feed.loading',
-    textFree: true,
     build: () => const Scaffold(
       body: FeedLoading(margin: EdgeInsets.all(12), radius: 28),
     ),
   ),
   ScreenEntry(
     id: 'feed.empty',
-    unlocalizedEnglish: true,
-    // The category label is interpolated into the body copy -> use the LONGEST of the six, never a short stand-in.
-    build: () => Scaffold(
-      body: FeedEmpty(categoryLabel: 'Ayyappan', onBrowseAll: () {}),
-    ),
+    build: () => Scaffold(body: FeedEmpty(onBrowseAll: () {})),
   ),
   ScreenEntry(
     id: 'feed.error',
@@ -461,7 +456,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   // ── Apply ──────────────────────────────────────────────────────────────
   ScreenEntry(
     id: 'apply.sheet',
-    unlocalizedEnglish: true,
     build: () => SheetHost(
       open: (context) =>
           ApplySheet.show(context, wallpaper: kFakeWallpapers.first),

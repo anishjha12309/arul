@@ -1,18 +1,20 @@
 key,verdict,screens,note
-appName,proven-fits,signin.screen,
+appName,proven-fits,signin.screen signin.backedOutQuick signin.backedOutSlow signin.neverOpened signin.addAccountAbandoned signin.reauthFailed signin.activityClosed signin.noProvider signin.selectorStripped,
 appTagline,slot-measured,,not pump-reachable; measured against its real slot width
 applied,slot-measured,,not pump-reachable; measured against its real slot width
-apply,slot-measured,,not pump-reachable; measured against its real slot width
-applyTargetBoth,slot-measured,,not pump-reachable; measured against its real slot width
+appliedLiveFallback,slot-measured,,not pump-reachable; measured against its real slot width
+apply,proven-fits,ringtones.screen ringtones.screen.locked apply.sheet,headroom warning (<3% spare)
+applyTargetBoth,proven-fits,apply.sheet,
 applyTargetHome,proven-fits,apply.sheet,
 applyTargetLock,proven-fits,apply.sheet,
 applyTargetTitle,proven-fits,apply.sheet,
 cancel,proven-fits,settings.confirm_logout settings.confirm_delete settings.confirm_delete_premium,
-categoryAll,demoted,feed.chips ringtones.screen ringtones.screen.locked,4 finding(s); 1.3-only=true
-earn,demoted,ringtones.screen ringtones.screen.locked,2 finding(s); 1.3-only=true
+categoryAll,proven-fits,feed.chips ringtones.screen ringtones.screen.locked,
+earn,proven-fits,ringtones.screen ringtones.screen.locked,
 errorGeneric,slot-measured,,not pump-reachable; measured against its real slot width
 errorGenericRetry,slot-measured,,not pump-reachable; measured against its real slot width
-feedEmptyBody,slot-measured,,not pump-reachable; measured against its real slot width
+feedBrowseAll,proven-fits,feed.empty,
+feedEmptyBody,proven-fits,feed.empty,
 feedEmptyTitle,proven-fits,feed.empty,
 feedErrorBody,proven-fits,feed.error ringtones.error,
 feedErrorTitle,proven-fits,feed.error,
@@ -24,44 +26,81 @@ premiumBenefitApply,slot-measured,,not pump-reachable; measured against its real
 premiumBenefitLive,slot-measured,,not pump-reachable; measured against its real slot width
 premiumBenefitNew,slot-measured,,not pump-reachable; measured against its real slot width
 premiumBenefitShare,slot-measured,,not pump-reachable; measured against its real slot width
-premiumBrandTitle,proven-fits,settings.screen,
 premiumCelebrateBody,slot-measured,,not pump-reachable; measured against its real slot width
 premiumCelebrateTitle,slot-measured,,not pump-reachable; measured against its real slot width
 premiumComingSoon,slot-measured,,not pump-reachable; measured against its real slot width
 premiumComingSoonToast,slot-measured,,not pump-reachable; measured against its real slot width
-premiumCta,slot-measured,,not pump-reachable; measured against its real slot width
+premiumCta,proven-fits,feed.trial_nudge,
 premiumCtaPaid,slot-measured,,not pump-reachable; measured against its real slot width
+premiumCtaSubscribe,slot-measured,,not pump-reachable; measured against its real slot width
+premiumCtaTrial,proven-fits,feed.trial_nudge,
+premiumEyebrow,slot-measured,,not pump-reachable; measured against its real slot width
+premiumFeatureDaily,slot-measured,,not pump-reachable; measured against its real slot width
+premiumFeatureRingtones,slot-measured,,not pump-reachable; measured against its real slot width
+premiumFeatureWallpapers,slot-measured,,not pump-reachable; measured against its real slot width
 premiumFootnotePaid,slot-measured,,not pump-reachable; measured against its real slot width
 premiumFootnoteTrial,slot-measured,,not pump-reachable; measured against its real slot width
 premiumHeadline,slot-measured,,not pump-reachable; measured against its real slot width
 premiumKeepBrowsing,slot-measured,,not pump-reachable; measured against its real slot width
+premiumNavTitle,slot-measured,,not pump-reachable; measured against its real slot width
+premiumPaidFinePrint,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPerMonth,slot-measured,,not pump-reachable; measured against its real slot width
+premiumPerMonthCaption,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPerkApplyShare,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPerkEvery,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPerkNew,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPlanNote,slot-measured,,not pump-reachable; measured against its real slot width
 premiumPrice,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrCheck,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrExpiresIn,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrInstruction,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrTitlePaid,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrTitleTrial,slot-measured,,not pump-reachable; measured against its real slot width
+premiumQrWaiting,slot-measured,,not pump-reachable; measured against its real slot width
+premiumReassurancePaid,slot-measured,,not pump-reachable; measured against its real slot width
+premiumReassuranceTrial,slot-measured,,not pump-reachable; measured against its real slot width
+premiumRefundedBadge,slot-measured,,not pump-reachable; measured against its real slot width
+premiumResumeCta,slot-measured,,not pump-reachable; measured against its real slot width
+premiumResumeHintPaid,slot-measured,,not pump-reachable; measured against its real slot width
+premiumResumeHintTrial,slot-measured,,not pump-reachable; measured against its real slot width
 premiumScreenSubline,slot-measured,,not pump-reachable; measured against its real slot width
+premiumSelectedUpiApp,slot-measured,,not pump-reachable; measured against its real slot width
 premiumSheetPitch,slot-measured,,not pump-reachable; measured against its real slot width
+premiumSocialProof,slot-measured,,not pump-reachable; measured against its real slot width
 premiumSub,slot-measured,,not pump-reachable; measured against its real slot width
+premiumTagline,slot-measured,,not pump-reachable; measured against its real slot width
 premiumTitle,slot-measured,,not pump-reachable; measured against its real slot width
+premiumTrialFinePrint,slot-measured,,not pump-reachable; measured against its real slot width
+premiumTrialLeadPrefix,slot-measured,,not pump-reachable; measured against its real slot width
 premiumTrialNote,slot-measured,,not pump-reachable; measured against its real slot width
 premiumTrialPill,slot-measured,,not pump-reachable; measured against its real slot width
+premiumUpiAppGeneric,slot-measured,,not pump-reachable; measured against its real slot width
 premiumWelcomeToast,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseActivateFailed,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseCancelled,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseConfirmationLate,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseErrorGeneric,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseErrorNetwork,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseInProgress,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseIntentFailed,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseInterrupted,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseNotCompleted,slot-measured,,not pump-reachable; measured against its real slot width
+purchaseUpiLaunchFailed,slot-measured,,not pump-reachable; measured against its real slot width
+pushChannelName,slot-measured,,not pump-reachable; measured against its real slot width
 referEmpty,proven-fits,refer.screen,
 referHeroBody,proven-fits,refer.screen,
 referHeroTitle,proven-fits,refer.screen,
-referHowItWorks,demoted,refer.screen,1 finding(s); 1.3-only=false
+referHowItWorks,proven-fits,refer.screen,
 referNotNow,proven-fits,refer.share_moment refer.share_moment.ringtone,
 referRewardDays,proven-fits,refer.screen,
 referRewardsLabel,proven-fits,refer.screen,
 referShareCta,proven-fits,refer.share_moment refer.share_moment.ringtone,
 referShareMessage,system-ui,,rendered by the OS (share sheet / notification shade)
-referShareWhatsapp,demoted,refer.screen,4 finding(s); 1.3-only=false
+referShareWhatsapp,proven-fits,refer.screen,
 referStep1,proven-fits,refer.screen,
 referStep2,proven-fits,refer.screen,
 referStep3,proven-fits,refer.screen,
-referTitle,demoted,settings.screen refer.screen,4 finding(s); 1.3-only=true
+referTitle,proven-fits,settings.screen refer.screen,
 remindersComingUp,slot-measured,,not pump-reachable; measured against its real slot width
 remindersMonthApr,slot-measured,,not pump-reachable; measured against its real slot width
 remindersMonthAug,slot-measured,,not pump-reachable; measured against its real slot width
@@ -78,18 +117,20 @@ remindersMonthSep,slot-measured,,not pump-reachable; measured against its real s
 remindersPermissionToast,slot-measured,,not pump-reachable; measured against its real slot width
 remindersScheduleNote,slot-measured,,not pump-reachable; measured against its real slot width
 remindersTimeLabel,slot-measured,,not pump-reachable; measured against its real slot width
-remindersTitle,demoted,settings.screen notifications.screen,1 finding(s); 1.3-only=true
+remindersTitle,proven-fits,settings.screen notifications.screen,
 remindersToggleSub,proven-fits,notifications.screen,
 remindersToggleTitle,proven-fits,notifications.screen,
-retry,demoted,feed.error feed.offline ringtones.error,6 finding(s); 1.3-only=true
+retry,proven-fits,feed.error feed.offline ringtones.error,
+ringtoneCurrentBadge,slot-measured,,not pump-reachable; measured against its real slot width
 ringtonePreviewSemantic,slot-measured,,not pump-reachable; measured against its real slot width
 ringtonePreviewUnavailable,slot-measured,,not pump-reachable; measured against its real slot width
-ringtoneSet,demoted,ringtones.screen ringtones.screen.locked,48 finding(s); 1.3-only=false
+ringtoneSet,proven-fits,ringtones.screen ringtones.screen.locked,
 ringtoneSetApplying,slot-measured,,not pump-reachable; measured against its real slot width
 ringtoneSetDownloading,slot-measured,,not pump-reachable; measured against its real slot width
 ringtoneSetFailed,slot-measured,,not pump-reachable; measured against its real slot width
 ringtoneSetPreparing,slot-measured,,not pump-reachable; measured against its real slot width
 ringtoneSetSuccess,slot-measured,,not pump-reachable; measured against its real slot width
+ringtoneVolumeMuted,slot-measured,,not pump-reachable; measured against its real slot width
 ringtonesEmptyBody,proven-fits,ringtones.empty,
 ringtonesEmptyTitle,proven-fits,ringtones.empty,
 ringtonesErrorTitle,proven-fits,ringtones.error,
@@ -97,25 +138,28 @@ save,proven-fits,settings.edit_name_sheet,
 settingsAbout,slot-measured,,not pump-reachable; measured against its real slot width
 settingsAppearance,slot-measured,,not pump-reachable; measured against its real slot width
 settingsContent,slot-measured,,not pump-reachable; measured against its real slot width
-settingsDeleteAccount,proven-fits,settings.screen settings.confirm_delete settings.confirm_delete_premium,
+settingsDeleteAccount,proven-fits,settings.help_sheet settings.help_sheet.trialing settings.confirm_delete settings.confirm_delete_premium,
 settingsDeleteConfirmBody,proven-fits,settings.confirm_delete,
 settingsDeleteConfirmBodyPremium,demoted,settings.confirm_delete_premium,2 finding(s); 1.3-only=true
 settingsDeleteConfirmTitle,proven-fits,settings.confirm_delete settings.confirm_delete_premium,
-settingsEditNameSub,demoted,settings.edit_name_sheet,3 finding(s); 1.3-only=false
+settingsEditNameSub,proven-fits,settings.edit_name_sheet,
 settingsEditNameTitle,proven-fits,settings.edit_name_sheet,
-settingsFallbackEmail,demoted,settings.screen,8 finding(s); 1.3-only=false
-settingsFallbackName,demoted,settings.screen,4 finding(s); 1.3-only=false
+settingsFallbackEmail,layout-defect,settings.screen,fires in English too — not demotable
+settingsFallbackName,proven-fits,settings.screen,
+settingsHelpDeleteSub,proven-fits,settings.help_sheet settings.help_sheet.trialing,
+settingsHelpManage,proven-fits,settings.help_sheet.trialing,
+settingsHelpSupport,proven-fits,settings.help_sheet settings.help_sheet.trialing,
+settingsHelpSupportSub,proven-fits,settings.help_sheet settings.help_sheet.trialing,
 settingsLanguage,proven-fits,settings.screen settings.language_sheet,
 settingsLogout,proven-fits,settings.screen settings.confirm_logout,
 settingsLogoutConfirmBody,proven-fits,settings.confirm_logout,
 settingsLogoutConfirmTitle,proven-fits,settings.confirm_logout,
-settingsNeedHelp,proven-fits,settings.screen,
+settingsNeedHelp,proven-fits,settings.screen settings.help_sheet settings.help_sheet.trialing,
 settingsNeedHelpSub,proven-fits,settings.screen,
 settingsNoEmailApp,slot-measured,,not pump-reachable; measured against its real slot width
 settingsPremiumSubActive,slot-measured,,not pump-reachable; measured against its real slot width
 settingsPremiumSubCancelled,slot-measured,,not pump-reachable; measured against its real slot width
-settingsPremiumSubLocked,proven-fits,settings.screen,
-settingsPremiumSubTrial,slot-measured,,not pump-reachable; measured against its real slot width
+settingsPremiumSubTrial,proven-fits,settings.help_sheet.trialing,
 settingsPrivacy,proven-fits,settings.screen,
 settingsReferSub,proven-fits,settings.screen,
 settingsRefund,proven-fits,settings.screen,
@@ -128,16 +172,17 @@ settingsTellFriend,proven-fits,settings.screen,
 settingsTellFriendSub,proven-fits,settings.screen,
 settingsTerms,proven-fits,settings.screen,
 settingsTheme,proven-fits,settings.screen settings.theme_sheet,
-settingsTitle,proven-fits,settings.screen shell.dock,headroom warning (<3% spare)
+settingsTitle,proven-fits,settings.screen shell.dock,
 settingsUpload,proven-fits,settings.screen,
 settingsUploadSub,proven-fits,settings.screen,
 settingsVersion,slot-measured,,not pump-reachable; measured against its real slot width
 share,slot-measured,,not pump-reachable; measured against its real slot width
-signInBody,slot-measured,,not pump-reachable; measured against its real slot width
-signInGoogle,layout-defect,signin.screen,fires in English too — not demotable
-signInHeadline,slot-measured,,not pump-reachable; measured against its real slot width
-signInTerms,slot-measured,,not pump-reachable; measured against its real slot width
-tabRingtones,demoted,ringtones.screen ringtones.screen.locked shell.dock,16 finding(s); 1.3-only=false
+signInCaption,proven-fits,signin.screen signin.backedOutQuick signin.backedOutSlow signin.neverOpened signin.addAccountAbandoned signin.reauthFailed signin.activityClosed signin.noProvider signin.selectorStripped,
+signInGoogle,proven-fits,signin.screen signin.backedOutQuick signin.backedOutSlow signin.neverOpened signin.addAccountAbandoned signin.reauthFailed signin.activityClosed signin.noProvider signin.selectorStripped,
+signInNudgeRetry,proven-fits,signin.backedOutQuick signin.backedOutSlow signin.neverOpened signin.addAccountAbandoned signin.reauthFailed signin.activityClosed signin.noProvider signin.selectorStripped,
+signInSubtitleExchanging,slot-measured,,not pump-reachable; measured against its real slot width
+signInSubtitleIdle,proven-fits,signin.screen,
+tabRingtones,proven-fits,ringtones.screen ringtones.screen.locked upload.screen shell.dock,
 tabWallpapers,proven-fits,upload.screen shell.dock,
 themeDark,proven-fits,settings.theme_sheet,
 themeDarkSub,proven-fits,settings.theme_sheet,
@@ -146,6 +191,14 @@ themeLightSub,proven-fits,settings.theme_sheet,
 themeSystem,slot-measured,,not pump-reachable; measured against its real slot width
 themeSystemDefault,proven-fits,settings.screen settings.theme_sheet,
 themeSystemSub,proven-fits,settings.theme_sheet,
+trialNudgeDismiss,slot-measured,,not pump-reachable; measured against its real slot width
+trialNudgeRow,proven-fits,feed.trial_nudge,
+trialReminderBody,slot-measured,,not pump-reachable; measured against its real slot width
+trialReminderTitle,slot-measured,,not pump-reachable; measured against its real slot width
+upiPickerLastUsed,slot-measured,,not pump-reachable; measured against its real slot width
+upiPickerQrSubtitle,slot-measured,,not pump-reachable; measured against its real slot width
+upiPickerQrTitle,slot-measured,,not pump-reachable; measured against its real slot width
+upiPickerTitle,slot-measured,,not pump-reachable; measured against its real slot width
 uploadBody,slot-measured,,not pump-reachable; measured against its real slot width
 uploadCategoryLabel,proven-fits,upload.screen,
 uploadComingSoon,slot-measured,,not pump-reachable; measured against its real slot width
@@ -159,7 +212,7 @@ uploadPickCategory,slot-measured,,not pump-reachable; measured against its real 
 uploadPickFile,slot-measured,,not pump-reachable; measured against its real slot width
 uploadPickZoneSub,proven-fits,upload.screen,
 uploadPickZoneSubAudio,slot-measured,,not pump-reachable; measured against its real slot width
-uploadPickZoneTitle,demoted,upload.screen,13 finding(s); 1.3-only=false
+uploadPickZoneTitle,proven-fits,upload.screen,
 uploadPickZoneTitleAudio,slot-measured,,not pump-reachable; measured against its real slot width
 uploadRejectAudio,slot-measured,,not pump-reachable; measured against its real slot width
 uploadRejectLive,slot-measured,,not pump-reachable; measured against its real slot width
@@ -170,10 +223,10 @@ uploadShareMomentBody,proven-fits,refer.share_moment,
 uploadShareMomentBodyRingtone,proven-fits,refer.share_moment.ringtone,
 uploadShareMomentTitle,proven-fits,refer.share_moment refer.share_moment.ringtone,
 uploadSpecNote,slot-measured,,not pump-reachable; measured against its real slot width
-uploadSubmitCta,demoted,upload.screen,3 finding(s); 1.3-only=true
+uploadSubmitCta,proven-fits,upload.screen,
 uploadSuccessToast,slot-measured,,not pump-reachable; measured against its real slot width
-uploadTitle,demoted,settings.screen upload.screen,19 finding(s); 1.3-only=false
-uploadTitleHint,demoted,upload.screen,5 finding(s); 1.3-only=false
+uploadTitle,proven-fits,settings.screen upload.screen,
+uploadTitleHint,proven-fits,upload.screen,headroom warning (<3% spare)
 uploadTitleHintRingtone,slot-measured,,not pump-reachable; measured against its real slot width
 uploadTitleLabel,slot-measured,,not pump-reachable; measured against its real slot width
 uploadTitleOptional,slot-measured,,not pump-reachable; measured against its real slot width
