@@ -119,6 +119,12 @@ silent on screen: the event counts it, the user sees no failure. Once the resume
 `trial_started`, `subscription_active` and `payment_failed` — `checkout_started` keeps `upi_app` and
 fires once per decision, never on a resume.
 
+The return page adds `trial_return_shown` (once per open) and `return_video_start`/`return_video_muted`
+beside `onboarding_video_*` — all GA4-only, `lang` = the cut that PLAYED (`hi` plays `en`). A tap
+from that page stamps `surface: return` on `checkout_started`, `trial_started`, `subscription_active`
+and `payment_failed`; the trial screen sends no `surface`, so an absent key IS the trial screen. The
+sign-in events use the same parameter name for their own values — filter by event before splitting.
+
 The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES and the PostHog
 allow-list are exact sets pinned by tests: every sink matches the literal, a typo drops silently.
 

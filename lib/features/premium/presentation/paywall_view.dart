@@ -145,7 +145,7 @@ class ArulPaywallView extends StatelessWidget {
       child: Column(
         children: [
           // Pinned, so the way out stays reachable however far the sell scrolls.
-          _NavRow(onBack: onBack),
+          PaywallNavRow(onBack: onBack),
           if (video == null) ...[
             _HeaderBlock(showSocialProof: showSocialProof),
             // The handoff's ~745pt page is SHORTER than the phone it lands on.
@@ -251,7 +251,7 @@ class ArulPaywallLoading extends StatelessWidget {
     return PaywallGround(
       child: Column(
         children: [
-          _NavRow(onBack: onBack),
+          PaywallNavRow(onBack: onBack),
           const Expanded(
             child: Center(
               child: ArulSpinner(
@@ -267,9 +267,9 @@ class ArulPaywallLoading extends StatelessWidget {
   }
 }
 
-/// Back ring + centred "SUBSCRIPTION", on the header ground.
-class _NavRow extends StatelessWidget {
-  const _NavRow({required this.onBack});
+/// Back ring + centred "SUBSCRIPTION", on the header ground — the paywall's and the return page's.
+class PaywallNavRow extends StatelessWidget {
+  const PaywallNavRow({super.key, required this.onBack});
 
   final VoidCallback onBack;
 

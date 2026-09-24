@@ -76,6 +76,17 @@ ONLY an overshooting clip, with a `-maxrate` sized from its own duration, so one
 instead of every clip being pre-emptively starved. Bulk statics go through `sharp` (lanczos3 plus
 sharpen when upscaling) — tuned to match this recipe, not byte-identical to it.
 
+**Paywall clips** (`onboarding/<lang>.mp4`, `onboarding/return/<lang>.mp4` — the only AUDIBLE
+media): 16:9 at 1024×576 (both dimensions on the video rule), and **level every cut to −14 LUFS** —
+dubs arrive near −14 while an English master arrived at −6 and clipping, so switching language
+jumped the volume. Two-pass `loudnorm` (measure, then feed `measured_*` back with `linear=true`),
+then a limiter:
+```bash
+ffmpeg -i in.mp4 -map 0:v:0 -map 0:a:0 -sn -map_metadata -1   -vf "fps=25,scale=1024:576:flags=lanczos:out_range=tv,unsharp=3:3:0.3:3:3:0.0,setsar=1,format=yuv420p"   -c:v libx264 -profile:v high -preset slow -crf 25 -maxrate 700k -bufsize 1400k -g 50   -af "loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=…:measured_TP=…:measured_LRA=…:measured_thresh=…:offset=…:linear=true,aresample=48000,alimiter=limit=0.84:level=false"   -c:a aac -b:a 64k -ar 48000 -ac 2 -movflags +faststart out/<lang>.mp4
+```
+Dubs ship with a `mov_text` subtitle track — `-sn` drops it. A new cut or re-cut is an upload plus a
+`feature_flags.<onboarding|return>_video` edit (`langs`, `version` → `?v=`), never a release.
+
 **Ringtone audio:**
 ```bash
 ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3

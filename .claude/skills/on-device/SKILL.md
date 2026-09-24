@@ -112,6 +112,10 @@ fails unelevated, and a phone on Jio cannot be forced down to 2G/3G. For plain o
 data off at the moment of the tap — `svc data enable` leaves `mobile_data=1` while the radio is
 still down, so assert the state you think you set.
 
+**Return page, no real mandate:** `DEBUG_RETURN_PAGE=on` (debug) opens it from any paywall; its button
+toasts. Uncut clips: `DEBUG_RETURN_CLIP_DIR=/data/user/0/com.hsrutility.arul/files/return`, filled via
+`/data/local/tmp` + `run-as … cp` — a file `adb push`ed into `/sdcard/Android/data/<pkg>/` is `EACCES`.
+
 **Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
 for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`
 between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: cmd.exe

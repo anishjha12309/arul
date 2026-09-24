@@ -24,7 +24,7 @@ SILENTLY — a software fallback, a green edge strip, or a black card.
 - **Poster first, mounted under the texture, revealed on `onRenderedFirstFrame`.** No shimmer or
   spinner: an undecoded live card looks static, so "nothing is moving" is cold-cache latency — check
   the pool, not the catalog. Poster, full image and texture share one `cropAlignment`.
-- **Audio is decided at CREATE, not per open.** Only the paywall's onboarding clip is audible.
+- **Audio is decided at CREATE, not per open.** Only the paywall's one shared player is audible.
 
 Read [docs/video-feed.md](../../docs/video-feed.md), and
 [docs/media-conventions.md](../../docs/media-conventions.md) before changing an encode.

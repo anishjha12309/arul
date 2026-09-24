@@ -221,6 +221,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         // conversion is a late catch-up: the process that knew the path is gone, and a guess is worse.
         'method': ?_checkoutMethod,
         'target_app': ?_checkoutTargetApp,
+        'surface': ?_checkoutSurface,
       },
     );
     if (event == ArulEvents.trialStarted) {
@@ -246,6 +247,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'method': method,
         'target_app': ?targetApp,
         'value': ?price,
+        'surface': ?_checkoutSurface,
       },
     );
   }
@@ -266,6 +268,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         // Which handoff was in flight when it died — the whole point of the event.
         // Null only if a failure somehow precedes the tap.
         'method': ?_checkoutMethod,
+        'surface': ?_checkoutSurface,
       },
     );
   }
@@ -295,6 +298,11 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// The UPI package the handoff targeted, when [_checkoutMethod] is `upi_app`; null otherwise.
   String? _checkoutTargetApp;
+
+  /// Which screen the tap came from — `return` for the return page, null for the trial screen —
+  /// riding the checkout, conversion and failure events so "did the return page win trials" is one
+  /// breakdown. Set per decision: at [startTrial] and at [resumeIntent], never inherited.
+  String? _checkoutSurface;
 
   /// Monthly price in rupees from the remote app_config; null until it loads.
   /// Read synchronously from the already-cached provider -> no await on the success path.
@@ -372,6 +380,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     String? targetApp,
     bool trialEligible = false,
     bool asQr = false,
+    String? surface,
   }) async {
     // A resumable attempt owns the screen: its own order is still live at PhonePe, and a second
     // initiate would revoke it. Resume, [switchApp], or the deadline — nothing else moves from
@@ -390,6 +399,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     _clearIntentAttempt();
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
+    _checkoutSurface = surface;
     // The user has committed -> count the checkout BEFORE any network call.
     // So an initiate failure reads as an abandoned checkout, not as nothing having happened.
     // `upi_qr` is its own method, not `upi_app` with a package: the package was never launched and
@@ -982,7 +992,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// No `/payments/initiate` (a second one revokes the live order and burns the claim window) and no
   /// second `checkout_started` (the funnel counts ONE checkout per decision). The deadline is the
   /// order's, so it is carried over untouched however many times this runs.
-  Future<void> resumeIntent() async {
+  Future<void> resumeIntent({String? surface}) async {
     // Not resumable = already processing, already settled, or gone. Never a second launch.
     // Mid-switch counts as gone: the state still reads resumable while the abandon is in flight,
     // and re-opening an order that is being revoked server-side sends the user to a dead sheet.
@@ -993,6 +1003,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     // The ONE marker that this attempt came back through the resume button. Terminal events read it:
     // `trial_started`/`subscription_active` via _trackConversion, `payment_failed` via _fail.
     _checkoutMethod = 'upi_app_resumed';
+    _checkoutSurface = surface;
     _setState(const PurchaseProcessing());
 
     final launched = await UpiApps.launch(
@@ -1045,6 +1056,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     String targetApp, {
     required bool trialEligible,
     bool asQr = false,
+    String? surface,
   }) async {
     final resumable = _resumableState;
     if (resumable == null ||
@@ -1071,6 +1083,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       targetApp: targetApp,
       trialEligible: trialEligible,
       asQr: asQr,
+      surface: surface,
     );
   }
 

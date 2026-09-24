@@ -82,8 +82,11 @@ on fade-in.
 
 `create(audio:)` picks the `AudioAttributes` and focus handling once, so a player built muted never
 takes audio focus — raising its volume later changes focus behaviour not at all. Everything except
-the paywall's onboarding clip stays `audio: false`: a preview that took focus would pause the user's
-music while they browsed. The clip's URL is the one thing `Log.i("audible open")` prints, which
+the paywall's ONE audible player stays `audio: false`: a preview that took focus would pause the user's
+music while they browsed. The onboarding clip and the return page's clip SHARE that player — the feed
+under `/premium` still holds its decoders, so a second one would break the budget. Hand it over by
+giving the other card `null`, and take it back only after the return page's exit plus one frame: its
+card pauses the player as it disposes, which silenced a clip handed back any earlier. The clip's URL is the one thing `Log.i("audible open")` prints, which
 matters because the language cuts are the same footage and a screenshot cannot tell them apart.
 
 ## Noise to ignore

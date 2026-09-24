@@ -12,7 +12,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Decoder capability APIs untrusted — attempt and degrade, never query and assume
 - [ ] Leaving Wallpapers pauses at once, frees decoders only after a grace; apply, backgrounding and detach stay immediate
 - [ ] Poster paints FIRST under the texture, revealed on `onRenderedFirstFrame` (an undecoded live card looks static); poster, image and texture share one `cropAlignment`
-- [ ] Audio decided at CREATE, not per open; all but the paywall clip stays `audio: false`
+- [ ] Audio decided at CREATE, not per open; all but the paywall's ONE player (onboarding + return clip, shared) stays `audio: false`
 
 ## Wallpaper apply
 - [ ] Static apply hands the OS a bitmap ALREADY centre-cropped to the display aspect; never `visibleCropHint=null` on the raw file
@@ -61,6 +61,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial
 - [ ] The confirmation poll TOLERATES network failure and OUTLIVES the paywall; never-reached says confirmation is late, not the refund line
 - [ ] A return from the UPI app with the order OPEN is RESUMABLE (same link, same app, no new initiate, no second `checkout_started`); only picking ANOTHER app (fresh checkout with it, chip never frozen) or the `QRexpire` deadline (5 min on production links; 10–15 min fallback) abandons — SILENTLY, no "start over" button, no failure toast
+- [ ] On the TRIAL sell EVERY unapproved return (→ resumable) pushes the return page — never on the ₹199 sell, never stacked; its button keeps the resume/switch/QR rules; it BORROWS the one audible player and hands it back only after its exit + a frame; `return_video.enabled:false` restores the plain resumable paywall
 - [ ] Delete account: revoke → tombstone → cascade → refresh-jti denylist
 
 ## Browse
