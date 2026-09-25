@@ -346,7 +346,7 @@
   "trialReminderBody": "You didn't finish setting up. Tap to try again — it takes a moment.",
   "comeBackTitle": "Your wallpaper is ready",
   "@comeBackTitle": {
-    "description": "The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below, exp_reminder arm). Owner-approved copy."
+    "description": "The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below). Owner-approved copy."
   },
   "comeBackBody": "One tap to sign in and set it.",
   "premiumSelectedUpiApp": "Selected UPI App",

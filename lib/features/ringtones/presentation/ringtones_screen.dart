@@ -1039,6 +1039,10 @@ class _SetPill extends StatelessWidget {
   /// Side padding inside the pill. Tighter than a chip's 16 so a 4-glyph verb fits at 1.0 unshrunk.
   static const double _padding = 12;
 
+  /// The line box centres, the ink does not: the Devanagari and Kannada verbs sit ~3 dp high in
+  /// it (measured on device), so they drop by that much. The verb per locale is fixed.
+  static const _inkNudge = <String, double>{'hi': 2.7, 'kn': 3.4};
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1090,18 +1094,27 @@ class _SetPill extends StatelessWidget {
                       widthFactor: 1,
                       child: busy
                           ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
-                          : FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                // A control, like the dock labels: past 1.0× the room goes to the
-                                // ringtone's name, which must show whole.
-                                textScaler: MediaQuery.textScalerOf(
-                                  context,
-                                ).clamp(maxScaleFactor: 1.0),
-                                style: ArulTokens.chipActive.copyWith(
-                                  color: fg,
+                          : Transform.translate(
+                              offset: Offset(
+                                0,
+                                _inkNudge[Localizations.localeOf(
+                                      context,
+                                    ).languageCode] ??
+                                    0,
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  // A control, like the dock labels: past 1.0× the room goes to the
+                                  // ringtone's name, which must show whole.
+                                  textScaler: MediaQuery.textScalerOf(
+                                    context,
+                                  ).clamp(maxScaleFactor: 1.0),
+                                  style: ArulTokens.chipActive.copyWith(
+                                    color: fg,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1131,6 +1144,7 @@ class _FitTitle extends StatelessWidget {
   /// An ABSOLUTE floor, not a fraction of the user's scale: at 1.5× a relative floor still left
   /// 16 sp text in an 86 dp slot, while the whole point of 1.5× is a readable title.
   static const double _minSp = 12;
+
   /// Coarse on purpose: a few shared sizes read as a system; a size per title reads as uneven rows.
   static const double _step = 0.12;
 

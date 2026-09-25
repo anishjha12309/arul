@@ -22,6 +22,7 @@ import '../domain/auth_service.dart';
 import '../domain/regional_art.dart';
 import '../providers/auth_providers.dart';
 import '../providers/launch_art_provider.dart';
+import '../providers/launch_clip_provider.dart';
 import 'widgets/launch_backdrop.dart';
 import '../../../app/theme/motion.dart';
 
@@ -98,6 +99,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     unawaited(_geoAsk);
     ref.read(experimentKillSwitchProvider);
     ref.read(comeBackReminderProvider);
+    ref.read(launchClipProvider);
 
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {

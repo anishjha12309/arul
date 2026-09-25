@@ -87,9 +87,14 @@ brown-screen duration fell in two steps, to zero only once both were in.
   yet). At the cap `closeLiveWindow()` makes a late answer store-only (next launch), and
   `LaunchArtNotifier.settle()` fixes the poster once. The control arm stores the region, never its
   language (`Experiments.geoLanguageApplies`).
-- **The regional arm is poster-only on every tier** (a clip per region costs MBs; a streamed one
-  fights the sign-in). A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift
-  a face: `RegionalPoster.zoom` about `pivot` puts it near 0.3 of the height, clear of the panel.
+- **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face.**
+  `RegionalPoster.zoom` about `pivot` moves it; the framing is the owner's, judged by eye. The render
+  matrix (`regional_wall_matrix_test.dart`) gates type and clip-on-poster, and reports faces.
+- **The poster's own live clip is a bonus, never the base.** It downloads (catalog row by
+  `wallpaperId`, feed cache, never a bundled key) only after the wall painted AND Google's surface
+  showed or settled — never signed in, on Data Saver or a poster-rule phone. It swaps onto the ONE
+  shared auth player (never a second decoder) paused, fades in on frame 0 = the poster's pixels,
+  then loops; a launch clip must stay one deity for its whole loop. Any failure keeps the poster.
 - **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
   what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
   second picker.

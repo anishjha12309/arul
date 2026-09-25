@@ -43,6 +43,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A stripped picker (`selectorStripped`) reopens the PICKER once, never the dismissed sheet
 - [ ] A refresh that proves the session dead signs the UI out and sends any signed-in screen to the wall
 - [ ] A Keystore refusal moves the session to app-private storage, sticky per install (`arul_keystore_refused`)
+- [ ] The regional wall's live clip downloads only after the poster painted AND Google's surface showed/settled, never signed in, never on Data Saver or a poster-rule phone; any failure keeps the poster, silently
 
 ## Premium / payments
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user

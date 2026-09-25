@@ -1276,7 +1276,7 @@ abstract class AppLocalizations {
   /// **'You didn\'t finish setting up. Tap to try again — it takes a moment.'**
   String get trialReminderBody;
 
-  /// The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below, exp_reminder arm). Owner-approved copy.
+  /// The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below). Owner-approved copy.
   ///
   /// In en, this message translates to:
   /// **'Your wallpaper is ready'**

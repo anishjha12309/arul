@@ -1,5 +1,5 @@
-// B3's contract: ONE post per install, armed at the first Google surface on Android 12 and below in
-// the reminder arm, and disarmed by anything that shows the person came back.
+// The come-back reminder's contract: ONE post per install, armed at the first Google surface on
+// every Android 12L-and-below install, and disarmed by anything that shows the person came back.
 
 import 'dart:async';
 
@@ -46,7 +46,6 @@ void main() {
   late _FakeNotifications notifications;
 
   Future<ComeBackReminder> reminder({
-    bool active = true,
     int? sdk = 31,
     Map<String, Object> stored = const {},
   }) async {
@@ -56,7 +55,6 @@ void main() {
     return ComeBackReminder(
       prefs: prefs,
       notifications: notifications,
-      active: active,
       sdkInt: () async => sdk,
       copy: () => (title: 'Your wallpaper is ready', body: 'One tap'),
       picture: () async => '/files/poster.webp',
@@ -78,16 +76,23 @@ void main() {
     },
   );
 
-  test('never on Android 13+, an unknown SDK or the control arm', () async {
-    for (final (active, sdk) in [
-      (true, 33),
-      (true, 36),
-      (true, null),
-      (false, 26),
-    ]) {
-      final r = await reminder(active: active, sdk: sdk);
+  test('never on Android 13+ or an unknown SDK', () async {
+    for (final sdk in [33, 36, null]) {
+      final r = await reminder(sdk: sdk);
       await r.onSurfaceShown();
-      expect(notifications.armed, isEmpty, reason: '$active/$sdk');
+      expect(notifications.armed, isEmpty, reason: '$sdk');
+    }
+  });
+
+  test('every install on Android 12L and below, with no coin', () async {
+    for (final sdk in [26, 28, 31, 32]) {
+      // An older build's stored control arm no longer decides anything.
+      final r = await reminder(
+        sdk: sdk,
+        stored: {'arul_exp_reminder_v1': 'control'},
+      );
+      await r.onSurfaceShown();
+      expect(notifications.armed, hasLength(1), reason: '$sdk');
     }
   });
 

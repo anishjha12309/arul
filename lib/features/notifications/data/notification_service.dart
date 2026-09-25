@@ -26,7 +26,7 @@ class NotificationService {
   /// The unfinished-trial reminder. One at a time, so ONE id.
   static const _trialReminderId = 3000;
 
-  /// The come-back reminder (sign-in factorial, `exp_reminder`). Once per install, so ONE id.
+  /// The come-back reminder (Android 12L and below). Once per install, so ONE id.
   static const _comeBackId = 3001;
 
   /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.

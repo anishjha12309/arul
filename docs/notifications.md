@@ -44,11 +44,12 @@ exactly one Arul channel. No screen promises a notification.
   the auth seed, never awaited), and ANY premium read retires marker and reminder.
 - **The trial reminder NEVER requests the notification permission** — it fires from a payment
   failing, which is not an opt-in. No permission means no reminder; the feed row covers that user.
-- **The come-back reminder (`exp_reminder`) is Android 12L and below only** (SDK ≤ 32): 13+ needs
-  `POST_NOTIFICATIONS`, and the wall must never ask. ONE post per install, armed ~60 min after the
-  install's FIRST Google surface (`SignInPhase.signals`), disarmed by any settled attempt, any
-  resume and any cold start. An arm still awaiting the plugin when a disarm lands cancels what it
-  scheduled (`_epoch`). The big picture waits for `/geo` (the first surface lands before it) and
+- **The come-back reminder is Android 12L and below only** (SDK ≤ 32), for EVERY install on that
+  tier — no coin, no kill switch: 13+ needs `POST_NOTIFICATIONS`, and the wall must never ask. ONE
+  post per install, armed ~60 min after the install's FIRST Google surface (`SignInPhase.signals`),
+  disarmed by any settled attempt, any resume and any cold start. An arm still awaiting the plugin
+  when a disarm lands cancels what it scheduled (`_epoch`). The big picture waits for `/geo` (the
+  first surface lands before it) and
   is a FILE the plugin reads at post time, maybe from the boot receiver with no Flutter alive.
   Android crops a big picture to its CENTRE band — a 9:16 poster's waist, faces cut off, seen on
   device — so the app writes the 2:1 band around `RegionalPoster.faceY`. On a 13+ test phone:

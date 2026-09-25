@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
 import '../api/api_client.dart';
+import '../config/build_info.dart';
 import '../perf/boot_trace.dart';
 import 'locale_provider.dart';
 import 'shared_preferences_provider.dart';
@@ -83,14 +84,15 @@ class GeoLanguageService {
 
   Future<Map<String, dynamic>> _ask() {
     // Test seam: `DEBUG_GEO_LANG=ta` stands in for the Worker -> the Tamil path walks on a phone in the north.
-    // Const-gated on kDebugMode -> release builds compile it away.
+    // Const-gated on the define -> a build without it compiles the seam away; a sideload release
+    // may carry it (never a Play install), so the regional wall is walkable at release speed.
     // `DEBUG_GEO_REGION=KL` picks the regional arm's art the same way.
     const debugLang = String.fromEnvironment('DEBUG_GEO_LANG');
     const debugRegion = String.fromEnvironment(
       'DEBUG_GEO_REGION',
       defaultValue: 'SEAM',
     );
-    if (kDebugMode && debugLang.isNotEmpty) {
+    if (debugLang.isNotEmpty && (kDebugMode || !PlayInstall.isPlay)) {
       return Future.value({'lang': debugLang, 'region': debugRegion});
     }
     // `v=2` is what earns a `lang` -> builds before the factorial flip nothing, so its cohort stays clean.

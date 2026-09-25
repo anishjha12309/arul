@@ -69,6 +69,16 @@ class ArulScreenHeader extends StatelessWidget {
   /// A [leading] glyph keeps the true gutter — unlike type it has a real edge.
   static const double _titleOpticalInset = 3;
 
+  /// A localized title renders in its Noto fallback, whose taller ascent rides the ink 4–9 dp above
+  /// the Marcellus titles' (measured on device against the wordmark's). Drop it back per script.
+  static const _scriptDrop = <String, double>{
+    'hi': 7.2,
+    'kn': 8.8,
+    'ml': 6.1,
+    'ta': 3.6,
+    'te': 7.0,
+  };
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -97,7 +107,16 @@ class ArulScreenHeader extends StatelessWidget {
                   const EdgeInsets.only(left: _titleOpticalInset),
                 ),
                 child: Transform.translate(
-                  offset: Offset(0, titleDrop),
+                  offset: Offset(
+                    0,
+                    titleDrop +
+                        (titleStyle == null
+                            ? _scriptDrop[Localizations.localeOf(
+                                    context,
+                                  ).languageCode] ??
+                                  0
+                            : 0),
+                  ),
                   // Shrinks, never clips — the dock's rule, applied to the title: a Malayalam
                   // "Ringtones" at a 1.3 OS font size on a 320 dp phone lost its last letters to an
                   // ellipsis, and a title cut mid-word reads as broken where a slightly smaller one

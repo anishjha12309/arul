@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// One bundled launch poster: frame 0 of the region's most-applied live wallpaper.
+/// One bundled launch poster: frame 0 of the region's most-applied live wallpaper, [wallpaperId].
 ///
 /// A 9:16 master on a 9:19–9:20 phone crops only its SIDES, so no alignment can move a face up or
 /// down. [zoom] about [pivot] does: it puts each face near 0.3 of the height — under the wordmark,
@@ -8,12 +8,18 @@ import 'package:flutter/widgets.dart';
 final class RegionalPoster {
   const RegionalPoster(
     this.asset, {
+    required this.wallpaperId,
     required this.zoom,
     required this.pivot,
     required this.faceY,
   });
 
   final String asset;
+
+  /// The catalog row the poster was cut from. Its clip is found by id at run time, never by a
+  /// bundled key: a CMS replace moves `full_key`, never the id.
+  final String wallpaperId;
+
   final double zoom;
   final Alignment pivot;
 
@@ -22,9 +28,14 @@ final class RegionalPoster {
   /// crops its own 2:1 band around this line.
   final double faceY;
 
+  /// The live masters' frame (media-conventions.md). Poster and clip are both laid out in it, so
+  /// the crossfade between them lands on the same pixels.
+  static const frame = Size(1024, 1824);
+
   /// Face at 0.43 of the frame -> zoomed about the bottom edge to lift it clear of the panel.
   static const murugan = RegionalPoster(
     'assets/images/regional/murugan.webp',
+    wallpaperId: '1039cdb4-f0ee-41a8-a005-3d9f6511927f',
     zoom: 1.2,
     pivot: Alignment.bottomCenter,
     faceY: 0.43,
@@ -33,17 +44,20 @@ final class RegionalPoster {
   /// Face at 0.25 -> zoomed about the top edge to drop it below the wordmark on 18:9 phones.
   static const ayyappan = RegionalPoster(
     'assets/images/regional/ayyappan.webp',
+    wallpaperId: '4d4b4543-a2ca-47c5-b71c-b4867337358b',
     zoom: 1.15,
     pivot: Alignment.topCenter,
     faceY: 0.25,
   );
 
-  /// Shiva left of centre with Parvati at the right edge -> the pivot leans left to keep Shiva whole.
+  /// The crossfade plays the whole clip -> a launch clip must stay one deity for its full loop.
+  /// Face at 0.33 -> zoomed about the top edge to sit between the wordmark and the panel.
   static const sivan = RegionalPoster(
     'assets/images/regional/sivan.webp',
+    wallpaperId: '1c340988-23d0-405b-9931-2778ad03c17e',
     zoom: 1.15,
-    pivot: Alignment(-0.3, -1),
-    faceY: 0.27,
+    pivot: Alignment.topCenter,
+    faceY: 0.33,
   );
 
   static const all = [murugan, ayyappan, sivan];
