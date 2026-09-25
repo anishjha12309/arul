@@ -20,8 +20,8 @@ Future<bool?> showArulConfirmDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: title,
-    barrierColor: ArulTokens.dialogOverlay, // rgba(20,9,12,.60)
-    transitionDuration: ArulTokens.dialogEnter, // 250ms
+    barrierColor: ArulTokens.dialogOverlay,
+    transitionDuration: ArulTokens.dialogEnter,
     pageBuilder: (context, _, _) => _ConfirmDialog(
       title: title,
       message: message,
@@ -74,7 +74,6 @@ class _ConfirmDialog extends StatelessWidget {
 
     return Center(
       child: Padding(
-        // 24px side margins.
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Material(
           type: MaterialType.transparency,
@@ -103,7 +102,7 @@ class _ConfirmDialog extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: ArulTokens.body.copyWith(color: messageColor),
                 ),
-                const SizedBox(height: 20), // 8px gap + 12px margin-top
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
@@ -136,7 +135,6 @@ class _ConfirmDialog extends StatelessWidget {
   }
 }
 
-/// One 48px r999 dialog button — filled is solid maroon; outlined is a hairline on the fill's own alpha-0.
 class _DialogButton extends StatefulWidget {
   const _DialogButton({
     required this.label,
@@ -153,9 +151,6 @@ class _DialogButton extends StatefulWidget {
   final Color? borderColor;
   final Color? textColor;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 
   @override

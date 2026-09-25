@@ -135,7 +135,6 @@ class WallpaperPrefetchService {
   /// fetches through the cache manager directly, joining any transfer of the SAME url already up.
   int _priorityWaiters = 0;
 
-  /// Completed and cleared the moment [_priorityWaiters] falls to zero.
   Completer<void>? _priorityIdle;
 
   /// Downloads [url] if needed and completes once its bytes are on disk, returning the local path.
@@ -216,14 +215,13 @@ class WallpaperPrefetchService {
     for (var i = start; i <= end; i++) {
       if (items[i].kind == WallpaperKind.live) candidates.add(i);
     }
-    // Nearest distance to the current index first.
     candidates.sort(
       (a, b) => (a - currentIndex).abs().compareTo((b - currentIndex).abs()),
     );
 
     for (final i in candidates) {
       final url = urlFor(items[i]);
-      if (_tracked.contains(url)) continue; // already queued or downloading
+      if (_tracked.contains(url)) continue;
       _tracked.add(url); // synchronous claim → no duplicate enqueue
       _queue.add(url);
     }

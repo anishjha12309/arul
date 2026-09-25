@@ -13,7 +13,7 @@ import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 
 /** An object younger than this is never swept -> an in-progress CMS create has no row yet -> the grace protects it. */
-export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000; // 12 hours
+export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000;
 
 /**
  * The only prefixes this sweep manages.
@@ -61,7 +61,6 @@ export interface CanonicalSweepResult {
   deleted: number;
   kept: number;
   errors: number;
-  /** True when ANY prefix refused to sweep — an empty reference set or the blast-radius cap. */
   aborted: boolean;
   /** Per-prefix refusal reason -> it reaches the cron log -> that log is the operator's only triage surface. */
   abortedPrefixes: Record<string, string>;
@@ -110,12 +109,12 @@ export function selectCanonicalKeysToDelete(
   const out: string[] = [];
   for (const c of candidates) {
     if (activePrefix !== undefined) {
-      if (!c.key.startsWith(activePrefix)) continue; // not this prefix's business
+      if (!c.key.startsWith(activePrefix)) continue;
     } else if (!CANONICAL_PREFIXES.some((p) => c.key.startsWith(p))) {
-      continue; // canonical only
+      continue;
     }
-    if (referencedKeys.has(c.key)) continue; // a row still points here — keep
-    if (nowMs - c.uploadedMs < graceMs) continue; // too fresh — may be mid-create
+    if (referencedKeys.has(c.key)) continue;
+    if (nowMs - c.uploadedMs < graceMs) continue;
     out.push(c.key);
   }
   return out;
@@ -204,7 +203,6 @@ export async function sweepCanonical(
         prefix,
       );
 
-      // Failsafe 2: blast-radius cap.
       const refusal = blastRadiusRefusal(toDelete.length, candidates.length);
       if (refusal !== null) {
         console.error(`[sweep-canonical] ABORT ${prefix} — ${refusal} (failsafe)`);

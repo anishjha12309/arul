@@ -1,6 +1,5 @@
 import 'package:flutter/services.dart';
 
-/// What the native Play services check did for this phone.
 enum PlayServicesFix {
   /// Play services can sign in -> nothing was shown, the failure was something else.
   available,
@@ -9,7 +8,6 @@ enum PlayServicesFix {
   /// the app, which the controller's return rule (or a cold start) already turns into a sign-in.
   shown,
 
-  /// No dialog can fix this phone, or there is no native side to ask.
   unresolved,
 }
 

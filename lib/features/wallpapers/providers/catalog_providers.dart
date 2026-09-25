@@ -12,7 +12,6 @@ import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../data/video_thumbnail_service.dart';
 
-/// Where the last good catalog is kept — a `{"items":[…]}` snapshot in the same snake_case shape.
 const _catalogCacheFile = 'catalog.json';
 
 /// Directory holding the catalog snapshot — a provider SEAM, so tests can point at a temp dir.
@@ -277,18 +276,6 @@ class SelectedCategory extends Notifier<String> {
   void select(String slug) => state = slug;
 }
 
-/// The list the feed serves for [slug] — the ONE definition of feed order.
-///
-/// All and every category chip run the same comparator; a category chip is All restricted to one
-/// category. The invariant: a category view can never contradict All. It holds because the
-/// comparator is a TOTAL order whose last tier is catalog position, and position in the filtered list
-/// is monotonic in the full one -> restricting cannot reverse a pair.
-///
-/// NEW IS THE ONE EXCEPTION, on purpose (owner's call, 2026-09-15): it is not All restricted, it has
-/// its own order — renewed, then debuts, then filler by applies ([newOrder]). Pins play no part in it.
-///
-/// [apply_restore] resolves its saved page index through this too — a position in the SERVED list.
-/// Validating it against any other ordering restores a post-apply restart to a different wallpaper.
 List<Wallpaper> feedOrder(String slug, List<Wallpaper> all, {DateTime? now}) =>
     switch (slug) {
       WallpaperCategory.newSlug => newOrder(
@@ -314,32 +301,8 @@ List<Wallpaper> feedOrder(String slug, List<Wallpaper> all, {DateTime? now}) =>
 /// (Unified CMS feed-order.tsx `RENEW_WINDOW_MS`) — change one, change the other.
 const Duration kNewWindow = Duration(days: 7);
 
-/// The floor under [kNewWindow], so the chip is never thin. A week with 3 publishes shows those 3
-/// plus the 17 next-newest of any age; a week with none shows the newest 20. A FLOOR, never a cap.
 const int kNewMinItems = 20;
 
-/// The New chip: which rows it holds AND their order. Three tiers, the first two inside [kNewWindow]:
-///
-///   1. RENEWED — [renewedAt] in the window, most recent renew first. An operator's CMS Renew puts a
-///      row back on top; renew five and they stack, the last one placed on top (owner's call).
-///   2. DEBUTS — every other row with [publishedAt] in the window, newest publish first.
-///   3. FILLER — only when 1 + 2 hold fewer than [kNewMinItems]: the next-newest rows by
-///      [publishedAt] (nulls last) make up the floor, and are shown most-used first.
-///
-/// TIES go by [useCount] descending, then [id] ascending — in every tier. Never by `feedRank` or
-/// list position: the catalog's `feed_rank` is a position with the CMS pins baked into it, and pins
-/// must play NO part in New (owner's call). A bulk publish is one transaction, so a whole batch shares
-/// one [publishedAt]; that is the tie this rule exists for. [id] makes the order total — `List.sort`
-/// is not stable — and, unlike list index, it is the same for wallpapers and ringtones, whose drained
-/// list is re-sorted by `sort_order`/title.
-///
-/// A renewed row is ONE row: tier 1 wins, whatever its [publishedAt] (a renew re-stamps both anyway).
-/// A null [publishedAt] sorts LAST and can only ever arrive as filler: it means the row predates the
-/// field, never that it is new. A renew older than the window is just a date — the row competes on
-/// [publishedAt] like any other.
-///
-/// [now] is required, not read from the clock in here — the window is a boundary a test has to be
-/// able to stand on either side of. The window is INCLUSIVE at exactly 7 days.
 List<T> newOrder<T>(
   List<T> all, {
   required String Function(T) id,
@@ -364,14 +327,14 @@ List<T> newOrder<T>(
       ),
   ];
   int byUsesThenId(_NewKey<T> a, _NewKey<T> b) {
-    final byUses = b.uses.compareTo(a.uses); // most used first
+    final byUses = b.uses.compareTo(a.uses);
     return byUses != 0 ? byUses : a.id.compareTo(b.id);
   }
 
   int newestFirst(DateTime? a, DateTime? b) {
     if (a == null || b == null) {
       if (a == null && b == null) return 0;
-      return a == null ? 1 : -1; // nulls last
+      return a == null ? 1 : -1;
     }
     return b.compareTo(a);
   }
@@ -416,7 +379,6 @@ List<T> newOrder<T>(
   ]);
 }
 
-/// One row as [newOrder] reads it — each key read once.
 typedef _NewKey<T> = ({
   T row,
   String id,
@@ -425,13 +387,6 @@ typedef _NewKey<T> = ({
   DateTime? ren,
 });
 
-/// Whether the New chip may be offered on the Wallpapers row.
-///
-/// The chip needs `published_at`, which only a catalog built after db/schema/15_published_at.sql
-/// carries. An install holding an older cached page would otherwise show a "New" chip whose window
-/// matched nothing and whose 20-item floor served the top of All under a wrong name. One row with
-/// the field is enough — the field is emitted for the whole scope or not at all, and the chip
-/// appears by itself on the next drain.
 final showNewCategoryProvider = Provider<bool>((ref) {
   final all = switch (ref.watch(catalogProvider)) {
     AsyncData(:final value) => value,
@@ -440,20 +395,6 @@ final showNewCategoryProvider = Provider<bool>((ref) {
   return all.any((w) => w.publishedAt != null);
 });
 
-/// The three-tier feed order (CLAUDE.md §5b), for any catalog list with a rank and a use counter:
-///
-///   1. [rank] ascending, **nulls last**;
-///   2. [useCount] descending — popularity;
-///   3. catalog position ascending — the order the Worker built.
-///
-/// Shared with the Ringtones tab, written once so the two lists cannot drift apart.
-/// Tier 1 is SPARSE by design — a null rank is ordinary, so most of the catalog reaches tier 2.
-/// That is what lets an import land safely: new rows arrive unranked and displace nothing.
-/// Tier 3 is load-bearing. Dart's `List.sort` is NOT stable, and most rows tie on both tiers above.
-/// Their order would then be free to change between runs.
-/// The feed compares served lists by ORDERED IDS -> that re-points the pager under a scrolling user.
-/// Decorating with the index keeps the order TOTAL and a pure function of the list it is given.
-/// The zero state is exactly right, not a fallback: everything falls through to plain catalog order.
 List<T> orderedByUse<T>(
   List<T> all,
   int Function(T) useCount, {
@@ -468,8 +409,8 @@ List<T> orderedByUse<T>(
   keyed.sort((a, b) {
     final byRank = _compareRank(a.rank, b.rank);
     if (byRank != 0) return byRank;
-    final byCount = b.count.compareTo(a.count); // descending — most used first
-    return byCount != 0 ? byCount : a.i.compareTo(b.i); // then catalog order
+    final byCount = b.count.compareTo(a.count);
+    return byCount != 0 ? byCount : a.i.compareTo(b.i);
   });
   return List<T>.unmodifiable([for (final e in keyed) e.row]);
 }

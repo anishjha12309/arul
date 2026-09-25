@@ -16,7 +16,6 @@ import '../data/push_registration.dart';
 
 part 'push_providers.g.dart';
 
-/// The campaign-push registry writer. One per app, kept alive for the whole process.
 @Riverpod(keepAlive: true)
 PushRegistration pushRegistration(Ref ref) {
   final registration = PushRegistration(
@@ -30,7 +29,6 @@ PushRegistration pushRegistration(Ref ref) {
   return registration;
 }
 
-/// The one-time `POST_NOTIFICATIONS` prompt.
 @Riverpod(keepAlive: true)
 PushPermission pushPermission(Ref ref) => PushPermission(
   prefs: ref.watch(sharedPreferencesProvider),

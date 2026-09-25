@@ -8,8 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
-/// Any failure inside the watermark pipeline — asset load, decode, canvas, encode, transform.
-/// Callers treat it as "share the original instead" — a watermark must never break the share.
 class ShareWatermarkException implements Exception {
   const ShareWatermarkException(this.message);
   final String message;
@@ -45,7 +43,6 @@ class WatermarkSpec {
 
   final int logoCorner;
 
-  /// `AR-` + 6–8 uppercase base36 chars, unique per share.
   final String code;
 
   int get codeCorner => (logoCorner + 2) % 4;
@@ -75,7 +72,7 @@ class ShareWatermarkService {
   final Random _random;
   final MethodChannel _channel;
 
-  ui.Image? _logo; // decoded once, reused across shares
+  ui.Image? _logo;
 
   /// Cached for the service's life — the OS version cannot change under a running process.
   ({bool supported, int sdkInt})? _videoSupport;
@@ -83,7 +80,6 @@ class ShareWatermarkService {
   static Future<Uint8List> _loadBundledLogo() async =>
       (await rootBundle.load(_logoAsset)).buffer.asUint8List();
 
-  /// Picks a random corner for the logo, code diagonally opposite, and a fresh code for THIS share.
   WatermarkSpec plan({required String wallpaperId, String? userId}) {
     final corner = _random.nextInt(4);
     return WatermarkSpec(
@@ -102,7 +98,7 @@ class ShareWatermarkService {
       wallpaperId,
       DateTime.now().microsecondsSinceEpoch,
     );
-    final length = 6 + _random.nextInt(3); // 6..8
+    final length = 6 + _random.nextInt(3);
     final out = StringBuffer('AR-');
     for (var i = 0; i < length; i++) {
       mix = 0x3fffffff & (mix * 31 + _random.nextInt(1 << 24));
@@ -136,7 +132,6 @@ class ShareWatermarkService {
     final logoW = width * _logoWidthFrac;
     final logoH = logoW * logo.height / logo.width;
 
-    // Top-left of an [itemW]x[itemH] box tucked into corner [c] at the inset.
     Offset corner(int c, double itemW, double itemH) => Offset(
       c == 0 || c == 3 ? inset : width - inset - itemW,
       c == 0 || c == 1 ? inset : height - inset - itemH,
@@ -155,22 +150,16 @@ class ShareWatermarkService {
     _drawLogo(
       canvas,
       logo,
-      Rect.fromLTWH(
-        group.dx,
-        group.dy + (groupH - logoH) / 2, // vertically centered in the group
-        logoW,
-        logoH,
-      ),
+      Rect.fromLTWH(group.dx, group.dy + (groupH - logoH) / 2, logoW, logoH),
       logoW,
     );
     final wordOffset = Offset(
       group.dx + logoW + gap,
-      group.dy + (groupH - wordFill.height) / 2, // centered against the logo
+      group.dy + (groupH - wordFill.height) / 2,
     );
     wordStroke.paint(canvas, wordOffset);
     wordFill.paint(canvas, wordOffset);
 
-    // Unique code, diagonally opposite, same legibility treatment.
     final (codeStroke, codeFill) = _labelPainters(
       spec.code,
       height * _codeFontFrac,

@@ -76,8 +76,6 @@ class FeedChips extends ConsumerWidget {
   }
 }
 
-/// Chip-row skeleton for the feed's top bar while the catalog loads — three ivory-8% pills.
-/// The chips themselves render once categories land.
 class FeedChipsSkeleton extends StatelessWidget {
   const FeedChipsSkeleton({super.key});
 
@@ -220,7 +218,6 @@ class _ActionBarSkeleton extends StatelessWidget {
   }
 }
 
-/// Opacity pulse .55 ↔ 1 over 2s — transform and opacity only.
 class _OpacityPulse extends StatefulWidget {
   const _OpacityPulse({required this.child});
 
@@ -269,9 +266,6 @@ class _OpacityPulseState extends State<_OpacityPulse>
       FadeTransition(opacity: _opacity, child: widget.child);
 }
 
-/// Empty state for a category with no wallpapers.
-/// The chips remain, so the user can jump elsewhere.
-/// A gopuram, copy, and an outlined gold "Browse all" that switches the category back to All.
 class FeedEmpty extends StatelessWidget {
   const FeedEmpty({super.key, required this.onBrowseAll});
 
@@ -402,7 +396,6 @@ class FeedError extends StatelessWidget {
 
   final VoidCallback onRetry;
 
-  /// Selects the offline copy over the load-failure copy — same icon, same Retry, same layout.
   final bool offline;
 
   @override
@@ -445,7 +438,6 @@ class FeedError extends StatelessWidget {
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
             identifier: 'arul_feed_retry',
-            // Compact, but never under Android's 48 dp target.
             height: ArulTokens.minHitTarget,
             fontSize: 14,
             expand: false,

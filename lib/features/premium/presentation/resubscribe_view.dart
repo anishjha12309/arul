@@ -8,7 +8,6 @@ import 'member_view.dart';
 import 'paywall_ornaments.dart';
 import 'paywall_view.dart';
 
-/// The cancelled-but-paid-through premium state and its resubscribe action.
 class ArulResubscribeView extends StatelessWidget {
   const ArulResubscribeView({
     super.key,

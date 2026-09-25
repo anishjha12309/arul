@@ -64,7 +64,6 @@ const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
  */
 const SETUP_CLAIM_WINDOW_MS = 4_000;
 
-/** The columns handleInitiate reads under the per-user lock. */
 interface PriorSubscription {
   trial_end: unknown;
   status: string;
@@ -83,12 +82,9 @@ interface PriorSubscription {
  */
 type ClaimConflict = "active_subscription" | "setup_in_flight";
 
-/** What the claim transaction hands back to the rest of handleInitiate. */
 type ClaimResult =
   | { conflict: ClaimConflict; supersededMandateId?: undefined; trialEligible?: undefined }
   | { conflict: false; supersededMandateId: string | null; trialEligible: boolean };
-
-// ── POST /payments/initiate ──────────────────────────────────────────────────
 
 export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -347,7 +343,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     const origin = new URL(c.req.url).origin;
     const redirectUrl = `${origin}/payments/callback?sub=${encodeURIComponent(sub)}`;
 
-    // Call PhonePe Standard Checkout v2 — PENNY_DROP setup
     let ppResult;
     try {
       ppResult = await setupSubscription(env, {
@@ -409,13 +404,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   }
 }
 
-// ── POST /payments/webhook ───────────────────────────────────────────────────
-
 export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // 1. Verify PhonePe callback Authorization header
-  //    Authorization = SHA256(username + ":" + password) hex
   const authHeader = c.req.header("Authorization") ?? "";
   const webhookUsername = env.PHONEPE_WEBHOOK_USERNAME ?? "";
   const webhookPassword = env.PHONEPE_WEBHOOK_PASSWORD ?? "";
@@ -458,7 +449,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(401, "invalid_signature", "Webhook authorization failed");
   }
 
-  // 2. Parse payload
   let payload: PhonePeWebhookPayload;
   try {
     payload = JSON.parse(rawBody) as PhonePeWebhookPayload;
@@ -851,7 +841,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       console.log(`[payments/webhook] Unhandled event: ${event}, sub: ${merchantSubId}`);
     }
 
-    // 5. Mark idempotent
     await env.KV.put(kvKey, "1", { expirationTtl: KV_TXN_TTL });
     return new Response("ok", { status: 200 });
 
@@ -867,8 +856,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   }
 }
 
-// ── POST /payments/status ────────────────────────────────────────────────────
-
 export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -877,7 +864,6 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
 
   const sql = getDb(env);
   try {
-    // Fetch our subscription row
     const rows = await sql`
       SELECT
         id, user_id, status, plan,
@@ -896,7 +882,6 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
 
     const row = rows[0];
 
-    // Optionally reconcile with live PhonePe status
     let phonePeStatus: { state: string; orderId?: string } | null = null;
     const merchantOrderId = row.merchant_order_id as string | null;
     const merchantSubId = row.merchant_subscription_id as string | null;
@@ -1393,8 +1378,6 @@ export function handleCallback(c: Context<{ Bindings: Env }>): Response {
     `</body></html>`;
   return c.html(html);
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * The approval of a re-subscribe. The mandate initiate PARKED (superseded_mandate_id) has been replaced by an

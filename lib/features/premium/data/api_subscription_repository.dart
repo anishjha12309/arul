@@ -3,7 +3,6 @@ import '../../../data/models/subscription_model.dart';
 import '../domain/entitlement.dart';
 import '../domain/subscription_repository.dart';
 
-/// Fetches the current user's entitlement from the Worker's merged `GET /me`.
 class ApiSubscriptionRepository implements SubscriptionRepository {
   const ApiSubscriptionRepository({required ApiClient apiClient})
     : _api = apiClient;

@@ -37,14 +37,12 @@ class TrialReturnPage extends ConsumerStatefulWidget {
   /// The app holding the open order, else the remembered pick — floated to the head and selected.
   final String? initialSelection;
 
-  /// The app a previous visit settled on — the one row that earns the "Last used" badge.
   final String? rememberedPackage;
 
   /// A row tap on an app writes it as the remembered pick, exactly as the sheet does. Never called
   /// for the QR row: the QR is a one-time route, never a default.
   final ValueChanged<String> onRememberApp;
 
-  /// The button, with the current selection — a package name or [kUpiPickQr].
   final ValueChanged<String> onStart;
 
   @override
@@ -127,17 +125,14 @@ class ArulTrialReturnView extends StatelessWidget {
   final Widget? clip;
   final List<UpiApp> apps;
 
-  /// A package name, [kUpiPickQr], or null before the app probe answers.
   final String? selection;
   final String? lastUsedPackage;
   final bool busy;
   final VoidCallback onBack;
   final ValueChanged<String> onSelect;
 
-  /// Null leaves the button dead — nothing selected yet.
   final VoidCallback? onStart;
 
-  /// The page's one column edge — the clip, the heading and the rows all sit on it.
   static const double gutter = ArulTokens.screenPadding;
 
   @override

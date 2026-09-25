@@ -25,7 +25,6 @@ enum SignInOutcome {
   /// No Google surface was ever seen: Credential Manager returned a cancel on its own.
   neverOpened,
 
-  /// The user walked into "Add another account" and walked back out.
   addAccountAbandoned,
 
   /// Google could not re-verify the chosen account. Nothing the app can fix -> point at Settings.
@@ -67,7 +66,6 @@ const Map<String, SignInOutcome> _knownMessages = <String, SignInOutcome>{
   'activity is canceled by the user': SignInOutcome.activityClosed,
 };
 
-/// The messages that mean "the user backed out", which timing then splits three ways.
 const Set<String> _backedOutMessages = <String>{
   '[16] Cancelled by user',
   '[16] Canceled by user',
@@ -100,7 +98,6 @@ SignInOutcome classifySignInOutcome({
     }
   }
 
-  // The backed-out family, split by whether a Google surface was ever seen and how long it took.
   if (msToSurface == null) return SignInOutcome.neverOpened;
   return msToSurface < kSlowSurfaceMs
       ? SignInOutcome.backedOutQuick

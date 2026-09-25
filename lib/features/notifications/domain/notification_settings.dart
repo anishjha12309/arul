@@ -41,7 +41,6 @@ class NotificationSettings {
         reminderMinute: j['reminderMinute'] as int? ?? 0,
       );
     } catch (_) {
-      // Corrupt blob — fall back to defaults rather than crash on startup.
       return const NotificationSettings();
     }
   }

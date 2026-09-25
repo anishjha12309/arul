@@ -1,0 +1,9 @@
+name: comment_guard
+description: Token-stream proof that a comment-only edit changed no code.
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  analyzer: ^14.4.0

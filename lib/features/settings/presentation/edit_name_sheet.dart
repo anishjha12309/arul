@@ -6,9 +6,6 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The edit-name sheet, laid out to the mock's spec.
-///
-/// Resolves to the trimmed new name on Save -> null on dismiss.
 Future<String?> showEditNameSheet(BuildContext context, String current) {
   return showArulSheet<String>(
     context,

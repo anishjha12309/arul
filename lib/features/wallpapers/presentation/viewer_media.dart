@@ -62,7 +62,6 @@ class ViewerMedia extends StatelessWidget {
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
 
-          // 2. The real thing.
           if (wallpaper.kind == WallpaperKind.image)
             CachedNetworkImage(
               imageUrl: wallpaper.url(AppConfig.cdnBaseUrl),
@@ -83,7 +82,6 @@ class ViewerMedia extends StatelessWidget {
   }
 }
 
-/// The live clip: a native ExoPlayer rendering into a Flutter [Texture].
 class _LiveTexture extends StatelessWidget {
   const _LiveTexture({required this.slot});
 

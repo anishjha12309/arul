@@ -11,7 +11,6 @@ class PickedMedia {
   final String name;
 }
 
-/// Which system picker to open.
 enum MediaPickKind {
   /// The Android Photo Picker: images and video, never audio.
   visual,

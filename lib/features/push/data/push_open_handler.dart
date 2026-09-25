@@ -113,7 +113,6 @@ class PushOpenHandler {
             return <String, dynamic>{};
           }),
     );
-    // GA4 only. Notifications are not on the PostHog allow-list and are not a Meta ★ event.
     _analytics.track(
       'push_opened',
       properties: {

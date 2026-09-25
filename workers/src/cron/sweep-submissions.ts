@@ -13,9 +13,8 @@ import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 
 /** An object younger than this is never swept -> an in-flight upload has no row yet -> the grace is what protects it. */
-export const SWEEP_GRACE_MS = 6 * 60 * 60 * 1000; // 6 hours
+export const SWEEP_GRACE_MS = 6 * 60 * 60 * 1000;
 
-/** Pending submissions older than this are auto-rejected so their bytes free up. */
 export const PENDING_EXPIRY_DAYS = 30;
 
 import { SUBMISSION_PREFIX, SUBMISSION_INFIX } from "../lib/r2.js";
@@ -30,7 +29,6 @@ export interface SweepResult {
   deleted: number;
   kept: number;
   errors: number;
-  /** Pending rows auto-rejected this run for exceeding PENDING_EXPIRY_DAYS. */
   expired: number;
 }
 
@@ -43,9 +41,9 @@ export function selectKeysToDelete(
 ): string[] {
   const out: string[] = [];
   for (const c of candidates) {
-    if (!c.key.includes(SUBMISSION_INFIX)) continue; // only submission objects
-    if (pendingKeys.has(c.key)) continue; // still awaiting moderation — keep
-    if (nowMs - c.uploadedMs < graceMs) continue; // too fresh — may be in-flight
+    if (!c.key.includes(SUBMISSION_INFIX)) continue;
+    if (pendingKeys.has(c.key)) continue;
+    if (nowMs - c.uploadedMs < graceMs) continue;
     out.push(c.key);
   }
   return out;

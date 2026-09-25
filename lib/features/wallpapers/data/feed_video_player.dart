@@ -25,7 +25,6 @@ import 'package:flutter/services.dart';
 class FeedVideoPlayerPool {
   FeedVideoPlayerPool._(this._hub);
 
-  /// Production instance wired to the real, process-global channel hub.
   factory FeedVideoPlayerPool() =>
       FeedVideoPlayerPool._(_FeedVideoChannelHub.instance);
 
@@ -50,8 +49,6 @@ class FeedVideoPlayerPool {
     EventChannel events,
   ) => FeedVideoPlayerPool._(_FeedVideoChannelHub.forTesting(method, events));
 
-  /// The shared channel hub — one MethodChannel + one EventChannel subscription for the whole
-  /// process, or an isolated one under test.
   final _FeedVideoChannelHub _hub;
 
   /// Handles created by THIS pool -> [dispose] releases only these, never another pool's.
@@ -136,7 +133,6 @@ class _FeedVideoChannelHub {
     );
   }
 
-  /// The one hub for real platform channels, created lazily on first use.
   static _FeedVideoChannelHub? _instance;
   static _FeedVideoChannelHub get instance =>
       _instance ??= _FeedVideoChannelHub(
@@ -222,7 +218,6 @@ class FeedVideoPlayer {
   /// Native, process-stable player id. Also the fan-out key for events.
   final int playerId;
 
-  /// Flutter texture id the [Texture] widget renders.
   final int textureId;
 
   /// Highest `openId` we have asked the native side to open. The native openId
@@ -245,7 +240,6 @@ class FeedVideoPlayer {
   /// card's poster (posters "overlapping" across categories until the cache warmed).
   bool _awaitingOpen = false;
 
-  /// Native video size once known (for BoxFit.cover scaling of the [Texture]).
   final ValueNotifier<Size?> videoSize = ValueNotifier<Size?>(null);
 
   /// Called with the `PlaybackException` error-code name (e.g.

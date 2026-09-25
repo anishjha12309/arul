@@ -47,7 +47,6 @@ class AppShell extends ConsumerStatefulWidget {
         MediaQuery.viewPaddingOf(context).bottom;
   }
 
-  /// The dock branch a deep-link target lives on.
   static int branchFor(ArulTab tab) => switch (tab) {
     ArulTab.wallpapers => wallpapersBranch,
     ArulTab.ringtones => ringtonesBranch,
@@ -166,7 +165,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-/// One dock tab's content.
 typedef ArulNavItem = ({ArulLineGlyph glyph, String label});
 
 /// Cross-fades between branches over [ArulTokens.tabSwitch] instead of cutting between them.

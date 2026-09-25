@@ -100,7 +100,6 @@ class ArulMemberView extends StatelessWidget {
   }
 }
 
-/// Ringed back control and serif title shared by premium plan pages.
 class PremiumPlanNav extends StatelessWidget {
   const PremiumPlanNav({super.key, required this.onBack});
 
@@ -163,7 +162,6 @@ class PremiumPlanNav extends StatelessWidget {
   }
 }
 
-/// Temple hero shared by active, trialing and cancelled premium states.
 class PremiumPlanHero extends StatelessWidget {
   const PremiumPlanHero({
     super.key,
@@ -243,7 +241,6 @@ class PremiumPlanHero extends StatelessWidget {
 
 enum PremiumPlanStatusTone { positive, warning }
 
-/// Positive or warning status treatment for premium plan heroes.
 class PremiumPlanStatusChip extends StatelessWidget {
   const PremiumPlanStatusChip({
     super.key,
@@ -308,7 +305,6 @@ class PremiumPlanStatusChip extends StatelessWidget {
   }
 }
 
-/// One immutable row in a premium plan billing card.
 class PremiumPlanBillingRowData {
   const PremiumPlanBillingRowData({required this.label, required this.value});
 
@@ -316,7 +312,6 @@ class PremiumPlanBillingRowData {
   final String value;
 }
 
-/// Floret-led billing details shared by premium plan pages.
 class PremiumPlanBillingCard extends StatelessWidget {
   const PremiumPlanBillingCard({super.key, required this.rows});
 

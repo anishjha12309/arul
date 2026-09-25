@@ -17,8 +17,6 @@ import '../../../wallpapers/data/feed_video_player.dart';
 class VideoBackground extends StatefulWidget {
   const VideoBackground({super.key, this.overlayOpacity = 0.42});
 
-  /// How dark the translucent veil on top of the video should be.
-  /// 0.0 = no veil, 1.0 = fully black.
   final double overlayOpacity;
 
   @override
@@ -31,13 +29,6 @@ class _VideoBackgroundState extends State<VideoBackground>
   /// Still painted as the base layer -> any edge the poster's cover-fit leaves is never bare.
   static const _fallbackColor = ArulColors.ink;
 
-  /// FRAME 0 of `splash.mp4`, bundled (512×912 WebP, ~15 KB in the APK).
-  ///
-  /// After the OS splash hands off, the Media3 decoder has produced no frame yet.
-  /// The background was flat [_fallbackColor] until it did -> this is the shutter that covers it.
-  /// Media3's guidance is to hold a placeholder and reveal the video only on the first frame.
-  /// `PlayerView` does that with its own artwork; a raw [Texture] must supply it itself.
-  /// It is frame 0 of the very file the texture plays -> no crossfade, the swap is imperceptible.
   static const _posterAsset = 'assets/images/splash_poster.webp';
 
   _SharedAuthVideoPlayer? _shared;
@@ -77,10 +68,6 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 
   Future<void> _init() async {
-    // A low-memory phone never gets a decoder here: the poster below IS the background.
-    // Google's sign-in step measured 2–3× slower on these handsets, and the looping video was
-    // competing with it for the same CPU and RAM on exactly the launch the funnel lives on.
-    // Decided BEFORE acquire -> no native player is ever created, not just left unpainted.
     if (await DeviceMemory.isLow || !mounted) return;
     final shared = _SharedAuthVideoPlayer.acquire();
     _shared = shared;
@@ -125,8 +112,6 @@ class _VideoBackgroundState extends State<VideoBackground>
         // Base colour: covers any edge the poster's cover-fit leaves bare.
         const ColoredBox(color: _fallbackColor),
 
-        // The shutter stays MOUNTED under the texture, like the feed's live cards.
-        // So a decoder that drops or restarts can never expose bare colour.
         const Image(
           image: AssetImage(_posterAsset),
           fit: BoxFit.cover,
@@ -158,7 +143,6 @@ class _VideoBackgroundState extends State<VideoBackground>
             },
           ),
 
-        // Subtle darkening veil for legibility
         ColoredBox(
           color: Color.fromRGBO(0, 0, 0, widget.overlayOpacity.clamp(0, 1)),
         ),
@@ -187,7 +171,6 @@ class _SharedAuthVideoPlayer {
   FeedVideoPlayerPool? _pool;
   Future<FeedVideoPlayer?>? _player;
 
-  /// Resolves to the shared player, or null when the platform side is unavailable.
   Future<FeedVideoPlayer?> get player => _player ?? Future.value();
 
   static _SharedAuthVideoPlayer acquire() {
@@ -291,7 +274,6 @@ class _SharedAuthVideoPlayer {
     final pool = _pool;
     _pool = null;
     _player = null;
-    // Disposing the pool releases the native player + its texture.
     if (pool != null) unawaited(pool.dispose());
   }
 }

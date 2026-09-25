@@ -24,8 +24,6 @@ import {
   buildMerchantOrderId,
 } from "../lib/phonepe.js";
 
-// ── POST /internal/build-catalog ─────────────────────────────────────────────
-
 export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -124,8 +122,6 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
   }
 }
 
-// ── POST /internal/run-redemptions ───────────────────────────────────────────
-
 export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -195,7 +191,6 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
       const result: (typeof results)[number] = { subscriptionId: merchantSubId };
 
       try {
-        // Step 1: Notify (if not already notified)
         let redemptionOrderId = row.redemption_order_id as string | null;
         if (!redemptionOrderId || force) {
           // PhonePe requires the mandate be verified ACTIVE before a notify
@@ -225,7 +220,6 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
           result.notify = "already_notified";
         }
 
-        // Step 2: Execute
         const execRes = await executeRedemption(env, redemptionOrderId);
         result.execute = execRes.state;
 
@@ -522,8 +516,6 @@ function authorizePush(c: Context<{ Bindings: Env }>, env: Env): boolean {
 
 /** Monthly price in paise, and the refund ceiling -> mirrored in payments.ts -> change both together. */
 const MONTHLY_PRICE_PAISE = 19900;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Authorize an operator route that MOVES MONEY. OPS_SECRET and nothing else.

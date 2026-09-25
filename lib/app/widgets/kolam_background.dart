@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'kolam_painter.dart';
 
-/// Brand surface for splash + sign-in. See [KolamPainter].
 class KolamBackground extends StatelessWidget {
   const KolamBackground({super.key, this.child});
 

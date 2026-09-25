@@ -53,7 +53,6 @@ class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
   final FeedVideoPlayer? player;
   final OnboardingVideoSource source;
 
-  /// The bundled still under the texture — [kOnboardingPoster] or [kReturnPoster].
   final String poster;
 
   /// `<prefix>_start` / `<prefix>_muted` — each clip is counted under its own name.

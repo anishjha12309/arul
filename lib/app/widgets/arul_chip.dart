@@ -4,12 +4,10 @@ import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 
-/// Which surface an [ArulChip] sits on.
 enum ArulChipVariant {
   /// Over the feed's media — a fixed dark palette, so it stays legible on any wallpaper.
   feed,
 
-  /// On a themed surface — the Upload screen's category chips. Follows light/dark.
   surface,
 
   /// The browse-axis chip row on a themed surface — the Ringtones screen. Follows light/dark.
@@ -18,10 +16,6 @@ enum ArulChipVariant {
   category,
 }
 
-/// The category / selection chip used by the feed row and the Upload screen.
-///
-/// Feed spec: pad 7×15, r999; inactive ivory-92% on `rgba(20,9,12,.42)`; active SOLID gold on dark.
-/// Surface spec: unselected light is white on a maroon-12% border; selected is a solid brand fill.
 class ArulChip extends StatefulWidget {
   const ArulChip({
     super.key,
@@ -74,7 +68,6 @@ class _ArulChipState extends State<ArulChip> {
     );
 
     final Widget visual = Container(
-      // The browse row is a fixed 34 tall with 16 side padding; the other two size off the label.
       height: variant == ArulChipVariant.category ? _categoryHeight : null,
       alignment: variant == ArulChipVariant.category ? Alignment.center : null,
       padding: variant == ArulChipVariant.category
@@ -150,17 +143,15 @@ class _ArulChipState extends State<ArulChip> {
     switch (variant) {
       case ArulChipVariant.feed:
         if (selected) {
-          // Solid gold, dark text.
           return (ArulTokens.gold, ArulTokens.gold, ArulTokens.darkSurface);
         }
         return (
-          const Color.fromRGBO(20, 9, 12, 0.42), // rgba(20,9,12,.42)
-          const Color.fromRGBO(250, 245, 236, 0.22), // rgba(250,245,236,.22)
-          const Color.fromRGBO(250, 245, 236, 0.92), // ivory 92%
+          const Color.fromRGBO(20, 9, 12, 0.42),
+          const Color.fromRGBO(250, 245, 236, 0.22),
+          const Color.fromRGBO(250, 245, 236, 0.92),
         );
       case ArulChipVariant.surface:
         if (selected) {
-          // Solid gold on dark, solid maroon on light.
           final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
           final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
           return (fill, fill, fg);

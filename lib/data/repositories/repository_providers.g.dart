@@ -8,12 +8,9 @@ part of 'repository_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Shared client for the edge-cached catalog JSON (public CDN, no auth).
 
 @ProviderFor(catalogHttpClient)
 final catalogHttpClientProvider = CatalogHttpClientProvider._();
-
-/// Shared client for the edge-cached catalog JSON (public CDN, no auth).
 
 final class CatalogHttpClientProvider
     extends
@@ -23,7 +20,6 @@ final class CatalogHttpClientProvider
           CatalogHttpClient
         >
     with $Provider<CatalogHttpClient> {
-  /// Shared client for the edge-cached catalog JSON (public CDN, no auth).
   CatalogHttpClientProvider._()
     : super(
         from: null,

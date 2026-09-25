@@ -25,8 +25,6 @@ class ReferScreen extends ConsumerWidget {
     (n: '3', text: l10n.referStep3),
   ];
 
-  /// WhatsApp-first share of the referral-attributed Play link; the system sheet on any failure.
-  /// The mechanics live in [tellAFriend] -> one copy, one attribution rule, one analytics shape.
   Future<void> _share(BuildContext context, WidgetRef ref) =>
       tellAFriend(context, ref, source: 'refer_screen');
 
@@ -73,7 +71,6 @@ class ReferScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header: the one pushed-screen header. Spec > Refer & Earn.
             ArulPushedHeader(
               title: l10n.referTitle,
               color: textPrimary,
@@ -89,7 +86,6 @@ class ReferScreen extends ConsumerWidget {
                   24,
                 ),
                 children: [
-                  // Hero card.
                   Container(
                     padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
                     decoration: BoxDecoration(
@@ -140,7 +136,6 @@ class ReferScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  // Rewards card.
                   Container(
                     padding: const EdgeInsets.all(ArulTokens.cardPadding16),
                     decoration: BoxDecoration(
@@ -178,7 +173,6 @@ class ReferScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  // How it works card.
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: ArulTokens.cardPadding16,
@@ -241,7 +235,6 @@ class ReferScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Empty state.
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

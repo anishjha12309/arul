@@ -24,7 +24,7 @@ function getGoogleJWKS(): ReturnType<typeof createRemoteJWKSet> {
 }
 
 export interface GoogleIdTokenClaims {
-  sub: string; // stable Google user ID
+  sub: string;
   email: string;
   email_verified: boolean;
   name: string | undefined;

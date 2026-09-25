@@ -12,7 +12,6 @@ enum ReferralStatus {
   rewarded,
 }
 
-/// A referral record (Neon `referrals`): who referred whom and the reward state.
 @freezed
 abstract class ReferralModel with _$ReferralModel {
   @JsonSerializable(fieldRename: FieldRename.snake)

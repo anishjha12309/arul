@@ -3,7 +3,6 @@ import '../../../data/models/referral_model.dart';
 import '../domain/referral_repository.dart';
 import '../domain/referral_summary.dart';
 
-/// Fetches the current user's referrals from the Worker (`/me/referrals`).
 class ApiReferralRepository implements ReferralRepository {
   const ApiReferralRepository({required ApiClient apiClient})
     : _api = apiClient;
@@ -24,13 +23,11 @@ class ApiReferralRepository implements ReferralRepository {
 
   @override
   Future<ReferralSummary> getReferralSummary() async {
-    // GET /me/referrals -> { referral_code, items: [...], total_reward_days }.
     try {
       final data = await _api.get('/me/referrals');
       final items = _parseItems(data);
       final total =
           (data['total_reward_days'] as num?)?.toInt() ??
-          // Server sent no total -> sum the items.
           items.fold<int>(0, (sum, r) => sum + r.rewardDays);
       return ReferralSummary(
         referralCode: data['referral_code'] as String?,

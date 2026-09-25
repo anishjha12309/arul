@@ -66,12 +66,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     'sivan',
   ];
 
-  /// 'wallpaper' | 'ringtone' — the submitted `kind`.
   String _kind = 'wallpaper';
   String? _category;
   bool _rightsAccepted = false;
 
-  // Picked file (validated against UploadConstraints before it lands here).
   String? _filePath;
   String? _fileName;
   String? _mimeType;
@@ -149,8 +147,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     unawaited(File(path).delete().then((_) {}, onError: (_) {}));
   }
 
-  /// Picks media for the current kind and validates MIME and size against [UploadConstraints].
-  /// Rejects with a toast when it does not fit.
   Future<void> _pickFile() async {
     if (_picking) return;
     _picking = true;
@@ -290,7 +286,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
     final dashColor = isDark
         ? ArulTokens.goldBorder50
-        : const Color.fromRGBO(122, 30, 51, 0.45); // maroon 45%, per spec
+        : const Color.fromRGBO(122, 30, 51, 0.45);
     final pickZoneFill = isDark ? null : ArulTokens.cardBgLight;
     final labelColor = isDark
         ? ArulTokens.darkTextSecondary
@@ -360,7 +356,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Pick zone.
                   Semantics(
                     container: true,
                     identifier: 'arul_upload_pick',
@@ -430,7 +425,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Title (optional).
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -480,7 +474,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Category.
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -507,7 +500,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Rights checkbox.
                   Semantics(
                     // Announced as ONE checkbox with its sentence, not a glyph and a paragraph.
                     checked: _rightsAccepted,
@@ -560,8 +552,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Submit — disabled until file, category and rights are all present.
-                  // Also disabled while an upload is in flight, for re-entrancy.
                   CtaButton(
                     label: l10n.uploadSubmitCta,
                     identifier: 'arul_upload_submit',

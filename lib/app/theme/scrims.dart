@@ -24,11 +24,7 @@ abstract final class ArulScrims {
   static const top = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [
-      Color(0x9E14090C), // 62%
-      Color(0x2E14090C), // 18% — the anti-banding tail
-      Color(0x0014090C),
-    ],
+    colors: [Color(0x9E14090C), Color(0x2E14090C), Color(0x0014090C)],
     stops: [0.0, 0.6, 1.0],
   );
 
@@ -38,11 +34,7 @@ abstract final class ArulScrims {
   static const bottom = LinearGradient(
     begin: Alignment.bottomCenter,
     end: Alignment.topCenter,
-    colors: [
-      Color(0xB814090C), // 72%
-      Color(0x3D14090C), // 24% — the anti-banding tail
-      Color(0x0014090C),
-    ],
+    colors: [Color(0xB814090C), Color(0x3D14090C), Color(0x0014090C)],
     stops: [0.0, 0.55, 1.0],
   );
 

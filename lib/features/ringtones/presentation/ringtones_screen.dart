@@ -33,16 +33,6 @@ import 'deity_art.dart';
 import 'ringtone_states.dart';
 import 'ringtone_tile.dart';
 
-/// The Ringtones tab — a category-chip browse over rows; preview free, "Set" premium-gated.
-///
-///   * **One value drives the whole now-playing look** — fill, border, title, button, its position
-///     ring and diya all read the same `currentId`. No per-row flag can fall out of sync, and
-///     clearing it stops audio;
-///   * **The art is BUNDLED, not fetched** — the catalog carries only a `deity` slug the app maps
-///     to one of 17 PNGs. Nothing here can 404, so the list has no image loading state at all.
-///
-/// The ground is still drawn per track, so one deity's 35 tracks are not 35 identical tiles.
-/// Category is THE browse axis (CLAUDE.md §5b) — there are no All/New tabs.
 class RingtonesScreen extends ConsumerStatefulWidget {
   const RingtonesScreen({super.key});
 
@@ -57,14 +47,11 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   // Cached so dispose() never touches ref — unusable there in Riverpod 3.
   RingtonePreviewNotifier? _previewNotifier;
 
-  /// The list's own controller, so a deep link can put its row at the top.
   final ScrollController _scroll = ScrollController();
 
   /// The gap [_buildList] draws between rows — part of the deep-link scroll arithmetic.
   static const double _rowGap = 10;
 
-  /// Row a link asked for, as an index into the All list, waiting for layout.
-  /// Consumed by [_scheduleDeepLinkScroll].
   int? _pendingScrollIndex;
 
   @override
@@ -103,7 +90,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     ).indexWhere((r) => r.id == target.id);
     if (index < 0) return;
 
-    // GA4-only (not on the PostHog allow-list, not a Meta ★ event).
     ref
         .read(analyticsServiceProvider)
         .track('deep_link_opened', properties: target.analyticsProperties);
@@ -169,7 +155,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   /// On a free user ensurePremium tracks the block and routes `/premium?source=ringtone_set`.
   Future<void> _onSetTapped(Ringtone ringtone) async {
     if (!await ensurePremium(context, ref, source: 'ringtone_set')) return;
-    // Phone ringtone only — no alarm/notification choice in Arul's UI.
     unawaited(
       ref
           .read(ringtoneSetProvider.notifier)
@@ -194,8 +179,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     // Keep the entitlement resolved while the tab is up -> the gate's await returns instantly.
     ref.watch(entitlementProvider);
 
-    // Preview failure → localized toast, once per error tick.
-    // A muted media stream reports through the SAME issue flag (W5) -> one more branch, same toast.
     ref.listen(ringtonePreviewProvider, (prev, next) {
       if (next.hasError && !(prev?.hasError ?? false)) {
         showArulToast(
@@ -573,7 +556,6 @@ class RingtoneRow extends ConsumerWidget {
       ),
     );
 
-    // ONE value drives every now-playing affordance in this row.
     final isPlaying = preview.isPlayingId(ringtone.id);
     final isBuffering = preview.isLoadingId(ringtone.id);
 
@@ -1002,7 +984,6 @@ class _TransportIconPainter extends CustomPainter {
       ..isAntiAlias = true;
 
     if (playing) {
-      // Two rounded bars: 8,6 and 13.2,6 — 3.2 × 12, r1.1.
       for (final x in const [8.0, 13.2]) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(

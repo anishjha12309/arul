@@ -19,9 +19,7 @@ const DEFAULT_HOST = "https://us.i.posthog.com";
 
 interface FirstConversion {
   userId: string;
-  /** Merchant order id of the settled debit (DKS_…_R…). */
   transactionId: string;
-  /** Paise. Falls back to ₹199 when the payload omitted it. */
   amountPaise?: number | null;
   /** The row's `updated_at` as RETURNED by the UPDATE -> stable across a resend -> this is what makes `uuid` dedupe. */
   occurredAt?: Date | string | null;
@@ -158,7 +156,6 @@ interface SubscriptionCancel {
    * One event per MANDATE -> a resubscribe mints a new id -> cancelling that one is a new event. */
   merchantSubId: string | null;
   reason: SubscriptionCancelReason;
-  /** Row status BEFORE the write: 'trialing' | 'active' | 'paused' | … */
   priorStatus: string | null;
   /** The cancel write's own RETURNED `updated_at` — see FirstConversion.occurredAt.
    * Optional because account deletion leaves no row to return one. */

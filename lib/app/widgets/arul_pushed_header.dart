@@ -22,13 +22,10 @@ class ArulPushedHeader extends StatelessWidget {
 
   final String title;
 
-  /// Ink for both the arrow and the title.
   final Color color;
 
-  /// Defaults to popping the route.
   final VoidCallback? onBack;
 
-  /// Stable accessibility id for the back control (`Semantics(identifier:)`).
   final String? identifier;
 
   static const double _glyph = 24;

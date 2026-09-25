@@ -8,12 +8,9 @@ part of 'referral_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Play Install Referrer capture + pending-code handoff to sign-in.
 
 @ProviderFor(installReferrerService)
 final installReferrerServiceProvider = InstallReferrerServiceProvider._();
-
-/// Play Install Referrer capture + pending-code handoff to sign-in.
 
 final class InstallReferrerServiceProvider
     extends
@@ -23,7 +20,6 @@ final class InstallReferrerServiceProvider
           InstallReferrerService
         >
     with $Provider<InstallReferrerService> {
-  /// Play Install Referrer capture + pending-code handoff to sign-in.
   InstallReferrerServiceProvider._()
     : super(
         from: null,
@@ -61,14 +57,8 @@ final class InstallReferrerServiceProvider
 String _$installReferrerServiceHash() =>
     r'5a728569571a728f157aa4bf09faad970f6e03dc';
 
-/// The Refer & Earn screen's data: own code + referrals + total days earned.
-/// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
-
 @ProviderFor(referralSummary)
 final referralSummaryProvider = ReferralSummaryProvider._();
-
-/// The Refer & Earn screen's data: own code + referrals + total days earned.
-/// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
 
 final class ReferralSummaryProvider
     extends
@@ -78,8 +68,6 @@ final class ReferralSummaryProvider
           FutureOr<ReferralSummary>
         >
     with $FutureModifier<ReferralSummary>, $FutureProvider<ReferralSummary> {
-  /// The Refer & Earn screen's data: own code + referrals + total days earned.
-  /// `ref.invalidate(referralSummaryProvider)` re-fetches — pull-to-refresh, or the refresh button.
   ReferralSummaryProvider._()
     : super(
         from: null,

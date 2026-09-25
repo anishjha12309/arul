@@ -43,15 +43,12 @@ const appLanguageNativeNames = <String, String>{
   'hi': 'हिन्दी',
 };
 
-/// The English name for [code], falling back to English for anything unsupported.
 String appLanguageName(String code) =>
     appLanguageNames[code] ?? appLanguageNames['en']!;
 
-/// The native name for [code], falling back to English for anything unsupported.
 String appLanguageNativeName(String code) =>
     appLanguageNativeNames[code] ?? appLanguageNativeNames['en']!;
 
-/// The locale code an English name from the sheet belongs to, or null.
 String? appLanguageCodeFor(String englishName) {
   for (final e in appLanguageNames.entries) {
     if (e.value == englishName) return e.key;
@@ -59,7 +56,6 @@ String? appLanguageCodeFor(String englishName) {
   return null;
 }
 
-/// The prefs key [LocaleNotifier] persists an explicit pick under.
 const appLocalePrefsKey = LocaleNotifier._key;
 
 /// Who wrote [appLocalePrefsKey]: `pick` (Settings, the wall chip) or `link` (`lang=`).
@@ -75,7 +71,6 @@ const geoLangPrefsKey = 'arul_geo_lang';
 /// The region Cloudflare reported, raw, or [geoNone] -> `geo_region` on every event.
 const geoRegionPrefsKey = 'arul_geo_region';
 
-/// What a geo key holds when the answer carried nothing.
 const geoNone = 'none';
 
 /// Where the app's language came from -> `language_source` on every event.
@@ -89,7 +84,6 @@ enum LanguageSource {
 
   const LanguageSource(this.key);
 
-  /// The value analytics reports.
   final String key;
 }
 
@@ -106,7 +100,6 @@ Locale resolveAppLocale(
   return _shipped(geoCode) ?? _phoneLocale(phoneLocales) ?? const Locale('en');
 }
 
-/// Which rung of [resolveAppLocale] decided, from the same inputs plus who wrote the stored code.
 LanguageSource resolveLanguageSource(
   String? storedCode,
   String? storedSource,

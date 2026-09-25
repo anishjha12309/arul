@@ -22,9 +22,8 @@ class CatalogVersion {
   final http.Client _client;
 
   String? _cached;
-  bool _dirty = true; // re-fetch on first use and after invalidate()
+  bool _dirty = true;
 
-  /// The current version string, or null if unknown (pre first build / offline).
   Future<String?> current() async {
     if (!_dirty && _cached != null) return _cached;
     try {
@@ -45,6 +44,5 @@ class CatalogVersion {
     return _cached;
   }
 
-  /// Force the next [current] call to re-fetch (e.g. on explicit pull-to-refresh).
   void invalidate() => _dirty = true;
 }

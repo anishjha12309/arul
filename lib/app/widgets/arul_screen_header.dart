@@ -34,7 +34,6 @@ class ArulScreenHeader extends StatelessWidget {
   /// The layout height stays [ArulTokens.headerControlSize], bounded by the band's spare room.
   final double titleDrop;
 
-  /// Optional glyph before the title. Sized to [ArulTokens.headerControlSize] by its own widget.
   final Widget? leading;
 
   /// Trailing controls, right-aligned with [_actionGap] between them.
@@ -57,10 +56,8 @@ class ArulScreenHeader extends StatelessWidget {
     bottom: ArulTokens.headerBottomPadding,
   );
 
-  /// Gap between the leading glyph and the title.
   static const double _leadingGap = 12;
 
-  /// Gap between two trailing controls.
   static const double _actionGap = 8;
 
   /// **Optical left inset for the title — tune it if the title reads too near the screen edge.**

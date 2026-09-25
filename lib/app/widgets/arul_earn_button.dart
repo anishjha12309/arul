@@ -29,7 +29,6 @@ class ArulEarnButton extends StatefulWidget {
 
 class _ArulEarnButtonState extends State<ArulEarnButton>
     with SingleTickerProviderStateMixin {
-  /// One wiggle, and the pause between them — the reference chip's cadence, held in [Motion].
   static const Duration _wiggleDuration = Motion.wiggle;
   static const Duration _wiggleGap = Motion.wiggleGap;
 
@@ -39,7 +38,7 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   /// Pill metrics — all Pakiza's.
   /// The gift glyph carries its own side-bearing -> an even 16/16 looks adrift -> padding is ASYMMETRIC.
   static const double _padLeft = 12;
-  static const double _padRight = ArulTokens.contentGap; // 16
+  static const double _padRight = ArulTokens.contentGap;
   static const double _gap = 8;
   static const double _emojiSize = 17;
 

@@ -55,7 +55,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
   static const _preAuthThumbWarmCount = 1;
 
-  /// The warm-up runs once per splash, on the first catalog data to land — disk snapshot or drain.
   bool _mediaWarmed = false;
 
   late final AnimationController _hairlineController;
@@ -81,7 +80,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     // Never awaited and never on the routing path -> the splash still routes the moment the seed settles.
     unawaited(ref.read(geoLanguageServiceProvider).fetchOnce());
 
-    // Warm the catalog while the wordmark is up, then the first screenful of feed media.
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
         unawaited(_warmFeedMedia(value));
@@ -141,7 +139,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _warmPosters(items, thumbCount);
   }
 
-  /// Decode the first [count] posters at the tiles' own width -> the reel's first paint is a repaint.
   void _warmPosters(List<Wallpaper> items, int count) {
     final decodeWidth = WallpaperTile.decodeWidthFor(context);
     for (final w in items.take(count)) {
@@ -159,14 +156,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
-  /// Wait for the stored-session check to finish, then route IMMEDIATELY.
-  ///
-  /// Sampling `currentState` on a timer raced the secure-storage read and bounced returning users.
-  /// Awaiting [AuthService.initialized], bounded, is the fix — and the only thing this screen waits on.
-  /// There is NO fixed brand beat (owner's call): the 1800ms one measured as pure dead time.
-  /// The auth seed settles ~375ms in and the catalog is warm by then -> the splash sat idle ~1.4s.
-  /// It owned most of the cold start and most of the first-content gap.
-  /// Do NOT re-add a floor — a longer brand moment must come from critical-path work, not a timer.
   Future<void> _decideRoute() async {
     BootTrace.mark('splash: _decideRoute start');
     if (AppConfig.hasBackend) {
@@ -227,12 +216,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             // Video paints edge-to-edge -> our own scrim below, no built-in overlay competing.
             const VideoBackground(overlayOpacity: 0),
 
-            // Spec > Splash: 180deg .25 → 0 @35% → 0 @55% → .82.
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
             ),
 
-            // Bottom-centred column, bottom 64, gap 10 — the wordmark carries the brand alone.
             Positioned(
               left: 0,
               right: 0,

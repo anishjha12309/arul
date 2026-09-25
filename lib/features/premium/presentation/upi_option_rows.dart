@@ -40,9 +40,6 @@ class UpiOptionRow extends StatelessWidget {
   /// Null while the page is busy — the row still shows, and answers nothing.
   final VoidCallback? onTap;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 
   /// The return page's tick. On the sheet a tap IS the choice and closes it, so a tick there would
@@ -173,7 +170,6 @@ class UpiQrOptionRow extends StatelessWidget {
   }
 }
 
-/// The frame both rows share: border, selected fill, press-down tick, and the optional radio tick.
 class _OptionShell extends StatelessWidget {
   const _OptionShell({
     required this.identifier,
@@ -243,7 +239,6 @@ class _OptionShell extends StatelessWidget {
   }
 }
 
-/// A radio in the paywall's gold: a ring when off, a filled disc with a check when on.
 class _Tick extends StatelessWidget {
   const _Tick({required this.on});
 
@@ -295,7 +290,6 @@ class _LastUsedBadge extends StatelessWidget {
   }
 }
 
-/// App icon from PackageManager bytes, or the wallet glyph fallback.
 class UpiAppIcon extends StatelessWidget {
   const UpiAppIcon({super.key, required this.app, required this.size});
 

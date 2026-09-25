@@ -13,8 +13,6 @@
 
 import { MAX_BYTES_BY_MIME } from "./media-constraints.js";
 
-// ── Per-role structural rules ─────────────────────────────────────────────────
-
 /**
  * Live-wallpaper geometry — proven on budget SoCs (SD695, Dimensity 900). Canonical encode is 1024x1824.
  *
@@ -37,13 +35,10 @@ export const WALLPAPER_IMAGE = {
   maxSide: 8192,
 } as const;
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
 export type MediaRole = "wallpaper" | "ringtone";
 
 export interface VerifyOk {
   ok: true;
-  /** Stored (signed-PUT-enforced) content type. */
   contentType: string;
   width?: number;
   height?: number;
@@ -103,18 +98,15 @@ export async function verifyMediaObject(
     if (ct.startsWith("image/")) return verifyWallpaperImage(reader, ct);
     return fail("bad_type", `A wallpaper must be a JPEG/PNG/WebP image or an MP4 video (got "${ct}")`);
   }
-  // ringtone
   if (!ct.startsWith("audio/")) {
     return fail("bad_type", `A ringtone must be an audio file (got "${ct}")`);
   }
   return verifyRingtoneAudio(reader, ct);
 }
 
-// ── Ranged reader over the R2 binding ─────────────────────────────────────────
-
 const HEAD_CHUNK = 64 * 1024; // one GET covers magic bytes + most image headers
 const MAX_MOOV_BYTES = 8 * 1024 * 1024; // sanity cap; a <50MB file's moov is ≪ this
-const MAX_JPEG_SCAN = 512 * 1024; // SOF must appear within this prefix
+const MAX_JPEG_SCAN = 512 * 1024;
 
 class R2Reader {
   private headChunk: Uint8Array | null = null;
@@ -125,7 +117,6 @@ class R2Reader {
     readonly size: number,
   ) {}
 
-  /** Read [offset, offset+length), clamped to the object; null on R2 failure. */
   async read(offset: number, length: number): Promise<Uint8Array | null> {
     if (offset >= this.size) return new Uint8Array(0);
     const len = Math.min(length, this.size - offset);
@@ -144,14 +135,11 @@ class R2Reader {
     }
   }
 
-  /** First HEAD_CHUNK bytes (cached). */
   async head(): Promise<Uint8Array | null> {
     if (this.headChunk) return this.headChunk;
     return this.read(0, Math.min(HEAD_CHUNK, this.size));
   }
 }
-
-// ── Byte helpers ──────────────────────────────────────────────────────────────
 
 function u16(b: Uint8Array, o: number): number {
   return (b[o]! << 8) | b[o + 1]!;
@@ -171,8 +159,6 @@ function startsWith(b: Uint8Array, sig: number[], offset = 0): boolean {
   for (let i = 0; i < sig.length; i++) if (b[offset + i] !== sig[i]) return false;
   return true;
 }
-
-// ── Image sniffing + dimension parsing ────────────────────────────────────────
 
 interface Dims {
   width: number;
@@ -195,7 +181,6 @@ function parsePngDims(b: Uint8Array): Dims | null {
 }
 
 async function parseJpegDims(reader: R2Reader): Promise<Dims | null> {
-  // Walk markers until a SOFn (baseline/progressive/etc.) frame header.
   let buf = await reader.head();
   if (!buf) return null;
   let o = 2;
@@ -286,8 +271,6 @@ async function verifyWallpaperImage(reader: R2Reader, ct: string): Promise<Verif
   return { ok: true, contentType: ct, width, height };
 }
 
-// ── MP4 (ISO-BMFF) parsing ────────────────────────────────────────────────────
-
 interface Mp4Info {
   durationMs: number | null;
   videoTracks: { codec: string; width: number; height: number }[];
@@ -343,7 +326,7 @@ async function parseMp4(reader: R2Reader): Promise<Mp4Info | null> {
       collectTrack(body, start, len, info);
       return false;
     }
-    return false; // moov's other children need no descent at this level
+    return false;
   });
   return info;
 }
@@ -376,7 +359,6 @@ function walkBoxes(
   }
 }
 
-/** Extract handler type + (for video) stsd sample-entry codec/dims of one trak. */
 function collectTrack(body: Uint8Array, start: number, len: number, info: Mp4Info): void {
   let handler = "";
   let sampleEntry: { codec: string; width: number; height: number } | null = null;
@@ -449,8 +431,6 @@ async function verifyLiveWallpaper(reader: R2Reader, ct: string): Promise<Verify
   return result;
 }
 
-// ── Audio ─────────────────────────────────────────────────────────────────────
-
 async function verifyRingtoneAudio(reader: R2Reader, ct: string): Promise<VerifyResult> {
   const head = await reader.head();
   if (!head || head.length < 12) return fail("corrupt", "Could not read the uploaded audio");
@@ -467,7 +447,6 @@ async function verifyRingtoneAudio(reader: R2Reader, ct: string): Promise<Verify
     if (!adts && !adif) return fail("bad_type", "The file's contents are not a valid AAC stream");
     return { ok: true, contentType: ct };
   }
-  // audio/mp4 or audio/x-m4a — an MP4 container that must carry audio, not video.
   const mp4 = await parseMp4(reader);
   if (!mp4) return fail("corrupt", "The file's contents are not a valid M4A audio file");
   if (mp4.audioTracks === 0) {

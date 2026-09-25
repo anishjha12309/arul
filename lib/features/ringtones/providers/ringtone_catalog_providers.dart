@@ -13,7 +13,6 @@ import '../../wallpapers/providers/catalog_providers.dart'
 import '../data/cdn_ringtone_repository.dart';
 import '../domain/ringtone_repository.dart';
 
-/// CDN-backed ringtone repository (edge-cached catalog JSON, never the DB).
 final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
   (ref) => CdnRingtoneRepository(
     catalogClient: ref.watch(catalogHttpClientProvider),
@@ -189,8 +188,6 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   );
 });
 
-/// Slug of the catch-all category — tracks belonging to none of the five deities.
-/// Ringtones only; wallpapers have no such bucket.
 const String othersCategorySlug = 'others';
 
 /// [compareBrowseCategories] — Sivan first, then alphabetical — except `others` is always LAST.
@@ -261,7 +258,6 @@ final showNewRingtoneCategoryProvider = Provider<bool>((ref) {
   return all.any((r) => r.publishedAt != null);
 });
 
-/// The list the screen renders: [ringtoneFeedOrder] for the selected category.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {
   final slug = ref.watch(selectedRingtoneCategoryProvider);
   return ref

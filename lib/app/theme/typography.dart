@@ -24,7 +24,6 @@ abstract final class ArulType {
   static const _serif = 'Marcellus';
 
   static TextTheme scale(Color ink, Color muted) => TextTheme(
-    // Display / hero headings — Marcellus (redesign screen titles & hero copy).
     displayLarge: TextStyle(
       fontFamily: _serif,
       fontSize: 48,
@@ -60,7 +59,6 @@ abstract final class ArulType {
       letterSpacing: _tight,
       color: ink,
     ),
-    // Viewer title, sign-in headline. Marcellus, 22px (redesign screen title).
     headlineSmall: TextStyle(
       fontFamily: _serif,
       fontSize: 22,
@@ -68,7 +66,6 @@ abstract final class ArulType {
       letterSpacing: 0.3,
       color: ink,
     ),
-    // App-bar title, sheet title.
     titleLarge: TextStyle(
       fontSize: 18,
       height: 1.3,
@@ -76,7 +73,6 @@ abstract final class ArulType {
       letterSpacing: -0.2,
       color: ink,
     ),
-    // Apply-sheet rows, list tiles.
     titleMedium: TextStyle(
       fontSize: 15,
       height: 1.35,
@@ -92,14 +88,12 @@ abstract final class ArulType {
     bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: ink),
     bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: muted),
     bodySmall: TextStyle(fontSize: 12, height: 1.4, color: muted),
-    // Buttons.
     labelLarge: TextStyle(
       fontSize: 15,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
       color: ink,
     ),
-    // Tab / chip labels.
     labelMedium: TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w600,
@@ -107,7 +101,6 @@ abstract final class ArulType {
       color: ink,
     ),
 
-    /// Eyebrow / tagline.
     labelSmall: TextStyle(
       fontSize: 11,
       fontWeight: FontWeight.w600,

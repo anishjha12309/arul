@@ -15,7 +15,7 @@ class KolamPainter extends CustomPainter {
     final rect = Offset.zero & size;
     canvas.drawRect(rect, Paint()..shader = ArulScrims.silk.createShader(rect));
 
-    final glow = Offset(size.width * 0.5, size.height * 0.72); // the lamp
+    final glow = Offset(size.width * 0.5, size.height * 0.72);
     canvas.drawCircle(
       glow,
       size.width * 0.7,
@@ -62,7 +62,6 @@ class KolamPainter extends CustomPainter {
     }
   }
 
-  /// Stepped temple tower, mirrored about [cx].
   Path _gopuram(double cx, double baseY, double w, double h, int steps) {
     final half = w / 2;
     final stepH = h / (steps + 1);
@@ -83,9 +82,9 @@ class KolamPainter extends CustomPainter {
     for (final p in left.skip(1)) {
       path.lineTo(p.dx, p.dy);
     }
-    path.lineTo(cx, y - stepH); // apex
+    path.lineTo(cx, y - stepH);
     for (final p in left.reversed) {
-      path.lineTo(2 * cx - p.dx, p.dy); // mirror
+      path.lineTo(2 * cx - p.dx, p.dy);
     }
     return path..close();
   }

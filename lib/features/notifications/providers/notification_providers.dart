@@ -21,7 +21,6 @@ NotificationService notificationService(Ref ref) => throw UnimplementedError(
   'notificationServiceProvider must be overridden in main()',
 );
 
-/// Persisted notification preferences (SharedPreferences-backed).
 @Riverpod(keepAlive: true)
 class NotificationSettingsNotifier extends _$NotificationSettingsNotifier {
   @override
@@ -63,7 +62,6 @@ class NotificationSettingsNotifier extends _$NotificationSettingsNotifier {
     }
   }
 
-  /// The single time-of-day every reminder fires at.
   Future<void> setReminderTime(int hour, int minute) =>
       _persist(state.copyWith(reminderHour: hour, reminderMinute: minute));
 }

@@ -11,7 +11,6 @@ import 'shared_preferences_provider.dart';
 
 part 'geo_language_service.g.dart';
 
-/// Hands a `GET /geo` answer to its one consumer, [LocaleNotifier.setGeoHint].
 typedef GeoAnswerHandler =
     Future<void> Function({String? lang, String? region});
 
@@ -25,10 +24,6 @@ class GeoLanguageService {
     required this._api,
     required this._prefs,
     required this._onAnswer,
-    // 12 s, not 5. The answer is ~200 bytes and decides what language the sign-in wall is written
-    // in — there is no second ask, and a miss costs the whole first launch its language. At 5 s it
-    // died on a 7 KB/s link every time, queued behind the first-second catalog drain; the budget
-    // is for a slow LINK, not for a slow Worker. Never awaited, so it delays nothing on screen.
     this._timeout = const Duration(seconds: 12),
   });
 

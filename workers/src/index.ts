@@ -57,8 +57,6 @@ import { sweepCanonical } from "./cron/sweep-canonical.js";
 import { runAutopayNotify } from "./cron/autopay-notify.js";
 import { runPushDispatch, sweepPush } from "./cron/push-dispatch.js";
 
-// ── App ───────────────────────────────────────────────────────────────────────
-
 const app = new Hono<{ Bindings: Env }>();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
@@ -99,54 +97,48 @@ app.get("/", handleRootLink);
 
 // ── Region hint (PUBLIC — the app's first launch, no JWT) ─────────────────────
 // Read once per fresh install from request.cf -> host-agnostic, so pre-rename workers.dev installs get it too
-app.get("/geo", handleGeo); // routes/geo.ts -> no DB, no KV, no limiter
+app.get("/geo", handleGeo);
 
-// ── Auth routes ───────────────────────────────────────────────────────────────
 app.post("/auth/login", handleLogin);
 app.post("/auth/refresh", handleRefresh);
 app.post("/auth/logout", handleLogout);
 
-// ── Media routes (all gated) ──────────────────────────────────────────────────
 app.post("/media/signed-url", handleSignedUrl);
 app.post("/media/upload-url", handleUploadUrl);
 app.post("/media/confirm-upload", handleConfirmUpload);
 
-// ── Payment routes (PhonePe Autopay v2) ───────────────────────────────────────
-app.post("/payments/initiate", handleInitiate);    // JWT — mandate: ₹2 PENNY_DROP / ₹199 TRANSACTION
-app.post("/payments/webhook", handleWebhook);      // S2S callback (callback-auth verified)
-app.post("/payments/status", handleStatus);        // JWT — reconcile live subscription state
-app.post("/payments/cancel", handleCancel);        // JWT — revoke mandate (Manage Subscription)
-app.post("/payments/abandon", handleAbandon);      // JWT — release a claimed setup after SDK cancel
-app.get("/payments/callback", handleCallback);     // PhonePe post-mandate browser redirect
+app.post("/payments/initiate", handleInitiate);
+app.post("/payments/webhook", handleWebhook);
+app.post("/payments/status", handleStatus);
+app.post("/payments/cancel", handleCancel);
+app.post("/payments/abandon", handleAbandon);
+app.get("/payments/callback", handleCallback);
 
-// ── Me routes (all gated, scoped to verified sub) ─────────────────────────────
 app.get("/me", handleMe);
 app.post("/me/profile", handleUpdateProfile);
-app.delete("/me", handleDeleteAccount); // revoke mandate → tombstone → cascade delete
+app.delete("/me", handleDeleteAccount);
 app.get("/me/subscription", handleMeSubscription);
 app.get("/me/submissions", handleMeSubmissions);
 app.get("/me/referrals", handleMeReferrals);
 // Campaign push (docs/push.md). ADDITIVE — builds 68-74 never call either and keep working untouched.
-app.post("/me/device", handleRegisterDevice);       // JWT — register this phone's FID in the registry
-app.post("/me/push-opened", handlePushOpened);      // JWT — this person tapped campaign <id>
+app.post("/me/device", handleRegisterDevice);
+app.post("/me/push-opened", handlePushOpened);
 app.post("/push/device", handleRegisterAnonDevice); // PUBLIC — a signed-out phone; never writes user_id
 
-// ── Internal routes ───────────────────────────────────────────────────────────
 app.post("/internal/build-catalog", handleBuildCatalog);
 app.post("/internal/sweep-submissions", handleSweepSubmissions);
 app.post("/internal/sweep-canonical", handleSweepCanonical);
-app.post("/internal/run-redemptions", handleRunRedemptions); // testing: force notify+execute
-app.post("/internal/refund", handleRefund);                  // operator/support: ₹199 refund
+app.post("/internal/run-redemptions", handleRunRedemptions);
+app.post("/internal/refund", handleRefund);
 // Campaign push, guarded by PUSH_SECRET -> a THIRD secret: one string must not both rebuild the
 // catalog and message every user. Literal paths, and none of them collides with a /:id route here.
-app.post("/internal/push/count", handlePushCount);       // CMS composer's live audience counts
-app.post("/internal/push/dispatch", handlePushDispatch); // "send now" -> starts a pass in seconds
-app.post("/internal/push/test", handlePushTest);         // "send to my phone" -> is_internal devices only
+app.post("/internal/push/count", handlePushCount);
+app.post("/internal/push/dispatch", handlePushDispatch);
+app.post("/internal/push/test", handlePushTest);
 
 // Authoring lives in the unified CMS worker (hsr-cms) -> this worker has no /admin -> see README
 // hsr-cms reaches it through the ARUL_API service binding + /internal/build-catalog
 
-// ── Global error handler ──────────────────────────────────────────────────────
 app.onError((err, c) => {
   console.error("[worker] Unhandled error:", err);
   return c.json(
@@ -155,15 +147,12 @@ app.onError((err, c) => {
   );
 });
 
-// ── 404 handler ───────────────────────────────────────────────────────────────
 app.notFound((c) => {
   return c.json(
     { error: { code: "not_found", message: `Route not found: ${c.req.method} ${c.req.path}` } },
     404,
   );
 });
-
-// ── Scheduled handler (CRON) ──────────────────────────────────────────────────
 
 interface ScheduledEvent {
   cron: string;

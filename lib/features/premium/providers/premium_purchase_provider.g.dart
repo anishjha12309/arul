@@ -8,36 +8,12 @@ part of 'premium_purchase_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// Manages the PhonePe Standard Checkout trial-start flow.
-///
-/// Flow:
-///   1. POST /payments/initiate  → get orderId / token / merchantId / environment
-///   2. PhonePePaymentSdk.init() with the returned environment + merchantId
-///   3. PhonePePaymentSdk.startTransaction() with the order payload
-///   4. Poll POST /payments/status until status ∈ {trialing, active}
-///   5. Invalidate entitlementProvider so the UI reflects the new state
 
 @ProviderFor(PremiumPurchase)
 final premiumPurchaseProvider = PremiumPurchaseProvider._();
 
-/// Manages the PhonePe Standard Checkout trial-start flow.
-///
-/// Flow:
-///   1. POST /payments/initiate  → get orderId / token / merchantId / environment
-///   2. PhonePePaymentSdk.init() with the returned environment + merchantId
-///   3. PhonePePaymentSdk.startTransaction() with the order payload
-///   4. Poll POST /payments/status until status ∈ {trialing, active}
-///   5. Invalidate entitlementProvider so the UI reflects the new state
 final class PremiumPurchaseProvider
     extends $NotifierProvider<PremiumPurchase, PurchaseState> {
-  /// Manages the PhonePe Standard Checkout trial-start flow.
-  ///
-  /// Flow:
-  ///   1. POST /payments/initiate  → get orderId / token / merchantId / environment
-  ///   2. PhonePePaymentSdk.init() with the returned environment + merchantId
-  ///   3. PhonePePaymentSdk.startTransaction() with the order payload
-  ///   4. Poll POST /payments/status until status ∈ {trialing, active}
-  ///   5. Invalidate entitlementProvider so the UI reflects the new state
   PremiumPurchaseProvider._()
     : super(
         from: null,
@@ -65,16 +41,7 @@ final class PremiumPurchaseProvider
   }
 }
 
-String _$premiumPurchaseHash() => r'9095242d1ed0dbcef3cca40b9a08740becdd0219';
-
-/// Manages the PhonePe Standard Checkout trial-start flow.
-///
-/// Flow:
-///   1. POST /payments/initiate  → get orderId / token / merchantId / environment
-///   2. PhonePePaymentSdk.init() with the returned environment + merchantId
-///   3. PhonePePaymentSdk.startTransaction() with the order payload
-///   4. Poll POST /payments/status until status ∈ {trialing, active}
-///   5. Invalidate entitlementProvider so the UI reflects the new state
+String _$premiumPurchaseHash() => r'b48acbd6849981ce96fa51a73cb5df746d1a109d';
 
 abstract class _$PremiumPurchase extends $Notifier<PurchaseState> {
   PurchaseState build();

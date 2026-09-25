@@ -18,7 +18,6 @@ abstract final class BootTrace {
   /// is, and a profile-vs-profile A/B would flatter it.
   static const _diag = bool.fromEnvironment('DIAG');
 
-  /// Emit `[boot] +1234ms <label>`. No-op in a shipped release; a DIAG release keeps it.
   static void mark(String label) {
     if (kReleaseMode && !_diag) return;
     debugPrint('[boot] +${_sw.elapsedMilliseconds}ms $label');

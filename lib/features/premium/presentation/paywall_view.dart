@@ -28,7 +28,6 @@ class PaywallDisplayLabel extends StatelessWidget {
 
   final String text;
 
-  /// The Latin style, tracking included.
   final TextStyle style;
 
   /// Left padding equal to [style]'s letterSpacing, given back only while the track is applied.
@@ -75,7 +74,6 @@ class ArulPaywallView extends StatelessWidget {
     this.onPayByQr,
   });
 
-  /// One free trial per user. Drives the panel — lead line + ₹2 + badge, or ₹199 + "PER MONTH".
   final bool trialEligible;
 
   /// "₹199" — from remote config, so a price test needs no release.
@@ -83,7 +81,6 @@ class ArulPaywallView extends StatelessWidget {
 
   final bool purchaseBusy;
 
-  /// `feature_flags.show_social_proof`.
   final bool showSocialProof;
 
   /// The localised onboarding clip, resolved by [PremiumScreen] from the live locale.
@@ -125,7 +122,6 @@ class ArulPaywallView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Built once, placed in exactly ONE branch below — above the clip, or centred in the middle.
     final video = onboardingVideo;
     // The footer sits outside the middle's LayoutBuilder -> it reads the SCREEN, not the viewport.
     // Same intent: on a short phone the chrome gives back padding so the clip fits above the fold.
@@ -267,7 +263,6 @@ class ArulPaywallLoading extends StatelessWidget {
   }
 }
 
-/// Back ring + centred "SUBSCRIPTION", on the header ground — the paywall's and the return page's.
 class PaywallNavRow extends StatelessWidget {
   const PaywallNavRow({super.key, required this.onBack});
 
@@ -311,7 +306,6 @@ class PaywallNavRow extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (_) => ArulHaptics.tap(),
                 onTap: onBack,
-                // The ring is 34; the touch target it sits in is [ArulTokens.minHitTarget].
                 child: SizedBox.square(
                   dimension: ArulTokens.minHitTarget,
                   child: Center(
@@ -353,7 +347,6 @@ class _HeaderCrest extends StatelessWidget {
   final bool showSocialProof;
   final bool compact;
 
-  /// Short screen: close the gaps to the minimum that still reads as spacing.
   final bool dense;
 
   @override
@@ -383,7 +376,6 @@ class _HeaderCrest extends StatelessWidget {
   }
 }
 
-/// The gold rule that closes the header.
 class _HeaderHairline extends StatelessWidget {
   const _HeaderHairline();
 
@@ -401,7 +393,6 @@ class _HeaderHairline extends StatelessWidget {
   );
 }
 
-/// The no-clip header, exactly as the handoff draws it.
 class _HeaderBlock extends StatelessWidget {
   const _HeaderBlock({required this.showSocialProof});
 
@@ -450,7 +441,6 @@ class _ScrollableMiddle extends StatelessWidget {
   }
 }
 
-/// Gold-ruled "PREMIUM", the wordmark, the tagline.
 class _BrandLockup extends StatelessWidget {
   const _BrandLockup();
 
@@ -643,7 +633,6 @@ class _SocialProofPillState extends State<_SocialProofPill> {
   }
 }
 
-/// The offer inside two crisp, parallel chamfered rules.
 class _ShrinePanel extends StatelessWidget {
   const _ShrinePanel({
     required this.padTop,
@@ -652,7 +641,6 @@ class _ShrinePanel extends StatelessWidget {
     this.dense = false,
   });
 
-  /// Short screen — see [ArulPaywallView].
   final bool dense;
 
   /// The handoff gives the monthly panel 26px of top padding and the trial 24 — its lead line pays.
@@ -695,7 +683,6 @@ class _ShrinePanel extends StatelessWidget {
   }
 }
 
-/// Screen A — ₹199, "PER MONTH", the fixed fine print.
 class _MonthlyOffer extends StatelessWidget {
   const _MonthlyOffer({required this.monthlyPrice});
 
@@ -833,7 +820,6 @@ class _PriceDivider extends StatelessWidget {
 class PriceLockup extends StatelessWidget {
   const PriceLockup({super.key, required this.price});
 
-  /// "₹199" — a leading rupee sign followed by the amount.
   final String price;
 
   /// Ink extents in `em` from `Gelasio-Regular.ttf` (upem 2048), as `(yMin, yMax)` about the baseline.
@@ -875,7 +861,6 @@ class PriceLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Everything up to the first digit is the symbol; the rest is the amount.
     final split = price.indexOf(RegExp(r'[0-9]'));
     final symbol = split <= 0 ? '₹' : price.substring(0, split);
     final amount = split <= 0 ? price : price.substring(split);
@@ -922,8 +907,6 @@ class _FeatureRow extends StatelessWidget {
   static const double _sidePad = 12;
   static const double _featurePad = 4;
 
-  /// One column's text width at [screenWidth]: the row less its padding and the two 1px dividers,
-  /// split three ways, less the feature's own padding.
   static double labelWidthFor(double screenWidth) =>
       (screenWidth - _sidePad * 2 - 2) / 3 - _featurePad * 2;
 
@@ -999,7 +982,6 @@ class _Feature extends StatelessWidget {
   final PaywallOrnament icon;
   final String label;
 
-  /// The width this column's label actually gets — see [_FeatureRow.labelWidthFor].
   final double labelWidth;
   final bool tight;
 

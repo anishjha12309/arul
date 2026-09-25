@@ -41,7 +41,6 @@ abstract final class PlayInstall {
   static bool get isPlay => _isPlay;
   static bool _isPlay = true;
 
-  /// The probe, started once. Later callers get the same future.
   static Future<bool> get resolved => _probe ??= _ask();
 
   static Future<bool> _ask() async {
@@ -61,14 +60,12 @@ abstract final class PlayInstall {
     }
   }
 
-  /// Pins the answer without a channel, for tests that assert the gate rather than the probe.
   @visibleForTesting
   static void debugSetIsPlay(bool value) {
     _isPlay = value;
     _probe = Future<bool>.value(value);
   }
 
-  /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
   static void resetForTesting() {
     _isPlay = true;
@@ -148,14 +145,12 @@ abstract final class DeviceQuality {
     }
   }
 
-  /// Pins the tier without a channel, for tests that assert a consumer rather than the probe.
   @visibleForTesting
   static void debugSetTier(DeviceTier value) {
     _resolved = value;
     _probe = Future<DeviceTier>.value(value);
   }
 
-  /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
   static void resetForTesting() {
     _probe = null;
@@ -190,7 +185,6 @@ abstract final class DeviceMemory {
       ? DeviceQuality.resolved == DeviceTier.low
       : null;
 
-  /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
   static void resetForTesting() => DeviceQuality.resetForTesting();
 }
@@ -218,7 +212,6 @@ abstract final class AndroidVersion {
     }
   }
 
-  /// Drop the cached answer so a test can re-probe under a different mock.
   @visibleForTesting
   static void resetForTesting() => _probe = null;
 }

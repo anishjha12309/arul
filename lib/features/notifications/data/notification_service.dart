@@ -2,9 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-// The 10-year database (five years either side of the data build), a quarter of the default one's
-// 270 KB inside libapp.so. Every reminder lands within a few years, and a date past the truncation
-// still resolves on the zone's last rule — Asia/Kolkata has had one since 1945.
 import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -30,16 +27,13 @@ class NotificationAudit {
   final int festivalsArmed;
   final int festivalsExpected;
 
-  /// Titles of everything armed, for the QA card's detail list.
   final List<String> titles;
 
   int get totalArmed => weeklyArmed + festivalsArmed;
 
-  /// True when every reminder the tables define is armed.
   bool get complete =>
       weeklyArmed == weeklyExpected && festivalsArmed == festivalsExpected;
 
-  /// Festivals the scheduler skipped for want of a future date.
   int get skippedFestivals => festivalsExpected - festivalsArmed;
 }
 
@@ -74,7 +68,6 @@ class NotificationService {
   /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.
   static const _icon = 'ic_notification';
 
-  /// The coloured brand mark, shown beside the text.
   static const _largeIcon = 'ic_notification_large';
 
   /// Whether `res/raw/arul_bell.mp3` is present in the build.
@@ -100,15 +93,6 @@ class NotificationService {
   static const _festivalChannelId = 'arul_festivals_v1';
   static const _festivalChannelName = 'Festival reminders';
 
-  /// The CMS campaign channel (docs/push.md). Created by THIS class even though nothing here ever
-  /// posts to it: FCM shows those notifications itself, and the id in the payload has to already
-  /// exist on the device or FCM silently falls back to the manifest's default channel.
-  ///
-  /// Created at EVERY launch, never at opt-in, and that is the point on Android 8–12: those phones
-  /// have no runtime permission, so the channel IS the user's control — and a phone that upgrades to
-  /// 13 later is auto-granted only if a channel already exists and notifications were not disabled.
-  /// **The id is immutable once a device has seen it** — a new one appears as a second, empty toggle
-  /// in system settings. Getting it right the first time is the whole reason for the `_v1` suffix.
   static const updatesChannelId = 'arul_updates_v1';
 
   /// Fallback until [setUpdatesChannelName] supplies the user's language. Name and description ARE
@@ -135,7 +119,6 @@ class NotificationService {
   /// Null until then — an early tap just opens the app, which is the correct fallback.
   void Function(String category)? onOpenCategory;
 
-  /// Tapped the unfinished-trial reminder — the paywall, not a category.
   void Function()? onOpenTrialReminder;
 
   /// Payload marking [_trialReminderId], distinguishable from every category slug.
@@ -318,8 +301,6 @@ class NotificationService {
     await _plugin.cancelAllPendingNotifications();
     if (!settings.masterEnabled) return;
 
-    // Exact alarms need a special-access permission that shows on the Play listing -> inexact.
-    // A few minutes' drift is immaterial for a weekly or seasonal reminder.
     const mode = AndroidScheduleMode.inexactAllowWhileIdle;
 
     await _scheduleWeekly(settings, mode);
@@ -405,7 +386,6 @@ class NotificationService {
     }
   }
 
-  /// The reminder instant — [kFestivalLeadDays] before [eventDate], at the user's chosen time.
   tz.TZDateTime _reminderTime(DateTime eventDate, int hour, int minute) {
     final d = eventDate.subtract(const Duration(days: kFestivalLeadDays));
     return tz.TZDateTime(tz.local, d.year, d.month, d.day, hour, minute);
@@ -431,7 +411,6 @@ class NotificationService {
     ),
   );
 
-  /// Next instant in the local zone for [hour]:[minute], strictly in the future.
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(
@@ -448,7 +427,6 @@ class NotificationService {
     return scheduled;
   }
 
-  /// Next occurrence of [weekday] (`DateTime.monday`…`sunday`) at [hour]:[minute].
   tz.TZDateTime _nextWeekday(int weekday, int hour, int minute) {
     var scheduled = _nextInstanceOfTime(hour, minute);
     while (scheduled.weekday != weekday) {
@@ -456,10 +434,6 @@ class NotificationService {
     }
     return scheduled;
   }
-
-  // QA: reachable in debug AND in a sideloaded release APK, never in Play (`qaToolsEnabled`).
-  // R8 stripping icons, a stale channel sound, an alarm that never armed happen ONLY in release.
-  // So NOT gated on `kDebugMode` — a tool compiled out of release could never catch them.
 
   /// What is actually scheduled right now, newest-armed last.
   ///
@@ -526,14 +500,11 @@ class NotificationService {
     }
   }
 
-  /// Drops the unfinished-trial reminder — the trial was finished, or the marker aged out.
   Future<void> cancelTrialReminder() async {
     if (!_initialized) await initialize();
     await _plugin.cancel(id: _trialReminderId);
   }
 
-  /// Fires a one-off notification [delay] from now -> the user confirms reminders actually arrive.
-  /// Requests the permission first if needed.
   Future<void> scheduleTestNotification({
     Duration delay = const Duration(seconds: 5),
   }) async {

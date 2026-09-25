@@ -53,7 +53,6 @@ const LANG_BY_NAME: Readonly<Record<string, string>> = {
   "himachal pradesh": "hi",
 };
 
-/** A cf field Cloudflare "knows" -> a non-blank string -> anything else reads as unknown. */
 function known(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }

@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Pure prefs arithmetic, no plugins and no Riverpod, so the rules below can be pinned in tests.
 abstract final class TrialNudge {
-  /// When the unfinished attempt was abandoned, epoch ms.
   static const markerKey = 'arul_trial_unfinished_ms';
 
   /// The merchant order id it died on — kept so a late grant can be matched to it by hand.
@@ -25,12 +24,10 @@ abstract final class TrialNudge {
   /// How long an unfinished trial is worth mentioning. Past this the moment has gone.
   static const window = Duration(days: 7);
 
-  /// The reminder's delay, and the waking hours it may land in.
   static const reminderDelay = Duration(hours: 6);
   static const reminderEarliestHour = 9;
   static const reminderLatestHour = 21;
 
-  /// Writes the marker. [dueMs] is the reminder instant, or null when no reminder was armed.
   static Future<void> mark(
     SharedPreferences prefs, {
     required String orderId,
@@ -62,7 +59,6 @@ abstract final class TrialNudge {
     return !age.isNegative && age < window;
   }
 
-  /// The stored reminder instant if it is still in the future, else null.
   static DateTime? pendingReminder(SharedPreferences prefs, DateTime now) {
     final due = prefs.getInt(reminderDueKey);
     if (due == null) return null;

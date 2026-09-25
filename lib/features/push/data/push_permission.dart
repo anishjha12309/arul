@@ -5,19 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/crash/crash_reporter.dart';
 
-/// Asks for `POST_NOTIFICATIONS` ONCE, on the first home-feed frame after a successful sign-in.
-///
-/// **Where it is asked is the whole design.** Never on the sign-in wall and never during the Google
-/// flow: a second system dialog stacked on Credential Manager is exactly the interruption that costs
-/// sign-ins, and sign-in percentage is the number this app is judged on. By the time the feed draws,
-/// the person is in — a dialog there costs nothing that has not already been earned.
-///
-/// **Never asked twice.** [_kPromptedKey] is set the moment the OS answers, whatever the answer, so
-/// a `denied` is final for this install. Android itself stops showing the dialog after two refusals,
-/// so re-asking would be a no-op that reads to us as a fresh refusal.
-///
-/// This is NOT the local-reminders opt-in. That one asks on its own toggle, as it always has, and
-/// the two must stay separate: a reminder is a thing the user switched on, a campaign is not.
 class PushPermission {
   PushPermission({
     required this._prefs,
@@ -26,7 +13,6 @@ class PushPermission {
     this._request,
   });
 
-  /// Set once the OS has answered, whatever it answered. Never cleared.
   static const _kPromptedKey = 'arul_push_prompted';
 
   final SharedPreferences _prefs;
@@ -40,7 +26,6 @@ class PushPermission {
 
   bool _asking = false;
 
-  /// Whether this install has already put the question to the OS.
   bool get alreadyPrompted => _prefs.getBool(_kPromptedKey) ?? false;
 
   /// Ask, if this install never has. Returns whether notifications are now permitted.
@@ -73,7 +58,6 @@ class PushPermission {
     }
   }
 
-  /// Android below 13 has no runtime permission and this answers `authorized` with no dialog.
   static Future<AuthorizationStatus> _askSdk() async =>
       (await FirebaseMessaging.instance.requestPermission())
           .authorizationStatus;

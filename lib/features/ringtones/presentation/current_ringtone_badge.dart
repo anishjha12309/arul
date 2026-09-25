@@ -20,7 +20,6 @@ class CurrentRingtoneBadge extends StatelessWidget {
   /// One step under [ArulTokens.caption] — a marker, not a second label competing with the title.
   static const double _fontSize = 10.5;
 
-  /// The pill's inset. The VERTICAL half is what spends the row's height budget — see the class doc.
   static const double _padH = 7;
   static const double _padV = 2.5;
 

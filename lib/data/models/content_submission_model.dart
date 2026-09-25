@@ -12,7 +12,6 @@ enum ContentSubmissionStatus {
   rejected,
 }
 
-/// A user content submission awaiting moderation (Neon `content_submissions`).
 @freezed
 abstract class ContentSubmissionModel with _$ContentSubmissionModel {
   @JsonSerializable(fieldRename: FieldRename.snake)

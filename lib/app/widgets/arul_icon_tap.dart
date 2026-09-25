@@ -40,7 +40,6 @@ class ArulIconTap extends StatefulWidget {
   /// the UI layer and survives every locale.
   final String? identifier;
 
-  /// The transparent hit area either side of a glyph of [size].
   static double slackFor(double size) => (ArulTokens.minHitTarget - size) / 2;
 
   @override

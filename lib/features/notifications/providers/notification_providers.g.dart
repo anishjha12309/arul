@@ -67,16 +67,12 @@ final class NotificationServiceProvider
 String _$notificationServiceHash() =>
     r'87ba170a1c4adc9f37de5e37dc0e13f817a0ca30';
 
-/// Persisted notification preferences (SharedPreferences-backed).
-
 @ProviderFor(NotificationSettingsNotifier)
 final notificationSettingsProvider = NotificationSettingsNotifierProvider._();
 
-/// Persisted notification preferences (SharedPreferences-backed).
 final class NotificationSettingsNotifierProvider
     extends
         $NotifierProvider<NotificationSettingsNotifier, NotificationSettings> {
-  /// Persisted notification preferences (SharedPreferences-backed).
   NotificationSettingsNotifierProvider._()
     : super(
         from: null,
@@ -106,8 +102,6 @@ final class NotificationSettingsNotifierProvider
 
 String _$notificationSettingsNotifierHash() =>
     r'62b37dc6d0aa8d2ea9f9f72a19c9e60bc27034ca';
-
-/// Persisted notification preferences (SharedPreferences-backed).
 
 abstract class _$NotificationSettingsNotifier
     extends $Notifier<NotificationSettings> {

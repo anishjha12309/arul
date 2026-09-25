@@ -32,7 +32,6 @@ final class WallpaperShareIdle extends WallpaperShareState {
 final class WallpaperSharePreparing extends WallpaperShareState {
   const WallpaperSharePreparing({this.progress});
 
-  /// 0.0–1.0 while the media downloads; null before the first byte lands.
   final double? progress;
 }
 
@@ -76,7 +75,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     Wallpaper wallpaper, {
     required String Function(String link) buildCaption,
   }) async {
-    if (state is WallpaperSharePreparing) return; // re-entrancy guard
+    if (state is WallpaperSharePreparing) return;
 
     final service = ref.read(wallpaperApplyServiceProvider);
     final analytics = ref.read(analyticsServiceProvider);
@@ -299,7 +298,6 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     );
   }
 
-  /// Best-effort, fire-and-forget deletion of day-old watermarked outputs.
   void _cleanStaleWatermarks(String tmpPath) {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));
     Future(() async {
@@ -379,7 +377,6 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     );
   }
 
-  /// Friendly filename shown to the recipient, its extension taken from the file actually shared.
   String _recipientFilename(Wallpaper wallpaper, String sharedPath) {
     final dot = sharedPath.lastIndexOf('.');
     final ext = dot == -1 ? '' : sharedPath.substring(dot);

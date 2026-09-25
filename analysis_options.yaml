@@ -18,6 +18,8 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - "lib/app/l10n/app_localizations*.dart"
+    # comment-guard writes transient Dart snapshots here while it verifies a cull.
+    - "tools/comment-guard/out/**"
 
 linter:
   rules:

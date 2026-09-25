@@ -92,7 +92,6 @@ class _SkeletonState extends State<Skeleton>
   }
 }
 
-/// Slides the gradient across the box: -1 (fully left) → 2 (fully past right).
 class _Sweep extends GradientTransform {
   const _Sweep(this.t);
 

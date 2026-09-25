@@ -22,7 +22,6 @@ class SafeBackButtonDispatcher extends RootBackButtonDispatcher {
   /// The router's root navigator — the one navigator that exists whatever the shells are doing.
   final GlobalKey<NavigatorState> rootNavigator;
 
-  /// Where a contained failure is reported (non-fatal).
   final void Function(Object error, StackTrace stack) onError;
 
   @override

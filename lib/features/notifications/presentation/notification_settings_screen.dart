@@ -13,8 +13,6 @@ import '../domain/devotional_event.dart';
 import '../providers/notification_providers.dart';
 import '../../../app/widgets/arul_pushed_header.dart';
 
-/// Settings sub-screen for devotional reminders — one master switch plus the time they fire.
-/// Accepting it enables the WHOLE set, the weekly day and every festival; no per-festival opt-ins.
 class NotificationSettingsScreen extends ConsumerStatefulWidget {
   const NotificationSettingsScreen({super.key});
 
@@ -120,9 +118,6 @@ class _NotificationSettingsScreenState
                     _Card(child: _WhatYoullGet(festivals: festivalEvents)),
                   ],
 
-                  // Debug AND sideloaded release APK; never the Play build.
-                  // R8 stripping icons, a stale channel sound, an alarm never armed happen in RELEASE.
-                  // So the gate is deliberately NOT kDebugMode — such a tool could never catch them.
                   if (ref.watch(qaToolsEnabledProvider)) ...[
                     const SizedBox(height: ArulTokens.contentGap),
                     _QaTools(
@@ -149,10 +144,6 @@ class _NotificationSettingsScreenState
     if (!mounted) return;
     if (value && !granted) {
       showArulToast(context, l10n.remindersPermissionToast);
-      // Refused twice and Android stops offering its dialog -> the toast would name a
-      // screen with no way to reach it. Same deep-link shape as Set's WRITE_SETTINGS.
-      // The toggle is NOT parked: granting there and coming back leaves it off until
-      // the next tap, which then succeeds — the permission is already held.
       final service = ref.read(notificationServiceProvider);
       if (await service.notificationsBlocked()) {
         await service.openNotificationSettings();
@@ -210,7 +201,6 @@ class _NotificationSettingsScreenState
   }
 }
 
-/// The same rounded, hairline-bordered surface Settings uses for its rows card.
 class _Card extends StatelessWidget {
   const _Card({required this.child});
 
@@ -235,7 +225,6 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// Icon chip + title/subtitle + switch, matching the Settings row metrics.
 class _ToggleRow extends StatelessWidget {
   const _ToggleRow({
     required this.icon,

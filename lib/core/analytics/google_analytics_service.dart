@@ -30,7 +30,6 @@ class GoogleAnalyticsService implements AnalyticsService {
 
   final FirebaseAnalytics _analytics;
 
-  /// Currency for valued conversion events. India-only (v1) → INR.
   static const _currency = 'INR';
 
   @override
@@ -93,7 +92,6 @@ class GoogleAnalyticsService implements AnalyticsService {
     }
   }
 
-  /// Revenue for Google Ads ROAS. `value` may be a num or a numeric string; null when absent.
   double? _value(Map<String, Object?>? props) {
     final v = props?['value'];
     if (v is num) return v.toDouble();
@@ -101,11 +99,6 @@ class GoogleAnalyticsService implements AnalyticsService {
     return null;
   }
 
-  /// GA4 accepts only non-null String/num values -> drop nulls, coerce bools, stringify the rest.
-  /// A stray value type would otherwise reject the WHOLE event. An empty or absent map -> null.
-  /// GA4 DISCARDS `value` unless `currency` rides with it — the amount is stripped as `_err=19`.
-  /// A valued event then reaches Google Ads carrying no revenue at all.
-  /// India-only -> pair every `value` with INR HERE, not at each call site; explicit `currency` wins.
   Map<String, Object>? _clean(Map<String, Object?>? props) {
     if (props == null) return null;
     final out = <String, Object>{};

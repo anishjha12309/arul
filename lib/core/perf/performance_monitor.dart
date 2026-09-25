@@ -9,7 +9,6 @@ abstract interface class PerformanceMonitor {
   Future<PerfTrace> startTrace(String name);
 }
 
-/// A single running trace -> attributes and metrics added before [stop] are uploaded with it.
 abstract interface class PerfTrace {
   /// Low-cardinality string dimension (e.g. result=success) -> Perf caps attributes per trace ->
   /// never an unbounded value like an id.
@@ -17,7 +16,6 @@ abstract interface class PerfTrace {
 
   void setMetric(String name, int value);
 
-  /// Stops and submits the trace.
   Future<void> stop();
 }
 

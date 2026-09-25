@@ -5,7 +5,6 @@ import 'sign_in_outcome.dart';
 /// The auth providers the app supports — never put provider-specific logic in widgets or the router.
 enum AuthProvider { google }
 
-/// Possible ways a sign-in attempt can resolve.
 sealed class AuthResult {
   const AuthResult();
 }
@@ -80,7 +79,6 @@ final class AuthUserState {
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
 
-  /// A copy with the given fields overridden. Only valid on an authenticated state.
   AuthUserState copyWith({String? displayName, String? email}) =>
       AuthUserState._(
         status: status,
@@ -95,7 +93,6 @@ abstract interface class AuthService {
   /// Stream of auth state changes. Fires an initial event immediately.
   Stream<AuthUserState> get authStateChanges;
 
-  /// Current auth state (synchronous snapshot).
   AuthUserState get currentState;
 
   /// Completes once the stored-session check has finished and [currentState] is the real verdict.
@@ -140,7 +137,6 @@ abstract interface class AuthService {
   /// Throws on failure so the caller can surface it.
   Future<void> updateDisplayName(String name);
 
-  /// Sign out the current user.
   Future<void> signOut();
 
   /// Permanently delete the account server-side — revoke any live mandate, drop all data, clear session.

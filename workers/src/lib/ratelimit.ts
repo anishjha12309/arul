@@ -19,13 +19,13 @@ export async function allowRequest(
   limiter: RateLimit | undefined,
   key: string,
 ): Promise<boolean> {
-  if (!limiter) return true; // not configured — fail open
+  if (!limiter) return true;
   try {
     const { success } = await limiter.limit({ key });
     return success;
   } catch (err) {
     console.warn("[ratelimit] limiter threw, allowing request:", err);
-    return true; // fail open
+    return true;
   }
 }
 

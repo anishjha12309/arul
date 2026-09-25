@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../perf/boot_trace.dart';
 
-/// Typed error thrown for any non-2xx API response.
 class ApiException implements Exception {
   const ApiException({
     required this.code,
@@ -50,12 +49,6 @@ const _kProfileKey = 'arul_profile';
 /// Set once, for good, when this install's Android Keystore refuses the session store.
 const _kKeystoreRefusedKey = 'arul_keystore_refused';
 
-/// Wraps `http` with:
-///   - Base URL from [AppConfig.apiBaseUrl]
-///   - `Authorization: Bearer <accessToken>` on all requests
-///   - Single-flight 401 → refresh → retry logic
-///   - Typed [ApiException] on non-2xx responses
-///   - Token persistence via [FlutterSecureStorage], or [_plainStore] where the Keystore refuses
 class ApiClient {
   ApiClient({
     FlutterSecureStorage? storage,
@@ -109,7 +102,6 @@ class ApiClient {
     }
   }
 
-  /// True when the secure-storage plugin's failure came out of the Android Keystore.
   @visibleForTesting
   static bool isKeystoreRefusal(PlatformException e) =>
       '${e.message} ${e.details}'.toLowerCase().contains('keystore');
@@ -138,7 +130,6 @@ class ApiClient {
   /// 12s is well past any healthy round trip -> online behaviour is unchanged. Injectable for tests.
   final Duration _requestTimeout;
 
-  /// Prevents concurrent refresh races — only one in-flight refresh at a time.
   Completer<void>? _refreshCompleter;
 
   /// Fires each time a refresh proves the session dead and the tokens are cleared.
@@ -253,7 +244,6 @@ class ApiClient {
     await _write(_kProfileKey, jsonEncode(map));
   }
 
-  /// Reads the locally cached profile, or null if none is stored / unparseable.
   Future<Map<String, dynamic>?> readCachedProfile() async {
     final raw = await _read(_kProfileKey);
     if (raw == null || raw.isEmpty) return null;
@@ -264,7 +254,6 @@ class ApiClient {
     }
   }
 
-  /// Returns true if a stored access token exists (not validated — just presence).
   Future<bool> hasTokens() async {
     final token = await readAccessToken();
     return token != null && token.isNotEmpty;
@@ -281,7 +270,6 @@ class ApiClient {
     };
   }
 
-  /// POSTs [body] as JSON to [path]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
@@ -338,7 +326,6 @@ class ApiClient {
     _meEpoch++;
   }
 
-  /// DELETEs [path] with an optional JSON [body]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> delete(
     String path, {
     Map<String, dynamic>? body,
@@ -346,7 +333,6 @@ class ApiClient {
   }) =>
       _requestWithRetry('DELETE', path, body: body, requiresAuth: requiresAuth);
 
-  /// Core request. A 401 with [requiresAuth] runs a single-flight refresh and retries exactly once.
   Future<Map<String, dynamic>> _requestWithRetry(
     String method,
     String path, {
@@ -362,7 +348,6 @@ class ApiClient {
     final response = await _execute(method, path, headers: headers, body: body);
 
     if (response.statusCode == 401 && requiresAuth && !isRetry) {
-      // Single-flight refresh: if another call is already refreshing, wait.
       if (_refreshCompleter != null) {
         await _refreshCompleter!.future;
       } else {
@@ -382,7 +367,6 @@ class ApiClient {
           _refreshCompleter = null;
         }
       }
-      // Retry once with new tokens.
       return _requestWithRetry(
         method,
         path,
@@ -484,7 +468,6 @@ class ApiClient {
     await setTokens(accessToken: newAccess, refreshToken: newRefresh);
   }
 
-  /// Decodes the JSON body — returns it on 2xx, else throws a typed [ApiException].
   Map<String, dynamic> _parseResponse(http.Response response) {
     late Map<String, dynamic> json;
     try {

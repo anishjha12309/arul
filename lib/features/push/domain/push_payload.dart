@@ -11,7 +11,6 @@ library;
 
 import '../../../core/deeplink/deep_link_target.dart';
 
-/// The destination keys the Worker writes into `data.dest`. Anything else is treated as home.
 const _kDestWallpaper = 'wallpaper';
 const _kDestRingtone = 'ringtone';
 const _kDestCategory = 'category';
@@ -70,5 +69,4 @@ String? pushLang(Map<String, Object?> data) {
   return raw is String && raw.isNotEmpty ? raw : null;
 }
 
-/// A payload value as a string, or empty. See the note in [pushTargetFor]: read, never cast.
 String _str(Object? value) => value is String ? value : '';

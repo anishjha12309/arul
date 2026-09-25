@@ -10,7 +10,6 @@ class AllowlistedAnalyticsService implements AnalyticsService {
 
   final AnalyticsService _inner;
 
-  /// Event names PostHog is permitted to receive. Everything else is dropped.
   final Set<String> allowed;
 
   @override

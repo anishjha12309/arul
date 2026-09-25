@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/app_config_model.dart';
 
-/// A resolved onboarding clip: which language won and where its bytes are.
 @immutable
 class OnboardingVideoSource {
   const OnboardingVideoSource({required this.lang, required this.url});

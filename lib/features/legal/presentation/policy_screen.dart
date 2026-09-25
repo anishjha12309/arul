@@ -32,7 +32,6 @@ enum PolicyDoc {
     PolicyDoc.refund => AppConfig.refundUrl,
   };
 
-  /// The push target. Call sites use this instead of spelling paths.
   String get route => switch (this) {
     PolicyDoc.privacy => '/policy/privacy',
     PolicyDoc.terms => '/policy/terms',
@@ -80,10 +79,8 @@ class PolicyScreen extends StatefulWidget {
 class _PolicyScreenState extends State<PolicyScreen> {
   late final WebViewController _controller;
 
-  /// True until the document has loaded AND been styled — the web view is invisible throughout.
   bool _loading = true;
 
-  /// A main-frame load failure. Almost always no connection.
   bool _failed = false;
 
   /// Whether the reader has followed a link deeper into the policy pages.
@@ -153,7 +150,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
     final brightness = Theme.of(context).brightness;
     if (brightness == _brightness) return;
     _brightness = brightness;
-    // Matches the page's ground to the app's before first paint, and re-themes on a live flip.
     unawaited(
       _controller.setBackgroundColor(
         _brightness == Brightness.dark
@@ -208,11 +204,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
     }
   }
 
-  /// The document has finished loading: style it, then show it.
-  ///
-  /// Android fires `onPageFinished` for its OWN error page too, right after
-  /// `onWebResourceError` -> revealing there paints the robot over the offline state.
-  /// So a failed load is final until [_retry] clears it.
   Future<void> _reveal() async {
     if (_failed) return;
     await _applyAppChrome();
@@ -267,7 +258,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
     return NavigationDecision.prevent;
   }
 
-  /// One back for the arrow and the gesture — unwind the pages first, then leave the screen.
   Future<void> _back() async {
     if (await _controller.canGoBack()) {
       await _controller.goBack();
@@ -305,7 +295,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // The pushed sub-screen header, as on Upload and Reminders — this is an app screen.
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
                 child: Row(

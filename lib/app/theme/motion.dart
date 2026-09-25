@@ -8,22 +8,17 @@ import '../../core/config/build_info.dart';
 /// Material 3 *Expressive* is NOT in Flutter stable — it is deferred to a placeholder `material_ui`.
 /// So "expressive" here is our own restraint plus spring -> never import M3E.
 abstract final class Motion {
-  /// Chip select, toggle, small state flips.
-  static const quick = Durations.short4; // 200ms
+  static const quick = Durations.short4;
   static const quickCurve = Easing.standard;
 
-  /// Sheets & page-level reveals (translateY(24)+fade). The spec: sheets .3s ease.
   static const enter = Duration(milliseconds: 300);
   static const enterCurve = Curves.ease;
 
-  /// Dialog entrance. The spec: dialogs .25s.
   static const dialogEnter = Duration(milliseconds: 250);
 
-  /// Chrome recede while swiping the feed. The spec: out 150ms.
   static const exit = Duration(milliseconds: 150);
   static const exitCurve = Easing.emphasizedAccelerate;
 
-  /// Chrome settle on release. The spec: in 250ms ease-out.
   static const settle = Duration(milliseconds: 250);
   static const settleCurve = Curves.easeOut;
 
@@ -40,20 +35,14 @@ abstract final class Motion {
   /// A breath, not a flip; nothing the eye is waiting on.
   static const breathe = Duration(milliseconds: 350);
 
-  /// The alternating loops: a flame's sway, an empty state's pulse, the Earn parcel's rattle.
-  /// Ease-in-out both ways, so the turn at each end is soft.
   static const swayCurve = Curves.easeInOut;
 
-  /// The skeleton sliding-gradient loop. The spec: 1.8s linear.
   static const skeletonSweep = Duration(milliseconds: 1800);
 
-  /// Splash hairline loader loop. The spec: 1.6s linear.
   static const hairlineSweep = Duration(milliseconds: 1600);
 
-  /// One full in-and-out of the feed's first-load pulse.
   static const loadingPulse = Duration(seconds: 2);
 
-  /// One Earn-button wiggle, and the rest between wiggles.
   static const wiggle = Duration(milliseconds: 550);
   static const wiggleGap = Duration(seconds: 3);
 

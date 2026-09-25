@@ -20,11 +20,6 @@ abstract class Ringtone with _$Ringtone {
     /// An unknown or missing category must never crash the list -> it falls into All.
     @Default('other') String category,
 
-    /// Which god the track is to — finer than [category], and DISPLAY ONLY: row subtitle and art.
-    /// NEVER a browse axis — no chip filters on it, nothing orders by it (CLAUDE.md §5b).
-    /// One category spans several gods — `perumal` holds Venkateswara, Krishna, Rama, Narasimha.
-    /// So category-level art would put Lakshmi's figure on a Chamundeshwari chant.
-    /// Nullable, and null is ORDINARY -> `deityAsset()` resolves to the category's art, no subtitle.
     String? deity,
     @Default(<String>[]) List<String> tags,
     required String audioKey,
@@ -69,10 +64,8 @@ abstract class Ringtone with _$Ringtone {
     return d[0].toUpperCase() + d.substring(1);
   }
 
-  /// Public CDN URL for the preview stream.
   String audioUrl(String cdnBase) => '$cdnBase/$audioKey';
 
-  /// Public CDN URL for the cover art, or null when there is none.
   String? coverUrl(String cdnBase) =>
       coverKey == null ? null : '$cdnBase/$coverKey';
 }

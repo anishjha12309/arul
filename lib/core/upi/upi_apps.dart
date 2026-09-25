@@ -12,7 +12,6 @@ class UpiApp {
   final String packageName;
   final String label;
 
-  /// App icon as PNG bytes, or null — the picker falls back to a glyph.
   final Uint8List? icon;
 }
 
@@ -44,7 +43,6 @@ class UpiScan {
 
   const UpiScan.empty() : apps = const [], otherPackages = const [];
 
-  /// Offered, in the channel's preference order.
   final List<UpiApp> apps;
 
   /// Packages that answer a mandate intent and are NOT on the allowlist, sorted.
@@ -52,7 +50,6 @@ class UpiScan {
   final List<String> otherPackages;
 }
 
-/// Platform bridge for the direct UPI-intent mandate flow.
 class UpiApps {
   static const _channel = MethodChannel('com.hsrutility.arul/upi_intent');
 

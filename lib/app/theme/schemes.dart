@@ -95,10 +95,10 @@ abstract final class ArulSchemes {
     surfaceDim: ArulColors.ink,
     surfaceBright: Color(0xFF2A1218),
     surfaceContainerLowest: Color(0xFF0D0609),
-    surfaceContainerLow: ArulColors.inkRaised, // #1A0B0F
+    surfaceContainerLow: ArulColors.inkRaised,
     surfaceContainer: ArulColors.inkRaised,
-    surfaceContainerHigh: ArulColors.inkHigh, // #241014
-    surfaceContainerHighest: ArulColors.inkVariant, // #2A1218
+    surfaceContainerHigh: ArulColors.inkHigh,
+    surfaceContainerHighest: ArulColors.inkVariant,
 
     inverseSurface: ArulColors.ivoryText,
     onInverseSurface: ArulColors.inverseLight, // 10.83:1
@@ -111,8 +111,6 @@ abstract final class ArulSchemes {
 
   static ColorScheme light() => lightScheme;
   static ColorScheme dark() => darkScheme;
-
-  /// The muted text tier — sub-copy, footnotes, the eyebrow; anywhere the scale wants less than onSurface.
 
   static const lightMuted = ArulColors.inkMuted; // 6.03:1 on ivory
   static const darkMuted = ArulColors.ivoryMuted; // 9.62:1 on ink

@@ -31,12 +31,6 @@ import 'help_sheet.dart';
 import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
-/// Settings — profile card, one rows-card, muted logout, policy footer.
-///
-/// Identity comes from the auth state, with neutral stand-ins while it loads.
-/// Edit-name persists via `POST /me/profile`, and language drives the app locale.
-/// Support, the plan and account deletion all live behind the Need help? row's sheet; logout and
-/// delete run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -302,7 +296,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .read(appConfigProvider.future)
         .catchError((_) => null);
 
-    // Real installed version — a failed read leaves it blank, printing "Unknown" below.
     var version = '';
     try {
       final info = await ref.read(packageInfoProvider.future);
@@ -392,7 +385,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       .join('&');
 }
 
-/// Silk-gradient profile card — a 52px maroon avatar with a gold initial, name, email, edit pencil.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.name,
@@ -406,7 +398,6 @@ class _ProfileCard extends StatelessWidget {
   final String initial;
   final VoidCallback onEdit;
 
-  /// Transparent hit area either side of the 20 px pencil inside its 48 box.
   static const double _pencilSlack = (ArulTokens.minHitTarget - 20) / 2;
 
   @override
@@ -506,7 +497,6 @@ class _RowData {
     required this.identifier,
   }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
-  /// A Material icon — the default for the utility rows.
   final IconData? icon;
 
   /// A custom mark, for where a Material icon would be the wrong voice.
@@ -520,13 +510,9 @@ class _RowData {
   final String sub;
   final VoidCallback onTap;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 }
 
-/// A single rounded card holding all five rows, hairline-divided.
 class _RowsCard extends StatelessWidget {
   const _RowsCard({required this.rows});
 
@@ -734,7 +720,6 @@ class _FooterLink extends StatelessWidget {
   }
 }
 
-/// "DMCA PROTECTED" — a hairline pill in every other surface chip's language: fill, border, glyph.
 class _DmcaBadge extends StatelessWidget {
   const _DmcaBadge();
 
@@ -791,8 +776,6 @@ class _DmcaBadge extends StatelessWidget {
   }
 }
 
-/// Muted-maroon logout pill — dark: maroon-35% ground, maroon-60% border, `#F0C9BA` text.
-/// Light: maroon-8% ground, maroon-35% border, maroon text.
 class _LogoutButton extends StatefulWidget {
   const _LogoutButton({required this.onTap});
 
@@ -852,7 +835,6 @@ class _LogoutButtonState extends State<_LogoutButton> {
     );
   }
 
-  // Approximation of `#F0C9BA` from brand tokens — ivory lightened toward maroon; no token exists.
   static final Color _logoutTextDark = Color.lerp(
     ArulTokens.ivory,
     ArulTokens.maroon,

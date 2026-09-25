@@ -75,8 +75,6 @@ void retireUnfinishedTrial(Ref ref, Entitlement entitlement) {
   }
 }
 
-/// The gate's view of [entitlementDetailProvider]: just "may this user act?".
-/// Invalidating [entitlementDetailProvider] cascades here automatically.
 final entitlementProvider = FutureProvider<bool>((ref) async {
   final entitlement = await ref.watch(entitlementDetailProvider.future);
   return entitlement.isPremium;

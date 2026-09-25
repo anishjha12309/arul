@@ -34,10 +34,8 @@ import '../../../app/theme/motion.dart';
 class RingtoneTileSpec {
   const RingtoneTileSpec({required this.groundIndex});
 
-  /// Index into the ten jewel-tone grounds — the ONLY thing that varies between two same-deity tracks.
   final int groundIndex;
 
-  /// How many grounds exist; also the modulus [groundIndex] is reduced by.
   static const int groundCount = 10;
 
   /// The deterministic derivation. Same id → same spec, always.
@@ -96,7 +94,6 @@ class RingtoneTile extends StatefulWidget {
 
   final RingtoneTileSpec spec;
 
-  /// Resolved by [deityAsset] — always a path with a real file behind it.
   final String assetPath;
 
   final bool playing;
@@ -199,24 +196,22 @@ class _RingtoneTileState extends State<RingtoneTile>
   }
 }
 
-/// Ground + kolam ring. Everything under the deity figure.
 class RingtoneTileGroundPainter extends CustomPainter {
   const RingtoneTileGroundPainter({required this.spec});
 
   final RingtoneTileSpec spec;
 
-  /// The ten jewel-tone temple grounds, `(top-left, bottom-right)`.
   static const List<(Color, Color)> _grounds = [
-    (Color(0xFF5C1226), Color(0xFF2A0A12)), // maroon
-    (Color(0xFF0E3B2E), Color(0xFF07231B)), // temple green
-    (Color(0xFF1E2159), Color(0xFF0E0F2E)), // indigo
-    (Color(0xFF0B4550), Color(0xFF04252C)), // peacock teal
-    (Color(0xFF7A5410), Color(0xFF3A2606)), // turmeric ochre
-    (Color(0xFF40154A), Color(0xFF210A28)), // aubergine
-    (Color(0xFF6B2A12), Color(0xFF33130A)), // brick
-    (Color(0xFF5E1839), Color(0xFF2C0A1B)), // deep rose
-    (Color(0xFF3F4A12), Color(0xFF1E2408)), // olive
-    (Color(0xFF12335A), Color(0xFF08192E)), // navy
+    (Color(0xFF5C1226), Color(0xFF2A0A12)),
+    (Color(0xFF0E3B2E), Color(0xFF07231B)),
+    (Color(0xFF1E2159), Color(0xFF0E0F2E)),
+    (Color(0xFF0B4550), Color(0xFF04252C)),
+    (Color(0xFF7A5410), Color(0xFF3A2606)),
+    (Color(0xFF40154A), Color(0xFF210A28)),
+    (Color(0xFF6B2A12), Color(0xFF33130A)),
+    (Color(0xFF5E1839), Color(0xFF2C0A1B)),
+    (Color(0xFF3F4A12), Color(0xFF1E2408)),
+    (Color(0xFF12335A), Color(0xFF08192E)),
   ];
 
   /// One warm gold ink — the same value the deity PNGs are drawn in.
@@ -240,7 +235,7 @@ class RingtoneTileGroundPainter extends CustomPainter {
       rrect,
       Paint()
         ..shader = LinearGradient(
-          begin: Alignment.topLeft, // 135°
+          begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [from, to],
         ).createShader(rect),
@@ -265,7 +260,6 @@ class RingtoneTileGroundPainter extends CustomPainter {
   bool shouldRepaint(RingtoneTileGroundPainter old) => old.spec != spec;
 }
 
-/// The now-playing diya, painted OVER the deity figure.
 class RingtoneTileDiyaPainter extends CustomPainter {
   RingtoneTileDiyaPainter({
     required this.playing,
@@ -276,15 +270,12 @@ class RingtoneTileDiyaPainter extends CustomPainter {
   final bool playing;
   final bool reduceMotion;
 
-  /// 0 → 1 → 0 over two [ArulTokens.diyaFlicker] beats. Read only while [playing], motion permitting.
   final Animation<double> flicker;
 
   static const Color _ink = Color(0xFFEBD6A3);
 
-  /// The now-playing scrim.
   static const Color _scrim = Color.fromRGBO(14, 6, 8, 0.66);
 
-  /// The diya: glow core, glow falloff, bowl fill, flame.
   static const Color _glowCore = Color(0xFFF4DFA8);
   static const Color _glowEdge = Color(0xFFD4A017);
   static const Color _bowlFill = Color.fromRGBO(212, 160, 23, 0.35);
@@ -292,14 +283,12 @@ class RingtoneTileDiyaPainter extends CustomPainter {
 
   static const double _vb = 46;
 
-  /// The handoff's three flame keyframes about (23, 30): rotate -4°/scaleY .94 → 2°/1.05 → -2°/.97.
   static const List<(double, double)> _flameFrames = [
     (-4, 0.94),
     (2, 1.05),
     (-2, 0.97),
   ];
 
-  /// The glow's opacity on the same three keyframes.
   static const List<double> _glowFrames = [0.28, 0.5, 0.32];
 
   /// The glow opacity when motion is suppressed — one held value, not the middle of the pulse.
@@ -323,7 +312,6 @@ class RingtoneTileDiyaPainter extends CustomPainter {
 
     final t = reduceMotion ? null : flicker.value;
 
-    // Glow.
     const glowCentre = Offset(23, 21);
     const glowRadius = 9.0;
     final glowOpacity = t == null ? _glowStill : _sample(_glowFrames, t);
@@ -340,7 +328,6 @@ class RingtoneTileDiyaPainter extends CustomPainter {
         ).createShader(glowBox),
     );
 
-    // Bowl + base.
     final bowl = Path()
       ..moveTo(14.6, 27.6)
       ..cubicTo(16.6, 32.4, 29.4, 32.4, 31.4, 27.6)
@@ -365,7 +352,6 @@ class RingtoneTileDiyaPainter extends CustomPainter {
           ..color = _ink,
       );
 
-    // Flame, swaying about its base.
     final flame = Path()
       ..moveTo(23, 26.4)
       ..cubicTo(25.8, 23.6, 24.8, 19.6, 23, 16.6)
@@ -388,7 +374,6 @@ class RingtoneTileDiyaPainter extends CustomPainter {
       ..restore();
   }
 
-  /// CSS keyframes at 0 / 50 / 100% — the first half interpolates frame 0→1, the second 1→2.
   static double _sample(List<double> frames, double t) => t < 0.5
       ? _lerp(frames[0], frames[1], t * 2)
       : _lerp(frames[1], frames[2], (t - 0.5) * 2);

@@ -1,15 +1,3 @@
-/// The devotional calendar Arul notifies on — a weekly rhythm that repeats, and a table that does not.
-///
-/// Hindu festivals are LUNISOLAR: their dates ride the tithi or nakshatra at sunrise at a place.
-/// That is astronomy, and no Dart package computes it to a standard worth showing a devotee.
-/// A festival wrong by a week is worse than saying nothing -> the dates are DATA, never computed.
-///
-///  * **It fails silent, never wrong** — [FestivalEvent.nextOccurrenceAfter] returns null once the
-///    table runs out, and the scheduler skips that festival;
-///  * **It has to be refreshed** — the table runs to the end of 2031 (docs/notifications.md).
-///
-/// Reminders fire [kFestivalLeadDays] days AHEAD and never name a date.
-/// So the ±1-day disagreement between panchangams is invisible to the user.
 library;
 
 /// How many days before a festival its reminder fires.
@@ -35,7 +23,6 @@ class WeeklyDevotionalDay {
   /// A changed key orphans the old scheduled notification instead of replacing it.
   final String key;
 
-  /// `DateTime.monday` … `DateTime.sunday`.
   final int weekday;
 
   /// The catalog category this day belongs to -> a tap opens the feed already filtered to it.
@@ -66,7 +53,6 @@ const weeklyDevotionalDays = <WeeklyDevotionalDay>[
   ),
 ];
 
-/// One festival in the table — stable identity, copy, and the explicit Gregorian dates it falls on.
 class FestivalEvent {
   const FestivalEvent({
     required this.key,
@@ -86,7 +72,6 @@ class FestivalEvent {
 
   final String emoji;
 
-  /// Headline, shown after [emoji].
   final String title;
 
   /// Body copy. It fires [kFestivalLeadDays] days EARLY -> speak in the near future, never name a date.
@@ -95,10 +80,6 @@ class FestivalEvent {
   /// The Gregorian dates this festival falls on, ascending — verified against a panchangam.
   final List<DateTime> dates;
 
-  /// The first date strictly after [from], or null when the table has run out for this festival.
-  ///
-  /// Null is the SAFE answer -> the caller must treat it as "do not schedule".
-  /// Adding 365 days to guess would put a lunisolar festival up to a fortnight wrong.
   DateTime? nextOccurrenceAfter(DateTime from) {
     final floor = DateTime(from.year, from.month, from.day);
     for (final date in dates) {
@@ -107,19 +88,9 @@ class FestivalEvent {
     return null;
   }
 
-  /// The latest date in the table for this festival — how far its coverage runs.
   DateTime? get coverageEnd => dates.isEmpty ? null : dates.last;
 }
 
-/// Dates are DATA, verified by hand against a published Tamil panchangam — never computed.
-///
-/// One date per line with the weekday in a comment, precisely so it can be eyeballed.
-/// When EXTENDING coverage (the test starts failing from 2030), verify the new rows the same way.
-/// The solar entries (Pongal, Makaravilakku, Puthandu, Aadi Perukku) follow fixed Tamil rules.
-/// Everything tithi- or nakshatra-based must be checked against a panchangam.
-/// Residual error is contained by design: reminders fire early and never name a date.
-/// A festival with no future date is skipped outright rather than guessed at.
-/// Ordered by the Tamil year (Chithirai → Panguni); all six catalog categories are represented.
 final festivalEvents = <FestivalEvent>[
   FestivalEvent(
     key: 'puthandu',

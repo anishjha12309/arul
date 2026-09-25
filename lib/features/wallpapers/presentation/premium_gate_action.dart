@@ -9,7 +9,5 @@ enum PremiumGateAction {
 
   const PremiumGateAction(this.source);
 
-  /// The `?source=` value forwarded to `/premium` and the stem of the
-  /// `${source}_blocked_premium` analytics event.
   final String source;
 }

@@ -9,18 +9,8 @@ import 'package:flutter/material.dart';
 /// This API is single-[color] stroke -> a filled or two-tone glyph is artwork, kept with its control.
 /// Every glyph is authored in the handoff's 24×24 viewBox and scaled to [ArulLineIcon.size].
 /// Strokes scale with it -> the optical weight holds at any size.
-enum ArulLineGlyph {
-  /// Dock: Wallpapers. Rounded frame + small circle + mountain polyline.
-  wallpapers,
+enum ArulLineGlyph { wallpapers, ringtones, settings }
 
-  /// Dock: Ringtones. Music note — head, stem, flag.
-  ringtones,
-
-  /// Dock: Settings. Inner circle inside a dashed outer ring.
-  settings,
-}
-
-/// One stroke glyph from [ArulLineGlyph], drawn in [color] at [size] square.
 class ArulLineIcon extends StatelessWidget {
   const ArulLineIcon({
     super.key,
@@ -50,7 +40,6 @@ class _LineIconPainter extends CustomPainter {
   final ArulLineGlyph glyph;
   final Color color;
 
-  /// The authoring viewBox every path below is expressed in.
   static const double _vb = 24;
 
   @override
@@ -78,7 +67,6 @@ class _LineIconPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// `rect 3.2,4.4 17.6×15.2 r3` + `circle 9,10 r1.9` + `M4.4 18.4 L10 12.8 L13.6 16.4 L16.4 13.6 L20.4 17.6`.
   void _wallpapers(Canvas canvas, Paint paint) {
     canvas
       ..drawRRect(
@@ -101,7 +89,6 @@ class _LineIconPainter extends CustomPainter {
       );
   }
 
-  /// `circle 9,17.6 r2.9` + stem `M11.9 17.6 V5.6` + flag `M11.9 5.6 C15.6 6.2 17.6 7.6 17.9 9.8`.
   void _ringtones(Canvas canvas, Paint paint) {
     canvas
       ..drawCircle(const Offset(9, 17.6), 2.9, paint)

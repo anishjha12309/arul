@@ -175,9 +175,6 @@ Future<void> _startPostHog(
   await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }
 
-/// Configures the app (system UI, image cache, PostHog, Meta, Google Sign-In,
-/// referral capture) and runs it inside a Riverpod scope. Shared by the
-/// Firebase and non-Firebase entry paths above.
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
@@ -237,24 +234,6 @@ Future<void> _startApp() async {
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');
 
-  // Lean config: manual events only, session replay and surveys OFF, and no
-  // `PosthogObserver`/`PostHogWidget` anywhere -> no element autocapture and no `$screen` at all.
-  // `captureApplicationLifecycleEvents` is OFF (owner's call: PostHog shows the journey and nothing
-  // else). The flag is all-or-nothing and its events never pass through `AnalyticsService`, so it is
-  // the ONLY control over them -> keeping `Application Installed` would also buy `Application
-  // Opened`/`Backgrounded` on every launch and backgrounding — most of the event stream and none of
-  // the funnel -> off, and the install event is re-emitted by hand below.
-  // Verified against posthog-android 3.58.3, not assumed: sessions still work (the lifecycle observer
-  // is registered either way — only the two captures inside it are gated), and GA4 still
-  // auto-collects first_open/session_start/screen_view at 100%, where DAU and retention are read.
-  // The cohort gates `setup()` itself, not individual captures -> a non-panel install pays zero
-  // native init, network and battery, which matters on the budget devices this app targets, and an
-  // SDK that never started cannot autocapture.
-  // The cohort draw is persisted in prefs -> this must stay BELOW the prefs await.
-  // Mirrored in Pakiza -> keep both in sync.
-  // No SIDELOADED build reports to PostHog (owner's rule) -> resolve the installer BEFORE the SDK
-  // starts, so the very first event is already gated and a developer's on-device pass never lands
-  // in the product funnel. One probe per process; every later reader gets the cached verdict.
   await PlayInstall.resolved;
   debugPrint(
     '[Analytics] PostHog sink: ${PlayInstall.isPlay ? "on (Play install)" : "OFF (sideloaded)"}',
@@ -287,10 +266,6 @@ Future<void> _startApp() async {
       // so one request each costs nothing that matters.
       ..flushAt = 1
       ..debug = kDebugMode;
-    // `setup()` does native init and opens the SDK's first network work -> awaiting it here puts that
-    // on the critical path to the first frame for every panel member -> fire-and-forget, matching the
-    // contract every other PostHog call already uses (`PostHogAnalyticsService`).
-    // Nothing captures before the first user action anyway — lifecycle autocapture is off above.
     unawaited(_startPostHog(config, prefs));
   }
 

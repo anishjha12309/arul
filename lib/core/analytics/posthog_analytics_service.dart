@@ -31,7 +31,6 @@ class PostHogAnalyticsService implements AnalyticsService {
     );
   }
 
-  /// The properties a capture sends: everything registered, overridden by the event's own.
   @visibleForTesting
   static Map<String, Object?> propertiesFor(Map<String, Object?>? properties) =>
       {..._registered, ...?properties};
@@ -86,7 +85,6 @@ class PostHogAnalyticsService implements AnalyticsService {
     await _applyRegistered();
   }
 
-  /// Test seam: forget everything registered, as a fresh process would.
   @visibleForTesting
   static void resetForTest() {
     _registered.clear();

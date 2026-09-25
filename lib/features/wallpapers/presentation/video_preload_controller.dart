@@ -29,7 +29,6 @@ class LiveVideoSlot {
     required this.ready,
   });
 
-  /// Feed index this slot serves.
   final int index;
 
   /// Stable identity of the pooled player backing this slot.
@@ -46,7 +45,6 @@ class LiveVideoSlot {
   /// Null until the native `videoSize` event arrives; the poster alone covers the card until then.
   final ValueListenable<Size?> videoSize;
 
-  /// Per-item first-frame flag the card listens to in isolation.
   final ValueListenable<bool> ready;
 }
 
@@ -82,7 +80,6 @@ class _PooledPlayer {
   /// Reset to false before each `open()`, and true again on the native onRenderedFirstFrame.
   ValueListenable<bool> get ready => handle.firstFrame;
 
-  /// Native video size for BoxFit.cover scaling, owned by the native handle.
   ValueListenable<Size?> get videoSize => handle.videoSize;
 
   /// Bumped on every reassignment.
@@ -141,7 +138,6 @@ class VideoPreloadController extends ChangeNotifier
     WidgetsBinding.instance.addObserver(this);
   }
 
-  /// CDN base used to build the public stream URL for live previews.
   final String cdnBaseUrl;
 
   /// Downloads upcoming live MP4 bytes to disk ahead of the decoder window. Owns NO decoders.
@@ -407,7 +403,6 @@ class VideoPreloadController extends ChangeNotifier
     return index >= start && index <= end;
   }
 
-  /// The pooled player currently serving [index], or null if none is.
   _PooledPlayer? _playerServing(int index) {
     for (final p in _pool_) {
       if (p.servingIndex == index) return p;
@@ -514,7 +509,6 @@ class VideoPreloadController extends ChangeNotifier
     return proxy;
   }
 
-  /// Fire-and-forget assignment used from [_reconcile].
   void _assignPlayer(int index, {required bool playWhenReady}) {
     unawaited(_assignPlayerAsync(index, playWhenReady: playWhenReady));
   }
@@ -531,7 +525,6 @@ class VideoPreloadController extends ChangeNotifier
   }) async {
     if (_appPaused || _disposed) return null;
 
-    // Prefer an idle, already-created player -> reuse its surface.
     _PooledPlayer? pooled;
     for (final p in _pool_) {
       if (p.servingIndex == -1) {

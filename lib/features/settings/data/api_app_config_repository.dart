@@ -14,12 +14,10 @@ import '../domain/app_config_repository.dart';
 class ApiAppConfigRepository implements AppConfigRepository {
   ApiAppConfigRepository({this.version});
 
-  /// Optional version resolver; when set, the fetch is stamped with `?v=`.
   final CatalogVersion? version;
 
   @override
   Future<AppConfigModel?> getAppConfig() async {
-    // Public CDN JSON, baked by the build-catalog Worker.
     final v = await version?.current();
     final base = '${AppConfig.cdnBaseUrl}/catalog/app_config.json';
     final cdnUrl = Uri.parse(v != null && v.isNotEmpty ? '$base?v=$v' : base);

@@ -26,7 +26,6 @@ import 'widgets/video_background.dart';
 /// that outgrows its slot is handled where it happens, not by shrinking the screen.
 const double _kCaptionSize = 15;
 
-/// The pill's subtitle, one step under the title.
 const double _kSubtitleSize = 13;
 
 /// The pill's MINIMUM height at this type size. It still grows past it whenever the subtitle wraps.
@@ -291,8 +290,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   }
 }
 
-/// The pill title's type. 19 w600 — the largest thing on the panel and the line Google's own sheet
-/// is read beside.
 const TextStyle kSignInTitleStyle = TextStyle(
   fontSize: 17,
   fontWeight: FontWeight.w600,
@@ -313,17 +310,9 @@ const Key kSignInTitleKey = Key('signIn.pill.title');
 @visibleForTesting
 const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 
-/// What the pill says under its title, resolved in ONE place.
-///
-/// Every failed attempt gets the SAME line. The outcome still rides `AuthCancelled` into
-/// `login_cancelled`, but the screen no longer explains it: a sentence naming Play services or
-/// account settings, and a link out of the app, were three lines this audience cannot act on
-/// (owner's call). The one thing any of them can do is tap again -> that is the whole message.
 String _subtitleFor(AppLocalizations l10n, SignInOutcome? outcome) =>
     outcome == null ? l10n.signInSubtitleIdle : l10n.signInNudgeRetry;
 
-/// The one-tap pill: r999, `rgba(20,9,12,.55)` fill, gold-50% border, solid gold on press,
-/// [_kPillMinHeight] tall or taller.
 class _SignInPill extends StatefulWidget {
   const _SignInPill({
     required this.title,

@@ -25,7 +25,6 @@ final _catalogVersion = CatalogVersion(cdnBaseUrl: AppConfig.cdnBaseUrl);
 /// Call it on an explicit refresh -> a just-published version wins over the session-cached one.
 void invalidateCatalogVersion() => _catalogVersion.invalidate();
 
-/// Shared client for the edge-cached catalog JSON (public CDN, no auth).
 @Riverpod(keepAlive: true)
 CatalogHttpClient catalogHttpClient(Ref ref) => CatalogHttpClient(
   cdnBaseUrl: AppConfig.cdnBaseUrl,

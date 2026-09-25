@@ -7,7 +7,6 @@ import '../../../core/deeplink/deep_link_target.dart';
 
 export '../../../core/deeplink/deep_link_parser.dart' show kDeepLinkHost;
 
-/// Play Store package id — the share link points here with a `referrer` [captureOnce] reads back.
 const String kPlayPackageId = 'com.hsrutility.arul';
 
 /// Captures the Play Install Referrer ONCE per install and hands its code to the first sign-in.
@@ -194,7 +193,6 @@ class InstallReferrerService {
     final s = raw.trim();
     if (s.isEmpty) return null;
 
-    // Preferred: our key inside a (possibly utm-augmented) query string.
     try {
       final params = Uri.splitQueryString(s);
       final v = params['ref'] ?? params['referral'] ?? params['code'];
@@ -204,7 +202,6 @@ class InstallReferrerService {
       // fall through to bare-value handling
     }
 
-    // Fallback: Play returned exactly the bare value we set.
     if (!s.contains('=') && !s.contains('&')) return _clean(s);
     return null;
   }
@@ -215,8 +212,6 @@ class InstallReferrerService {
     return RegExp(r'^[A-Z0-9]{4,16}$').hasMatch(c) ? c : null;
   }
 
-  /// The wallpaper tapped BEFORE they had the app — the `w=<uuid>` half of the Worker's payload.
-  /// Validated as a UUID: see `normalizeUuid`.
   @visibleForTesting
   static String? parseWallpaperTarget(String? raw) =>
       switch (parseReferrerPayload(raw)?.target) {
@@ -224,7 +219,6 @@ class InstallReferrerService {
         _ => null,
       };
 
-  /// The ringtone half (`r=<uuid>`) of the same payload.
   @visibleForTesting
   static String? parseRingtoneTarget(String? raw) =>
       switch (parseReferrerPayload(raw)?.target) {
@@ -232,7 +226,6 @@ class InstallReferrerService {
         _ => null,
       };
 
-  /// The `lang=<code>` half, reduced to one of the six shipped codes.
   @visibleForTesting
   static String? parseLang(String? raw) => parseReferrerPayload(raw)?.lang;
 
@@ -294,7 +287,6 @@ class InstallReferrerService {
     if (answered) await _prefs.setBool(_kChecked, true);
   }
 
-  /// Persist and hand over everything one link asked for.
   Future<void> queueRequest(DeepLinkRequest request) async {
     final target = request.target;
     if (target != null) {
@@ -346,7 +338,6 @@ class InstallReferrerService {
     }
   }
 
-  /// Durably queue a validated language and hand it to the live app.
   Future<void> queueLocale(String code) async {
     final normalized = normalizeLang(code);
     if (normalized == null) return;
@@ -376,7 +367,6 @@ class InstallReferrerService {
   String? get pendingRingtoneId =>
       _nonEmpty(_prefs.getString(_kPendingRingtone));
 
-  /// The language the link asked for, until `DeepLinkLocaleSync` applies it.
   String? get pendingLang => _nonEmpty(_prefs.getString(_kPendingLang));
 
   static String? _nonEmpty(String? v) => (v != null && v.isNotEmpty) ? v : null;
@@ -389,12 +379,9 @@ class InstallReferrerService {
     await _prefs.remove(_kPendingSource);
   }
 
-  /// Drop the pending language once it has been applied.
   Future<void> clearPendingLang() => _prefs.remove(_kPendingLang);
 
-  /// The pending referral code to attach to the next login, or null.
   String? get pendingCode => _nonEmpty(_prefs.getString(_kPendingCode));
 
-  /// Drop the pending code once it has been consumed by a successful login.
   Future<void> clearPendingCode() => _prefs.remove(_kPendingCode);
 }

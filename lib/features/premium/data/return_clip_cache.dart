@@ -22,7 +22,6 @@ abstract final class ReturnClipCache {
     ),
   );
 
-  /// The local path of [url] if it has already landed, else null — never waits on the network.
   static Future<String?> pathIfCached(String url) async {
     try {
       final info = await _cache.getFileFromCache(url);

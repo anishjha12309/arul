@@ -44,7 +44,7 @@ class _ApplySheetBody extends StatefulWidget {
 }
 
 class _ApplySheetBodyState extends State<_ApplySheetBody> {
-  ApplyTarget _target = ApplyTarget.both; // Spec: default Both
+  ApplyTarget _target = ApplyTarget.both;
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +191,6 @@ class _WallpaperThumb extends StatelessWidget {
   }
 }
 
-/// One target card — r16, a 26px icon over a 13px label.
-/// Selected is a gold 1.5px border, gold-tint fill and gold icon, in both themes.
-/// Unselected follows the app theme — ivory-tint on dark, maroon-tint on light.
 class _TargetCard extends StatelessWidget {
   const _TargetCard({
     required this.icon,
@@ -208,9 +205,6 @@ class _TargetCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 
   @override
