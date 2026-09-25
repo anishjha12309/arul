@@ -174,10 +174,6 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.
-- **The after-sign-in paywall side rides the account-creating INSERT** — the Worker mints the id
-  (`crypto.randomUUID()`) so `paywall_test` needs no second write on the one request where latency
-  shows most; only the rare tombstone path clears it. The app sends `postSigninPaywall: true` and obeys
-  `user.paywallTest`; it never decides who is in. Switch: `POST_SIGNIN_PAYWALL_TEST` in wrangler.toml.
 - **Sign-out and delete-account call the plugin's `signOut()`** = Credential Manager
   `clearCredentialState()`, so providers drop their stored session and a user who signed out to
   switch accounts is not handed the same one. Best-effort AFTER the local clear; a plugin error must

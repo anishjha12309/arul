@@ -15,8 +15,7 @@ Campaign invariants ([docs/push.md](../../docs/push.md)):
   seen it. FCM falls back to the manifest default when the channel does not exist yet, and on
   Android 8–12 the channel IS the user's only control. The NAME is mutable and is localized.
 - **The permission prompt fires once per install**, on the first feed frame AFTER sign-in, never on
-  the wall or during the Google flow — a stacked dialog costs sign-ins. Denied is final. The
-  after-sign-in paywall side asks when `/premium` closes, never over it.
+  the wall or during the Google flow — a stacked dialog costs sign-ins. Denied is final.
 - **Notification messages only**, never data-only. **Registering no `onBackgroundMessage` handler is
   what keeps the Flutter isolate out — the plugin's receiver does not check first**, it enqueues its
   background service for every message and the executor then finds no callback handle. Register one

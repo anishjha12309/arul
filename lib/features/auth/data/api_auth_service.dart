@@ -12,7 +12,6 @@ import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
-import '../../premium/domain/post_signin_paywall.dart';
 import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
@@ -81,7 +80,6 @@ class ApiAuthService implements AuthService {
 
   final _controller = StreamController<AuthUserState>.broadcast();
 
-  // Tracks the current state so [currentState] can return synchronously.
   AuthUserState _current = AuthUserState.unauthenticated();
 
   /// Checks secure storage for an existing access token and emits the right initial state.
@@ -142,7 +140,6 @@ class ApiAuthService implements AuthService {
       ),
     );
 
-    // 2. Background upgrade to the real user (or sign out if the session is dead).
     try {
       final data = await _api.get('/me');
       final user = data['user'] as Map<String, dynamic>?;
@@ -171,7 +168,6 @@ class ApiAuthService implements AuthService {
         await _api.clearTokens();
         _endSession();
       }
-      // Other statuses (offline, 5xx): keep the optimistic authenticated state.
     } catch (_) {
       // Network error: keep the optimistic authenticated state.
     }
@@ -190,8 +186,6 @@ class ApiAuthService implements AuthService {
     _current = state;
     if (!_controller.isClosed) _controller.add(state);
   }
-
-  // ─── AuthService ───────────────────────────────────────────────────────────
 
   @override
   Stream<AuthUserState> get authStateChanges => _controller.stream;
@@ -225,8 +219,6 @@ class ApiAuthService implements AuthService {
     final user = data['user'] as Map<String, dynamic>?;
     final newName = user?['displayName'] as String? ?? trimmed;
 
-    // Reflect the new name in the current state so the UI updates reactively,
-    // and refresh the local cache so it survives the next offline cold start.
     if (_current.isAuthenticated) {
       _emit(_current.copyWith(displayName: newName));
       await _api.cacheProfile(
@@ -249,7 +241,6 @@ class ApiAuthService implements AuthService {
     final refreshToken = await _api.readRefreshToken();
     if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
-        // Best-effort: denylist the refresh token on the server.
         await _api.post('/auth/logout', body: {'refreshToken': refreshToken});
       } catch (e) {
         debugPrint('[ApiAuthService] logout request failed (non-fatal): $e');
@@ -308,8 +299,6 @@ class ApiAuthService implements AuthService {
     _emit(AuthUserState.unauthenticated());
   }
 
-  // ─── Google ────────────────────────────────────────────────────────────────
-
   /// Monotonic attempt counter backing [abandonPendingSignIn]. Captured at
   /// launch, re-checked the moment `authenticate()` returns: a mismatch means
   /// the controller's stall guard gave up on this attempt while Credential
@@ -339,7 +328,6 @@ class ApiAuthService implements AuthService {
         ..._installProps,
         'provider': 'google',
         'kind': kind.name,
-        // Null-aware elements: dropped entirely when absent.
         'error': ?_trimForAnalytics(error),
         'gis_code': ?gisCode,
         'surface': ?_surface,
@@ -722,10 +710,6 @@ class ApiAuthService implements AuthService {
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
         sheet: useSheet
             ? () => GoogleSignIn.instance.attemptLightweightAuthentication(
-                // The plugin's DEFAULT swallows canceled/interrupted/
-                // uiUnavailable into a null result, which would make a
-                // DISMISSED sheet indistinguishable from an empty one — and
-                // put the picker up over it.
                 reportAllExceptions: true,
               )
             : null,
@@ -753,7 +737,6 @@ class ApiAuthService implements AuthService {
       // drop the zombie before any side effect.
       if (attempt != _attemptSeq) return const AuthCancelled();
 
-      // v7: idToken is a synchronous property on GoogleSignInAuthentication.
       final idToken = account.authentication.idToken;
       if (idToken == null) {
         return _googleFailure(
@@ -792,10 +775,7 @@ class ApiAuthService implements AuthService {
             // and token claim disagree; both absent is still accepted, which is
             // what every build already in the field sends.
             'nonce': ?GoogleSignInInit.nonce,
-            // Null-aware elements: dropped entirely when absent.
             'referralCode': ?referralCode,
-            // This build can open the paywall after sign-in -> a new account may be put in the test.
-            PostSigninPaywall.requestFlag: true,
           },
           requiresAuth: false,
         ),
@@ -850,10 +830,6 @@ class ApiAuthService implements AuthService {
 
       final displayName = user['displayName'] as String? ?? account.displayName;
       final email = user['email'] as String?;
-      // Noted BEFORE the authenticated emit -> the feed's first frame, which that emit routes to,
-      // must find it already set.
-      final paywallTest = user['paywallTest'] as String?;
-      PostSigninPaywall.note(paywallTest);
 
       _emit(
         AuthUserState.authenticated(
@@ -895,8 +871,6 @@ class ApiAuthService implements AuthService {
           // Present only when the exchange was saved by the network retry —
           // the field readout for whether the retry earns its keep.
           if (exchangeRetried) 'exchange_retried': true,
-          // Side of the after-sign-in paywall test; absent when this account is not in it.
-          'paywall_test': ?paywallTest,
         },
       );
 
@@ -968,10 +942,6 @@ class ApiAuthService implements AuthService {
       // Last-resort fallback for non-GIS, non-platform exceptions only —
       // GoogleSignInException above owns the plugin's outcomes now.
       if (isNetworkError(e)) {
-        // Both exchange attempts (see _postLoginWithRetry) died on the wire.
-        // Reproduced on device 2026-08-31: the Google flow SURVIVED a 12s
-        // uplink blackout and delivered a credential — it was this POST that
-        // gave up. Say connection, not a generic "failed".
         return _googleFailure(
           AuthFailureKind.networkError,
           "Couldn't reach the server. Check your internet connection and try again.",

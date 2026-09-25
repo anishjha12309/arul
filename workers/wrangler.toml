@@ -52,10 +52,6 @@ PUSH_ENABLED = "true"
 # any other value answers `lang: null` with country/region intact -> fresh installs fall back to the
 # phone's language while the accuracy measurement keeps flowing. Turning it off = edit here, deploy.
 GEO_LANG_ENABLED = "false"
-# After-sign-in paywall test switch (routes/auth.ts, db/schema/24_paywall_test.sql). "true" and nothing
-# else splits NEW trial-eligible accounts 50/50 on a build that can show it; any other value assigns no
-# side -> nobody new sees the paywall, and accounts already split keep theirs for the read.
-POST_SIGNIN_PAYWALL_TEST = "true"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>

@@ -23,9 +23,6 @@ import { getDb } from "../lib/db.js";
 import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
-import { paywallTestSide, type PaywallTestSide } from "../lib/paywall-test.js";
-
-// ── POST /auth/login ─────────────────────────────────────────────────────────
 
 export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -33,7 +30,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     idToken?: string;
     referralCode?: string;
     nonce?: string;
-    postSigninPaywall?: boolean;
   };
   try {
     body = await c.req.json();
@@ -50,7 +46,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     typeof body.referralCode === "string" && body.referralCode.trim()
       ? body.referralCode
       : null;
-  // 1. Verify Google idToken
   let googleClaims;
   try {
     googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
@@ -90,12 +85,9 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   const sql = getDb(env);
 
   try {
-    // 2. Upsert the user row, keyed on google_sub
     let userId: string;
     let displayName: string | null;
     let referralCode: string;
-    // After-sign-in paywall test side -> assigned ONLY to a brand-new account below, null for everyone else
-    let paywallTest: PaywallTestSide | null = null;
 
     // The returning user is the common case -> ONE statement, never SELECT-then-UPDATE
     // This round trip sits between the account picker and the feed -> every sequential query is visible latency
@@ -119,27 +111,18 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       referralCode = row.referral_code as string;
     } else {
       // New user -> generate a referral code and insert -> a unique-violation retries once with a fresh code
-      // The id is minted HERE, not by the column default -> the test side derives from it and rides the SAME
-      // INSERT -> the first login gains no round trip. The tombstone branch below clears it again.
-      const newUserId = crypto.randomUUID();
-      paywallTest =
-        body.postSigninPaywall === true && env.POST_SIGNIN_PAYWALL_TEST === "true"
-          ? paywallTestSide(newUserId)
-          : null;
       const insertUser = async (): Promise<
         Array<Record<string, unknown>>
       > => {
         referralCode = generateReferralCode();
         try {
           return await sql`
-            INSERT INTO users (id, google_sub, email, display_name, referral_code, paywall_test)
+            INSERT INTO users (google_sub, email, display_name, referral_code)
             VALUES (
-              ${newUserId},
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
-              ${referralCode},
-              ${paywallTest}
+              ${referralCode}
             )
             RETURNING id, display_name, referral_code
           `;
@@ -147,14 +130,12 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           if (!isUniqueViolation(insertErr)) throw insertErr;
           referralCode = generateReferralCode();
           return await sql`
-            INSERT INTO users (id, google_sub, email, display_name, referral_code, paywall_test)
+            INSERT INTO users (google_sub, email, display_name, referral_code)
             VALUES (
-              ${newUserId},
               ${googleClaims.sub},
               ${googleClaims.email},
               ${googleClaims.name ?? null},
-              ${referralCode},
-              ${paywallTest}
+              ${referralCode}
             )
             RETURNING id, display_name, referral_code
           `;
@@ -196,11 +177,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           VALUES (${userId}, 'expired', ${tomb[0].trial_end as Date})
           ON CONFLICT (user_id) DO NOTHING
         `;
-        // No free trial left to start -> out of the paywall test, or its trial read would count a ₹199 sell
-        if (paywallTest !== null) {
-          paywallTest = null;
-          await sql`UPDATE users SET paywall_test = NULL WHERE id = ${userId}`;
-        }
       }
 
       // New user only -> attribute the install to a referrer -> best-effort, a bad code must never break sign-in
@@ -213,7 +189,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       }
     }
 
-    // 3. Issue tokens
     const accessToken = await signAccessToken(userId, env.JWT_SECRET);
     const { token: refreshToken } = await signRefreshToken(userId, env.JWT_SECRET);
 
@@ -225,8 +200,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         displayName,
         email: googleClaims.email ?? null,
         referralCode,
-        // "paywall" -> the app opens /premium right after this sign-in; "control" -> it does not; null -> not in the test
-        paywallTest,
       },
     });
   } catch (err) {
@@ -236,8 +209,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── POST /auth/refresh ───────────────────────────────────────────────────────
 
 export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -254,7 +225,6 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(400, "missing_field", "refreshToken is required");
   }
 
-  // 1. Verify the refresh JWT
   let claims;
   try {
     claims = await verifyRefreshToken(refreshToken, env.JWT_SECRET);
@@ -287,7 +257,6 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(401, "invalid_refresh", "Refresh token has been revoked");
   }
 
-  // 4. Issue new pair
   const newAccessToken = await signAccessToken(claims.sub, env.JWT_SECRET);
   const { token: newRefreshToken } = await signRefreshToken(claims.sub, env.JWT_SECRET);
 
@@ -300,12 +269,9 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
   return c.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
 }
 
-// ── POST /auth/logout ────────────────────────────────────────────────────────
-
 export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // Require valid access token
   const authHeader = c.req.header("Authorization") ?? "";
   const accessToken = authHeader.replace(/^Bearer\s+/i, "");
   if (!accessToken) {
@@ -329,7 +295,6 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
     return errorResponse(400, "missing_field", "refreshToken is required");
   }
 
-  // Verify and denylist the refresh token
   let claims;
   try {
     claims = await verifyRefreshToken(refreshToken, env.JWT_SECRET);
@@ -343,8 +308,6 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
 
   return c.json({ ok: true });
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function errorResponse(
   status: number,

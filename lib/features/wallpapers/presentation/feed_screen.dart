@@ -29,7 +29,6 @@ import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
-import '../../premium/domain/post_signin_paywall.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../push/providers/push_providers.dart';
 import 'feed_states.dart';
@@ -151,25 +150,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
 
-    // THE one POST_NOTIFICATIONS prompt (docs/push.md), on the first home-feed frame after sign-in.
-    // Here and nowhere earlier: a system dialog stacked on Credential Manager is exactly the
-    // interruption that costs sign-ins, and sign-in percentage is the number this app is judged on.
-    // By the time this frame draws the person is already in. Spent once per install, grant or deny.
-    // Post-frame so it never shares a frame with the feed's first paint.
-    // The after-sign-in paywall test's "paywall" side opens /premium FIRST and asks on its close ->
-    // never a system dialog on top of the price.
+    // The permission prompt fires once per install, on the first feed frame after sign-in: a dialog
+    // stacked on Google's flow costs sign-ins. Post-frame so it never shares the feed's first paint.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(_openPostSigninPaywallThenPrompt());
+      unawaited(ref.read(pushPermissionProvider).promptOnce());
     });
-  }
-
-  Future<void> _openPostSigninPaywallThenPrompt() async {
-    if (PostSigninPaywall.take()) {
-      await context.push('/premium?source=${PostSigninPaywall.source}');
-      if (!mounted) return;
-    }
-    await ref.read(pushPermissionProvider).promptOnce();
   }
 
   void _onDeepLinkChanged() {
@@ -499,16 +485,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     }
   }
 
-  // ─── Build ───────────────────────────────────────────────────────────────────
-
-  // The chips gap and the gap below the hairline now live in
-  // [ArulBrowseHeader], which both browse tabs share — the reel's card is still
-  // solved from whatever height that frame leaves, so its 1:1.86 ratio holds by
-  // construction (see [FeedCardGeometry.resolve]).
-
   static const _cardRadius = FeedCardGeometry.radius;
 
-  /// The card's resting geometry for a reel [height] — see [FeedCardGeometry].
   FeedCardGeometry _geometryFor(BuildContext context, double height) =>
       FeedCardGeometry.resolve(context, reelHeight: height);
 
@@ -779,7 +757,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           ),
         ),
 
-        // In-flight transfer bar for an apply/share download.
         if (busy)
           Positioned(
             top: 0,
@@ -873,8 +850,6 @@ class _CardChrome extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Scrim height, and the band the badge + buttons live in (Pakiza's
-  /// `AppFeed.scrimHeight`).
   static const double stackHeight = FeedCardGeometry.scrimHeight;
 
   /// Inset of the action row from the card's left, right and bottom edges —
@@ -886,14 +861,6 @@ class _CardChrome extends StatelessWidget {
   static const double _barInset = FeedCardGeometry.actionInset;
   static const double _barInsetH = FeedCardGeometry.actionInset;
 
-  /// Inset of the live mark from the card's top and right edges.
-  ///
-  /// NOT [_barInsetH]. The action row can sit on 14 because it runs the width
-  /// of the card and reads as a bar; a lone 24dp disc at 14 reads as jammed
-  /// into the corner, because [FeedCardGeometry.radius] (24) is curving away
-  /// directly behind it. 22 puts the disc's outer edge clear of that arc, so it
-  /// sits ON the wallpaper rather than on its rim — while staying far enough in
-  /// from the centre that it never lands on a face or a crown.
   static const double _liveMarkInset = 22;
 
   final Wallpaper wallpaper;
@@ -985,9 +952,6 @@ class _ActionBar extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Both buttons' height, and the row's. Exported because the feed anchors the
-  /// gate nudge off the bar's top edge; the NUMBER lives in [FeedCardGeometry]
-  /// so the loading skeleton places the same objects from the same source.
   static const double height = FeedCardGeometry.actionBarHeight;
 
   final bool busy;
