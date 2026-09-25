@@ -63,14 +63,6 @@
       "back": 1
     },
     {
-      "name": "reminders",
-      "path": [
-        "settingsTitle",
-        "settingsRemindersSubOff"
-      ],
-      "back": 1
-    },
-    {
       "name": "language_sheet",
       "path": [
         "settingsTitle",

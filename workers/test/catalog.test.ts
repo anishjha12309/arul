@@ -1,9 +1,6 @@
 /**
  * The exported, R2-facing halves of build-catalog: deleteOrphanedPages and writeAppConfig.
- *
- * NOT covered: the row shaping inside buildScope() -> that logic is unexported and inlined, so no test can reach it
- * It was once "covered" by copies of the logic redefined here -> those copies silently drifted from production
- * They were deleted rather than left giving false confidence -> EXPORT the real helpers to test them for real
+ * buildScope()'s row shaping is exported and tested against the real function in build-scope.test.ts.
  */
 
 import { describe, it, expect, vi } from "vitest";

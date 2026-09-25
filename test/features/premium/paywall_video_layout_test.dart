@@ -126,10 +126,12 @@ void main() {
         closeTo(16 / 9, 0.02),
         reason: '$name: the clip frame is not 16:9',
       );
+      // Full width where the block fits; where the clip would cross the fold it is pinned above the
+      // CTA and scaled (never cropped) down to a 178 dp floor instead of being cut.
       expect(
         frame.width,
-        greaterThan(size.width * 0.7),
-        reason: '$name: the clip is not full width',
+        greaterThanOrEqualTo(178 - 0.5),
+        reason: '$name: the clip shrank below its floor',
       );
 
       // 3. The price is still above the clip -> the ordering the owner asked for: offer read first, clip as proof.

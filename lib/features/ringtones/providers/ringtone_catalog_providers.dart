@@ -176,6 +176,9 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   };
   final labels = <String, String>{};
   for (final r in all) {
+    // `others` is retired: never offered as a chip or an Upload category, only tolerated by the
+    // sort and art fallbacks. A stray row still shows under All.
+    if (r.category == othersCategorySlug) continue;
     labels.putIfAbsent(r.category, () => r.categoryLabel);
   }
   // A CMS order wins OUTRIGHT here, `others` included: dragging it off the end is a

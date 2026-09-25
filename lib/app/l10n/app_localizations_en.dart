@@ -12,9 +12,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appName => 'Arul';
 
   @override
-  String get appTagline => 'SOUTH INDIAN WALLPAPERS';
-
-  @override
   String get categoryAll => 'All';
 
   @override
@@ -277,12 +274,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTellFriendSub => 'Send Arul to someone who would love it';
 
   @override
-  String get settingsRemindersSubOn => 'Weekly and festival reminders on';
-
-  @override
-  String get settingsRemindersSubOff => 'Festival and weekly reminders';
-
-  @override
   String get settingsLanguage => 'Language';
 
   @override
@@ -373,63 +364,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeDarkSub => 'Lamp-lit maroon';
 
   @override
-  String get remindersTitle => 'Reminders';
-
-  @override
-  String get remindersToggleTitle => 'Devotional reminders';
-
-  @override
-  String get remindersToggleSub => 'The weekly day, and every major festival';
-
-  @override
-  String get remindersScheduleNote =>
-      'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.';
-
-  @override
-  String get remindersPermissionToast =>
-      'Notifications are off for Arul. Turn them on in your phone settings to get reminders.';
-
-  @override
   String get remindersTimeLabel => 'Reminder time';
-
-  @override
-  String get remindersComingUp => 'Coming up';
-
-  @override
-  String get remindersMonthJan => 'Jan';
-
-  @override
-  String get remindersMonthFeb => 'Feb';
-
-  @override
-  String get remindersMonthMar => 'Mar';
-
-  @override
-  String get remindersMonthApr => 'Apr';
-
-  @override
-  String get remindersMonthMay => 'May';
-
-  @override
-  String get remindersMonthJun => 'Jun';
-
-  @override
-  String get remindersMonthJul => 'Jul';
-
-  @override
-  String get remindersMonthAug => 'Aug';
-
-  @override
-  String get remindersMonthSep => 'Sep';
-
-  @override
-  String get remindersMonthOct => 'Oct';
-
-  @override
-  String get remindersMonthNov => 'Nov';
-
-  @override
-  String get remindersMonthDec => 'Dec';
 
   @override
   String get premiumScreenSubline =>
@@ -778,4 +713,156 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get purchaseConfirmationLate =>
       'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.';
+
+  @override
+  String get authErrorNoPlayServices =>
+      'Google Play Services is unavailable. Please update or reinstall.';
+
+  @override
+  String get authErrorNetwork =>
+      'No internet. Check your connection and try again.';
+
+  @override
+  String get authErrorTokenExchange => 'Sign-in failed. Please try again.';
+
+  @override
+  String get authErrorServer => 'Sign-in failed. Please try again.';
+
+  @override
+  String get authErrorIncomplete =>
+      'Sign-in didn\'t complete. Check your internet connection and try again.';
+
+  @override
+  String get splashTagline => 'Bhakti in your hands';
+
+  @override
+  String get videoMute => 'Mute video';
+
+  @override
+  String get videoUnmute => 'Unmute video';
+
+  @override
+  String get premiumMemberHeadline => 'You\'re a member';
+
+  @override
+  String premiumMemberTrialSubline(String price) {
+    return 'Full access to every wallpaper. Your first $price payment is charged when the trial ends.';
+  }
+
+  @override
+  String get premiumMemberSubline =>
+      'Every wallpaper, still and live, is yours to apply and share.';
+
+  @override
+  String get premiumTrialEndsLabel => 'Trial ends';
+
+  @override
+  String get premiumRenewsOnLabel => 'Renews on';
+
+  @override
+  String get premiumMemberTrialFootnote =>
+      'Cancel before the trial ends and you are never charged. Billed monthly via UPI Autopay.';
+
+  @override
+  String get premiumMemberFootnote =>
+      'Billed monthly via UPI Autopay. Cancel anytime — your access continues until the current period ends.';
+
+  @override
+  String get premiumStatusTrial => 'Free trial';
+
+  @override
+  String get premiumStatusActive => 'Active';
+
+  @override
+  String get premiumPlanLabel => 'Plan';
+
+  @override
+  String get premiumPlanMonthly => 'Monthly';
+
+  @override
+  String get premiumPaymentLabel => 'Payment';
+
+  @override
+  String get premiumPaymentUpiAutopay => 'UPI Autopay';
+
+  @override
+  String get premiumRenewalReminder =>
+      'We\'ll remind you 24 hours before every renewal.';
+
+  @override
+  String get premiumCancelSubscription => 'Cancel subscription';
+
+  @override
+  String get premiumAutoRenewOffHeadline => 'Auto-renew is off';
+
+  @override
+  String get premiumAutoRenewOffSubline =>
+      'You keep full access until your paid period ends. You won\'t be charged again.';
+
+  @override
+  String get premiumStatusAutoRenewOff => 'Auto-renew off';
+
+  @override
+  String get premiumAccessUntilLabel => 'Access until';
+
+  @override
+  String get premiumResubscribeCta => 'Resubscribe';
+
+  @override
+  String premiumResubscribeFootnote(String price) {
+    return 'Resubscribing sets up a fresh UPI Autopay mandate at $price a month.';
+  }
+
+  @override
+  String get premiumChange => 'Change';
+
+  @override
+  String get premiumCancelDialogTitle => 'Cancel subscription?';
+
+  @override
+  String get premiumCancelDialogBody =>
+      'Your premium access stays active until the end of the current billing period. After that you won\'t be charged again.';
+
+  @override
+  String premiumCancelDialogBodyDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return 'Your premium access stays active until $dateString. After that you won\'t be charged again.';
+  }
+
+  @override
+  String get premiumCancelConfirm => 'Cancel it';
+
+  @override
+  String get premiumCancelledToast =>
+      'Subscription cancelled. You keep premium until the period ends.';
+
+  @override
+  String premiumCancelledToastDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return 'Subscription cancelled. You keep premium until $dateString.';
+  }
+
+  @override
+  String premiumPlanDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get premiumCancelKeep => 'Keep premium';
 }

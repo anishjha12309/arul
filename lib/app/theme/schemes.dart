@@ -33,7 +33,7 @@ abstract final class ArulSchemes {
 
     surface: ArulColors.ivory,
     onSurface: ArulColors.inkText, //         13.48:1 on surface
-    onSurfaceVariant: ArulColors.inkMuted, //  6.03:1 on surface, 5.11:1 on
+    onSurfaceVariant: ArulColors.inkMuted, //  6.74:1 on surface, 5.64:1 on
     // surfaceContainerHighest — the idle category chip, its worst ground.
     outline: ArulColors.ivoryOutline, //       3.53:1 on surface
     outlineVariant: ArulColors.ivoryOutlineVariant,
@@ -112,6 +112,6 @@ abstract final class ArulSchemes {
   static ColorScheme light() => lightScheme;
   static ColorScheme dark() => darkScheme;
 
-  static const lightMuted = ArulColors.inkMuted; // 6.03:1 on ivory
+  static const lightMuted = ArulColors.inkMuted; // 6.74:1 on ivory
   static const darkMuted = ArulColors.ivoryMuted; // 9.62:1 on ink
 }

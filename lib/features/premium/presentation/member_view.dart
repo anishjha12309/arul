@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
@@ -13,6 +14,7 @@ class ArulMemberView extends StatelessWidget {
     super.key,
     required this.trialing,
     required this.renewalDate,
+    required this.monthlyPrice,
     required this.cancelBusy,
     required this.onBack,
     required this.onCancel,
@@ -20,23 +22,26 @@ class ArulMemberView extends StatelessWidget {
 
   final bool trialing;
   final String? renewalDate;
+  final String monthlyPrice;
   final bool cancelBusy;
   final VoidCallback onBack;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final headline = trialing ? "You're on the free trial" : "You're a member";
+    final l10n = AppLocalizations.of(context);
+    final headline = trialing
+        ? l10n.settingsPremiumSubTrial
+        : l10n.premiumMemberHeadline;
     final subline = trialing
-        ? 'Full access to every wallpaper. Your first ₹199 payment is charged '
-              'when the trial ends.'
-        : 'Every wallpaper, still and live, is yours to apply and share.';
-    final dateLabel = trialing ? 'Trial ends' : 'Renews on';
+        ? l10n.premiumMemberTrialSubline(monthlyPrice)
+        : l10n.premiumMemberSubline;
+    final dateLabel = trialing
+        ? l10n.premiumTrialEndsLabel
+        : l10n.premiumRenewsOnLabel;
     final footnote = trialing
-        ? 'Cancel before the trial ends and you are never charged. Billed '
-              'monthly via UPI Autopay.'
-        : 'Billed monthly via UPI Autopay. Cancel anytime — your access '
-              'continues until the current period ends.';
+        ? l10n.premiumMemberTrialFootnote
+        : l10n.premiumMemberFootnote;
 
     return PaywallGround(
       child: Column(
@@ -54,18 +59,20 @@ class ArulMemberView extends StatelessWidget {
                 PremiumPlanHero(
                   headline: headline,
                   subline: subline,
-                  status: trialing ? 'Free trial' : 'Active',
+                  status: trialing
+                      ? l10n.premiumStatusTrial
+                      : l10n.premiumStatusActive,
                 ),
                 const SizedBox(height: ArulTokens.premiumMemberSectionGap),
                 PremiumPlanBillingCard(
                   rows: [
-                    const PremiumPlanBillingRowData(
-                      label: 'Plan',
-                      value: 'Monthly',
+                    PremiumPlanBillingRowData(
+                      label: l10n.premiumPlanLabel,
+                      value: l10n.premiumPlanMonthly,
                     ),
-                    const PremiumPlanBillingRowData(
-                      label: 'Payment',
-                      value: 'UPI Autopay',
+                    PremiumPlanBillingRowData(
+                      label: l10n.premiumPaymentLabel,
+                      value: l10n.premiumPaymentUpiAutopay,
                     ),
                     if (renewalDate != null)
                       PremiumPlanBillingRowData(
@@ -119,6 +126,7 @@ class PremiumPlanNav extends StatelessWidget {
           Semantics(
             button: true,
             label: MaterialLocalizations.of(context).backButtonTooltip,
+            onTap: onBack,
             excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -397,17 +405,17 @@ class _RenewalReminder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        PaywallOrnamentImage(
+        const PaywallOrnamentImage(
           ornament: PaywallOrnament.lotus,
           width: ArulTokens.premiumMemberReminderLotusSize,
         ),
-        SizedBox(width: ArulTokens.premiumMemberReminderGap),
+        const SizedBox(width: ArulTokens.premiumMemberReminderGap),
         Flexible(
           child: Text(
-            "We'll remind you 24 hours before every renewal.",
+            AppLocalizations.of(context).premiumRenewalReminder,
             textAlign: TextAlign.center,
             style: ArulTokens.premiumMemberReminder,
           ),
@@ -482,7 +490,7 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
                       color: ArulTokens.paywallMaroon,
                     ),
                   )
-                : const Stack(
+                : Stack(
                     alignment: Alignment.center,
                     children: [
                       Padding(
@@ -491,7 +499,7 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
                               ArulTokens.premiumMemberCancelFloretInset * 3,
                         ),
                         child: Text(
-                          'Cancel subscription',
+                          AppLocalizations.of(context).premiumCancelSubscription,
                           textAlign: TextAlign.center,
                           style: ArulTokens.premiumMemberCancelLabel,
                         ),

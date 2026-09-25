@@ -46,6 +46,27 @@ class DirectShareService {
     }
     return false;
   }
+
+  /// Hands [text] alone to WhatsApp; returns whether it opened. NEVER throws.
+  ///
+  /// A targeted `ACTION_SEND` keeps WhatsApp's picker in Arul's task, so one Back comes home; the
+  /// `whatsapp://send` link roots it in WhatsApp's task, over WhatsApp's own home screen.
+  Future<bool> shareTextToWhatsApp(String text) async {
+    for (final package in _whatsAppPackages) {
+      try {
+        final ok = await _channel.invokeMethod<bool>('shareTextToPackage', {
+          'package': package,
+          'text': text,
+        });
+        if (ok ?? false) return true;
+      } on PlatformException {
+        // bad_input — try the next package.
+      } on MissingPluginException {
+        return false;
+      }
+    }
+    return false;
+  }
 }
 
 /// Overridable seam — there is no platform channel in pure-Dart tests.

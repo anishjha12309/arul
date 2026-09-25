@@ -9,7 +9,6 @@ import '../../auth/providers/auth_providers.dart';
 import '../../premium/domain/trial_nudge.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../data/notification_service.dart';
-import '../domain/notification_settings.dart';
 
 part 'notification_providers.g.dart';
 
@@ -21,78 +20,15 @@ NotificationService notificationService(Ref ref) => throw UnimplementedError(
   'notificationServiceProvider must be overridden in main()',
 );
 
-@Riverpod(keepAlive: true)
-class NotificationSettingsNotifier extends _$NotificationSettingsNotifier {
-  @override
-  NotificationSettings build() =>
-      NotificationSettings.fromPrefs(ref.read(sharedPreferencesProvider));
-
-  Future<void> _persist(NotificationSettings next) async {
-    state = next;
-    await next.save(ref.read(sharedPreferencesProvider));
-  }
-
-  /// Turns the feature on or off; turning on prompts for the OS permission and returns the grant.
-  /// So the UI can point a user who declined at system settings.
-  Future<bool> setMasterEnabled(bool enabled) async {
-    if (enabled) {
-      final granted = await ref
-          .read(notificationServiceProvider)
-          .requestPermissions();
-      // A denied prompt must leave the toggle OFF -> persist ON only on a real grant.
-      // Otherwise the UI claims reminders are active while Android drops every one.
-      await _persist(state.copyWith(masterEnabled: granted));
-      return granted;
-    }
-    await _persist(state.copyWith(masterEnabled: false));
-    return false;
-  }
-
-  /// Reconciles the persisted opt-in with the real OS permission, revocable at any time.
-  ///
-  /// Only an explicit "denied" flips the toggle off — null leaves state untouched.
-  /// So a flaky OEM query can never wipe a valid opt-in.
-  Future<void> syncWithSystem() async {
-    if (!state.masterEnabled) return;
-    final allowed = await ref
-        .read(notificationServiceProvider)
-        .areNotificationsEnabled();
-    if (allowed == false) {
-      await _persist(state.copyWith(masterEnabled: false));
-    }
-  }
-
-  Future<void> setReminderTime(int hour, int minute) =>
-      _persist(state.copyWith(reminderHour: hour, reminderMinute: minute));
-}
-
-/// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
+/// Re-arms the unfinished-trial reminder once per launch, watched from the ROOT widget.
 ///
-/// Watched from the ROOT widget so it stays alive for the app's lifetime.
-/// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
-/// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
-/// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
+/// Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
+/// reminder further out on every launch, so the people who open the app most would never see it.
+/// Its only gate is the OS permission — `scheduleTrialReminder` refuses without it, and NOTHING here
+/// ever asks for it.
 @Riverpod(keepAlive: true)
 Future<void> notificationBootstrap(Ref ref) async {
-  final settings = ref.watch(notificationSettingsProvider);
   final service = ref.read(notificationServiceProvider);
-
-  if (!settings.masterEnabled) {
-    await service.cancelAllPending();
-  } else {
-    await service.applySettings(settings);
-  }
-
-  // AFTER either branch, because both cancel every pending notification — including this one.
-  //
-  // The unfinished-trial reminder is NOT a devotional reminder and the master toggle does not own
-  // it: it is one follow-up to a payment the user started themselves. Gating it on that toggle
-  // would make it dead code, since it defaults OFF and the people who abandon a trial are mostly
-  // fresh installs. Its gate is the OS permission alone — `scheduleTrialReminder` refuses without
-  // it, and NOTHING here ever asks for it.
-  //
-  // Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
-  // reminder further out on every launch, so the people who open the app most would never see it.
   final prefs = ref.read(sharedPreferencesProvider);
   final due = TrialNudge.pendingReminder(prefs, DateTime.now());
   if (due != null) {

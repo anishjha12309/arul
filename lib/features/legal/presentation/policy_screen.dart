@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/state_views.dart';
 import '../../../core/config/app_config.dart';
@@ -72,6 +73,23 @@ class PolicyScreen extends StatefulWidget {
 
   final PolicyDoc doc;
 
+  /// Hosts the reader navigates itself — DERIVED from the configured URLs, never written out.
+  /// So a dart-define override cannot bounce our own pages out to the browser.
+  static final Set<String> _ownHosts = {
+    Uri.parse(AppConfig.privacyUrl).host,
+    Uri.parse(AppConfig.termsUrl).host,
+    Uri.parse(AppConfig.refundUrl).host,
+  }..removeWhere((h) => h.isEmpty);
+
+  /// Whether [url] stays in the reader; anything else goes out to the OS.
+  @visibleForTesting
+  static bool keepsInReader(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        _ownHosts.contains(uri.host);
+  }
+
   @override
   State<PolicyScreen> createState() => _PolicyScreenState();
 }
@@ -94,14 +112,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// [WebViewController.setBackgroundColor] was never called and the platform view kept its
   /// default white.
   Brightness? _brightness;
-
-  /// Hosts the reader navigates itself — DERIVED from the configured URLs, never written out.
-  /// So a dart-define override cannot bounce our own pages out to the browser.
-  static final Set<String> _ownHosts = {
-    Uri.parse(AppConfig.privacyUrl).host,
-    Uri.parse(AppConfig.termsUrl).host,
-    Uri.parse(AppConfig.refundUrl).host,
-  }..removeWhere((h) => h.isEmpty);
 
   @override
   void initState() {
@@ -239,13 +249,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// The text links to `mailto:` support, PhonePe's and Google's policies, and the Play listing.
   /// A policy reader should swallow none of those — `mailto:` a web view cannot render at all.
   FutureOr<NavigationDecision> _decideNavigation(NavigationRequest request) {
-    final uri = Uri.tryParse(request.url);
-    final isOurs =
-        uri != null &&
-        (uri.scheme == 'https' || uri.scheme == 'http') &&
-        _ownHosts.contains(uri.host);
-    if (isOurs) return NavigationDecision.navigate;
+    if (PolicyScreen.keepsInReader(request.url)) {
+      return NavigationDecision.navigate;
+    }
 
+    final uri = Uri.tryParse(request.url);
     if (uri != null) {
       // Fire-and-forget -> a device with no handler for the scheme must not throw into the reader.
       unawaited(
@@ -258,12 +266,13 @@ class _PolicyScreenState extends State<PolicyScreen> {
     return NavigationDecision.prevent;
   }
 
+  /// Reads [_canGoBack], never the web view -> the pop starts on the tap's own frame, not after a
+  /// round trip to a platform view that is busy rendering the page.
   Future<void> _back() async {
-    if (await _controller.canGoBack()) {
+    if (_canGoBack) {
       await _controller.goBack();
       return;
     }
-    if (!mounted) return;
     if (context.canPop()) context.pop();
   }
 
@@ -295,30 +304,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => unawaited(_back()),
-                      icon: Icon(Icons.arrow_back, color: textPrimary),
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).backButtonTooltip,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        widget.doc.title(l10n),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ArulTokens.screenTitle.copyWith(
-                          color: textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              ArulPushedHeader(
+                title: widget.doc.title(l10n),
+                color: textPrimary,
+                onBack: () => unawaited(_back()),
+                identifier: 'arul_policy_back',
               ),
 
               Expanded(

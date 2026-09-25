@@ -117,8 +117,8 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWith((ref) => api),
         analyticsServiceProvider.overrideWith((ref) => analytics),
-        appConfigProvider.overrideWith(
-          (ref) async => const AppConfigModel(
+        appConfigProvider.overrideWithBuild(
+          (ref, _) async => const AppConfigModel(
             prices: {
               'monthly': {'amount': 19900},
             },

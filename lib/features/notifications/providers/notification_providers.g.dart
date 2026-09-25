@@ -67,87 +67,32 @@ final class NotificationServiceProvider
 String _$notificationServiceHash() =>
     r'87ba170a1c4adc9f37de5e37dc0e13f817a0ca30';
 
-@ProviderFor(NotificationSettingsNotifier)
-final notificationSettingsProvider = NotificationSettingsNotifierProvider._();
-
-final class NotificationSettingsNotifierProvider
-    extends
-        $NotifierProvider<NotificationSettingsNotifier, NotificationSettings> {
-  NotificationSettingsNotifierProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'notificationSettingsProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$notificationSettingsNotifierHash();
-
-  @$internal
-  @override
-  NotificationSettingsNotifier create() => NotificationSettingsNotifier();
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(NotificationSettings value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<NotificationSettings>(value),
-    );
-  }
-}
-
-String _$notificationSettingsNotifierHash() =>
-    r'62b37dc6d0aa8d2ea9f9f72a19c9e60bc27034ca';
-
-abstract class _$NotificationSettingsNotifier
-    extends $Notifier<NotificationSettings> {
-  NotificationSettings build();
-  @$mustCallSuper
-  @override
-  WhenComplete runBuild() {
-    final ref = this.ref as $Ref<NotificationSettings, NotificationSettings>;
-    final element =
-        ref.element
-            as $ClassProviderElement<
-              AnyNotifier<NotificationSettings, NotificationSettings>,
-              NotificationSettings,
-              Object?,
-              Object?
-            >;
-    return element.handleCreate(ref, build);
-  }
-}
-
-/// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
+/// Re-arms the unfinished-trial reminder once per launch, watched from the ROOT widget.
 ///
-/// Watched from the ROOT widget so it stays alive for the app's lifetime.
-/// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
-/// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
-/// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
+/// Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
+/// reminder further out on every launch, so the people who open the app most would never see it.
+/// Its only gate is the OS permission — `scheduleTrialReminder` refuses without it, and NOTHING here
+/// ever asks for it.
 
 @ProviderFor(notificationBootstrap)
 final notificationBootstrapProvider = NotificationBootstrapProvider._();
 
-/// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
+/// Re-arms the unfinished-trial reminder once per launch, watched from the ROOT widget.
 ///
-/// Watched from the ROOT widget so it stays alive for the app's lifetime.
-/// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
-/// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
-/// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
+/// Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
+/// reminder further out on every launch, so the people who open the app most would never see it.
+/// Its only gate is the OS permission — `scheduleTrialReminder` refuses without it, and NOTHING here
+/// ever asks for it.
 
 final class NotificationBootstrapProvider
     extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
     with $FutureModifier<void>, $FutureProvider<void> {
-  /// Side-effecting bootstrap — re-arms the local schedule on every settings change, and once at start.
+  /// Re-arms the unfinished-trial reminder once per launch, watched from the ROOT widget.
   ///
-  /// Watched from the ROOT widget so it stays alive for the app's lifetime.
-  /// The SINGLE place that drives scheduling — the notifier's mutators only persist state.
-  /// So there is exactly one path from "settings changed" to "alarms re-armed", and no drift.
-  /// Festival reminders are one-shot alarms -> the startup run is what carries the schedule forward.
+  /// Re-armed at its PERSISTED instant, never a fresh six hours: recomputing from now would push the
+  /// reminder further out on every launch, so the people who open the app most would never see it.
+  /// Its only gate is the OS permission — `scheduleTrialReminder` refuses without it, and NOTHING here
+  /// ever asks for it.
   NotificationBootstrapProvider._()
     : super(
         from: null,
@@ -174,4 +119,4 @@ final class NotificationBootstrapProvider
 }
 
 String _$notificationBootstrapHash() =>
-    r'455e3140acae0ebf06c9489d936e548b5bed39cb';
+    r'b49df922b52c34bc8fe6413d753e26be7886e6ce';

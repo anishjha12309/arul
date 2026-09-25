@@ -15,6 +15,7 @@ Future<bool?> showArulConfirmDialog(
   required String title,
   required String message,
   required String confirmLabel,
+  String? cancelLabel,
 }) {
   return showGeneralDialog<bool>(
     context: context,
@@ -26,6 +27,7 @@ Future<bool?> showArulConfirmDialog(
       title: title,
       message: message,
       confirmLabel: confirmLabel,
+      cancelLabel: cancelLabel,
     ),
     transitionBuilder: (context, anim, _, child) {
       final t = CurvedAnimation(parent: anim, curve: ArulTokens.sheetCurve);
@@ -45,11 +47,16 @@ class _ConfirmDialog extends StatelessWidget {
     required this.title,
     required this.message,
     required this.confirmLabel,
+    this.cancelLabel,
   });
 
   final String title;
   final String message;
   final String confirmLabel;
+
+  /// Defaults to the shared "Cancel". A dialog whose ACTION is a cancel must name its way out
+  /// differently, or both buttons read "cancel".
+  final String? cancelLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +114,7 @@ class _ConfirmDialog extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _DialogButton(
-                        label: AppLocalizations.of(context).cancel,
+                        label: cancelLabel ?? AppLocalizations.of(context).cancel,
                         filled: false,
                         borderColor: cancelBorder,
                         textColor: cancelText,

@@ -163,42 +163,10 @@ class ArulPaywallView extends StatelessWidget {
             // The clip is capped at a THIRD of the viewport -> it cannot crowd the price out.
             // On a tall screen that cap sits above its natural 16:9 height and does nothing.
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Everything between the pinned nav and the pinned CTA has this much room.
-                  // Below ~420dp the ornament gives way: the pill goes, gaps close, the clip grows.
-                  // The clip visible WITHOUT scrolling is a requirement, and padding is the only slack.
-                  final h = constraints.maxHeight;
-                  final dense = h < 420;
-                  // A SECOND, higher threshold, only for the feature row.
-                  // Between the two a phone fits the pill but not three medallions AND two label lines.
-                  // A label sliced by the fold reads as broken; the same row 20% smaller reads designed.
-                  // Separate thresholds are what stop a common 360x800 phone from losing the pill.
-                  final tight = h < 520;
-                  return SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: h),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _HeaderCrest(
-                            showSocialProof: showSocialProof && !dense,
-                            dense: dense,
-                          ),
-                          // `tight`, not `dense` — the panel's padding is cheap to give back.
-                          // `dense` also hides the social-proof pill, so splitting the two lets a
-                          // 360x800 phone with system bars keep the pill AND the whole label.
-                          offerPanel(tight),
-                          // No height cap — the clip renders at its own 16:9, full width, everywhere.
-                          // Capping here made a small phone show a letterbox band of forehead.
-                          // The room comes out of `dense` above instead.
-                          video,
-                          _FeatureRow(tight: tight),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              child: _ClipMiddle(
+                showSocialProof: showSocialProof,
+                offerPanel: offerPanel,
+                video: video,
               ),
             ),
           ],
@@ -420,6 +388,136 @@ class _HeaderBlock extends StatelessWidget {
 
 /// Centred when there is slack, scrollable when there is not.
 /// Both layouts put whatever must never be clipped through here.
+/// Everything between the pinned nav and the pinned CTA in the clip layout.
+///
+/// Offer read FIRST, clip under it, features last, scrolling as one block — when that block puts
+/// the whole clip on the first screenful. At 360×724 dp and 1.3× font the pinned CTA grows so tall
+/// that the clip landed under the fold (a 40 dp strip in Tamil), and the owner's rule is that the
+/// clip is never dropped. So when the clip would cross the fold it is PINNED above the CTA instead,
+/// scaled down (16:9 kept, never cropped) no lower than [_minClipFrame], and the crest, offer and
+/// features scroll above it. Decided after the first layout, before the route transition ends.
+class _ClipMiddle extends StatefulWidget {
+  const _ClipMiddle({
+    required this.showSocialProof,
+    required this.offerPanel,
+    required this.video,
+  });
+
+  final bool showSocialProof;
+  final Widget Function(bool dense) offerPanel;
+  final Widget video;
+
+  /// The smallest clip frame height pinned mode may shrink to (a 178 dp wide 16:9 frame).
+  static const double _minClipFrame = 100;
+
+  /// What the scrolling body keeps above a pinned clip: the price lockup must stay on screen.
+  static const double _minBody = 190;
+
+  /// The card's padding around its frame (onboarding_video_card.dart default gutters).
+  static const double _clipPadV = 10 + ArulTokens.paywallBrandBottomPadding;
+
+  @override
+  State<_ClipMiddle> createState() => _ClipMiddleState();
+}
+
+class _ClipMiddleState extends State<_ClipMiddle> {
+  final _clipKey = GlobalKey();
+  final _viewportKey = GlobalKey();
+  double? _pinnedFor;
+  double? _checkedFor;
+
+  void _checkFold(double h) {
+    if (_checkedFor == h) return;
+    _checkedFor = h;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final clip = _clipKey.currentContext?.findRenderObject() as RenderBox?;
+      final port = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (clip == null || port == null || !clip.hasSize || !port.hasSize) return;
+      // The FRAME must clear the fold; the card's own bottom gutter may tuck under the CTA.
+      final clipBottom = clip
+          .localToGlobal(Offset(0, clip.size.height - ArulTokens.paywallBrandBottomPadding))
+          .dy;
+      final portBottom = port.localToGlobal(Offset(0, port.size.height)).dy;
+      if (clipBottom > portBottom + 0.5) setState(() => _pinnedFor = h);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Below ~420 dp the ornament gives way: the pill goes, gaps close.
+        // `tight` (a second, higher threshold) only for the feature row and the panel's padding:
+        // between the two a 360x800 phone keeps the pill AND the whole label.
+        final h = constraints.maxHeight;
+        final dense = h < 420;
+        final tight = h < 520;
+        final crest = _HeaderCrest(
+          showSocialProof: widget.showSocialProof && !dense,
+          dense: dense,
+        );
+        if (_pinnedFor == h) {
+          final frameWidth =
+              constraints.maxWidth - 2 * ArulTokens.paywallPanelInset;
+          final natural = frameWidth * 9 / 16 + _ClipMiddle._clipPadV;
+          final floor = _ClipMiddle._minClipFrame + _ClipMiddle._clipPadV;
+          final clipH = (h - _ClipMiddle._minBody).clamp(floor, natural);
+          Widget body = SingleChildScrollView(
+            child: Column(
+              children: [
+                _HeaderCrest(showSocialProof: false, dense: true),
+                widget.offerPanel(true),
+                const _FeatureRow(tight: true),
+              ],
+            ),
+          );
+          // The clip is at its floor and the price still has no room: only now does type give,
+          // and only to 1.15× — the owner's order is clip first, legible type second.
+          if (h - clipH < _ClipMiddle._minBody) {
+            final media = MediaQuery.of(context);
+            body = MediaQuery(
+              data: media.copyWith(
+                textScaler: media.textScaler.clamp(maxScaleFactor: 1.15),
+              ),
+              child: body,
+            );
+          }
+          return Column(
+            children: [
+              Expanded(child: body),
+              // The same GlobalKey as the scrolling branch -> the card REPARENTS with its State; a
+              // rebuilt card would pause the one audible player on dispose.
+              SizedBox(
+                height: clipH,
+                child: Center(
+                  child: KeyedSubtree(key: _clipKey, child: widget.video),
+                ),
+              ),
+            ],
+          );
+        }
+        _checkFold(h);
+        return SingleChildScrollView(
+          key: _viewportKey,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: h),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                crest,
+                widget.offerPanel(tight),
+                KeyedSubtree(key: _clipKey, child: widget.video),
+                _FeatureRow(tight: tight),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ScrollableMiddle extends StatelessWidget {
   const _ScrollableMiddle({required this.children});
 

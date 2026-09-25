@@ -1,8 +1,8 @@
 # Campaign push — CMS composes, the Worker sends
 
 Read before touching `workers/src/lib/fcm.ts`, `workers/src/cron/push-dispatch.ts`,
-`lib/features/push/**` or the CMS's Notifications page. Local reminders are a different feature with
-its own rules: [notifications.md](notifications.md).
+`lib/features/push/**` or the CMS's Notifications page. The channel and the app's one-off local posts:
+[notifications.md](notifications.md).
 
 ## The one path
 
@@ -193,7 +193,7 @@ Asked on the first home-feed frame after a successful sign-in. **Never on the si
 during the Google flow**: a dialog stacked on Credential Manager is the interruption that costs
 sign-ins, the number this app is judged on. `arul_push_prompted` is set the moment the OS answers,
 whatever it answered — Android stops showing the dialog after two refusals, so a third ask reads back
-as a fresh refusal. The reminders toggle keeps its own separate opt-in.
+as a fresh refusal.
 
 ## The channel is created at launch, not at opt-in
 

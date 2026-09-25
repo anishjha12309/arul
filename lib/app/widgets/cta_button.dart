@@ -96,6 +96,9 @@ class _CtaButtonState extends State<CtaButton> {
       enabled: _enabled,
       label: widget.label,
       identifier: widget.identifier,
+      onTap: _enabled ? widget.onPressed : null,
+      // The label IS the visible word -> without this it announces the label then the label again.
+      excludeSemantics: true,
       child: GestureDetector(
         // The haptic rides press-DOWN -> it lands in step with the scale dip and the colour swap.
         onTapDown: _enabled

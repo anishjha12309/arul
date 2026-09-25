@@ -112,12 +112,6 @@ abstract class AppLocalizations {
   /// **'Arul'**
   String get appName;
 
-  /// No description provided for @appTagline.
-  ///
-  /// In en, this message translates to:
-  /// **'SOUTH INDIAN WALLPAPERS'**
-  String get appTagline;
-
   /// The first browse chip on both tabs. ONE short everyday word.
   ///
   /// In en, this message translates to:
@@ -616,18 +610,6 @@ abstract class AppLocalizations {
   /// **'Send Arul to someone who would love it'**
   String get settingsTellFriendSub;
 
-  /// No description provided for @settingsRemindersSubOn.
-  ///
-  /// In en, this message translates to:
-  /// **'Weekly and festival reminders on'**
-  String get settingsRemindersSubOn;
-
-  /// No description provided for @settingsRemindersSubOff.
-  ///
-  /// In en, this message translates to:
-  /// **'Festival and weekly reminders'**
-  String get settingsRemindersSubOff;
-
   /// No description provided for @settingsLanguage.
   ///
   /// In en, this message translates to:
@@ -796,119 +778,11 @@ abstract class AppLocalizations {
   /// **'Lamp-lit maroon'**
   String get themeDarkSub;
 
-  /// No description provided for @remindersTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Reminders'**
-  String get remindersTitle;
-
-  /// No description provided for @remindersToggleTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Devotional reminders'**
-  String get remindersToggleTitle;
-
-  /// No description provided for @remindersToggleSub.
-  ///
-  /// In en, this message translates to:
-  /// **'The weekly day, and every major festival'**
-  String get remindersToggleSub;
-
-  /// No description provided for @remindersScheduleNote.
-  ///
-  /// In en, this message translates to:
-  /// **'You\'ll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.'**
-  String get remindersScheduleNote;
-
-  /// No description provided for @remindersPermissionToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications are off for Arul. Turn them on in your phone settings to get reminders.'**
-  String get remindersPermissionToast;
-
   /// No description provided for @remindersTimeLabel.
   ///
   /// In en, this message translates to:
   /// **'Reminder time'**
   String get remindersTimeLabel;
-
-  /// No description provided for @remindersComingUp.
-  ///
-  /// In en, this message translates to:
-  /// **'Coming up'**
-  String get remindersComingUp;
-
-  /// No description provided for @remindersMonthJan.
-  ///
-  /// In en, this message translates to:
-  /// **'Jan'**
-  String get remindersMonthJan;
-
-  /// No description provided for @remindersMonthFeb.
-  ///
-  /// In en, this message translates to:
-  /// **'Feb'**
-  String get remindersMonthFeb;
-
-  /// No description provided for @remindersMonthMar.
-  ///
-  /// In en, this message translates to:
-  /// **'Mar'**
-  String get remindersMonthMar;
-
-  /// No description provided for @remindersMonthApr.
-  ///
-  /// In en, this message translates to:
-  /// **'Apr'**
-  String get remindersMonthApr;
-
-  /// No description provided for @remindersMonthMay.
-  ///
-  /// In en, this message translates to:
-  /// **'May'**
-  String get remindersMonthMay;
-
-  /// No description provided for @remindersMonthJun.
-  ///
-  /// In en, this message translates to:
-  /// **'Jun'**
-  String get remindersMonthJun;
-
-  /// No description provided for @remindersMonthJul.
-  ///
-  /// In en, this message translates to:
-  /// **'Jul'**
-  String get remindersMonthJul;
-
-  /// No description provided for @remindersMonthAug.
-  ///
-  /// In en, this message translates to:
-  /// **'Aug'**
-  String get remindersMonthAug;
-
-  /// No description provided for @remindersMonthSep.
-  ///
-  /// In en, this message translates to:
-  /// **'Sep'**
-  String get remindersMonthSep;
-
-  /// No description provided for @remindersMonthOct.
-  ///
-  /// In en, this message translates to:
-  /// **'Oct'**
-  String get remindersMonthOct;
-
-  /// No description provided for @remindersMonthNov.
-  ///
-  /// In en, this message translates to:
-  /// **'Nov'**
-  String get remindersMonthNov;
-
-  /// No description provided for @remindersMonthDec.
-  ///
-  /// In en, this message translates to:
-  /// **'Dec'**
-  String get remindersMonthDec;
 
   /// No description provided for @premiumScreenSubline.
   ///
@@ -1515,6 +1389,234 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.'**
   String get purchaseConfirmationLate;
+
+  /// Sign-in wall toast: Google Play services cannot run the sign-in (AuthFailureKind.noPlayServices).
+  ///
+  /// In en, this message translates to:
+  /// **'Google Play Services is unavailable. Please update or reinstall.'**
+  String get authErrorNoPlayServices;
+
+  /// Sign-in wall toast: the link died during sign-in (AuthFailureKind.networkError). Same words as purchaseErrorNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet. Check your connection and try again.'**
+  String get authErrorNetwork;
+
+  /// Sign-in wall toast: Google returned no usable token (AuthFailureKind.tokenExchangeFailed).
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in failed. Please try again.'**
+  String get authErrorTokenExchange;
+
+  /// Sign-in wall toast: our server refused the login (AuthFailureKind.serverError). Never the server's own message.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in failed. Please try again.'**
+  String get authErrorServer;
+
+  /// Sign-in wall toast: Google's flow ended without a result (AuthFailureKind.unknown); in the field this is mostly a dead link.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in didn\'t complete. Check your internet connection and try again.'**
+  String get authErrorIncomplete;
+
+  /// Splash line under the wordmark. Latin renders in tracked caps; 'bhakti' is kept as one word in every script.
+  ///
+  /// In en, this message translates to:
+  /// **'Bhakti in your hands'**
+  String get splashTagline;
+
+  /// Screen-reader label for the paywall clip's sound button while sound is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute video'**
+  String get videoMute;
+
+  /// Screen-reader label for the paywall clip's sound button while muted.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute video'**
+  String get videoUnmute;
+
+  /// Plan screen headline for an active paying member.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re a member'**
+  String get premiumMemberHeadline;
+
+  /// Plan screen subline during the free trial.
+  ///
+  /// In en, this message translates to:
+  /// **'Full access to every wallpaper. Your first {price} payment is charged when the trial ends.'**
+  String premiumMemberTrialSubline(String price);
+
+  /// Plan screen subline for an active member.
+  ///
+  /// In en, this message translates to:
+  /// **'Every wallpaper, still and live, is yours to apply and share.'**
+  String get premiumMemberSubline;
+
+  /// Billing row label; the value is a date.
+  ///
+  /// In en, this message translates to:
+  /// **'Trial ends'**
+  String get premiumTrialEndsLabel;
+
+  /// Billing row label; the value is a date.
+  ///
+  /// In en, this message translates to:
+  /// **'Renews on'**
+  String get premiumRenewsOnLabel;
+
+  /// Plan screen fine print during the trial.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel before the trial ends and you are never charged. Billed monthly via UPI Autopay.'**
+  String get premiumMemberTrialFootnote;
+
+  /// Plan screen fine print for an active member.
+  ///
+  /// In en, this message translates to:
+  /// **'Billed monthly via UPI Autopay. Cancel anytime — your access continues until the current period ends.'**
+  String get premiumMemberFootnote;
+
+  /// Status chip (rendered in caps in Latin).
+  ///
+  /// In en, this message translates to:
+  /// **'Free trial'**
+  String get premiumStatusTrial;
+
+  /// Status chip (rendered in caps in Latin).
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get premiumStatusActive;
+
+  /// Billing row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get premiumPlanLabel;
+
+  /// Billing row value: the plan period.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get premiumPlanMonthly;
+
+  /// Billing row label.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get premiumPaymentLabel;
+
+  /// Billing row value: the payment method. Same transliteration as premiumPlanNote.
+  ///
+  /// In en, this message translates to:
+  /// **'UPI Autopay'**
+  String get premiumPaymentUpiAutopay;
+
+  /// Plan screen reassurance line.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll remind you 24 hours before every renewal.'**
+  String get premiumRenewalReminder;
+
+  /// Plan screen button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel subscription'**
+  String get premiumCancelSubscription;
+
+  /// Cancelled-but-paid-through headline. Same words as settingsPremiumSubCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-renew is off'**
+  String get premiumAutoRenewOffHeadline;
+
+  /// Cancelled-but-paid-through subline.
+  ///
+  /// In en, this message translates to:
+  /// **'You keep full access until your paid period ends. You won\'t be charged again.'**
+  String get premiumAutoRenewOffSubline;
+
+  /// Status chip (rendered in caps in Latin).
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-renew off'**
+  String get premiumStatusAutoRenewOff;
+
+  /// Billing row label; the value is a date.
+  ///
+  /// In en, this message translates to:
+  /// **'Access until'**
+  String get premiumAccessUntilLabel;
+
+  /// Button on the cancelled plan screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Resubscribe'**
+  String get premiumResubscribeCta;
+
+  /// Fine print under Resubscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Resubscribing sets up a fresh UPI Autopay mandate at {price} a month.'**
+  String premiumResubscribeFootnote(String price);
+
+  /// Link beside the chosen UPI app.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get premiumChange;
+
+  /// Cancel confirmation dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel subscription?'**
+  String get premiumCancelDialogTitle;
+
+  /// Cancel dialog body when the period end is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Your premium access stays active until the end of the current billing period. After that you won\'t be charged again.'**
+  String get premiumCancelDialogBody;
+
+  /// Cancel dialog body with the period end.
+  ///
+  /// In en, this message translates to:
+  /// **'Your premium access stays active until {date}. After that you won\'t be charged again.'**
+  String premiumCancelDialogBodyDate(DateTime date);
+
+  /// Cancel dialog confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel it'**
+  String get premiumCancelConfirm;
+
+  /// Toast after a successful cancel, period end unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription cancelled. You keep premium until the period ends.'**
+  String get premiumCancelledToast;
+
+  /// Toast after a successful cancel, with the period end.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription cancelled. You keep premium until {date}.'**
+  String premiumCancelledToastDate(DateTime date);
+
+  /// A plan date in the app's language (month name localized by intl).
+  ///
+  /// In en, this message translates to:
+  /// **'{date}'**
+  String premiumPlanDate(DateTime date);
+
+  /// Cancel-subscription dialog: the way OUT (keeps the plan). Must not say 'cancel' — the other button does.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep premium'**
+  String get premiumCancelKeep;
 }
 
 class _AppLocalizationsDelegate

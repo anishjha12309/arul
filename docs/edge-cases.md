@@ -51,7 +51,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while the period lives, never `expired`; resurrect matches `('expired','cancelled')`
 - [ ] A re-subscribe over a `trialing`/`active`/`paused` row PARKS its mandate (`superseded_mandate_id`), revokes nothing at PhonePe; the grant revokes it, every release path restores it as the live mandate with the ladder intact; cancel and account delete revoke both
 - [ ] `/payments/status` grants the month when a never-converted row's `redemption_order_id` is COMPLETED at PhonePe; the redemption webhook grants only on root `payload.state` COMPLETED
-- [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = install prompt + dead CTA, never the hosted page
+- [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = the SAME CTA sells the mandate QR (`onPayByQr`), never the hosted page
 - [ ] A TRIAL setup (never a spent-trial ₹199 one) marks prefs AT THE UPI HANDOFF, not at a failure — half of CTA taps die with no terminal event (process killed behind the UPI app, paywall popped while resumable); one dismissible feed row and one reminder; a premium read or settled purchase clears both
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause
 - [ ] The app reads `premium` from `GET /me`, never re-deriving the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row — every other state is a sell
@@ -99,14 +99,12 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A pick needs NO permission (Photo Picker / audio `GET_CONTENT`), never a `resolveActivity` pre-flight, and the cached copy is swept at the next pick
 
 ## Notifications, share and deep links
-- [ ] Reminders stay local; a campaign push reaches a phone ONLY through the CMS ([push.md](push.md))
+- [ ] ONE channel (`arul_updates_v1`); a campaign push reaches a phone ONLY through the CMS ([push.md](push.md)); the retired reminder channels and alarms are cleared at launch
 - [ ] Push permission asked once per install, on the first feed frame AFTER sign-in — never on the wall
 - [ ] An unreadable push payload opens the app, never a crash; `is_internal` gets test sends only
 - [ ] BOTH tap paths deliver: killed → `getInitialMessage()`, backgrounded → `onMessageOpenedApp`
 - [ ] A campaign tap lands on its screen even under `/premium` or a pushed screen, and a cold tap is held until the splash's auth decision (`PushTapRouter`)
-- [ ] Festival dates are DATA — a table that runs out means SKIP, never extrapolate
 - [ ] `keep.xml` stops R8 stripping the icons; breaks release builds ONLY
-- [ ] QA tools gate on `kDebugMode` OR not `isPlayInstall`, so a sideloaded release keeps them
 - [ ] EXACTLY ONE link leaves per share, owned by the caption, trailing
 - [ ] WhatsApp-first by a DIFFERENT mechanism per path — the text-only link silently drops the file
 - [ ] A share link carries `ilang=`, never `lang=`; the live watermark needs API 31, below which the share ships clean rather than crashing
@@ -126,7 +124,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 
 ## App-wide
 - [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
-- [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT auth error toasts. Checkout failures show a localized `PurchaseErrorKind` line, never the Worker's English `message`
+- [ ] Loading / empty / error state on every async surface, localized in all 6 locales. Checkout, cancel and sign-in failures show a localized line per KIND (`PurchaseErrorKind`, `AuthFailureKind`), never the Worker's English `message`
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
 - [ ] A system Back never escapes go_router's `popRoute` — `SafeBackButtonDispatcher` records it non-fatal
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**

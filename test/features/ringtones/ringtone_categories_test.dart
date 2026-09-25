@@ -3,10 +3,20 @@
 // Sivan is pinned FIRST (owner's instruction) -> the same rule the wallpaper chip row runs.
 // Both are contracts, not cosmetic choices -> nothing else in the app would catch either regressing.
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/data/models/wallpaper.dart';
+import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
+
+class _FakeCatalog extends RingtoneCatalogNotifier {
+  _FakeCatalog(this._items);
+  final List<Ringtone> _items;
+  @override
+  Future<List<Ringtone>> build() async => _items;
+}
 
 List<String> _ordered(List<WallpaperCategory> input) =>
     (input.toList()..sort(compareRingtoneCategories))
@@ -76,4 +86,26 @@ void main() {
   test('others alone is fine', () {
     expect(_ordered([cat('others')]), ['Others']);
   });
+
+  test(
+    'the retired others category is never offered, even with a stray row',
+    () async {
+      Ringtone tone(String id, String category) =>
+          Ringtone(id: id, title: id, category: category, audioKey: '$id.mp3');
+      final container = ProviderContainer(
+        overrides: [
+          ringtoneCatalogProvider.overrideWith(
+            () => _FakeCatalog([tone('a', 'murugan'), tone('b', 'others')]),
+          ),
+          appConfigProvider.overrideWithBuild((ref, _) async => null),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(ringtoneCatalogProvider.future);
+      await container.read(appConfigProvider.future);
+      expect(container.read(ringtoneCategoriesProvider).map((c) => c.slug), [
+        'murugan',
+      ]);
+    },
+  );
 }

@@ -24,6 +24,7 @@ import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/connectivity/data_saver.dart';
 import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
@@ -227,6 +228,9 @@ Future<void> _startApp() async {
         ..maximumSize = count;
     }),
   );
+
+  // Asked before the splash warms the feed, which is the first reader.
+  unawaited(DataSaver.refresh());
 
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.

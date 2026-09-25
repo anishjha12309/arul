@@ -16,9 +16,8 @@ abstract final class TrialNudge {
 
   /// The instant the one reminder is due, epoch ms.
   ///
-  /// Persisted rather than recomputed because [NotificationService.applySettings] cancels EVERY
-  /// pending notification on each launch: the reminder has to be re-armed afterwards, and re-arming
-  /// from "now" would walk it further away on every launch until the user never got it.
+  /// Persisted rather than recomputed because `notificationBootstrap` re-arms it on every launch, and
+  /// re-arming from "now" would walk it further away on every launch until the user never got it.
   static const reminderDueKey = 'arul_trial_reminder_due_ms';
 
   /// How long an unfinished trial is worth mentioning. Past this the moment has gone.

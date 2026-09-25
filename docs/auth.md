@@ -96,8 +96,9 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
 - **The pill is the ONLY tappable thing on the wall — never add a second control.** Google's sheet
   lands ON this screen and covers it, so anything else is reached by dismissing the sheet first: the
   bottom-left language chip that once sat here pushed first-sheet sign-ins down and pill taps up, and
-  its users made roughly twice the attempts and signed in far less. A fresh install opens in its
-  REGION's language ([deep-links.md](deep-links.md)); Settings is the one place it changes.
+  its users made roughly twice the attempts and signed in far less. A fresh install opens in the
+  phone's language; the region default ([deep-links.md](deep-links.md)) applies only while the
+  Worker's `GEO_LANG_ENABLED` brake is `"true"`. Settings is the one place it changes.
 - **Nothing else on the wall is tappable** — the Terms · Privacy footer stays gone; Play's in-app
   privacy-policy requirement is met by Settings. The wordmark stays English and is the wall's only
   mark; the eyebrow is the splash's alone. **Icon glyphs take NO `shadows`:** Impeller paints a
@@ -178,9 +179,9 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   `clearCredentialState()`, so providers drop their stored session and a user who signed out to
   switch accounts is not handed the same one. Best-effort AFTER the local clear; a plugin error must
   never strand the user signed in.
-- **The sign-in SCREEN is localized in all six; the failure TOASTS are not.** Everything on the wall
-  but the wordmark comes from the ARBs. `AuthFailure.message` stays authored-English
-  ("localized-enough") — the one exception left to the all-6-locales rule.
+- **Everything on the wall but the wordmark comes from the ARBs, failure toasts included:** the toast
+  is `authFailureText(kind)`, one key per `AuthFailureKind`. `AuthFailure.message` is English for
+  logs and analytics only — never shown, since a server failure's message is the Worker's text.
 
 ## Session
 

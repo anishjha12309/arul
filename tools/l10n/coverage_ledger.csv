@@ -101,25 +101,7 @@ referStep1,proven-fits,refer.screen,
 referStep2,proven-fits,refer.screen,
 referStep3,proven-fits,refer.screen,
 referTitle,proven-fits,settings.screen refer.screen,
-remindersComingUp,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthApr,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthAug,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthDec,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthFeb,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthJan,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthJul,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthJun,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthMar,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthMay,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthNov,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthOct,slot-measured,,not pump-reachable; measured against its real slot width
-remindersMonthSep,slot-measured,,not pump-reachable; measured against its real slot width
-remindersPermissionToast,slot-measured,,not pump-reachable; measured against its real slot width
-remindersScheduleNote,slot-measured,,not pump-reachable; measured against its real slot width
 remindersTimeLabel,slot-measured,,not pump-reachable; measured against its real slot width
-remindersTitle,proven-fits,settings.screen notifications.screen,
-remindersToggleSub,proven-fits,notifications.screen,
-remindersToggleTitle,proven-fits,notifications.screen,
 retry,proven-fits,feed.error feed.offline ringtones.error,
 ringtoneCurrentBadge,slot-measured,,not pump-reachable; measured against its real slot width
 ringtonePreviewSemantic,slot-measured,,not pump-reachable; measured against its real slot width
@@ -163,8 +145,6 @@ settingsPremiumSubTrial,proven-fits,settings.help_sheet.trialing,
 settingsPrivacy,proven-fits,settings.screen,
 settingsReferSub,proven-fits,settings.screen,
 settingsRefund,proven-fits,settings.screen,
-settingsRemindersSubOff,proven-fits,settings.screen,
-settingsRemindersSubOn,slot-measured,,not pump-reachable; measured against its real slot width
 settingsSupport,slot-measured,,not pump-reachable; measured against its real slot width
 settingsSupportEmailDetails,slot-measured,,not pump-reachable; measured against its real slot width
 settingsSupportEmailPrompt,slot-measured,,not pump-reachable; measured against its real slot width

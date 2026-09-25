@@ -48,6 +48,7 @@ ArulMemberView _view({
 }) => ArulMemberView(
   trialing: trialing,
   renewalDate: renewalDate,
+  monthlyPrice: '₹199',
   cancelBusy: cancelBusy,
   onBack: () {},
   onCancel: onCancel ?? () {},
@@ -130,6 +131,32 @@ void main() {
       expect(gesture.onTap, isNull);
       expect(presses, 0);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('PremiumPlanNav', () {
+    testWidgets('the back control exposes a tap action to TalkBack', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      var backs = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PremiumPlanNav(onBack: () => backs++)),
+        ),
+      );
+
+      // The back Semantics wraps only the ring+glyph, not the whole nav row, so it has to be
+      // located by its label rather than by PremiumPlanNav's type.
+      expect(
+        tester.getSemantics(find.byIcon(Icons.arrow_back)),
+        matchesSemantics(isButton: true, hasTapAction: true),
+      );
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pump();
+      expect(backs, 1);
+      handle.dispose();
     });
   });
 }

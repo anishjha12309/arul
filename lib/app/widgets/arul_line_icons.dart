@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 /// The hand-drawn stroke glyphs the design handoffs specify by SVG path.
 ///
 /// Material's `Icons` set stays the default everywhere else — it costs nothing and tree-shakes.
-/// These three have no Material equivalent -> painting them adds no asset and no font.
+/// These have no Material equivalent -> painting them adds no asset and no font.
+/// The gift replaces an emoji: budget Android 8–10 ROMs draw 🎁 as tofu or a monochrome fallback.
 /// This API is single-[color] stroke -> a filled or two-tone glyph is artwork, kept with its control.
 /// Every glyph is authored in the handoff's 24×24 viewBox and scaled to [ArulLineIcon.size].
 /// Strokes scale with it -> the optical weight holds at any size.
-enum ArulLineGlyph { wallpapers, ringtones, settings }
+enum ArulLineGlyph { wallpapers, ringtones, settings, gift }
 
 class ArulLineIcon extends StatelessWidget {
   const ArulLineIcon({
@@ -62,6 +63,8 @@ class _LineIconPainter extends CustomPainter {
         _ringtones(canvas, paint..strokeWidth = 1.7);
       case ArulLineGlyph.settings:
         _settings(canvas, paint);
+      case ArulLineGlyph.gift:
+        _gift(canvas, paint..strokeWidth = 1.7);
     }
 
     canvas.restore();
@@ -122,6 +125,35 @@ class _LineIconPainter extends CustomPainter {
     for (var i = 0; i < count; i++) {
       canvas.drawArc(box, i * step, sweep, false, paint);
     }
+  }
+
+  /// Lid over a box, one ribbon down the middle, a two-loop bow sitting on the lid.
+  void _gift(Canvas canvas, Paint paint) {
+    canvas
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTRB(3.5, 8.5, 20.5, 12),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      )
+      ..drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTRB(5, 12, 19, 20.5),
+          const Radius.circular(1.2),
+        ),
+        paint,
+      )
+      ..drawLine(const Offset(12, 8.5), const Offset(12, 20.5), paint)
+      ..drawPath(
+        Path()
+          ..moveTo(12, 8.5)
+          ..cubicTo(10.6, 5.4, 6.6, 4.6, 6.8, 6.8)
+          ..cubicTo(7, 8.4, 10.2, 8.5, 12, 8.5)
+          ..cubicTo(13.8, 8.5, 17, 8.4, 17.2, 6.8)
+          ..cubicTo(17.4, 4.6, 13.4, 5.4, 12, 8.5),
+        paint,
+      );
   }
 
   static Path _polyline(List<Offset> points) {

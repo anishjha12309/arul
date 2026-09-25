@@ -127,6 +127,7 @@ class _ArulChipState extends State<ArulChip> {
       selected: selected,
       label: label,
       identifier: identifier,
+      onTap: onTap,
       // The label is announced once, as this control's name.
       excludeSemantics: true,
       child: chip,

@@ -251,24 +251,35 @@ String _$appConfigRepositoryHash() =>
 
 /// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
 /// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
+///
+/// A failed fetch must not stick for the process: an offline or slow cold start would otherwise
+/// keep the built-in chip order, default prices and no `feature_flags` until the next cold start.
+/// So a null answer refetches on the offline->online edge, and on one short ladder for a link that
+/// was "online" all along but too slow for the 10 s timeout. A refetch never passes through loading
+/// — readers use `asData`, and a flicker to loading would drop the prices they already show.
 
-@ProviderFor(appConfig)
-final appConfigProvider = AppConfigProvider._();
+@ProviderFor(AppConfigNotifier)
+final appConfigProvider = AppConfigNotifierProvider._();
 
 /// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
 /// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
-
-final class AppConfigProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<AppConfigModel?>,
-          AppConfigModel?,
-          FutureOr<AppConfigModel?>
-        >
-    with $FutureModifier<AppConfigModel?>, $FutureProvider<AppConfigModel?> {
+///
+/// A failed fetch must not stick for the process: an offline or slow cold start would otherwise
+/// keep the built-in chip order, default prices and no `feature_flags` until the next cold start.
+/// So a null answer refetches on the offline->online edge, and on one short ladder for a link that
+/// was "online" all along but too slow for the 10 s timeout. A refetch never passes through loading
+/// — readers use `asData`, and a flicker to loading would drop the prices they already show.
+final class AppConfigNotifierProvider
+    extends $AsyncNotifierProvider<AppConfigNotifier, AppConfigModel?> {
   /// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
   /// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
-  AppConfigProvider._()
+  ///
+  /// A failed fetch must not stick for the process: an offline or slow cold start would otherwise
+  /// keep the built-in chip order, default prices and no `feature_flags` until the next cold start.
+  /// So a null answer refetches on the offline->online edge, and on one short ladder for a link that
+  /// was "online" all along but too slow for the 10 s timeout. A refetch never passes through loading
+  /// — readers use `asData`, and a flicker to loading would drop the prices they already show.
+  AppConfigNotifierProvider._()
     : super(
         from: null,
         argument: null,
@@ -280,18 +291,38 @@ final class AppConfigProvider
       );
 
   @override
-  String debugGetCreateSourceHash() => _$appConfigHash();
+  String debugGetCreateSourceHash() => _$appConfigNotifierHash();
 
   @$internal
   @override
-  $FutureProviderElement<AppConfigModel?> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<AppConfigModel?> create(Ref ref) {
-    return appConfig(ref);
-  }
+  AppConfigNotifier create() => AppConfigNotifier();
 }
 
-String _$appConfigHash() => r'e62972c1fad4392f942f6253a51ecb0b15b7f95a';
+String _$appConfigNotifierHash() => r'9fce4c7e3513575b2f5aad4cd808303a36cdf095';
+
+/// The singleton remote app configuration — support email, prices, policy URLs, feature flags.
+/// Null until the catalog `app_config.json` is baked -> consumers must provide their own fallbacks.
+///
+/// A failed fetch must not stick for the process: an offline or slow cold start would otherwise
+/// keep the built-in chip order, default prices and no `feature_flags` until the next cold start.
+/// So a null answer refetches on the offline->online edge, and on one short ladder for a link that
+/// was "online" all along but too slow for the 10 s timeout. A refetch never passes through loading
+/// — readers use `asData`, and a flicker to loading would drop the prices they already show.
+
+abstract class _$AppConfigNotifier extends $AsyncNotifier<AppConfigModel?> {
+  FutureOr<AppConfigModel?> build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<AsyncValue<AppConfigModel?>, AppConfigModel?>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<AsyncValue<AppConfigModel?>, AppConfigModel?>,
+              AsyncValue<AppConfigModel?>,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}

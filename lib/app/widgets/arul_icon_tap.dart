@@ -58,6 +58,7 @@ class _ArulIconTapState extends State<ArulIconTap> {
       enabled: _enabled,
       label: widget.label,
       identifier: widget.identifier,
+      onTap: widget.onTap,
       // The glyph would otherwise be announced a second time, nameless.
       excludeSemantics: true,
       child: GestureDetector(

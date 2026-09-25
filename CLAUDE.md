@@ -25,8 +25,8 @@ in `docs/` (§9). Open defects: `docs/known-issues.md`.
 - Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers
   (static + live video feed) and ringtones; premium via PhonePe UPI Autopay.
 - Three-tab shell behind the floating dock (Wallpapers · Ringtones · Settings). **Settings is a dock
-  branch, not a pushed route.** Local reminders stay on-device; campaign pushes come only from the CMS
-  through the Worker (`docs/push.md`). No screen promises a push.
+  branch, not a pushed route.** Campaign pushes come only from the CMS through the Worker
+  (`docs/push.md`). No screen promises a push.
 - Content lives in the R2 bucket `south-indian-wallpapers`. **Never share a bucket, KV namespace or
   database with another app** — the orphan sweep deletes the other app's media.
 

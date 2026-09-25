@@ -52,6 +52,26 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('exposes a tap action to TalkBack, not just a raw label', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      _host(ArulIconTap(icon: Icons.close, label: 'Close', onTap: () {})),
+    );
+    expect(
+      tester.getSemantics(find.byType(ArulIconTap)),
+      matchesSemantics(
+        label: 'Close',
+        isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        hasTapAction: true,
+      ),
+    );
+    handle.dispose();
+  });
+
   testWidgets('a null onTap is inert', (tester) async {
     await tester.pumpWidget(
       _host(const ArulIconTap(icon: Icons.edit, label: 'Edit', onTap: null)),

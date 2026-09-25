@@ -1286,20 +1286,20 @@ class PremiumPurchase extends _$PremiumPurchase {
   ///
   /// Calls POST /payments/cancel — the server stops future debits but does NOT strip entitlement.
   /// The user keeps premium until the current period ends.
-  /// Returns null on success, or an error message to display.
+  /// Returns null on success, or the kind of failure — the caller shows [purchaseErrorText] for it.
+  /// Never the Worker's `message`: it is English and not written for a user, so it goes to
+  /// Crashlytics only (edge-cases: checkout failures show a localized line).
   /// Kept OFF the [PurchaseState] machine — the caller drives its own confirm dialog and snackbar.
-  Future<String?> cancel() async {
+  Future<PurchaseErrorKind?> cancel() async {
     try {
       await _api.post('/payments/cancel');
       _refreshEntitlement();
       return null;
-    } on ApiException catch (e) {
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Could not cancel your subscription. Please try again.';
-    } catch (e) {
+    } catch (e, stack) {
+      if (isNetworkError(e)) return PurchaseErrorKind.network;
       debugPrint('[PremiumPurchase] cancel failed: $e');
-      return 'Something went wrong. Please try again.';
+      _crash.recordError(e, stack, reason: 'subscription cancel failed');
+      return PurchaseErrorKind.generic;
     }
   }
 }

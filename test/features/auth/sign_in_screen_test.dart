@@ -149,6 +149,21 @@ void main() {
     return AppLocalizations.of(tester.element(find.byType(SignInScreen).first));
   }
 
+  group('the sign-in pill', () {
+    // The pill's Semantics carried no button role and no onTap — a `container: true` node with a
+    // GestureDetector child announces as a plain group, not a tappable control.
+    testWidgets('exposes a tap action to TalkBack', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pump(tester);
+
+      expect(
+        tester.getSemantics(find.bySemanticsIdentifier('arul_signin_pill')),
+        matchesSemantics(isButton: true, hasTapAction: true),
+      );
+      handle.dispose();
+    });
+  });
+
   group('the line under the pill', () {
     testWidgets('idle asks for an account and never shows the retry line', (
       tester,

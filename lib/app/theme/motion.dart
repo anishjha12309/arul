@@ -59,15 +59,15 @@ abstract final class Motion {
 /// Whether this frame should hold still.
 ///
 /// TWO signals, one answer:
-///   - `MediaQuery.disableAnimations` — the accessibility setting AND Android's battery saver,
-///     which is where most of the real traffic comes from;
+///   - `MediaQuery.disableAnimations` — Android's Remove animations (transition scale 0). Battery
+///     Saver does not set it on every ROM (Nothing OS 16 leaves the scales at 1);
 ///   - [DeviceTier.low] — a 2–3 GB two-decoder phone, where every repainting pixel competes with
 ///     the video decoder for the same budget.
 ///
 /// **Animations HOLD at their resting state, they are not removed.** A skeleton parks its sheen
 /// mid-sweep rather than going flat, a sheet sits at its settled offset rather than at +24, a press
-/// scale stays at 1. Nothing moves position when the flag flips, so a phone that turns battery
-/// saver on mid-session sees stillness, never a re-layout.
+/// scale stays at 1. Nothing moves position when the flag flips, so a phone that turns the setting
+/// on mid-session sees stillness, never a re-layout.
 ///
 /// The tier half is read from the resolved static, not watched: the probe lands inside the splash,
 /// before any animated screen builds, and a tier cannot change while the process lives.

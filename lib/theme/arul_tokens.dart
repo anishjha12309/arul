@@ -40,7 +40,8 @@ abstract final class ArulTokens {
 
   static const Color darkMuted = Color(0xFF8F7C68);
 
-  static const Color darkFaint = Color(0xFF6E5C4C);
+  /// 4.96:1 on [darkSurface] — the faintest rung that still clears WCAG AA.
+  static const Color darkFaint = Color(0xFF8F7D6E);
 
   static const Color cardBgDark04 = Color.fromRGBO(250, 245, 236, 0.04);
 
@@ -122,11 +123,13 @@ abstract final class ArulTokens {
 
   static const Color lightText = Color(0xFF2B1116);
 
-  static const Color lightSecondary = Color(0xFF8A6F5C);
+  /// 6.74:1 on ivory (WCAG AA) — evening installs read this over glare.
+  static const Color lightSecondary = Color(0xFF6A5142);
 
   static const Color lightBody = Color(0xFF6B5240);
 
-  static const Color lightFaint = Color(0xFFB09A86);
+  /// 5.00:1 on ivory — footers, counters and chevrons are text too, and owe AA.
+  static const Color lightFaint = Color(0xFF7A6657);
 
   static const Color cardBgLight = Color(0xFFFFFFFF);
 
@@ -143,16 +146,16 @@ abstract final class ArulTokens {
   /// Light-theme dock rim `rgba(122,30,51,.08)` — quieter than [cardBorderLight]; a shadow lifts it.
   static const Color maroonBorder08 = Color.fromRGBO(122, 30, 51, 0.08);
 
-  /// The now-playing row's title on LIGHT, `#A3760F` — [gold] itself fails contrast on a white card.
+  /// The now-playing row's title on LIGHT, 5.57:1 on ivory — [gold] itself fails contrast there.
   /// Darkened for light only; dark stays on [gold].
-  static const Color nowPlayingTitleLight = Color(0xFFA3760F);
+  static const Color nowPlayingTitleLight = Color(0xFF7A5F0E);
 
-  /// Gold TEXT or glyph ink on a LIGHT surface. `#A3760F`.
+  /// Gold TEXT or glyph ink on a LIGHT surface. `#7A5F0E`, 5.57:1 on ivory.
   ///
   /// Same value and cause as [nowPlayingTitleLight] — [gold] does not carry on ivory.
   /// A different ROLE though, so the two move independently: a row's state versus a control's label.
   /// Anything gold-on-light that is TYPE, not fill, reads this.
-  static const Color goldInkLight = Color(0xFFA3760F);
+  static const Color goldInkLight = Color(0xFF7A5F0E);
 
   /// The dock's surface on DARK, `#1B1215` — a step warmer than [darkSurface].
   /// So the capsule separates from the feed behind it without a rim. Light uses [cardBgLight].
@@ -642,7 +645,8 @@ abstract final class ArulTokens {
 
   static const Color paywallGold700 = Color(0xFFC8933A);
 
-  static const Color paywallGoldDeep = Color(0xFFB07F2E);
+  /// Clears AA on [paywallCream] — the PREMIUM eyebrow is small caps text, not ornament.
+  static const Color paywallGoldDeep = Color(0xFF8A6218);
 
   static const Color paywallGoldSoft = Color(0xFFE0C58A);
 
@@ -675,7 +679,8 @@ abstract final class ArulTokens {
   /// is body copy; both owe AA. It stays the LIGHTEST readable rung, not a decorative one.
   static const Color paywallInkFaint = Color(0xFF7D6E50);
 
-  static const Color paywallInkGold = Color(0xFFA3814A);
+  /// Clears AA on [paywallCream] — PER MONTH and the tagline are read, not decoration.
+  static const Color paywallInkGold = Color(0xFF85632D);
 
   static const Color paywallInkUpi = Color(0xFF2C2418);
 

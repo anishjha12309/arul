@@ -14,6 +14,7 @@ import '../../../app/theme/theme.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
+import '../../../core/connectivity/data_saver.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -200,26 +201,9 @@ String _packWithinGa4Limit(List<String> values) {
   return out.isEmpty ? 'toolong' : out.toString();
 }
 
-/// `14 Jul 2026`. Null in → null out, so callers can hide the row entirely.
-String? _formatDate(DateTime? d) {
-  if (d == null) return null;
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  final local = d.toLocal();
-  return '${local.day} ${months[local.month - 1]} ${local.year}';
-}
+/// A plan date in the app's language — the month name comes from intl's locale data.
+String? _formatDate(AppLocalizations l10n, DateTime? d) =>
+    d == null ? null : l10n.premiumPlanDate(d.toLocal());
 
 /// THE premium screen — paywall and plan home in ONE route.
 ///
@@ -477,17 +461,17 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   Future<void> _confirmAndCancel(SubscriptionModel sub) async {
     if (_cancelBusy) return;
-    final until = _formatDate(sub.currentPeriodEnd);
+    final l10n = AppLocalizations.of(context);
+    final end = sub.currentPeriodEnd?.toLocal();
 
     final ok = await showArulConfirmDialog(
       context,
-      title: 'Cancel subscription?',
-      message: until == null
-          ? 'Your premium access stays active until the end of the current '
-                'billing period. After that you won\'t be charged again.'
-          : 'Your premium access stays active until $until. After that you '
-                'won\'t be charged again.',
-      confirmLabel: 'Cancel it',
+      title: l10n.premiumCancelDialogTitle,
+      message: end == null
+          ? l10n.premiumCancelDialogBody
+          : l10n.premiumCancelDialogBodyDate(end),
+      confirmLabel: l10n.premiumCancelConfirm,
+      cancelLabel: l10n.premiumCancelKeep,
     );
     if (ok != true || !mounted) return;
 
@@ -497,11 +481,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // cancel() owns the message; refreshStatus() is a best-effort reconcile in its own try.
     // A reconcile must never turn a successful cancel into an error.
     // _cancelBusy is always cleared, so the button cannot get stuck spinning.
-    String? error;
+    PurchaseErrorKind? error;
     try {
       error = await notifier.cancel();
     } catch (_) {
-      error = 'Something went wrong. Please try again.';
+      error = PurchaseErrorKind.generic;
     }
     try {
       await notifier.refreshStatus();
@@ -512,10 +496,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
     showArulToast(
       context,
-      error ??
-          (until == null
-              ? 'Subscription cancelled. You keep premium until the period ends.'
-              : 'Subscription cancelled. You keep premium until $until.'),
+      (error == null ? null : purchaseErrorText(l10n, error)) ??
+          (end == null
+              ? l10n.premiumCancelledToast
+              : l10n.premiumCancelledToastDate(end)),
       kind: error != null ? ToastKind.error : ToastKind.success,
     );
   }
@@ -822,6 +806,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   /// Starts pulling the return clip to disk — see [ReturnClipCache].
   void _warmReturnClip() {
+    // Speculative bytes; under Data Saver the return page fetches its clip only if it opens.
+    if (DataSaver.isOn) return;
     final config = ref.read(appConfigProvider).asData?.value;
     if (!returnPageEnabled(config)) return;
     final source = resolveReturnVideo(
@@ -888,7 +874,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       _returnRoute = route;
       _returnClosed = closed;
     });
-    // GA4 only (off the PostHog allow-list): how often the page is reached, per language.
     ref
         .read(analyticsServiceProvider)
         .track(
@@ -1183,7 +1168,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
     return ArulMemberView(
       trialing: trialing,
-      renewalDate: _formatDate(renewalDate),
+      renewalDate: _formatDate(AppLocalizations.of(context), renewalDate),
+      monthlyPrice: _monthlyPrice(
+        ref.watch(appConfigProvider).asData?.value?.prices,
+      ),
       cancelBusy: _cancelBusy,
       onBack: _leave,
       onCancel: () => _confirmAndCancel(sub),
@@ -1229,7 +1217,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
     return ArulResubscribeView(
       monthlyPrice: monthlyPrice,
-      accessUntil: _formatDate(sub.currentPeriodEnd),
+      accessUntil: _formatDate(
+        AppLocalizations.of(context),
+        sub.currentPeriodEnd,
+      ),
       selectedUpiApp: selectedApp,
       // Not `length > 1`: the picker is no longer a choice AMONG apps, it also holds the QR
       // row, so a phone with exactly one UPI app still has two ways to pay and must be able to
@@ -1319,8 +1310,6 @@ class _UpiPickerSheet extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: UpiOptionRow(
                       app: app,
-                      // The INDEX is the identifier: row 0 is the head of the
-                      // channel's preference order, which is what the rig asserts.
                       identifier: 'arul_upi_option_$i',
                       selected: app.packageName == selectedPackage,
                       lastUsed: app.packageName == rememberedPackage,

@@ -505,6 +505,8 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   /// Fades first when something is audibly playing, exactly like a user pause -> a tab switch must
   /// not click.
   Future<void> stop() async {
+    // The screen's dispose defers this a microtask; the scope may be gone by then (sign-out).
+    if (!ref.mounted) return;
     _pausedByInterruption = false;
     _duckedByInterruption = false;
     final wasPlaying = state.isPlaying;

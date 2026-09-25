@@ -479,7 +479,7 @@ function pgBigintToNumber(v: unknown): number {
   return 0;
 }
 
-async function buildScope(
+export async function buildScope(
   sql: ReturnType<typeof getDb>,
   r2Bucket: R2Bucket,
   scope: string,

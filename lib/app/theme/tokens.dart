@@ -92,7 +92,7 @@ abstract final class ArulColors {
   static const ivoryDim = Color(0xFFEFE3D3);
 
   static const inkText = Color(0xFF2B1116);
-  static const inkMuted = Color(0xFF8A6F5C);
+  static const inkMuted = Color(0xFF6A5142);
 
   static const ivoryOutline = Color(0xFFB09A86);
   static const ivoryOutlineVariant = Color(0xFFE5D6CE);

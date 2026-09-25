@@ -452,20 +452,26 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           border: Border.all(color: fieldBorder),
                         ),
                         alignment: Alignment.centerLeft,
-                        child: TextField(
-                          controller: _titleController,
-                          style: ArulTokens.rowTitle.copyWith(
-                            color: textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            hintText: _isRingtone
-                                ? l10n.uploadTitleHintRingtone
-                                : l10n.uploadTitleHint,
-                            hintStyle: TextStyle(
-                              fontSize: 14.5,
-                              color: placeholderColor,
+                        // The visible "Title (optional)" caption above is a sibling Text, so
+                        // TalkBack never hears it as the field's name without this label.
+                        child: Semantics(
+                          label:
+                              '${l10n.uploadTitleLabel} ${l10n.uploadTitleOptional}',
+                          child: TextField(
+                            controller: _titleController,
+                            style: ArulTokens.rowTitle.copyWith(
+                              color: textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              isCollapsed: true,
+                              border: InputBorder.none,
+                              hintText: _isRingtone
+                                  ? l10n.uploadTitleHintRingtone
+                                  : l10n.uploadTitleHint,
+                              hintStyle: TextStyle(
+                                fontSize: 14.5,
+                                color: placeholderColor,
+                              ),
                             ),
                           ),
                         ),
@@ -504,6 +510,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                     // Announced as ONE checkbox with its sentence, not a glyph and a paragraph.
                     checked: _rightsAccepted,
                     label: l10n.uploadRightsCheckbox,
+                    button: true,
+                    onTap: () =>
+                        setState(() => _rightsAccepted = !_rightsAccepted),
                     excludeSemantics: true,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,

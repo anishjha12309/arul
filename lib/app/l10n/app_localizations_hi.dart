@@ -12,9 +12,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get appName => 'अरुल';
 
   @override
-  String get appTagline => 'दक्षिण भारतीय वॉलपेपर';
-
-  @override
   String get categoryAll => 'सभी';
 
   @override
@@ -277,12 +274,6 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsTellFriendSub => 'जिसे Arul पसंद आएगा, उसे भेजें';
 
   @override
-  String get settingsRemindersSubOn => 'हर हफ़्ते और त्योहार के रिमाइंडर चालू';
-
-  @override
-  String get settingsRemindersSubOff => 'त्योहार और हर हफ़्ते के रिमाइंडर';
-
-  @override
   String get settingsLanguage => 'भाषा';
 
   @override
@@ -372,63 +363,7 @@ class AppLocalizationsHi extends AppLocalizations {
   String get themeDarkSub => 'दीये की रोशनी में मैरून';
 
   @override
-  String get remindersTitle => 'रिमाइंडर';
-
-  @override
-  String get remindersToggleTitle => 'भक्ति रिमाइंडर';
-
-  @override
-  String get remindersToggleSub => 'हर हफ़्ते का ख़ास दिन, और हर बड़ा त्योहार';
-
-  @override
-  String get remindersScheduleNote =>
-      'हर हफ़्ते शुक्रवार को एक रिमाइंडर, और हर बड़े त्योहार से कुछ दिन पहले एक — पोंगल, दीपावली, नवरात्रि, शिवरात्रि वगैरह। महीने में करीब दो।';
-
-  @override
-  String get remindersPermissionToast =>
-      'Arul के लिए नोटिफ़िकेशन बंद हैं। रिमाइंडर पाने के लिए फ़ोन सेटिंग्स में चालू करें।';
-
-  @override
   String get remindersTimeLabel => 'रिमाइंडर का समय';
-
-  @override
-  String get remindersComingUp => 'आने वाले';
-
-  @override
-  String get remindersMonthJan => 'जन';
-
-  @override
-  String get remindersMonthFeb => 'फ़र';
-
-  @override
-  String get remindersMonthMar => 'मार्च';
-
-  @override
-  String get remindersMonthApr => 'अप्रैल';
-
-  @override
-  String get remindersMonthMay => 'मई';
-
-  @override
-  String get remindersMonthJun => 'जून';
-
-  @override
-  String get remindersMonthJul => 'जुल';
-
-  @override
-  String get remindersMonthAug => 'अग';
-
-  @override
-  String get remindersMonthSep => 'सित';
-
-  @override
-  String get remindersMonthOct => 'अक्टू';
-
-  @override
-  String get remindersMonthNov => 'नव';
-
-  @override
-  String get remindersMonthDec => 'दिस';
 
   @override
   String get premiumScreenSubline => 'पूरा संग्रह, आपकी स्क्रीन पर जीवंत';
@@ -776,4 +711,156 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get purchaseConfirmationLate =>
       'भुगतान मिल गया, पर पुष्टि में देर हो रही है। ऐप बंद करके दोबारा खोलें — आपका सब्सक्रिप्शन जल्द चालू हो जाएगा।';
+
+  @override
+  String get authErrorNoPlayServices =>
+      'Google Play Services उपलब्ध नहीं है। कृपया अपडेट करें या दोबारा इंस्टॉल करें।';
+
+  @override
+  String get authErrorNetwork =>
+      'इंटरनेट नहीं है। कनेक्शन जाँचें और दोबारा कोशिश करें।';
+
+  @override
+  String get authErrorTokenExchange => 'साइन इन नहीं हुआ। फिर कोशिश करें।';
+
+  @override
+  String get authErrorServer => 'साइन इन नहीं हुआ। फिर कोशिश करें।';
+
+  @override
+  String get authErrorIncomplete =>
+      'साइन इन पूरा नहीं हुआ। इंटरनेट चेक करें और फिर कोशिश करें।';
+
+  @override
+  String get splashTagline => 'भक्ति आपके हाथों में';
+
+  @override
+  String get videoMute => 'वीडियो की आवाज़ बंद करें';
+
+  @override
+  String get videoUnmute => 'वीडियो की आवाज़ चालू करें';
+
+  @override
+  String get premiumMemberHeadline => 'आप सदस्य हैं';
+
+  @override
+  String premiumMemberTrialSubline(String price) {
+    return 'हर वॉलपेपर का पूरा ऐक्सेस। ट्रायल ख़त्म होने पर आपका पहला $price का पेमेंट लिया जाएगा।';
+  }
+
+  @override
+  String get premiumMemberSubline =>
+      'हर वॉलपेपर, स्टिल और लाइव, लगाने और शेयर करने के लिए आपका है।';
+
+  @override
+  String get premiumTrialEndsLabel => 'ट्रायल ख़त्म';
+
+  @override
+  String get premiumRenewsOnLabel => 'रिन्यू होगा';
+
+  @override
+  String get premiumMemberTrialFootnote =>
+      'ट्रायल ख़त्म होने से पहले रद्द करें तो कोई पैसा नहीं कटेगा। UPI ऑटोपे से हर महीने बिल होगा।';
+
+  @override
+  String get premiumMemberFootnote =>
+      'UPI ऑटोपे से हर महीने बिल होगा। कभी भी रद्द करें — मौजूदा अवधि ख़त्म होने तक ऐक्सेस बना रहेगा।';
+
+  @override
+  String get premiumStatusTrial => 'मुफ़्त ट्रायल';
+
+  @override
+  String get premiumStatusActive => 'चालू';
+
+  @override
+  String get premiumPlanLabel => 'प्लान';
+
+  @override
+  String get premiumPlanMonthly => 'मासिक';
+
+  @override
+  String get premiumPaymentLabel => 'पेमेंट';
+
+  @override
+  String get premiumPaymentUpiAutopay => 'UPI ऑटोपे';
+
+  @override
+  String get premiumRenewalReminder =>
+      'हर रिन्यूअल से 24 घंटे पहले हम आपको याद दिलाएँगे।';
+
+  @override
+  String get premiumCancelSubscription => 'सब्सक्रिप्शन रद्द करें';
+
+  @override
+  String get premiumAutoRenewOffHeadline => 'ऑटो-रिन्यू बंद है';
+
+  @override
+  String get premiumAutoRenewOffSubline =>
+      'पैसे दी गई अवधि ख़त्म होने तक पूरा ऐक्सेस बना रहेगा। आपसे दोबारा पैसे नहीं लिए जाएँगे।';
+
+  @override
+  String get premiumStatusAutoRenewOff => 'ऑटो-रिन्यू बंद';
+
+  @override
+  String get premiumAccessUntilLabel => 'ऐक्सेस कब तक';
+
+  @override
+  String get premiumResubscribeCta => 'फिर से सब्सक्राइब करें';
+
+  @override
+  String premiumResubscribeFootnote(String price) {
+    return 'फिर से सब्सक्राइब करने पर $price प्रति माह का नया UPI ऑटोपे मैंडेट बनेगा।';
+  }
+
+  @override
+  String get premiumChange => 'बदलें';
+
+  @override
+  String get premiumCancelDialogTitle => 'सब्सक्रिप्शन रद्द करें?';
+
+  @override
+  String get premiumCancelDialogBody =>
+      'मौजूदा बिलिंग अवधि ख़त्म होने तक आपका प्रीमियम चालू रहेगा। उसके बाद आपसे दोबारा पैसे नहीं लिए जाएँगे।';
+
+  @override
+  String premiumCancelDialogBodyDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString तक आपका प्रीमियम चालू रहेगा। उसके बाद आपसे दोबारा पैसे नहीं लिए जाएँगे।';
+  }
+
+  @override
+  String get premiumCancelConfirm => 'हाँ, रद्द करें';
+
+  @override
+  String get premiumCancelledToast =>
+      'सब्सक्रिप्शन रद्द हो गया। अवधि ख़त्म होने तक प्रीमियम चालू रहेगा।';
+
+  @override
+  String premiumCancelledToastDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return 'सब्सक्रिप्शन रद्द हो गया। $dateString तक प्रीमियम चालू रहेगा।';
+  }
+
+  @override
+  String premiumPlanDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get premiumCancelKeep => 'प्रीमियम जारी रखें';
 }

@@ -6,7 +6,6 @@ import '../core/deeplink/deep_link_target.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/legal/presentation/policy_screen.dart';
-import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/referral/presentation/refer_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
@@ -21,7 +20,7 @@ import 'theme/theme.dart';
 ///
 /// Splash decides imperatively: loading stays -> unauthed goes /sign-in -> authed goes /browse.
 /// Wallpapers · Ringtones · Settings are always-alive dock BRANCHES -> Settings is never a push.
-/// Their sub-screens (notifications, premium, refer, upload) stay top-level pushes OVER the shell.
+/// Their sub-screens (premium, refer, upload) stay top-level pushes OVER the shell.
 /// Every push goes through [ArulPushPage] -> read its doc before writing a pageBuilder here: a
 /// plain `CustomTransitionPage` opts the route out of predictive back.
 final router = GoRouter(
@@ -83,11 +82,6 @@ final router = GoRouter(
           ],
         ),
       ],
-    ),
-    GoRoute(
-      path: '/settings/notifications',
-      pageBuilder: (_, state) =>
-          _push(state, const NotificationSettingsScreen()),
     ),
     GoRoute(
       path: '/refer',

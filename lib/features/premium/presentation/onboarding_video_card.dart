@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
@@ -217,9 +218,9 @@ class _ArulOnboardingVideoCardState
     return Padding(
       // Default: the offer panel's gutters -> the two read as one column, not two indents.
       padding: widget.padding,
-      // Full width at the clip's OWN 16:9 on every screen — never cropped, never scaled to fit.
-      // Paying for a short screen out of the clip turned a talking head into a band of forehead.
-      // Room comes from the chrome instead (`dense` in paywall_view.dart) -> one framing everywhere.
+      // The clip's OWN 16:9, never cropped: cropping for a short screen turned a talking head into
+      // a band of forehead. Full width where it fits; a pinned short-screen layout scales the whole
+      // frame down instead (`_ClipMiddle` in paywall_view.dart).
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: SizedBox(
@@ -293,7 +294,9 @@ class _MuteButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: muted ? 'Unmute video' : 'Mute video',
+      label: muted
+          ? AppLocalizations.of(context).videoUnmute
+          : AppLocalizations.of(context).videoMute,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,

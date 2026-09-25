@@ -160,7 +160,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     if (pending == null) {
       final missed = notifier.takePendingAutoFailure();
       if (missed != null && mounted) {
-        showArulToast(context, missed.message, kind: ToastKind.error);
+        showArulToast(
+          context,
+          authFailureText(AppLocalizations.of(context), missed.kind),
+          kind: ToastKind.error,
+        );
         setState(() => _outcome = _outcomeForFailure(missed.kind));
       }
       return;
@@ -176,9 +180,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
         case AuthCancelled(:final outcome):
           // No toast, but not a silent bounce -> the subtitle says what this attempt did.
           _outcome = outcome;
-        case AuthFailure(:final message, :final kind):
-          // Localized-enough surface + retry (the pill), never a stuck spinner.
-          showArulToast(context, message, kind: ToastKind.error);
+        case AuthFailure(:final kind):
+          // One localized line per kind + retry (the pill), never a stuck spinner. Never the
+          // failure's own message: it is English and can carry the Worker's text.
+          showArulToast(
+            context,
+            authFailureText(AppLocalizations.of(context), kind),
+            kind: ToastKind.error,
+          );
           _outcome = _outcomeForFailure(kind);
       }
       // Handled live here -> drop the recorded copy, or a later mount replays a seen failure.
@@ -344,6 +353,12 @@ class _SignInPillState extends State<_SignInPill> {
     return Semantics(
       container: true,
       identifier: 'arul_signin_pill',
+      button: true,
+      label: '${widget.title}. ${widget.subtitle}',
+      onTap: widget.busy ? null : widget.onTap,
+      // Without this the title's own auto-merged tap node and this one both carry the action —
+      // the wall's "pill is the ONLY tappable thing" contract catches a second stop otherwise.
+      excludeSemantics: true,
       child: _pill(context),
     );
   }
@@ -527,3 +542,15 @@ class _GoogleGMark extends StatelessWidget {
     );
   }
 }
+
+/// The wall's failure toast in the app's language. Exhaustive: a new kind without a line is a
+/// compile error, never a silent English fallback.
+@visibleForTesting
+String authFailureText(AppLocalizations l10n, AuthFailureKind kind) =>
+    switch (kind) {
+      AuthFailureKind.noPlayServices => l10n.authErrorNoPlayServices,
+      AuthFailureKind.networkError => l10n.authErrorNetwork,
+      AuthFailureKind.tokenExchangeFailed => l10n.authErrorTokenExchange,
+      AuthFailureKind.serverError => l10n.authErrorServer,
+      AuthFailureKind.unknown => l10n.authErrorIncomplete,
+    };

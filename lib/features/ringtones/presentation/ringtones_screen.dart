@@ -146,7 +146,10 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     }
     ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     _scroll.dispose();
-    _previewNotifier?.stop();
+    // One microtask late: dispose runs inside finalizeTree, where a provider write throws in debug
+    // and the next shell build then trips a duplicate GlobalKey (sign-out, dead session -> wall).
+    final preview = _previewNotifier;
+    if (preview != null) Future.microtask(() => unawaited(preview.stop()));
     super.dispose();
   }
 
@@ -599,10 +602,9 @@ class RingtoneRow extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                _FitTitle(
                   ringtone.title,
                   maxLines: _titleMaxLines,
-                  overflow: TextOverflow.ellipsis,
                   style: ArulTokens.rowTitleTracked.copyWith(
                     color: lit
                         ? (isDark
@@ -1027,15 +1029,12 @@ class _SetPill extends StatelessWidget {
 
   static const double _visualHeight = 32;
 
-  /// The widest the pill may grow — the width English "Set" takes at a 1.3× OS font size.
-  ///
-  /// A Row lays its inflexible children out FIRST, so every dp this pill grows is a dp the title
-  /// column loses: the Tamil and Malayalam verbs at 1.3× took ~25 dp from it and song titles broke
-  /// mid-word ("Venkate / sha"). A CONSTANT ceiling, not one that scales: at 1.0 every verb fits
-  /// under it unshrunk, and at 1.3 the column keeps exactly the width the English build gives it,
-  /// so a title that fits in English fits in Tamil. Past the ceiling the LABEL shrinks — a smaller
-  /// verb beats a broken title, and both beat a clipped one.
-  static const double _maxWidth = 66;
+  /// The pill is at least [_minWidth] and GROWS with its verb (owner's call): a constant 66 dp
+  /// ceiling shrank the Telugu and Kannada verbs to ~8 sp at 360 dp / 1.3×, unreadable for this
+  /// audience. The title column pays the width instead and wraps. [_maxWidth] is only a backstop
+  /// past every shipped verb at 1.3×; beyond it the label shrinks rather than clips.
+  static const double _minWidth = 64;
+  static const double _maxWidth = 128;
 
   /// Side padding inside the pill. Tighter than a chip's 16 so a 4-glyph verb fits at 1.0 unshrunk.
   static const double _padding = 12;
@@ -1053,6 +1052,9 @@ class _SetPill extends StatelessWidget {
       enabled: !disabled,
       label: label,
       identifier: 'arul_ringtone_set',
+      onTap: disabled ? null : onTap,
+      // The label is the visible pill word -> without this it is announced twice.
+      excludeSemantics: true,
       child: Opacity(
         opacity: disabled && !busy ? 0.55 : 1,
         child: GestureDetector(
@@ -1060,30 +1062,50 @@ class _SetPill extends StatelessWidget {
           onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
           onTap: disabled ? null : onTap,
           behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            height: ArulTokens.minHitTarget,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: _maxWidth),
-                child: Container(
-                  height: _visualHeight,
-                  padding: const EdgeInsets.symmetric(horizontal: _padding),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-                    border: Border.all(color: border),
+          // The pill draws at its label's intrinsic width (as little as 47dp) -> a bare SizedBox
+          // hit-tests only that. minWidth widens the invisible hit box; Center leaves the drawn
+          // Container at its own intrinsic width, unstretched.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minWidth: ArulTokens.minHitTarget,
+            ),
+            child: SizedBox(
+              height: ArulTokens.minHitTarget,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: _minWidth,
+                    maxWidth: _maxWidth,
                   ),
-                  child: Center(
-                    widthFactor: 1,
-                    child: busy
-                        ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
-                        : FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              style: ArulTokens.chipActive.copyWith(color: fg),
+                  child: Container(
+                    height: _visualHeight,
+                    padding: const EdgeInsets.symmetric(horizontal: _padding),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(
+                        ArulTokens.pillRadius,
+                      ),
+                      border: Border.all(color: border),
+                    ),
+                    child: Center(
+                      widthFactor: 1,
+                      child: busy
+                          ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
+                          : FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                // A control, like the dock labels: past 1.0× the room goes to the
+                                // ringtone's name, which must show whole.
+                                textScaler: MediaQuery.textScalerOf(
+                                  context,
+                                ).clamp(maxScaleFactor: 1.0),
+                                style: ArulTokens.chipActive.copyWith(
+                                  color: fg,
+                                ),
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
               ),
@@ -1092,5 +1114,90 @@ class _SetPill extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// A ringtone title that is shown WHOLE: the owner's rule is the name fully there, never "…" and
+/// never a word split in half. The row's height is pinned to [maxLines] lines, so the title gives
+/// size instead — the largest scale at which it fits [maxLines] lines with every word unbroken,
+/// down to [_minSp] actual size. Only a title that fails even there ellipsises.
+class _FitTitle extends StatelessWidget {
+  const _FitTitle(this.text, {required this.maxLines, required this.style});
+
+  final String text;
+  final int maxLines;
+  final TextStyle style;
+
+  /// An ABSOLUTE floor, not a fraction of the user's scale: at 1.5× a relative floor still left
+  /// 16 sp text in an 86 dp slot, while the whole point of 1.5× is a readable title.
+  static const double _minSp = 12;
+  /// Coarse on purpose: a few shared sizes read as a system; a size per title reads as uneven rows.
+  static const double _step = 0.12;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    // Measure with what Text will actually paint: the inherited family and locale, not the bare style.
+    final measured = DefaultTextStyle.of(context).style.merge(style);
+    final locale = Localizations.maybeLocaleOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final size = base.scale(measured.fontSize ?? 14);
+        final floor = (_minSp / size).clamp(0.0, 1.0);
+        var factor = 1.0;
+        while (factor > floor &&
+            !_fits(
+              measured,
+              locale,
+              TextScaler.linear(base.scale(1) * factor),
+              width,
+              direction,
+            )) {
+          factor -= _step;
+        }
+        if (factor < floor) factor = floor;
+        return Text(
+          text,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          textScaler: TextScaler.linear(base.scale(1) * factor),
+          style: style,
+        );
+      },
+    );
+  }
+
+  bool _fits(
+    TextStyle measured,
+    Locale? locale,
+    TextScaler scaler,
+    double width,
+    TextDirection direction,
+  ) {
+    // A single word wider than the column is what breaks mid-word; lines alone would allow it.
+    for (final word in text.split(RegExp(r'\s+'))) {
+      final painter = TextPainter(
+        text: TextSpan(text: word, style: measured),
+        textScaler: scaler,
+        textDirection: direction,
+        locale: locale,
+        maxLines: 1,
+      )..layout();
+      final tooWide = painter.width > width;
+      painter.dispose();
+      if (tooWide) return false;
+    }
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: measured),
+      textScaler: scaler,
+      textDirection: direction,
+      locale: locale,
+      maxLines: maxLines,
+    )..layout(maxWidth: width);
+    final fits = !painter.didExceedMaxLines;
+    painter.dispose();
+    return fits;
   }
 }

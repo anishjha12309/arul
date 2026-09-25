@@ -54,6 +54,9 @@ class Attributor {
     for (final key in kArbPlaceholders.keys) {
       final template = strings[key];
       if (template == null) continue;
+      // A pure-placeholder message (a bare `{date}`) has no copy of its own to recognise, and as a
+      // pattern it would match every string on screen, catalog titles included.
+      if (template.replaceAll(RegExp(r'\{\w+\}'), '').trim().isEmpty) continue;
       out.add(_Template(key, template));
     }
     // Longest template FIRST -> a long message must not be shadowed by a shorter pattern that also matches.

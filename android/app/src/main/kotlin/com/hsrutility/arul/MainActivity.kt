@@ -5,6 +5,7 @@ import android.app.ActivityManager
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.net.ConnectivityManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
@@ -18,6 +19,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
@@ -332,6 +334,7 @@ class MainActivity : FlutterFragmentActivity() {
                 // generation — the permission model, the channel rules and the trampoline rules all
                 // change with it, and nothing else in the payload says which phone this is.
                 "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
+                "dataSaverOn" -> result.success(dataSaverOn())
                 else -> result.notImplemented()
             }
         }
@@ -634,6 +637,19 @@ class MainActivity : FlutterFragmentActivity() {
 
     // Same fallback chain as WRITE_SETTINGS: the per-app notification page, then app details,
     // which resolves everywhere. A tap that opens nothing is preferable to a crash.
+    // Android's Data Saver blocks background data on a METERED network and asks the foreground to
+    // use less. Both halves must hold: Data Saver on Wi-Fi restricts nothing.
+    private fun dataSaverOn(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            cm.isActiveNetworkMetered &&
+                cm.restrictBackgroundStatus == ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun openNotificationSettingsScreen() {
         val candidates = mutableListOf<Intent>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

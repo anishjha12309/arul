@@ -199,6 +199,9 @@ class _OptionShell extends StatelessWidget {
       button: true,
       selected: selected,
       enabled: tap != null,
+      onTap: tap,
+      // The label is the row's own visible name text -> without this it is announced twice.
+      excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: tap == null ? null : (_) => ArulHaptics.tap(),

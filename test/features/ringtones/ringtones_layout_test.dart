@@ -60,7 +60,10 @@ class _StubPreview extends RingtonePreviewNotifier {
   }
 
   @override
-  Future<void> stop() async => state = const RingtonePreviewState();
+  Future<void> stop() async {
+    if (!ref.mounted) return;
+    state = const RingtonePreviewState();
+  }
 }
 
 /// A narrow phone, a big-type user, and the two longest of the six locales.

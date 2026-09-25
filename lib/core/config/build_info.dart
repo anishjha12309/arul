@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart'
-    show debugPrint, kDebugMode, visibleForTesting;
+    show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -14,22 +14,14 @@ const _channel = MethodChannel('com.hsrutility.arul/build_info');
 /// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
 /// -> the two can never disagree.
 ///
-/// ONE probe per process, shared by every caller ([PlayInstall]) -> the QA-tools gate and the
-/// PostHog gate can never answer differently about the same build.
-@Riverpod(keepAlive: true)
-Future<bool> isPlayInstall(Ref ref) => PlayInstall.resolved;
-
-/// The Play-install answer, asked once and cached for the process.
+/// ONE probe per process ([PlayInstall]), asked once and cached.
 ///
-/// Two callers need it in two shapes: [qaToolsEnabled] can await it, and the analytics assembly
-/// cannot — it is a synchronous provider that runs on the first `track()`. So the probe is kicked
-/// off in `main()` and its verdict parked in [isPlay], the same shape `AnalyticsCohort.isMember`
-/// already uses for the same reason.
+/// The analytics assembly is a synchronous provider that runs on the first `track()`, so the probe is
+/// kicked off in `main()` and its verdict parked in [PlayInstall.isPlay], the same shape
+/// `AnalyticsCohort.isMember` already uses for the same reason.
 ///
-/// **Fails toward PLAY.** An unresolvable installer or a platform error answers `true`: the two
-/// consumers want opposite safety, and the one that matters more is the analytics gate — a real
-/// user's events must never be dropped because a channel hiccuped. The QA tools read `== false`, so
-/// the same answer hides them, which is also the safe direction there.
+/// **Fails toward PLAY.** An unresolvable installer or a platform error answers `true`: a real
+/// user's events must never be dropped because a channel hiccuped.
 /// A MISSING channel is different from a failing one: no platform at all is `flutter test` or a host
 /// build, which is not a store build and must stay silent.
 abstract final class PlayInstall {
@@ -214,20 +206,4 @@ abstract final class AndroidVersion {
 
   @visibleForTesting
   static void resetForTesting() => _probe = null;
-}
-
-/// Whether the on-device QA affordances (fire a test notification, preview every reminder, inspect
-/// what is actually armed) should be reachable.
-///
-/// True in debug AND in a **sideloaded release APK**, false in the Play build.
-/// The APK case is the point: R8 resource shrinking is what strips the notification icons -> a
-/// `kDebugMode` gate hid the one screen that could catch it, in exactly the build where it breaks.
-/// Real users only ever get the AAB -> they still never see these.
-/// A loading or failed answer resolves to false -> the tools appear a frame late on a release APK
-/// rather than ever flashing up in the store build.
-@Riverpod(keepAlive: true)
-bool qaToolsEnabled(Ref ref) {
-  if (kDebugMode) return true;
-  // `== false`, not `!= true` -> a loading or errored snapshot is null -> it must resolve to "hide".
-  return ref.watch(isPlayInstallProvider).value == false;
 }

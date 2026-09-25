@@ -322,8 +322,13 @@ class ArulSheetRow extends StatelessWidget {
       ),
     );
 
-    if (identifier == null) return row;
-    return Semantics(container: true, identifier: identifier, child: row);
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      identifier: identifier,
+      child: row,
+    );
   }
 }
 

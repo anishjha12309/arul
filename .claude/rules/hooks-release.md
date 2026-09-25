@@ -19,8 +19,7 @@ Manifest invariants:
 
 - **`FLAG_SECURE` is set in `MainActivity.onCreate`, not the manifest** — it must survive the Android
   12+ wallpaper-apply recreate — and **only when `isPlayInstall()`**, which fails CLOSED. So a
-  sideloaded release APK deliberately differs from the store build in two visible ways: screenshots
-  work, and the reminders screen shows its QA card. Both are intended.
+  sideloaded release APK deliberately differs from the store build: screenshots work. Intended.
 - **`WRITE_SETTINGS` must stay an ACTIVE line.** Ringtones ship; a commented one breaks Set on every
   device. It is special-access and shows on the Play listing, so the Data safety form and the listing
   copy must both account for it.

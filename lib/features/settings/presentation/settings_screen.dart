@@ -20,7 +20,6 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../legal/presentation/policy_screen.dart';
-import '../../notifications/providers/notification_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
@@ -65,15 +64,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // The row shows the autonym (தமிழ், not "Tamil") — the word a speaker recognises; the sheet
     // still trades in the English NAME, which is why `language` stays what it was.
     final languageShown = appLanguageNativeNames[languageCode] ?? language;
-
-    // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
-    // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
-    final notificationsOn = ref
-        .watch(notificationSettingsProvider)
-        .masterEnabled;
-    final notificationsSub = notificationsOn
-        ? l10n.settingsRemindersSubOn
-        : l10n.settingsRemindersSubOff;
 
     return Scaffold(
       backgroundColor: bg,
@@ -124,13 +114,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         sub: l10n.settingsTellFriendSub,
                         onTap: () =>
                             tellAFriend(context, ref, source: 'settings'),
-                      ),
-                      _RowData(
-                        icon: Icons.notifications_active_outlined,
-                        title: l10n.remindersTitle,
-                        identifier: 'arul_settings_reminders',
-                        sub: notificationsSub,
-                        onTap: () => context.push('/settings/notifications'),
                       ),
                       _RowData(
                         icon: Icons.translate,
@@ -569,6 +552,7 @@ class _SettingsRow extends StatelessWidget {
 
     return Semantics(
       container: true,
+      button: true,
       identifier: data.identifier,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -693,6 +677,9 @@ class _FooterLink extends StatelessWidget {
       link: true,
       label: label,
       identifier: 'arul_policy_${doc.name}',
+      onTap: () => context.push(doc.route),
+      // The label is the visible link text -> without this it is announced twice.
+      excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),

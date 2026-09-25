@@ -32,20 +32,13 @@ class _ArulAppState extends ConsumerState<ArulApp> {
   @override
   void initState() {
     super.initState();
-    // A reminder is about ONE deity -> its tap lands on that deity, never on wherever the feed was left.
-    // Select the category BEFORE routing -> the feed's first build already filters -> no flash of the old one.
-    ref.read(notificationServiceProvider).onOpenCategory = (category) {
-      if (!mounted) return;
-      ref.read(selectedCategoryProvider.notifier).select(category);
-      router.go('/browse');
-    };
-    // The one reminder that is not about a deity: an unfinished trial goes back to the paywall.
+    // The unfinished-trial reminder goes back to the paywall.
     ref.read(notificationServiceProvider).onOpenTrialReminder = () {
       if (!mounted) return;
       router.go('/premium?source=trial_reminder');
     };
 
-    // A tapped CAMPAIGN notification (docs/push.md). Started here, beside the local handlers and
+    // A tapped CAMPAIGN notification (docs/push.md). Started here, beside the local handler and
     // before the router resolves the launch, for the same reason `NotificationService` is built
     // before `runApp`: a tap that LAUNCHED the app must find a live handler, and the cold tap is the
     // one that matters. [PushTapRouter] holds a tap that lands before the splash's auth decision.
@@ -126,9 +119,7 @@ class _ArulAppState extends ConsumerState<ArulApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Re-arms local reminders on every notification-settings change and once on startup.
-    // Festival reminders are one-shot alarms -> only the launch-time re-arm reaches the next one.
-    // So it must not depend on the user opening a screen -> watched at the ROOT, not from any screen.
+    // Re-arms the unfinished-trial reminder once on startup, from its persisted instant.
     ref.watch(notificationBootstrapProvider);
 
     // Campaign push (docs/push.md), watched at the ROOT for the same reason: neither depends on a

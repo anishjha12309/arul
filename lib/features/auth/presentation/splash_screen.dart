@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../core/providers/geo_language_service.dart';
@@ -38,7 +39,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const _tagline = 'DEVOTIONAL WALLPAPERS & RINGTONES';
   static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
 
   /// How many leading feed thumbnails to warm once the catalog lands.
@@ -230,15 +230,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
                   // Shrinks, never wraps — see the twin in sign_in_screen.dart.
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text(
-                        _tagline,
-                        maxLines: 1,
-                        style: ArulTokens.tagline,
-                      ),
+                      child: _Tagline(AppLocalizations.of(context).splashTagline),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -306,6 +302,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           },
         ),
       ),
+    );
+  }
+}
+
+/// Latin in tracked caps; an Indic script untracked, because tracking splits its clusters apart.
+class _Tagline extends StatelessWidget {
+  const _Tagline(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final latin = Localizations.localeOf(context).languageCode == 'en';
+    return Text(
+      latin ? text.toUpperCase() : text,
+      maxLines: 1,
+      style: latin
+          ? ArulTokens.tagline
+          : ArulTokens.tagline.copyWith(letterSpacing: 0),
     );
   }
 }

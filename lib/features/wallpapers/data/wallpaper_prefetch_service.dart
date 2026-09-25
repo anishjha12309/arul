@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import '../../../core/connectivity/data_saver.dart';
 import '../../../data/models/wallpaper.dart';
 
 /// Prefetches upcoming LIVE wallpaper MP4s to a local disk cache, ahead of the feed reaching them.
@@ -183,6 +184,14 @@ class WallpaperPrefetchService {
   /// Skips anything already cached or in flight — safe, and intended, on every page settle.
   void prefetchAround(List<Wallpaper> items, int currentIndex) {
     if (_disposed || items.isEmpty) return;
+    // Data Saver: the visible card still loads through [ensureCached]; nothing is staged ahead.
+    if (DataSaver.isOn) {
+      for (final url in _queue) {
+        _tracked.remove(url);
+      }
+      _queue.clear();
+      return;
+    }
 
     // Cold start: hold the window narrow until the current card paints, and arm the widen fallback.
     if (!_widened) {

@@ -227,6 +227,7 @@ class _TargetCard extends StatelessWidget {
       label: label,
       identifier: identifier,
       selected: selected,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         // A card picks between values -> the lightest tick, on press-DOWN, like every other picker.

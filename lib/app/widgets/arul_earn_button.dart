@@ -6,18 +6,20 @@ import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/motion.dart';
+import 'arul_line_icons.dart';
 import 'arul_screen_header.dart';
 
 /// The Refer & Earn entry in a browse tab's header band — ONE control, shared by both tabs.
 ///
 /// The tabs cross-fade -> two shapes for one affordance read as two unrelated buttons.
 /// So this is the single control and a tab supplies only the destination.
-/// **A port of Pakiza's `EarnChip`** — geometry, emoji, type and wiggle are its numbers verbatim.
+/// **A port of Pakiza's `EarnChip`** — geometry, type and wiggle are its numbers verbatim.
 /// Rebuilding it by eye did not converge -> do not try again.
 /// The gold is [ArulTokens.gold], never Pakiza's: theming is the one thing the apps never share (§0).
 /// **The "shimmer" is the GRADIENT, not an animation** — a sheen plus a hairline lift, nothing moving.
 /// A travelling highlight over a video feed costs what the static gradient does not -> no glint.
-/// **The gift is the 🎁 emoji**, from the system font -> full-colour, zero asset, zero font dependency.
+/// **The gift is PAINTED** ([ArulLineGlyph.gift]) in the label's ink: budget Android 8–10 ROMs drew the
+/// 🎁 emoji as tofu or a monochrome fallback.
 class ArulEarnButton extends StatefulWidget {
   const ArulEarnButton({super.key, required this.onTap});
 
@@ -40,7 +42,8 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   static const double _padLeft = 12;
   static const double _padRight = ArulTokens.contentGap;
   static const double _gap = 8;
-  static const double _emojiSize = 17;
+  /// The emoji's drawn box at 17 sp — the painted gift takes the same room.
+  static const double _giftSize = 19;
 
   /// The label's ceiling at OS font scale 1.3: "பரிசு" fits, "സമ്മാനം" shrank — so ml uses നേടൂ.
   static const double _labelMaxWidth = 84;
@@ -122,6 +125,7 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
         container: true,
         button: true,
         label: l10n.earn,
+        onTap: widget.onTap,
         // The label IS the visible word -> without this it announces "Earn, button" then "Earn" again.
         excludeSemantics: true,
         child: GestureDetector(
@@ -167,9 +171,12 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
                           origin: const Offset(0, 6),
                           child: child,
                         ),
-                        child: const Text(
-                          '🎁',
-                          style: TextStyle(fontSize: _emojiSize),
+                        child: ArulLineIcon(
+                          glyph: ArulLineGlyph.gift,
+                          size: _giftSize,
+                          color: isDark
+                              ? ArulTokens.gold
+                              : ArulTokens.goldInkLight,
                         ),
                       ),
                     ),
