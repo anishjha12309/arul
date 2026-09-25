@@ -655,6 +655,12 @@ class AppLocalizationsMl extends AppLocalizations {
       'സെറ്റപ്പ് നിങ്ങൾ പൂർത്തിയാക്കിയില്ല. വീണ്ടും ശ്രമിക്കാൻ ടാപ്പ് ചെയ്യുക — ഒരു നിമിഷം മതി.';
 
   @override
+  String get comeBackTitle => 'നിങ്ങളുടെ വാൾപേപ്പർ തയ്യാർ';
+
+  @override
+  String get comeBackBody => 'സൈൻ ഇൻ ചെയ്യാൻ ടാപ്പ് ചെയ്യുക.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ആപ്പ്';
 
   @override

@@ -16,7 +16,7 @@ import '../../../theme/arul_tokens.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 import '../providers/auth_providers.dart';
-import 'widgets/video_background.dart';
+import 'widgets/launch_backdrop.dart';
 
 /// The wall's caption.
 ///
@@ -231,8 +231,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Same shared player as splash; we paint our own scrim below.
-            const VideoBackground(overlayOpacity: 0),
+            // Same backdrop as the splash (shared player, or the regional poster); our own scrim below.
+            const LaunchBackdrop(),
 
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.signInScrim),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../experiments/experiments.dart';
 import 'shared_preferences_provider.dart';
 
 part 'locale_provider.g.dart';
@@ -90,28 +91,33 @@ enum LanguageSource {
 /// [LocaleNotifier]'s resolution, callable before Riverpod exists — `main()` stamps it on
 /// `Application Installed`, which fires ahead of the first frame.
 /// An explicit pick or link -> the REGION (fresh installs, once) -> the phone -> English.
+/// [useGeo] false skips the region rung ([Experiments.geoLanguageApplies]).
 Locale resolveAppLocale(
   String? storedCode,
   String? geoCode,
-  List<Locale> phoneLocales,
-) {
+  List<Locale> phoneLocales, {
+  bool useGeo = true,
+}) {
   // A stored code the app no longer ships reads as English, never as the phone.
   if (storedCode != null) return _shipped(storedCode) ?? const Locale('en');
-  return _shipped(geoCode) ?? _phoneLocale(phoneLocales) ?? const Locale('en');
+  return (useGeo ? _shipped(geoCode) : null) ??
+      _phoneLocale(phoneLocales) ??
+      const Locale('en');
 }
 
 LanguageSource resolveLanguageSource(
   String? storedCode,
   String? storedSource,
   String? geoCode,
-  List<Locale> phoneLocales,
-) {
+  List<Locale> phoneLocales, {
+  bool useGeo = true,
+}) {
   if (storedCode != null) {
     return storedSource == LanguageSource.link.key
         ? LanguageSource.link
         : LanguageSource.pick;
   }
-  if (_shipped(geoCode) != null) return LanguageSource.geo;
+  if (useGeo && _shipped(geoCode) != null) return LanguageSource.geo;
   if (_phoneLocale(phoneLocales) != null) return LanguageSource.phone;
   return LanguageSource.fallback;
 }
@@ -146,6 +152,7 @@ LanguageOrigin resolveLanguageOrigin(
     prefs.getString(appLocaleSourcePrefsKey),
     prefs.getString(geoLangPrefsKey),
     phoneLocales,
+    useGeo: Experiments.read(prefs).geoLanguageApplies,
   ),
   geoRegion: geoRegionValue(prefs.getString(geoRegionPrefsKey)),
 );
@@ -186,6 +193,7 @@ class LocaleNotifier extends _$LocaleNotifier {
       prefs.getString(_key),
       prefs.getString(geoLangPrefsKey),
       ref.read(platformLocalesProvider),
+      useGeo: ref.read(experimentsProvider).geoLanguageApplies,
     );
   }
 
@@ -211,7 +219,12 @@ class LocaleNotifier extends _$LocaleNotifier {
 
   /// A fresh install's `GET /geo` answer -> stored once, pending cleared, applied live unless a
   /// pick or a link already exists. Never written to [_key]: the region is a hint like the phone.
-  Future<void> setGeoHint({String? lang, String? region}) async {
+  /// [applyLive] false stores it for the next launch only: the regional arm's answer after its cap.
+  Future<void> setGeoHint({
+    String? lang,
+    String? region,
+    bool applyLive = true,
+  }) async {
     final prefs = ref.read(sharedPreferencesProvider);
     // Only a SHIPPED code is kept -> a code a later build adds cannot re-language this install then.
     final geo = _shipped(lang);
@@ -223,8 +236,14 @@ class LocaleNotifier extends _$LocaleNotifier {
       ),
       prefs.remove(geoPendingPrefsKey),
     ];
-    if (geo != null && prefs.getString(_key) == null) state = geo;
-    ref.invalidate(languageOriginProvider);
+    if (geo != null &&
+        applyLive &&
+        ref.read(experimentsProvider).geoLanguageApplies &&
+        prefs.getString(_key) == null) {
+      state = geo;
+    }
+    // A stored-only answer leaves this session's language as it was -> so does its reported origin.
+    if (applyLive) ref.invalidate(languageOriginProvider);
     await Future.wait(writes);
   }
 }

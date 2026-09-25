@@ -97,8 +97,9 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   lands ON this screen and covers it, so anything else is reached by dismissing the sheet first: the
   bottom-left language chip that once sat here pushed first-sheet sign-ins down and pill taps up, and
   its users made roughly twice the attempts and signed in far less. A fresh install opens in the
-  phone's language; the region default ([deep-links.md](deep-links.md)) applies only while the
-  Worker's `GEO_LANG_ENABLED` brake is `"true"`. Settings is the one place it changes.
+  phone's language; the region default ([deep-links.md](deep-links.md)) applies only in the
+  `exp_regional` arm (and pre-factorial installs) while the Worker's `GEO_LANG_ENABLED` brake is
+  `"true"`. Settings is the one place it changes.
 - **Nothing else on the wall is tappable** — the Terms · Privacy footer stays gone; Play's in-app
   privacy-policy requirement is met by Settings. The wordmark stays English and is the wall's only
   mark; the eyebrow is the splash's alone. **Icon glyphs take NO `shadows`:** Impeller paints a

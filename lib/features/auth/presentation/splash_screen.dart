@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/experiments/experiments.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../core/providers/geo_language_service.dart';
 import '../../../data/models/wallpaper.dart';
@@ -16,9 +17,12 @@ import '../../../theme/arul_tokens.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../../wallpapers/providers/wallpaper_prefetch_provider.dart';
+import '../../notifications/providers/come_back_reminder.dart';
 import '../domain/auth_service.dart';
+import '../domain/regional_art.dart';
 import '../providers/auth_providers.dart';
-import 'widgets/video_background.dart';
+import '../providers/launch_art_provider.dart';
+import 'widgets/launch_backdrop.dart';
 import '../../../app/theme/motion.dart';
 
 /// The launch screen.
@@ -55,6 +59,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
   static const _preAuthThumbWarmCount = 1;
 
+  /// The regional arm's longest wait for `/geo` before the wall paints in the phone's language.
+  /// It runs inside the ~1.5 s Google's sheet takes to draw anyway; lower it, never raise it, if
+  /// the measured LTE p90 says so (launch-surface.md).
+  static const regionCap = Duration(milliseconds: 1200);
+
+  late final Future<void> _geoAsk;
+  final _geoClock = Stopwatch();
+  bool _geoDone = false;
+
   bool _mediaWarmed = false;
 
   late final AnimationController _hairlineController;
@@ -76,9 +89,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .warmUp()
           .then((_) => BootTrace.mark('splash: API warm-up settled')),
     );
-    // A fresh install's region hint, asked once -> the wall flips live when it lands.
-    // Never awaited and never on the routing path -> the splash still routes the moment the seed settles.
-    unawaited(ref.read(geoLanguageServiceProvider).fetchOnce());
+    // A fresh install's region hint, asked once. Only the regional arm waits for it, in
+    // [_awaitRegion]; every other launch routes the moment the seed settles.
+    _geoClock.start();
+    _geoAsk = ref.read(geoLanguageServiceProvider).fetchOnce().whenComplete(() {
+      _geoDone = true;
+    });
+    unawaited(_geoAsk);
+    ref.read(experimentKillSwitchProvider);
+    ref.read(comeBackReminderProvider);
 
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
@@ -189,8 +208,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         AppConfig.hasBackend &&
         ref.read(authServiceProvider).currentState.isAuthenticated;
 
+    if (ref.read(launchArtProvider) is AwaitingRegionArt) {
+      if (!authed) await _awaitRegion();
+      ref.read(launchArtProvider.notifier).settle();
+      await _precacheLaunchArt();
+      if (!mounted) return;
+    }
+
     BootTrace.mark('splash: routing to ${authed ? '/browse' : '/sign-in'}');
     context.go(authed ? '/browse' : '/sign-in');
+  }
+
+  /// The regional arm on a launch `/geo` has not answered yet: hold the dark ground until the region
+  /// lands or [regionCap] passes, so the wall's first frame is already in its final language.
+  /// The Google sheet is not held — `autoSignIn` fired before this. A miss closes the live window:
+  /// the answer, whenever it comes, is kept for the next launch and never flips this one.
+  Future<void> _awaitRegion() async {
+    final answered =
+        _geoDone ||
+        await awaitRegionAnswer(_geoAsk, regionCap - _geoClock.elapsed);
+    if (!answered) ref.read(geoLanguageServiceProvider).closeLiveWindow();
+    BootTrace.mark(
+      'splash: region wait ended at ${_geoClock.elapsedMilliseconds}ms '
+      '(${answered ? 'settled' : 'cap'})',
+    );
+  }
+
+  /// Decodes the settled poster before routing -> the wall's first frame has it. Bounded: a slow
+  /// decode fades in on the wall instead of holding the route.
+  Future<void> _precacheLaunchArt() async {
+    final art = ref.read(launchArtProvider);
+    if (art is! PosterArt || !mounted) return;
+    await precacheImage(AssetImage(art.poster.asset), context)
+        .timeout(const Duration(milliseconds: 300), onTimeout: () {})
+        .catchError((Object _) {});
   }
 
   @override
@@ -201,6 +252,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final awaitingRegion = ref.watch(launchArtProvider) is AwaitingRegionArt;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -213,8 +265,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Video paints edge-to-edge -> our own scrim below, no built-in overlay competing.
-            const VideoBackground(overlayOpacity: 0),
+            // Video or poster, edge-to-edge -> our own scrim below, no built-in overlay competing.
+            const LaunchBackdrop(),
 
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
@@ -229,12 +281,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 children: [
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
-                  // Shrinks, never wraps — see the twin in sign_in_screen.dart.
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: _Tagline(AppLocalizations.of(context).splashTagline),
+                  // Shrinks, never wraps — see the twin in sign_in_screen.dart. Held back while the
+                  // regional arm waits: the language is not known yet, and a line that changes
+                  // script under the reader is the flip this arm exists to remove.
+                  Visibility.maintain(
+                    visible: !awaitingRegion,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _Tagline(
+                          AppLocalizations.of(context).splashTagline,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),

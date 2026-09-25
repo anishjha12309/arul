@@ -59,7 +59,7 @@ brown-screen duration fell in two steps, to zero only once both were in.
   landed 9 s later and the feed's first art ~1 s later on LTE; the only gain was on a 7 KB/s link,
   where cellular-vs-Wi-Fi sign-in differs by ~2 pp. Speed at login won. Never re-add a gate.
 - **`GET /geo`'s timeout is 12 s, not 5.** There is no second ask, and a miss costs the whole first
-  launch its language; the budget is for a slow LINK, never for a slow Worker. Never awaited.
+  launch its language; the budget is for a slow LINK, never for a slow Worker.
 - **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
   `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
   splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under
@@ -77,8 +77,19 @@ brown-screen duration fell in two steps, to zero only once both were in.
 - **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
   may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
   the first-content gap).
-- **`GET /geo` fires beside the API warm-up and is NEVER awaited.** The wall may paint in the phone's
-  language and flip live when the answer lands; gating routing on it re-adds the wait ruled out above.
+- **`GET /geo` fires beside the API warm-up and only the `exp_regional` arm waits for it** — every
+  other launch routes on the auth seed alone. The arm waits at most `regionCap` (1,200 ms from the
+  ask, fresh-install first launch and signed-out only) AFTER `autoSignIn` fired, so Google's sheet is
+  never held. Measure with the `[boot]` marks `geo: answered in` / `splash: region wait ended`; if
+  the LTE p90 passes the cap, LOWER the cap, never raise it.
+- **The regional wall paints its final language and poster on its FIRST frame — never flip.**
+  While waiting the splash shows dark ground + wordmark only (no tagline: its language is not known
+  yet). At the cap `closeLiveWindow()` makes a late answer store-only (next launch), and
+  `LaunchArtNotifier.settle()` fixes the poster once. The control arm stores the region, never its
+  language (`Experiments.geoLanguageApplies`).
+- **The regional arm is poster-only on every tier** (a clip per region costs MBs; a streamed one
+  fights the sign-in). A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift
+  a face: `RegionalPoster.zoom` about `pivot` puts it near 0.3 of the height, clear of the panel.
 - **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
   what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
   second picker.

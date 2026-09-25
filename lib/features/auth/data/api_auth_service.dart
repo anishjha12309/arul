@@ -696,16 +696,19 @@ class ApiAuthService implements AuthService {
       _surfaceClock.startAttempt(
         // Google's screen is up. For the people who then leave without a cancel, a success or a
         // failure, this is the one fact that separates "never saw the sheet" from "saw it and left".
-        onSurface: (ms) => _analytics.track(
-          'login_surface_shown',
-          properties: {
-            ..._installProps,
-            'provider': 'google',
-            'surface': ?_surface,
-            'auto': auto,
-            'ms_to_surface': ms,
-          },
-        ),
+        onSurface: (ms) {
+          _analytics.track(
+            'login_surface_shown',
+            properties: {
+              ..._installProps,
+              'provider': 'google',
+              'surface': ?_surface,
+              'auto': auto,
+              'ms_to_surface': ms,
+            },
+          );
+          SignInPhase.signals.add(SignInSignal.surfaceShown);
+        },
       );
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
         sheet: useSheet
@@ -976,6 +979,7 @@ class ApiAuthService implements AuthService {
         SignInPhase.exchanging.value = false;
         _surfaceClock.endAttempt();
       }
+      SignInPhase.signals.add(SignInSignal.settled);
     }
   }
 

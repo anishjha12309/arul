@@ -14,8 +14,11 @@ type Geo = { country: string | null; region: string | null; lang: string | null 
 
 const ON = { GEO_LANG_ENABLED: "true" };
 
-async function geo(cf: Record<string, unknown> | undefined, env = makeEnv(ON)): Promise<Geo> {
-  const url = "https://arul-api.hsrutility.com/geo";
+async function geo(
+  cf: Record<string, unknown> | undefined,
+  env = makeEnv(ON),
+  url = "https://arul-api.hsrutility.com/geo?v=2",
+): Promise<Geo> {
   const res = handleGeo(makeCtx({ env, url, ...(cf !== undefined ? { cf } : {}) }));
   expect(res.status).toBe(200);
   return (await res.json()) as Geo;
@@ -145,6 +148,21 @@ describe("GET /geo — degraded inputs", () => {
   });
 });
 
+// Builds before the factorial call a bare /geo -> they must keep the phone's language or the test's cohort is polluted
+describe("GET /geo — only v=2 callers get a language", () => {
+  it.each([
+    "https://arul-api.hsrutility.com/geo",
+    "https://arul-api.hsrutility.com/geo?v=1",
+    "https://arul-api.hsrutility.com/geo?v=",
+  ])("%s -> lang null, region intact", async (url) => {
+    expect(await geo({ country: "IN", regionCode: "TN" }, makeEnv(ON), url)).toEqual({
+      country: "IN",
+      region: "TN",
+      lang: null,
+    });
+  });
+});
+
 describe("GEO_LANG_ENABLED kill switch", () => {
   // Off must keep country + region -> measurement continues while the default is dark
   it.each([undefined, "false", "TRUE", "1", " true", ""])("%j -> lang null, region intact", async (value) => {
@@ -160,7 +178,7 @@ describe("GEO_LANG_ENABLED kill switch", () => {
 // The handler tests above bypass Hono's router -> a path with no ROUTE 404s in production while they stay green
 describe("real router: /geo", () => {
   function request(host: string, cf?: Record<string, unknown>): Request {
-    const req = new Request(`https://${host}/geo`);
+    const req = new Request(`https://${host}/geo?v=2`);
     // A Node Request carries no cf -> attach the one the edge would have -> Hono hands it over as c.req.raw
     if (cf) Object.defineProperty(req, "cf", { value: cf });
     return req;

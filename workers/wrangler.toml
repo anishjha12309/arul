@@ -51,7 +51,7 @@ PUSH_ENABLED = "true"
 # Region-language kill switch for GET /geo (routes/geo.ts). "true" and nothing else answers `lang`;
 # any other value answers `lang: null` with country/region intact -> fresh installs fall back to the
 # phone's language while the accuracy measurement keeps flowing. Turning it off = edit here, deploy.
-GEO_LANG_ENABLED = "false"
+GEO_LANG_ENABLED = "true"
 
 # ─── KV namespace ────────────────────────────────────────────────────────────
 # Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>

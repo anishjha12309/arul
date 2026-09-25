@@ -200,7 +200,7 @@ class AppLocalizationsKn extends AppLocalizations {
   String get earn => 'ಗಿಫ್ಟ್';
 
   @override
-  String get ringtoneSet => 'ಸೆಟ್ ಮಾಡಿ';
+  String get ringtoneSet => 'ಸೆಟ್';
 
   @override
   String get ringtonePreviewSemantic => 'ಕೇಳಿ ನೋಡಿ';
@@ -643,6 +643,12 @@ class AppLocalizationsKn extends AppLocalizations {
   @override
   String get trialReminderBody =>
       'ನೀವು ಸೆಟಪ್ ಪೂರ್ಣಗೊಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಟ್ಯಾಪ್ ಮಾಡಿ — ಒಂದು ಕ್ಷಣ ಸಾಕು.';
+
+  @override
+  String get comeBackTitle => 'ನಿಮ್ಮ ವಾಲ್‌ಪೇಪರ್ ಸಿದ್ಧ';
+
+  @override
+  String get comeBackBody => 'ಸೈನ್ ಇನ್ ಮಾಡಲು ಟ್ಯಾಪ್ ಮಾಡಿ.';
 
   @override
   String get premiumSelectedUpiApp => 'UPI ಆ್ಯಪ್';

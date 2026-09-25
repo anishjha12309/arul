@@ -649,6 +649,12 @@ class AppLocalizationsTe extends AppLocalizations {
       'మీరు సెటప్ పూర్తి చేయలేదు. మళ్లీ ప్రయత్నించడానికి నొక్కండి — ఒక క్షణం చాలు.';
 
   @override
+  String get comeBackTitle => 'మీ వాల్‌పేపర్ సిద్ధం';
+
+  @override
+  String get comeBackBody => 'సైన్ ఇన్ చేయడానికి నొక్కండి.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI యాప్';
 
   @override

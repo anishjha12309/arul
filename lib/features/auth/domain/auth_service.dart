@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'sign_in_outcome.dart';
@@ -46,7 +48,15 @@ enum AuthFailureKind {
 /// UI-only state that gates nothing -> a plain notifier, not a member every test fake must grow.
 abstract final class SignInPhase {
   static final ValueNotifier<bool> exchanging = ValueNotifier<bool>(false);
+
+  /// Google's surface came up ([SignInSignal.surfaceShown]) or an attempt ended any way at all
+  /// ([SignInSignal.settled]) -> the come-back reminder's arm and disarm, fed without a new member
+  /// on [AuthService].
+  static final StreamController<SignInSignal> signals =
+      StreamController<SignInSignal>.broadcast(sync: true);
 }
+
+enum SignInSignal { surfaceShown, settled }
 
 enum AuthStatus { unauthenticated, authenticated }
 

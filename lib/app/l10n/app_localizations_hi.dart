@@ -643,6 +643,12 @@ class AppLocalizationsHi extends AppLocalizations {
       'आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।';
 
   @override
+  String get comeBackTitle => 'आपका वॉलपेपर तैयार है';
+
+  @override
+  String get comeBackBody => 'साइन इन करने के लिए एक टैप।';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ऐप';
 
   @override

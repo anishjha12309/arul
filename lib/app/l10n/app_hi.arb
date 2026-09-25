@@ -195,6 +195,8 @@
   "trialNudgeDismiss": "बंद करें",
   "trialReminderTitle": "आपका मुफ़्त ट्रायल इंतज़ार कर रहा है",
   "trialReminderBody": "आपने सेटअप पूरा नहीं किया। दोबारा कोशिश करने के लिए टैप करें — बस एक पल लगेगा।",
+  "comeBackTitle": "आपका वॉलपेपर तैयार है",
+  "comeBackBody": "साइन इन करने के लिए एक टैप।",
   "premiumSelectedUpiApp": "UPI ऐप",
   "upiPickerTitle": "पेमेंट किससे करें",
   "upiPickerLastUsed": "पिछली बार इस्तेमाल किया",

@@ -12,6 +12,8 @@ import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/ringtone.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../review/domain/review_ledger.dart';
+import '../../review/providers/review_prompt_controller.dart';
 import '../data/ringtone_set_service.dart';
 
 enum RingtoneSetStage { checkingPermission, fetchingUrl, downloading, setting }
@@ -147,6 +149,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         ArulEvents.ringtoneSet,
         properties: {'ringtone_id': ringtone.id, 'category': ringtone.category},
       );
+      armReviewPrompt(ref, ReviewTrigger.ringtone);
 
       state = RingtoneSetSuccess(target: target);
     } on RingtoneSetException catch (e) {

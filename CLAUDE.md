@@ -120,7 +120,7 @@ before a release — and **architecture** covers routes, entitlement, uploads an
 edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
 phonepe · phonepe-webhook · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
-notifications · push · ui-direction · perf-measurement
+notifications · push · review-prompt · ui-direction · perf-measurement
 
 ## Compact instructions
 

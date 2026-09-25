@@ -651,6 +651,12 @@ class AppLocalizationsTa extends AppLocalizations {
       'செட்டப்பை நீங்கள் முடிக்கவில்லை. மீண்டும் முயற்சிக்கத் தட்டவும் — ஒரு நிமிடம் போதும்.';
 
   @override
+  String get comeBackTitle => 'உங்கள் வால்பேப்பர் தயார்';
+
+  @override
+  String get comeBackBody => 'உள்நுழைய ஒரு தட்டு.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI ஆப்';
 
   @override

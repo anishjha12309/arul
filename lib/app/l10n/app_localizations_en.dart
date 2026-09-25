@@ -644,6 +644,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'You didn\'t finish setting up. Tap to try again — it takes a moment.';
 
   @override
+  String get comeBackTitle => 'Your wallpaper is ready';
+
+  @override
+  String get comeBackBody => 'One tap to sign in and set it.';
+
+  @override
   String get premiumSelectedUpiApp => 'Selected UPI App';
 
   @override

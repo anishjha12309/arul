@@ -181,6 +181,12 @@ the sheet-first `login_attempt` lands before the `register` round trip, and the 
 blank on four cold-start attempts in five. A blank `app_language` bucket is installs that predate the
 register, cold-start attempts before that stamp, and the Worker's server-side events.
 
+**The sign-in factorial: `exp_regional` (`control`|`regional`) and `exp_reminder`
+(`control`|`reminder`)** are two independent coins dealt once per fresh install in `main()`, primed
+and registered like `app_language`, never on installs that predate the draw. They carry the
+ASSIGNMENT, not the kill state; `feature_flags.exp_regional|exp_reminder = false` turns an arm off
+from the next cold start (the first launch has no config). No new events.
+
 `language_source` (`pick` · `link` · `geo` · `phone` · `default`) and `geo_region` (Cloudflare's raw
 region or `none`) measure the region default. A fresh install's install event and first-frame
 `login_attempt` fire BEFORE `GET /geo` answers, so they carry the phone's language and `phone`; later

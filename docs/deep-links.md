@@ -58,7 +58,11 @@ shows a guess as a choice, and a pick or a link still overrides it.
 Only India maps (the list is `routes/geo.ts`), and `regionCode` is scoped to its country — `US`+`TN`
 is Tennessee. Delhi, Maharashtra and Gujarat stay unmapped by decision: Delhi's language-switchers
 pick South-Indian languages more often than Hindi. `GEO_LANG_ENABLED` in the Worker's `[vars]` is the
-brake — anything but `"true"` answers `lang: null` while `region` keeps flowing for measurement.
+brake — anything but `"true"` answers `lang: null` while `region` keeps flowing for measurement. A bare
+`/geo` also gets `lang: null`: only `?v=2` earns one, so fielded builds that apply `lang` unconditionally
+never leak region language into the factorial's cohorts when the brake is on. The app
+applies `lang` only in the `exp_regional` arm; the control arm stores the region and keeps the phone
+([launch-surface.md](launch-surface.md)).
 
 No region answer → the phone's own locale order, first supported LANGUAGE only (`ta-MY` is Tamil).
 **That phone fallback is never written to `arul_locale`**: persisting it would freeze the app to

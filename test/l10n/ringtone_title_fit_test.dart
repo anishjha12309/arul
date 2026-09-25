@@ -23,7 +23,7 @@ void main() {
 
   for (final (w, h) in const [(360.0, 640.0), (360.0, 720.0), (411.0, 860.0)]) {
     for (final scale in const [1.0, 1.3, 1.5]) {
-      for (final locale in const ['en', 'ta', 'te', 'ml', 'hi']) {
+      for (final locale in const ['en', 'ta', 'te', 'ml', 'hi', 'kn']) {
         testWidgets('$locale ${w.toInt()}x${h.toInt()} @$scale', (
           tester,
         ) async {

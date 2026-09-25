@@ -26,6 +26,9 @@ class NotificationService {
   /// The unfinished-trial reminder. One at a time, so ONE id.
   static const _trialReminderId = 3000;
 
+  /// The come-back reminder (sign-in factorial, `exp_reminder`). Once per install, so ONE id.
+  static const _comeBackId = 3001;
+
   /// Monochrome status-bar silhouette. Android tints it -> never the launcher icon, it renders white.
   static const _icon = 'ic_notification';
 
@@ -68,6 +71,9 @@ class NotificationService {
 
   /// Payload marking [_trialReminderId].
   static const trialReminderPayload = 'arul_trial_reminder';
+
+  /// Payload marking [_comeBackId]. A tap needs no route: opening the app is the sign-in.
+  static const comeBackPayload = 'arul_come_back';
 
   /// One-time setup: timezone database, plugin init, channel creation.
   /// Prompts for NO permission. Single-flight via [_initFuture].
@@ -213,5 +219,56 @@ class NotificationService {
   Future<void> cancelTrialReminder() async {
     if (!_initialized) await initialize();
     await _plugin.cancel(id: _trialReminderId);
+  }
+
+  /// Arms the ONE come-back reminder for [due], [picturePath] as its big picture. False when nothing
+  /// was scheduled. Never asks for the permission: Android 12 and below post without one, and the
+  /// caller arms it there only.
+  Future<bool> scheduleComeBack({
+    required DateTime due,
+    required String title,
+    required String body,
+    String? picturePath,
+  }) async {
+    if (!_initialized) await initialize();
+    if (await areNotificationsEnabled() != true) return false;
+    final when = tz.TZDateTime.from(due, tz.local);
+    if (!when.isAfter(tz.TZDateTime.now(tz.local))) return false;
+    try {
+      await _plugin.zonedSchedule(
+        id: _comeBackId,
+        title: title,
+        body: body,
+        scheduledDate: when,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            updatesChannelId,
+            _updatesChannelName,
+            icon: _icon,
+            largeIcon: const DrawableResourceAndroidBitmap(_largeIcon),
+            color: _accent,
+            styleInformation: picturePath == null
+                ? BigTextStyleInformation(body)
+                : BigPictureStyleInformation(
+                    FilePathAndroidBitmap(picturePath),
+                    contentTitle: title,
+                    summaryText: body,
+                    hideExpandedLargeIcon: true,
+                  ),
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: comeBackPayload,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('[ComeBack] reminder not scheduled: $e');
+      return false;
+    }
+  }
+
+  Future<void> cancelComeBack() async {
+    if (!_initialized) await initialize();
+    await _plugin.cancel(id: _comeBackId);
   }
 }

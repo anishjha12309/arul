@@ -31,6 +31,8 @@ import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../push/providers/push_providers.dart';
+import '../../review/presentation/review_prompt_trigger.dart';
+import '../../ringtones/providers/ringtone_set_provider.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
@@ -50,7 +52,7 @@ class FeedScreen extends ConsumerStatefulWidget {
 }
 
 class _FeedScreenState extends ConsumerState<FeedScreen>
-    with ApplyRestore, WidgetsBindingObserver {
+    with ApplyRestore, WidgetsBindingObserver, ReviewPromptTrigger {
   /// `viewportFraction` is final on PageController and needs the reel's measured height -> build
   /// lazily in [_pagerFor], never in initState.
   ///
@@ -157,6 +159,18 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       unawaited(ref.read(pushPermissionProvider).promptOnce());
     });
   }
+
+  /// Play's review sheet waits for the plain feed: on its tab, online, the permission ask spent, and
+  /// no apply, share or ringtone set still running (docs/review-prompt.md).
+  @override
+  bool reviewHostReady() =>
+      GoRouter.maybeOf(context)?.routeInformationProvider.value.uri.path ==
+          '/browse' &&
+      ref.read(isOnlineProvider).value != false &&
+      ref.read(pushPermissionProvider).alreadyPrompted &&
+      ref.read(wallpaperApplyProvider) is! WallpaperApplyLoading &&
+      ref.read(wallpaperShareProvider) is! WallpaperSharePreparing &&
+      ref.read(ringtoneSetProvider) is! RingtoneSetLoading;
 
   void _onDeepLinkChanged() {
     scheduleMicrotask(() {
@@ -498,6 +512,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     if (ref.watch(catalogProvider) case AsyncData(:final value)) {
       maybeRestoreAfterApply(value);
       maybeOpenDeepLink(value);
+      if (value.isNotEmpty) maybeScheduleReviewPrompt();
     }
 
     final feed = ref.watch(feedProvider);

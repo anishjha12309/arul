@@ -90,6 +90,7 @@ class PushOpenHandler {
   }
 
   void _open(RemoteMessage message) {
+    ArulDeepLink.noteExternalOpen();
     try {
       final data = Map<String, Object?>.from(message.data);
       final target = pushTargetFor(data);

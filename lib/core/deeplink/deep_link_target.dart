@@ -225,6 +225,7 @@ class ArulDeepLink {
 
   static DeepLinkTarget? _target;
   static String? _lang;
+  static bool _landed = false;
   static final _DeepLinkNotifier _notifier = _DeepLinkNotifier();
 
   /// Fires after every [requestTarget]/[requestLocale] — consumers read the pending value themselves.
@@ -242,6 +243,7 @@ class ArulDeepLink {
   /// A ringtone link replaces a pending wallpaper, never sits beside it.
   static void requestTarget(DeepLinkTarget target) {
     _target = target;
+    _landed = true;
     _notifier.fire();
   }
 
@@ -251,6 +253,13 @@ class ArulDeepLink {
     _lang = code;
     _notifier.fire();
   }
+
+  /// A link or a campaign tap reached this process — it stays true after the target is consumed.
+  /// The review prompt reads it: a person who arrived on something must not land on Play's sheet.
+  static bool get landedThisLaunch => _landed;
+
+  /// A campaign tap with no parked target (home, a category, premium) is a landing all the same.
+  static void noteExternalOpen() => _landed = true;
 
   /// The pending target without taking it — the shell peeks to pick a branch, its screen consumes.
   static DeepLinkTarget? get pendingTarget => _target;
@@ -289,5 +298,6 @@ class ArulDeepLink {
   static void reset() {
     _target = null;
     _lang = null;
+    _landed = false;
   }
 }

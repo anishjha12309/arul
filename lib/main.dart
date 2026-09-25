@@ -20,6 +20,7 @@ import 'core/analytics/analytics_events.dart';
 import 'core/analytics/analytics_service.dart';
 import 'core/analytics/posthog_analytics_service.dart';
 import 'core/deeplink/deep_link_target.dart';
+import 'core/experiments/experiments.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
@@ -154,16 +155,19 @@ Future<void> _startPostHog(
   SharedPreferences prefs,
 ) async {
   final phone = WidgetsBinding.instance.platformDispatcher.locales;
+  final experiments = Experiments.read(prefs);
   final lang = resolveAppLocale(
     prefs.getString(appLocalePrefsKey),
     prefs.getString(geoLangPrefsKey),
     phone,
+    useGeo: experiments.geoLanguageApplies,
   ).languageCode;
   final origin = resolveLanguageOrigin(prefs, phone);
   PostHogAnalyticsService.prime({
     kAppLanguageProperty: lang,
     kLanguageSourceProperty: origin.source.key,
     kGeoRegionProperty: origin.geoRegion,
+    ...experiments.analyticsProperties,
     // Only when the probe has ALREADY answered — priming an unresolved `mid` would stamp a guess
     // on the pre-login events. `app.dart` registers the real rung the moment it lands, and
     // `register` overwrites a primed key, so the two can never disagree.
@@ -252,6 +256,12 @@ Future<void> _startApp() async {
   // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
   // build we can ever put on a test phone — measures the same startup path real users get.
   final inCohort = AnalyticsCohort.resolve(prefs);
+  // The sign-in factorial's two coins, dealt once off the same first-launch marker.
+  Experiments.drawIfFreshInstall(
+    prefs,
+    freshInstall: AnalyticsCohort.isFreshInstall,
+    qaArms: PlayInstall.isPlay ? '' : const String.fromEnvironment('QA_EXP_ARMS'),
+  );
   // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
   GeoLanguageService.markIfFreshInstall(
     prefs,

@@ -8,6 +8,7 @@ import '../core/analytics/analytics_service.dart';
 import '../core/config/build_info.dart';
 import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
+import '../core/experiments/experiments.dart';
 import '../core/providers/locale_provider.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/notifications/providers/notification_providers.dart';
@@ -94,6 +95,9 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       analytics.register(kLanguageSourceProperty, next.source.key);
       analytics.register(kGeoRegionProperty, next.geoRegion);
     }, fireImmediately: true);
+    // The factorial's arms on every event, for GA4 as much as PostHog. Fixed for the process -> once.
+    final analytics = ref.read(analyticsServiceProvider);
+    ref.read(experimentsProvider).analyticsProperties.forEach(analytics.register);
     // How much phone this is, on every later event. One probe per process, so this fires once;
     // events captured before it lands simply carry no tier rather than a guessed one.
     unawaited(

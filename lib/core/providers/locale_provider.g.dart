@@ -133,7 +133,7 @@ final class LocaleNotifierProvider
   }
 }
 
-String _$localeNotifierHash() => r'0e593b713c9445c47bda81fd28feedd1d406f117';
+String _$localeNotifierHash() => r'ee299c6cde9198e1d41454524256ae14d553f27a';
 
 /// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
 ///

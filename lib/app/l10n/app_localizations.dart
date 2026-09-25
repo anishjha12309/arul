@@ -1276,6 +1276,18 @@ abstract class AppLocalizations {
   /// **'You didn\'t finish setting up. Tap to try again — it takes a moment.'**
   String get trialReminderBody;
 
+  /// The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below, exp_reminder arm). Owner-approved copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Your wallpaper is ready'**
+  String get comeBackTitle;
+
+  /// No description provided for @comeBackBody.
+  ///
+  /// In en, this message translates to:
+  /// **'One tap to sign in and set it.'**
+  String get comeBackBody;
+
   /// No description provided for @premiumSelectedUpiApp.
   ///
   /// In en, this message translates to:

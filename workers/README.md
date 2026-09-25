@@ -25,7 +25,7 @@ and traps → [docs/phonepe.md](../docs/phonepe.md) · Cache Rules and headers �
 | POST | /payments/{initiate,status,cancel,abandon} | Bearer | Autopay mandate lifecycle; initiate 409s `setup_in_progress` vs `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback; idempotent via KV orderId dedupe |
 | GET | /payments/callback | — | Post-mandate browser redirect |
-| GET | /geo | — | A fresh install's region hint from `request.cf` alone (no DB, KV or limiter): `{country, region, lang}`, `no-store`; `lang` only for mapped Indian states while `GEO_LANG_ENABLED` is exactly `"true"` |
+| GET | /geo | — | A fresh install's region hint from `request.cf` alone (no DB, KV or limiter): `{country, region, lang}`, `no-store`; `lang` only for mapped Indian states, only on `?v=2`, while `GEO_LANG_ENABLED` is exactly `"true"` |
 | GET | /me | Bearer | Identity **+ the subscription row in one query** (LEFT JOIN) — one cold-start round-trip |
 | GET/POST | /me/{subscription,submissions,referrals} · /me/profile | Bearer | Scoped to verified sub. `/me/subscription` is kept only for old builds |
 | DELETE | /me | Bearer | Revoke mandate → trial tombstone (HMAC, never-rotate secret) → cascade → denylist |
