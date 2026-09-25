@@ -47,6 +47,8 @@ the guard sees it. Every one of these skips this cold open:
 - a link or push landing this process: `ArulDeepLink.landedThisLaunch`, set by `requestTarget` and by
   `noteExternalOpen()` in `PushOpenHandler._open` (home, category and premium taps park no target).
   It stays true after the target is consumed;
+- this launch's update check still undecided (it waits) or prompted (it skips) — the update wins
+  ([app-update.md](app-update.md));
 - the router not on `/browse`, known offline, the push-permission ask not yet spent, or an apply,
   share or ringtone set still loading.
 

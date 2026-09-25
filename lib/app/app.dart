@@ -10,6 +10,7 @@ import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
 import '../core/experiments/experiments.dart';
 import '../core/providers/locale_provider.dart';
+import '../features/app_update/providers/app_update_controller.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/notifications/providers/notification_providers.dart';
 import '../features/push/data/push_open_handler.dart';
@@ -132,6 +133,9 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     // user's language (the channel itself is created by NotificationService.initialize at launch).
     ref.watch(pushBootstrapProvider);
     ref.watch(pushChannelNameProvider);
+
+    // Play in-app update (docs/app-update.md) -> at the root, like the bootstraps above.
+    ref.watch(appUpdateBootstrapProvider);
 
     // Above the MaterialApp -> a link's `lang=` covers the sign-in screen as much as the feed.
     // Lives for the whole session -> a deferred delivery arriving seconds in still applies.

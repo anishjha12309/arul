@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/deeplink/deep_link_target.dart';
+import '../../../core/update/update_holds.dart';
 import '../providers/review_prompt_controller.dart';
 
 /// Lets a late post-frame surface (the push permission dialog, a paywall push, an update prompt)
@@ -29,6 +30,7 @@ mixin ReviewPromptTrigger<T extends ConsumerStatefulWidget>
     on ConsumerState<T> {
   Timer? _reviewTimer;
   bool _reviewScheduled = false;
+  VoidCallback? _awaitUpdate;
 
   /// The host's own "nothing is in flight" — its route, connectivity, running applies or sets.
   bool reviewHostReady();
@@ -37,19 +39,32 @@ mixin ReviewPromptTrigger<T extends ConsumerStatefulWidget>
   void maybeScheduleReviewPrompt() {
     if (_reviewScheduled) return;
     _reviewScheduled = true;
-    _reviewTimer = Timer(reviewSettleDelay, () {
-      if (!mounted) return;
-      try {
-        unawaited(
-          ref
-              .read(reviewPromptControllerProvider)
-              .maybeAsk(_reviewSurfaceClear),
-        );
-      } catch (e) {
-        // A container without prefs (a screen test) -> no ask, and nothing thrown from a timer.
-        debugPrint('[Review] trigger unavailable: $e');
+    _reviewTimer = Timer(reviewSettleDelay, _askOnceUpdateDecided);
+  }
+
+  // The update outranks the review: ask only after this launch's update check has settled.
+  void _askOnceUpdateDecided() {
+    if (!mounted) return;
+    if (UpdateHolds.launch.value == UpdateLaunch.undecided) {
+      void listener() {
+        if (UpdateHolds.launch.value == UpdateLaunch.undecided) return;
+        UpdateHolds.launch.removeListener(listener);
+        _awaitUpdate = null;
+        _askOnceUpdateDecided();
       }
-    });
+
+      _awaitUpdate = listener;
+      UpdateHolds.launch.addListener(listener);
+      return;
+    }
+    try {
+      unawaited(
+        ref.read(reviewPromptControllerProvider).maybeAsk(_reviewSurfaceClear),
+      );
+    } catch (e) {
+      // A container without prefs (a screen test) -> no ask, and nothing thrown from a timer.
+      debugPrint('[Review] trigger unavailable: $e');
+    }
   }
 
   bool _reviewSurfaceClear() {
@@ -60,6 +75,7 @@ mixin ReviewPromptTrigger<T extends ConsumerStatefulWidget>
       return false;
     }
     if (ArulDeepLink.landedThisLaunch) return false;
+    if (UpdateHolds.launch.value != UpdateLaunch.clear) return false;
     if (!reviewSurfaceIsTopmost(context)) return false;
     return reviewHostReady();
   }
@@ -67,6 +83,8 @@ mixin ReviewPromptTrigger<T extends ConsumerStatefulWidget>
   @override
   void dispose() {
     _reviewTimer?.cancel();
+    final awaiting = _awaitUpdate;
+    if (awaiting != null) UpdateHolds.launch.removeListener(awaiting);
     super.dispose();
   }
 }

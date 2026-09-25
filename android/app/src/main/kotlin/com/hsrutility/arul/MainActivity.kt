@@ -30,6 +30,7 @@ import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
+import com.hsrutility.arul.update.AppUpdateChannel
 import com.hsrutility.arul.upload.MediaPickChannel
 import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -110,6 +111,14 @@ class MainActivity : FlutterFragmentActivity() {
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
     private var mediaPickChannel: MediaPickChannel? = null
+    private var appUpdateChannel: AppUpdateChannel? = null
+
+    // Registered as a member -> the Activity Result API requires it before STARTED, and
+    // configureFlutterEngine can run later than that.
+    private val appUpdateLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+            appUpdateChannel?.onFlowResult(it.resultCode)
+        }
     private var deferredLinkChannel: MethodChannel? = null
     private var googleDeferredPrefs: SharedPreferences? = null
     private var googleDeferredListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -369,6 +378,17 @@ class MainActivity : FlutterFragmentActivity() {
             MediaPickChannel.CHANNEL,
         ).setMethodCallHandler(mediaPick)
 
+        // Play in-app update (docs/app-update.md) -> its flow result comes back through appUpdateLauncher.
+        val updateMethodChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AppUpdateChannel.CHANNEL,
+        )
+        // The fake-update test hook is honoured only on a sideload -> a Play install can never be faked.
+        val fakeUpdate = if (isPlayInstall()) null else intent?.getStringExtra(AppUpdateChannel.FAKE_EXTRA)
+        val appUpdate = AppUpdateChannel(this, appUpdateLauncher, updateMethodChannel, fakeUpdate)
+        appUpdateChannel = appUpdate
+        updateMethodChannel.setMethodCallHandler(appUpdate)
+
         // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
         // Android stops showing its dialog once the user has refused twice, so the toggle would
         // otherwise be a dead tap behind a toast naming a screen with no way to reach it.
@@ -453,6 +473,8 @@ class MainActivity : FlutterFragmentActivity() {
         // A destroyed engine must leave no dangling coroutine jobs, ExoPlayers or SurfaceProducers behind.
         wallpaperApplyChannel?.dispose()
         wallpaperApplyChannel = null
+        appUpdateChannel?.dispose()
+        appUpdateChannel = null
         feedVideoPlugin?.dispose()
         feedVideoPlugin = null
         videoThumbnailChannel?.dispose()

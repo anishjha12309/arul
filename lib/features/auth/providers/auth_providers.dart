@@ -10,6 +10,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/update/update_holds.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
 import '../data/play_services_resolver.dart';
@@ -121,7 +122,6 @@ class AuthController extends _$AuthController {
   @visibleForTesting
   Duration returnCooldown = const Duration(seconds: 60);
 
-  /// Seam for Google's Play services repair — tests answer for the native side.
   @visibleForTesting
   PlayServicesResolver playServices = const PlayServicesResolver();
 
@@ -315,6 +315,8 @@ class AuthController extends _$AuthController {
     // Cleared at the START, not on the settle: [_guard] can return without the classifier below
     // ever running, and a stale `true` would hand the NEXT reconnect a sheet it never earned.
     _lastOutcomeNetworkFailure = false;
+    // An update screen over Google's sheet would cancel the attempt -> held until it settles.
+    final releaseUpdateHold = UpdateHolds.hold();
     late final Future<AuthResult> guarded;
     guarded = _guard(raw, started, provider, auto, returned, reconnected)
         .then((result) {
@@ -338,6 +340,7 @@ class AuthController extends _$AuthController {
           _reconnectSpent = false;
           // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
           if (identical(_inFlight, guarded)) _inFlight = null;
+          releaseUpdateHold();
         });
     _inFlight = guarded;
     return guarded;
@@ -380,7 +383,6 @@ class AuthController extends _$AuthController {
     bool returned,
     bool reconnected,
   ) async {
-    // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
     var wasMidFlow = false;
     // The relaunch is ONE-SHOT per attempt -> a second lost sheet cannot loop it.
@@ -575,7 +577,6 @@ class AuthController extends _$AuthController {
   /// The screen collects this on its first frame; consumed on read so it can never re-toast.
   AuthFailure? _pendingAutoFailure;
 
-  /// Returns the not-yet-surfaced auto-attempt failure, if any, and clears it.
   AuthFailure? takePendingAutoFailure() {
     final failure = _pendingAutoFailure;
     _pendingAutoFailure = null;

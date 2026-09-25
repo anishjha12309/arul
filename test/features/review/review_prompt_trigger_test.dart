@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:arul/core/update/update_holds.dart';
 import 'package:arul/features/review/domain/review_ledger.dart';
 import 'package:arul/features/review/presentation/review_prompt_trigger.dart';
 import 'package:arul/features/review/providers/review_prompt_controller.dart';
@@ -63,7 +64,10 @@ void main() {
     binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
   });
 
-  tearDown(ArulDeepLink.reset);
+  tearDown(() {
+    ArulDeepLink.reset();
+    UpdateHolds.launch.value = UpdateLaunch.clear;
+  });
 
   final shellNavKey = GlobalKey<NavigatorState>();
 
@@ -209,5 +213,37 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await settle(tester);
     expect(launcher.requests, 0);
+  });
+
+  testWidgets('waits for the update check, then asks once it found nothing', (
+    tester,
+  ) async {
+    UpdateHolds.launch.value = UpdateLaunch.undecided;
+    await pumpApp(tester);
+    loaded.value = true;
+    await tester.pump();
+    await settle(tester);
+    await settle(tester);
+    expect(launcher.requests, 0, reason: 'update still undecided');
+
+    UpdateHolds.launch.value = UpdateLaunch.clear;
+    await tester.pump();
+    await tester.pump();
+    expect(launcher.requests, 1);
+  });
+
+  testWidgets('an update prompt this launch wins: no review, the arm kept', (
+    tester,
+  ) async {
+    UpdateHolds.launch.value = UpdateLaunch.undecided;
+    await pumpApp(tester);
+    loaded.value = true;
+    await tester.pump();
+    await settle(tester);
+
+    UpdateHolds.launch.value = UpdateLaunch.prompted;
+    await settle(tester);
+    expect(launcher.requests, 0);
+    expect(stillArmed(), isTrue);
   });
 }

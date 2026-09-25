@@ -125,6 +125,9 @@ now. Reasoning lives in the `docs/` file of the same name.
 ## Review prompt
 - [ ] Play's review sheet only on a LATER cold open than the static apply / live chooser / ringtone set that armed it, once the feed has loaded, with nothing above it (route, sheet, dialog, link or push landing, OS dialog); a skip keeps it pending; ≤ 7 asks per rolling 30 days; no pre-prompt, ever
 
+## In-app update
+- [ ] Play's update flow never over the splash, the sign-in wall, a sign-in attempt, `/premium` or a loading apply / share / set; a sideload, no Play or offline is a silent no-op; a FLEXIBLE download is never resumed as IMMEDIATE; an update prompt takes the launch from the review sheet ([app-update.md](app-update.md))
+
 ## App-wide
 - [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
 - [ ] Loading / empty / error state on every async surface, localized in all 6 locales. Checkout, cancel and sign-in failures show a localized line per KIND (`PurchaseErrorKind`, `AuthFailureKind`), never the Worker's English `message`

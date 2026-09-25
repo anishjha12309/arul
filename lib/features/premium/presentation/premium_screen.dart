@@ -20,6 +20,7 @@ import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
+import '../../../core/update/update_holds.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
@@ -42,7 +43,6 @@ import 'upi_option_rows.dart';
 
 export 'upi_option_rows.dart' show kUpiPickQr;
 
-/// Monthly price from app_config `prices` (paise) → "₹199", falling back to the launch price.
 String _monthlyPrice(Map<String, dynamic>? prices) {
   final monthly = prices?['monthly'];
   if (monthly is Map && monthly['amount'] is num) {
@@ -138,26 +138,7 @@ bool opensReturnPage({
     !pageUp &&
     enabled;
 
-/// What the return page's button does with the row it has selected.
-enum ReturnStart {
-  /// The app holding the open order — reopen THAT mandate, no new order.
-  resume,
-
-  /// Another app while an order is open — drop it, start fresh there.
-  switchApp,
-
-  /// No order open any more (its window ran out) — a fresh checkout.
-  fresh,
-
-  /// The QR while its code is already live — show that code again.
-  qrReopen,
-
-  /// The QR while an app order is open — drop it, put a fresh one on screen.
-  qrSwitch,
-
-  /// The QR with nothing open — a fresh one on screen.
-  qrFresh,
-}
+enum ReturnStart { resume, switchApp, fresh, qrReopen, qrSwitch, qrFresh }
 
 @visibleForTesting
 ReturnStart returnStartAction(PurchaseState state, String selection) {
@@ -261,6 +242,8 @@ const _kUpiAppKey = 'arul_upi_app';
 
 class _PremiumScreenState extends ConsumerState<PremiumScreen>
     with WidgetsBindingObserver {
+  late final VoidCallback _releaseUpdateHold;
+
   /// UPI app the user picked, restored from [_kUpiAppKey] on open.
   /// The build then falls back to the first installed app — allowlist order puts Paytm first.
   /// No installed UPI apps → no picker → the hosted-page flow.
@@ -292,7 +275,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   static bool get _returnSeam => kDebugMode && _debugReturnPage.isNotEmpty;
   bool _returnSeamFired = false;
 
-  /// The sell state `paywall_shown` has already reported, null before the first report.
   String? _paywallShown;
 
   /// Reports `paywall_shown` ONCE per state of the sell — GA4 only, deliberately off the PostHog
@@ -319,6 +301,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   @override
   void initState() {
     super.initState();
+    // A forced restart here would kill the UPI handoff and its poll -> no update while mounted.
+    _releaseUpdateHold = UpdateHolds.hold();
     WidgetsBinding.instance.addObserver(this);
     // Synchronous by construction — `sharedPreferencesProvider` is overridden in main() after its await.
     _selectedUpiPackage = ref
@@ -333,6 +317,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   @override
   void dispose() {
+    _releaseUpdateHold();
     WidgetsBinding.instance.removeObserver(this);
     // Releases the native player, its surface and its audio focus.
     // The clip is the app's only audible player -> a leak here is a voice over the next screen.
@@ -732,15 +717,12 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  /// Which UPI app the CTA launches — the user's pick if still installed, else the first allowlisted.
-  /// Null when none is installed, which means the hosted page.
   String? _resolvedUpiPackage(List<UpiApp> upiApps) => upiApps.isEmpty
       ? null
       : (upiApps.any((a) => a.packageName == _selectedUpiPackage)
             ? _selectedUpiPackage
             : upiApps.first.packageName);
 
-  /// Installed apps with the user's remembered pick floated to the head — see [UpiApps.ordered].
   List<UpiApp> _orderedUpiApps(List<UpiApp> apps) =>
       UpiApps.ordered(apps, _selectedUpiPackage);
 
@@ -798,13 +780,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         .switchApp(picked, trialEligible: trialEligible);
   }
 
-  /// Writes [package] as the remembered pick — from the sheet and from the return page alike.
   Future<void> _rememberUpiApp(String package) async {
     if (mounted) setState(() => _selectedUpiPackage = package);
     await ref.read(sharedPreferencesProvider).setString(_kUpiAppKey, package);
   }
 
-  /// Starts pulling the return clip to disk — see [ReturnClipCache].
   void _warmReturnClip() {
     // Speculative bytes; under Data Saver the return page fetches its clip only if it opens.
     if (DataSaver.isOn) return;
@@ -930,7 +910,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     }
   }
 
-  /// Takes the return page down and waits until the trial screen has its player back.
   Future<void> _closeReturnPage() async {
     final route = _returnRoute;
     final closed = _returnClosed;
@@ -1159,7 +1138,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   bool _showSocialProof(AppConfigModel? config) =>
       config?.featureFlags['show_social_proof'] != false;
 
-  /// Trialing / active: the plan stated once, billing details, Cancel.
   Widget _planHome(_Palette p, SubscriptionModel sub, bool purchaseBusy) {
     final trialing = sub.status == SubscriptionStatus.trialing;
     final renewalDate = trialing
@@ -1376,7 +1354,6 @@ class _QrMandateSheetState extends ConsumerState<_QrMandateSheet> {
     super.dispose();
   }
 
-  /// `4:32`, floored at zero — the last second reads 0:00 rather than going negative.
   String _remaining(DateTime expiresAt) {
     final left = expiresAt.difference(DateTime.now());
     final seconds = left.isNegative ? 0 : left.inSeconds;

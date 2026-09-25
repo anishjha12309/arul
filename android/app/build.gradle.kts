@@ -153,6 +153,9 @@ dependencies {
     // upload/MediaPickChannel builds the Photo Picker intent with androidx's PickVisualMedia contract (1.7.0+).
     // Same floor rule: the transitive copy is off our classpath, and 1.9.0 is what Gradle resolves today.
     implementation("androidx.activity:activity:1.9.0")
+
+    // update/AppUpdateChannel -> Play in-app updates. 2.1.0 is the floor Play requires at targetSdk 34+.
+    implementation("com.google.android.play:app-update:2.1.0")
 }
 
 flutter {
