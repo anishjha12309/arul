@@ -208,6 +208,12 @@ abstract class AppLocalizations {
   /// **'Click here to sign in'**
   String get signInNudgeRetry;
 
+  /// Sign-in pill subtitle while the phone has no network. Google sign-in opens by itself once the network is back, so this only says the app is waiting. Never a fix to make, never a second sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for internet…'**
+  String get signInSubtitleOffline;
+
   /// No description provided for @premiumTitle.
   ///
   /// In en, this message translates to:

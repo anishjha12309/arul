@@ -71,11 +71,19 @@ void main() {
 
       final failures = <String>[];
 
-      for (final state in _states) {
-        final entry = ScreenEntry(
-          id: 'signin.${state?.name ?? 'idle'}',
-          build: () => SignInScreen(debugOutcome: state),
-        );
+      final entries = [
+        for (final state in _states)
+          ScreenEntry(
+            id: 'signin.${state?.name ?? 'idle'}',
+            build: () => SignInScreen(debugOutcome: state),
+          ),
+        // The launch held for the network: its wait line is a subtitle like the others.
+        ScreenEntry(
+          id: 'signin.waitingForInternet',
+          build: () => const SignInScreen(debugWaitingForInternet: true),
+        ),
+      ];
+      for (final entry in entries) {
         for (final (width, height) in _sizes) {
           for (final scale in _scales) {
             final config = L10nConfig(

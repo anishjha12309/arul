@@ -25,6 +25,7 @@ import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/connectivity/connectivity_provider.dart';
 import 'core/connectivity/data_saver.dart';
 import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
@@ -51,6 +52,7 @@ Future<void> main() async {
     _maybeEnableFlutterDriver();
     WidgetsFlutterBinding.ensureInitialized();
     unawaited(ApiClient.warmSecureStorage());
+    LaunchLinkProbe.start();
     await _startApp();
     return;
   }
@@ -66,6 +68,8 @@ Future<void> main() async {
       // fire it BEFORE Firebase so the two overlap; after Firebase serialised the costs.
       // Fire-and-forget -> see `ApiClient.warmSecureStorage`.
       unawaited(ApiClient.warmSecureStorage());
+      // Whether there is a network at all, known before the splash decides to hold the sign-in sheet.
+      LaunchLinkProbe.start();
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
       // The three collection toggles are re-affirmations: Crashlytics, Performance and Analytics all
@@ -260,7 +264,9 @@ Future<void> _startApp() async {
   Experiments.drawIfFreshInstall(
     prefs,
     freshInstall: AnalyticsCohort.isFreshInstall,
-    qaArms: PlayInstall.isPlay ? '' : const String.fromEnvironment('QA_EXP_ARMS'),
+    qaArms: PlayInstall.isPlay
+        ? ''
+        : const String.fromEnvironment('QA_EXP_ARMS'),
   );
   // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
   GeoLanguageService.markIfFreshInstall(

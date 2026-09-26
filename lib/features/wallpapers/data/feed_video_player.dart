@@ -346,15 +346,22 @@ class FeedVideoPlayer {
     firstFrame.value = true;
   }
 
-  Future<void> play() => _hub.invokeMethod('play', {'playerId': playerId});
+  // A card can outlive the player it was handed (the return page over a disposed /premium) -> a
+  // released player answers every call as a no-op instead of a round trip to a stale id.
+  Future<void> play() => _disposed
+      ? Future<void>.value()
+      : _hub.invokeMethod('play', {'playerId': playerId});
 
-  Future<void> pause() => _hub.invokeMethod('pause', {'playerId': playerId});
+  Future<void> pause() => _disposed
+      ? Future<void>.value()
+      : _hub.invokeMethod('pause', {'playerId': playerId});
 
   /// Runtime mute / unmute, 0..1. Only meaningful on a player created with
   /// `audio: true` — a muted-by-construction player never took audio focus, so
   /// raising its volume changes nothing the user can hear.
-  Future<void> setVolume(double volume) =>
-      _hub.invokeMethod('setVolume', {'playerId': playerId, 'volume': volume});
+  Future<void> setVolume(double volume) => _disposed
+      ? Future<void>.value()
+      : _hub.invokeMethod('setVolume', {'playerId': playerId, 'volume': volume});
 
   /// Stops playback, releasing the codec while KEEPING the native player and
   /// its surface (Media3 STATE_IDLE holds "only limited resources"; a later

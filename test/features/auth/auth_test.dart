@@ -29,6 +29,9 @@ class _FakeAuthService implements AuthService {
   /// The `reconnected` flag each attempt carried -> the same for the RECONNECT marker.
   final List<bool> reconnectedFlags = [];
 
+  /// The `afterOffline` flag each attempt carried -> "was this the launch held for the network?".
+  final List<bool> afterOfflineFlags = [];
+
   /// The `reopened` flag each attempt carried -> "was this the picker put back after add-account?".
   final List<bool> reopenedFlags = [];
 
@@ -41,6 +44,7 @@ class _FakeAuthService implements AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   }) {
     final completer = Completer<AuthResult>();
@@ -48,6 +52,7 @@ class _FakeAuthService implements AuthService {
     autoFlags.add(auto);
     returnedFlags.add(returned);
     reconnectedFlags.add(reconnected);
+    afterOfflineFlags.add(afterOffline);
     reopenedFlags.add(reopened);
     return completer.future;
   }
@@ -635,6 +640,146 @@ void main() {
     });
   });
 
+  // Offline, Google's sheet only draws to fail, so the launch is HELD until the link is up. Pinned:
+  // held only on a KNOWN offline reading, released once under its own surface name, never blocking
+  // the pill, spending no reconnect budget.
+  group('AuthController launch held while offline', () {
+    late _FakeAuthService auth;
+    late AuthController controller;
+    var lifecycle = AppLifecycleState.resumed;
+
+    setUp(() {
+      auth = _FakeAuthService();
+      final container = ProviderContainer(
+        overrides: [authServiceProvider.overrideWithValue(auth)],
+      );
+      addTearDown(container.dispose);
+      lifecycle = AppLifecycleState.resumed;
+      // Every read moves a second on, so a reading always lands strictly after the settle before it.
+      var clock = DateTime(2026, 9, 26, 10);
+      controller = container.read(authControllerProvider.notifier)
+        ..now = (() => clock = clock.add(const Duration(seconds: 1)))
+        ..stallTick = const Duration(milliseconds: 10)
+        ..lifecycleProbe = (() => lifecycle);
+    });
+
+    test('a KNOWN offline launch opens nothing and is held, not spent', () {
+      expect(controller.autoSignIn(AuthProvider.google, offline: true), isNull);
+      expect(controller.autoHeldOffline, isTrue);
+      // The wall's first frame asks again while still offline: still held, still nothing.
+      expect(controller.autoSignIn(AuthProvider.google, offline: true), isNull);
+      expect(auth.attempts, isEmpty);
+    });
+
+    test('the link coming up releases it ONCE, as the automatic sheet, '
+        'stamped sheet_after_offline', () async {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+
+      // No offline reading first: a wall that mounted offline only ever sees the link come UP.
+      expect(controller.noteConnectivity(online: true), isTrue);
+      final attempt = controller.autoSignIn(AuthProvider.google);
+      expect(attempt, isNotNull);
+      expect(auth.autoFlags, [true]);
+      expect(auth.afterOfflineFlags, [true]);
+      expect(auth.reconnectedFlags, [false]);
+      expect(controller.autoHeldOffline, isFalse);
+
+      auth.settleLast(const AuthCancelled());
+      await attempt;
+      // Spent like any automatic launch: a cancel on it is never relaunched by the link.
+      expect(controller.noteConnectivity(online: false), isFalse);
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('an unknown reading is online — the sheet is never held on a '
+        'guess', () {
+      expect(controller.autoSignIn(AuthProvider.google), isNotNull);
+      expect(controller.autoHeldOffline, isFalse);
+      expect(auth.afterOfflineFlags, [false]);
+    });
+
+    test('a link that comes up behind another app waits for the return', () {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      lifecycle = AppLifecycleState.paused;
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(controller.autoHeldOffline, isTrue);
+
+      lifecycle = AppLifecycleState.resumed;
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isTrue,
+        reason:
+            'ANY resume releases it — the shade pulled down to turn data on',
+      );
+      expect(controller.autoSignIn(AuthProvider.google), isNotNull);
+      expect(auth.afterOfflineFlags, [true]);
+    });
+
+    test('a resume while still offline just holds again', () {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isTrue);
+      expect(controller.autoSignIn(AuthProvider.google, offline: true), isNull);
+      expect(controller.autoHeldOffline, isTrue);
+      expect(auth.attempts, isEmpty);
+    });
+
+    test('the pill is never blocked, and a tap ends the wait', () async {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      final tap = controller.signIn(AuthProvider.google);
+      expect(auth.autoFlags, [false]);
+      expect(controller.autoHeldOffline, isFalse);
+
+      // The person's own attempt ends in a cancel: the link coming up must not answer it.
+      auth.settleLast(const AuthCancelled());
+      await tap;
+      expect(controller.noteConnectivity(online: false), isFalse);
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('it spends none of the reconnect budget', () async {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      expect(controller.noteConnectivity(online: true), isTrue);
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(
+        const AuthFailure(message: 'link died', kind: AuthFailureKind.unknown),
+      );
+      await first;
+      for (var i = 0; i < 2; i++) {
+        expect(controller.noteConnectivity(online: false), isFalse);
+        expect(
+          controller.noteConnectivity(online: true),
+          isTrue,
+          reason: 'reconnect re-arm ${i + 1} of 2 is still there',
+        );
+        final again = controller.autoSignIn(AuthProvider.google)!;
+        auth.settleLast(
+          const AuthFailure(
+            message: 'link died',
+            kind: AuthFailureKind.unknown,
+          ),
+        );
+        await again;
+      }
+      expect(auth.afterOfflineFlags, [true, false, false]);
+      expect(auth.reconnectedFlags, [false, true, true]);
+    });
+
+    test('a signed-in user is never handed the held sheet', () {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      auth.authed = true;
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
+    });
+
+    test('signing out starts a fresh stretch with nothing held', () async {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      await controller.signOut();
+      expect(controller.autoHeldOffline, isFalse);
+    });
+  });
+
   // The OS finishing Google's picker under us (an icon launch on the live task) reaches the app
   // as a `canceled` — in the FRAMEWORK's words, where a user's back-out carries GMS's words.
   // Measured on one phone in one minute; pinned here so the two can never be merged again.
@@ -720,6 +865,34 @@ void main() {
         ),
         isFalse,
         reason: 'the reconnect sheet is a sheet — a swipe on it is the user',
+      );
+    });
+
+    // The held launch is a sheet with a name of its own: it outranks a reconnect (it retries no
+    // failure) and loses to a return, and a swipe on it is still the user's.
+    test('the launch held for the network names itself', () {
+      expect(
+        ApiAuthService.sheetSurfaceFor(returned: false, afterOffline: true),
+        'sheet_after_offline',
+      );
+      expect(
+        ApiAuthService.sheetSurfaceFor(
+          returned: false,
+          reconnected: true,
+          afterOffline: true,
+        ),
+        'sheet_after_offline',
+      );
+      expect(
+        ApiAuthService.sheetSurfaceFor(returned: true, afterOffline: true),
+        'sheet_return',
+      );
+      expect(
+        ApiAuthService.isSelectorStrip(
+          surface: 'sheet_after_offline',
+          description: 'User cancelled the selector',
+        ),
+        isFalse,
       );
     });
 

@@ -60,6 +60,9 @@ class AppLocalizationsKn extends AppLocalizations {
   String get signInNudgeRetry => 'ಸೈನ್ ಇನ್ ಮಾಡಲು ಇಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ';
 
   @override
+  String get signInSubtitleOffline => 'ಇಂಟರ್ನೆಟ್‌ಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೇವೆ…';
+
+  @override
   String get premiumTitle => 'ಪ್ರೀಮಿಯಂ';
 
   @override

@@ -199,6 +199,7 @@ class ApiAuthService implements AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   }) {
     switch (provider) {
@@ -207,6 +208,7 @@ class ApiAuthService implements AuthService {
           auto: auto,
           returned: returned,
           reconnected: reconnected,
+          afterOffline: afterOffline,
           reopened: reopened,
         );
     }
@@ -249,6 +251,8 @@ class ApiAuthService implements AuthService {
     await _api.clearTokens();
     await _clearGoogleCredentialState();
     _crash.setUserId(null);
+    // BEFORE the emit: the wall it raises fires sign-in events that must land on a fresh identity.
+    _analytics.reset();
     _emit(AuthUserState.unauthenticated());
     // Timing mark, readable in profile (and in a DIAG release): the baseline
     // harness reads logout duration — denylist round-trip + token clear — from
@@ -296,6 +300,7 @@ class ApiAuthService implements AuthService {
     await _api.clearTokens();
     await _clearGoogleCredentialState();
     _crash.setUserId(null);
+    _analytics.reset();
     _emit(AuthUserState.unauthenticated());
   }
 
@@ -495,19 +500,28 @@ class ApiAuthService implements AuthService {
   /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetReconnect = 'sheet_reconnect';
 
+  /// The sheet of the launch HELD while the phone had no network: it follows no failure, so it alone
+  /// says whether waiting for the link beats letting the sheet fail offline.
+  /// A VALUE on the existing `surface` property — no new event, no new property.
+  static const _surfaceSheetAfterOffline = 'sheet_after_offline';
+
   /// The sheet's reported name for an attempt, given which re-arm fired it.
   ///
   /// A pure one-liner only because the service itself is unconstructable in a unit test (a real
   /// ApiClient, a real analytics sink, GMS): this is the only way the funnel's most load-bearing
   /// mapping — which `surface` value a re-armed attempt files itself under — is pinnable at all.
   /// A RETURN wins over a reconnect: the person came back to the app themselves, which is the
-  /// stronger fact about the attempt, and the two must never blend into a third name.
+  /// stronger fact about the attempt, and the two must never blend into a third name. A held
+  /// launch sits between them: it outranks a reconnect, which only ever retries a failure.
   @visibleForTesting
   static String sheetSurfaceFor({
     required bool returned,
     bool reconnected = false,
+    bool afterOffline = false,
   }) => returned
       ? _surfaceSheetReturn
+      : afterOffline
+      ? _surfaceSheetAfterOffline
       : reconnected
       ? _surfaceSheetReconnect
       : _surfaceSheet;
@@ -636,6 +650,7 @@ class ApiAuthService implements AuthService {
     required bool auto,
     required bool returned,
     required bool reconnected,
+    required bool afterOffline,
     required bool reopened,
   }) async {
     final attempt = ++_attemptSeq;
@@ -672,6 +687,7 @@ class ApiAuthService implements AuthService {
       final sheetSurface = sheetSurfaceFor(
         returned: returned,
         reconnected: reconnected,
+        afterOffline: afterOffline,
       );
       final buttonSurface = buttonSurfaceFor(reopened: reopened);
       _analytics.track(

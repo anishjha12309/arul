@@ -179,7 +179,7 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// Tracks a ★ conversion event with the monthly price and order id.
   ///
-  /// Fans out to PostHog, GA4 and Meta via the composite; a missing price just omits the value.
+  /// Fans out to PostHog, GA4 and Meta via the composite; the value is never omitted.
   /// A `trial_started` is then MARKED reported — AFTER the track, so nothing precedes the event.
   /// And BEFORE every caller's invalidate -> the refresh cannot fire [TrialConversionCatchUp]'s copy.
   void _trackConversion(String event, String merchantOrderId) {
@@ -195,7 +195,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       properties: {
         'plan': 'monthly',
         'order_id': merchantOrderId,
-        'value': ?price,
+        'value': price,
         // Which handoff carried this mandate — the same keys `checkout_started` set at the tap, so
         // "which UPI app starts a trial" reads off PostHog the day it ships. Both omitted when the
         // conversion is a late catch-up: the process that knew the path is gone, and a guess is worse.
@@ -226,7 +226,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'plan': 'monthly',
         'method': method,
         'target_app': ?targetApp,
-        'value': ?price,
+        'value': price,
         'surface': ?_checkoutSurface,
       },
     );
@@ -283,12 +283,16 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// breakdown. Set per decision: at [startTrial] and at [resumeIntent], never inherited.
   String? _checkoutSurface;
 
-  /// Monthly price in rupees from the remote app_config; null until it loads.
-  /// Read synchronously from the already-cached provider -> no await on the success path.
-  double? _monthlyPriceRupees() => ref.mounted
-      ? monthlyPriceRupees(ref.read(appConfigProvider).asData?.value) ??
-            _priceAtStart
-      : _priceAtStart;
+  /// Monthly price in rupees from the remote app_config, else the tap's, else [monthlyPriceRupees]'s
+  /// fallback. Read synchronously from the already-cached provider -> no await on the success path.
+  double _monthlyPriceRupees() {
+    final config = ref.mounted
+        ? ref.read(appConfigProvider).asData?.value
+        : null;
+    return config != null
+        ? monthlyPriceRupees(config)
+        : _priceAtStart ?? monthlyPriceRupees(null);
+  }
 
   /// Price captured at the TAP -> a conversion reported after the paywall is gone still has a value.
   double? _priceAtStart;
@@ -385,6 +389,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       asQr ? 'upi_qr' : (targetApp != null ? 'upi_app' : 'phonepe_sdk'),
       asQr ? null : targetApp,
     );
+    // Whatever trial this checkout starts is THIS install's to report, even if only the catch-up hears.
+    _catchUp.noteCheckout();
 
     try {
       final initResp = await _initiateWithRetry({

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:play_install_referrer/play_install_referrer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,9 +22,30 @@ const String kPlayPackageId = 'com.hsrutility.arul';
 /// The target is consumed by the tab that shows it, the language by `DeepLinkLocaleSync`.
 /// Android-only, and a no-op without Play Services -> a missing referrer never affects launch.
 class InstallReferrerService {
-  InstallReferrerService(this._prefs);
+  InstallReferrerService(
+    this._prefs, {
+    Future<Map<Object?, Object?>?> Function()? metaReferrer,
+  }) : _metaReferrer = metaReferrer ?? _readMetaReferrer;
 
   final SharedPreferences _prefs;
+  final Future<Map<Object?, Object?>?> Function() _metaReferrer;
+
+  static const _deferredLinkChannel = MethodChannel(
+    'com.hsrutility.arul/deferred_link',
+  );
+
+  /// Meta's last ad touch for this app, from the Facebook/Instagram/Lite apps
+  /// (`MetaInstallReferrer.kt`); null when none, or off Android.
+  static Future<Map<Object?, Object?>?> _readMetaReferrer() async {
+    try {
+      return await _deferredLinkChannel.invokeMapMethod<Object?, Object?>(
+        'getMetaInstallReferrer',
+      );
+    } catch (e) {
+      debugPrint('[InstallReferrer] Meta referrer unavailable (non-fatal): $e');
+      return null;
+    }
+  }
 
   static const _kPendingCode = 'pending_referral_code';
   static const _kPendingWallpaper = 'pending_deeplink_wallpaper';
@@ -170,6 +192,34 @@ class InstallReferrerService {
     };
   }
 
+  /// What Play's referrer left unattributed — Meta's referrer may still name it.
+  static bool _unattributed(Map<String, String> play) {
+    final channel = play[_kInstallChannel];
+    return channel == null ||
+        channel == 'organic' ||
+        channel == 'unknown' ||
+        channel == 'other';
+  }
+
+  /// Play's referrer carries only same-session clicks, so a Meta view-through or later-session
+  /// click reads `organic`; Meta documents its own referrer as the answer for exactly those.
+  /// Anything Play attributed (an ad, a share, one of our links) is never overridden.
+  @visibleForTesting
+  static Map<String, String> withMetaReferrer(
+    Map<String, String> play,
+    Map<Object?, Object?>? meta,
+  ) {
+    if (meta == null || !_unattributed(play)) return play;
+    final raw = meta['utm_source'];
+    final source = raw is String ? raw.trim().toLowerCase() : '';
+    return {
+      ...play,
+      _kInstallChannel: 'meta_ads',
+      if (source.isNotEmpty)
+        _kInstallSource: source.length <= 40 ? source : source.substring(0, 40),
+    };
+  }
+
   /// The persisted attribution as event properties; empty until the referrer has landed.
   ///
   /// An install that arrived on a wallpaper or ringtone link carries it as a suffix on the SAME
@@ -263,11 +313,18 @@ class InstallReferrerService {
       }
     }
 
-    if (raw != null) {
-      final attribution = parseAttribution(raw);
+    if (answered) {
+      final play = raw == null
+          ? const <String, String>{}
+          : parseAttribution(raw);
+      final attribution = _unattributed(play)
+          ? withMetaReferrer(play, await _metaReferrer())
+          : play;
       for (final MapEntry(:key, :value) in attribution.entries) {
         await _prefs.setString(key, value);
       }
+    }
+    if (raw != null) {
       final code = parseReferralCode(raw);
       if (code != null) {
         await _prefs.setString(_kPendingCode, code);

@@ -34,8 +34,8 @@ class ReviewLedger {
   static const armedTriggerKey = 'arul_review_armed_trigger';
   static const requestsKey = 'arul_review_requests';
 
-  /// Owner's cap: at most this many asks in any rolling [window].
-  static const maxRequests = 7;
+  /// Play's quota may silently drop any second ask inside a month, so one per rolling [window].
+  static const maxRequests = 1;
   static const window = Duration(days: 30);
 
   final SharedPreferences _prefs;

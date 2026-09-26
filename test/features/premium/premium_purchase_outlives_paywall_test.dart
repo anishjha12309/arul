@@ -131,7 +131,6 @@ void main() {
             prefs: prefs,
             analytics: analytics,
             monthlyPriceRupees: () => 199,
-            isFreshInstall: true,
           ),
         ),
         ...overrides,
@@ -208,26 +207,27 @@ void main() {
     expect(eventsNamed('trial_started'), isEmpty);
   });
 
-  testWidgets(
-    'a failure after the paywall is gone still counts payment_failed',
-    (tester) async {
-      final api = _FakeApi(['pending', 'expired']);
-      final container = await build(tester, api);
-      await startThenLeave(tester, container);
-      await tester.pump(const Duration(seconds: 30));
+  testWidgets('a failure after the paywall is gone still counts payment_failed', (
+    tester,
+  ) async {
+    final api = _FakeApi(['pending', 'expired']);
+    final container = await build(tester, api);
+    await startThenLeave(tester, container);
+    await tester.pump(const Duration(seconds: 30));
 
-      expect(api.statusCalls, 2);
-      expect(eventsNamed('trial_started'), isEmpty);
-      expect(eventsNamed('payment_failed'), [
-        {
-          'reason': 'expired',
-          'cancelled': false,
-          'plan': 'monthly',
-          'method': 'upi_app',
-        },
-      ]);
-    },
-  );
+    expect(api.statusCalls, 2);
+    expect(eventsNamed('trial_started'), isEmpty);
+    // The tap opened the marker -> if PhonePe grants this order later, the catch-up owes it.
+    expect(prefs.getString(TrialConversionCatchUp.prefsKey), '');
+    expect(eventsNamed('payment_failed'), [
+      {
+        'reason': 'expired',
+        'cancelled': false,
+        'plan': 'monthly',
+        'method': 'upi_app',
+      },
+    ]);
+  });
 
   // The everyday path -> the user stays on the paywall until the mandate settles.
   // The three tests above run with the notifier already disposed -> `ref.mounted` is false and the mounted branch never ran.

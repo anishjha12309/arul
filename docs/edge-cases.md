@@ -34,10 +34,12 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] `am crash` with Google's sheet in front, then the icon → a fresh Arul, never the dead sheet (API 31+, `main_launch_mode`)
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
+- [ ] Sign-out and delete reset every analytics identity BEFORE the wall shows (GA4 `setUserId(null)`, never `resetAnalyticsData`)
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
 - [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time, and a resume with no exchange in flight abandons after the grace, then relaunches ONCE
 - [ ] A RETURN to the wall (paused/hidden ≥ 20 s begun after the last outcome, ≥ 60 s since it, nothing in flight) re-arms the automatic sheet ONCE as `sheet_return`; a cancel on the same foreground stretch never relaunches
 - [ ] A RECONNECT (offline→online after a `networkError`/`unknown` failure or GMS's offline `[16] Account reauth failed` cancel, landing after it settled, resumed, nothing in flight) re-arms the sheet as `sheet_reconnect` — ONE per failure, TWO per signed-out stretch, never after a user's cancel
+- [ ] No network at launch HOLDS the automatic sheet (wait line on the pill, pill still tappable); link up or any resume fires it once as `sheet_after_offline`; an unknown reading never holds
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
 - [ ] A stripped picker (`selectorStripped`) reopens the PICKER once, never the dismissed sheet
@@ -61,6 +63,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Re-applying or re-sharing a CACHED wallpaper still calls `/media/signed-url`; offline with bytes on disk is the one pass-through
 - [ ] A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial
 - [ ] The confirmation poll TOLERATES network failure and OUTLIVES the paywall; never-reached says confirmation is late, not the refund line
+- [ ] A reinstall or second phone mid-trial never re-fires `trial_started`; a trial this install's checkout started still fires late; `value` is never omitted
 - [ ] A return from the UPI app with the order OPEN is RESUMABLE (same link, same app, no new initiate, no second `checkout_started`); only picking ANOTHER app (fresh checkout with it, chip never frozen) or the `QRexpire` deadline (5 min on production links; 10–15 min fallback) abandons — SILENTLY, no "start over" button, no failure toast
 - [ ] On the TRIAL sell EVERY unapproved return (→ resumable) pushes the return page — never on the ₹199 sell, never stacked; its button keeps the resume/switch/QR rules; it BORROWS the one audible player and hands it back only after its exit + a frame; `return_video.enabled:false` restores the plain resumable paywall
 - [ ] Delete account: revoke → tombstone → cascade → refresh-jti denylist
@@ -124,7 +127,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing means mutual media deletion. R2 objects are public BY DESIGN; never add a "private" one
 
 ## Review prompt
-- [ ] Play's review sheet only on a LATER cold open than the static apply / live chooser / ringtone set that armed it, once the feed has loaded, with nothing above it (route, sheet, dialog, link or push landing, OS dialog); a skip keeps it pending; ≤ 7 asks per rolling 30 days; no pre-prompt, ever
+- [ ] Play's review sheet only on a LATER cold open than the static apply / live chooser / ringtone set that armed it, once the feed has loaded, with nothing above it (route, sheet, dialog, link or push landing, OS dialog); a skip keeps it pending; ≤ 1 ask per rolling 30 days; no pre-prompt, ever
 
 ## In-app update
 - [ ] Play's update flow never over the splash, the sign-in wall, a sign-in attempt, `/premium` or a loading apply / share / set; a sideload, no Play or offline is a silent no-op; a FLEXIBLE download is never resumed as IMMEDIATE; an update prompt takes the launch from the review sheet ([app-update.md](app-update.md))

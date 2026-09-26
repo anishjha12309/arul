@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/experiments/experiments.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../core/providers/geo_language_service.dart';
@@ -65,6 +66,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// the measured LTE p90 says so (launch-surface.md).
   static const regionCap = Duration(milliseconds: 1200);
 
+  /// The most the sheet waits on a transport reading that has not answered by the time the seed
+  /// settles. Normally it has — it starts in initState — and past this it counts as ONLINE, so it
+  /// can only ever delay a phone that is genuinely offline, never floor everyone's sheet.
+  static const _linkReadCap = Duration(milliseconds: 150);
+
   late final Future<void> _geoAsk;
   final _geoClock = Stopwatch();
   bool _geoDone = false;
@@ -100,6 +106,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     ref.read(experimentKillSwitchProvider);
     ref.read(comeBackReminderProvider);
     ref.read(launchClipProvider);
+    // LISTENED, never just read: Riverpod 3 pauses a provider nobody listens to, and its first
+    // reading then never lands before the sign-in below asks whether there is a network at all.
+    ref.listenManual(isOnlineProvider, (_, _) {});
 
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
@@ -196,11 +205,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // Showing THEM a picker is a worse bug than being a second slower.
       if (AppConfig.googleAuthConfigured &&
           !ref.read(authServiceProvider).currentState.isAuthenticated) {
-        BootTrace.mark('splash: no session → auto sign-in from splash');
+        // No network at all -> the launch is HELD, not spent: Google's sheet would draw, take the
+        // account tap and fail. The wall shows the wait line and fires the sheet when the link is up.
+        final offline = await _knownOffline();
+        if (!mounted) return;
+        BootTrace.mark(
+          offline
+              ? 'splash: no session, offline → sign-in held for the network'
+              : 'splash: no session → auto sign-in from splash',
+        );
         unawaited(
           ref
                   .read(authControllerProvider.notifier)
-                  .autoSignIn(AuthProvider.google) ??
+                  .autoSignIn(AuthProvider.google, offline: offline) ??
               Future<void>.value(),
         );
       }
@@ -219,6 +236,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     BootTrace.mark('splash: routing to ${authed ? '/browse' : '/sign-in'}');
     context.go(authed ? '/browse' : '/sign-in');
+  }
+
+  /// True only on a KNOWN `none` transport reading; loading past [_linkReadCap], or an error, is online.
+  Future<bool> _knownOffline() async {
+    final reading = ref.read(isOnlineProvider);
+    if (reading.hasValue) return reading.value == false;
+    try {
+      return !await ref.read(isOnlineProvider.future).timeout(_linkReadCap);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// The regional arm on a launch `/geo` has not answered yet: hold the dark ground until the region

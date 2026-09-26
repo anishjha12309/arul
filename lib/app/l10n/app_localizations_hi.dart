@@ -60,6 +60,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get signInNudgeRetry => 'साइन इन करने के लिए यहाँ टैप करें';
 
   @override
+  String get signInSubtitleOffline => 'इंटरनेट का इंतज़ार है…';
+
+  @override
   String get premiumTitle => 'प्रीमियम';
 
   @override

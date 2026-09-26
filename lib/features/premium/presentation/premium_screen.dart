@@ -321,7 +321,24 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     WidgetsBinding.instance.removeObserver(this);
     // Releases the native player, its surface and its audio focus.
     // The clip is the app's only audible player -> a leak here is a voice over the next screen.
-    unawaited(_videoPool?.dispose());
+    final pool = _videoPool;
+    final returnRoute = _returnRoute;
+    if (returnRoute != null && returnRoute.isActive) {
+      // The return page borrows this screen's player and calls back into it -> it never outlives
+      // the screen. Removed after this frame (a navigator cannot change mid-finalize), and the pool
+      // goes a frame later, once the page's card has paused the player it held.
+      final navigator = returnRoute.navigator;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (returnRoute.isActive) navigator?.removeRoute(returnRoute);
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => unawaited(pool?.dispose()),
+        );
+        WidgetsBinding.instance.scheduleFrame();
+      });
+      WidgetsBinding.instance.scheduleFrame();
+    } else {
+      unawaited(pool?.dispose());
+    }
     _videoPool = null;
     _videoPlayer = null;
     super.dispose();
@@ -781,7 +798,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   Future<void> _rememberUpiApp(String package) async {
-    if (mounted) setState(() => _selectedUpiPackage = package);
+    if (!mounted) return;
+    setState(() => _selectedUpiPackage = package);
     await ref.read(sharedPreferencesProvider).setString(_kUpiAppKey, package);
   }
 
@@ -933,6 +951,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   ///   • no order open any more (its window ran out) → a fresh checkout.
   /// Every path is tagged `surface: return`, so the page's trials are one breakdown.
   void _startFromReturnPage(String selection) {
+    if (!mounted) return;
     const surface = 'return';
     if (_returnSeam) {
       showArulToast(context, 'DEBUG_RETURN_PAGE: would start $selection');

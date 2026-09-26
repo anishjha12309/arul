@@ -90,8 +90,10 @@ real time**. Nothing else. No changelog — close a line by deleting it.
   holds Arul upright is the RUNTIME request, `SystemChrome.setPreferredOrientations` in `main()`:
   forced landscape (`user_rotation=1`, accelerometer off) on an Android 16 A001 with the feed up
   stayed `ROTATION_0`, `requestedOrientation=PORTRAIT`. Never trade that call for a manifest
-  attribute; the documented opt-out, if it ever fails, is `android:resizeableActivity="false"` plus
-  the `<application>` property `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY`.
+  attribute. On sw600dp+ (tablets, unfolded foldables) Android 16 ignores the runtime request too, so
+  the `<application>` property `android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` keeps the
+  portrait-only UI in compat mode there. Android documents that opt-out as temporary: the real fix,
+  before a targetSdk that drops it, is a layout that adapts.
 - **A wallpaper engine surface gets NO aspect handling for free** — fixed in both repos
   ([wallpaper-apply.md](wallpaper-apply.md)). Media3 documents `setVideoScalingMode` as
   `SurfaceView`-only; on an engine surface it works ANYWAY, and `dumpsys SurfaceFlinger` still shows

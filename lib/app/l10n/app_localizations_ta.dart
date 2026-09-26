@@ -60,6 +60,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get signInNudgeRetry => 'உள்நுழைய இங்கே தட்டவும்';
 
   @override
+  String get signInSubtitleOffline => 'இணையத்துக்காகக் காத்திருக்கிறோம்…';
+
+  @override
   String get premiumTitle => 'பிரீமியம்';
 
   @override

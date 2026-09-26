@@ -465,6 +465,10 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       id: 'signin.${outcome.name}',
       build: () => SignInScreen(debugOutcome: outcome),
     ),
+  ScreenEntry(
+    id: 'signin.waitingForInternet',
+    build: () => const SignInScreen(debugWaitingForInternet: true),
+  ),
 
   // ── The dock ───────────────────────────────────────────────────────────
   ScreenEntry(

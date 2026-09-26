@@ -1,5 +1,5 @@
 // Play's review sheet: asked on a LATER cold open than the success that armed it, once per process,
-// at most 7 times in any rolling 30 days, and never at the cost of an exception reaching the UI.
+// at most once in any rolling 30 days, and never at the cost of an exception reaching the UI.
 // Play never says whether the sheet showed, so a completed call is what consumes the arm.
 
 import 'package:flutter/services.dart';
@@ -131,37 +131,45 @@ void main() {
   });
 
   test(
-    '7 asks in any rolling 30 days, then capped until the oldest ages out',
+    'one ask in any rolling 30 days, then capped until it ages out',
     () async {
       final start = now;
-      for (var i = 0; i < 7; i++) {
-        now = start.add(Duration(days: i * 4));
-        await ledgerFor('arm$i').arm(ReviewTrigger.wallpaperStatic);
-        expect(
-          await coldOpen('open$i').maybeAsk(clear),
-          ReviewAskOutcome.requested,
-        );
-      }
-      expect(launcher.requests, 7);
+      await ledgerFor('arm0').arm(ReviewTrigger.wallpaperStatic);
+      expect(
+        await coldOpen('open0').maybeAsk(clear),
+        ReviewAskOutcome.requested,
+      );
+      expect(launcher.requests, 1);
 
-      // Day 25: the 8th pending success is held, not consumed.
-      now = start.add(const Duration(days: 25));
-      await ledgerFor('arm7').arm(ReviewTrigger.ringtone);
-      expect(await coldOpen('open7').maybeAsk(clear), ReviewAskOutcome.capped);
+      // Day 1: the next pending success is held, not consumed.
+      now = start.add(const Duration(days: 1));
+      await ledgerFor('arm1').arm(ReviewTrigger.ringtone);
+      expect(await coldOpen('open1').maybeAsk(clear), ReviewAskOutcome.capped);
       expect(ledgerFor('x').isArmed, isTrue);
 
       // Day 29 still inside the first ask's window.
       now = start.add(const Duration(days: 29, hours: 23));
-      expect(await coldOpen('open8').maybeAsk(clear), ReviewAskOutcome.capped);
+      expect(await coldOpen('open2').maybeAsk(clear), ReviewAskOutcome.capped);
+      expect(launcher.requests, 1);
 
-      // Day 30: the first ask has aged out -> one slot opens.
+      // Day 30: the first ask has aged out -> the held success is asked.
       now = start.add(const Duration(days: 30));
       expect(
-        await coldOpen('open9').maybeAsk(clear),
+        await coldOpen('open3').maybeAsk(clear),
         ReviewAskOutcome.requested,
       );
-      expect(launcher.requests, 8);
-      expect(ledgerFor('x').requestsWithin(now), 7);
+      expect(launcher.requests, 2);
+      expect(ledgerFor('x').requestsWithin(now), 1);
+      expect(analytics.props['review_prompt_requested'], {
+        'trigger': 'ringtone',
+        'requests_30d': '1',
+      });
+
+      // Day 31: that ask opens a fresh window -> capped again.
+      now = start.add(const Duration(days: 31));
+      await ledgerFor('arm2').arm(ReviewTrigger.wallpaperLive);
+      expect(await coldOpen('open4').maybeAsk(clear), ReviewAskOutcome.capped);
+      expect(launcher.requests, 2);
     },
   );
 

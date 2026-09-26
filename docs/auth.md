@@ -9,7 +9,8 @@ config error and a user dismissal with the same code.
 
 ## One visible Google surface per attempt
 
-- **Auto-launch a Google surface on the first frame — never a silent, no-UI check.** `google_sign_in`
+- **Auto-launch a Google surface on the first frame — never a silent, no-UI check** (held only
+  while there is no network at all, §Failure handling). `google_sign_in`
   v7: `instance` → `initialize()` → surface. The idToken's `aud` is the WEB client id, verified in the
   Worker against Google's JWKS.
 - **Sheet first, picker second**, per Google's SIWG guide:
@@ -75,7 +76,8 @@ Reading `login_cancelled`/`login_failed` correctly is an analytics trap, not a c
 **ONE line, the same for every failure — the retry line. No sentence under the pill, no link out of
 the app** (owner's call: lines naming Play services or account settings were noise to an audience
 that cannot act on them; all any of them can do is tap again). Never re-add a fix line or a help
-link. The outcome (`classifySignInOutcome`, `domain/sign_in_outcome.dart`) still
+link. The held launch's wait line is the one other subtitle — a state, never a failure line. The
+outcome (`classifySignInOutcome`, `domain/sign_in_outcome.dart`) still
 rides `AuthCancelled` into `login_cancelled` as `nudge`, pinned string by string in both of Google's
 spellings: MESSAGE first, then the backed-out family split on **`ms_to_surface`** — wall-clock from
 `authenticate()` to the attempt's FIRST inactive/paused/hidden, the only signal the app gets that
@@ -173,6 +175,14 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   failed` (never any other cancel, nor `noPlayServices`, `serverError`, `tokenExchangeFailed`), landing after that outcome settled, nothing in flight, signed out, and our
   own UI RESUMED. ONE per failure and TWO per signed-out stretch, or a flapping link loops the
   sheet. Files under `surface=sheet_reconnect`.
+- **No network at all when the automatic sheet comes due HOLDS it** (`autoSignIn(offline: true)`).
+  Offline the sheet draws only to fail — account tap, then picker, then a toast nobody could avoid.
+  Hold on a KNOWN `none` reading only: loading or errored reads online, and the splash waits at most
+  150 ms for an unanswered one. `LaunchLinkProbe` asks in `main()`, and the splash LISTENS to
+  `isOnlineProvider` — Riverpod 3 pauses an unlistened provider, so a bare read never answered. The pill shows the wait line; the link coming up (no failure or
+  offline reading needed) or ANY resume (the shade pulled down to turn data on) releases it once as
+  `sheet_after_offline`, re-reading the link first. No reconnect budget spent; a pill tap ends the
+  wait and is never blocked.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.

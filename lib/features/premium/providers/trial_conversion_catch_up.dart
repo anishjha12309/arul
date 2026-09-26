@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
@@ -14,14 +13,15 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../domain/entitlement.dart';
 
-/// Monthly price in rupees from the remote app_config (`amount` is paise); null until it loads.
+/// Monthly price in rupees from the remote app_config (`amount` is paise), else ₹199.
 /// Shared with the purchase notifier -> a late `trial_started` carries exactly an in-session `value`.
-double? monthlyPriceRupees(AppConfigModel? config) {
+/// Never null: Ads books a valueless conversion at ₹1 (docs/google-ads.md); ₹199 is the paywall's.
+double monthlyPriceRupees(AppConfigModel? config) {
   final monthly = config?.prices['monthly'];
   if (monthly is Map && monthly['amount'] is num) {
     return (monthly['amount'] as num) / 100;
   }
-  return null;
+  return 199;
 }
 
 /// Fires `trial_started` LATE for a trial that was granted with the app closed.
@@ -34,31 +34,32 @@ double? monthlyPriceRupees(AppConfigModel? config) {
 /// So the refresh that follows an in-session fire can never re-fire it.
 /// Keyed on the ORDER, not a boolean -> a second account on the same device gets its own event.
 /// The ~85% that fire in-session are untouched — same instant, same path.
-/// A pre-catch-up install cannot tell "fired on the old build" from "lost".
-/// So its first [reconcile] records the order WITHOUT firing — never risk a double count.
-/// A fresh install has no such history and fires.
+/// No marker = this install never ran the checkout, so a trial it finds began elsewhere (reinstall,
+/// second phone, pre-catch-up update) -> recorded, never fired (docs/analytics-events.md).
 class TrialConversionCatchUp {
   TrialConversionCatchUp({
     required SharedPreferences prefs,
     required AnalyticsService analytics,
-    required double? Function() monthlyPriceRupees,
-    required bool isFreshInstall,
+    required double Function() monthlyPriceRupees,
   }) : _prefs = prefs,
        _analytics = analytics,
-       _monthlyPriceRupees = monthlyPriceRupees,
-       _isFreshInstall = isFreshInstall;
+       _monthlyPriceRupees = monthlyPriceRupees;
 
   final SharedPreferences _prefs;
   final AnalyticsService _analytics;
-  final double? Function() _monthlyPriceRupees;
-  final bool _isFreshInstall;
+  final double Function() _monthlyPriceRupees;
 
   // ignore_for_file: prefer_initializing_formals — private named parameters
   // would leak the underscore into the public constructor signature.
 
   /// Last SETUP order id whose `trial_started` this install has emitted.
-  /// `''` = initialised, nothing reported yet; absent = pre-catch-up install.
+  /// `''` = open, nothing reported yet; absent = no trial of this install's making can exist yet.
   static const prefsKey = 'arul_trial_started_reported_v1';
+
+  /// Opens the marker at the checkout tap -> this install's trial stays owed even before any `GET /me`.
+  void noteCheckout() {
+    if (_prefs.getString(prefsKey) == null) markReported('');
+  }
 
   /// Records [orderId] as reported.
   ///
@@ -91,7 +92,8 @@ class TrialConversionCatchUp {
         return false;
       }
 
-      if (reported == null && !_isFreshInstall) {
+      // Found, not owed: this install never ran its checkout (see the class doc).
+      if (reported == null) {
         markReported(orderId);
         return false;
       }
@@ -103,7 +105,7 @@ class TrialConversionCatchUp {
         properties: {
           'plan': 'monthly',
           'order_id': orderId,
-          'value': ?_monthlyPriceRupees(),
+          'value': _monthlyPriceRupees(),
           // Separates recovered from in-session in every sink -> measurable without a second name.
           'late': true,
         },
@@ -118,13 +120,11 @@ class TrialConversionCatchUp {
 }
 
 /// App-wide [TrialConversionCatchUp].
-/// `isFreshInstall` is read once — the cohort draw resolves in `main()` before the first read.
 final trialConversionCatchUpProvider = Provider<TrialConversionCatchUp>((ref) {
   return TrialConversionCatchUp(
     prefs: ref.watch(sharedPreferencesProvider),
     analytics: ref.watch(analyticsServiceProvider),
     monthlyPriceRupees: () =>
         monthlyPriceRupees(ref.read(appConfigProvider).asData?.value),
-    isFreshInstall: AnalyticsCohort.isFreshInstall,
   );
 });

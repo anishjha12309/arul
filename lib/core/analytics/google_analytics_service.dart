@@ -70,26 +70,17 @@ class GoogleAnalyticsService implements AnalyticsService {
     // No-op: GA4 auto-collects screen_view; PostHog owns explicit screens.
   }
 
+  /// Drops the user id only. Never `resetAnalyticsData`: it mints a new app instance id, and Google
+  /// Ads ties a conversion to the ad click through that id -> a re-login would lose its attribution.
   @override
-  void reset() => unawaited(_resetKeepingRegistered());
+  void reset() => unawaited(_analytics.setUserId(id: null));
 
   /// A GA4 USER property — the SDK stamps it on every event logged after it is set, which is the
   /// per-event cut [AnalyticsService.register] asks for. Invisible in reports until it is registered
   /// as a user-scoped custom dimension. Names ≤24 chars, values ≤36 -> a language code fits both.
   @override
   void register(String key, Object value) {
-    _registered[key] = value.toString();
     unawaited(_analytics.setUserProperty(name: key, value: value.toString()));
-  }
-
-  final _registered = <String, String>{};
-
-  /// `resetAnalyticsData` clears the user properties with the app instance id -> re-apply AFTER it.
-  Future<void> _resetKeepingRegistered() async {
-    await _analytics.resetAnalyticsData();
-    for (final e in _registered.entries) {
-      await _analytics.setUserProperty(name: e.key, value: e.value);
-    }
   }
 
   double? _value(Map<String, Object?>? props) {

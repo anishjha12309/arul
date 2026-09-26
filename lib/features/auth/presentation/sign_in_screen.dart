@@ -58,12 +58,20 @@ const double _kPanelPadY = 25;
 /// Generic "Continue with Google" copy, never a named identity — the account choice is Google's.
 /// The background player is SHARED with the splash -> arriving here never re-inits a MediaCodec.
 class SignInScreen extends ConsumerStatefulWidget {
-  const SignInScreen({super.key, this.debugOutcome});
+  const SignInScreen({
+    super.key,
+    this.debugOutcome,
+    this.debugWaitingForInternet = false,
+  });
 
   /// Renders the screen as if an attempt had just ended this way, without running one.
   /// The l10n and size matrices pump every outcome through here; nothing else may set it.
   @visibleForTesting
   final SignInOutcome? debugOutcome;
+
+  /// Renders the wait line of a launch held for the network, for the same two matrices.
+  @visibleForTesting
+  final bool debugWaitingForInternet;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -152,21 +160,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     if (_signingIn) return;
     final notifier = ref.read(authControllerProvider.notifier);
     final pending = auto
-        ? notifier.autoSignIn(AuthProvider.google)
+        ? notifier.autoSignIn(AuthProvider.google, offline: _knownOffline)
         : notifier.signIn(AuthProvider.google);
-    // Auto-launch already spent.
+    // Auto-launch already spent, or HELD for the network.
     // A fast failure can settle on the splash with nothing awaiting it -> surface it NOW.
     // The contract is a message plus retry, never a silent bounce; a cancel stays quiet.
     if (pending == null) {
       final missed = notifier.takePendingAutoFailure();
-      if (missed != null && mounted) {
+      if (!mounted) return;
+      if (missed != null) {
         showArulToast(
           context,
           authFailureText(AppLocalizations.of(context), missed.kind),
           kind: ToastKind.error,
         );
-        setState(() => _outcome = _outcomeForFailure(missed.kind));
+        _outcome = _outcomeForFailure(missed.kind);
       }
+      // A held launch swaps the subtitle for the wait line; the rebuild picks it up.
+      setState(() {});
       return;
     }
 
@@ -197,6 +208,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     }
   }
 
+  /// True only on a KNOWN `none` transport reading. Loading or errored is online, exactly as the
+  /// provider seeds it: the sheet is held only when the phone certainly has no network.
+  bool get _knownOffline => ref.read(isOnlineProvider).value == false;
+
   /// A visible failure already toasted its own message; the screen shows the same retry line as any
   /// other outcome, so this only classifies for `login_cancelled` — `noPlayServices` is the one
   /// failure with no provider to ask, and the toast is where that is said.
@@ -218,7 +233,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final subtitle = _subtitleFor(l10n, _outcome);
+    final waiting =
+        widget.debugWaitingForInternet ||
+        (!_signingIn &&
+            ref.read(authControllerProvider.notifier).autoHeldOffline);
+    final subtitle = _subtitleFor(l10n, _outcome, waiting: waiting);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -319,8 +338,17 @@ const Key kSignInTitleKey = Key('signIn.pill.title');
 @visibleForTesting
 const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 
-String _subtitleFor(AppLocalizations l10n, SignInOutcome? outcome) =>
-    outcome == null ? l10n.signInSubtitleIdle : l10n.signInNudgeRetry;
+/// The wait line outranks both others: while the launch is held, nothing has been tried yet, and the
+/// sheet opens by itself the moment the network is back. It says only that — never a fix to make.
+String _subtitleFor(
+  AppLocalizations l10n,
+  SignInOutcome? outcome, {
+  bool waiting = false,
+}) => waiting
+    ? l10n.signInSubtitleOffline
+    : outcome == null
+    ? l10n.signInSubtitleIdle
+    : l10n.signInNudgeRetry;
 
 class _SignInPill extends StatefulWidget {
   const _SignInPill({

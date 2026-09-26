@@ -60,6 +60,9 @@ class AppLocalizationsMl extends AppLocalizations {
   String get signInNudgeRetry => 'സൈൻ ഇൻ ചെയ്യാൻ ഇവിടെ ടാപ്പ് ചെയ്യുക';
 
   @override
+  String get signInSubtitleOffline => 'ഇന്റർനെറ്റിനായി കാത്തിരിക്കുന്നു…';
+
+  @override
   String get premiumTitle => 'പ്രീമിയം';
 
   @override

@@ -32,6 +32,10 @@
   "signInSubtitleIdle": "Choose an account to start",
   "signInSubtitleExchanging": "Signing you in…",
   "signInNudgeRetry": "Click here to sign in",
+  "signInSubtitleOffline": "Waiting for internet…",
+  "@signInSubtitleOffline": {
+    "description": "Sign-in pill subtitle while the phone has no network. Google sign-in opens by itself once the network is back, so this only says the app is waiting. Never a fix to make, never a second sentence."
+  },
   "premiumTitle": "Premium",
   "premiumHeadline": "Unlock every wallpaper",
   "premiumSub": "Browsing is always free. Premium is for making them yours.",

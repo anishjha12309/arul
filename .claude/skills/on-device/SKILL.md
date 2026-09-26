@@ -28,6 +28,7 @@ Proven filters — grep the capture, don't eyeball:
 | Video/feed jank | `BLASTBufferQueue`, `ExoPlayer`, `FeedVideoPlugin`, `FeedVideo:`, `Choreographer.*Skipped` |
 | Crashes/ANR | `FATAL`, `AndroidRuntime`, `ANR in` |
 | Sign-in | `GoogleSignIn`, `ApiException`, `[ApiAuthService]` |
+| Ad events (debug build) | GA4 `FA-SVC  : Logging event` (after `setprop log.tag.FA-SVC VERBOSE`), Meta `FacebookSDK.AppEvents: Created app event`, PostHog `PostHog : Queued Event` (Play-installer sideload: `adb install -i com.android.vending`) |
 
 `Skipped` is capital-S in AOSP — a lowercase grep matches nothing. The app's own tags —
 `FeedVideoPlugin`, `FeedVideo:`, `[ApiAuthService]`, `[PremiumPurchase]` (plain `debugPrint`),

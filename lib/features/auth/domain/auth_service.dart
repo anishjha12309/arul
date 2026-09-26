@@ -125,6 +125,10 @@ abstract interface class AuthService {
   /// set: the sheet is still the first surface, only its name changes (`sheet_reconnect`), so the
   /// one re-arm a dead link earns can be priced against the cold-start sheet.
   ///
+  /// [afterOffline] marks the automatic attempt that was HELD because the phone had no network when
+  /// it was due, and fired once the link came up. Analytics only, like [reconnected], which it
+  /// outranks (`sheet_after_offline`): it is the stretch's FIRST attempt, never a retry of a failure.
+  ///
   /// [reopened] marks the picker the guard puts back after Google's add-account flow handed the
   /// user back with nothing chosen. Analytics only, like [returned]: it is always a BUTTON-flow
   /// attempt (`auto: false`) and only renames that picker (`button_after_add_account`).
@@ -133,6 +137,7 @@ abstract interface class AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   });
 

@@ -30,8 +30,8 @@ while Play answers.
   qualifies. Failure, premium refusal and a trip to the write-settings grant arm nothing.
 - **Boolean, not a count.** Ten sets in one launch buy one ask; each ask needs a fresh success.
 - **Once per process.** The first evaluation decides; a skip leaves the arm for the next cold open.
-- **Cap: 7 asks in any rolling 30 days** (owner's call), counted on our side. Play's own quota is
-  stricter and unpublished, so many of those 7 will draw nothing — by design.
+- **Cap: 1 ask per rolling 30 days**, counted on our side. Play's quota may silently drop any second
+  call inside a month, yet that call still spends the arm and fires `review_prompt_requested`.
 - Arming must never fail a set that already succeeded: it is fire-and-forget behind a try.
 
 ## Where it asks — the guard

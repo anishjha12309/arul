@@ -60,6 +60,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signInNudgeRetry => 'Click here to sign in';
 
   @override
+  String get signInSubtitleOffline => 'Waiting for internet…';
+
+  @override
   String get premiumTitle => 'Premium';
 
   @override

@@ -9,12 +9,15 @@ import android.net.ConnectivityManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
@@ -23,10 +26,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
+import com.facebook.LoggingBehavior
 import com.facebook.applinks.AppLinkData
 import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
+import com.hsrutility.arul.referral.MetaInstallReferrer
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
@@ -139,6 +144,12 @@ class MainActivity : FlutterFragmentActivity() {
         // This is what renders LaunchTheme's splash on API<=30 -> without it those attrs are Android-12-only.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Meta writes App Events to logcat only in debug mode -> debuggable builds only, so a sideload
+        // can prove StartTrial/InitiateCheckout reach the SDK while a release build never logs them.
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            FacebookSdk.setIsDebugEnabled(true)
+            FacebookSdk.addLoggingBehavior(LoggingBehavior.APP_EVENTS)
+        }
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()
         // FLAG_SECURE blocks screenshots and recording and blanks the recents thumbnail -> Play builds only.
@@ -289,6 +300,18 @@ class MainActivity : FlutterFragmentActivity() {
                         markDeferredLinkHandled(token)
                         pendingDeferredLinks.remove(token)
                         result.success(true)
+                    }
+                    "getMetaInstallReferrer" -> {
+                        val appId = if (FacebookSdk.isInitialized()) FacebookSdk.getApplicationId() else null
+                        if (appId.isNullOrBlank()) {
+                            result.success(null)
+                            return@setMethodCallHandler
+                        }
+                        val context = applicationContext
+                        Thread {
+                            val row = MetaInstallReferrer.read(context, appId)
+                            Handler(Looper.getMainLooper()).post { result.success(row) }
+                        }.start()
                     }
                     else -> result.notImplemented()
                 }
@@ -529,9 +552,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     // The URL an ad's deep-link field carried, for a user who installed from it (docs/deferred-links.md §Meta).
     // fetchDeferredAppLinkData asks Meta's Graph API once -> it logs NO app event -> attribution is unaffected.
-    // Called from Dart's FIRST pull, never onCreate: a Graph POST in the first second of a fresh
-    // install shared the link with the sign-in and the catalog, and on a 7 KB/s connection that
-    // queue starved all three. An ad target one sign-in late still lands before the feed does.
+    // Runs in onCreate, so on a fresh install this Graph POST shares the first second's network with
+    // the sign-in and the catalog — on a 7 KB/s connection that queue starved all three once.
     // The SDK was already initialised by its manifest ContentProvider -> this Activity does not init it.
     // A null callback means "no link" AND "network failed" -> retry over the first launches, capped at META_MAX_ATTEMPTS.
     // Never throws -> a deferred link is never worth a crash on the launch path.

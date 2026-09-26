@@ -1,14 +1,15 @@
 // TrialConversionCatchUp fires the late `trial_started` for trials granted with the app closed.
 // A trialing row whose order this install never reported fires EXACTLY ONE event (order_id, value, late: true).
 // An order the purchase notifier already reported, marked before the entitlement refresh, is never re-fired.
-// An install predating the catch-up grandfathers the trial it finds on first run -> it may have fired on the old build.
-// A LATER order on the same install does fire, and a fresh install fires on first run.
-// Non-trialing rows fire nothing and merely initialise the marker.
+// A trial found before this install opened the marker began elsewhere (reinstall, second phone, update) -> recorded, not fired.
+// A checkout on this install opens the marker, and a LATER order on the same install does fire.
+// Non-trialing rows fire nothing and merely open the marker; the value never goes out empty.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:arul/core/analytics/analytics_service.dart';
+import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
@@ -52,8 +53,7 @@ void main() {
 
   Future<TrialConversionCatchUp> build({
     Map<String, Object> stored = const {},
-    bool isFreshInstall = true,
-    double? price = 199,
+    double price = 199,
   }) async {
     SharedPreferences.setMockInitialValues(stored);
     analytics = _RecordingAnalytics();
@@ -61,13 +61,13 @@ void main() {
       prefs: await SharedPreferences.getInstance(),
       analytics: analytics,
       monthlyPriceRupees: () => price,
-      isFreshInstall: isFreshInstall,
     );
   }
 
   test('fires exactly one late trial_started for an unreported trialing order, '
       'with the in-session property shape plus late: true', () async {
-    final catchUp = await build();
+    // '' = an earlier read saw no trial, or this install tapped checkout -> the trial is owed.
+    final catchUp = await build(stored: {TrialConversionCatchUp.prefsKey: ''});
 
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isTrue);
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
@@ -83,14 +83,18 @@ void main() {
     });
   });
 
-  test(
-    'omits value when the price has not loaded, like the in-session event',
-    () async {
-      final catchUp = await build(price: null);
-      catchUp.reconcile(_row(SubscriptionStatus.trialing));
-      expect(analytics.events.single.$2, isNot(contains('value')));
-    },
-  );
+  test('the value falls back to the paywall price before app_config loads, '
+      'and follows the config once it has', () {
+    expect(monthlyPriceRupees(null), 199);
+    const config = AppConfigModel(
+      prices: {
+        'monthly': {'amount': 14900},
+      },
+      policyUrls: {},
+      featureFlags: {},
+    );
+    expect(monthlyPriceRupees(config), 149);
+  });
 
   test(
     'never re-fires an order the purchase notifier already reported',
@@ -105,10 +109,11 @@ void main() {
     },
   );
 
-  test('an install that predates the catch-up grandfathers the trial it finds, '
-      'then fires for a later order', () async {
-    // No marker written and not a fresh install -> the old build may already have fired this -> record, do not fire.
-    final catchUp = await build(isFreshInstall: false);
+  test('a trial found before the marker opened is recorded, never fired — '
+      'reinstall, second phone or update — then a later order fires', () async {
+    // The install that ran this checkout already reported it; a second copy would credit this install's ad.
+    final catchUp = await build();
+    expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
     expect(analytics.events, isEmpty);
 
@@ -122,17 +127,27 @@ void main() {
     expect(analytics.events.single.$2?['order_id'], 'DKS_ORDER_2');
   });
 
-  test(
-    'a fresh install has no old-build history and fires on first run',
-    () async {
-      final catchUp = await build(isFreshInstall: true);
-      expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isTrue);
-    },
-  );
+  test('a checkout tapped before any entitlement read keeps its trial owed, '
+      'so an app-closed grant still fires', () async {
+    final catchUp = await build();
+    catchUp.noteCheckout();
+    expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isTrue);
+    expect(analytics.events.single.$2?['late'], isTrue);
+  });
+
+  test('a checkout never reopens a marker that already names an order', () async {
+    final catchUp = await build(
+      stored: {TrialConversionCatchUp.prefsKey: 'DKS_ORDER_1'},
+    );
+    catchUp.noteCheckout();
+    expect(catchUp.isReported('DKS_ORDER_1'), isTrue);
+    expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
+    expect(analytics.events, isEmpty);
+  });
 
   test('non-trialing rows fire nothing and initialise the marker, so a trial '
-      'lost LATER on a pre-existing install is recognised as new', () async {
-    final catchUp = await build(isFreshInstall: false);
+      'lost LATER on the same install is recognised as new', () async {
+    final catchUp = await build();
 
     expect(catchUp.reconcile(const Entitlement.none()), isFalse);
     expect(catchUp.reconcile(_row(SubscriptionStatus.active)), isFalse);
@@ -143,7 +158,7 @@ void main() {
     );
     expect(analytics.events, isEmpty);
 
-    // Marker now exists (''), so the grandfather branch no longer applies.
+    // Marker now open (''), so the trial is owed, not found.
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isTrue);
   });
 

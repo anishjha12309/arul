@@ -50,7 +50,8 @@ class MetaAnalyticsService implements AnalyticsService {
 
   @override
   void identify(String userId, {Map<String, Object?>? userProperties}) {
-    // Advanced matching — the SDK hashes the id before upload; cheap, and improves attribution.
+    // Meta's `app_user_id`: stored by the SDK and sent unhashed on every app event until [reset] —
+    // an opaque Neon id, not hashed Advanced Matching (that is `setUserData`).
     unawaited(_facebook.setUserID(userId));
   }
 

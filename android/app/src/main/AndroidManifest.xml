@@ -36,6 +36,11 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true">
+        <!-- targetSdk 36 ignores portrait locks (manifest AND runtime) on sw600dp+ screens, and the UI is -->
+        <!-- phone-portrait only -> opt out so tablets/foldables get compat mode (docs/known-issues.md). -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true"/>
         <!-- Install from an eligible Ads creative -> Firebase writes its App URL into google.analytics.deferred.deeplink.prefs. -->
         <!-- MainActivity reads that value -> it feeds the same one-shot Flutter target as App Links and Play Install Referrer. -->
         <meta-data
@@ -329,6 +334,14 @@
     <queries>
         <package android:name="com.whatsapp"/>
         <package android:name="com.whatsapp.w4b"/>
+    </queries>
+
+    <!-- Meta Install Referrer: these apps' InstallReferrerProviders carry view-through and later-session -->
+    <!-- Meta installs that Play's referrer never sees -> invisible without these (MetaInstallReferrer.kt). -->
+    <queries>
+        <package android:name="com.facebook.katana"/>
+        <package android:name="com.instagram.android"/>
+        <package android:name="com.facebook.lite"/>
     </queries>
 
     <!-- REQUIRED on Android 11+ -> package visibility hides every UPI app -> the picker lists nothing and mandate setup dies. -->

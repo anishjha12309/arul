@@ -156,7 +156,6 @@ void main() {
             prefs: prefs,
             analytics: analytics,
             monthlyPriceRupees: () => 199,
-            isFreshInstall: true,
           ),
         ),
       ],

@@ -60,6 +60,9 @@ class AppLocalizationsTe extends AppLocalizations {
   String get signInNudgeRetry => 'సైన్ ఇన్ చేయడానికి ఇక్కడ నొక్కండి';
 
   @override
+  String get signInSubtitleOffline => 'ఇంటర్నెట్ కోసం వేచి ఉన్నాం…';
+
+  @override
   String get premiumTitle => 'ప్రీమియం';
 
   @override
