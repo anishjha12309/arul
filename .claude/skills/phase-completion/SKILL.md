@@ -26,6 +26,17 @@ step — but `*.g.dart`/`*.freezed.dart` do, and nothing below catches them bein
 - [ ] Analytics fire through `AnalyticsService`; update docs/analytics-events.md if events changed
 - [ ] UI matches docs/ui-direction.md (tokens only — no literal colors), dark + light
 - [ ] No secrets; config via `--dart-define-from-file`
+- [ ] Device classes that FORK this change's code path were exercised — not all of them, the ones
+      that fork. What forks in this app:
+
+| Fork | Exercise when the change touches |
+| --- | --- |
+| Android ≤ 9 · ≤ 12 · 13+ · 16 | ringtone Set (pre-Q writes the public dir), notification permission (13+), predictive back (13–15 default off), edge-to-edge (enforced from 15) |
+| low-RAM / 2-decoder SoC | the feed, any player, the auth video |
+| large font scale + the 5 Indic locales | any string or fixed-height row (`configChanges` carries `fontScale`, so no restart hides an overflow) |
+| gesture vs 3-button nav | anything anchored to the bottom — the dock, sheets, the wall |
+| throttled cellular / offline | sign-in, checkout, `/geo`, catalog, push registration (on-device skill) |
+| fresh install vs upgrade vs Play install | one-shot deferred links, prefs and token migration, `FLAG_SECURE`, QA tools |
 
 ## 3. Git — one commit per phase, NEVER before human approval
 1. Show checks green + report against DoD.

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/app_config_model.dart';
 
-/// A resolved onboarding clip: which language won and where its bytes are.
 @immutable
 class OnboardingVideoSource {
   const OnboardingVideoSource({required this.lang, required this.url});
@@ -37,9 +36,43 @@ const _defaultLangs = <String>['en', 'ta', 'te', 'kn', 'ml'];
 OnboardingVideoSource? resolveOnboardingVideo(
   AppConfigModel? config,
   String languageCode,
-) {
-  final flag = config?.featureFlags['onboarding_video'];
-  final map = flag is Map ? flag : const {};
+) => _resolveClip(
+  config,
+  languageCode,
+  flag: 'onboarding_video',
+  folder: 'onboarding',
+);
+
+/// The "don't go back" clip on the return page, resolved exactly like [resolveOnboardingVideo] from
+/// its own `feature_flags.return_video` — its own switch, version and language list, because the two
+/// cuts are dubbed and re-cut on separate schedules.
+OnboardingVideoSource? resolveReturnVideo(
+  AppConfigModel? config,
+  String languageCode,
+) => _resolveClip(
+  config,
+  languageCode,
+  flag: 'return_video',
+  folder: 'onboarding/return',
+);
+
+/// Whether the return page opens at all. `return_video.enabled: false` turns the WHOLE page off —
+/// not just its clip — so the page can be withdrawn without a release and the unapproved return
+/// falls back to the trial screen's own "open it again" button. Absent config is ON, for the same
+/// reason as the clip: a cold start can reach the paywall before `/config` lands.
+bool returnPageEnabled(AppConfigModel? config) {
+  final flag = config?.featureFlags['return_video'];
+  return !(flag is Map && flag['enabled'] == false);
+}
+
+OnboardingVideoSource? _resolveClip(
+  AppConfigModel? config,
+  String languageCode, {
+  required String flag,
+  required String folder,
+}) {
+  final raw = config?.featureFlags[flag];
+  final map = raw is Map ? raw : const {};
 
   // A cold start reaches the paywall before /config lands on a slow link -> only an explicit
   // `enabled: false` gates the feature off, never an absent config.
@@ -62,6 +95,6 @@ OnboardingVideoSource? resolveOnboardingVideo(
   final query = version == null ? '' : '?v=$version';
   return OnboardingVideoSource(
     lang: lang,
-    url: '${AppConfig.cdnBaseUrl}/onboarding/$lang.mp4$query',
+    url: '${AppConfig.cdnBaseUrl}/$folder/$lang.mp4$query',
   );
 }

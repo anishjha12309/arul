@@ -14,7 +14,6 @@ import '../../../core/api/api_client.dart';
 enum RingtoneTarget { ringtone, notification, alarm }
 
 extension RingtoneTargetAndroid on RingtoneTarget {
-  /// Integer constants matching Android's RingtoneManager TYPE_* values.
   int get androidType => switch (this) {
     RingtoneTarget.ringtone => 1,
     RingtoneTarget.notification => 2,
@@ -45,14 +44,12 @@ class RingtoneSetException implements Exception {
 class RingtoneRef {
   const RingtoneRef({required this.uri, this.displayName});
 
-  /// The `content://media/external/audio/media/<id>` the tone was registered under.
   final String uri;
 
   /// MediaStore's `DISPLAY_NAME` — the catalog title plus the extension, already uniquified by
   /// MediaStore if it had to be. Null when the provider refused the column.
   final String? displayName;
 
-  /// Null for anything that is not a usable pair — an empty URI is no URI, never an empty match.
   static RingtoneRef? fromChannel(Map<Object?, Object?>? map) {
     final uri = map?['uri'] as String?;
     if (uri == null || uri.isEmpty) return null;
@@ -79,7 +76,6 @@ class RingtoneRefStore {
 
   final SharedPreferences _prefs;
 
-  /// `arul_*`, the app's prefs convention.
   static const prefsKey = 'arul_ringtone_uris';
 
   /// The catalog is tens of tracks, so this cap is never reached in practice — it only stops a long
@@ -87,7 +83,6 @@ class RingtoneRefStore {
   /// current is by definition among the most recent.
   static const _maxEntries = 32;
 
-  /// Every id Arul has set, oldest write first. Unreadable or corrupt JSON reads as empty.
   Map<String, RingtoneRef> read() {
     final raw = _prefs.getString(prefsKey);
     if (raw == null || raw.isEmpty) return const {};
@@ -101,12 +96,10 @@ class RingtoneRefStore {
       }
       return out;
     } catch (_) {
-      // A pref written by an older shape, or half-written -> start clean rather than throw.
       return const {};
     }
   }
 
-  /// Records [ref] against [ringtoneId], moving a repeat set to the most-recent end.
   Future<void> record(String ringtoneId, RingtoneRef ref) async {
     final next = Map<String, RingtoneRef>.from(read())..remove(ringtoneId);
     next[ringtoneId] = ref;
@@ -121,8 +114,6 @@ class RingtoneRefStore {
 }
 
 abstract interface class RingtoneSetService {
-  /// Calls the Worker `/media/signed-url` with the ringtone [id].
-  /// The server runs the LIVE entitlement check and resolves the key to a short-lived signed URL.
   Future<String> fetchSignedUrl(String id);
 
   /// Streams [url] to a temp file named [filename].
@@ -136,11 +127,8 @@ abstract interface class RingtoneSetService {
     void Function(double) onProgress,
   );
 
-  /// Returns true if the app holds `WRITE_SETTINGS` special permission.
   Future<bool> canWriteSettings();
 
-  /// Launches Android's `ACTION_MANAGE_WRITE_SETTINGS` intent so the user can
-  /// grant the special permission.
   Future<void> openWriteSettings();
 
   /// Registers [file] in MediaStore and sets it as the device [target] tone.
@@ -213,10 +201,6 @@ class AndroidRingtoneSetService implements RingtoneSetService {
     final tmpDir = await getTemporaryDirectory();
     final file = File('${tmpDir.path}/$filename');
 
-    // Same shape as the wallpaper twin (`wallpaper_apply_service.dart`): stream into a `.part` and
-    // rename only on SUCCESS, so the final name never holds a truncated tone MediaStore would
-    // register. The `.part` SURVIVES a failure -> its length is the first byte still owed, and a
-    // drop on cellular resumes instead of re-downloading what is already there.
     final part = File('${file.path}.part');
     var have = await part.exists() ? await part.length() : 0;
 
@@ -224,13 +208,8 @@ class AndroidRingtoneSetService implements RingtoneSetService {
     if (have > 0) request.headers['Range'] = 'bytes=$have-';
     final response = await _http.send(request);
 
-    // 206 -> the range was honoured, append. 200 -> the server ignored it and is sending the WHOLE
-    // object, so what is on disk is not a prefix of this body: truncate and start over.
     final resuming = have > 0 && response.statusCode == 206;
     if (response.statusCode != 200 && !resuming) {
-      // 416 means the `.part` is already as long as the object -> it can never be a prefix of a
-      // future body, so drop it. Every other status keeps it: an expired signed URL is a new grant
-      // away, not a reason to throw the bytes out.
       if (response.statusCode == 416 && await part.exists()) {
         await part.delete();
       }
@@ -307,7 +286,6 @@ class AndroidRingtoneSetService implements RingtoneSetService {
       );
       return RingtoneRef.fromChannel(registered);
     } on PlatformException catch (e) {
-      // e.message is raw platform text — log it, but surface only the authored message.
       debugPrint('[RingtoneSet] ${e.code}: ${e.message}');
       throw RingtoneSetException(e.message ?? 'Failed to set ringtone');
     }

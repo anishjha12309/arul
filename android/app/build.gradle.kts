@@ -114,6 +114,19 @@ kotlin {
     }
 }
 
+// facebook_app_events pulls the whole facebook-android-sdk, but Arul and the plugin only touch
+// facebook-core and facebook-applinks -> the rest shipped unused dex and an exported, permission-less
+// CustomTabActivity (fbconnect://). Neither kept module depends on these (their POMs: core -> bolts only).
+configurations.all {
+    listOf(
+        "facebook-common",
+        "facebook-login",
+        "facebook-share",
+        "facebook-messenger",
+        "facebook-gamingservices",
+    ).forEach { exclude(group = "com.facebook.android", module = it) }
+}
+
 dependencies {
     // Java 8+ API desugaring -> flutter_local_notifications needs it for zonedSchedule -> version kept in step with Pakiza's.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
@@ -136,10 +149,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // MainActivity.fetchMetaDeferredLink needs AppLinkData/FacebookSdk -> a plugin's `implementation` deps are off our classpath.
-    // facebook_app_events pulls the SAME range -> declaring a RANGE, not a pin, keeps Gradle resolving ONE version for both.
-    // Two different pins here and in the plugin would be a runtime mismatch -> never pin these.
-    implementation("com.facebook.android:facebook-core:[18.0,19.0)")
-    implementation("com.facebook.android:facebook-applinks:[18.0,19.0)")
+    // facebook_app_events asks for facebook-android-sdk:[18.0,19.0); Gradle selects a static version inside a range, so
+    // these pins keep an unchosen 18.x out of the APK. Keep all three equal and inside the plugin's range on any bump.
+    implementation("com.facebook.android:facebook-core:18.3.0")
+    implementation("com.facebook.android:facebook-applinks:18.3.0")
+    constraints {
+        implementation("com.facebook.android:facebook-android-sdk:18.3.0")
+    }
 
     // push/ArulMessagingService extends the firebase_messaging plugin's service -> the plugin's Firebase deps are off our classpath too.
     // Same BoM as firebase_core's FirebaseSDKVersion (4.14.0 -> 34.18.0) -> Gradle resolves ONE firebase-messaging -> bump them together.
@@ -153,6 +169,9 @@ dependencies {
     // upload/MediaPickChannel builds the Photo Picker intent with androidx's PickVisualMedia contract (1.7.0+).
     // Same floor rule: the transitive copy is off our classpath, and 1.9.0 is what Gradle resolves today.
     implementation("androidx.activity:activity:1.9.0")
+
+    // update/AppUpdateChannel -> Play in-app updates. 2.1.0 is the floor Play requires at targetSdk 34+.
+    implementation("com.google.android.play:app-update:2.1.0")
 }
 
 flutter {

@@ -12,7 +12,6 @@ library;
 
 /// `kind|screen|config|key` for each English finding.
 const Set<String> kEnglishBaseline = <String>{
-  'truncated|refer.screen|320x569@1.3|referShareWhatsapp',
   'truncated|settings.screen|320x569@1.3|settingsFallbackEmail',
 };
 
@@ -21,6 +20,4 @@ const Set<String> kEnglishBaseline = <String>{
 /// A locale overflow is subtracted only when it is no WORSE
 /// than English at the same frame. Anything larger is
 /// translation-induced, however small English's own overflow.
-const Map<String, double> kEnglishOverflowPx = <String, double>{
-  'upload.screen|320x569@1.3|right': 29.0,
-};
+const Map<String, double> kEnglishOverflowPx = <String, double>{};

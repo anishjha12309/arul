@@ -63,22 +63,28 @@ class _CtaButtonState extends State<CtaButton> {
         widget.expand ? w : IntrinsicWidth(child: w);
 
     final child = widget.busy
-        ? const ArulSpinner(size: 22, strokeWidth: 2.4, color: Colors.white)
+        ? const ArulSpinner(size: 22, strokeWidth: 2.4, color: ArulTokens.onCta)
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               if (widget.icon != null) ...[
-                Icon(widget.icon, size: 20, color: Colors.white),
+                Icon(widget.icon, size: 20, color: ArulTokens.onCta),
                 const SizedBox(width: 8),
               ],
+              // A translated verb phrase at a large OS font size can outgrow a compact pill ->
+              // the label shrinks a little before it would ever be cut; "Share via What…" is not a
+              // button anyone can read, a slightly smaller "Share via WhatsApp" is.
               Flexible(
-                child: Text(
-                  widget.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArulTokens.button.copyWith(
-                    fontSize: widget.fontSize,
-                    color: Colors.white,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    style: ArulTokens.button.copyWith(
+                      fontSize: widget.fontSize,
+                      color: ArulTokens.onCta,
+                    ),
                   ),
                 ),
               ),
@@ -90,6 +96,9 @@ class _CtaButtonState extends State<CtaButton> {
       enabled: _enabled,
       label: widget.label,
       identifier: widget.identifier,
+      onTap: _enabled ? widget.onPressed : null,
+      // The label IS the visible word -> without this it announces the label then the label again.
+      excludeSemantics: true,
       child: GestureDetector(
         // The haptic rides press-DOWN -> it lands in step with the scale dip and the colour swap.
         onTapDown: _enabled
@@ -104,9 +113,7 @@ class _CtaButtonState extends State<CtaButton> {
         child: AnimatedScale(
           // Parked at the resting scale when motion is reduced; the haptic still answers the press.
           scale: _pressed && !context.reduceMotion ? 0.97 : 1,
-          duration: context.reduceMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 90),
+          duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
           child: Opacity(
             opacity: _enabled ? 1 : 0.5,
             // A Container with a non-null alignment fills bounded constraints even at width null ->

@@ -9,7 +9,8 @@ config error and a user dismissal with the same code.
 
 ## One visible Google surface per attempt
 
-- **Auto-launch a Google surface on the first frame — never a silent, no-UI check.** `google_sign_in`
+- **Auto-launch a Google surface on the first frame — never a silent, no-UI check** (held only
+  while there is no network at all, §Failure handling). `google_sign_in`
   v7: `instance` → `initialize()` → surface. The idToken's `aud` is the WEB client id, verified in the
   Worker against Google's JWKS.
 - **Sheet first, picker second**, per Google's SIWG guide:
@@ -31,10 +32,19 @@ config error and a user dismissal with the same code.
   `GetSignInWithGoogleOption` is the remedy Google's guide names for a dismissal and is not that
   surface. Reports `surface=button_after_dismiss` so the second chance can be priced. The cooldown
   resets by clearing GMS storage, or toggle it from the dialer: `*#*#66382723#*#*`.
-- **Google's surfaces live INSIDE this app's task and outlive its process.** Swipe home out of a
-  picker, lose the process, tap the icon: Android resumes the dead picker with no app behind it, and
-  a pick lands on the home screen (reproduced on device). `clearTaskOnLaunch` on `MainActivity`
-  strips everything above it on an icon launch; recents are untouched. Keep it.
+- **Google's surfaces live INSIDE this app's task and outlive its process.** Credential Manager
+  launches them from the activity context. Home, lose the process, tap the icon: the dead picker
+  returns with no app behind it. `clearTaskOnLaunch` strips everything above `MainActivity` on an
+  icon launch; recents are untouched. Keep it — but it acts on the task ROOT only.
+- **A death WHILE the surface is in front (crash, ANR close, force-stop) makes Google's selector the
+  ROOT**: MainActivity's record goes with the process, and the icon brought back the dead sheet over
+  the home screen — Continue went nowhere. `singleInstancePerTask` never reuses a task whose root is
+  not MainActivity, so the icon opens a fresh Arul; the dead task stays hidden (its root is excluded
+  from Recents). Plain `am kill` cannot reproduce it (a visible process is spared) — use `am crash`.
+- **`launchMode` is `@integer/main_launch_mode`: 4 in `values-v31`, singleTop below.** API ≤30 reads
+  a raw `singleInstancePerTask` as `standard`: a second app stacked on a warm link, a restart on a
+  push tap. So Android ≤11 keeps the dead sheet. Never `singleTask` (AOSP `complyActivityFlags`): it
+  adds MainActivity ABOVE the dead root, and the next icon tap's reset finishes it.
 - **A pill tap SKIPS the sheet** (`signInWith(auto: false)`). Google's stated reasons for the button
   flow — sheet dismissed, no accounts, accounts needing re-auth — are exactly why the user taps.
 - **Sheet-first is not the reverted warm-up**, which ran the sheet *ahead of* a picker it would open
@@ -66,7 +76,8 @@ Reading `login_cancelled`/`login_failed` correctly is an analytics trap, not a c
 **ONE line, the same for every failure — the retry line. No sentence under the pill, no link out of
 the app** (owner's call: lines naming Play services or account settings were noise to an audience
 that cannot act on them; all any of them can do is tap again). Never re-add a fix line or a help
-link. The outcome (`classifySignInOutcome`, `domain/sign_in_outcome.dart`) still
+link. The held launch's wait line is the one other subtitle — a state, never a failure line. The
+outcome (`classifySignInOutcome`, `domain/sign_in_outcome.dart`) still
 rides `AuthCancelled` into `login_cancelled` as `nudge`, pinned string by string in both of Google's
 spellings: MESSAGE first, then the backed-out family split on **`ms_to_surface`** — wall-clock from
 `authenticate()` to the attempt's FIRST inactive/paused/hidden, the only signal the app gets that
@@ -87,8 +98,10 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
 - **The pill is the ONLY tappable thing on the wall — never add a second control.** Google's sheet
   lands ON this screen and covers it, so anything else is reached by dismissing the sheet first: the
   bottom-left language chip that once sat here pushed first-sheet sign-ins down and pill taps up, and
-  its users made roughly twice the attempts and signed in far less. A fresh install opens in its
-  REGION's language ([deep-links.md](deep-links.md)); Settings is the one place it changes.
+  its users made roughly twice the attempts and signed in far less. A fresh install opens in the
+  phone's language; the region default ([deep-links.md](deep-links.md)) applies only in the
+  `exp_regional` arm (and pre-factorial installs) while the Worker's `GEO_LANG_ENABLED` brake is
+  `"true"`. Settings is the one place it changes.
 - **Nothing else on the wall is tappable** — the Terms · Privacy footer stays gone; Play's in-app
   privacy-policy requirement is met by Settings. The wordmark stays English and is the wall's only
   mark; the eyebrow is the splash's alone. **Icon glyphs take NO `shadows`:** Impeller paints a
@@ -118,11 +131,14 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   to "taking too long" on device.
 - **An icon tap on a live task is the OS, not the user.** `clearTaskOnLaunch` strips Google's
   surface: a stripped sheet delivers nothing (the grace path), a stripped PICKER delivers a
-  `canceled` nobody made. The launcher brings the task forward WITHOUT `onNewIntent` (measured), so
-  the tell is the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
+  `canceled` nobody made. Any `onNewIntent` carries only the launcher's MAIN intent, so the tell is
+  the wording: a user's back-out of the picker says `[16] Cancelled by user`, the
   framework closing the session says `User cancelled the selector` — on the BUTTON surface that is
-  `SignInOutcome.selectorStripped` and relaunches once as `surface_stripped`; on the sheet the
-  same words are the user's swipe. Recents keeps the surface and needs none of this.
+  `SignInOutcome.selectorStripped` and reopens the PICKER once as `surface_stripped`, never the sheet
+  the user already dismissed; on the sheet the same words are the user's swipe. Recents keeps the
+  surface and needs none of this. Below Android 14 the American `User canceled the selector` is Play
+  services' own `identitycredentials` selector, which androidx.credentials 1.6 routes every request
+  through on GMS ≥ 25.24; a back-out or an icon strip on Android 12L never produced it.
 - A cancel stays TOAST-less; the retry line is the only feedback. **A DISMISSED sheet is never
   auto-relaunched; a LOST callback is relaunched ONCE**, one-shot so a second cannot loop. A user's
   cancel SETTLES the future inside the grace and never reaches that path; the launcher's
@@ -159,6 +175,14 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   failed` (never any other cancel, nor `noPlayServices`, `serverError`, `tokenExchangeFailed`), landing after that outcome settled, nothing in flight, signed out, and our
   own UI RESUMED. ONE per failure and TWO per signed-out stretch, or a flapping link loops the
   sheet. Files under `surface=sheet_reconnect`.
+- **No network at all when the automatic sheet comes due HOLDS it** (`autoSignIn(offline: true)`).
+  Offline the sheet draws only to fail — account tap, then picker, then a toast nobody could avoid.
+  Hold on a KNOWN `none` reading only: loading or errored reads online, and the splash waits at most
+  150 ms for an unanswered one. `LaunchLinkProbe` asks in `main()`, and the splash LISTENS to
+  `isOnlineProvider` — Riverpod 3 pauses an unlistened provider, so a bare read never answered. The pill shows the wait line; the link coming up (no failure or
+  offline reading needed) or ANY resume (the shade pulled down to turn data on) releases it once as
+  `sheet_after_offline`, re-reading the link first. No reconnect budget spent; a pill tap ends the
+  wait and is never blocked.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s elapsed cap,
   1.5 s backoff, so the worst case stays inside the 30 s stall budget. A server RESPONSE is never
   retried. GMS survives blackouts this POST does not, and a lost exchange must never cost a picker.
@@ -166,13 +190,19 @@ failure KIND, never a message; an unrecognised message classifies as nothing.
   `clearCredentialState()`, so providers drop their stored session and a user who signed out to
   switch accounts is not handed the same one. Best-effort AFTER the local clear; a plugin error must
   never strand the user signed in.
-- **The sign-in SCREEN is localized in all six; the failure TOASTS are not.** Everything on the wall
-  but the wordmark comes from the ARBs. `AuthFailure.message` stays authored-English
-  ("localized-enough") — the one exception left to the all-6-locales rule.
+- **Everything on the wall but the wordmark comes from the ARBs, failure toasts included:** the toast
+  is `authFailureText(kind)`, one key per `AuthFailureKind`. `AuthFailure.message` is English for
+  logs and analytics only — never shown, since a server failure's message is the Worker's text.
 
 ## Session
 
 JWT HS256: access 60 m, refresh 60 d rotating, old jti denylisted in KV. **Entitlement is never
 authoritative in the token** — `prm` is a UI hint ([architecture.md](architecture.md) §Entitlement).
+
+**A refresh that proves the session dead ends it mid-use** (`ApiClient.sessionEnded` → signed out →
+`ArulApp` sends any signed-in screen to the wall and re-arms the automatic sheet). Google's credential
+state is left alone, so a one-account phone signs straight back in. Without it the UI stayed signed
+in and every gated call failed with `no_refresh_token` until a cold start. Where tokens live when the
+Keystore refuses: [launch-surface.md](launch-surface.md).
 The sign-in background video is a shared ref-counted player with a 2 s dispose grace, so a screen
 swap cannot kill it.

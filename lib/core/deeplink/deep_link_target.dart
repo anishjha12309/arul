@@ -1,21 +1,16 @@
 import 'package:flutter/foundation.dart';
 
-/// Which of the shell's browse tabs a link points into.
 enum ArulTab { wallpapers, ringtones }
 
 /// Where a link was delivered from — rides on the target for the GA4-only `deep_link_opened`.
 /// Answers which channel actually lands people on content; nothing else reads it.
 enum DeepLinkSource {
-  /// Android handed the app an intent — a verified https App Link, or Meta's `fb<APP_ID>://open`.
   appLink,
 
-  /// Play Install Referrer replayed the Worker's redirect payload on the first launch after install.
   installReferrer,
 
-  /// Google Ads App Campaign deferred deep link, fetched by GA4F.
   googleAds,
 
-  /// Meta deferred deep link (`AppLinkData.fetchDeferredAppLinkData`).
   meta,
 
   /// A campaign notification tapped on the phone (`docs/push.md`).
@@ -25,10 +20,8 @@ enum DeepLinkSource {
   /// `app_link` and quietly inflate the channel that ad spend is read against.
   push,
 
-  /// The `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` test seams.
   debug;
 
-  /// Wire form for analytics and the persisted pending target.
   String get key => switch (this) {
     DeepLinkSource.appLink => 'app_link',
     DeepLinkSource.installReferrer => 'install_referrer',
@@ -56,10 +49,8 @@ sealed class DeepLinkTarget {
 
   final DeepLinkSource source;
 
-  /// The tab the shell must be on for this target to be visible.
   ArulTab get tab;
 
-  /// `kind` for analytics.
   String get kind;
 
   /// Analytics for `deep_link_opened` — GA4-only, deliberately off the PostHog list and Meta's ★ set.
@@ -234,14 +225,12 @@ class ArulDeepLink {
 
   static DeepLinkTarget? _target;
   static String? _lang;
+  static bool _landed = false;
   static final _DeepLinkNotifier _notifier = _DeepLinkNotifier();
 
   /// Fires after every [requestTarget]/[requestLocale] — consumers read the pending value themselves.
   static Listenable get changes => _notifier;
 
-  /// Record the wallpaper a link asked for.
-  ///
-  /// The wallpaper-only entry point the referrer path and the tests use — see [requestTarget].
   static void request(
     String wallpaperId, {
     DeepLinkSource source = DeepLinkSource.appLink,
@@ -254,6 +243,7 @@ class ArulDeepLink {
   /// A ringtone link replaces a pending wallpaper, never sits beside it.
   static void requestTarget(DeepLinkTarget target) {
     _target = target;
+    _landed = true;
     _notifier.fire();
   }
 
@@ -263,6 +253,13 @@ class ArulDeepLink {
     _lang = code;
     _notifier.fire();
   }
+
+  /// A link or a campaign tap reached this process — it stays true after the target is consumed.
+  /// The review prompt reads it: a person who arrived on something must not land on Play's sheet.
+  static bool get landedThisLaunch => _landed;
+
+  /// A campaign tap with no parked target (home, a category, premium) is a landing all the same.
+  static void noteExternalOpen() => _landed = true;
 
   /// The pending target without taking it — the shell peeks to pick a branch, its screen consumes.
   static DeepLinkTarget? get pendingTarget => _target;
@@ -278,7 +275,6 @@ class ArulDeepLink {
     return t;
   }
 
-  /// Take the pending target if it is a ringtone, clearing it.
   static RingtoneLinkTarget? consumeRingtone() {
     final t = _target;
     if (t is! RingtoneLinkTarget) return null;
@@ -286,7 +282,6 @@ class ArulDeepLink {
     return t;
   }
 
-  /// Take the pending target if it only names a tab, clearing it.
   static TabLinkTarget? consumeTab() {
     final t = _target;
     if (t is! TabLinkTarget) return null;
@@ -294,16 +289,15 @@ class ArulDeepLink {
     return t;
   }
 
-  /// Take the pending language, clearing it.
   static String? consumeLocale() {
     final code = _lang;
     _lang = null;
     return code;
   }
 
-  /// Test seam — clears state between tests; listeners are the widgets' own to remove.
   static void reset() {
     _target = null;
     _lang = null;
+    _landed = false;
   }
 }

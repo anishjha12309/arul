@@ -5,6 +5,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../../app/theme/motion.dart';
 
 /// One row: the native label over the English name. Both come from `locale_provider.dart`, the one
 /// home for the language tables -> the sheet, Settings and the sign-in trigger cannot drift apart.
@@ -98,7 +99,7 @@ class _LanguageSheet extends StatelessWidget {
   }
 }
 
-class _LangTile extends StatelessWidget {
+class _LangTile extends StatefulWidget {
   const _LangTile({required this.lang, required this.on, required this.onTap});
 
   final _Lang lang;
@@ -106,7 +107,17 @@ class _LangTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_LangTile> createState() => _LangTileState();
+}
+
+class _LangTileState extends State<_LangTile> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final lang = widget.lang;
+    final on = widget.on;
+    final onTap = widget.onTap;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // The reference sheet is dark-only -> the light unselected tile is an assumption: white, maroon.
@@ -124,34 +135,51 @@ class _LangTile extends StatelessWidget {
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // A language tile picks between discrete values — the same tick as theme rows and chips.
-      onTapDown: (_) => ArulHaptics.selection(),
+    return Semantics(
+      button: true,
+      selected: on,
+      label: '${lang.native} ${lang.name}',
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border, width: 1.5),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              lang.native,
-              textAlign: TextAlign.center,
-              // sheetTitle is 17px/w600 (system stack — safe for Indic glyphs).
-              style: ArulTokens.sheetTitle.copyWith(color: nativeColor),
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // A language tile picks between discrete values — the same tick as theme rows and chips.
+        onTapDown: (_) {
+          ArulHaptics.selection();
+          setState(() => _pressed = true);
+        },
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: onTap,
+        child: AnimatedOpacity(
+          // Holds at 1 when motion is reduced; the tick still answers the press.
+          opacity: _pressed && !context.reduceMotion ? 0.6 : 1,
+          duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+            decoration: BoxDecoration(
+              color: bg,
+              border: Border.all(color: border, width: 1.5),
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(height: 3),
-            Text(
-              lang.name,
-              textAlign: TextAlign.center,
-              style: ArulTokens.caption.copyWith(color: nameColor),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  lang.native,
+                  textAlign: TextAlign.center,
+                  // sheetTitle is 17px/w600 (system stack — safe for Indic glyphs).
+                  style: ArulTokens.sheetTitle.copyWith(color: nativeColor),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  lang.name,
+                  textAlign: TextAlign.center,
+                  style: ArulTokens.caption.copyWith(color: nameColor),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

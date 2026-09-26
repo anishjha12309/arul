@@ -29,13 +29,11 @@ final RegExp _uuid = RegExp(
 );
 final RegExp _metaScheme = RegExp(r'^fb[0-9]*$');
 
-/// What one link asked for: a target, a language, or both.
 class DeepLinkRequest {
   const DeepLinkRequest({this.target, this.lang});
 
   final DeepLinkTarget? target;
 
-  /// A code from `supportedAppLocales`, or null when the link carried none.
   final String? lang;
 
   @override
@@ -111,7 +109,6 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
   return DeepLinkRequest(target: target, lang: lang);
 }
 
-/// [parseDeepLinkUri] for a raw string; null when it is not even a URI.
 DeepLinkRequest? parseDeepLink(String? raw, {required DeepLinkSource source}) {
   if (raw == null) return null;
   final uri = Uri.tryParse(raw.trim());

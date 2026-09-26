@@ -8,12 +8,9 @@ part of 'push_providers.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The campaign-push registry writer. One per app, kept alive for the whole process.
 
 @ProviderFor(pushRegistration)
 final pushRegistrationProvider = PushRegistrationProvider._();
-
-/// The campaign-push registry writer. One per app, kept alive for the whole process.
 
 final class PushRegistrationProvider
     extends
@@ -23,7 +20,6 @@ final class PushRegistrationProvider
           PushRegistration
         >
     with $Provider<PushRegistration> {
-  /// The campaign-push registry writer. One per app, kept alive for the whole process.
   PushRegistrationProvider._()
     : super(
         from: null,
@@ -59,17 +55,12 @@ final class PushRegistrationProvider
 
 String _$pushRegistrationHash() => r'05fcc157463fa54353f50bf56b1bff3db0caf78c';
 
-/// The one-time `POST_NOTIFICATIONS` prompt.
-
 @ProviderFor(pushPermission)
 final pushPermissionProvider = PushPermissionProvider._();
-
-/// The one-time `POST_NOTIFICATIONS` prompt.
 
 final class PushPermissionProvider
     extends $FunctionalProvider<PushPermission, PushPermission, PushPermission>
     with $Provider<PushPermission> {
-  /// The one-time `POST_NOTIFICATIONS` prompt.
   PushPermissionProvider._()
     : super(
         from: null,

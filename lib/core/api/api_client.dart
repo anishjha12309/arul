@@ -2,13 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 import '../perf/boot_trace.dart';
 
-/// Typed error thrown for any non-2xx API response.
 class ApiException implements Exception {
   const ApiException({
     required this.code,
@@ -23,12 +24,16 @@ class ApiException implements Exception {
   bool get isPremiumRequired => status == 403 && code == 'premium_required';
   bool get isUnauthorized => status == 401;
 
-  /// The refresh token is retired for good -> [ApiClient.clearTokens] has ALREADY run and the wall
-  /// is the next screen. This is a sign-out, not a defect, which is why `isNonCrashError` demotes
-  /// it. A TRANSIENT refresh failure is deliberately NOT this (see `refresh_unavailable`): those
-  /// keep the stored tokens, and calling them a session expiry would sign a payer out for a blip.
+  /// No live session: the refresh token is retired for good, or there never was one (a gated call
+  /// made while signed out). [ApiClient.clearTokens] has ALREADY run and [ApiClient.sessionEnded]
+  /// has fired, so the wall is the next screen. A sign-out, not a defect, which is why
+  /// `isNonCrashError` demotes it. A TRANSIENT refresh failure is deliberately NOT this (see
+  /// `refresh_unavailable`): those keep the stored tokens, and calling them a session expiry would
+  /// sign a payer out for a blip.
   bool get isSessionExpired =>
-      code == 'invalid_refresh' || code == 'invalid_refresh_response';
+      code == 'no_refresh_token' ||
+      code == 'invalid_refresh' ||
+      code == 'invalid_refresh_response';
 
   @override
   String toString() => 'ApiException($status, $code): $message';
@@ -41,22 +46,82 @@ const _kRefreshTokenKey = 'arul_refresh_token';
 /// Cleared with the tokens on sign-out and account deletion -> it never leaks across accounts.
 const _kProfileKey = 'arul_profile';
 
-/// Wraps `http` with:
-///   - Base URL from [AppConfig.apiBaseUrl]
-///   - `Authorization: Bearer <accessToken>` on all requests
-///   - Single-flight 401 → refresh → retry logic
-///   - Typed [ApiException] on non-2xx responses
-///   - Token persistence via [FlutterSecureStorage]
+/// Set once, for good, when this install's Android Keystore refuses the session store.
+const _kKeystoreRefusedKey = 'arul_keystore_refused';
+
 class ApiClient {
   ApiClient({
     FlutterSecureStorage? storage,
     http.Client? httpClient,
     this._requestTimeout = const Duration(seconds: 12),
+    this._plainStore,
+    this._onKeystoreRefused,
   }) : _storage = storage ?? const FlutterSecureStorage(),
        _http = httpClient ?? http.Client();
 
   final FlutterSecureStorage _storage;
   final http.Client _http;
+
+  /// Where the session lives once THIS install's Android Keystore has refused it: app-private
+  /// storage, out of every backup and device transfer (data_extraction_rules, allowBackup=false).
+  ///
+  /// Some Android 8.1/9 phones' keymaster answers every key generation or load with
+  /// `KeyStoreException: Memory allocation failed` (keymaster error -41), AES and RSA alike, on
+  /// every retry — so no cipher option helps, and those phones could never hold a session: Google
+  /// and `POST /auth/login` succeeded, then the token write threw. Owner's call: plain storage
+  /// there. The switch is sticky per install ([_kKeystoreRefusedKey]) so one session never splits
+  /// across two stores. Null (tests, define-less runs) = no fallback, the refusal propagates.
+  final SharedPreferences? _plainStore;
+
+  /// Told once per process when the switch happens -> a non-fatal, so the fix stays countable.
+  final void Function(Object error, StackTrace stack)? _onKeystoreRefused;
+  bool _refusalReported = false;
+
+  /// Runs a session-store operation against the Keystore-backed store, or against [_plainStore]
+  /// once the Keystore has refused this install. ONLY a Keystore refusal switches: the plugin's
+  /// error carries the Java stack, and every refusal seen in the field runs through
+  /// `android.security.keystore`. Anything else propagates exactly as before.
+  Future<T> _session<T>(
+    Future<T> Function(FlutterSecureStorage secure) secure,
+    FutureOr<T> Function(SharedPreferences plain) plain,
+  ) async {
+    final store = _plainStore;
+    if (store != null && (store.getBool(_kKeystoreRefusedKey) ?? false)) {
+      return plain(store);
+    }
+    try {
+      return await secure(_storage);
+    } on PlatformException catch (e, stack) {
+      if (store == null || !isKeystoreRefusal(e)) rethrow;
+      await store.setBool(_kKeystoreRefusedKey, true);
+      if (!_refusalReported) {
+        _refusalReported = true;
+        _onKeystoreRefused?.call(e, stack);
+      }
+      return plain(store);
+    }
+  }
+
+  @visibleForTesting
+  static bool isKeystoreRefusal(PlatformException e) =>
+      '${e.message} ${e.details}'.toLowerCase().contains('keystore');
+
+  static String _plainKey(String key) => 'arul_plain_$key';
+
+  Future<String?> _read(String key) => _session(
+    (secure) => secure.read(key: key),
+    (plain) => plain.getString(_plainKey(key)),
+  );
+
+  Future<void> _write(String key, String value) => _session(
+    (secure) => secure.write(key: key, value: value),
+    (plain) => plain.setString(_plainKey(key), value),
+  );
+
+  Future<void> _delete(String key) => _session(
+    (secure) => secure.delete(key: key),
+    (plain) => plain.remove(_plainKey(key)),
+  );
 
   /// Hard ceiling on every HTTP round trip, request and refresh alike.
   ///
@@ -65,8 +130,19 @@ class ApiClient {
   /// 12s is well past any healthy round trip -> online behaviour is unchanged. Injectable for tests.
   final Duration _requestTimeout;
 
-  /// Prevents concurrent refresh races — only one in-flight refresh at a time.
   Completer<void>? _refreshCompleter;
+
+  /// Fires each time a refresh proves the session dead and the tokens are cleared.
+  ///
+  /// The auth state lives in the auth service, not here. Without this, a session that died
+  /// mid-process kept the UI signed in while every gated call failed until the next cold start.
+  Stream<void> get sessionEnded => _sessionEnded.stream;
+  final _sessionEnded = StreamController<void>.broadcast();
+
+  Future<void> _endSession() async {
+    await clearTokens();
+    if (!_sessionEnded.isClosed) _sessionEnded.add(null);
+  }
 
   /// GET paths coalesced while in flight and briefly replayed after settling (see [_meFreshFor]).
   ///
@@ -128,16 +204,16 @@ class ApiClient {
 
   static const Duration _warmTimeout = Duration(seconds: 5);
 
-  Future<String?> readAccessToken() => _storage.read(key: _kAccessTokenKey);
-  Future<String?> readRefreshToken() => _storage.read(key: _kRefreshTokenKey);
+  Future<String?> readAccessToken() => _read(_kAccessTokenKey);
+  Future<String?> readRefreshToken() => _read(_kRefreshTokenKey);
 
   Future<void> setTokens({
     required String accessToken,
     required String refreshToken,
   }) async {
     await Future.wait([
-      _storage.write(key: _kAccessTokenKey, value: accessToken),
-      _storage.write(key: _kRefreshTokenKey, value: refreshToken),
+      _write(_kAccessTokenKey, accessToken),
+      _write(_kRefreshTokenKey, refreshToken),
     ]);
   }
 
@@ -145,10 +221,10 @@ class ApiClient {
     // The in-memory `/me` snapshot belongs to the session being torn down -> drop it with the tokens.
     invalidateMe();
     await Future.wait([
-      _storage.delete(key: _kAccessTokenKey),
-      _storage.delete(key: _kRefreshTokenKey),
+      _delete(_kAccessTokenKey),
+      _delete(_kRefreshTokenKey),
       // Drop the cached profile too -> the next or signed-out user never sees the previous name.
-      _storage.delete(key: _kProfileKey),
+      _delete(_kProfileKey),
     ]);
   }
 
@@ -165,12 +241,11 @@ class ApiClient {
       'email': ?email,
     };
     if (map.isEmpty) return;
-    await _storage.write(key: _kProfileKey, value: jsonEncode(map));
+    await _write(_kProfileKey, jsonEncode(map));
   }
 
-  /// Reads the locally cached profile, or null if none is stored / unparseable.
   Future<Map<String, dynamic>?> readCachedProfile() async {
-    final raw = await _storage.read(key: _kProfileKey);
+    final raw = await _read(_kProfileKey);
     if (raw == null || raw.isEmpty) return null;
     try {
       return jsonDecode(raw) as Map<String, dynamic>;
@@ -179,7 +254,6 @@ class ApiClient {
     }
   }
 
-  /// Returns true if a stored access token exists (not validated — just presence).
   Future<bool> hasTokens() async {
     final token = await readAccessToken();
     return token != null && token.isNotEmpty;
@@ -196,7 +270,6 @@ class ApiClient {
     };
   }
 
-  /// POSTs [body] as JSON to [path]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
@@ -253,7 +326,6 @@ class ApiClient {
     _meEpoch++;
   }
 
-  /// DELETEs [path] with an optional JSON [body]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> delete(
     String path, {
     Map<String, dynamic>? body,
@@ -261,7 +333,6 @@ class ApiClient {
   }) =>
       _requestWithRetry('DELETE', path, body: body, requiresAuth: requiresAuth);
 
-  /// Core request. A 401 with [requiresAuth] runs a single-flight refresh and retries exactly once.
   Future<Map<String, dynamic>> _requestWithRetry(
     String method,
     String path, {
@@ -277,11 +348,15 @@ class ApiClient {
     final response = await _execute(method, path, headers: headers, body: body);
 
     if (response.statusCode == 401 && requiresAuth && !isRetry) {
-      // Single-flight refresh: if another call is already refreshing, wait.
       if (_refreshCompleter != null) {
         await _refreshCompleter!.future;
       } else {
         _refreshCompleter = Completer<void>();
+        // Joiners await this future; the refresher gets the error by `rethrow`. With no joiner, an
+        // error completion nobody listens to is an UNCAUGHT zone error -> Crashlytics logged every
+        // failed refresh FATAL even when the caller caught it. Marking it handled changes nothing a
+        // joiner sees.
+        _refreshCompleter!.future.ignore();
         try {
           await _doRefresh();
           _refreshCompleter!.complete();
@@ -292,7 +367,6 @@ class ApiClient {
           _refreshCompleter = null;
         }
       }
-      // Retry once with new tokens.
       return _requestWithRetry(
         method,
         path,
@@ -329,11 +403,11 @@ class ApiClient {
     );
   }
 
-  /// Exchanges the refresh token for a new pair; on failure clears tokens and throws [ApiException].
+  /// Exchanges the refresh token for a new pair; a DEAD session ends it ([_endSession]) and throws.
   Future<void> _doRefresh() async {
     final refreshToken = await readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) {
-      await clearTokens();
+      await _endSession();
       throw const ApiException(
         code: 'no_refresh_token',
         message: 'No refresh token — please sign in again.',
@@ -372,7 +446,7 @@ class ApiClient {
           status: response.statusCode,
         );
       }
-      await clearTokens();
+      await _endSession();
       throw ApiException(
         code: 'invalid_refresh',
         message: 'Session expired — please sign in again.',
@@ -384,7 +458,7 @@ class ApiClient {
     final newAccess = data['accessToken'] as String?;
     final newRefresh = data['refreshToken'] as String?;
     if (newAccess == null || newRefresh == null) {
-      await clearTokens();
+      await _endSession();
       throw const ApiException(
         code: 'invalid_refresh_response',
         message: 'Unexpected refresh response.',
@@ -394,7 +468,6 @@ class ApiClient {
     await setTokens(accessToken: newAccess, refreshToken: newRefresh);
   }
 
-  /// Decodes the JSON body — returns it on 2xx, else throws a typed [ApiException].
   Map<String, dynamic> _parseResponse(http.Response response) {
     late Map<String, dynamic> json;
     try {
@@ -425,5 +498,8 @@ class ApiClient {
     );
   }
 
-  void dispose() => _http.close();
+  void dispose() {
+    _http.close();
+    unawaited(_sessionEnded.close());
+  }
 }

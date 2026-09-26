@@ -20,22 +20,16 @@ import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../legal/presentation/policy_screen.dart';
-import '../../notifications/providers/notification_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
+import '../../../app/widgets/arul_icon_tap.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
 import 'help_sheet.dart';
 import 'language_sheet.dart';
 import 'theme_sheet.dart';
 
-/// Settings — profile card, one rows-card, muted logout, policy footer.
-///
-/// Identity comes from the auth state, with neutral stand-ins while it loads.
-/// Edit-name persists via `POST /me/profile`, and language drives the app locale.
-/// Support, the plan and account deletion all live behind the Need help? row's sheet; logout and
-/// delete run the real auth actions before routing back to sign-in.
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
@@ -65,16 +59,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? authEmail
         : l10n.settingsFallbackEmail;
     // The EFFECTIVE language, so a phone-language default shows here as what the user is reading.
-    final language = appLanguageName(ref.watch(localeProvider).languageCode);
-
-    // Reads the persisted opt-in, which the reminders screen reconciles against the OS permission.
-    // So a user who revoked notifications in system settings sees "Off" here, not a stale "On".
-    final notificationsOn = ref
-        .watch(notificationSettingsProvider)
-        .masterEnabled;
-    final notificationsSub = notificationsOn
-        ? l10n.settingsRemindersSubOn
-        : l10n.settingsRemindersSubOff;
+    final languageCode = ref.watch(localeProvider).languageCode;
+    final language = appLanguageName(languageCode);
+    // The row shows the autonym (தமிழ், not "Tamil") — the word a speaker recognises; the sheet
+    // still trades in the English NAME, which is why `language` stays what it was.
+    final languageShown = appLanguageNativeNames[languageCode] ?? language;
 
     return Scaffold(
       backgroundColor: bg,
@@ -127,17 +116,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             tellAFriend(context, ref, source: 'settings'),
                       ),
                       _RowData(
-                        icon: Icons.notifications_active_outlined,
-                        title: l10n.remindersTitle,
-                        identifier: 'arul_settings_reminders',
-                        sub: notificationsSub,
-                        onTap: () => context.push('/settings/notifications'),
-                      ),
-                      _RowData(
                         icon: Icons.translate,
                         title: l10n.settingsLanguage,
                         identifier: 'arul_settings_language',
-                        sub: language,
+                        sub: languageShown,
                         onTap: () => _pickLanguage(language),
                       ),
                       _RowData(
@@ -238,7 +220,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       message: l10n.settingsLogoutConfirmBody,
       confirmLabel: l10n.settingsLogout,
     );
-    if (ok != true) return;
+    // Unmounted = the session ended while the dialog was open and the wall already replaced
+    // Settings -> nothing is left to sign out of, and `ref` is dead.
+    if (ok != true || !mounted) return;
     // Best-effort server logout plus a local token clear — never throws for the offline case.
     await ref.read(authControllerProvider.notifier).signOut();
     if (mounted) context.go('/sign-in');
@@ -260,7 +244,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : l10n.settingsDeleteConfirmBody,
       confirmLabel: l10n.settingsDeleteAccount,
     );
-    if (ok != true) return;
+    // Same as [_logout]: a session that ended under the dialog leaves no account to delete here.
+    if (ok != true || !mounted) return;
     // GA4-only, deliberately off the PostHog allow-list — account state lives in Neon, exactly.
     // These exist so churn and delete FAILURES show in the free, unsampled record.
     // A failing delete is otherwise a support problem we only hear about by email.
@@ -294,7 +279,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         .read(appConfigProvider.future)
         .catchError((_) => null);
 
-    // Real installed version — a failed read leaves it blank, printing "Unknown" below.
     var version = '';
     try {
       final info = await ref.read(packageInfoProvider.future);
@@ -384,7 +368,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       .join('&');
 }
 
-/// Silk-gradient profile card — a 52px maroon avatar with a gold initial, name, email, edit pencil.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.name,
@@ -398,6 +381,8 @@ class _ProfileCard extends StatelessWidget {
   final String initial;
   final VoidCallback onEdit;
 
+  static const double _pencilSlack = (ArulTokens.minHitTarget - 20) / 2;
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -406,9 +391,15 @@ class _ProfileCard extends StatelessWidget {
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
     final pencilColor = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(ArulTokens.cardPadding16),
+      padding: const EdgeInsets.fromLTRB(
+        ArulTokens.cardPadding16,
+        ArulTokens.cardPadding16,
+        ArulTokens.cardPadding16 - _pencilSlack,
+        ArulTokens.cardPadding16,
+      ),
       decoration: BoxDecoration(
         gradient: isDark ? ArulTokens.silkDark : ArulTokens.silkLight,
         border: Border.all(
@@ -461,11 +452,17 @@ class _ProfileCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          // The pencil draws 20 inside a 48 box. The card's right padding gives up the 14 px of
+          // slack (16 → 2), so the glyph's right edge stays on the same inner line as before and the
+          // box is real hit area on both sides — a Transform would have painted the slack outside
+          // its own bounds, where the hit test never reaches. The old 8 px gap is inside the slack.
+          ArulIconTap(
+            icon: Icons.edit,
+            size: 20,
+            color: pencilColor,
+            label: l10n.settingsEditNameTitle,
+            identifier: 'arul_settings_edit_name',
             onTap: onEdit,
-            child: Icon(Icons.edit, size: 20, color: pencilColor),
           ),
         ],
       ),
@@ -483,7 +480,6 @@ class _RowData {
     required this.identifier,
   }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
-  /// A Material icon — the default for the utility rows.
   final IconData? icon;
 
   /// A custom mark, for where a Material icon would be the wrong voice.
@@ -497,13 +493,9 @@ class _RowData {
   final String sub;
   final VoidCallback onTap;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 }
 
-/// A single rounded card holding all five rows, hairline-divided.
 class _RowsCard extends StatelessWidget {
   const _RowsCard({required this.rows});
 
@@ -560,6 +552,7 @@ class _SettingsRow extends StatelessWidget {
 
     return Semantics(
       container: true,
+      button: true,
       identifier: data.identifier,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -684,6 +677,9 @@ class _FooterLink extends StatelessWidget {
       link: true,
       label: label,
       identifier: 'arul_policy_${doc.name}',
+      onTap: () => context.push(doc.route),
+      // The label is the visible link text -> without this it is announced twice.
+      excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => ArulHaptics.tap(),
@@ -711,7 +707,6 @@ class _FooterLink extends StatelessWidget {
   }
 }
 
-/// "DMCA PROTECTED" — a hairline pill in every other surface chip's language: fill, border, glyph.
 class _DmcaBadge extends StatelessWidget {
   const _DmcaBadge();
 
@@ -768,8 +763,6 @@ class _DmcaBadge extends StatelessWidget {
   }
 }
 
-/// Muted-maroon logout pill — dark: maroon-35% ground, maroon-60% border, `#F0C9BA` text.
-/// Light: maroon-8% ground, maroon-35% border, maroon text.
 class _LogoutButton extends StatefulWidget {
   const _LogoutButton({required this.onTap});
 
@@ -829,7 +822,6 @@ class _LogoutButtonState extends State<_LogoutButton> {
     );
   }
 
-  // Approximation of `#F0C9BA` from brand tokens — ivory lightened toward maroon; no token exists.
   static final Color _logoutTextDark = Color.lerp(
     ArulTokens.ivory,
     ArulTokens.maroon,

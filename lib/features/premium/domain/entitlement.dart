@@ -10,7 +10,6 @@ import '../../../data/models/subscription_model.dart';
 class Entitlement {
   const Entitlement({required this.isPremium, this.subscription});
 
-  /// No account / no backend / row gone — free-tier access only.
   const Entitlement.none() : isPremium = false, subscription = null;
 
   final bool isPremium;

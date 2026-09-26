@@ -20,19 +20,16 @@ class ArulBrowseHeader extends StatelessWidget {
     this.actions = const [],
   });
 
-  /// The screen's name, rendered by [ArulScreenHeader].
   final String title;
 
   /// Passed straight through to [ArulScreenHeader.titleStyle] — read its doc first. Only the feed calls it.
   final TextStyle? titleStyle;
 
-  /// Passed straight through to [ArulScreenHeader.titleDrop].
   final double titleDrop;
 
   /// The category chip row. Each tab reads its own catalog -> only this differs, never the frame.
   final Widget chips;
 
-  /// Trailing controls in the title band (Earn, refer, settings).
   final List<Widget> actions;
 
   @override

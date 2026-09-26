@@ -16,10 +16,8 @@ abstract interface class CrashReporter {
   /// Associates later reports with a user id (the auth `sub`). Null clears it on sign-out.
   void setUserId(String? id);
 
-  /// Adds a breadcrumb line to the next crash report.
   void log(String message);
 
-  /// Attaches a key/value shown alongside the next crash report.
   void setCustomKey(String key, Object value);
 }
 

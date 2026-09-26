@@ -12,7 +12,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Decoder capability APIs untrusted — attempt and degrade, never query and assume
 - [ ] Leaving Wallpapers pauses at once, frees decoders only after a grace; apply, backgrounding and detach stay immediate
 - [ ] Poster paints FIRST under the texture, revealed on `onRenderedFirstFrame` (an undecoded live card looks static); poster, image and texture share one `cropAlignment`
-- [ ] Audio decided at CREATE, not per open; all but the paywall clip stays `audio: false`
+- [ ] Audio decided at CREATE, not per open; all but the paywall's ONE player (onboarding + return clip, shared) stays `audio: false`
 
 ## Wallpaper apply
 - [ ] Static apply hands the OS a bitmap ALREADY centre-cropped to the display aspect; never `visibleCropHint=null` on the raw file
@@ -21,6 +21,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] EVERY live apply opens the system chooser; the notifier finishes IDLE and never claims success
 - [ ] `SCALE_TO_FIT_WITH_CROPPING` set in `VideoRenderer.initialize()`, never from display metrics
 - [ ] ONE engine on ONE record — home and lock cannot hold different live videos
+- [ ] The engine's private copy is adopted on the service's IO thread, never on an engine callback (an ANR)
 - [ ] The static fallback fires on EXACTLY TWO signals: no live-wallpaper feature, or both chooser launches throwing; never anything else
 - [ ] OEM live-wallpaper restrictions caught → a localized error, never a crash
 
@@ -30,14 +31,21 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] At most TWO Google surfaces per attempt; a DISMISSED sheet escalates ONCE to the button flow, never a second One Tap pass
 - [ ] A return from Google's add-account flow reopens the PICKER once (never the sheet, never twice); a Play services failure shows GOOGLE'S update dialog, checked against Credential Manager's floor
 - [ ] A failed sign-in shows ONE retry line; the wall has no links and no language control — the pill is its ONLY tappable thing; `clearTaskOnLaunch` stays on MainActivity
+- [ ] `am crash` with Google's sheet in front, then the icon → a fresh Arul, never the dead sheet (API 31+, `main_launch_mode`)
 - [ ] Every ID token carries the per-process nonce; the Worker checks the PAIR, both-absent accepted for fielded builds. Never log or track it
 - [ ] Sign-out and delete clear Credential Manager state, best-effort, after the local clear
+- [ ] Sign-out and delete reset every analytics identity BEFORE the wall shows (GA4 `setUserId(null)`, never `resetAnalyticsData`)
 - [ ] Sign-in bg video: a shared ref-counted player with a 2 s dispose grace
 - [ ] Failures classified by typed `code` only; EVERY failure return goes through `_googleFailure`; the 30 s stall clock counts FOREGROUND time, and a resume with no exchange in flight abandons after the grace, then relaunches ONCE
 - [ ] A RETURN to the wall (paused/hidden ≥ 20 s begun after the last outcome, ≥ 60 s since it, nothing in flight) re-arms the automatic sheet ONCE as `sheet_return`; a cancel on the same foreground stretch never relaunches
 - [ ] A RECONNECT (offline→online after a `networkError`/`unknown` failure or GMS's offline `[16] Account reauth failed` cancel, landing after it settled, resumed, nothing in flight) re-arms the sheet as `sheet_reconnect` — ONE per failure, TWO per signed-out stretch, never after a user's cancel
+- [ ] No network at launch HOLDS the automatic sheet (wait line on the pill, pill still tappable); link up or any resume fires it once as `sheet_after_offline`; an unknown reading never holds
 - [ ] `POST /auth/login` retries connectivity-class failures only, inside the stall budget; never a server RESPONSE
 - [ ] `login_cancelled` is a MIXED bucket — split on message text first, timing second
+- [ ] A stripped picker (`selectorStripped`) reopens the PICKER once, never the dismissed sheet
+- [ ] A refresh that proves the session dead signs the UI out and sends any signed-in screen to the wall
+- [ ] A Keystore refusal moves the session to app-private storage, sticky per install (`arul_keystore_refused`)
+- [ ] The regional wall's live clip downloads only after the poster painted AND Google's surface showed/settled, never signed in, never on Data Saver or a poster-rule phone; any failure keeps the poster, silently
 
 ## Premium / payments
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future` — a loading snapshot must never bounce a premium user
@@ -46,7 +54,7 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A failed/abandoned setup RESTORES to `cancelled` while the period lives, never `expired`; resurrect matches `('expired','cancelled')`
 - [ ] A re-subscribe over a `trialing`/`active`/`paused` row PARKS its mandate (`superseded_mandate_id`), revokes nothing at PhonePe; the grant revokes it, every release path restores it as the live mandate with the ladder intact; cancel and account delete revoke both
 - [ ] `/payments/status` grants the month when a never-converted row's `redemption_order_id` is COMPLETED at PhonePe; the redemption webhook grants only on root `payload.state` COMPLETED
-- [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = install prompt + dead CTA, never the hosted page
+- [ ] The picker offers only `MANDATE_APPS` that ALSO resolve a mandate-shaped `upi://` probe; no usable app = the SAME CTA sells the mandate QR (`onPayByQr`), never the hosted page
 - [ ] A TRIAL setup (never a spent-trial ₹199 one) marks prefs AT THE UPI HANDOFF, not at a failure — half of CTA taps die with no terminal event (process killed behind the UPI app, paywall popped while resumable); one dismissible feed row and one reminder; a premium read or settled purchase clears both
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows; `/payments/status` heals both lost pause and lost unpause
 - [ ] The app reads `premium` from `GET /me`, never re-deriving the rule from the row; Settings' Manage row shows only for premium WITH a `trialing`/`active`/`cancelled` row — every other state is a sell
@@ -55,7 +63,9 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Re-applying or re-sharing a CACHED wallpaper still calls `/media/signed-url`; offline with bytes on disk is the one pass-through
 - [ ] A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial
 - [ ] The confirmation poll TOLERATES network failure and OUTLIVES the paywall; never-reached says confirmation is late, not the refund line
+- [ ] A reinstall or second phone mid-trial never re-fires `trial_started`; a trial this install's checkout started still fires late; `value` is never omitted
 - [ ] A return from the UPI app with the order OPEN is RESUMABLE (same link, same app, no new initiate, no second `checkout_started`); only picking ANOTHER app (fresh checkout with it, chip never frozen) or the `QRexpire` deadline (5 min on production links; 10–15 min fallback) abandons — SILENTLY, no "start over" button, no failure toast
+- [ ] On the TRIAL sell EVERY unapproved return (→ resumable) pushes the return page — never on the ₹199 sell, never stacked; its button keeps the resume/switch/QR rules; it BORROWS the one audible player and hands it back only after its exit + a frame; `return_video.enabled:false` restores the plain resumable paywall
 - [ ] Delete account: revoke → tombstone → cascade → refresh-jti denylist
 
 ## Browse
@@ -93,14 +103,12 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] A pick needs NO permission (Photo Picker / audio `GET_CONTENT`), never a `resolveActivity` pre-flight, and the cached copy is swept at the next pick
 
 ## Notifications, share and deep links
-- [ ] Reminders stay local; a campaign push reaches a phone ONLY through the CMS ([push.md](push.md))
+- [ ] ONE channel (`arul_updates_v1`); a campaign push reaches a phone ONLY through the CMS ([push.md](push.md)); the retired reminder channels and alarms are cleared at launch
 - [ ] Push permission asked once per install, on the first feed frame AFTER sign-in — never on the wall
 - [ ] An unreadable push payload opens the app, never a crash; `is_internal` gets test sends only
 - [ ] BOTH tap paths deliver: killed → `getInitialMessage()`, backgrounded → `onMessageOpenedApp`
 - [ ] A campaign tap lands on its screen even under `/premium` or a pushed screen, and a cold tap is held until the splash's auth decision (`PushTapRouter`)
-- [ ] Festival dates are DATA — a table that runs out means SKIP, never extrapolate
 - [ ] `keep.xml` stops R8 stripping the icons; breaks release builds ONLY
-- [ ] QA tools gate on `kDebugMode` OR not `isPlayInstall`, so a sideloaded release keeps them
 - [ ] EXACTLY ONE link leaves per share, owned by the caption, trailing
 - [ ] WhatsApp-first by a DIFFERENT mechanism per path — the text-only link silently drops the file
 - [ ] A share link carries `ilang=`, never `lang=`; the live watermark needs API 31, below which the share ships clean rather than crashing
@@ -118,10 +126,17 @@ now. Reasoning lives in the `docs/` file of the same name.
 - [ ] Hyperdrive query caching OFF (it caused ~60 s staleness)
 - [ ] Bucket/KV/DB are exclusively Arul's — sharing means mutual media deletion. R2 objects are public BY DESIGN; never add a "private" one
 
+## Review prompt
+- [ ] Play's review sheet only on a LATER cold open than the static apply / live chooser / ringtone set that armed it, once the feed has loaded, with nothing above it (route, sheet, dialog, link or push landing, OS dialog); a skip keeps it pending; ≤ 1 ask per rolling 30 days; no pre-prompt, ever
+
+## In-app update
+- [ ] Play's update flow never over the splash, the sign-in wall, a sign-in attempt, `/premium` or a loading apply / share / set; a sideload, no Play or offline is a silent no-op; a FLEXIBLE download is never resumed as IMMEDIATE; an update prompt takes the launch from the review sheet ([app-update.md](app-update.md))
+
 ## App-wide
 - [ ] Privacy / Terms / Refund open the IN-APP reader (`/policy/:doc`), never `launchUrl` (store rejection); navigation fenced to the policy host; navbar/footer hidden and the page held until they are. Offline = the app's own error + Retry, and `onPageFinished` fires for Android's robot page too, so the reveal must neither clear the failure nor show its own first paint (the page themes off the OS scheme, not the app's)
-- [ ] Loading / empty / error state on every async surface, localized in all 6 locales, EXCEPT auth error toasts. Checkout failures show a localized `PurchaseErrorKind` line, never the Worker's English `message`
+- [ ] Loading / empty / error state on every async surface, localized in all 6 locales. Checkout, cancel and sign-in failures show a localized line per KIND (`PurchaseErrorKind`, `AuthFailureKind`), never the Worker's English `message`
 - [ ] Worker error envelope `{error:{code,message}}` handled; offline → a retry affordance
+- [ ] A system Back never escapes go_router's `popRoute` — `SafeBackButtonDispatcher` records it non-fatal
 - [ ] Analytics only via `AnalyticsService`; ★ mirrors to GA4 `login`/`begin_checkout` + Meta — **no `purchase` anywhere**
 - [ ] `allowBackup=false`, data-extraction rules, HTTPS-only network config
 - [ ] `FLAG_SECURE` set in `MainActivity.onCreate` (not the manifest — it must survive the apply recreate) **only when `isPlayInstall()`**, fail-CLOSED; a guard denies any `.aab` that loses it

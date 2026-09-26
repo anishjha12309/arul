@@ -9,13 +9,11 @@ import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 
-/// Where on the device the wallpaper should be applied.
 enum ApplyTarget {
   home,
   lock,
   both;
 
-  /// Wire value passed to the native apply channel ("home" | "lock" | "both").
   String get channelValue => name;
 }
 
@@ -62,7 +60,6 @@ enum LiveApplyOutcome {
   staticFallback,
 }
 
-/// [LiveApplyOutcome] plus, for the fallback, WHY it was impossible.
 class LiveApplyResult {
   const LiveApplyResult(this.outcome, {this.reason});
 
@@ -85,7 +82,6 @@ enum MediaUseAction {
   /// A share is reach, not use -> folding it in would rank a wallpaper nobody kept.
   share;
 
-  /// Wire value sent as the request's `action` field.
   String get wire => name;
 }
 
@@ -113,7 +109,6 @@ abstract class WallpaperApplyService {
     void Function(double) onProgress,
   );
 
-  /// Applies [file] as a static wallpaper to [target] screen(s).
   Future<void> applyStaticWallpaper(File file, ApplyTarget target);
 
   /// Sets [file] as a live wallpaper — the native side persists the video, then opens the chooser.
@@ -199,16 +194,6 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     final tmpDir = await getTemporaryDirectory();
     final file = File('${tmpDir.path}/$filename');
 
-    // Download to a `.part` file and rename only on SUCCESS.
-    //
-    // Streaming into the final path left a TRUNCATED file under the real name on any drop.
-    // The apply flow's "exists and non-empty" cache check then accepted it forever after.
-    // A static apply failed to decode every time; a live apply handed the service a broken MP4.
-    // Its error recovery re-prepares without bound — an infinite loop on the user's home screen.
-    // The rename is ATOMIC -> the final name only ever exists as a complete file.
-    //
-    // The `.part` SURVIVES a failure, so its length is the first byte still owed -> a drop on
-    // cellular resumes instead of re-paying for the megabytes already on disk.
     final part = File('${file.path}.part');
     var have = await part.exists() ? await part.length() : 0;
 
@@ -216,14 +201,8 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     if (have > 0) request.headers['Range'] = 'bytes=$have-';
     final response = await _http.send(request);
 
-    // 206 -> the range was honoured, append. 200 -> the server ignored it and is sending the WHOLE
-    // object, so what is on disk is not a prefix of this body: truncate and start over.
     final resuming = have > 0 && response.statusCode == 206;
     if (response.statusCode != 200 && !resuming) {
-      // 416 means the `.part` is already as long as the object -> it can never be a prefix of a
-      // future body, so drop it rather than ask for the same impossible range forever.
-      // Every other status keeps the `.part`: an expired signed URL is a new grant away, not a
-      // reason to throw the bytes out.
       if (response.statusCode == 416 && await part.exists()) {
         await part.delete();
       }

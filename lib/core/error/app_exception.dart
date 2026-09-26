@@ -51,7 +51,6 @@ bool isNetworkError(Object error) =>
     error is HttpException ||
     error is http.ClientException;
 
-/// Maps raw exceptions to typed [AppException]s at the data layer boundary.
 AppException mapException(Object error) {
   if (error is AppException) return error;
   final msg = error.toString();

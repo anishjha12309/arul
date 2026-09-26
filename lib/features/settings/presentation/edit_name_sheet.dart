@@ -6,9 +6,6 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// The edit-name sheet, laid out to the mock's spec.
-///
-/// Resolves to the trimmed new name on Save -> null on dismiss.
 Future<String?> showEditNameSheet(BuildContext context, String current) {
   return showArulSheet<String>(
     context,
@@ -75,83 +72,87 @@ class _EditNameSheetState extends State<_EditNameSheet> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 26 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            l10n.settingsEditNameTitle,
-            style: ArulTokens.sheetTitle.copyWith(color: titleColor),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            l10n.settingsEditNameSub,
-            textAlign: TextAlign.center,
-            style: ArulTokens.rowSub.copyWith(fontSize: 13, color: subColor),
-          ),
-          const SizedBox(height: 16),
-          AnimatedBuilder(
-            animation: _focus,
-            builder: (context, _) => Container(
-              height: 54,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: fieldBg,
-                border: Border.all(
-                  color: _focus.hasFocus ? focusBorder : idleBorder,
-                  width: 1.5,
+      // The keyboard takes most of a short phone -> the sheet scrolls under it instead of
+      // overflowing (ArulSheet sizes to content and owns no scroll view).
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              l10n.settingsEditNameTitle,
+              style: ArulTokens.sheetTitle.copyWith(color: titleColor),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.settingsEditNameSub,
+              textAlign: TextAlign.center,
+              style: ArulTokens.rowSub.copyWith(fontSize: 13, color: subColor),
+            ),
+            const SizedBox(height: 16),
+            AnimatedBuilder(
+              animation: _focus,
+              builder: (context, _) => Container(
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: fieldBg,
+                  border: Border.all(
+                    color: _focus.hasFocus ? focusBorder : idleBorder,
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(ArulTokens.inputRadius),
                 ),
-                borderRadius: BorderRadius.circular(ArulTokens.inputRadius),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.person, size: 20, color: focusBorder),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focus,
-                      cursorColor: focusBorder,
-                      maxLength: _maxChars,
-                      maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _save(),
-                      inputFormatters: [
-                        LengthLimitingTextInputFormatter(_maxChars),
-                      ],
-                      style: ArulTokens.rowTitle.copyWith(
-                        fontWeight: FontWeight.w400,
-                        color: textColor,
-                      ),
-                      decoration: const InputDecoration(
-                        isCollapsed: true,
-                        border: InputBorder.none,
-                        counterText: '',
+                child: Row(
+                  children: [
+                    Icon(Icons.person, size: 20, color: focusBorder),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focus,
+                        cursorColor: focusBorder,
+                        maxLength: _maxChars,
+                        maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _save(),
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(_maxChars),
+                        ],
+                        style: ArulTokens.rowTitle.copyWith(
+                          fontWeight: FontWeight.w400,
+                          color: textColor,
+                        ),
+                        decoration: const InputDecoration(
+                          isCollapsed: true,
+                          border: InputBorder.none,
+                          counterText: '',
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              '${_controller.text.characters.length} / $_maxChars',
-              style: ArulTokens.caption.copyWith(
-                fontSize: 11.5,
-                color: counterColor,
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                '${_controller.text.characters.length} / $_maxChars',
+                style: ArulTokens.caption.copyWith(
+                  fontSize: 11.5,
+                  color: counterColor,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          CtaButton(
-            label: l10n.save,
-            height: ArulTokens.ctaHeight50,
-            fontSize: 15.5,
-            onPressed: _controller.text.trim().isEmpty ? null : _save,
-          ),
-        ],
+            const SizedBox(height: 16),
+            CtaButton(
+              label: l10n.save,
+              height: ArulTokens.ctaHeight50,
+              fontSize: 15.5,
+              onPressed: _controller.text.trim().isEmpty ? null : _save,
+            ),
+          ],
+        ),
       ),
     );
   }

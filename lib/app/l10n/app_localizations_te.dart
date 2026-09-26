@@ -12,10 +12,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get appName => 'అరుళ్';
 
   @override
-  String get appTagline => 'దక్షిణ భారత వాల్‌పేపర్లు';
+  String get categoryAll => 'అన్నీ';
 
   @override
-  String get categoryAll => 'All';
+  String get categoryNew => 'కొత్తవి';
 
   @override
   String get feedLiveBadge => 'లైవ్';
@@ -24,7 +24,13 @@ class AppLocalizationsTe extends AppLocalizations {
   String get feedEmptyTitle => 'ఇక్కడ ఇంకా ఏమీ లేదు';
 
   @override
-  String get feedEmptyBody => 'వేరే విభాగాన్ని ప్రయత్నించండి.';
+  String get feedEmptyBody => 'వేరే కేటగిరీ చూడండి.';
+
+  @override
+  String get feedBrowseAll => 'అన్నీ చూడండి';
+
+  @override
+  String get feedLoadingBody => 'మీ వాల్‌పేపర్లు వస్తున్నాయి…';
 
   @override
   String get feedErrorTitle => 'వాల్‌పేపర్లను లోడ్ చేయలేకపోయాం';
@@ -33,7 +39,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get feedErrorBody => 'మీ కనెక్షన్ చూసి మళ్లీ ప్రయత్నించండి.';
 
   @override
-  String get retry => 'Retry';
+  String get retry => 'మళ్లీ ప్రయత్నించు';
 
   @override
   String get errorGeneric => 'ఏదో తప్పు జరిగింది.';
@@ -48,10 +54,13 @@ class AppLocalizationsTe extends AppLocalizations {
   String get signInSubtitleIdle => 'ప్రారంభించడానికి ఖాతాను ఎంచుకోండి';
 
   @override
-  String get signInSubtitleExchanging => 'సైన్ ఇన్ చేస్తోంది…';
+  String get signInSubtitleExchanging => 'సైన్ ఇన్ అవుతోంది…';
 
   @override
   String get signInNudgeRetry => 'సైన్ ఇన్ చేయడానికి ఇక్కడ నొక్కండి';
+
+  @override
+  String get signInSubtitleOffline => 'ఇంటర్నెట్ కోసం వేచి ఉన్నాం…';
 
   @override
   String get premiumTitle => 'ప్రీమియం';
@@ -108,7 +117,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsContent => 'కంటెంట్';
 
   @override
-  String get settingsAbout => 'గురించి';
+  String get settingsAbout => 'యాప్ గురించి';
 
   @override
   String get settingsSupport => 'సహాయం కావాలి';
@@ -120,14 +129,14 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsVersion => 'వెర్షన్';
 
   @override
-  String get uploadTitle => 'Upload your content';
+  String get uploadTitle => 'అప్‌లోడ్ చేయండి';
 
   @override
   String get uploadBody =>
-      'మీ సొంత వాల్‌పేపర్‌ను కమ్యూనిటీతో పంచుకోండి. ఇది కనిపించే ముందు ప్రతి సమర్పణను మేము సమీక్షిస్తాం.';
+      'మీ సొంత వాల్‌పేపర్‌ను అందరితో షేర్ చేయండి. యాప్‌లో కనిపించే ముందు ప్రతిదాన్నీ మేము చెక్ చేస్తాం.';
 
   @override
-  String get uploadPickCategory => 'ఒక విభాగాన్ని ఎంచుకోండి';
+  String get uploadPickCategory => 'కేటగిరీ ఎంచుకోండి';
 
   @override
   String get uploadPickFile => 'ఫైల్‌ను ఎంచుకోండి';
@@ -143,10 +152,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get apply => 'సెట్ చేయండి';
 
   @override
-  String get share => 'పంచుకోండి';
+  String get share => 'షేర్ చేయండి';
 
   @override
-  String get applyTargetTitle => 'వాల్‌పేపర్‌ను సెట్ చేయండి';
+  String get applyTargetTitle => 'వాల్‌పేపర్ ఎక్కడ సెట్ చేయాలి';
 
   @override
   String get applyTargetHome => 'హోమ్ స్క్రీన్';
@@ -155,18 +164,18 @@ class AppLocalizationsTe extends AppLocalizations {
   String get applyTargetLock => 'లాక్ స్క్రీన్';
 
   @override
-  String get applyTargetBoth => 'హోమ్ మరియు లాక్ స్క్రీన్';
+  String get applyTargetBoth => 'రెండూ';
 
   @override
-  String get applied => 'వాల్‌పేపర్ సెట్ చేయబడింది';
+  String get applied => 'వాల్‌పేపర్ సెట్ అయింది';
 
   @override
   String get appliedLiveFallback =>
-      'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లు పని చేయవు, అందుకే స్థిర చిత్రాన్ని సెట్ చేసాం.';
+      'ఈ ఫోన్‌లో లైవ్ వాల్‌పేపర్లు పని చేయవు, అందుకే మామూలు ఫోటోను సెట్ చేశాం.';
 
   @override
   String get offlineBody =>
-      'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. మీ కనెక్షన్‌ను చూడండి మరియు మళ్లీ ప్రయత్నించండి.';
+      'మీరు ఆఫ్‌లైన్‌లో ఉన్నారు. ఇంటర్నెట్ చూసి మళ్లీ ప్రయత్నించండి.';
 
   @override
   String get offlineTitle => 'ఇంటర్నెట్ లేదు';
@@ -177,25 +186,25 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String wallpaperShareCaption(String link) {
-    return 'ఇలాంటి మరిన్ని భక్తి వాల్‌పేపర్లు — స్థిరం మరియు లైవ్ — Arulలో:\n$link';
+    return 'ఇలాంటి మరిన్ని భక్తి వాల్‌పేపర్లు — ఫోటో, లైవ్ — Arulలో:\n$link';
   }
 
   @override
   String referShareMessage(String link) {
-    return 'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నాను — అమ్మన్, మురుగన్, పెరుమాళ్, శివన్, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందని అనిపించింది.\n\n$link';
+    return 'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నా — అమ్మవారు, మురుగన్, వెంకటేశ్వర స్వామి, శివుడు, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందనుకున్నా.\n\n$link';
   }
 
   @override
-  String get tabWallpapers => 'వాల్‌పేపర్లు';
+  String get tabWallpapers => 'వాల్‌పేపర్';
 
   @override
-  String get tabRingtones => 'Ringtones';
+  String get tabRingtones => 'రింగ్‌టోన్';
 
   @override
-  String get earn => 'Earn';
+  String get earn => 'గిఫ్ట్';
 
   @override
-  String get ringtoneSet => 'Set';
+  String get ringtoneSet => 'సెట్ చేయి';
 
   @override
   String get ringtonePreviewSemantic => 'ప్రివ్యూ';
@@ -240,16 +249,16 @@ class AppLocalizationsTe extends AppLocalizations {
   String get save => 'సేవ్ చేయి';
 
   @override
-  String get cancel => 'రద్దు';
+  String get cancel => 'వద్దు';
 
   @override
   String get errorGenericRetry => 'ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.';
 
   @override
-  String get settingsFallbackName => 'Your account';
+  String get settingsFallbackName => 'మీ ఖాతా';
 
   @override
-  String get settingsFallbackEmail => 'Signed in with Google';
+  String get settingsFallbackEmail => 'Googleతో సైన్ ఇన్ చేశారు';
 
   @override
   String get settingsPremiumSubTrial => 'మీరు ఉచిత ట్రయల్‌లో ఉన్నారు';
@@ -262,19 +271,13 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsPremiumSubActive => 'మీరు సభ్యులు';
 
   @override
-  String get settingsReferSub => '30 రోజుల ఉచిత ప్రీమియం సంపాదించండి';
+  String get settingsReferSub => '30 రోజుల ఉచిత ప్రీమియం పొందండి';
 
   @override
   String get settingsTellFriend => 'స్నేహితుడికి చెప్పండి';
 
   @override
-  String get settingsTellFriendSub => 'Arul ఇష్టపడే వారికి పంపండి';
-
-  @override
-  String get settingsRemindersSubOn => 'వారపు, పండుగ రిమైండర్లు ఆన్‌లో ఉన్నాయి';
-
-  @override
-  String get settingsRemindersSubOff => 'పండుగ, వారపు రిమైండర్లు';
+  String get settingsTellFriendSub => 'నచ్చే వారికి Arul పంపండి';
 
   @override
   String get settingsLanguage => 'భాష';
@@ -286,13 +289,13 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsNeedHelp => 'సహాయం కావాలా?';
 
   @override
-  String get settingsNeedHelpSub => 'సపోర్ట్ మరియు సబ్‌స్క్రిప్షన్';
+  String get settingsNeedHelpSub => 'సపోర్ట్, సబ్‌స్క్రిప్షన్';
 
   @override
   String get settingsHelpSupport => 'సపోర్ట్‌ను సంప్రదించండి';
 
   @override
-  String get settingsHelpSupportSub => 'ఇమెయిల్‌లో మాకు రాయండి';
+  String get settingsHelpSupportSub => 'మాకు ఇమెయిల్ చేయండి';
 
   @override
   String get settingsHelpManage => 'సబ్‌స్క్రిప్షన్ నిర్వహించండి';
@@ -327,7 +330,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get settingsDeleteConfirmBodyPremium =>
-      'Premium ends now. The days left aren\'t refunded, and a new account won\'t get a free trial.';
+      'ప్రీమియం ఇప్పుడే ముగుస్తుంది. మిగిలిన రోజుల డబ్బు తిరిగి రాదు, కొత్త ఖాతాకు ఉచిత ట్రయల్ రాదు.';
 
   @override
   String get settingsTerms => 'నిబంధనలు & షరతులు';
@@ -352,78 +355,23 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsEditNameTitle => 'మీ పేరు';
 
   @override
-  String get settingsEditNameSub => 'Shown on wallpapers you upload';
+  String get settingsEditNameSub =>
+      'మీరు అప్‌లోడ్ చేసే వాల్‌పేపర్లపై కనిపిస్తుంది';
 
   @override
   String get themeSystemDefault => 'సిస్టమ్ డిఫాల్ట్';
 
   @override
-  String get themeSystemSub => 'పరికరం సెట్టింగ్‌ను అనుసరించు';
+  String get themeSystemSub => 'ఫోన్ సెట్టింగ్ ప్రకారం';
 
   @override
-  String get themeLightSub => 'ఐవరీ & పట్టు';
+  String get themeLightSub => 'తెల్లని పట్టు';
 
   @override
   String get themeDarkSub => 'దీపకాంతి మెరూన్';
 
   @override
-  String get remindersTitle => 'Reminders';
-
-  @override
-  String get remindersToggleTitle => 'భక్తి రిమైండర్లు';
-
-  @override
-  String get remindersToggleSub => 'వారపు రోజు, ప్రతి ముఖ్య పండుగ';
-
-  @override
-  String get remindersScheduleNote =>
-      'ప్రతి వారం శుక్రవారం ఒక రిమైండర్, ప్రతి ముఖ్య పండుగకు కొన్ని రోజుల ముందు ఒకటి — పొంగల్, దీపావళి, నవరాత్రి, శివరాత్రి, ఇతరాలు. నెలకు సుమారు రెండు.';
-
-  @override
-  String get remindersPermissionToast =>
-      'Arulకు నోటిఫికేషన్లు ఆఫ్‌లో ఉన్నాయి. రిమైండర్లు రావాలంటే ఫోన్ సెట్టింగ్‌లలో ఆన్ చేయండి.';
-
-  @override
   String get remindersTimeLabel => 'రిమైండర్ సమయం';
-
-  @override
-  String get remindersComingUp => 'రాబోయేవి';
-
-  @override
-  String get remindersMonthJan => 'జన';
-
-  @override
-  String get remindersMonthFeb => 'ఫిబ్ర';
-
-  @override
-  String get remindersMonthMar => 'మార్చి';
-
-  @override
-  String get remindersMonthApr => 'ఏప్రి';
-
-  @override
-  String get remindersMonthMay => 'మే';
-
-  @override
-  String get remindersMonthJun => 'జూన్';
-
-  @override
-  String get remindersMonthJul => 'జులై';
-
-  @override
-  String get remindersMonthAug => 'ఆగ';
-
-  @override
-  String get remindersMonthSep => 'సెప్';
-
-  @override
-  String get remindersMonthOct => 'అక్టో';
-
-  @override
-  String get remindersMonthNov => 'నవం';
-
-  @override
-  String get remindersMonthDec => 'డిసెం';
 
   @override
   String get premiumScreenSubline => 'పూర్తి సేకరణ, మీ స్క్రీన్‌పై సజీవంగా';
@@ -480,7 +428,7 @@ class AppLocalizationsTe extends AppLocalizations {
   String get premiumKeepBrowsing => 'ఉచితంగా బ్రౌజ్ చేస్తూ ఉండండి';
 
   @override
-  String get referTitle => 'Refer & Earn';
+  String get referTitle => 'రిఫర్ చేసి పొందండి';
 
   @override
   String get referHeroTitle => 'స్నేహితుడికి బహుమతి, మీకు ఒక నెల';
@@ -490,10 +438,10 @@ class AppLocalizationsTe extends AppLocalizations {
       'మీ లింక్‌తో సబ్‌స్క్రైబ్ చేసే ప్రతి స్నేహితుడికీ 30 రోజుల ఉచిత ప్రీమియం';
 
   @override
-  String get referShareWhatsapp => 'Share via WhatsApp';
+  String get referShareWhatsapp => 'WhatsAppలో పంపండి';
 
   @override
-  String get referRewardsLabel => 'సంపాదించిన రివార్డులు';
+  String get referRewardsLabel => 'మీకు వచ్చిన రివార్డులు';
 
   @override
   String referRewardDays(int days) {
@@ -501,7 +449,7 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
-  String get referHowItWorks => 'How it works';
+  String get referHowItWorks => 'ఇది ఎలా పనిచేస్తుంది';
 
   @override
   String get referStep1 => 'మీ లింక్‌ను స్నేహితులు, కుటుంబంతో పంచుకోండి';
@@ -514,10 +462,11 @@ class AppLocalizationsTe extends AppLocalizations {
   String get referStep3 => '30 రోజుల ఉచిత ప్రీమియం మీ ఖాతాలో చేరుతుంది';
 
   @override
-  String get referEmpty => 'ఇంకా రిఫరల్స్ లేవు — ఒక షేర్‌తో మొదటి స్నేహితుడు';
+  String get referEmpty =>
+      'ఇంకా రిఫరల్స్ లేవు — ఒక్క షేర్‌తో మీ మొదటి స్నేహితుడు రావచ్చు';
 
   @override
-  String get referShareCta => 'Arul పంచుకో';
+  String get referShareCta => 'Arul షేర్ చేయండి';
 
   @override
   String get referNotNow => 'ఇప్పుడు కాదు';
@@ -526,29 +475,29 @@ class AppLocalizationsTe extends AppLocalizations {
   String get uploadScreenTitle => 'వాల్‌పేపర్ అప్‌లోడ్';
 
   @override
-  String get uploadPickZoneTitle => 'Choose an image or video';
+  String get uploadPickZoneTitle => 'ఫోటో లేదా వీడియో ఎంచుకోండి';
 
   @override
-  String get uploadPickZoneSub => 'పోర్ట్రెయిట్, 1080×2400 లేదా పెద్దది';
+  String get uploadPickZoneSub => 'నిలువుగా, 1080×2400 లేదా పెద్దది';
 
   @override
-  String get uploadTitleLabel => 'శీర్షిక';
+  String get uploadTitleLabel => 'పేరు';
 
   @override
-  String get uploadTitleOptional => '(ఐచ్ఛికం)';
+  String get uploadTitleOptional => '(ఇష్టమైతే)';
 
   @override
-  String get uploadTitleHint => 'e.g. Meenakshi at dusk';
+  String get uploadTitleHint => 'ఉదా. సంధ్యలో మీనాక్షి';
 
   @override
-  String get uploadCategoryLabel => 'విభాగం';
+  String get uploadCategoryLabel => 'కేటగిరీ';
 
   @override
   String get uploadRightsCheckbox =>
       'ఈ కంటెంట్‌పై హక్కులు నాకే ఉన్నాయి, లేదా పంచుకోవడానికి అనుమతి ఉంది';
 
   @override
-  String get uploadSubmitCta => 'Submit for review';
+  String get uploadSubmitCta => 'సమీక్షకు పంపు';
 
   @override
   String get uploadFootnote =>
@@ -587,7 +536,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get uploadShareMomentBodyRingtone =>
-      'మీ రింగ్‌టోన్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?';
+      'మీ రింగ్‌టోన్‌ను త్వరలో చెక్ చేస్తాం. ఈ లోపు — Arul నచ్చే వాళ్లు ఎవరైనా తెలుసా?';
 
   @override
   String uploadTooLarge(String max) {
@@ -595,14 +544,14 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
-  String get uploadSuccessToast => 'సమీక్షకు పంపబడింది — ధన్యవాదాలు!';
+  String get uploadSuccessToast => 'సమీక్షకు పంపాం — ధన్యవాదాలు!';
 
   @override
   String get uploadShareMomentTitle => 'ధన్యవాదాలు';
 
   @override
   String get uploadShareMomentBody =>
-      'మీ వాల్‌పేపర్‌ను త్వరలో సమీక్షిస్తాం. అప్పటివరకు — Arul ఇష్టపడే వారు తెలుసా?';
+      'మీ వాల్‌పేపర్‌ను త్వరలో చెక్ చేస్తాం. ఈ లోపు — Arul నచ్చే వాళ్లు ఎవరైనా తెలుసా?';
 
   @override
   String get uploadComingSoonToast => 'అప్‌లోడ్ త్వరలో వస్తుంది.';
@@ -703,6 +652,12 @@ class AppLocalizationsTe extends AppLocalizations {
       'మీరు సెటప్ పూర్తి చేయలేదు. మళ్లీ ప్రయత్నించడానికి నొక్కండి — ఒక క్షణం చాలు.';
 
   @override
+  String get comeBackTitle => 'మీ వాల్‌పేపర్ సిద్ధం';
+
+  @override
+  String get comeBackBody => 'సైన్ ఇన్ చేయడానికి నొక్కండి.';
+
+  @override
   String get premiumSelectedUpiApp => 'UPI యాప్';
 
   @override
@@ -733,7 +688,7 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
-  String get pushChannelName => 'అరుళ్ అప్‌డేట్‌లు';
+  String get pushChannelName => 'Arul అప్‌డేట్‌లు';
 
   @override
   String get purchaseErrorNetwork =>
@@ -772,4 +727,156 @@ class AppLocalizationsTe extends AppLocalizations {
   @override
   String get purchaseConfirmationLate =>
       'చెల్లింపు అందింది, కానీ నిర్ధారణ ఆలస్యమవుతోంది. యాప్‌ను మూసి మళ్లీ తెరవండి — మీ సబ్‌స్క్రిప్షన్ త్వరలో యాక్టివ్ అవుతుంది.';
+
+  @override
+  String get authErrorNoPlayServices =>
+      'Google Play Services అందుబాటులో లేదు. అప్‌డేట్ చేయండి లేదా మళ్లీ ఇన్‌స్టాల్ చేయండి.';
+
+  @override
+  String get authErrorNetwork =>
+      'ఇంటర్నెట్ లేదు. కనెక్షన్ చూసుకుని మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get authErrorTokenExchange => 'సైన్ ఇన్ కాలేదు. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get authErrorServer => 'సైన్ ఇన్ కాలేదు. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get authErrorIncomplete =>
+      'సైన్ ఇన్ పూర్తి కాలేదు. ఇంటర్నెట్ చూసి మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get splashTagline => 'భక్తి మీ చేతుల్లో';
+
+  @override
+  String get videoMute => 'వీడియో సౌండ్ ఆపండి';
+
+  @override
+  String get videoUnmute => 'వీడియో సౌండ్ ఆన్ చేయండి';
+
+  @override
+  String get premiumMemberHeadline => 'మీరు సభ్యులు';
+
+  @override
+  String premiumMemberTrialSubline(String price) {
+    return 'ప్రతి వాల్‌పేపర్‌కు పూర్తి యాక్సెస్. ట్రయల్ ముగిసినప్పుడు మీ మొదటి $price చెల్లింపు వసూలు అవుతుంది.';
+  }
+
+  @override
+  String get premiumMemberSubline =>
+      'స్టిల్, లైవ్ — ప్రతి వాల్‌పేపర్‌ను మీరు పెట్టుకోవచ్చు, షేర్ చేయవచ్చు.';
+
+  @override
+  String get premiumTrialEndsLabel => 'ట్రయల్ ముగింపు';
+
+  @override
+  String get premiumRenewsOnLabel => 'రెన్యువల్ తేదీ';
+
+  @override
+  String get premiumMemberTrialFootnote =>
+      'ట్రయల్ ముగిసేలోపు రద్దు చేస్తే ఎలాంటి ఛార్జీ ఉండదు. UPI ఆటోపే ద్వారా నెలనెలా వసూలు అవుతుంది.';
+
+  @override
+  String get premiumMemberFootnote =>
+      'UPI ఆటోపే ద్వారా నెలనెలా వసూలు అవుతుంది. ఎప్పుడైనా రద్దు చేయవచ్చు — ప్రస్తుత వ్యవధి ముగిసే వరకు యాక్సెస్ ఉంటుంది.';
+
+  @override
+  String get premiumStatusTrial => 'ఉచిత ట్రయల్';
+
+  @override
+  String get premiumStatusActive => 'యాక్టివ్';
+
+  @override
+  String get premiumPlanLabel => 'ప్లాన్';
+
+  @override
+  String get premiumPlanMonthly => 'నెలవారీ';
+
+  @override
+  String get premiumPaymentLabel => 'చెల్లింపు';
+
+  @override
+  String get premiumPaymentUpiAutopay => 'UPI ఆటోపే';
+
+  @override
+  String get premiumRenewalReminder =>
+      'ప్రతి రెన్యువల్‌కు 24 గంటల ముందు మీకు గుర్తు చేస్తాం.';
+
+  @override
+  String get premiumCancelSubscription => 'సబ్‌స్క్రిప్షన్ రద్దు చేయండి';
+
+  @override
+  String get premiumAutoRenewOffHeadline => 'ఆటో రెన్యువల్ ఆఫ్‌లో ఉంది';
+
+  @override
+  String get premiumAutoRenewOffSubline =>
+      'మీరు చెల్లించిన వ్యవధి ముగిసే వరకు పూర్తి యాక్సెస్ ఉంటుంది. మళ్లీ ఛార్జ్ చేయబడదు.';
+
+  @override
+  String get premiumStatusAutoRenewOff => 'ఆటో రెన్యువల్ ఆఫ్';
+
+  @override
+  String get premiumAccessUntilLabel => 'యాక్సెస్ గడువు';
+
+  @override
+  String get premiumResubscribeCta => 'మళ్లీ సబ్‌స్క్రైబ్ చేయండి';
+
+  @override
+  String premiumResubscribeFootnote(String price) {
+    return 'మళ్లీ సబ్‌స్క్రైబ్ చేస్తే, నెలకు $price చొప్పున కొత్త UPI ఆటోపే మ్యాండేట్ సెట్ అవుతుంది.';
+  }
+
+  @override
+  String get premiumChange => 'మార్చు';
+
+  @override
+  String get premiumCancelDialogTitle => 'సబ్‌స్క్రిప్షన్ రద్దు చేయాలా?';
+
+  @override
+  String get premiumCancelDialogBody =>
+      'ప్రస్తుత బిల్లింగ్ వ్యవధి ముగిసే వరకు మీ ప్రీమియం కొనసాగుతుంది. ఆ తర్వాత మళ్లీ ఛార్జ్ చేయబడదు.';
+
+  @override
+  String premiumCancelDialogBodyDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString వరకు మీ ప్రీమియం కొనసాగుతుంది. ఆ తర్వాత మళ్లీ ఛార్జ్ చేయబడదు.';
+  }
+
+  @override
+  String get premiumCancelConfirm => 'అవును, రద్దు చేయండి';
+
+  @override
+  String get premiumCancelledToast =>
+      'సబ్‌స్క్రిప్షన్ రద్దయింది. వ్యవధి ముగిసే వరకు ప్రీమియం ఉంటుంది.';
+
+  @override
+  String premiumCancelledToastDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return 'సబ్‌స్క్రిప్షన్ రద్దయింది. $dateString వరకు ప్రీమియం ఉంటుంది.';
+  }
+
+  @override
+  String premiumPlanDate(DateTime date) {
+    final intl.DateFormat dateDateFormat = intl.DateFormat(
+      'd MMM y',
+      localeName,
+    );
+    final String dateString = dateDateFormat.format(date);
+
+    return '$dateString';
+  }
+
+  @override
+  String get premiumCancelKeep => 'ప్రీమియం కొనసాగించండి';
 }

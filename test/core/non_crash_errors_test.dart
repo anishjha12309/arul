@@ -54,6 +54,17 @@ void main() {
       ),
       isTrue,
     );
+    // No session at all: a gated call made while signed out (a push-open report on the wall).
+    expect(
+      isNonCrashError(
+        const ApiException(
+          code: 'no_refresh_token',
+          message: 'No refresh token — please sign in again.',
+          status: 401,
+        ),
+      ),
+      isTrue,
+    );
     expect(
       isNonCrashError(
         const ApiException(

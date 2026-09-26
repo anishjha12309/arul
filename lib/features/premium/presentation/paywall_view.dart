@@ -28,7 +28,6 @@ class PaywallDisplayLabel extends StatelessWidget {
 
   final String text;
 
-  /// The Latin style, tracking included.
   final TextStyle style;
 
   /// Left padding equal to [style]'s letterSpacing, given back only while the track is applied.
@@ -75,7 +74,6 @@ class ArulPaywallView extends StatelessWidget {
     this.onPayByQr,
   });
 
-  /// One free trial per user. Drives the panel — lead line + ₹2 + badge, or ₹199 + "PER MONTH".
   final bool trialEligible;
 
   /// "₹199" — from remote config, so a price test needs no release.
@@ -83,7 +81,6 @@ class ArulPaywallView extends StatelessWidget {
 
   final bool purchaseBusy;
 
-  /// `feature_flags.show_social_proof`.
   final bool showSocialProof;
 
   /// The localised onboarding clip, resolved by [PremiumScreen] from the live locale.
@@ -125,7 +122,6 @@ class ArulPaywallView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // Built once, placed in exactly ONE branch below — above the clip, or centred in the middle.
     final video = onboardingVideo;
     // The footer sits outside the middle's LayoutBuilder -> it reads the SCREEN, not the viewport.
     // Same intent: on a short phone the chrome gives back padding so the clip fits above the fold.
@@ -145,7 +141,7 @@ class ArulPaywallView extends StatelessWidget {
       child: Column(
         children: [
           // Pinned, so the way out stays reachable however far the sell scrolls.
-          _NavRow(onBack: onBack),
+          PaywallNavRow(onBack: onBack),
           if (video == null) ...[
             _HeaderBlock(showSocialProof: showSocialProof),
             // The handoff's ~745pt page is SHORTER than the phone it lands on.
@@ -167,42 +163,10 @@ class ArulPaywallView extends StatelessWidget {
             // The clip is capped at a THIRD of the viewport -> it cannot crowd the price out.
             // On a tall screen that cap sits above its natural 16:9 height and does nothing.
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Everything between the pinned nav and the pinned CTA has this much room.
-                  // Below ~420dp the ornament gives way: the pill goes, gaps close, the clip grows.
-                  // The clip visible WITHOUT scrolling is a requirement, and padding is the only slack.
-                  final h = constraints.maxHeight;
-                  final dense = h < 420;
-                  // A SECOND, higher threshold, only for the feature row.
-                  // Between the two a phone fits the pill but not three medallions AND two label lines.
-                  // A label sliced by the fold reads as broken; the same row 20% smaller reads designed.
-                  // Separate thresholds are what stop a common 360x800 phone from losing the pill.
-                  final tight = h < 520;
-                  return SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: h),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _HeaderCrest(
-                            showSocialProof: showSocialProof && !dense,
-                            dense: dense,
-                          ),
-                          // `tight`, not `dense` — the panel's padding is cheap to give back.
-                          // `dense` also hides the social-proof pill, so splitting the two lets a
-                          // 360x800 phone with system bars keep the pill AND the whole label.
-                          offerPanel(tight),
-                          // No height cap — the clip renders at its own 16:9, full width, everywhere.
-                          // Capping here made a small phone show a letterbox band of forehead.
-                          // The room comes out of `dense` above instead.
-                          video,
-                          _FeatureRow(tight: tight),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              child: _ClipMiddle(
+                showSocialProof: showSocialProof,
+                offerPanel: offerPanel,
+                video: video,
               ),
             ),
           ],
@@ -251,7 +215,7 @@ class ArulPaywallLoading extends StatelessWidget {
     return PaywallGround(
       child: Column(
         children: [
-          _NavRow(onBack: onBack),
+          PaywallNavRow(onBack: onBack),
           const Expanded(
             child: Center(
               child: ArulSpinner(
@@ -267,9 +231,8 @@ class ArulPaywallLoading extends StatelessWidget {
   }
 }
 
-/// Back ring + centred "SUBSCRIPTION", on the header ground.
-class _NavRow extends StatelessWidget {
-  const _NavRow({required this.onBack});
+class PaywallNavRow extends StatelessWidget {
+  const PaywallNavRow({super.key, required this.onBack});
 
   final VoidCallback onBack;
 
@@ -311,7 +274,6 @@ class _NavRow extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (_) => ArulHaptics.tap(),
                 onTap: onBack,
-                // The ring is 34; the touch target it sits in is [ArulTokens.minHitTarget].
                 child: SizedBox.square(
                   dimension: ArulTokens.minHitTarget,
                   child: Center(
@@ -353,7 +315,6 @@ class _HeaderCrest extends StatelessWidget {
   final bool showSocialProof;
   final bool compact;
 
-  /// Short screen: close the gaps to the minimum that still reads as spacing.
   final bool dense;
 
   @override
@@ -383,7 +344,6 @@ class _HeaderCrest extends StatelessWidget {
   }
 }
 
-/// The gold rule that closes the header.
 class _HeaderHairline extends StatelessWidget {
   const _HeaderHairline();
 
@@ -401,7 +361,6 @@ class _HeaderHairline extends StatelessWidget {
   );
 }
 
-/// The no-clip header, exactly as the handoff draws it.
 class _HeaderBlock extends StatelessWidget {
   const _HeaderBlock({required this.showSocialProof});
 
@@ -429,6 +388,136 @@ class _HeaderBlock extends StatelessWidget {
 
 /// Centred when there is slack, scrollable when there is not.
 /// Both layouts put whatever must never be clipped through here.
+/// Everything between the pinned nav and the pinned CTA in the clip layout.
+///
+/// Offer read FIRST, clip under it, features last, scrolling as one block — when that block puts
+/// the whole clip on the first screenful. At 360×724 dp and 1.3× font the pinned CTA grows so tall
+/// that the clip landed under the fold (a 40 dp strip in Tamil), and the owner's rule is that the
+/// clip is never dropped. So when the clip would cross the fold it is PINNED above the CTA instead,
+/// scaled down (16:9 kept, never cropped) no lower than [_minClipFrame], and the crest, offer and
+/// features scroll above it. Decided after the first layout, before the route transition ends.
+class _ClipMiddle extends StatefulWidget {
+  const _ClipMiddle({
+    required this.showSocialProof,
+    required this.offerPanel,
+    required this.video,
+  });
+
+  final bool showSocialProof;
+  final Widget Function(bool dense) offerPanel;
+  final Widget video;
+
+  /// The smallest clip frame height pinned mode may shrink to (a 178 dp wide 16:9 frame).
+  static const double _minClipFrame = 100;
+
+  /// What the scrolling body keeps above a pinned clip: the price lockup must stay on screen.
+  static const double _minBody = 190;
+
+  /// The card's padding around its frame (onboarding_video_card.dart default gutters).
+  static const double _clipPadV = 10 + ArulTokens.paywallBrandBottomPadding;
+
+  @override
+  State<_ClipMiddle> createState() => _ClipMiddleState();
+}
+
+class _ClipMiddleState extends State<_ClipMiddle> {
+  final _clipKey = GlobalKey();
+  final _viewportKey = GlobalKey();
+  double? _pinnedFor;
+  double? _checkedFor;
+
+  void _checkFold(double h) {
+    if (_checkedFor == h) return;
+    _checkedFor = h;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final clip = _clipKey.currentContext?.findRenderObject() as RenderBox?;
+      final port = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (clip == null || port == null || !clip.hasSize || !port.hasSize) return;
+      // The FRAME must clear the fold; the card's own bottom gutter may tuck under the CTA.
+      final clipBottom = clip
+          .localToGlobal(Offset(0, clip.size.height - ArulTokens.paywallBrandBottomPadding))
+          .dy;
+      final portBottom = port.localToGlobal(Offset(0, port.size.height)).dy;
+      if (clipBottom > portBottom + 0.5) setState(() => _pinnedFor = h);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Below ~420 dp the ornament gives way: the pill goes, gaps close.
+        // `tight` (a second, higher threshold) only for the feature row and the panel's padding:
+        // between the two a 360x800 phone keeps the pill AND the whole label.
+        final h = constraints.maxHeight;
+        final dense = h < 420;
+        final tight = h < 520;
+        final crest = _HeaderCrest(
+          showSocialProof: widget.showSocialProof && !dense,
+          dense: dense,
+        );
+        if (_pinnedFor == h) {
+          final frameWidth =
+              constraints.maxWidth - 2 * ArulTokens.paywallPanelInset;
+          final natural = frameWidth * 9 / 16 + _ClipMiddle._clipPadV;
+          final floor = _ClipMiddle._minClipFrame + _ClipMiddle._clipPadV;
+          final clipH = (h - _ClipMiddle._minBody).clamp(floor, natural);
+          Widget body = SingleChildScrollView(
+            child: Column(
+              children: [
+                _HeaderCrest(showSocialProof: false, dense: true),
+                widget.offerPanel(true),
+                const _FeatureRow(tight: true),
+              ],
+            ),
+          );
+          // The clip is at its floor and the price still has no room: only now does type give,
+          // and only to 1.15× — the owner's order is clip first, legible type second.
+          if (h - clipH < _ClipMiddle._minBody) {
+            final media = MediaQuery.of(context);
+            body = MediaQuery(
+              data: media.copyWith(
+                textScaler: media.textScaler.clamp(maxScaleFactor: 1.15),
+              ),
+              child: body,
+            );
+          }
+          return Column(
+            children: [
+              Expanded(child: body),
+              // The same GlobalKey as the scrolling branch -> the card REPARENTS with its State; a
+              // rebuilt card would pause the one audible player on dispose.
+              SizedBox(
+                height: clipH,
+                child: Center(
+                  child: KeyedSubtree(key: _clipKey, child: widget.video),
+                ),
+              ),
+            ],
+          );
+        }
+        _checkFold(h);
+        return SingleChildScrollView(
+          key: _viewportKey,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: h),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                crest,
+                widget.offerPanel(tight),
+                KeyedSubtree(key: _clipKey, child: widget.video),
+                _FeatureRow(tight: tight),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ScrollableMiddle extends StatelessWidget {
   const _ScrollableMiddle({required this.children});
 
@@ -450,7 +539,6 @@ class _ScrollableMiddle extends StatelessWidget {
   }
 }
 
-/// Gold-ruled "PREMIUM", the wordmark, the tagline.
 class _BrandLockup extends StatelessWidget {
   const _BrandLockup();
 
@@ -604,31 +692,38 @@ class _SocialProofPillState extends State<_SocialProofPill> {
       context,
     ).premiumSocialProof(_who.$1, _who.$2);
     return ExcludeSemantics(
-      child: AnimatedSwitcher(
-        // The line still rotates; it just cuts instead of cross-fading.
-        duration: context.reduceMotion
-            ? Duration.zero
-            : ArulTokens.chromeSettleIn,
-        switchInCurve: ArulTokens.settleCurve,
-        switchOutCurve: ArulTokens.settleCurve,
-        child: Container(
-          key: ValueKey(line),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: ArulTokens.paywallBorderPill),
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          ),
-          child: Text(
-            line,
-            // TWO lines, not one. The longest pairing ("Tiruchirappalli" + a Kannada verb phrase)
-            // ellipsised at 360dp, and English did the same at 1.3x text scale — a ticker that
-            // ends in "..." reads as a bug, not as chrome. The pill grows into the header's slack;
-            // in `dense` mode there is none, and the whole pill is dropped before it ever wraps.
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: ArulTokens.paywallPill,
+      child: Padding(
+        // The pill grows to two lines at a large OS font size -> it keeps the screen's
+        // gutter rather than running edge to edge with its round ends cut.
+        padding: const EdgeInsets.symmetric(
+          horizontal: ArulTokens.screenPadding,
+        ),
+        child: AnimatedSwitcher(
+          // The line still rotates; it just cuts instead of cross-fading.
+          duration: context.reduceMotion
+              ? Duration.zero
+              : ArulTokens.chromeSettleIn,
+          switchInCurve: ArulTokens.settleCurve,
+          switchOutCurve: ArulTokens.settleCurve,
+          child: Container(
+            key: ValueKey(line),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: ArulTokens.paywallPillFill,
+              border: Border.all(color: ArulTokens.paywallBorderPill),
+              borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+            ),
+            child: Text(
+              line,
+              // TWO lines, not one. The longest pairing ("Tiruchirappalli" + a Kannada verb phrase)
+              // ellipsised at 360dp, and English did the same at 1.3x text scale — a ticker that
+              // ends in "..." reads as a bug, not as chrome. The pill grows into the header's slack;
+              // in `dense` mode there is none, and the whole pill is dropped before it ever wraps.
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: ArulTokens.paywallPill,
+            ),
           ),
         ),
       ),
@@ -636,7 +731,6 @@ class _SocialProofPillState extends State<_SocialProofPill> {
   }
 }
 
-/// The offer inside two crisp, parallel chamfered rules.
 class _ShrinePanel extends StatelessWidget {
   const _ShrinePanel({
     required this.padTop,
@@ -645,7 +739,6 @@ class _ShrinePanel extends StatelessWidget {
     this.dense = false,
   });
 
-  /// Short screen — see [ArulPaywallView].
   final bool dense;
 
   /// The handoff gives the monthly panel 26px of top padding and the trial 24 — its lead line pays.
@@ -688,7 +781,6 @@ class _ShrinePanel extends StatelessWidget {
   }
 }
 
-/// Screen A — ₹199, "PER MONTH", the fixed fine print.
 class _MonthlyOffer extends StatelessWidget {
   const _MonthlyOffer({required this.monthlyPrice});
 
@@ -826,7 +918,6 @@ class _PriceDivider extends StatelessWidget {
 class PriceLockup extends StatelessWidget {
   const PriceLockup({super.key, required this.price});
 
-  /// "₹199" — a leading rupee sign followed by the amount.
   final String price;
 
   /// Ink extents in `em` from `Gelasio-Regular.ttf` (upem 2048), as `(yMin, yMax)` about the baseline.
@@ -868,7 +959,6 @@ class PriceLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Everything up to the first digit is the symbol; the rest is the amount.
     final split = price.indexOf(RegExp(r'[0-9]'));
     final symbol = split <= 0 ? '₹' : price.substring(0, split);
     final amount = split <= 0 ? price : price.substring(split);
@@ -915,8 +1005,6 @@ class _FeatureRow extends StatelessWidget {
   static const double _sidePad = 12;
   static const double _featurePad = 4;
 
-  /// One column's text width at [screenWidth]: the row less its padding and the two 1px dividers,
-  /// split three ways, less the feature's own padding.
   static double labelWidthFor(double screenWidth) =>
       (screenWidth - _sidePad * 2 - 2) / 3 - _featurePad * 2;
 
@@ -992,7 +1080,6 @@ class _Feature extends StatelessWidget {
   final PaywallOrnament icon;
   final String label;
 
-  /// The width this column's label actually gets — see [_FeatureRow.labelWidthFor].
   final double labelWidth;
   final bool tight;
 
@@ -1185,7 +1272,7 @@ class _Footer extends StatelessWidget {
   }
 }
 
-class _UpiChip extends StatelessWidget {
+class _UpiChip extends StatefulWidget {
   const _UpiChip({
     required this.app,
     required this.canChange,
@@ -1197,14 +1284,34 @@ class _UpiChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_UpiChip> createState() => _UpiChipState();
+}
+
+class _UpiChipState extends State<_UpiChip> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final app = widget.app;
+    final canChange = widget.canChange;
     final icon = app.icon;
     return Semantics(
       container: true,
+      button: canChange,
       identifier: 'arul_paywall_upi_chip',
       label: app.label,
       child: GestureDetector(
-        onTap: canChange ? onTap : null,
+        // It picks between UPI apps -> the picker's own tick on press-DOWN, and the medallion
+        // fill while pressed; a money-flow control that answered nothing read as decoration.
+        onTapDown: canChange
+            ? (_) {
+                ArulHaptics.selection();
+                setState(() => _pressed = true);
+              }
+            : null,
+        onTapUp: canChange ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: canChange ? () => setState(() => _pressed = false) : null,
+        onTap: canChange ? widget.onTap : null,
         // The pill draws 36 and is tapped at [ArulTokens.minHitTarget] — this one opens the
         // picker that decides which app takes the mandate, so it is the last control on the page
         // that may be hard to hit.
@@ -1219,7 +1326,9 @@ class _UpiChip extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: _pressed
+                    ? ArulTokens.paywallMedallionFill
+                    : ArulTokens.paywallPillFill,
                 border: Border.all(color: ArulTokens.paywallBorderControl),
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
               ),

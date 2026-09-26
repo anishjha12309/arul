@@ -31,6 +31,8 @@ import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../push/providers/push_providers.dart';
+import '../../review/presentation/review_prompt_trigger.dart';
+import '../../ringtones/providers/ringtone_set_provider.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
@@ -50,7 +52,7 @@ class FeedScreen extends ConsumerStatefulWidget {
 }
 
 class _FeedScreenState extends ConsumerState<FeedScreen>
-    with ApplyRestore, WidgetsBindingObserver {
+    with ApplyRestore, WidgetsBindingObserver, ReviewPromptTrigger {
   /// `viewportFraction` is final on PageController and needs the reel's measured height -> build
   /// lazily in [_pagerFor], never in initState.
   ///
@@ -150,16 +152,25 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
 
-    // THE one POST_NOTIFICATIONS prompt (docs/push.md), on the first home-feed frame after sign-in.
-    // Here and nowhere earlier: a system dialog stacked on Credential Manager is exactly the
-    // interruption that costs sign-ins, and sign-in percentage is the number this app is judged on.
-    // By the time this frame draws the person is already in. Spent once per install, grant or deny.
-    // Post-frame so it never shares a frame with the feed's first paint.
+    // The permission prompt fires once per install, on the first feed frame after sign-in: a dialog
+    // stacked on Google's flow costs sign-ins. Post-frame so it never shares the feed's first paint.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(ref.read(pushPermissionProvider).promptOnce());
     });
   }
+
+  /// Play's review sheet waits for the plain feed: on its tab, online, the permission ask spent, and
+  /// no apply, share or ringtone set still running (docs/review-prompt.md).
+  @override
+  bool reviewHostReady() =>
+      GoRouter.maybeOf(context)?.routeInformationProvider.value.uri.path ==
+          '/browse' &&
+      ref.read(isOnlineProvider).value != false &&
+      ref.read(pushPermissionProvider).alreadyPrompted &&
+      ref.read(wallpaperApplyProvider) is! WallpaperApplyLoading &&
+      ref.read(wallpaperShareProvider) is! WallpaperSharePreparing &&
+      ref.read(ringtoneSetProvider) is! RingtoneSetLoading;
 
   void _onDeepLinkChanged() {
     scheduleMicrotask(() {
@@ -488,16 +499,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     }
   }
 
-  // ─── Build ───────────────────────────────────────────────────────────────────
-
-  // The chips gap and the gap below the hairline now live in
-  // [ArulBrowseHeader], which both browse tabs share — the reel's card is still
-  // solved from whatever height that frame leaves, so its 1:1.86 ratio holds by
-  // construction (see [FeedCardGeometry.resolve]).
-
   static const _cardRadius = FeedCardGeometry.radius;
 
-  /// The card's resting geometry for a reel [height] — see [FeedCardGeometry].
   FeedCardGeometry _geometryFor(BuildContext context, double height) =>
       FeedCardGeometry.resolve(context, reelHeight: height);
 
@@ -509,6 +512,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     if (ref.watch(catalogProvider) case AsyncData(:final value)) {
       maybeRestoreAfterApply(value);
       maybeOpenDeepLink(value);
+      if (value.isNotEmpty) maybeScheduleReviewPrompt();
     }
 
     final feed = ref.watch(feedProvider);
@@ -617,7 +621,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
                             AsyncData(:final value) when value.isEmpty =>
                               FeedEmpty(
-                                categoryLabel: _selectedLabel(),
                                 onBrowseAll: () => ref
                                     .read(selectedCategoryProvider.notifier)
                                     .select(WallpaperCategory.allSlug),
@@ -643,21 +646,19 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     );
   }
 
-  String _selectedLabel() {
-    final slug = ref.read(selectedCategoryProvider);
-    for (final c in ref.read(categoriesProvider)) {
-      if (c.slug == slug) return c.label;
-    }
-    return '';
-  }
-
   Widget _buildReel(List<Wallpaper> items, FeedCardGeometry geo, double h) {
     _syncFeed(items);
 
-    final apply = ref.watch(wallpaperApplyProvider);
-    final share = ref.watch(wallpaperShareProvider);
+    // One bool for the reel: an apply/share download rewrites `progress` per chunk, and watching
+    // the whole state here would rebuild the pager and both action pills on every chunk. Only
+    // [_TransferProgress] follows the number.
     final busy =
-        apply is WallpaperApplyLoading || share is WallpaperSharePreparing;
+        ref.watch(
+          wallpaperApplyProvider.select((s) => s is WallpaperApplyLoading),
+        ) ||
+        ref.watch(
+          wallpaperShareProvider.select((s) => s is WallpaperSharePreparing),
+        );
 
     final m = geo.margin;
 
@@ -691,10 +692,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             child: AnimatedOpacity(
               opacity: _index == items.length - 1 ? 1 : 0,
               // Same end state, reached in one frame -> the mark is present or absent, never fading.
-              duration: context.reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 350),
-              curve: Curves.easeOut,
+              duration: context.reduceMotion ? Duration.zero : Motion.breathe,
+              curve: Motion.settleCurve,
               child: Center(child: _EndOfFeedMark(isDark: isDark)),
             ),
           ),
@@ -773,26 +772,12 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           ),
         ),
 
-        // In-flight transfer bar for an apply/share download.
-        if (apply is WallpaperApplyLoading || share is WallpaperSharePreparing)
+        if (busy)
           Positioned(
             top: 0,
             left: m.left,
             right: m.right,
-            child: _TransferProgress(
-              progress: switch ((apply, share)) {
-                (
-                  WallpaperApplyLoading(
-                    stage: WallpaperApplyStage.downloading,
-                    :final progress,
-                  ),
-                  _,
-                ) =>
-                  progress,
-                (_, WallpaperSharePreparing(:final progress)) => progress,
-                _ => null,
-              },
-            ),
+            child: const _TransferProgress(),
           ),
       ],
     );
@@ -880,8 +865,6 @@ class _CardChrome extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Scrim height, and the band the badge + buttons live in (Pakiza's
-  /// `AppFeed.scrimHeight`).
   static const double stackHeight = FeedCardGeometry.scrimHeight;
 
   /// Inset of the action row from the card's left, right and bottom edges —
@@ -893,14 +876,6 @@ class _CardChrome extends StatelessWidget {
   static const double _barInset = FeedCardGeometry.actionInset;
   static const double _barInsetH = FeedCardGeometry.actionInset;
 
-  /// Inset of the live mark from the card's top and right edges.
-  ///
-  /// NOT [_barInsetH]. The action row can sit on 14 because it runs the width
-  /// of the card and reads as a bar; a lone 24dp disc at 14 reads as jammed
-  /// into the corner, because [FeedCardGeometry.radius] (24) is curving away
-  /// directly behind it. 22 puts the disc's outer edge clear of that arc, so it
-  /// sits ON the wallpaper rather than on its rim — while staying far enough in
-  /// from the centre that it never lands on a face or a crown.
   static const double _liveMarkInset = 22;
 
   final Wallpaper wallpaper;
@@ -992,9 +967,6 @@ class _ActionBar extends StatelessWidget {
     required this.onShare,
   });
 
-  /// Both buttons' height, and the row's. Exported because the feed anchors the
-  /// gate nudge off the bar's top edge; the NUMBER lives in [FeedCardGeometry]
-  /// so the loading skeleton places the same objects from the same source.
   static const double height = FeedCardGeometry.actionBarHeight;
 
   final bool busy;
@@ -1067,26 +1039,39 @@ class _ApplyPill extends StatelessWidget {
                 maxWidth: FeedCardGeometry.applyPillMaxWidth,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 26),
-              // Text only, like the reference: an icon would crowd the longer
-              // verbs (ta/ml/te set "Apply" as a whole word) and this pill is
-              // already the only thing that can be tapped down here.
+              // Glyph + word (owner's call): a primary action for a low-literacy
+              // audience is never a word alone, and the glyph is the one the
+              // apply sheet's CTA already wears. The pill is still the only
+              // thing that can be tapped down here.
               // The ceiling is a hard 240 and the verb may not be cut: at 320dp
               // with the OS at 1.3, Tamil's whole-word "Apply" was ellipsised
-              // inside it. So the label shrinks to fit the pill it is given,
-              // exactly as the sign-in title does — the pill's width is the
-              // reference and the type gives way, never the other way round.
+              // inside it. So glyph and label shrink TOGETHER to fit the pill
+              // they are given, exactly as the sign-in title does — the pill's
+              // width is the reference and the type gives way, never the other
+              // way round.
               child: Center(
                 widthFactor: 1,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    style: ArulTokens.button.copyWith(
-                      fontSize: 16,
-                      color: ArulTokens.maroon,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.wallpaper_rounded,
+                        size: 20,
+                        color: ArulTokens.maroon,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        style: ArulTokens.button.copyWith(
+                          fontSize: 16,
+                          color: ArulTokens.maroon,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1155,13 +1140,34 @@ class _ShareCircle extends StatelessWidget {
 /// and the divider, so the `viewPadding.top` this used to add was a leftover
 /// from the full-bleed layout and dropped the bar into the middle of the card's
 /// top edge.
-class _TransferProgress extends StatelessWidget {
-  const _TransferProgress({required this.progress});
-
-  final double? progress;
+class _TransferProgress extends ConsumerWidget {
+  const _TransferProgress();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // This bar alone re-renders per download chunk; the reel that mounts it watches a bool.
+    // Apply reports a number only while downloading (its other stages are indeterminate).
+    final applyProgress = ref.watch(
+      wallpaperApplyProvider.select(
+        (s) => switch (s) {
+          WallpaperApplyLoading(
+            stage: WallpaperApplyStage.downloading,
+            :final progress,
+          ) =>
+            progress,
+          _ => null,
+        },
+      ),
+    );
+    final shareProgress = ref.watch(
+      wallpaperShareProvider.select(
+        (s) => switch (s) {
+          WallpaperSharePreparing(:final progress) => progress,
+          _ => null,
+        },
+      ),
+    );
+    final progress = applyProgress ?? shareProgress;
     return DecoratedBox(
       decoration: const BoxDecoration(gradient: ArulTokens.feedTopScrim),
       child: SizedBox(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
@@ -14,7 +15,10 @@ import '../domain/onboarding_video.dart';
 /// The cuts are the same footage re-voiced -> their opening frames measure ~41 dB PSNR apart.
 /// Per-language posters would cost 38 KB to ship five pictures of the same thing.
 /// The English cut is the master, not a dub, so it diverges more — but it only shows until reveal.
-const _poster = 'assets/images/onboarding/poster.webp';
+const kOnboardingPoster = 'assets/images/onboarding/poster.webp';
+
+/// The return page's shutter — that clip's own first frame, for the same one-frame-for-all reason.
+const kReturnPoster = 'assets/images/onboarding/return_poster.webp';
 
 /// The onboarding clip on the trial screen — and ONLY there.
 ///
@@ -32,11 +36,35 @@ class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
     super.key,
     required this.player,
     required this.source,
+    this.poster = kOnboardingPoster,
+    this.eventPrefix = 'onboarding_video',
+    this.padding = const EdgeInsets.fromLTRB(
+      ArulTokens.paywallPanelInset,
+      10,
+      ArulTokens.paywallPanelInset,
+      ArulTokens.paywallBrandBottomPadding,
+    ),
+    this.resumeOnForeground = true,
   });
 
   /// Null while the warm-up is still in flight — the poster covers that.
+  /// Also null while ANOTHER card holds the screen's one audible player: the return page borrows it,
+  /// and two cards driving one player fight — the covered one's pause lands after the visible one's
+  /// play. Handing it back re-attaches here, on the poster until the re-opened clip paints.
   final FeedVideoPlayer? player;
   final OnboardingVideoSource source;
+
+  final String poster;
+
+  /// `<prefix>_start` / `<prefix>_muted` — each clip is counted under its own name.
+  final String eventPrefix;
+
+  final EdgeInsets padding;
+
+  /// False while a UPI return is being checked. The status read decides within a second whether the
+  /// return page covers this card, and a voice that starts for that second and is then cut off reads
+  /// as a glitch — so the card waits, and plays the moment the check hands the screen back to it.
+  final bool resumeOnForeground;
 
   @override
   ConsumerState<ArulOnboardingVideoCard> createState() =>
@@ -69,9 +97,17 @@ class _ArulOnboardingVideoCardState
     super.didUpdateWidget(old);
     if (old.player != widget.player) {
       old.player?.firstFrame.removeListener(_onFirstFrame);
+      // A player handed back has been re-opened on this card's clip -> whatever it painted for the
+      // borrower must not show here, so the poster covers until THIS clip's first frame.
+      _ready = false;
       _attach();
     } else if (old.source != widget.source) {
       setState(() => _ready = false);
+      unawaited(widget.player?.play());
+    } else if (!old.resumeOnForeground &&
+        widget.resumeOnForeground &&
+        _visible &&
+        _foreground) {
       unawaited(widget.player?.play());
     }
   }
@@ -88,7 +124,7 @@ class _ArulOnboardingVideoCardState
     // Opened with playWhenReady false -> a warm-up never plays audio at someone not looking.
     // Playing is this widget's job, and only once the card is on screen.
     unawaited(player.setVolume(_muted ? 0 : 1));
-    if (_visible) unawaited(player.play());
+    if (_visible && _foreground) unawaited(player.play());
   }
 
   /// Pause when this route stops being the visible one.
@@ -102,7 +138,9 @@ class _ArulOnboardingVideoCardState
     final visible = TickerMode.valuesOf(context).enabled;
     if (visible == _visible) return;
     _visible = visible;
-    unawaited(visible ? widget.player?.play() : widget.player?.pause());
+    unawaited(
+      visible && _foreground ? widget.player?.play() : widget.player?.pause(),
+    );
   }
 
   @override
@@ -117,11 +155,22 @@ class _ArulOnboardingVideoCardState
         // The common return here is from the UPI app mid-checkout, and a frozen frame on the way
         // back read as broken -> a mid-sentence pickup is the accepted cost of a loop that holds.
         // `_visible` gates it: covered by a pushed route, TickerMode owns playback, not this.
-        if (_visible) unawaited(widget.player?.play());
+        if (_visible && widget.resumeOnForeground) {
+          unawaited(widget.player?.play());
+        }
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
         break;
     }
+  }
+
+  /// Whether Arul has the screen. A card can MOUNT while the app is behind the UPI app — the return
+  /// page is pushed when the confirmation poll runs out, about two minutes into a mandate sheet — and
+  /// playing then puts a voice over PhonePe. The resume callback plays it once the person is back.
+  /// Null before the binding has a state (tests) counts as foreground.
+  bool get _foreground {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
   }
 
   void _onFirstFrame() {
@@ -134,21 +183,24 @@ class _ArulOnboardingVideoCardState
   void _markStarted() {
     if (_started) return;
     _started = true;
-    _track('onboarding_video_start');
+    _track('start');
   }
 
   /// GA4 only — off [postHogAllowedEvents], not a Meta ★, not a conversion (`trial_started` is).
   /// No "completed" event: the clip LOOPS, and a looping player never reaches `STATE_ENDED`.
   void _track(String event) => ref
       .read(analyticsServiceProvider)
-      .track(event, properties: {'lang': widget.source.lang});
+      .track(
+        '${widget.eventPrefix}_$event',
+        properties: {'lang': widget.source.lang},
+      );
 
   Future<void> _toggleMute() async {
     ArulHaptics.tap();
     final next = !_muted;
     setState(() => _muted = next);
     await widget.player?.setVolume(next ? 0 : 1);
-    if (next) _track('onboarding_video_muted');
+    if (next) _track('muted');
   }
 
   @override
@@ -164,16 +216,11 @@ class _ArulOnboardingVideoCardState
   Widget build(BuildContext context) {
     final player = widget.player;
     return Padding(
-      // Same gutters as the offer panel above -> the two read as one column, not two indents.
-      padding: const EdgeInsets.fromLTRB(
-        ArulTokens.paywallPanelInset,
-        10,
-        ArulTokens.paywallPanelInset,
-        ArulTokens.paywallBrandBottomPadding,
-      ),
-      // Full width at the clip's OWN 16:9 on every screen — never cropped, never scaled to fit.
-      // Paying for a short screen out of the clip turned a talking head into a band of forehead.
-      // Room comes from the chrome instead (`dense` in paywall_view.dart) -> one framing everywhere.
+      // Default: the offer panel's gutters -> the two read as one column, not two indents.
+      padding: widget.padding,
+      // The clip's OWN 16:9, never cropped: cropping for a short screen turned a talking head into
+      // a band of forehead. Full width where it fits; a pinned short-screen layout scales the whole
+      // frame down instead (`_ClipMiddle` in paywall_view.dart).
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: SizedBox(
@@ -190,8 +237,8 @@ class _ArulOnboardingVideoCardState
                 fit: StackFit.expand,
                 children: [
                   // The shutter stays MOUNTED under the texture -> a dropped decoder shows no bare colour.
-                  const Image(
-                    image: AssetImage(_poster),
+                  Image(
+                    image: AssetImage(widget.poster),
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
                     filterQuality: FilterQuality.low,
@@ -247,7 +294,9 @@ class _MuteButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: muted ? 'Unmute video' : 'Mute video',
+      label: muted
+          ? AppLocalizations.of(context).videoUnmute
+          : AppLocalizations.of(context).videoMute,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
@@ -259,7 +308,7 @@ class _MuteButton extends StatelessWidget {
               height: 28,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0xB32E1D14),
+                color: ArulTokens.paywallMuteFill,
               ),
               child: Icon(
                 muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,

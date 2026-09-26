@@ -12,6 +12,8 @@ import '../../../core/providers/shared_preferences_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../review/domain/review_ledger.dart';
+import '../../review/providers/review_prompt_controller.dart';
 import '../data/wallpaper_apply_service.dart';
 import 'wallpaper_prefetch_provider.dart';
 
@@ -248,6 +250,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
             confirmed: true,
             fallback: true,
           );
+          armReviewPrompt(ref, ReviewTrigger.wallpaperStatic);
           state = const WallpaperApplySuccess(
             isLive: true,
             staticFallback: true,
@@ -256,6 +259,8 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
         }
 
         _trackApplied(analytics, wallpaper, target: target, confirmed: false);
+        // The chooser's Set tap is unobservable -> its opening is the success, as `wallpaper_applied` counts it.
+        armReviewPrompt(ref, ReviewTrigger.wallpaperLive);
         // Flags stay set -> a chooser-caused recreate restores position; otherwise the feed
         // consumes them on the next resume.
         state = const WallpaperApplyIdle();
@@ -270,6 +275,7 @@ class WallpaperApplyNotifier extends Notifier<WallpaperApplyState> {
       // We got here -> no OS restart happened -> clear the flags and confirm inline.
       await _clearPending(prefs);
       _trackApplied(analytics, wallpaper, target: target, confirmed: true);
+      armReviewPrompt(ref, ReviewTrigger.wallpaperStatic);
       state = const WallpaperApplySuccess(isLive: false);
     } on WallpaperApplyException catch (e) {
       await _clearPending(prefs);

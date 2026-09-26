@@ -116,7 +116,6 @@ function parseFilter(a: Record<string, unknown>): PushFilter | null {
   return f;
 }
 
-/** A one-line description for the campaign card's "who got it" chip. */
 export function audienceLabel(a: PushAudience): string {
   switch (a.kind) {
     case "all":

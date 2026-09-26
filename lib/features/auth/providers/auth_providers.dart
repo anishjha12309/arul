@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/update/update_holds.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
 import '../data/play_services_resolver.dart';
@@ -17,7 +20,26 @@ import '../domain/sign_in_outcome.dart';
 part 'auth_providers.g.dart';
 
 @Riverpod(keepAlive: true)
-ApiClient apiClient(Ref ref) => ApiClient();
+ApiClient apiClient(Ref ref) => ApiClient(
+  plainStore: _resolvedPrefs(ref),
+  onKeystoreRefused: (error, stack) => ref
+      .read(crashReporterProvider)
+      .recordError(
+        error,
+        stack,
+        reason: 'keystore refused: session in app-private storage',
+      ),
+);
+
+/// `main()` overrides [sharedPreferencesProvider] before `runApp`; a container that never ran it
+/// (tests) has none, and the session store then keeps today's behaviour with no fallback.
+SharedPreferences? _resolvedPrefs(Ref ref) {
+  try {
+    return ref.read(sharedPreferencesProvider);
+  } catch (_) {
+    return null;
+  }
+}
 
 @Riverpod(keepAlive: true)
 AuthService authService(Ref ref) => ApiAuthService(
@@ -100,7 +122,6 @@ class AuthController extends _$AuthController {
   @visibleForTesting
   Duration returnCooldown = const Duration(seconds: 60);
 
-  /// Seam for Google's Play services repair — tests answer for the native side.
   @visibleForTesting
   PlayServicesResolver playServices = const PlayServicesResolver();
 
@@ -169,6 +190,14 @@ class AuthController extends _$AuthController {
   /// ORDER is untouched, so a re-armed attempt is sheet-first exactly like every other automatic one.
   bool _reconnectArmed = false;
 
+  /// The automatic launch is HELD while the phone has no network: offline, Google's sheet only draws
+  /// to fail (docs/auth.md §Failure handling). Released by [noteConnectivity] or a return
+  /// ([noteAppLifecycle]); dropped when the person starts an attempt, since the pill is never blocked.
+  bool _heldOffline = false;
+
+  /// True while the wall's automatic sheet is waiting for the network — the wall's wait line.
+  bool get autoHeldOffline => _heldOffline;
+
   /// One lifecycle transition, from the sign-in wall's observer. Returns true when the caller should
   /// fire the automatic attempt again — the SCREEN stays the single joiner, so the toast and route
   /// handling live in one place.
@@ -195,6 +224,10 @@ class AuthController extends _$AuthController {
         final away = _awaySince;
         // Cleared whatever the verdict -> at most ONE re-arm per return, never a second resume's.
         _awaySince = null;
+        // A held launch goes on ANY resume — pulling down the shade to turn data on is an
+        // inactive->resumed that no away rule would count. [autoSignIn] re-reads the link and simply
+        // holds again if it is still down, so a resume can never open a sheet offline.
+        if (_heldOffline) return _heldMayGo();
         final settled = _lastOutcomeAt;
         if (away == null || settled == null) return false;
         if (_inFlight != null) return false;
@@ -244,6 +277,15 @@ class AuthController extends _$AuthController {
     final offline = _offlineSince;
     // Cleared whatever the verdict -> at most ONE re-arm per drop, never a second online reading's.
     _offlineSince = null;
+    if (_heldOffline) {
+      // No failure behind it and no offline reading needed first: a wall that mounted offline only
+      // ever sees the link come UP. Behind another app it stays held for the return to release.
+      final lifecycle = lifecycleProbe();
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+        return false;
+      }
+      return _heldMayGo();
+    }
     if (offline == null) return false;
     final settled = _lastOutcomeAt;
     if (settled == null) return false;
@@ -267,6 +309,12 @@ class AuthController extends _$AuthController {
     return true;
   }
 
+  /// Whether the held launch may fire now. It spends none of the reconnect budget: it is the
+  /// stretch's first automatic attempt, delayed, not a retry.
+  bool _heldMayGo() =>
+      _inFlight == null &&
+      !ref.read(authServiceProvider).currentState.isAuthenticated;
+
   /// Starts a sign-in, or joins the one already running.
   ///
   /// Safe from a button — a tap while a sheet is up gets that sheet's result, never a second sheet.
@@ -274,14 +322,19 @@ class AuthController extends _$AuthController {
   /// Not a policy this layer owns.
   /// [returned] is analytics only: it stamps this attempt as the one a RETURN re-armed.
   /// [reconnected] is the same for the one a RECONNECT re-armed; `returned` wins if both are set.
+  /// [afterOffline] is the same for the launch that was held while offline.
   Future<AuthResult> signIn(
     AuthProvider provider, {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
   }) {
     final existing = _inFlight;
     if (existing != null) return existing;
+    // An attempt of any kind ends the wait: a tap is the person taking over, and the held launch
+    // itself arrives here from [autoSignIn].
+    _heldOffline = false;
     final raw = ref
         .read(authServiceProvider)
         .signInWith(
@@ -289,13 +342,16 @@ class AuthController extends _$AuthController {
           auto: auto,
           returned: returned,
           reconnected: reconnected,
+          afterOffline: afterOffline,
         );
     final started = DateTime.now();
     // Cleared at the START, not on the settle: [_guard] can return without the classifier below
     // ever running, and a stale `true` would hand the NEXT reconnect a sheet it never earned.
     _lastOutcomeNetworkFailure = false;
+    // An update screen over Google's sheet would cancel the attempt -> held until it settles.
+    final releaseUpdateHold = UpdateHolds.hold();
     late final Future<AuthResult> guarded;
-    guarded = _guard(raw, started, provider, auto, returned, reconnected)
+    guarded = _guard(raw, started, provider, auto, returned, reconnected, afterOffline)
         .then((result) {
           // What the reconnect rule is allowed to retry, decided where the outcome is still typed.
           _lastOutcomeNetworkFailure =
@@ -317,6 +373,7 @@ class AuthController extends _$AuthController {
           _reconnectSpent = false;
           // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
           if (identical(_inFlight, guarded)) _inFlight = null;
+          releaseUpdateHold();
         });
     _inFlight = guarded;
     return guarded;
@@ -358,8 +415,8 @@ class AuthController extends _$AuthController {
     bool auto,
     bool returned,
     bool reconnected,
+    bool afterOffline,
   ) async {
-    // Start of the current continuous-foreground stretch.
     var sinceForeground = started;
     var wasMidFlow = false;
     // The relaunch is ONE-SHOT per attempt -> a second lost sheet cannot loop it.
@@ -375,7 +432,10 @@ class AuthController extends _$AuthController {
         result is AuthCancelled &&
         result.outcome == SignInOutcome.selectorStripped;
 
-    Future<AuthResult> relaunch(String kind) {
+    // A LOST callback reruns the attempt as it was: nobody answered the surface. A STRIPPED picker
+    // reopens the PICKER only — the sheet in front of it was already dismissed, and a redrawn One
+    // Tap sheet counts toward Google's 24 h cancel suppression.
+    Future<AuthResult> relaunch(String kind, {bool pickerOnly = false}) {
       relaunched = true;
       _abandonStalled(kind: kind);
       sinceForeground = DateTime.now();
@@ -384,9 +444,10 @@ class AuthController extends _$AuthController {
           .read(authServiceProvider)
           .signInWith(
             provider,
-            auto: auto,
+            auto: auto && !pickerOnly,
             returned: returned,
             reconnected: reconnected,
+            afterOffline: afterOffline,
           );
     }
 
@@ -447,7 +508,7 @@ class AuthController extends _$AuthController {
       }
       if (settled != null) {
         if (stripped(settled)) {
-          raw = relaunch('surface_stripped');
+          raw = relaunch('surface_stripped', pickerOnly: true);
           continue;
         }
         final recovery = await recover(settled);
@@ -485,7 +546,7 @@ class AuthController extends _$AuthController {
         }
         if (late != null) {
           if (stripped(late)) {
-            raw = relaunch('surface_stripped');
+            raw = relaunch('surface_stripped', pickerOnly: true);
             continue;
           }
           final recovery = await recover(late);
@@ -551,7 +612,6 @@ class AuthController extends _$AuthController {
   /// The screen collects this on its first frame; consumed on read so it can never re-toast.
   AuthFailure? _pendingAutoFailure;
 
-  /// Returns the not-yet-surfaced auto-attempt failure, if any, and clears it.
   AuthFailure? takePendingAutoFailure() {
     final failure = _pendingAutoFailure;
     _pendingAutoFailure = null;
@@ -566,9 +626,21 @@ class AuthController extends _$AuthController {
   /// [noteAppLifecycle] can re-arm it once for a RETURN and [noteConnectivity] once for a
   /// RECONNECT; those attempts carry the `sheet_return` / `sheet_reconnect` stamp so the funnel can
   /// price each re-arm on its own.
-  Future<AuthResult>? autoSignIn(AuthProvider provider) {
+  ///
+  /// [offline] = the caller KNOWS there is no network: the launch is HELD ([autoHeldOffline]) and this
+  /// returns null without spending it. An unknown reading is online — a slow probe must never cost a
+  /// phone with a network its sheet.
+  Future<AuthResult>? autoSignIn(
+    AuthProvider provider, {
+    bool offline = false,
+  }) {
     if (_autoLaunched) return _inFlight;
+    if (offline) {
+      _heldOffline = true;
+      return null;
+    }
     _autoLaunched = true;
+    final afterOffline = _heldOffline;
     final returned = _returnArmed;
     final reconnected = _reconnectArmed;
     _returnArmed = false;
@@ -578,6 +650,7 @@ class AuthController extends _$AuthController {
       auto: true,
       returned: returned,
       reconnected: reconnected,
+      afterOffline: afterOffline,
     );
     // Record a failure in case it settles before any screen joins; a joiner clears it after toasting.
     // The service never throws — every path returns a result -> no error continuation.
@@ -595,7 +668,16 @@ class AuthController extends _$AuthController {
   Future<void> signOut() async {
     await ref.read(authServiceProvider).signOut();
     _autoLaunched = false;
+    _heldOffline = false;
     // A new signed-out stretch -> its own reconnect budget, like its own automatic launch.
+    _reconnectBudget = _reconnectsPerStretch;
+  }
+
+  /// A session that died on its own mid-process (its refresh token is dead) -> a new signed-out
+  /// stretch, exactly as after [signOut]: its own automatic sheet and reconnect budget.
+  void sessionEnded() {
+    _autoLaunched = false;
+    _heldOffline = false;
     _reconnectBudget = _reconnectsPerStretch;
   }
 
@@ -607,6 +689,7 @@ class AuthController extends _$AuthController {
   Future<void> deleteAccount() async {
     await ref.read(authServiceProvider).deleteAccount();
     _autoLaunched = false;
+    _heldOffline = false;
     _reconnectBudget = _reconnectsPerStretch;
   }
 }

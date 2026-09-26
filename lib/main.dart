@@ -20,10 +20,13 @@ import 'core/analytics/analytics_events.dart';
 import 'core/analytics/analytics_service.dart';
 import 'core/analytics/posthog_analytics_service.dart';
 import 'core/deeplink/deep_link_target.dart';
+import 'core/experiments/experiments.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/connectivity/connectivity_provider.dart';
+import 'core/connectivity/data_saver.dart';
 import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/perf/boot_trace.dart';
@@ -49,6 +52,7 @@ Future<void> main() async {
     _maybeEnableFlutterDriver();
     WidgetsFlutterBinding.ensureInitialized();
     unawaited(ApiClient.warmSecureStorage());
+    LaunchLinkProbe.start();
     await _startApp();
     return;
   }
@@ -64,6 +68,8 @@ Future<void> main() async {
       // fire it BEFORE Firebase so the two overlap; after Firebase serialised the costs.
       // Fire-and-forget -> see `ApiClient.warmSecureStorage`.
       unawaited(ApiClient.warmSecureStorage());
+      // Whether there is a network at all, known before the splash decides to hold the sign-in sheet.
+      LaunchLinkProbe.start();
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
       // The three collection toggles are re-affirmations: Crashlytics, Performance and Analytics all
@@ -153,16 +159,19 @@ Future<void> _startPostHog(
   SharedPreferences prefs,
 ) async {
   final phone = WidgetsBinding.instance.platformDispatcher.locales;
+  final experiments = Experiments.read(prefs);
   final lang = resolveAppLocale(
     prefs.getString(appLocalePrefsKey),
     prefs.getString(geoLangPrefsKey),
     phone,
+    useGeo: experiments.geoLanguageApplies,
   ).languageCode;
   final origin = resolveLanguageOrigin(prefs, phone);
   PostHogAnalyticsService.prime({
     kAppLanguageProperty: lang,
     kLanguageSourceProperty: origin.source.key,
     kGeoRegionProperty: origin.geoRegion,
+    ...experiments.analyticsProperties,
     // Only when the probe has ALREADY answered — priming an unresolved `mid` would stamp a guess
     // on the pre-login events. `app.dart` registers the real rung the moment it lands, and
     // `register` overwrites a primed key, so the two can never disagree.
@@ -175,9 +184,6 @@ Future<void> _startPostHog(
   await Posthog().capture(eventName: ArulEvents.applicationInstalled);
 }
 
-/// Configures the app (system UI, image cache, PostHog, Meta, Google Sign-In,
-/// referral capture) and runs it inside a Riverpod scope. Shared by the
-/// Firebase and non-Firebase entry paths above.
 Future<void> _startApp() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppConfig.validate();
@@ -231,30 +237,15 @@ Future<void> _startApp() async {
     }),
   );
 
+  // Asked before the splash warms the feed, which is the first reader.
+  unawaited(DataSaver.refresh());
+
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.
   BootTrace.mark('SharedPreferences start');
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');
 
-  // Lean config: manual events only, session replay and surveys OFF, and no
-  // `PosthogObserver`/`PostHogWidget` anywhere -> no element autocapture and no `$screen` at all.
-  // `captureApplicationLifecycleEvents` is OFF (owner's call: PostHog shows the journey and nothing
-  // else). The flag is all-or-nothing and its events never pass through `AnalyticsService`, so it is
-  // the ONLY control over them -> keeping `Application Installed` would also buy `Application
-  // Opened`/`Backgrounded` on every launch and backgrounding — most of the event stream and none of
-  // the funnel -> off, and the install event is re-emitted by hand below.
-  // Verified against posthog-android 3.58.3, not assumed: sessions still work (the lifecycle observer
-  // is registered either way — only the two captures inside it are gated), and GA4 still
-  // auto-collects first_open/session_start/screen_view at 100%, where DAU and retention are read.
-  // The cohort gates `setup()` itself, not individual captures -> a non-panel install pays zero
-  // native init, network and battery, which matters on the budget devices this app targets, and an
-  // SDK that never started cannot autocapture.
-  // The cohort draw is persisted in prefs -> this must stay BELOW the prefs await.
-  // Mirrored in Pakiza -> keep both in sync.
-  // No SIDELOADED build reports to PostHog (owner's rule) -> resolve the installer BEFORE the SDK
-  // starts, so the very first event is already gated and a developer's on-device pass never lands
-  // in the product funnel. One probe per process; every later reader gets the cached verdict.
   await PlayInstall.resolved;
   debugPrint(
     '[Analytics] PostHog sink: ${PlayInstall.isPlay ? "on (Play install)" : "OFF (sideloaded)"}',
@@ -269,6 +260,14 @@ Future<void> _startApp() async {
   // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
   // build we can ever put on a test phone — measures the same startup path real users get.
   final inCohort = AnalyticsCohort.resolve(prefs);
+  // The sign-in factorial's two coins, dealt once off the same first-launch marker.
+  Experiments.drawIfFreshInstall(
+    prefs,
+    freshInstall: AnalyticsCohort.isFreshInstall,
+    qaArms: PlayInstall.isPlay
+        ? ''
+        : const String.fromEnvironment('QA_EXP_ARMS'),
+  );
   // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
   GeoLanguageService.markIfFreshInstall(
     prefs,
@@ -287,10 +286,6 @@ Future<void> _startApp() async {
       // so one request each costs nothing that matters.
       ..flushAt = 1
       ..debug = kDebugMode;
-    // `setup()` does native init and opens the SDK's first network work -> awaiting it here puts that
-    // on the critical path to the first frame for every panel member -> fire-and-forget, matching the
-    // contract every other PostHog call already uses (`PostHogAnalyticsService`).
-    // Nothing captures before the first user action anyway — lifecycle autocapture is off above.
     unawaited(_startPostHog(config, prefs));
   }
 

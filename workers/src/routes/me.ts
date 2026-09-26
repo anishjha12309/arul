@@ -20,8 +20,6 @@ import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 
-// ── GET /me ──────────────────────────────────────────────────────────────────
-
 /**
  * GET /me carries the caller's subscription row in the SAME query — a cold-start merge.
  *
@@ -103,8 +101,6 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
   }
 }
 
-// ── POST /me/profile ───────────────────────────────────────────────────────────
-
 /** Max display name length -> must match the DB CHECK and the client's counter -> three copies, change all three. */
 const MAX_DISPLAY_NAME = 200;
 
@@ -169,8 +165,6 @@ export async function handleUpdateProfile(
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── DELETE /me ───────────────────────────────────────────────────────────────
 
 /**
  * DELETE /me — permanently delete the caller's account. THE ORDER OF THE THREE STEPS IS LOAD-BEARING.
@@ -279,8 +273,6 @@ export async function handleDeleteAccount(
   }
 }
 
-// ── GET /me/subscription ─────────────────────────────────────────────────────
-
 export async function handleMeSubscription(
   c: Context<{ Bindings: Env }>,
 ): Promise<Response> {
@@ -324,8 +316,6 @@ export async function handleMeSubscription(
   }
 }
 
-// ── GET /me/submissions ──────────────────────────────────────────────────────
-
 export async function handleMeSubmissions(
   c: Context<{ Bindings: Env }>,
 ): Promise<Response> {
@@ -365,8 +355,6 @@ export async function handleMeSubmissions(
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── GET /me/referrals ────────────────────────────────────────────────────────
 
 export async function handleMeReferrals(
   c: Context<{ Bindings: Env }>,
@@ -422,8 +410,6 @@ export async function handleMeReferrals(
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── POST /me/device ──────────────────────────────────────────────────────────
 
 /**
  * The six shipped app languages, normalised the way the deep-link bounce does it.
@@ -502,7 +488,6 @@ interface DeviceBody {
   androidSdk: number | null;
 }
 
-/** The body both registration routes accept, normalised once. Null when there is no usable fid. */
 function readDeviceBody(body: Record<string, unknown>): DeviceBody | null {
   const fid = typeof body["fid"] === "string" ? body["fid"].trim() : "";
   if (!fid || fid.length > 256) return null;
@@ -514,8 +499,6 @@ function readDeviceBody(body: Record<string, unknown>): DeviceBody | null {
     androidSdk: Number.isFinite(Number(body["androidSdk"])) ? Math.floor(Number(body["androidSdk"])) : null,
   };
 }
-
-// ── POST /push/device ────────────────────────────────────────────────────────
 
 /** A registration body is a fid, a token and three scalars — far below this. */
 const ANON_DEVICE_BODY_MAX_BYTES = 2048;
@@ -574,8 +557,6 @@ export async function handleRegisterAnonDevice(
   }
 }
 
-// ── POST /me/push-opened ─────────────────────────────────────────────────────
-
 /**
  * POST /me/push-opened — the app reporting that this person tapped a campaign.
  *
@@ -622,8 +603,6 @@ export async function handlePushOpened(
 
 /** A campaign id is always a uuid -> anything else is a malformed payload, never a lookup. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Mask an email for the referrer's list -> "amir@gmail.com" becomes "am***@gmail.com" -> never show a full address. */
 function maskEmail(email: string | null): string | null {

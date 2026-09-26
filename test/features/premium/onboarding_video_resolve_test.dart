@@ -67,4 +67,46 @@ void main() {
       expect(resolveOnboardingVideo(config, 'kn'), isNull);
     });
   });
+
+  group('resolveReturnVideo', () {
+    test('lives in its own folder, one cut per language', () {
+      expect(
+        resolveReturnVideo(_config({}), 'kn')?.url,
+        endsWith('/onboarding/return/kn.mp4'),
+      );
+    });
+
+    test('Hindi plays the English cut, as the onboarding clip does', () {
+      expect(resolveReturnVideo(_config({}), 'hi')?.lang, 'en');
+    });
+
+    test('its switch is its own — turning onboarding off leaves it on', () {
+      final config = _config({
+        'onboarding_video': {'enabled': false},
+      });
+      expect(resolveReturnVideo(config, 'ta'), isNotNull);
+      expect(returnPageEnabled(config), isTrue);
+    });
+
+    test('return_video.enabled:false turns the whole page off', () {
+      final config = _config({
+        'return_video': {'enabled': false},
+      });
+      expect(resolveReturnVideo(config, 'ta'), isNull);
+      expect(returnPageEnabled(config), isFalse);
+    });
+
+    test('an absent config is ON — a cold start must not lose the page', () {
+      expect(returnPageEnabled(null), isTrue);
+      expect(resolveReturnVideo(null, 'ml')?.lang, 'ml');
+    });
+
+    test('its version busts only its own cache', () {
+      final config = _config({
+        'return_video': {'version': 3},
+      });
+      expect(resolveReturnVideo(config, 'ta')?.url, endsWith('ta.mp4?v=3'));
+      expect(resolveOnboardingVideo(config, 'ta')?.url, endsWith('ta.mp4'));
+    });
+  });
 }

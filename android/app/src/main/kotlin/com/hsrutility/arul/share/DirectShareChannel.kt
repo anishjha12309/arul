@@ -30,6 +30,7 @@ class DirectShareChannel(private val activity: Activity) :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "shareToPackage" -> shareToPackage(call, result)
+            "shareTextToPackage" -> shareTextToPackage(call, result)
             else -> result.notImplemented()
         }
     }
@@ -86,6 +87,36 @@ class DirectShareChannel(private val activity: Activity) :
             result.success(true)
         } catch (e: ActivityNotFoundException) {
             // Raced an uninstall between resolve and launch.
+            result.success(false)
+        } catch (e: SecurityException) {
+            result.success(false)
+        }
+    }
+
+    // Text-only: a targeted ACTION_SEND opens WhatsApp's picker INSIDE Arul's task (its
+    // ExternalShareAlias). The `whatsapp://send` link goes through a trampoline that roots the
+    // picker in WhatsApp's own task, so the first Back landed on WhatsApp's home, not on Arul.
+    private fun shareTextToPackage(call: MethodCall, result: MethodChannel.Result) {
+        val targetPackage = call.argument<String>("package")
+        val text = call.argument<String>("text")
+        if (targetPackage.isNullOrEmpty() || text.isNullOrEmpty()) {
+            result.error("bad_input", "package and text are required", null)
+            return
+        }
+        val intent =
+            Intent(Intent.ACTION_SEND).apply {
+                setPackage(targetPackage)
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+        if (intent.resolveActivity(activity.packageManager) == null) {
+            result.success(false)
+            return
+        }
+        try {
+            activity.startActivity(intent)
+            result.success(true)
+        } catch (e: ActivityNotFoundException) {
             result.success(false)
         } catch (e: SecurityException) {
             result.success(false)

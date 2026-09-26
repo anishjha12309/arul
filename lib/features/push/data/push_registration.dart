@@ -100,8 +100,6 @@ class PushRegistration {
       final fid =
           await (_fid?.call() ?? FirebaseInstallations.instance.getId());
       if (fid == null || fid.isEmpty) return;
-      // The token is the FALLBACK target only (`message.token` is deprecated in favour of the fid),
-      // so a phone that yields an id but no token still registers and is still reachable.
       final token =
           await (_token?.call() ?? FirebaseMessaging.instance.getToken())
               .catchError((Object _) => null);

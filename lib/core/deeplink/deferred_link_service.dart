@@ -20,7 +20,11 @@ class DeferredLinkService {
 
   final InstallReferrerService _targets;
   final MethodChannel _channel;
+
+  /// Redelivery dedupe. Bounded — a token is only ever redelivered close to its first arrival, so
+  /// the oldest can go once a handful sit here; the set must not grow for the life of the process.
   final Set<String> _seenTokens = <String>{};
+  static const _maxSeenTokens = 32;
 
   /// GA4F and the Meta SDK may answer on either side of engine startup -> attach BEFORE pulling.
   Future<void> start() async {
@@ -69,6 +73,9 @@ class DeferredLinkService {
     if (raw is! String || rawToken is! String || rawToken.isEmpty) return;
     // Native pushes on capture AND answers the initial pull -> seeing one delivery twice is NORMAL.
     if (!_seenTokens.add(rawToken)) return;
+    while (_seenTokens.length > _maxSeenTokens) {
+      _seenTokens.remove(_seenTokens.first);
+    }
 
     final source = switch (payload['source']) {
       'meta' => DeepLinkSource.meta,

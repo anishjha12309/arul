@@ -35,7 +35,7 @@ Future<T?> showArulSheet<T>(
     // ArulSheet paints its own 44×4 grabber -> the theme's drag handle would render a second one.
     showDragHandle: false,
     backgroundColor: Colors.transparent,
-    barrierColor: ArulTokens.sheetOverlay, // rgba(20,9,12,.58)
+    barrierColor: ArulTokens.sheetOverlay,
     // Every Arul sheet follows the app theme — ArulSheet reads `Theme.of(context).brightness` itself.
     builder: (context) {
       final sheet = ArulSheet(
@@ -55,8 +55,6 @@ Future<T?> showArulSheet<T>(
   );
 }
 
-/// The visual scaffold of an Arul sheet: surface, top hairline, grabber, translateY(24)+fade entrance.
-/// Used by [showArulSheet]; also usable directly, inside a custom route.
 class ArulSheet extends StatefulWidget {
   const ArulSheet({
     super.key,
@@ -68,13 +66,11 @@ class ArulSheet extends StatefulWidget {
 
   final Widget child;
 
-  /// Gradient-top variant (`#241014 → #1A0B0F`) for the premium sheet.
   final bool gradient;
 
   /// The 1px gold-35% top hairline, dark only. Off where it reads as a stray line, not an edge.
   final bool topHairline;
 
-  /// Optional explicit sheet surface. Null preserves the themed default.
   final Color? surfaceColor;
 
   @override
@@ -85,7 +81,7 @@ class _ArulSheetState extends State<ArulSheet>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: ArulTokens.sheetEnter, // 300ms
+    duration: ArulTokens.sheetEnter,
   );
 
   /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup, and the
@@ -107,7 +103,7 @@ class _ArulSheetState extends State<ArulSheet>
 
   late final Animation<double> _t = CurvedAnimation(
     parent: _c,
-    curve: ArulTokens.sheetCurve, // ease
+    curve: ArulTokens.sheetCurve,
   );
 
   @override
@@ -172,7 +168,6 @@ class _ArulSheetState extends State<ArulSheet>
   }
 }
 
-/// The drag grabber — 44×4 r2, `rgba(250,245,236,.25)` dark / `rgba(43,17,22,.2)` light.
 class _Grabber extends StatelessWidget {
   const _Grabber();
 
@@ -222,7 +217,6 @@ class ArulSheetRow extends StatelessWidget {
          'a row is a choice or an act, never both',
        );
 
-  /// A Material icon — the default.
   final IconData? icon;
 
   /// A custom mark, for where a Material icon would be the wrong voice (the brand gopuram).
@@ -236,7 +230,6 @@ class ArulSheetRow extends StatelessWidget {
   /// The beat this row answers with. A picker ticks; an action presses; deleting lands hard.
   final ArulHapticStyle haptic;
 
-  /// Stable accessibility id, for the rows that have one.
   final String? identifier;
 
   final bool selected;
@@ -329,8 +322,13 @@ class ArulSheetRow extends StatelessWidget {
       ),
     );
 
-    if (identifier == null) return row;
-    return Semantics(container: true, identifier: identifier, child: row);
+    return Semantics(
+      container: true,
+      button: true,
+      selected: selected,
+      identifier: identifier,
+      child: row,
+    );
   }
 }
 

@@ -135,6 +135,56 @@ void main() {
     });
   });
 
+  group('InstallReferrerService.withMetaReferrer', () {
+    const meta = {
+      'utm_source': 'apps.instagram.com',
+      'is_ct': 0,
+      'actual_timestamp': 1790424000,
+    };
+
+    test('relabels what Play left organic, unknown, other or empty', () {
+      for (final play in [
+        InstallReferrerService.parseAttribution(
+          'utm_source=google-play&utm_medium=organic',
+        ),
+        InstallReferrerService.parseAttribution('foo=bar'),
+        InstallReferrerService.parseAttribution('utm_source=someblog'),
+        const <String, String>{},
+      ]) {
+        final out = InstallReferrerService.withMetaReferrer(play, meta);
+        expect(out['install_channel'], 'meta_ads', reason: '$play');
+        expect(out['install_utm_source'], 'apps.instagram.com');
+      }
+    });
+
+    test('never overrides an ad, a share or one of our links', () {
+      for (final raw in [
+        'gclid=abc&utm_source=google',
+        'utm_source=apps.facebook.com&utm_campaign=fb4a',
+        'ref=ABC123',
+        'w=95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f',
+      ]) {
+        final play = InstallReferrerService.parseAttribution(raw);
+        expect(InstallReferrerService.withMetaReferrer(play, meta), play);
+      }
+    });
+
+    test(
+      'no Meta touch leaves Play untouched; a blank source keeps Play\'s',
+      () {
+        final organic = InstallReferrerService.parseAttribution(
+          'utm_source=google-play&utm_medium=organic',
+        );
+        expect(InstallReferrerService.withMetaReferrer(organic, null), organic);
+        final out = InstallReferrerService.withMetaReferrer(organic, {
+          'utm_source': '',
+        });
+        expect(out['install_channel'], 'meta_ads');
+        expect(out['install_utm_source'], 'google-play');
+      },
+    );
+  });
+
   group('InstallReferrerService referrer payload parsing', () {
     const id = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
     const rid = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';

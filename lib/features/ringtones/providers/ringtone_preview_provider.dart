@@ -13,19 +13,9 @@ import '../../../core/config/app_config.dart';
 import '../../../core/config/build_info.dart';
 import '../../../data/models/ringtone.dart';
 
-// Sentinel for copyWith nullable fields.
 const Object _absent = Object();
 
-/// Why [RingtonePreviewState.issue] is not [none] -> which toast line the screen should show.
-enum RingtonePreviewIssue {
-  none,
-
-  /// Empty audio key, or the fetch/decode failed -> `ringtonePreviewUnavailable`.
-  unavailable,
-
-  /// The media stream read 0 before a start -> `ringtoneVolumeMuted`.
-  muted,
-}
+enum RingtonePreviewIssue { none, unavailable, muted }
 
 class RingtonePreviewState {
   const RingtonePreviewState({
@@ -35,27 +25,19 @@ class RingtonePreviewState {
     this.issue = RingtonePreviewIssue.none,
   });
 
-  /// ID of the ringtone currently loaded (playing or paused). Null = idle.
   final String? currentId;
   final bool isPlaying;
 
-  /// True only while the audio engine is actively loading or buffering — NOT when paused.
   final bool isBuffering;
 
-  /// Why the last start attempt did not become audible; [RingtonePreviewNotifier.clearError]
-  /// resets it to [RingtonePreviewIssue.none].
   final RingtonePreviewIssue issue;
 
-  /// True for one state tick after playback fails outright; derived so every existing `hasError`
-  /// read — the screen's toast listener — keeps compiling and behaving exactly as before.
   bool get hasError => issue == RingtonePreviewIssue.unavailable;
 
-  /// True for one state tick after a muted device refused to start a preview.
   bool get isMuted => issue == RingtonePreviewIssue.muted;
 
   bool isPlayingId(String id) => currentId == id && isPlaying;
 
-  /// True only during network load/buffer — paused tracks return false.
   bool isLoadingId(String id) => currentId == id && isBuffering;
 
   RingtonePreviewState copyWith({
@@ -90,10 +72,9 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
 
   AppLifecycleListener? _lifecycle;
 
-  /// W4's two platform streams — a call, another player, or a headphone unplug. Cancelled
-  /// alongside the player in `ref.onDispose`; see [_handleInterruption] / [_handleBecomingNoisy].
   StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
   StreamSubscription<void>? _becomingNoisySub;
+  StreamSubscription<PlayerState>? _playerStateSub;
 
   /// Bumped by every action that decides what the player's volume should be next -> a ramp whose
   /// captured generation has gone stale stops writing volume, whether it lost the race to a new
@@ -142,9 +123,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     _player = AudioPlayer();
     _sessionReady = _configureSession();
 
-    // HOME must silence the preview: the IndexedStack keeps the screen alive and
-    // just_audio never abandons focus on its own, so a backgrounded app would
-    // keep playing AND keep holding the user's music down.
     _lifecycle = AppLifecycleListener(
       onStateChange: (lifecycle) {
         if (lifecycle == AppLifecycleState.paused ||
@@ -154,8 +132,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       },
     );
 
-    // Mirror player state changes into Riverpod state.
-    _player.playerStateStream.listen((ps) {
+    _playerStateSub = _player.playerStateStream.listen((ps) {
       if (ps.processingState == ProcessingState.completed) {
         // Track finished -> return to idle so the card resets to ▶. Nothing left to fade, and
         // interruption bookkeeping about a track that is now gone would only mislead the next one.
@@ -176,6 +153,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       _lifecycle?.dispose();
       unawaited(_interruptionSub?.cancel());
       unawaited(_becomingNoisySub?.cancel());
+      unawaited(_playerStateSub?.cancel());
       unawaited(_releaseFocus());
       _player.dispose();
     });
@@ -200,7 +178,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
           androidAudioFocusGainType: AndroidAudioFocusGainType.gainTransient,
         ),
       );
-      // W4: a call, another player starting, or an unplug all surface on these two streams.
       _interruptionSub = session.interruptionEventStream.listen(
         _handleInterruption,
       );
@@ -213,8 +190,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     }
   }
 
-  /// Hand the output back. just_audio takes focus on play and NEVER abandons it,
-  /// so every path to idle has to, or the transient gain never ends.
   Future<void> _releaseFocus() async {
     try {
       await (await AudioSession.instance).setActive(false);
@@ -376,7 +351,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     _pausedByInterruption = false;
     _duckedByInterruption = false;
 
-    // Same track — toggle play / pause.
     if (state.currentId == ringtone.id) {
       if (state.isPlaying) {
         // Visible flip leads exactly as a start does -> the icon answers the tap immediately and
@@ -451,7 +425,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       return;
     }
 
-    // W5: a muted stream cannot be heard -> refuse rather than spin an inaudible player.
     if (await _isMediaStreamMuted()) {
       debugPrint('[RingtonePreview] muted, not starting (volume 0)');
       await outgoingFaded;
@@ -532,6 +505,8 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   /// Fades first when something is audibly playing, exactly like a user pause -> a tab switch must
   /// not click.
   Future<void> stop() async {
+    // The screen's dispose defers this a microtask; the scope may be gone by then (sign-out).
+    if (!ref.mounted) return;
     _pausedByInterruption = false;
     _duckedByInterruption = false;
     final wasPlaying = state.isPlaying;
@@ -563,8 +538,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   /// The same length as a stream, for the beat between `play()` and the first duration landing.
   Stream<Duration?> get durationStream => _player.durationStream;
 
-  /// Call after consuming [RingtonePreviewState.issue] to prevent a duplicate toast, whichever
-  /// issue it was.
   void clearError() {
     if (state.issue != RingtonePreviewIssue.none) {
       state = state.copyWith(issue: RingtonePreviewIssue.none);

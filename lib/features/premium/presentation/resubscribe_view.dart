@@ -8,7 +8,6 @@ import 'member_view.dart';
 import 'paywall_ornaments.dart';
 import 'paywall_view.dart';
 
-/// The cancelled-but-paid-through premium state and its resubscribe action.
 class ArulResubscribeView extends StatelessWidget {
   const ArulResubscribeView({
     super.key,
@@ -59,29 +58,27 @@ class ArulResubscribeView extends StatelessWidget {
                 ArulTokens.premiumMemberScrollBottom,
               ),
               children: [
-                const PremiumPlanHero(
-                  headline: 'Auto-renew is off',
-                  subline:
-                      'You keep full access until your paid period ends. You '
-                      "won't be charged again.",
-                  status: 'Auto-renew off',
+                PremiumPlanHero(
+                  headline: l10n.premiumAutoRenewOffHeadline,
+                  subline: l10n.premiumAutoRenewOffSubline,
+                  status: l10n.premiumStatusAutoRenewOff,
                   statusTone: PremiumPlanStatusTone.warning,
                   ornamentStatus: true,
                 ),
                 const SizedBox(height: ArulTokens.premiumMemberSectionGap),
                 PremiumPlanBillingCard(
                   rows: [
-                    const PremiumPlanBillingRowData(
-                      label: 'Plan',
-                      value: 'Monthly',
+                    PremiumPlanBillingRowData(
+                      label: l10n.premiumPlanLabel,
+                      value: l10n.premiumPlanMonthly,
                     ),
-                    const PremiumPlanBillingRowData(
-                      label: 'Payment',
-                      value: 'UPI Autopay',
+                    PremiumPlanBillingRowData(
+                      label: l10n.premiumPaymentLabel,
+                      value: l10n.premiumPaymentUpiAutopay,
                     ),
                     if (accessUntil != null)
                       PremiumPlanBillingRowData(
-                        label: 'Access until',
+                        label: l10n.premiumAccessUntilLabel,
                         value: accessUntil!,
                       ),
                   ],
@@ -90,8 +87,8 @@ class ArulResubscribeView extends StatelessWidget {
                   const SizedBox(
                     height: ArulTokens.premiumResubscribePayUsingTop,
                   ),
-                  const Text(
-                    'Pay using',
+                  Text(
+                    l10n.upiPickerTitle,
                     style: ArulTokens.premiumResubscribePayUsing,
                   ),
                   const SizedBox(
@@ -110,7 +107,7 @@ class ArulResubscribeView extends StatelessWidget {
                 ShrineCta(
                   label: resuming
                       ? l10n.premiumResumeCta(resumeAppLabel!)
-                      : 'Resubscribe',
+                      : l10n.premiumResubscribeCta,
                   busy: purchaseBusy,
                   bottomLotus: true,
                   onPressed: purchaseBusy
@@ -132,8 +129,7 @@ class ArulResubscribeView extends StatelessWidget {
                     // is never a trial -> always the paid line.
                     resuming
                         ? l10n.premiumResumeHintPaid(resumeAppLabel!)
-                        : 'Resubscribing sets up a fresh UPI Autopay mandate at '
-                              '$monthlyPrice a month.',
+                        : l10n.premiumResubscribeFootnote(monthlyPrice),
                     textAlign: TextAlign.center,
                     style: ArulTokens.premiumResubscribeFootnote,
                   ),
@@ -177,7 +173,7 @@ class _PremiumUpiSelector extends StatelessWidget {
             vertical: ArulTokens.premiumResubscribeUpiVertical,
           ),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: ArulTokens.paywallPillFill,
             border: Border.all(color: ArulTokens.paywallBorderControl),
             borderRadius: BorderRadius.circular(
               ArulTokens.premiumResubscribeUpiRadius,
@@ -198,11 +194,11 @@ class _PremiumUpiSelector extends StatelessWidget {
               if (canChange) ...[
                 Opacity(
                   opacity: enabled ? 1 : ArulTokens.premiumMemberDisabledAlpha,
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Change',
+                        AppLocalizations.of(context).premiumChange,
                         style: ArulTokens.premiumResubscribeChange,
                       ),
                       SizedBox(width: ArulTokens.premiumResubscribeChangeGap),

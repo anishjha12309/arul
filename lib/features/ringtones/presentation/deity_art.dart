@@ -1,24 +1,7 @@
-/// Which artwork a ringtone row wears.
-///
-/// One transparent gold figure per deity under `assets/ringtones/`, composited over the hashed
-/// jewel-tone ground [RingtoneTile] still draws.
-/// Art keyed off `category` can only ever be as specific as the browse axis, which is deliberately
-/// coarse (CLAUDE.md §5b) — `perumal` alone spans Venkateswara, Krishna, Rama and Narasimha, `amman`
-/// six goddesses -> one emblem on all of them -> key the art off `deity` instead.
-///
-/// Resolution chain: the deity's own asset → the CATEGORY's default asset → `fallback.webp`.
-/// The middle link is the load-bearing one. `deity` is nullable free text -> older rows carry null,
-/// the CMS can save one without it, an import can invent a slug this release never heard of.
-/// Without the category step all of those land on a neutral gopuram — visibly wrong for a Murugan
-/// track sitting in a list of Murugan tracks -> with it the worst case for a KNOWN category is the
-/// right *family* of god, and only a genuinely new category reaches the fallback.
-/// That is what keeps a new deity an insert plus an app release for its WebP, never a migration.
 library;
 
 const String _base = 'assets/ringtones';
 
-/// The neutral tile: a three-tier gopuram, not a deity -> what an unrecognised category gets, and
-/// the only art that may stand for nothing in particular.
 const String kFallbackDeityAsset = '$_base/fallback.webp';
 
 /// Every deity slug that ships a WebP in this release.
@@ -79,8 +62,6 @@ String deityAsset({String? deity, String? category}) {
   return kFallbackDeityAsset;
 }
 
-/// Every asset path this release can ask for — the test's checklist, and the precache list if the
-/// tab ever needs one.
 Iterable<String> get allDeityAssets sync* {
   for (final slug in kDeityArtSlugs) {
     yield '$_base/$slug.webp';

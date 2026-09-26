@@ -102,8 +102,6 @@ class _SkeletonRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: _titleSubGap),
-                // The deity line -> what the row actually carries under the title, not a second
-                // copy of the title bar standing in for both lines at once.
                 FractionallySizedBox(
                   alignment: Alignment.centerLeft,
                   widthFactor: 0.42,
@@ -181,8 +179,6 @@ class RingtonesEmpty extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // The motif — the gopuram flanked by fading hairlines, a gold note beneath.
-                // The same quiet language as the feed's end-of-reel mark.
                 Opacity(
                   opacity: 0.6,
                   child: Row(
@@ -296,7 +292,7 @@ class RingtonesError extends StatelessWidget {
             label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
-            height: 46,
+            height: ArulTokens.minHitTarget,
             fontSize: 14,
             expand: false,
           ),

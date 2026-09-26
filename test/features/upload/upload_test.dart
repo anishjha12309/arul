@@ -270,6 +270,7 @@ class _FakeAuth implements AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   }) => throw UnimplementedError();
 

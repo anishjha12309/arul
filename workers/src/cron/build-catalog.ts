@@ -24,15 +24,12 @@ const PAGE_SIZE = 200;
 // The only un-versioned fetch is the rare version.json-failed fallback -> a day bounds how stale that can get
 const CATALOG_PAGE_CACHE_CONTROL = "public, max-age=86400";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 type ContentRow = Record<string, unknown>;
 
 interface ScopeResult {
   pages: number;
   items: number;
   skipped: number;
-  /** Orphaned page files removed this build — a stale tag page, or a page number a shrunk scope no longer reaches. */
   deleted: number;
 }
 
@@ -44,7 +41,6 @@ interface BuildResults {
     | { skipped: "locked" };
 }
 
-/** Build catalog pages for one scope, or for all enabled scopes when `scope` is null. */
 export async function buildCatalog(
   env: Env,
   scope: string | null,
@@ -228,8 +224,6 @@ async function buildCatalogLocked(
   }
 }
 
-// ── Always-fresh version pointer ────────────────────────────────────────────
-
 /**
  * Cache policy for the version pointer — the first request of every cold start, since every `?v=` comes from here.
  *
@@ -271,7 +265,6 @@ export async function writeVersionPointer(
   );
 }
 
-/** Current published content_version, or null when absent/unreadable. */
 async function readVersionPointer(r2Bucket: R2Bucket): Promise<string | null> {
   try {
     const raw = await getJsonString(r2Bucket, "catalog/version.json");
@@ -298,8 +291,6 @@ export function isNewerVersion(candidate: string, current: string): boolean {
   return a > b;
 }
 
-// ── Public app_config.json ────────────────────────────────────────────────────
-
 /**
  * Coerce a jsonb column to a real object, for LEGACY ROWS ONLY.
  *
@@ -324,7 +315,6 @@ function asJsonObject(v: unknown): unknown {
   return v ?? {};
 }
 
-/** Chip order per scope, as the app consumes it: `{ wallpapers: [...], ringtones: [...] }`. */
 export type CategoryOrder = Record<string, string[]>;
 
 /**
@@ -421,8 +411,6 @@ function pgTextArrayToList(v: unknown): string[] {
   return out.map((x) => x.trim()).filter((x) => x.length > 0);
 }
 
-// ── Daily popularity refresh ──────────────────────────────────────────────────
-
 /** The total use count as of the last popularity bump -> the guard that makes a quiet day a no-op. */
 const POPULARITY_TOTAL_KEY = "popularity_total";
 
@@ -473,7 +461,6 @@ export async function refreshPopularityOrder(env: Env): Promise<
 // There is no ordering FUNCTION -> the order IS the ORDER BY in buildScope() below -> do not add one
 // lib/feed-score.ts owns only the rank numbering -> read it for why the decayed score and round-robin are gone
 
-// ── Postgres bigint normalization ─────────────────────────────────────────────
 /**
  * Coerce a Postgres `bigint` column to a JS number — the same trap `content_version` above documents.
  *
@@ -492,28 +479,13 @@ function pgBigintToNumber(v: unknown): number {
   return 0;
 }
 
-// ── Per-scope builder ─────────────────────────────────────────────────────────
-
-async function buildScope(
+export async function buildScope(
   sql: ReturnType<typeof getDb>,
   r2Bucket: R2Bucket,
   scope: string,
 ): Promise<ScopeResult> {
 
   let rows: ContentRow[];
-  // THIS ORDER BY *IS* THE FEED ORDER, and it is the whole of it -> nothing re-sorts it in JS afterwards
-  // The CMS ordering page reproduces the feed by COPYING this clause -> keep the two byte-for-byte in step
-  // THREE TIERS: hand pins -> lifetime uses -> recency -> id. Each one only settles what the one above tied on
-  // Tier 1 is `feed_rank`, a nullable column the CMS writes (restored 2026-09-02) -> NULLS LAST puts unpinned last
-  // NULL means UNPINNED and is ~every row -> with nothing pinned this clause IS the use-count order it replaced
-  // Never fold NULL to 0 -> 0 is a valid top pin -> and imports write no rank, so a bulk drop cannot displace the head
-  // The trailing `id` is a TOTAL-ORDER tiebreaker, not decoration -> an import is one transaction
-  // So a whole batch ties on `created_at`, and at zero data on the counter too -> the sort would not be total
-  // Postgres may then return tied rows differently on any run -> a new plan, a parallel scan, a post-VACUUM heap
-  // Pages are cut every PAGE_SIZE rows in RETURNED order -> that reshuffles which item lands on which page
-  // The feed reorders under a scrolling user, and anyone mid-pagination can see an item twice or miss it
-  // `sort_order` deliberately does NOT lead -> imports own it -> leading with it ordered the feed by import sequence
-  // Pins do not live there either, and for the same reason -> an import would silently reset the curation
   if (scope === "wallpapers") {
     rows = await sql`
       SELECT * FROM wallpapers
@@ -533,7 +505,6 @@ async function buildScope(
     throw new Error(`[build-catalog] unknown scope: ${scope}`);
   }
 
-  // ── Validate rows ──────────────────────────────────────────────────────────
   let skipped = 0;
   const validRows = rows.filter((row) => {
     if (scope === "wallpapers") {

@@ -73,15 +73,6 @@ const postHogAllowedEvents = <String>{
 /// So `flutter test`, CI and key-less dev builds send nothing.
 @Riverpod(keepAlive: true)
 AnalyticsService analyticsService(Ref ref) {
-  // Cohort membership is resolved in main() before `Posthog().setup()`, and defaults to FALSE.
-  // So a build that never called `AnalyticsCohort.resolve` sends nothing, rather than everything.
-  //
-  // NO SIDELOADED BUILD REPORTS TO POSTHOG (owner's rule). A release APK on a developer's phone and
-  // a Play install are the same `release` binary, so without this gate every on-device pass writes
-  // itself into the product funnel — the panel then measures the people building the app.
-  // `PlayInstall` is probed once in main() before the SDK starts; it fails toward Play, so a channel
-  // hiccup never costs a real user's events. GA4, Meta and Crashlytics are deliberately NOT gated
-  // here: GA4 is the complete record and the ads source, and a crash from a test build is wanted.
   final services = <AnalyticsService>[
     if (AppConfig.posthogEnabled &&
         AnalyticsCohort.isMember &&

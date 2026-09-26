@@ -10,8 +10,6 @@
 
 import type { Env } from "../env.js";
 
-// ── Hosts ─────────────────────────────────────────────────────────────────────
-
 /**
  * Is this the production gateway? TRIMMED, and any unrecognised value THROWS. Both halves matter.
  *
@@ -73,10 +71,7 @@ function getOAuthUrl(env: Env): string {
     : "https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token";
 }
 
-// ── OAuth token (KV-cached) ───────────────────────────────────────────────────
-
 const OAUTH_KV_KEY = "phonepe:oauth";
-/** Refresh the token this many seconds before it actually expires. */
 const OAUTH_REFRESH_BUFFER_SECONDS = 60;
 
 interface CachedToken {
@@ -89,7 +84,6 @@ interface CachedToken {
  * The KV TTL is (expires_at - now - buffer) -> the entry disappears BEFORE the token could go invalid
  */
 export async function getAccessToken(env: Env): Promise<string> {
-  // 1. Try cache
   const cached = await env.KV.get(OAUTH_KV_KEY, "json") as CachedToken | null;
   if (cached) {
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -128,7 +122,6 @@ export async function getAccessToken(env: Env): Promise<string> {
     throw new Error("PhonePe OAuth: missing access_token in response");
   }
 
-  // 3. Cache it — TTL = remaining lifetime minus buffer (min 30s)
   const nowSeconds = Math.floor(Date.now() / 1000);
   const ttl = Math.max(30, data.expires_at - nowSeconds - OAUTH_REFRESH_BUFFER_SECONDS);
   const toCache: CachedToken = {
@@ -140,8 +133,6 @@ export async function getAccessToken(env: Env): Promise<string> {
   return data.access_token;
 }
 
-// ── Auth header helper ────────────────────────────────────────────────────────
-
 async function authHeaders(env: Env): Promise<Record<string, string>> {
   const token = await getAccessToken(env);
   return {
@@ -150,16 +141,12 @@ async function authHeaders(env: Env): Promise<Record<string, string>> {
   };
 }
 
-// ── Setup subscription (PENNY_DROP, /checkout/v2/pay) ─────────────────────────
-
 export interface SetupSubscriptionParams {
-  /** Our internal user UUID — used to build merchant IDs */
   userId: string;
   /** Unique merchant-generated subscription ID (≤63 chars, [A-Za-z0-9_-]) */
   merchantSubscriptionId: string;
   /** Unique merchant-generated order ID for this setup call (≤63 chars) */
   merchantOrderId: string;
-  /** URL PhonePe redirects to after the user completes the mandate */
   redirectUrl: string;
   /**
    * When set, the mandate is authorized via a REAL first debit of this amount
@@ -171,9 +158,7 @@ export interface SetupSubscriptionParams {
 }
 
 export interface SetupSubscriptionResult {
-  /** PhonePe-generated order ID */
   orderId: string;
-  /** Typically "PENDING" immediately after setup */
   state: string;
   /**
    * Web-checkout redirect URL. The mobile SDK returns the user via the app scheme instead, so it never reads this.
@@ -219,7 +204,7 @@ export async function setupSubscription(
         merchantSubscriptionId: params.merchantSubscriptionId,
         authWorkflowType: upfront ? "TRANSACTION" : "PENNY_DROP",
         amountType: "FIXED",
-        maxAmount: 19900, // ₹199 in paise
+        maxAmount: 19900,
         frequency: "MONTHLY",
         productType: "UPI_MANDATE",
       },
@@ -269,12 +254,9 @@ export async function setupSubscription(
   };
 }
 
-// ── Setup subscription — direct UPI intent (/subscriptions/v2/setup) ──────────
-
 export interface SetupIntentParams {
   merchantOrderId: string;
   merchantSubscriptionId: string;
-  /** Android package of the UPI app the user picked (e.g. "com.phonepe.app"). */
   targetApp: string;
   /** Present = trial consumed -> TRANSACTION with this real first debit. Absent = PENNY_DROP (₹2, auto-reversed). */
   upfrontAmountPaise?: number | undefined;
@@ -350,8 +332,6 @@ export async function setupSubscriptionIntent(
 
   return { orderId: data.orderId, state: data.state, intentUrl: data.intentUrl };
 }
-
-// ── Cancel (revoke) subscription ──────────────────────────────────────────────
 
 /**
  * Merchant-initiated cancellation of an active mandate. No request body; success is 204 No Content.
@@ -433,13 +413,10 @@ export async function revokeMandateTolerant(
   }
 }
 
-// ── Notify redemption ─────────────────────────────────────────────────────────
-
 export interface NotifyRedemptionParams {
   merchantSubscriptionId: string;
   /** Unique order ID for this debit cycle (≤63 chars, [A-Za-z0-9_-]) */
   merchantOrderId: string;
-  /** Amount in paise — 19900 for ₹199 */
   amountPaise: number;
 }
 
@@ -500,10 +477,8 @@ export async function notifyRedemption(
   };
 }
 
-// ── Execute redemption ────────────────────────────────────────────────────────
-
 export interface ExecuteRedemptionResult {
-  state: string; // PENDING | COMPLETED | FAILED
+  state: string;
   transactionId: string;
 }
 
@@ -542,12 +517,9 @@ export async function executeRedemption(
   };
 }
 
-// ── Subscription status ───────────────────────────────────────────────────────
-
 export interface SubscriptionStatusResult {
   merchantSubscriptionId: string;
   subscriptionId: string;
-  /** ACTIVE | ACTIVATION_IN_PROGRESS | EXPIRED | FAILED | CANCELLED | REVOKED | PAUSED | … */
   state: string;
   authWorkflowType: string;
   amountType: string;
@@ -556,7 +528,6 @@ export interface SubscriptionStatusResult {
   expireAt: number | null;
 }
 
-/** GET /subscriptions/v2/{merchantSubscriptionId}/status?details=true */
 export async function getSubscriptionStatus(
   env: Env,
   merchantSubscriptionId: string,
@@ -584,8 +555,6 @@ export async function getSubscriptionStatus(
   return data;
 }
 
-// ── Order status (setup orders + redemption orders) ───────────────────────────
-
 export interface OrderStatusResult {
   /**
    * COMPLETED | FAILED | PENDING | NOTIFIED. NOTIFIED is redemption-only: announced, never executed.
@@ -607,7 +576,6 @@ export interface OrderStatusResult {
   };
 }
 
-/** GET /subscriptions/v2/order/{merchantOrderId}/status?details=true — setup AND redemption orders alike. */
 export async function getOrderStatus(
   env: Env,
   merchantOrderId: string,
@@ -635,8 +603,6 @@ export async function getOrderStatus(
   return data;
 }
 
-// ── Redemption status (alias — same endpoint as order status) ─────────────────
-
 /** Identical to getOrderStatus — a distinct name only so redemption call sites read clearly. */
 export async function getRedemptionStatus(
   env: Env,
@@ -645,12 +611,9 @@ export async function getRedemptionStatus(
   return getOrderStatus(env, merchantOrderId);
 }
 
-// ── Refund ────────────────────────────────────────────────────────────────────
-
 export interface RefundResult {
   refundId: string;
   amount: number;
-  /** PENDING | COMPLETED | FAILED */
   state: string;
 }
 
@@ -688,8 +651,6 @@ export async function initiateRefund(
   return data;
 }
 
-// ── Webhook callback auth verification ───────────────────────────────────────
-
 /**
  * Verify a PhonePe callback's Authorization header — a bare hex SHA256(username + ":" + password).
  * There is no scheme prefix, no signature over the body and no timestamp -> replay protection is ours (KV marks)
@@ -712,8 +673,6 @@ export async function verifyWebhookAuth(
   return verifyCallbackAuth(authHeader, username, password);
 }
 
-// ── Webhook payload types ─────────────────────────────────────────────────────
-
 /**
  * Shape of a PhonePe Autopay v2 webhook POST body.
  *
@@ -726,7 +685,6 @@ export async function verifyWebhookAuth(
  *   Refund:      pg.refund.accepted | pg.refund.completed | pg.refund.failed
  */
 export interface PhonePeWebhookPayload {
-  /** e.g. "checkout.order.completed" (dotted-lower form). */
   event?: string;
   /**
    * The SAME event in UPPER_SNAKE ("SUBSCRIPTION_REVOKED") — PhonePe sends one field or the other.
@@ -734,7 +692,6 @@ export interface PhonePeWebhookPayload {
    */
   type?: string;
   payload: {
-    /** Order/subscription state */
     state: string;
     merchantId: string;
     merchantOrderId?: string;
@@ -776,14 +733,11 @@ export function merchantSubscriptionIdOf(
   return pp?.merchantSubscriptionId ?? pp?.paymentFlow?.merchantSubscriptionId;
 }
 
-/** PhonePe's own subscription id, same two homes as above. */
 export function phonePeSubscriptionIdOf(
   pp: PhonePeWebhookPayload["payload"] | undefined,
 ): string | null {
   return pp?.subscriptionId ?? pp?.paymentFlow?.subscriptionId ?? null;
 }
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
 
 async function sha256Hex(input: string): Promise<string> {
   const buf = await crypto.subtle.digest(
@@ -794,8 +748,6 @@ async function sha256Hex(input: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
-
-// ── Merchant ID generators ────────────────────────────────────────────────────
 
 /**
  * DKS_S_<userId-first-8>_<epoch-ms-base36>. PhonePe caps these at 63 chars of [A-Za-z0-9_-].

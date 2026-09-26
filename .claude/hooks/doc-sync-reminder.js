@@ -7,6 +7,14 @@
 // First match wins. Order specific -> general.
 const ROUTES = [
   {
+    when: ["lib/features/review/**"],
+    docs: ["docs/review-prompt.md", "docs/edge-cases.md §Review prompt"],
+  },
+  {
+    when: ["lib/features/app_update/**", "lib/core/update/**", "android/app/src/main/kotlin/**/update/**"],
+    docs: ["docs/app-update.md", "docs/edge-cases.md §In-app update"],
+  },
+  {
     when: [
       "android/app/src/main/res/values*/styles.xml",
       "android/app/src/main/res/drawable*/launch_background.xml",

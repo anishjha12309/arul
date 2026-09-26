@@ -154,10 +154,21 @@ void main() {
         'p3b',
       ]);
       // The cache is written after a successful parse, best-effort -> poll for it rather than awaiting.
-      await _pumpUntil(() => cacheFile.existsSync());
-      final cached =
-          jsonDecode(await cacheFile.readAsString()) as Map<String, dynamic>;
-      expect((cached['items'] as List).length, 6);
+      // Poll until it PARSES: `writeAsString` creates the file before its bytes land, and on a loaded
+      // machine an exists-only poll read an empty file ("Unexpected end of input").
+      Map<String, dynamic>? cached;
+      await _pumpUntil(() {
+        if (!cacheFile.existsSync()) return false;
+        try {
+          cached =
+              jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>;
+          return true;
+        } on FormatException {
+          return false;
+        }
+      });
+      final written = cached!;
+      expect((written['items'] as List).length, 6);
     });
 
     test('network failure with NO cache is the error state', () async {

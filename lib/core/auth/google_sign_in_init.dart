@@ -53,7 +53,6 @@ abstract final class GoogleSignInInit {
     return base64UrlEncode(bytes).replaceAll('=', '');
   }
 
-  /// Test-only: forget the recorded call so each test starts clean.
   @visibleForTesting
   static void resetForTest() {
     _ready = null;

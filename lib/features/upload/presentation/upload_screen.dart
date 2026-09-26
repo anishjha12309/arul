@@ -19,6 +19,7 @@ import '../../ringtones/providers/ringtone_catalog_providers.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../data/media_pick_service.dart';
 import '../providers/upload_provider.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Upload-your-content — WALLPAPERS **and** RINGTONES.
 ///
@@ -65,12 +66,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     'sivan',
   ];
 
-  /// 'wallpaper' | 'ringtone' — the submitted `kind`.
   String _kind = 'wallpaper';
   String? _category;
   bool _rightsAccepted = false;
 
-  // Picked file (validated against UploadConstraints before it lands here).
   String? _filePath;
   String? _fileName;
   String? _mimeType;
@@ -148,8 +147,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     unawaited(File(path).delete().then((_) {}, onError: (_) {}));
   }
 
-  /// Picks media for the current kind and validates MIME and size against [UploadConstraints].
-  /// Rejects with a toast when it does not fit.
   Future<void> _pickFile() async {
     if (_picking) return;
     _picking = true;
@@ -264,8 +261,14 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
         );
         if (!mounted) return;
         if (context.mounted && context.canPop()) context.pop();
-      case UploadError(:final message):
-        showArulToast(context, message, kind: ToastKind.error);
+      case UploadError():
+        // The provider's message is a diagnostic ("Upload URL not received", an HTTP status) ->
+        // the user gets the localized line; the reason stays in the state for logs.
+        showArulToast(
+          context,
+          AppLocalizations.of(context).errorGeneric,
+          kind: ToastKind.error,
+        );
         ref.read(uploadProvider.notifier).reset();
       case _:
         break;
@@ -283,7 +286,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
     final dashColor = isDark
         ? ArulTokens.goldBorder50
-        : const Color.fromRGBO(122, 30, 51, 0.45); // maroon 45%, per spec
+        : const Color.fromRGBO(122, 30, 51, 0.45);
     final pickZoneFill = isDark ? null : ArulTokens.cardBgLight;
     final labelColor = isDark
         ? ArulTokens.darkTextSecondary
@@ -308,25 +311,12 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: Icon(Icons.arrow_back, color: textPrimary),
-                    tooltip: MaterialLocalizations.of(
-                      context,
-                    ).backButtonTooltip,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    // Kind-neutral — this screen takes both, so the title cannot name one of them.
-                    l10n.uploadTitle,
-                    style: ArulTokens.screenTitle.copyWith(color: textPrimary),
-                  ),
-                ],
-              ),
+            ArulPushedHeader(
+              // Kind-neutral — this screen takes both, so the title cannot name one of them.
+              title: l10n.uploadTitle,
+              color: textPrimary,
+              identifier: 'arul_upload_back',
+              onBack: () => context.pop(),
             ),
             Expanded(
               child: ListView(
@@ -366,7 +356,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Pick zone.
                   Semantics(
                     container: true,
                     identifier: 'arul_upload_pick',
@@ -402,6 +391,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                                 color: accent,
                               ),
                               const SizedBox(height: 8),
+                              // ONE line, fixed height: the prompt is a short everyday phrase in
+                              // every locale (the ARB description says so), a picked FILE NAME can
+                              // run to anything and ellipsises. A wrapping or shrinking prompt
+                              // re-laid the whole zone and the list under it.
                               Text(
                                 _fileName ??
                                     (_isRingtone
@@ -432,7 +425,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Title (optional).
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -460,18 +452,26 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                           border: Border.all(color: fieldBorder),
                         ),
                         alignment: Alignment.centerLeft,
-                        child: TextField(
-                          controller: _titleController,
-                          style: TextStyle(fontSize: 14.5, color: textPrimary),
-                          decoration: InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            hintText: _isRingtone
-                                ? l10n.uploadTitleHintRingtone
-                                : l10n.uploadTitleHint,
-                            hintStyle: TextStyle(
-                              fontSize: 14.5,
-                              color: placeholderColor,
+                        // The visible "Title (optional)" caption above is a sibling Text, so
+                        // TalkBack never hears it as the field's name without this label.
+                        child: Semantics(
+                          label:
+                              '${l10n.uploadTitleLabel} ${l10n.uploadTitleOptional}',
+                          child: TextField(
+                            controller: _titleController,
+                            style: ArulTokens.rowTitle.copyWith(
+                              color: textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              isCollapsed: true,
+                              border: InputBorder.none,
+                              hintText: _isRingtone
+                                  ? l10n.uploadTitleHintRingtone
+                                  : l10n.uploadTitleHint,
+                              hintStyle: TextStyle(
+                                fontSize: 14.5,
+                                color: placeholderColor,
+                              ),
                             ),
                           ),
                         ),
@@ -480,7 +480,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Category.
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -507,50 +506,61 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Rights checkbox.
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    // A checkbox flips a discrete value — the toggle tick.
-                    onTapDown: (_) => ArulHaptics.selection(),
+                  Semantics(
+                    // Announced as ONE checkbox with its sentence, not a glyph and a paragraph.
+                    checked: _rightsAccepted,
+                    label: l10n.uploadRightsCheckbox,
+                    button: true,
                     onTap: () =>
                         setState(() => _rightsAccepted = !_rightsAccepted),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 2,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            _rightsAccepted
-                                ? Icons.check_box
-                                : Icons.check_box_outline_blank,
-                            size: 22,
-                            color: _rightsAccepted
-                                ? accent
-                                : (isDark
-                                      ? ArulTokens.darkFaint
-                                      : ArulTokens.lightFaint),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              l10n.uploadRightsCheckbox,
-                              style: ArulTokens.caption.copyWith(
-                                fontSize: 13,
-                                color: rightsTextColor,
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      // A checkbox flips a discrete value — the toggle tick.
+                      onTapDown: (_) => ArulHaptics.selection(),
+                      onTap: () =>
+                          setState(() => _rightsAccepted = !_rightsAccepted),
+                      child: Container(
+                        // A one-line caption beside a 22 px box was ~30 dp of target.
+                        constraints: const BoxConstraints(
+                          minHeight: ArulTokens.minHitTarget,
+                        ),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              _rightsAccepted
+                                  ? Icons.check_box
+                                  : Icons.check_box_outline_blank,
+                              size: 22,
+                              color: _rightsAccepted
+                                  ? accent
+                                  : (isDark
+                                        ? ArulTokens.darkFaint
+                                        : ArulTokens.lightFaint),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                l10n.uploadRightsCheckbox,
+                                style: ArulTokens.caption.copyWith(
+                                  fontSize: 13,
+                                  color: rightsTextColor,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Submit — disabled until file, category and rights are all present.
-                  // Also disabled while an upload is in flight, for re-entrancy.
                   CtaButton(
                     label: l10n.uploadSubmitCta,
                     identifier: 'arul_upload_submit',

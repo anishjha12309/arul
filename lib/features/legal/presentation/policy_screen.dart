@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/state_views.dart';
 import '../../../core/config/app_config.dart';
@@ -32,7 +33,6 @@ enum PolicyDoc {
     PolicyDoc.refund => AppConfig.refundUrl,
   };
 
-  /// The push target. Call sites use this instead of spelling paths.
   String get route => switch (this) {
     PolicyDoc.privacy => '/policy/privacy',
     PolicyDoc.terms => '/policy/terms',
@@ -73,6 +73,23 @@ class PolicyScreen extends StatefulWidget {
 
   final PolicyDoc doc;
 
+  /// Hosts the reader navigates itself — DERIVED from the configured URLs, never written out.
+  /// So a dart-define override cannot bounce our own pages out to the browser.
+  static final Set<String> _ownHosts = {
+    Uri.parse(AppConfig.privacyUrl).host,
+    Uri.parse(AppConfig.termsUrl).host,
+    Uri.parse(AppConfig.refundUrl).host,
+  }..removeWhere((h) => h.isEmpty);
+
+  /// Whether [url] stays in the reader; anything else goes out to the OS.
+  @visibleForTesting
+  static bool keepsInReader(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        _ownHosts.contains(uri.host);
+  }
+
   @override
   State<PolicyScreen> createState() => _PolicyScreenState();
 }
@@ -80,10 +97,8 @@ class PolicyScreen extends StatefulWidget {
 class _PolicyScreenState extends State<PolicyScreen> {
   late final WebViewController _controller;
 
-  /// True until the document has loaded AND been styled — the web view is invisible throughout.
   bool _loading = true;
 
-  /// A main-frame load failure. Almost always no connection.
   bool _failed = false;
 
   /// Whether the reader has followed a link deeper into the policy pages.
@@ -97,14 +112,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// [WebViewController.setBackgroundColor] was never called and the platform view kept its
   /// default white.
   Brightness? _brightness;
-
-  /// Hosts the reader navigates itself — DERIVED from the configured URLs, never written out.
-  /// So a dart-define override cannot bounce our own pages out to the browser.
-  static final Set<String> _ownHosts = {
-    Uri.parse(AppConfig.privacyUrl).host,
-    Uri.parse(AppConfig.termsUrl).host,
-    Uri.parse(AppConfig.refundUrl).host,
-  }..removeWhere((h) => h.isEmpty);
 
   @override
   void initState() {
@@ -153,7 +160,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
     final brightness = Theme.of(context).brightness;
     if (brightness == _brightness) return;
     _brightness = brightness;
-    // Matches the page's ground to the app's before first paint, and re-themes on a live flip.
     unawaited(
       _controller.setBackgroundColor(
         _brightness == Brightness.dark
@@ -208,11 +214,6 @@ class _PolicyScreenState extends State<PolicyScreen> {
     }
   }
 
-  /// The document has finished loading: style it, then show it.
-  ///
-  /// Android fires `onPageFinished` for its OWN error page too, right after
-  /// `onWebResourceError` -> revealing there paints the robot over the offline state.
-  /// So a failed load is final until [_retry] clears it.
   Future<void> _reveal() async {
     if (_failed) return;
     await _applyAppChrome();
@@ -248,13 +249,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
   /// The text links to `mailto:` support, PhonePe's and Google's policies, and the Play listing.
   /// A policy reader should swallow none of those — `mailto:` a web view cannot render at all.
   FutureOr<NavigationDecision> _decideNavigation(NavigationRequest request) {
-    final uri = Uri.tryParse(request.url);
-    final isOurs =
-        uri != null &&
-        (uri.scheme == 'https' || uri.scheme == 'http') &&
-        _ownHosts.contains(uri.host);
-    if (isOurs) return NavigationDecision.navigate;
+    if (PolicyScreen.keepsInReader(request.url)) {
+      return NavigationDecision.navigate;
+    }
 
+    final uri = Uri.tryParse(request.url);
     if (uri != null) {
       // Fire-and-forget -> a device with no handler for the scheme must not throw into the reader.
       unawaited(
@@ -267,13 +266,13 @@ class _PolicyScreenState extends State<PolicyScreen> {
     return NavigationDecision.prevent;
   }
 
-  /// One back for the arrow and the gesture — unwind the pages first, then leave the screen.
+  /// Reads [_canGoBack], never the web view -> the pop starts on the tap's own frame, not after a
+  /// round trip to a platform view that is busy rendering the page.
   Future<void> _back() async {
-    if (await _controller.canGoBack()) {
+    if (_canGoBack) {
       await _controller.goBack();
       return;
     }
-    if (!mounted) return;
     if (context.canPop()) context.pop();
   }
 
@@ -305,31 +304,11 @@ class _PolicyScreenState extends State<PolicyScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // The pushed sub-screen header, as on Upload and Reminders — this is an app screen.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 6, 16, 4),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => unawaited(_back()),
-                      icon: Icon(Icons.arrow_back, color: textPrimary),
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).backButtonTooltip,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        widget.doc.title(l10n),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: ArulTokens.screenTitle.copyWith(
-                          color: textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              ArulPushedHeader(
+                title: widget.doc.title(l10n),
+                color: textPrimary,
+                onBack: () => unawaited(_back()),
+                identifier: 'arul_policy_back',
               ),
 
               Expanded(

@@ -5,29 +5,37 @@ import android.app.ActivityManager
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.net.ConnectivityManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
+import com.facebook.LoggingBehavior
 import com.facebook.applinks.AppLinkData
 import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
+import com.hsrutility.arul.referral.MetaInstallReferrer
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
+import com.hsrutility.arul.update.AppUpdateChannel
 import com.hsrutility.arul.upload.MediaPickChannel
 import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -108,6 +116,14 @@ class MainActivity : FlutterFragmentActivity() {
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
     private var mediaPickChannel: MediaPickChannel? = null
+    private var appUpdateChannel: AppUpdateChannel? = null
+
+    // Registered as a member -> the Activity Result API requires it before STARTED, and
+    // configureFlutterEngine can run later than that.
+    private val appUpdateLauncher =
+        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+            appUpdateChannel?.onFlowResult(it.resultCode)
+        }
     private var deferredLinkChannel: MethodChannel? = null
     private var googleDeferredPrefs: SharedPreferences? = null
     private var googleDeferredListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
@@ -128,6 +144,12 @@ class MainActivity : FlutterFragmentActivity() {
         // This is what renders LaunchTheme's splash on API<=30 -> without it those attrs are Android-12-only.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Meta writes App Events to logcat only in debug mode -> debuggable builds only, so a sideload
+        // can prove StartTrial/InitiateCheckout reach the SDK while a release build never logs them.
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            FacebookSdk.setIsDebugEnabled(true)
+            FacebookSdk.addLoggingBehavior(LoggingBehavior.APP_EVENTS)
+        }
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()
         // FLAG_SECURE blocks screenshots and recording and blanks the recents thumbnail -> Play builds only.
@@ -279,6 +301,18 @@ class MainActivity : FlutterFragmentActivity() {
                         pendingDeferredLinks.remove(token)
                         result.success(true)
                     }
+                    "getMetaInstallReferrer" -> {
+                        val appId = if (FacebookSdk.isInitialized()) FacebookSdk.getApplicationId() else null
+                        if (appId.isNullOrBlank()) {
+                            result.success(null)
+                            return@setMethodCallHandler
+                        }
+                        val context = applicationContext
+                        Thread {
+                            val row = MetaInstallReferrer.read(context, appId)
+                            Handler(Looper.getMainLooper()).post { result.success(row) }
+                        }.start()
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -332,6 +366,7 @@ class MainActivity : FlutterFragmentActivity() {
                 // generation — the permission model, the channel rules and the trampoline rules all
                 // change with it, and nothing else in the payload says which phone this is.
                 "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
+                "dataSaverOn" -> result.success(dataSaverOn())
                 else -> result.notImplemented()
             }
         }
@@ -365,6 +400,17 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             MediaPickChannel.CHANNEL,
         ).setMethodCallHandler(mediaPick)
+
+        // Play in-app update (docs/app-update.md) -> its flow result comes back through appUpdateLauncher.
+        val updateMethodChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            AppUpdateChannel.CHANNEL,
+        )
+        // The fake-update test hook is honoured only on a sideload -> a Play install can never be faked.
+        val fakeUpdate = if (isPlayInstall()) null else intent?.getStringExtra(AppUpdateChannel.FAKE_EXTRA)
+        val appUpdate = AppUpdateChannel(this, appUpdateLauncher, updateMethodChannel, fakeUpdate)
+        appUpdateChannel = appUpdate
+        updateMethodChannel.setMethodCallHandler(appUpdate)
 
         // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
         // Android stops showing its dialog once the user has refused twice, so the toggle would
@@ -450,6 +496,8 @@ class MainActivity : FlutterFragmentActivity() {
         // A destroyed engine must leave no dangling coroutine jobs, ExoPlayers or SurfaceProducers behind.
         wallpaperApplyChannel?.dispose()
         wallpaperApplyChannel = null
+        appUpdateChannel?.dispose()
+        appUpdateChannel = null
         feedVideoPlugin?.dispose()
         feedVideoPlugin = null
         videoThumbnailChannel?.dispose()
@@ -504,9 +552,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     // The URL an ad's deep-link field carried, for a user who installed from it (docs/deferred-links.md §Meta).
     // fetchDeferredAppLinkData asks Meta's Graph API once -> it logs NO app event -> attribution is unaffected.
-    // Called from Dart's FIRST pull, never onCreate: a Graph POST in the first second of a fresh
-    // install shared the link with the sign-in and the catalog, and on a 7 KB/s connection that
-    // queue starved all three. An ad target one sign-in late still lands before the feed does.
+    // Runs in onCreate, so on a fresh install this Graph POST shares the first second's network with
+    // the sign-in and the catalog — on a 7 KB/s connection that queue starved all three once.
     // The SDK was already initialised by its manifest ContentProvider -> this Activity does not init it.
     // A null callback means "no link" AND "network failed" -> retry over the first launches, capped at META_MAX_ATTEMPTS.
     // Never throws -> a deferred link is never worth a crash on the launch path.
@@ -634,6 +681,19 @@ class MainActivity : FlutterFragmentActivity() {
 
     // Same fallback chain as WRITE_SETTINGS: the per-app notification page, then app details,
     // which resolves everywhere. A tap that opens nothing is preferable to a crash.
+    // Android's Data Saver blocks background data on a METERED network and asks the foreground to
+    // use less. Both halves must hold: Data Saver on Wi-Fi restricts nothing.
+    private fun dataSaverOn(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            cm.isActiveNetworkMetered &&
+                cm.restrictBackgroundStatus == ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun openNotificationSettingsScreen() {
         val candidates = mutableListOf<Intent>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

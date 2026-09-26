@@ -2,8 +2,6 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 
-/// Build-time config. Values arrive via `--dart-define-from-file=env/dev.json`.
-/// No secrets ever live here — the app holds none (CLAUDE.md §9).
 abstract final class AppConfig {
   /// The media CDN — the custom domain in both env files.
   /// Cloudflare rate-limits the r2.dev origin and Cache Rules/WAF never apply there -> never default to it.
@@ -83,7 +81,6 @@ abstract final class AppConfig {
   /// So key-less dev builds and `flutter test` send nothing.
   static bool get posthogEnabled => isRealValue(posthogKey);
 
-  /// A dart-define is "real" when non-empty and not a placeholder sentinel (`YOUR_`/`placeholder`/`TODO`).
   static bool isRealValue(String v) =>
       v.isNotEmpty &&
       !v.startsWith('YOUR_') &&
@@ -91,7 +88,6 @@ abstract final class AppConfig {
       !v.startsWith('TODO') &&
       !v.endsWith('TODO');
 
-  /// True when running under `flutter test` (the runner sets this env var).
   static final bool isFlutterTest = Platform.environment.containsKey(
     'FLUTTER_TEST',
   );

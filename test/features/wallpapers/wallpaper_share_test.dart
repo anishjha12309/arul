@@ -210,6 +210,9 @@ class _FakeDirectShare implements DirectShareService {
   final calls = <({String filePath, String mimeType, String text})>[];
 
   @override
+  Future<bool> shareTextToWhatsApp(String text) async => installed;
+
+  @override
   Future<bool> shareToWhatsApp({
     required String filePath,
     required String mimeType,

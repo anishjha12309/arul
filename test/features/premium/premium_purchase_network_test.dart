@@ -142,8 +142,8 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWith((ref) => api),
         analyticsServiceProvider.overrideWith((ref) => analytics),
-        appConfigProvider.overrideWith(
-          (ref) async => const AppConfigModel(
+        appConfigProvider.overrideWithBuild(
+          (ref, _) async => const AppConfigModel(
             prices: {
               'monthly': {'amount': 19900},
             },
@@ -156,7 +156,6 @@ void main() {
             prefs: prefs,
             analytics: analytics,
             monthlyPriceRupees: () => 199,
-            isFreshInstall: true,
           ),
         ),
       ],
@@ -320,4 +319,65 @@ void main() {
       }
     }
   });
+
+  group('cancel never shows the Worker message', () {
+    testWidgets('a server refusal is the generic localized line', (
+      tester,
+    ) async {
+      final container = await build(
+        tester,
+        _CancelApi(
+          const ApiException(
+            status: 502,
+            code: 'phonepe_error',
+            message: 'PhonePe revoke failed: upstream 500',
+          ),
+        ),
+      );
+      final kind = await container
+          .read(premiumPurchaseProvider.notifier)
+          .cancel();
+      expect(kind, PurchaseErrorKind.generic);
+      final text = purchaseErrorText(
+        lookupAppLocalizations(const Locale('ta')),
+        kind!,
+      );
+      expect(text, isNot(contains('PhonePe revoke')));
+    });
+
+    testWidgets('a dead link is the network line', (tester) async {
+      final container = await build(
+        tester,
+        _CancelApi(const SocketException('Failed host lookup')),
+      );
+      expect(
+        await container.read(premiumPurchaseProvider.notifier).cancel(),
+        PurchaseErrorKind.network,
+      );
+    });
+
+    testWidgets('success is null', (tester) async {
+      final container = await build(tester, _CancelApi(null));
+      expect(
+        await container.read(premiumPurchaseProvider.notifier).cancel(),
+        isNull,
+      );
+    });
+  });
+}
+
+class _CancelApi extends ApiClient {
+  _CancelApi(this.failure);
+
+  final Object? failure;
+
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = true,
+  }) async {
+    if (path == '/payments/cancel' && failure != null) throw failure!;
+    return {};
+  }
 }

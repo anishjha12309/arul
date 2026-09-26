@@ -14,11 +14,11 @@ import '../api/api_client.dart';
 ///   · Flutter's image pipeline ([library] is `image resource service`) — the framework catches it
 ///     and paints the errorBuilder; a broken image is a content or network fault, never a crash;
 ///   · transport failures on the app's own calls — offline, reset, TLS, timeout; the process lives;
-///   · a dead refresh token ([ApiException.isSessionExpired]) — the tokens are already cleared and
-///     the sign-in wall is the next screen, so it is a LOGOUT, not a crash. It was the app's single
-///     largest "crash" (8 users in the 8 days to 10 Sep on builds 70+), i.e. a crash-free rate that
-///     was measuring session lifetimes. Only the two terminal refresh codes qualify; a transient
-///     refresh failure keeps its tokens and is not this.
+///   · no live session ([ApiException.isSessionExpired]) — a dead refresh token, or a gated call made
+///     while signed out (a push-open report, a purchase poll outliving a sign-out). The tokens are
+///     already cleared and the app routes to the wall, so it is a LOGOUT, not a crash; counted
+///     fatal, the crash-free rate measured session lifetimes. A transient refresh failure keeps its
+///     tokens and is not this.
 ///
 /// Everything else stays FATAL on purpose — a bad cast or a disposed ref is a defect.
 /// The fatal badge is what gets it looked at.

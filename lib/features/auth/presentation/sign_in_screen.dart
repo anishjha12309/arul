@@ -16,7 +16,7 @@ import '../../../theme/arul_tokens.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 import '../providers/auth_providers.dart';
-import 'widgets/video_background.dart';
+import 'widgets/launch_backdrop.dart';
 
 /// The wall's caption.
 ///
@@ -26,7 +26,6 @@ import 'widgets/video_background.dart';
 /// that outgrows its slot is handled where it happens, not by shrinking the screen.
 const double _kCaptionSize = 15;
 
-/// The pill's subtitle, one step under the title.
 const double _kSubtitleSize = 13;
 
 /// The pill's MINIMUM height at this type size. It still grows past it whenever the subtitle wraps.
@@ -59,12 +58,20 @@ const double _kPanelPadY = 25;
 /// Generic "Continue with Google" copy, never a named identity — the account choice is Google's.
 /// The background player is SHARED with the splash -> arriving here never re-inits a MediaCodec.
 class SignInScreen extends ConsumerStatefulWidget {
-  const SignInScreen({super.key, this.debugOutcome});
+  const SignInScreen({
+    super.key,
+    this.debugOutcome,
+    this.debugWaitingForInternet = false,
+  });
 
   /// Renders the screen as if an attempt had just ended this way, without running one.
   /// The l10n and size matrices pump every outcome through here; nothing else may set it.
   @visibleForTesting
   final SignInOutcome? debugOutcome;
+
+  /// Renders the wait line of a launch held for the network, for the same two matrices.
+  @visibleForTesting
+  final bool debugWaitingForInternet;
 
   @override
   ConsumerState<SignInScreen> createState() => _SignInScreenState();
@@ -153,17 +160,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     if (_signingIn) return;
     final notifier = ref.read(authControllerProvider.notifier);
     final pending = auto
-        ? notifier.autoSignIn(AuthProvider.google)
+        ? notifier.autoSignIn(AuthProvider.google, offline: _knownOffline)
         : notifier.signIn(AuthProvider.google);
-    // Auto-launch already spent.
+    // Auto-launch already spent, or HELD for the network.
     // A fast failure can settle on the splash with nothing awaiting it -> surface it NOW.
     // The contract is a message plus retry, never a silent bounce; a cancel stays quiet.
     if (pending == null) {
       final missed = notifier.takePendingAutoFailure();
-      if (missed != null && mounted) {
-        showArulToast(context, missed.message, kind: ToastKind.error);
-        setState(() => _outcome = _outcomeForFailure(missed.kind));
+      if (!mounted) return;
+      if (missed != null) {
+        showArulToast(
+          context,
+          authFailureText(AppLocalizations.of(context), missed.kind),
+          kind: ToastKind.error,
+        );
+        _outcome = _outcomeForFailure(missed.kind);
       }
+      // A held launch swaps the subtitle for the wait line; the rebuild picks it up.
+      setState(() {});
       return;
     }
 
@@ -177,9 +191,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
         case AuthCancelled(:final outcome):
           // No toast, but not a silent bounce -> the subtitle says what this attempt did.
           _outcome = outcome;
-        case AuthFailure(:final message, :final kind):
-          // Localized-enough surface + retry (the pill), never a stuck spinner.
-          showArulToast(context, message, kind: ToastKind.error);
+        case AuthFailure(:final kind):
+          // One localized line per kind + retry (the pill), never a stuck spinner. Never the
+          // failure's own message: it is English and can carry the Worker's text.
+          showArulToast(
+            context,
+            authFailureText(AppLocalizations.of(context), kind),
+            kind: ToastKind.error,
+          );
           _outcome = _outcomeForFailure(kind);
       }
       // Handled live here -> drop the recorded copy, or a later mount replays a seen failure.
@@ -188,6 +207,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       if (mounted) setState(() => _signingIn = false);
     }
   }
+
+  /// True only on a KNOWN `none` transport reading. Loading or errored is online, exactly as the
+  /// provider seeds it: the sheet is held only when the phone certainly has no network.
+  bool get _knownOffline => ref.read(isOnlineProvider).value == false;
 
   /// A visible failure already toasted its own message; the screen shows the same retry line as any
   /// other outcome, so this only classifies for `login_cancelled` — `noPlayServices` is the one
@@ -210,7 +233,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final subtitle = _subtitleFor(l10n, _outcome);
+    final waiting =
+        widget.debugWaitingForInternet ||
+        (!_signingIn &&
+            ref.read(authControllerProvider.notifier).autoHeldOffline);
+    final subtitle = _subtitleFor(l10n, _outcome, waiting: waiting);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -223,8 +250,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Same shared player as splash; we paint our own scrim below.
-            const VideoBackground(overlayOpacity: 0),
+            // Same backdrop as the splash (shared player, or the regional poster); our own scrim below.
+            const LaunchBackdrop(),
 
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.signInScrim),
@@ -291,8 +318,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   }
 }
 
-/// The pill title's type. 19 w600 — the largest thing on the panel and the line Google's own sheet
-/// is read beside.
 const TextStyle kSignInTitleStyle = TextStyle(
   fontSize: 17,
   fontWeight: FontWeight.w600,
@@ -313,17 +338,18 @@ const Key kSignInTitleKey = Key('signIn.pill.title');
 @visibleForTesting
 const Key kSignInSubtitleKey = Key('signIn.pill.subtitle');
 
-/// What the pill says under its title, resolved in ONE place.
-///
-/// Every failed attempt gets the SAME line. The outcome still rides `AuthCancelled` into
-/// `login_cancelled`, but the screen no longer explains it: a sentence naming Play services or
-/// account settings, and a link out of the app, were three lines this audience cannot act on
-/// (owner's call). The one thing any of them can do is tap again -> that is the whole message.
-String _subtitleFor(AppLocalizations l10n, SignInOutcome? outcome) =>
-    outcome == null ? l10n.signInSubtitleIdle : l10n.signInNudgeRetry;
+/// The wait line outranks both others: while the launch is held, nothing has been tried yet, and the
+/// sheet opens by itself the moment the network is back. It says only that — never a fix to make.
+String _subtitleFor(
+  AppLocalizations l10n,
+  SignInOutcome? outcome, {
+  bool waiting = false,
+}) => waiting
+    ? l10n.signInSubtitleOffline
+    : outcome == null
+    ? l10n.signInSubtitleIdle
+    : l10n.signInNudgeRetry;
 
-/// The one-tap pill: r999, `rgba(20,9,12,.55)` fill, gold-50% border, solid gold on press,
-/// [_kPillMinHeight] tall or taller.
 class _SignInPill extends StatefulWidget {
   const _SignInPill({
     required this.title,
@@ -355,19 +381,29 @@ class _SignInPillState extends State<_SignInPill> {
     return Semantics(
       container: true,
       identifier: 'arul_signin_pill',
+      button: true,
+      label: '${widget.title}. ${widget.subtitle}',
+      onTap: widget.busy ? null : widget.onTap,
+      // Without this the title's own auto-merged tap node and this one both carry the action —
+      // the wall's "pill is the ONLY tappable thing" contract catches a second stop otherwise.
+      excludeSemantics: true,
       child: _pill(context),
     );
   }
 
   Widget _pill(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) {
-        ArulHaptics.tap();
-        _setPressed(true);
-      },
+      // In flight the pill is inert: no dip, no haptic, no second attempt from a repeat tap. The
+      // spinner in the trailing slot is the whole answer to a finger that lands here.
+      onTapDown: widget.busy
+          ? null
+          : (_) {
+              ArulHaptics.tap();
+              _setPressed(true);
+            },
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),
-      onTap: widget.onTap,
+      onTap: widget.busy ? null : widget.onTap,
       child: Container(
         // A MINIMUM, not a height. A wrapped subtitle, or a script that sets ~40% taller per line
         // (Devanagari) at a large OS text size, does not fit a fixed box. The pill GROWS instead of
@@ -534,3 +570,15 @@ class _GoogleGMark extends StatelessWidget {
     );
   }
 }
+
+/// The wall's failure toast in the app's language. Exhaustive: a new kind without a line is a
+/// compile error, never a silent English fallback.
+@visibleForTesting
+String authFailureText(AppLocalizations l10n, AuthFailureKind kind) =>
+    switch (kind) {
+      AuthFailureKind.noPlayServices => l10n.authErrorNoPlayServices,
+      AuthFailureKind.networkError => l10n.authErrorNetwork,
+      AuthFailureKind.tokenExchangeFailed => l10n.authErrorTokenExchange,
+      AuthFailureKind.serverError => l10n.authErrorServer,
+      AuthFailureKind.unknown => l10n.authErrorIncomplete,
+    };

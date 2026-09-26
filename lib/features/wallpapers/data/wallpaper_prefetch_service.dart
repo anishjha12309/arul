@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import '../../../core/connectivity/data_saver.dart';
 import '../../../data/models/wallpaper.dart';
 
 /// Prefetches upcoming LIVE wallpaper MP4s to a local disk cache, ahead of the feed reaching them.
@@ -135,7 +136,6 @@ class WallpaperPrefetchService {
   /// fetches through the cache manager directly, joining any transfer of the SAME url already up.
   int _priorityWaiters = 0;
 
-  /// Completed and cleared the moment [_priorityWaiters] falls to zero.
   Completer<void>? _priorityIdle;
 
   /// Downloads [url] if needed and completes once its bytes are on disk, returning the local path.
@@ -184,6 +184,14 @@ class WallpaperPrefetchService {
   /// Skips anything already cached or in flight — safe, and intended, on every page settle.
   void prefetchAround(List<Wallpaper> items, int currentIndex) {
     if (_disposed || items.isEmpty) return;
+    // Data Saver: the visible card still loads through [ensureCached]; nothing is staged ahead.
+    if (DataSaver.isOn) {
+      for (final url in _queue) {
+        _tracked.remove(url);
+      }
+      _queue.clear();
+      return;
+    }
 
     // Cold start: hold the window narrow until the current card paints, and arm the widen fallback.
     if (!_widened) {
@@ -216,14 +224,13 @@ class WallpaperPrefetchService {
     for (var i = start; i <= end; i++) {
       if (items[i].kind == WallpaperKind.live) candidates.add(i);
     }
-    // Nearest distance to the current index first.
     candidates.sort(
       (a, b) => (a - currentIndex).abs().compareTo((b - currentIndex).abs()),
     );
 
     for (final i in candidates) {
       final url = urlFor(items[i]);
-      if (_tracked.contains(url)) continue; // already queued or downloading
+      if (_tracked.contains(url)) continue;
       _tracked.add(url); // synchronous claim → no duplicate enqueue
       _queue.add(url);
     }

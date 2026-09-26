@@ -24,8 +24,6 @@ import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 
-// ── POST /auth/login ─────────────────────────────────────────────────────────
-
 export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   let body: {
@@ -48,7 +46,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     typeof body.referralCode === "string" && body.referralCode.trim()
       ? body.referralCode
       : null;
-  // 1. Verify Google idToken
   let googleClaims;
   try {
     googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
@@ -88,7 +85,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   const sql = getDb(env);
 
   try {
-    // 2. Upsert the user row, keyed on google_sub
     let userId: string;
     let displayName: string | null;
     let referralCode: string;
@@ -193,7 +189,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       }
     }
 
-    // 3. Issue tokens
     const accessToken = await signAccessToken(userId, env.JWT_SECRET);
     const { token: refreshToken } = await signRefreshToken(userId, env.JWT_SECRET);
 
@@ -215,8 +210,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   }
 }
 
-// ── POST /auth/refresh ───────────────────────────────────────────────────────
-
 export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -232,7 +225,6 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(400, "missing_field", "refreshToken is required");
   }
 
-  // 1. Verify the refresh JWT
   let claims;
   try {
     claims = await verifyRefreshToken(refreshToken, env.JWT_SECRET);
@@ -265,7 +257,6 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
     return errorResponse(401, "invalid_refresh", "Refresh token has been revoked");
   }
 
-  // 4. Issue new pair
   const newAccessToken = await signAccessToken(claims.sub, env.JWT_SECRET);
   const { token: newRefreshToken } = await signRefreshToken(claims.sub, env.JWT_SECRET);
 
@@ -278,12 +269,9 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
   return c.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
 }
 
-// ── POST /auth/logout ────────────────────────────────────────────────────────
-
 export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
-  // Require valid access token
   const authHeader = c.req.header("Authorization") ?? "";
   const accessToken = authHeader.replace(/^Bearer\s+/i, "");
   if (!accessToken) {
@@ -307,7 +295,6 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
     return errorResponse(400, "missing_field", "refreshToken is required");
   }
 
-  // Verify and denylist the refresh token
   let claims;
   try {
     claims = await verifyRefreshToken(refreshToken, env.JWT_SECRET);
@@ -321,8 +308,6 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
 
   return c.json({ ok: true });
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function errorResponse(
   status: number,

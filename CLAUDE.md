@@ -25,8 +25,8 @@ in `docs/` (§9). Open defects: `docs/known-issues.md`.
 - Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers
   (static + live video feed) and ringtones; premium via PhonePe UPI Autopay.
 - Three-tab shell behind the floating dock (Wallpapers · Ringtones · Settings). **Settings is a dock
-  branch, not a pushed route.** Local reminders stay on-device; campaign pushes come only from the CMS
-  through the Worker (`docs/push.md`). No screen promises a push.
+  branch, not a pushed route.** Campaign pushes come only from the CMS through the Worker
+  (`docs/push.md`). No screen promises a push.
 - Content lives in the R2 bucket `south-indian-wallpapers`. **Never share a bucket, KV namespace or
   database with another app** — the orphan sweep deletes the other app's media.
 
@@ -92,10 +92,12 @@ then debuts, then filler by uses, with no pins → `docs/browse.md`.
 
 ```bash
 flutter pub get && dart run build_runner watch -d      # codegen — generated files are TRACKED
-flutter analyze && flutter test
+flutter analyze && flutter test        # the GATE. Iterate on mcp__dart__analyze_files — 5 min vs instant
 flutter run --dart-define-from-file=env/dev.json
 cd workers && npx tsc --noEmit && npx vitest run && npx wrangler deploy   # deploy IS part of done
 ```
+
+Delegating? Sonnet subagents for mechanical sweeps and bounded searches; the lead keeps the decisions.
 
 ## 8. Definition of done & git
 
@@ -118,7 +120,7 @@ before a release — and **architecture** covers routes, entitlement, uploads an
 edge-cases · architecture · data-model · browse · feed-card · ringtones · auth · launch-surface ·
 phonepe · phonepe-webhook · autopay-debits · cron · caching · media-conventions · video-feed · wallpaper-apply ·
 analytics-events · analytics-ops · google-ads · deep-links · deferred-links · share ·
-notifications · push · ui-direction · perf-measurement
+notifications · push · app-update · review-prompt · ui-direction · perf-measurement
 
 ## Compact instructions
 

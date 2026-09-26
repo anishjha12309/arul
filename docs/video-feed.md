@@ -64,6 +64,10 @@ tracked time spent scrolling, not cards reached. The 160 ms settle debounce alre
 pages from enqueuing; the disk LRU (120 objects) stays deep so a cached cold start opens from files.
 Encode size is not the lever — the 15 MB ceiling is quality-first by the owner's call.
 
+**Under Android's Data Saver on a metered link, stage NOTHING ahead** (`DataSaver`, native
+`isActiveNetworkMetered && RESTRICT_BACKGROUND_STATUS_ENABLED`): the visible card still loads, the
+look-ahead and the return clip's speculative warm do not. Data Saver on Wi-Fi restricts nothing.
+
 ## The reveal — why an undecoded live card looks static
 
 Every card paints the `thumbs/` poster FIRST and keeps it mounted UNDER the texture; the texture
@@ -82,8 +86,11 @@ on fade-in.
 
 `create(audio:)` picks the `AudioAttributes` and focus handling once, so a player built muted never
 takes audio focus — raising its volume later changes focus behaviour not at all. Everything except
-the paywall's onboarding clip stays `audio: false`: a preview that took focus would pause the user's
-music while they browsed. The clip's URL is the one thing `Log.i("audible open")` prints, which
+the paywall's ONE audible player stays `audio: false`: a preview that took focus would pause the user's
+music while they browsed. The onboarding clip and the return page's clip SHARE that player — the feed
+under `/premium` still holds its decoders, so a second one would break the budget. Hand it over by
+giving the other card `null`, and take it back only after the return page's exit plus one frame: its
+card pauses the player as it disposes, which silenced a clip handed back any earlier. The clip's URL is the one thing `Log.i("audible open")` prints, which
 matters because the language cuts are the same footage and a screenshot cannot tell them apart.
 
 ## Noise to ignore

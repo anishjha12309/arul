@@ -31,12 +31,14 @@ in-session, one source. **Accepted cost: no revenue or ROAS signal on either pla
 is Neon.**
 
 `trial_started` carries `plan`, `order_id`, `value`, and — when the SAME process ran the checkout —
-`method` and `target_app`; a late catch-up copy omits both rather than guess. It fires from the purchase poll — or, for a
+`method` and `target_app`; a late catch-up copy omits both rather than guess. Never omit `value` (₹199
+before app_config lands) — Ads books a valueless conversion at ₹1. It fires from the purchase poll — or, for a
 trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget out),
 late from `TrialConversionCatchUp` on the next `GET /me` showing `trialing` for an order this install
 never reported (`late: true`, once per order). The catch-up marks BEFORE invalidating entitlement and
-installs predating it grandfather the trial they find, so an update cannot double-count. **Same app
-SDK, one source — never a server copy.**
+fires only once its marker is open (a no-trial read or the checkout tap): a trial found earlier —
+reinstall, second phone, update — is recorded, never fired, since GA4 does not dedupe a custom event by
+order and the copy credits the reinstall's ad. **Same app SDK, one source — never a server copy.**
 
 `subscription_active` reaches **PostHog only** (server, first trial→paid settle) — product analytics
 is not an attribution source; renewals reach nothing. It carries `target_app` from the row's
@@ -57,7 +59,8 @@ succeeding population for its denominator. Both: [auth.md](auth.md).
 appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
 left". `surface` values: `sheet`, `sheet_return` (the automatic attempt a return to the wall
 re-armed), `sheet_reconnect` (the one the link coming back after a network-class failure re-armed;
-a return outranks it), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the
+a return outranks it), `sheet_after_offline` (the cold-start sheet HELD while the phone had no
+network, fired when the link came up; outranks a reconnect, loses to a return), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the
 guard reopens once after Google's add-account flow); a re-armed attempt that escalates to the picker
 carries its sheet's name on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
 lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
@@ -65,7 +68,9 @@ lost the install and the sign-in outcome of everyone who left inside that window
 from build 74 on — the denominator now includes people it used to miss.
 Every sign-in event also carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` /
 `share` / `link` / `other` / `unknown`, off the Play referrer, `install_utm_source` and
-`install_utm_campaign` beside it; an install that arrived on a wallpaper or ringtone link adds
+`install_utm_campaign` beside it; Play carries only same-session clicks, so an install it leaves
+`organic`/`unknown`/`other` is relabelled `meta_ads` when Meta's Install Referrer (the Facebook/
+Instagram/Lite apps' provider, `MetaInstallReferrer.kt`) holds a view-through or later-session touch; an install that arrived on a wallpaper or ringtone link adds
 `+wallpaper` / `+ringtone` to the SAME value — split on `+`, never compare the whole string) and **`low_ram`** (the poster rule's verdict) — the two cuts
 PostHog's own properties cannot make, on the events that exist rather than new ones.
 
@@ -118,6 +123,12 @@ silent on screen: the event counts it, the user sees no failure. Once the resume
 `trial_started`, `subscription_active` and `payment_failed` — `checkout_started` keeps `upi_app` and
 fires once per decision, never on a resume.
 
+The return page adds `trial_return_shown` (once per open) and `return_video_start`/`return_video_muted`
+beside `onboarding_video_*` — all GA4-only, `lang` = the cut that PLAYED (`hi` plays `en`). A tap
+from that page stamps `surface: return` on `checkout_started`, `trial_started`, `subscription_active`
+and `payment_failed`; the trial screen sends no `surface`, so an absent key IS the trial screen. The
+sign-in events use the same parameter name for their own values — filter by event before splitting.
+
 The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES and the PostHog
 allow-list are exact sets pinned by tests: every sink matches the literal, a typo drops silently.
 
@@ -169,11 +180,21 @@ matches nothing.
 
 **`app_language`, `language_source` and `geo_region` ride EVERY event via `AnalyticsService.register`,
 never only `identify`** — a person property, frozen at ingest, leaves every pre-login event blank;
-`reset()` clears them on sign-out, so each sink re-applies them.
+`reset()` runs on sign-out and account deletion, before the wall appears, so the next person's
+events never land on the last user. PostHog's reset strips super properties, so that sink re-applies
+them. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`** — that mints a new app instance
+id and cuts the Google Ads attribution of a re-login.
 **The PostHog sink also stamps them onto the capture itself**, primed from prefs before `setup()`:
 the sheet-first `login_attempt` lands before the `register` round trip, and the SDK alone left it
 blank on four cold-start attempts in five. A blank `app_language` bucket is installs that predate the
 register, cold-start attempts before that stamp, and the Worker's server-side events.
+
+**`exp_regional` (`control`|`regional`)** is the only sign-in coin: dealt once per fresh install in
+`main()`, primed and registered like `app_language`, never on installs that predate the draw. It
+carries the ASSIGNMENT, not the kill state; `feature_flags.exp_regional = false` turns the arm off
+from the next cold start (the first launch has no config). No new events. The come-back reminder is
+no longer a coin — SDK ≤32 gets it unconditionally, so it has no arm, no property and no kill
+switch ([notifications.md](notifications.md)).
 
 `language_source` (`pick` · `link` · `geo` · `phone` · `default`) and `geo_region` (Cloudflare's raw
 region or `none`) measure the region default. A fresh install's install event and first-frame

@@ -48,7 +48,7 @@ final class ApiClientProvider
   }
 }
 
-String _$apiClientHash() => r'90c807f03b90249684265cc91739139c2c89eeb9';
+String _$apiClientHash() => r'55618e2e6c81c020a8398c628e57214986d47936';
 
 @ProviderFor(authService)
 final authServiceProvider = AuthServiceProvider._();
@@ -163,7 +163,7 @@ final class AuthControllerProvider
   AuthController create() => AuthController();
 }
 
-String _$authControllerHash() => r'c6d069801a60d7d704cefe6a4fc5b563e0b20420';
+String _$authControllerHash() => r'022b0722e53dbc8d2da1422afdf50d1e7dd85efa';
 
 /// Sign-in / sign-out actions — consumers read state from [authStateStreamProvider].
 

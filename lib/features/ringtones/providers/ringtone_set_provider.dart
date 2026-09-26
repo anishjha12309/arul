@@ -12,12 +12,12 @@ import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/ringtone.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../review/domain/review_ledger.dart';
+import '../../review/providers/review_prompt_controller.dart';
 import '../data/ringtone_set_service.dart';
 
-/// Stages reported while setting a ringtone.
 enum RingtoneSetStage { checkingPermission, fetchingUrl, downloading, setting }
 
-/// State machine for setting a ringtone: idle → loading, per [RingtoneSetStage] → success or error.
 sealed class RingtoneSetState {
   const RingtoneSetState();
 }
@@ -33,11 +33,9 @@ final class RingtoneSetLoading extends RingtoneSetState {
     this.progress,
   });
 
-  /// ID of the ringtone being set — cards use it to spin only for themselves.
   final String ringtoneId;
   final RingtoneSetStage stage;
 
-  /// Download progress 0.0–1.0; null for non-download stages.
   final double? progress;
 }
 
@@ -68,10 +66,7 @@ final ringtoneSetServiceProvider = Provider<RingtoneSetService>((ref) {
   );
 });
 
-/// Orchestrates setting a ringtone: permission check → signed URL → download → MediaStore + set.
-/// The signed-URL call is the Worker's LIVE entitlement check — the real premium gate.
 class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
-  /// The set interrupted by Android's grant screen, resumed when the app returns holding it.
   ({Ringtone ringtone, RingtoneTarget target})? _parkedForGrant;
   AppLifecycleListener? _grantReturnListener;
 
@@ -81,9 +76,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
     return const RingtoneSetIdle();
   }
 
-  /// Sets [ringtone] as the [target] tone, walking the [RingtoneSetStage] pipeline.
   Future<void> setRingtone(Ringtone ringtone, RingtoneTarget target) async {
-    // Re-entrancy guard, same as apply/share.
     if (state is RingtoneSetLoading) {
       return;
     }
@@ -92,17 +85,12 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
     final analytics = ref.read(analyticsServiceProvider);
 
     try {
-      // 1. Check WRITE_SETTINGS permission
       state = RingtoneSetLoading(
         ringtoneId: ringtone.id,
         stage: RingtoneSetStage.checkingPermission,
       );
       final canWrite = await service.canWriteSettings();
       if (!canWrite) {
-        // Straight to Android's grant screen — NO in-app explainer in front of it (owner's call).
-        // The request is PARKED and finishes itself when the app resumes holding the permission.
-        // Making the user tap Set again read as "I granted it and nothing happened".
-        // A resume WITHOUT the grant just drops it.
         _parkedForGrant = (ringtone: ringtone, target: target);
         _grantReturnListener ??= AppLifecycleListener(
           onStateChange: (lifecycle) {
@@ -116,21 +104,17 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         return;
       }
 
-      // 2. Fetch short-lived signed R2 URL via Worker
       state = RingtoneSetLoading(
         ringtoneId: ringtone.id,
         stage: RingtoneSetStage.fetchingUrl,
       );
       final signedUrl = await service.fetchSignedUrl(ringtone.id);
 
-      // 3. Download file with progress
       state = RingtoneSetLoading(
         ringtoneId: ringtone.id,
         stage: RingtoneSetStage.downloading,
         progress: 0.0,
       );
-      // Named by catalog id — a stable cache key, never shown to the user.
-      // The human-visible tone name is `ringtone.title`, threaded to the MediaStore insert below.
       final ext = ringtone.mime == 'audio/mpeg' ? 'mp3' : 'aac';
       final filename = '${ringtone.id}.$ext';
       final file = await service.downloadFile(signedUrl, filename, (p) {
@@ -141,7 +125,6 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         );
       });
 
-      // 4. Register in MediaStore and set as device tone
       state = RingtoneSetLoading(
         ringtoneId: ringtone.id,
         stage: RingtoneSetStage.setting,
@@ -166,6 +149,7 @@ class RingtoneSetNotifier extends Notifier<RingtoneSetState> {
         ArulEvents.ringtoneSet,
         properties: {'ringtone_id': ringtone.id, 'category': ringtone.category},
       );
+      armReviewPrompt(ref, ReviewTrigger.ringtone);
 
       state = RingtoneSetSuccess(target: target);
     } on RingtoneSetException catch (e) {

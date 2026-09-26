@@ -2,7 +2,6 @@ import '../../../core/api/api_client.dart';
 import '../../../data/models/content_submission_model.dart';
 import '../domain/content_submission_repository.dart';
 
-/// Reads and creates the user's content submissions via the Worker.
 class ApiContentSubmissionRepository implements ContentSubmissionRepository {
   const ApiContentSubmissionRepository({required ApiClient apiClient})
     : _api = apiClient;
@@ -26,7 +25,6 @@ class ApiContentSubmissionRepository implements ContentSubmissionRepository {
   }
 
   @override
-  /// Confirms an uploaded file with the Worker and returns the new pending submission.
   Future<ContentSubmissionModel> createSubmission({
     required String userId,
     required String kind,

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/arul_tokens.dart';
 
-/// The shared cream-and-temple ground for every premium surface.
 class PaywallGround extends StatelessWidget {
   const PaywallGround({super.key, required this.child});
 
@@ -23,7 +22,6 @@ class PaywallGround extends StatelessWidget {
   );
 }
 
-/// Generated illustrations used by the premium paywall's ornament layer.
 enum PaywallOrnament {
   floret,
   floretGold,
@@ -51,7 +49,6 @@ extension on PaywallOrnament {
   };
 }
 
-/// A decorative WebP that never enters the semantics tree.
 class PaywallOrnamentImage extends StatelessWidget {
   const PaywallOrnamentImage({
     super.key,
@@ -84,7 +81,6 @@ class PaywallOrnamentImage extends StatelessWidget {
   }
 }
 
-/// The full-bleed line-art plate, decoded to its actual display width.
 class PaywallBackgroundPlate extends StatelessWidget {
   const PaywallBackgroundPlate({super.key});
 
@@ -118,7 +114,6 @@ class PaywallBackgroundPlate extends StatelessWidget {
   }
 }
 
-/// A fading rule joined to a floret, mirrored around nearby copy when needed.
 class PaywallOrnamentWing extends StatelessWidget {
   const PaywallOrnamentWing({
     super.key,
@@ -164,7 +159,6 @@ class PaywallOrnamentWing extends StatelessWidget {
   }
 }
 
-/// Florets, rules and a small gopuram separating proof from the brand.
 class PaywallTempleDivider extends StatelessWidget {
   const PaywallTempleDivider({super.key});
 
@@ -204,7 +198,6 @@ class PaywallTempleDivider extends StatelessWidget {
   }
 }
 
-/// Live text framed by the same lotus illustration on both sides.
 class PaywallLotusLabel extends StatelessWidget {
   const PaywallLotusLabel({
     super.key,
@@ -231,7 +224,6 @@ class PaywallLotusLabel extends StatelessWidget {
   }
 }
 
-/// Live text framed by short gold rules.
 class PaywallRuledLabel extends StatelessWidget {
   const PaywallRuledLabel({super.key, required this.child});
 
@@ -252,7 +244,6 @@ class PaywallRuledLabel extends StatelessWidget {
   }
 }
 
-/// A gradient panel clipped to, and framed by, two parallel chamfered rules.
 class PaywallChamferedPanel extends StatelessWidget {
   const PaywallChamferedPanel({super.key, required this.child});
 
@@ -275,7 +266,6 @@ class PaywallChamferedPanel extends StatelessWidget {
   }
 }
 
-/// Lotus and dotted leaders laid over the top edge of the shrine panel.
 class PaywallPanelCrown extends StatelessWidget {
   const PaywallPanelCrown({super.key});
 
@@ -319,7 +309,6 @@ class PaywallPanelCrown extends StatelessWidget {
   }
 }
 
-/// A code-drawn dotted rule that can run horizontally or vertically.
 class PaywallDottedLine extends StatelessWidget {
   const PaywallDottedLine({super.key, this.vertical = false});
 

@@ -425,6 +425,7 @@ void main() {
       expect(requests, hasLength(1));
       expect(requests.single.method, 'GET');
       expect(requests.single.url.path, '/geo');
+      expect(requests.single.url.queryParameters['v'], '2');
       expect(container.read(localeProvider), const Locale('ta'));
       expect(prefs.getBool('arul_geo_pending'), isNull);
       expect(prefs.getString('arul_geo_region'), 'TN');
@@ -514,6 +515,36 @@ void main() {
         expect(calls, 1, reason: 'at most one call per cold start');
         expect(prefs.getBool('arul_geo_pending'), isTrue);
         expect(container.read(localeProvider), const Locale('en'));
+      },
+    );
+
+    test(
+      'settled completes on a failed ask and at once with nothing to ask',
+      () async {
+        final (container, prefs) = await boot(
+          pending: true,
+          network: MockClient((_) => Completer<http.Response>().future),
+        );
+        final failing = GeoLanguageService(
+          api: container.read(apiClientProvider),
+          prefs: prefs,
+          onAnswer: container.read(localeProvider.notifier).setGeoHint,
+          timeout: const Duration(milliseconds: 20),
+        );
+        var settled = false;
+        unawaited(failing.settled.then((_) => settled = true));
+        await failing.fetchOnce();
+        await Future<void>.delayed(Duration.zero);
+        expect(settled, isTrue);
+
+        await prefs.remove('arul_geo_pending');
+        final idle = GeoLanguageService(
+          api: container.read(apiClientProvider),
+          prefs: prefs,
+          onAnswer: container.read(localeProvider.notifier).setGeoHint,
+        );
+        await idle.fetchOnce();
+        await idle.settled;
       },
     );
   });

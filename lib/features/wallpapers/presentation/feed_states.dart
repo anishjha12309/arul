@@ -6,15 +6,12 @@ import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../app/widgets/sliding_skeleton.dart';
 import '../../../app/widgets/arul_chip.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
 import '../../../app/theme/motion.dart';
 import 'feed_card_geometry.dart';
-
-/// The seven feed category labels, verbatim from the design — the first is chrome, the rest catalog.
-/// Title-cased at the call site if the catalog ever yields a raw slug.
-const _kAllLabel = 'All';
 
 /// The horizontal category-chip row on the feed's solid top bar.
 ///
@@ -28,6 +25,7 @@ class FeedChips extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final categories = ref.watch(categoriesProvider);
     final selected = ref.watch(selectedCategoryProvider);
     final showNew = ref.watch(showNewCategoryProvider);
@@ -42,9 +40,12 @@ class FeedChips extends ConsumerWidget {
     // category. `orderedByCms` sorts only what came off the catalog, so an operator's drag can
     // never move these two either.
     final items = <WallpaperCategory>[
-      const WallpaperCategory(WallpaperCategory.allSlug, _kAllLabel),
+      // The same ARB key the ringtone row reads -> the two tabs can never disagree on this word.
+      WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll),
+      // Both chrome chips speak the user's language (owner's call, once All was translated); the
+      // catalog's deity slugs stay as the catalog spells them.
       if (showNew)
-        const WallpaperCategory(WallpaperCategory.newSlug, kNewCategoryLabel),
+        WallpaperCategory(WallpaperCategory.newSlug, l10n.categoryNew),
       ...categories,
     ];
 
@@ -75,8 +76,6 @@ class FeedChips extends ConsumerWidget {
   }
 }
 
-/// Chip-row skeleton for the feed's top bar while the catalog loads — three ivory-8% pills.
-/// The chips themselves render once categories land.
 class FeedChipsSkeleton extends StatelessWidget {
   const FeedChipsSkeleton({super.key});
 
@@ -164,7 +163,7 @@ class FeedLoading extends StatelessWidget {
                     const GopuramMark(size: 38, color: ArulTokens.gold),
                     const SizedBox(height: 12),
                     Text(
-                      'Bringing your wallpapers…',
+                      AppLocalizations.of(context).feedLoadingBody,
                       style: ArulTokens.body.copyWith(
                         color: ArulTokens.darkTextSecondary,
                       ),
@@ -219,7 +218,6 @@ class _ActionBarSkeleton extends StatelessWidget {
   }
 }
 
-/// Opacity pulse .55 ↔ 1 over 2s — transform and opacity only.
 class _OpacityPulse extends StatefulWidget {
   const _OpacityPulse({required this.child});
 
@@ -233,7 +231,7 @@ class _OpacityPulseState extends State<_OpacityPulse>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 2),
+    duration: Motion.loadingPulse,
   );
 
   /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup.
@@ -255,7 +253,7 @@ class _OpacityPulseState extends State<_OpacityPulse>
   late final Animation<double> _opacity = Tween<double>(
     begin: 0.55,
     end: 1,
-  ).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+  ).animate(CurvedAnimation(parent: _c, curve: Motion.swayCurve));
 
   @override
   void dispose() {
@@ -268,21 +266,14 @@ class _OpacityPulseState extends State<_OpacityPulse>
       FadeTransition(opacity: _opacity, child: widget.child);
 }
 
-/// Empty state for a category with no wallpapers.
-/// The chips remain, so the user can jump elsewhere.
-/// A gopuram, copy, and an outlined gold "Browse all" that switches the category back to All.
 class FeedEmpty extends StatelessWidget {
-  const FeedEmpty({
-    super.key,
-    required this.categoryLabel,
-    required this.onBrowseAll,
-  });
+  const FeedEmpty({super.key, required this.onBrowseAll});
 
-  final String categoryLabel;
   final VoidCallback onBrowseAll;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     // The chips stay visible via the feed's persistent top bar — this is only the body.
     return Padding(
@@ -299,7 +290,7 @@ class FeedEmpty extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Nothing here yet',
+            l10n.feedEmptyTitle,
             textAlign: TextAlign.center,
             style: ArulTokens.screenTitle.copyWith(
               fontSize: 20,
@@ -308,8 +299,7 @@ class FeedEmpty extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'New $categoryLabel wallpapers arrive often. '
-            'Meanwhile, explore everything.',
+            l10n.feedEmptyBody,
             textAlign: TextAlign.center,
             style: ArulTokens.body.copyWith(
               color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
@@ -319,7 +309,10 @@ class FeedEmpty extends StatelessWidget {
           Semantics(
             container: true,
             identifier: 'arul_feed_browse_all',
-            child: _OutlinedAccentPill(label: 'Browse all', onTap: onBrowseAll),
+            child: _OutlinedAccentPill(
+              label: l10n.feedBrowseAll,
+              onTap: onBrowseAll,
+            ),
           ),
         ],
       ),
@@ -328,33 +321,64 @@ class FeedEmpty extends StatelessWidget {
 }
 
 /// Outlined accent pill — `border gold-50%, pad 12 26, r999`; gold on dark, maroon on light.
-class _OutlinedAccentPill extends StatelessWidget {
+///
+/// Answers the finger like every other button: a tap haptic on press-DOWN, a tint while pressed,
+/// and a [ArulTokens.minHitTarget] hit box around the drawn pill.
+class _OutlinedAccentPill extends StatefulWidget {
   const _OutlinedAccentPill({required this.label, required this.onTap});
 
   final String label;
   final VoidCallback onTap;
 
   @override
+  State<_OutlinedAccentPill> createState() => _OutlinedAccentPillState();
+}
+
+class _OutlinedAccentPillState extends State<_OutlinedAccentPill> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          border: Border.all(
-            color: isDark
-                ? ArulTokens.goldBorder50
-                : ArulTokens.maroon.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Text(
-          label,
-          style: ArulTokens.button.copyWith(
-            fontSize: 14,
-            color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    return Semantics(
+      button: true,
+      label: widget.label,
+      child: GestureDetector(
+        onTapDown: (_) {
+          ArulHaptics.tap();
+          setState(() => _pressed = true);
+        },
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: ArulTokens.minHitTarget,
+          child: Center(
+            widthFactor: 1,
+            child: AnimatedContainer(
+              duration: context.reduceMotion ? Duration.zero : Motion.quick,
+              curve: Motion.quickCurve,
+              padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+              decoration: BoxDecoration(
+                // The press tints the pill with its own accent -> feedback in the pill's colour,
+                // never a foreign ripple on the ivory ground.
+                color: _pressed
+                    ? accent.withValues(alpha: 0.12)
+                    : accent.withValues(alpha: 0),
+                borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
+                border: Border.all(
+                  color: isDark
+                      ? ArulTokens.goldBorder50
+                      : ArulTokens.maroon.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Text(
+                widget.label,
+                style: ArulTokens.button.copyWith(fontSize: 14, color: accent),
+              ),
+            ),
           ),
         ),
       ),
@@ -372,7 +396,6 @@ class FeedError extends StatelessWidget {
 
   final VoidCallback onRetry;
 
-  /// Selects the offline copy over the load-failure copy — same icon, same Retry, same layout.
   final bool offline;
 
   @override
@@ -415,7 +438,7 @@ class FeedError extends StatelessWidget {
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
             identifier: 'arul_feed_retry',
-            height: 46,
+            height: ArulTokens.minHitTarget,
             fontSize: 14,
             expand: false,
           ),

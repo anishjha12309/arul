@@ -26,7 +26,6 @@ class CatalogHttpClient {
 
   final String cdnBaseUrl;
 
-  /// Optional version resolver; when set, fetches are version-stamped with `?v=`.
   final CatalogVersion? version;
 
   // A single long-lived client so the connection pool reuses one TCP/TLS
@@ -35,8 +34,6 @@ class CatalogHttpClient {
   // otherwise open (and tear down) a fresh socket per page.
   final http.Client _client;
 
-  /// Returns a parsed [CatalogPage], null on a cache miss / non-200 / parse
-  /// failure, or throws [NetworkException] when the device can't reach the CDN.
   Future<CatalogPage<T>?> fetchPage<T>({
     required String scope,
     required String slug,

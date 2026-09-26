@@ -232,7 +232,6 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       ? new Date(0)
       : new Date(now.getTime() - STALE_ORDER_MS);
 
-    // ── Pass A: Notify ────────────────────────────────────────────────────────
     const toNotify = await sql`
       SELECT
         id,
@@ -300,7 +299,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         const notifyResult = await notifyRedemption(env, {
           merchantSubscriptionId: merchantSubId,
           merchantOrderId: redemptionOrderId,
-          amountPaise: 19900, // ₹199
+          amountPaise: 19900,
         });
 
         console.log(
@@ -339,7 +338,6 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       }
     }
 
-    // ── Pass B: Execute ───────────────────────────────────────────────────────
     const toExecute = await sql`
       SELECT
         id,
@@ -921,8 +919,6 @@ async function refreshIdleMarker(
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
 /**
  * Take a subscription out of the autopay rotation WITHOUT touching entitlement.
  *
@@ -973,8 +969,6 @@ function addOneMonth(date: Date): Date {
   d.setMonth(d.getMonth() + 1);
   return d;
 }
-
-// ── User notification stub ─────────────────────────────────────────────────────
 
 interface UserNotificationParams {
   userId: string;

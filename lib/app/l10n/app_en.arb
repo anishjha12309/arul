@@ -1,20 +1,41 @@
 {
   "@@locale": "en",
   "appName": "Arul",
-  "appTagline": "SOUTH INDIAN WALLPAPERS",
   "categoryAll": "All",
+  "categoryNew": "New",
+  "@categoryNew": {
+    "description": "The New chip beside All on both browse rows — a WINDOW of recent items, not a category. ONE short everyday word for \"new (ones)\"."
+  },
+  "@categoryAll": {
+    "description": "The first browse chip on both tabs. ONE short everyday word."
+  },
   "feedLiveBadge": "Live",
   "feedEmptyTitle": "Nothing here yet",
   "feedEmptyBody": "Try another category.",
+  "feedBrowseAll": "Browse all",
+  "feedLoadingBody": "Bringing your wallpapers…",
+  "@feedLoadingBody": {
+    "description": "One line under the gopuram while the first catalog page loads. Short; on screen for well under a second on a warm cache."
+  },
+  "@feedBrowseAll": {
+    "description": "Outlined pill under the empty-category state; taps back to the All chip. A short verb phrase (\"see all\")."
+  },
   "feedErrorTitle": "Couldn't load wallpapers",
   "feedErrorBody": "Check your connection and try again.",
   "retry": "Retry",
+  "@retry": {
+    "description": "Compact pill with a refresh icon under every error card. ONE or two short words (\"again\" reads fine beside the icon)."
+  },
   "errorGeneric": "Something went wrong.",
   "signInCaption": "Bring the divine home",
   "signInGoogle": "Continue with Google",
   "signInSubtitleIdle": "Choose an account to start",
   "signInSubtitleExchanging": "Signing you in…",
   "signInNudgeRetry": "Click here to sign in",
+  "signInSubtitleOffline": "Waiting for internet…",
+  "@signInSubtitleOffline": {
+    "description": "Sign-in pill subtitle while the phone has no network. Google sign-in opens by itself once the network is back, so this only says the app is waiting. Never a fix to make, never a second sentence."
+  },
   "premiumTitle": "Premium",
   "premiumHeadline": "Unlock every wallpaper",
   "premiumSub": "Browsing is always free. Premium is for making them yours.",
@@ -37,6 +58,9 @@
   "settingsPrivacy": "Privacy policy",
   "settingsVersion": "Version",
   "uploadTitle": "Upload your content",
+  "@uploadTitle": {
+    "description": "Upload screen title; the slot is tight even for English at 320 dp. Two short words at most (\"Upload\")."
+  },
   "uploadBody": "Share your own wallpaper with the community. We review every submission before it goes live.",
   "uploadPickCategory": "Choose a category",
   "uploadPickFile": "Choose a file",
@@ -47,7 +71,10 @@
   "applyTargetTitle": "Set wallpaper on",
   "applyTargetHome": "Home screen",
   "applyTargetLock": "Lock screen",
-  "applyTargetBoth": "Home and lock screen",
+  "applyTargetBoth": "Both",
+  "@applyTargetBoth": {
+    "description": "Label under the phone icon on the third apply-target card (Home / Lock / Both). The three cards share one row on a 360 dp phone, ~100 dp each — ONE short everyday word meaning 'both'."
+  },
   "applied": "Wallpaper applied",
   "appliedLiveFallback": "Live wallpapers aren't supported on this phone, so we set a still image instead.",
   "@appliedLiveFallback": {
@@ -76,11 +103,17 @@
   },
   "tabWallpapers": "Wallpapers",
   "tabRingtones": "Ringtones",
+  "@tabRingtones": {
+    "description": "Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the Earn chip — use the short everyday (often singular, transliterated) word, never a long plural."
+  },
   "earn": "Earn",
   "@earn": {
     "description": "Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase."
   },
   "ringtoneSet": "Set",
+  "@ringtoneSet": {
+    "description": "The Set pill on every ringtone row, max 120 dp wide. ONE short verb; the transliterated \"set\" is fine where that is what people say."
+  },
   "ringtonePreviewSemantic": "Preview",
   "ringtonePreviewUnavailable": "Preview not available yet",
   "ringtoneVolumeMuted": "Turn up the volume to hear this preview",
@@ -110,8 +143,6 @@
   "settingsReferSub": "Earn 30 days free premium",
   "settingsTellFriend": "Tell a friend",
   "settingsTellFriendSub": "Send Arul to someone who would love it",
-  "settingsRemindersSubOn": "Weekly and festival reminders on",
-  "settingsRemindersSubOff": "Festival and weekly reminders",
   "settingsLanguage": "Language",
   "settingsTheme": "Theme",
   "settingsNeedHelp": "Need help?",
@@ -148,25 +179,7 @@
   "themeSystemSub": "Follow device setting",
   "themeLightSub": "Ivory & silk",
   "themeDarkSub": "Lamp-lit maroon",
-  "remindersTitle": "Reminders",
-  "remindersToggleTitle": "Devotional reminders",
-  "remindersToggleSub": "The weekly day, and every major festival",
-  "remindersScheduleNote": "You'll get one reminder each week on Velli Kizhamai, and one a few days before each major festival — Pongal, Deepavali, Navaratri, Sivarathiri and the rest. Around two a month.",
-  "remindersPermissionToast": "Notifications are off for Arul. Turn them on in your phone settings to get reminders.",
   "remindersTimeLabel": "Reminder time",
-  "remindersComingUp": "Coming up",
-  "remindersMonthJan": "Jan",
-  "remindersMonthFeb": "Feb",
-  "remindersMonthMar": "Mar",
-  "remindersMonthApr": "Apr",
-  "remindersMonthMay": "May",
-  "remindersMonthJun": "Jun",
-  "remindersMonthJul": "Jul",
-  "remindersMonthAug": "Aug",
-  "remindersMonthSep": "Sep",
-  "remindersMonthOct": "Oct",
-  "remindersMonthNov": "Nov",
-  "remindersMonthDec": "Dec",
   "premiumScreenSubline": "The full collection, alive on your screen",
   "premiumPerkEvery": "Every wallpaper, still and live",
   "premiumPerkApplyShare": "Apply and share without limits",
@@ -335,6 +348,11 @@
   "trialNudgeDismiss": "Dismiss",
   "trialReminderTitle": "Your free trial is waiting",
   "trialReminderBody": "You didn't finish setting up. Tap to try again — it takes a moment.",
+  "comeBackTitle": "Your wallpaper is ready",
+  "@comeBackTitle": {
+    "description": "The one local notification an install that left Google's sign-in screen gets about an hour later (Android 12 and below). Owner-approved copy."
+  },
+  "comeBackBody": "One tap to sign in and set it.",
   "premiumSelectedUpiApp": "Selected UPI App",
   "upiPickerTitle": "Pay using",
   "upiPickerLastUsed": "Last used",
@@ -421,5 +439,190 @@
   "purchaseConfirmationLate": "Payment received but confirmation is delayed. Please restart the app — your subscription will activate shortly.",
   "@purchaseConfirmationLate": {
     "description": "Toast on /premium when the payment may have gone through but the server has not confirmed it yet. A commercial statement."
+  },
+  "authErrorNoPlayServices": "Google Play Services is unavailable. Please update or reinstall.",
+  "@authErrorNoPlayServices": {
+    "description": "Sign-in wall toast: Google Play services cannot run the sign-in (AuthFailureKind.noPlayServices)."
+  },
+  "authErrorNetwork": "No internet. Check your connection and try again.",
+  "@authErrorNetwork": {
+    "description": "Sign-in wall toast: the link died during sign-in (AuthFailureKind.networkError). Same words as purchaseErrorNetwork."
+  },
+  "authErrorTokenExchange": "Sign-in failed. Please try again.",
+  "@authErrorTokenExchange": {
+    "description": "Sign-in wall toast: Google returned no usable token (AuthFailureKind.tokenExchangeFailed)."
+  },
+  "authErrorServer": "Sign-in failed. Please try again.",
+  "@authErrorServer": {
+    "description": "Sign-in wall toast: our server refused the login (AuthFailureKind.serverError). Never the server's own message."
+  },
+  "authErrorIncomplete": "Sign-in didn't complete. Check your internet connection and try again.",
+  "@authErrorIncomplete": {
+    "description": "Sign-in wall toast: Google's flow ended without a result (AuthFailureKind.unknown); in the field this is mostly a dead link."
+  },
+  "splashTagline": "Bhakti in your hands",
+  "@splashTagline": {
+    "description": "Splash line under the wordmark. Latin renders in tracked caps; 'bhakti' is kept as one word in every script."
+  },
+  "videoMute": "Mute video",
+  "@videoMute": {
+    "description": "Screen-reader label for the paywall clip's sound button while sound is on."
+  },
+  "videoUnmute": "Unmute video",
+  "@videoUnmute": {
+    "description": "Screen-reader label for the paywall clip's sound button while muted."
+  },
+  "premiumMemberHeadline": "You're a member",
+  "@premiumMemberHeadline": {
+    "description": "Plan screen headline for an active paying member."
+  },
+  "premiumMemberTrialSubline": "Full access to every wallpaper. Your first {price} payment is charged when the trial ends.",
+  "@premiumMemberTrialSubline": {
+    "description": "Plan screen subline during the free trial.",
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "premiumMemberSubline": "Every wallpaper, still and live, is yours to apply and share.",
+  "@premiumMemberSubline": {
+    "description": "Plan screen subline for an active member."
+  },
+  "premiumTrialEndsLabel": "Trial ends",
+  "@premiumTrialEndsLabel": {
+    "description": "Billing row label; the value is a date."
+  },
+  "premiumRenewsOnLabel": "Renews on",
+  "@premiumRenewsOnLabel": {
+    "description": "Billing row label; the value is a date."
+  },
+  "premiumMemberTrialFootnote": "Cancel before the trial ends and you are never charged. Billed monthly via UPI Autopay.",
+  "@premiumMemberTrialFootnote": {
+    "description": "Plan screen fine print during the trial."
+  },
+  "premiumMemberFootnote": "Billed monthly via UPI Autopay. Cancel anytime — your access continues until the current period ends.",
+  "@premiumMemberFootnote": {
+    "description": "Plan screen fine print for an active member."
+  },
+  "premiumStatusTrial": "Free trial",
+  "@premiumStatusTrial": {
+    "description": "Status chip (rendered in caps in Latin)."
+  },
+  "premiumStatusActive": "Active",
+  "@premiumStatusActive": {
+    "description": "Status chip (rendered in caps in Latin)."
+  },
+  "premiumPlanLabel": "Plan",
+  "@premiumPlanLabel": {
+    "description": "Billing row label."
+  },
+  "premiumPlanMonthly": "Monthly",
+  "@premiumPlanMonthly": {
+    "description": "Billing row value: the plan period."
+  },
+  "premiumPaymentLabel": "Payment",
+  "@premiumPaymentLabel": {
+    "description": "Billing row label."
+  },
+  "premiumPaymentUpiAutopay": "UPI Autopay",
+  "@premiumPaymentUpiAutopay": {
+    "description": "Billing row value: the payment method. Same transliteration as premiumPlanNote."
+  },
+  "premiumRenewalReminder": "We'll remind you 24 hours before every renewal.",
+  "@premiumRenewalReminder": {
+    "description": "Plan screen reassurance line."
+  },
+  "premiumCancelSubscription": "Cancel subscription",
+  "@premiumCancelSubscription": {
+    "description": "Plan screen button."
+  },
+  "premiumAutoRenewOffHeadline": "Auto-renew is off",
+  "@premiumAutoRenewOffHeadline": {
+    "description": "Cancelled-but-paid-through headline. Same words as settingsPremiumSubCancelled."
+  },
+  "premiumAutoRenewOffSubline": "You keep full access until your paid period ends. You won't be charged again.",
+  "@premiumAutoRenewOffSubline": {
+    "description": "Cancelled-but-paid-through subline."
+  },
+  "premiumStatusAutoRenewOff": "Auto-renew off",
+  "@premiumStatusAutoRenewOff": {
+    "description": "Status chip (rendered in caps in Latin)."
+  },
+  "premiumAccessUntilLabel": "Access until",
+  "@premiumAccessUntilLabel": {
+    "description": "Billing row label; the value is a date."
+  },
+  "premiumResubscribeCta": "Resubscribe",
+  "@premiumResubscribeCta": {
+    "description": "Button on the cancelled plan screen."
+  },
+  "premiumResubscribeFootnote": "Resubscribing sets up a fresh UPI Autopay mandate at {price} a month.",
+  "@premiumResubscribeFootnote": {
+    "description": "Fine print under Resubscribe.",
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "premiumChange": "Change",
+  "@premiumChange": {
+    "description": "Link beside the chosen UPI app."
+  },
+  "premiumCancelDialogTitle": "Cancel subscription?",
+  "@premiumCancelDialogTitle": {
+    "description": "Cancel confirmation dialog title."
+  },
+  "premiumCancelDialogBody": "Your premium access stays active until the end of the current billing period. After that you won't be charged again.",
+  "@premiumCancelDialogBody": {
+    "description": "Cancel dialog body when the period end is unknown."
+  },
+  "premiumCancelDialogBodyDate": "Your premium access stays active until {date}. After that you won't be charged again.",
+  "@premiumCancelDialogBodyDate": {
+    "description": "Cancel dialog body with the period end.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "d MMM y",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "premiumCancelConfirm": "Cancel it",
+  "@premiumCancelConfirm": {
+    "description": "Cancel dialog confirm button."
+  },
+  "premiumCancelledToast": "Subscription cancelled. You keep premium until the period ends.",
+  "@premiumCancelledToast": {
+    "description": "Toast after a successful cancel, period end unknown."
+  },
+  "premiumCancelledToastDate": "Subscription cancelled. You keep premium until {date}.",
+  "@premiumCancelledToastDate": {
+    "description": "Toast after a successful cancel, with the period end.",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "d MMM y",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "premiumPlanDate": "{date}",
+  "@premiumPlanDate": {
+    "description": "A plan date in the app's language (month name localized by intl).",
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "d MMM y",
+        "isCustomDateFormat": "true"
+      }
+    }
+  },
+  "premiumCancelKeep": "Keep premium",
+  "@premiumCancelKeep": {
+    "description": "Cancel-subscription dialog: the way OUT (keeps the plan). Must not say 'cancel' — the other button does."
   }
 }

@@ -32,6 +32,9 @@ class _CountingAuthService implements AuthService {
   /// The `reconnected` flag of every attempt -> the same for the reconnect re-arm.
   final List<bool> reconnectedFlags = [];
 
+  /// The `afterOffline` flag of every attempt -> the launch held while the phone was offline.
+  final List<bool> afterOfflineFlags = [];
+
   /// What the NEXT attempt settles as. A network-class failure is what the reconnect rule needs
   /// behind it, and nothing else on this screen cares which quiet outcome it gets.
   AuthResult next = const AuthCancelled();
@@ -42,11 +45,13 @@ class _CountingAuthService implements AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   }) {
     signInCalls++;
     returnedFlags.add(returned);
     reconnectedFlags.add(reconnected);
+    afterOfflineFlags.add(afterOffline);
     return Future.value(next);
   }
 
@@ -90,6 +95,7 @@ void main() {
   Future<AppLocalizations> pump(
     WidgetTester tester, {
     SignInOutcome? outcome,
+    bool waiting = false,
     List<Locale> phoneLocales = const [Locale('en')],
     Stream<bool>? online,
   }) async {
@@ -110,7 +116,10 @@ void main() {
       routes: [
         GoRoute(
           path: '/sign-in',
-          builder: (_, _) => SignInScreen(debugOutcome: outcome),
+          builder: (_, _) => SignInScreen(
+            debugOutcome: outcome,
+            debugWaitingForInternet: waiting,
+          ),
         ),
         for (final path in const ['/browse'])
           GoRoute(
@@ -148,6 +157,21 @@ void main() {
     await tester.pump();
     return AppLocalizations.of(tester.element(find.byType(SignInScreen).first));
   }
+
+  group('the sign-in pill', () {
+    // The pill's Semantics carried no button role and no onTap — a `container: true` node with a
+    // GestureDetector child announces as a plain group, not a tappable control.
+    testWidgets('exposes a tap action to TalkBack', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pump(tester);
+
+      expect(
+        tester.getSemantics(find.bySemanticsIdentifier('arul_signin_pill')),
+        matchesSemantics(isButton: true, hasTapAction: true),
+      );
+      handle.dispose();
+    });
+  });
 
   group('the line under the pill', () {
     testWidgets('idle asks for an account and never shows the retry line', (
@@ -279,6 +303,47 @@ void main() {
       expect(auth.signInCalls, 2);
       expect(auth.reconnectedFlags, [false, true]);
       expect(auth.returnedFlags, [false, false]);
+    });
+
+    testWidgets('a launch held for the network shows the wait line, and the '
+        'link coming up fires it ONCE, stamped as held', (tester) async {
+      final link = StreamController<bool>();
+      addTearDown(link.close);
+      await pump(tester, online: link.stream);
+      link.add(false);
+      await tester.pump();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SignInScreen)),
+        listen: false,
+      );
+      final controller = container.read(authControllerProvider.notifier)
+        ..stallTick = const Duration(milliseconds: 10)
+        ..lifecycleProbe = (() => AppLifecycleState.resumed);
+
+      // What the splash does on an offline cold start, then a resume while data is still off.
+      expect(controller.autoSignIn(AuthProvider.google, offline: true), isNull);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('Waiting for internet…'), findsOneWidget);
+      expect(auth.signInCalls, 0);
+
+      link.add(true);
+      await tester.pump();
+      await tester.pump();
+
+      expect(auth.signInCalls, 1);
+      expect(auth.afterOfflineFlags, [true]);
+      expect(find.text('Waiting for internet…'), findsNothing);
+    });
+
+    testWidgets('the wait line is the pill subtitle and nothing else on the '
+        'wall', (tester) async {
+      await pump(tester, waiting: true, online: Stream.value(false));
+      final subtitle = tester.widget<Text>(find.byKey(kSignInSubtitleKey));
+      expect(subtitle.data, 'Waiting for internet…');
+      expect(find.text('Choose an account to start'), findsNothing);
+      expect(find.text('Click here to sign in'), findsNothing);
     });
 
     testWidgets('a resume with no away stretch behind it changes nothing', (

@@ -8,7 +8,6 @@ import type postgres from "postgres";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O, 0, I, 1 (ambiguous)
 
-/** Free-premium days granted to the referrer per subscribing friend. */
 export const REWARD_DAYS = 30;
 
 export function generateReferralCode(): string {
@@ -77,7 +76,7 @@ export async function grantReferralReward(
       AND status <> 'rewarded'
     RETURNING referrer_id
   `;
-  if (rewarded.length === 0) return; // not referred, or already rewarded
+  if (rewarded.length === 0) return;
 
   const referrerId = rewarded[0].referrer_id;
   await sql`

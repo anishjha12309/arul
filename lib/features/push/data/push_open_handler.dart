@@ -34,6 +34,7 @@ class PushOpenHandler {
     this._messaging,
     this._openedStream,
     this._foregroundStream,
+    this._getInitialMessage,
   }) : _api = apiClient;
 
   final ApiClient _api;
@@ -47,6 +48,9 @@ class PushOpenHandler {
   /// instance — they are taken separately, which is also what lets a test drive a tap.
   final Stream<RemoteMessage>? _openedStream;
   final Stream<RemoteMessage>? _foregroundStream;
+
+  /// The cold-tap read, for tests: `FirebaseMessaging.instance` never resolves under `flutter test`.
+  final Future<RemoteMessage?> Function()? _getInitialMessage;
 
   /// Every readable target, whatever the app is showing — routing is [PushTapRouter]'s alone.
   final void Function(DeepLinkTarget target) onOpen;
@@ -63,7 +67,6 @@ class PushOpenHandler {
   /// live handler, and the cold tap is the one that matters.
   Future<void> start() async {
     try {
-      final messaging = _messaging ?? FirebaseMessaging.instance;
       _opened = (_openedStream ?? FirebaseMessaging.onMessageOpenedApp).listen(
         _open,
         onError: (Object e, StackTrace s) =>
@@ -75,7 +78,9 @@ class PushOpenHandler {
         ),
         onError: (Object _, StackTrace _) {},
       );
-      final initial = await messaging.getInitialMessage();
+      final initial =
+          await (_getInitialMessage ??
+              (_messaging ?? FirebaseMessaging.instance).getInitialMessage)();
       if (initial != null) _open(initial);
     } catch (error, stack) {
       // No Play services, or a plugin that could not register. The app keeps working; this phone
@@ -85,6 +90,7 @@ class PushOpenHandler {
   }
 
   void _open(RemoteMessage message) {
+    ArulDeepLink.noteExternalOpen();
     try {
       final data = Map<String, Object?>.from(message.data);
       final target = pushTargetFor(data);
@@ -113,7 +119,6 @@ class PushOpenHandler {
             return <String, dynamic>{};
           }),
     );
-    // GA4 only. Notifications are not on the PostHog allow-list and are not a Meta ★ event.
     _analytics.track(
       'push_opened',
       properties: {

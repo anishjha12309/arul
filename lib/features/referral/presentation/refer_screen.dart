@@ -8,6 +8,7 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Refer & Earn — a silk hero card with the WhatsApp CTA, a rewards card, a "how it works" card.
 ///
@@ -24,8 +25,6 @@ class ReferScreen extends ConsumerWidget {
     (n: '3', text: l10n.referStep3),
   ];
 
-  /// WhatsApp-first share of the referral-attributed Play link; the system sheet on any failure.
-  /// The mechanics live in [tellAFriend] -> one copy, one attribution rule, one analytics shape.
   Future<void> _share(BuildContext context, WidgetRef ref) =>
       tellAFriend(context, ref, source: 'refer_screen');
 
@@ -72,30 +71,11 @@ class ReferScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Header: back arrow + Marcellus title. Spec > Refer & Earn.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                ArulTokens.screenPadding - 4,
-                6,
-                ArulTokens.screenPadding,
-                10,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => context.pop(),
-                    icon: Icon(Icons.arrow_back_rounded, color: textPrimary),
-                    tooltip: MaterialLocalizations.of(
-                      context,
-                    ).backButtonTooltip,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    l10n.referTitle,
-                    style: ArulTokens.screenTitle.copyWith(color: textPrimary),
-                  ),
-                ],
-              ),
+            ArulPushedHeader(
+              title: l10n.referTitle,
+              color: textPrimary,
+              identifier: 'arul_refer_back',
+              onBack: () => context.pop(),
             ),
             Expanded(
               child: ListView(
@@ -106,7 +86,6 @@ class ReferScreen extends ConsumerWidget {
                   24,
                 ),
                 children: [
-                  // Hero card.
                   Container(
                     padding: const EdgeInsets.fromLTRB(20, 26, 20, 20),
                     decoration: BoxDecoration(
@@ -157,7 +136,6 @@ class ReferScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  // Rewards card.
                   Container(
                     padding: const EdgeInsets.all(ArulTokens.cardPadding16),
                     decoration: BoxDecoration(
@@ -195,7 +173,6 @@ class ReferScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: ArulTokens.contentGap),
-                  // How it works card.
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: ArulTokens.cardPadding16,
@@ -258,7 +235,6 @@ class ReferScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Empty state.
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

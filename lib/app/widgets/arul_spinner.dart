@@ -39,7 +39,6 @@ class ArulSpinner extends StatefulWidget {
 
 class _ArulSpinnerState extends State<ArulSpinner>
     with SingleTickerProviderStateMixin {
-  // 1.6s linear -> the vocabulary's one continuous-spin rhythm.
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: Motion.hairlineSweep,
@@ -142,7 +141,6 @@ class _ArulSpinnerPainter extends CustomPainter {
     canvas.drawArc(rect, 0, _twoPi, false, track);
 
     final turnValue = turn;
-    // Rest: the track above is the entire picture.
     if (turnValue == null) return;
 
     final start = turnValue * _twoPi - math.pi / 2;

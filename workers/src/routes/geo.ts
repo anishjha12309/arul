@@ -53,7 +53,6 @@ const LANG_BY_NAME: Readonly<Record<string, string>> = {
   "himachal pradesh": "hi",
 };
 
-/** A cf field Cloudflare "knows" -> a non-blank string -> anything else reads as unknown. */
 function known(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
@@ -67,8 +66,10 @@ export function handleGeo(c: Context<{ Bindings: Env }>): Response {
   // regionCode is scoped to its country -> US+TN is Tennessee -> the country gate comes first
   // A known code never falls back to the name -> the code is the stronger reading
   // Anything but the exact string "true" is OFF -> lang goes null and country/region keep flowing for measurement
+  // Only a caller sending v=2 (the factorial build on) gets a lang -> fielded builds keep the phone's language
+  const versioned = c.req.query("v") === "2";
   let lang: string | null = null;
-  if (c.env.GEO_LANG_ENABLED === "true" && country === "IN") {
+  if (c.env.GEO_LANG_ENABLED === "true" && versioned && country === "IN") {
     lang = code
       ? (LANG_BY_CODE[code.trim().toUpperCase()] ?? null)
       : name

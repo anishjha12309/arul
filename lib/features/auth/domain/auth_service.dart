@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'sign_in_outcome.dart';
@@ -5,7 +7,6 @@ import 'sign_in_outcome.dart';
 /// The auth providers the app supports — never put provider-specific logic in widgets or the router.
 enum AuthProvider { google }
 
-/// Possible ways a sign-in attempt can resolve.
 sealed class AuthResult {
   const AuthResult();
 }
@@ -47,7 +48,15 @@ enum AuthFailureKind {
 /// UI-only state that gates nothing -> a plain notifier, not a member every test fake must grow.
 abstract final class SignInPhase {
   static final ValueNotifier<bool> exchanging = ValueNotifier<bool>(false);
+
+  /// Google's surface came up ([SignInSignal.surfaceShown]) or an attempt ended any way at all
+  /// ([SignInSignal.settled]) -> the come-back reminder's arm and disarm, fed without a new member
+  /// on [AuthService].
+  static final StreamController<SignInSignal> signals =
+      StreamController<SignInSignal>.broadcast(sync: true);
 }
+
+enum SignInSignal { surfaceShown, settled }
 
 enum AuthStatus { unauthenticated, authenticated }
 
@@ -80,7 +89,6 @@ final class AuthUserState {
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
 
-  /// A copy with the given fields overridden. Only valid on an authenticated state.
   AuthUserState copyWith({String? displayName, String? email}) =>
       AuthUserState._(
         status: status,
@@ -95,7 +103,6 @@ abstract interface class AuthService {
   /// Stream of auth state changes. Fires an initial event immediately.
   Stream<AuthUserState> get authStateChanges;
 
-  /// Current auth state (synchronous snapshot).
   AuthUserState get currentState;
 
   /// Completes once the stored-session check has finished and [currentState] is the real verdict.
@@ -118,6 +125,10 @@ abstract interface class AuthService {
   /// set: the sheet is still the first surface, only its name changes (`sheet_reconnect`), so the
   /// one re-arm a dead link earns can be priced against the cold-start sheet.
   ///
+  /// [afterOffline] marks the automatic attempt that was HELD because the phone had no network when
+  /// it was due, and fired once the link came up. Analytics only, like [reconnected], which it
+  /// outranks (`sheet_after_offline`): it is the stretch's FIRST attempt, never a retry of a failure.
+  ///
   /// [reopened] marks the picker the guard puts back after Google's add-account flow handed the
   /// user back with nothing chosen. Analytics only, like [returned]: it is always a BUTTON-flow
   /// attempt (`auto: false`) and only renames that picker (`button_after_add_account`).
@@ -126,6 +137,7 @@ abstract interface class AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   });
 
@@ -140,7 +152,6 @@ abstract interface class AuthService {
   /// Throws on failure so the caller can surface it.
   Future<void> updateDisplayName(String name);
 
-  /// Sign out the current user.
   Future<void> signOut();
 
   /// Permanently delete the account server-side — revoke any live mandate, drop all data, clear session.

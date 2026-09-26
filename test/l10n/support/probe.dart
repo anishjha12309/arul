@@ -77,7 +77,14 @@ Future<ProbeResult> probeScreen(
       // That pump can rebuild a widget -> `RichText.updateRenderObject` then puts the UN-realized span back.
       // The restored style still names a registered family -> the box-glyph guard would not notice.
       // A w600 label would be measured against the w400 cut -> narrower than the truth, a false PASS.
-      // So realize again and require it to be a no-op.
+      // A layout-dependent widget (a LayoutBuilder sizing a title to its slot) legitimately rebuilds
+      // once more when realization changes a sibling's width, so realize until the frame settles and
+      // fail only if it never does.
+      var rounds = 0;
+      while (rounds < 3 && _realizeParagraphs(tester)) {
+        await tester.pump();
+        rounds++;
+      }
       if (_realizeParagraphs(tester)) {
         throw StateError(
           'Spans un-realized themselves on $screen/$locale/${config.id}: a '

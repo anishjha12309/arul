@@ -55,8 +55,6 @@ const REF_RE = /^[A-Z0-9]{4,16}$/;
  */
 const LANG_RE = /^(en|ta|te|kn|ml|hi)$/;
 
-// ── GET /.well-known/assetlinks.json ─────────────────────────────────────────
-
 export function handleAssetLinks(c: Context<{ Bindings: Env }>): Response {
   const fingerprints = (c.env.ANDROID_CERT_SHA256 ?? "")
     .split(",")
@@ -94,14 +92,10 @@ export function handleAssetLinks(c: Context<{ Bindings: Env }>): Response {
   );
 }
 
-// ── GET /w/:id  ·  GET /r/:id ────────────────────────────────────────────────
-
-/** The wallpaper form: `w=<uuid>` in the referrer payload. */
 export function handleWallpaperLink(c: Context<{ Bindings: Env }>): Response {
   return bounceToPlay(c, "w");
 }
 
-/** The ringtone form: `r=<uuid>` in the referrer payload. */
 export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
   return bounceToPlay(c, "r");
 }
@@ -178,7 +172,6 @@ function playStoreUrl(
   return url.toString();
 }
 
-/** Escape for an HTML attribute or text node. */
 function esc(raw: string): string {
   return raw
     .replace(/&/g, "&amp;")

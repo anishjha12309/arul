@@ -7,7 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/l10n/app_localizations.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/experiments/experiments.dart';
 import '../../../core/perf/boot_trace.dart';
 import '../../../core/providers/geo_language_service.dart';
 import '../../../data/models/wallpaper.dart';
@@ -15,9 +18,13 @@ import '../../../theme/arul_tokens.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../../wallpapers/providers/wallpaper_prefetch_provider.dart';
+import '../../notifications/providers/come_back_reminder.dart';
 import '../domain/auth_service.dart';
+import '../domain/regional_art.dart';
 import '../providers/auth_providers.dart';
-import 'widgets/video_background.dart';
+import '../providers/launch_art_provider.dart';
+import '../providers/launch_clip_provider.dart';
+import 'widgets/launch_backdrop.dart';
 import '../../../app/theme/motion.dart';
 
 /// The launch screen.
@@ -38,7 +45,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const _tagline = 'DEVOTIONAL WALLPAPERS & RINGTONES';
   static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
 
   /// How many leading feed thumbnails to warm once the catalog lands.
@@ -55,7 +61,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
   static const _preAuthThumbWarmCount = 1;
 
-  /// The warm-up runs once per splash, on the first catalog data to land — disk snapshot or drain.
+  /// The regional arm's longest wait for `/geo` before the wall paints in the phone's language.
+  /// It runs inside the ~1.5 s Google's sheet takes to draw anyway; lower it, never raise it, if
+  /// the measured LTE p90 says so (launch-surface.md).
+  static const regionCap = Duration(milliseconds: 1200);
+
+  /// The most the sheet waits on a transport reading that has not answered by the time the seed
+  /// settles. Normally it has — it starts in initState — and past this it counts as ONLINE, so it
+  /// can only ever delay a phone that is genuinely offline, never floor everyone's sheet.
+  static const _linkReadCap = Duration(milliseconds: 150);
+
+  late final Future<void> _geoAsk;
+  final _geoClock = Stopwatch();
+  bool _geoDone = false;
+
   bool _mediaWarmed = false;
 
   late final AnimationController _hairlineController;
@@ -77,11 +96,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           .warmUp()
           .then((_) => BootTrace.mark('splash: API warm-up settled')),
     );
-    // A fresh install's region hint, asked once -> the wall flips live when it lands.
-    // Never awaited and never on the routing path -> the splash still routes the moment the seed settles.
-    unawaited(ref.read(geoLanguageServiceProvider).fetchOnce());
+    // A fresh install's region hint, asked once. Only the regional arm waits for it, in
+    // [_awaitRegion]; every other launch routes the moment the seed settles.
+    _geoClock.start();
+    _geoAsk = ref.read(geoLanguageServiceProvider).fetchOnce().whenComplete(() {
+      _geoDone = true;
+    });
+    unawaited(_geoAsk);
+    ref.read(experimentKillSwitchProvider);
+    ref.read(comeBackReminderProvider);
+    ref.read(launchClipProvider);
+    // LISTENED, never just read: Riverpod 3 pauses a provider nobody listens to, and its first
+    // reading then never lands before the sign-in below asks whether there is a network at all.
+    ref.listenManual(isOnlineProvider, (_, _) {});
 
-    // Warm the catalog while the wordmark is up, then the first screenful of feed media.
     ref.listenManual(catalogProvider, fireImmediately: true, (_, next) {
       if (next case AsyncData(:final value) when value.isNotEmpty) {
         unawaited(_warmFeedMedia(value));
@@ -141,7 +169,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _warmPosters(items, thumbCount);
   }
 
-  /// Decode the first [count] posters at the tiles' own width -> the reel's first paint is a repaint.
   void _warmPosters(List<Wallpaper> items, int count) {
     final decodeWidth = WallpaperTile.decodeWidthFor(context);
     for (final w in items.take(count)) {
@@ -159,14 +186,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
-  /// Wait for the stored-session check to finish, then route IMMEDIATELY.
-  ///
-  /// Sampling `currentState` on a timer raced the secure-storage read and bounced returning users.
-  /// Awaiting [AuthService.initialized], bounded, is the fix — and the only thing this screen waits on.
-  /// There is NO fixed brand beat (owner's call): the 1800ms one measured as pure dead time.
-  /// The auth seed settles ~375ms in and the catalog is warm by then -> the splash sat idle ~1.4s.
-  /// It owned most of the cold start and most of the first-content gap.
-  /// Do NOT re-add a floor — a longer brand moment must come from critical-path work, not a timer.
   Future<void> _decideRoute() async {
     BootTrace.mark('splash: _decideRoute start');
     if (AppConfig.hasBackend) {
@@ -186,11 +205,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // Showing THEM a picker is a worse bug than being a second slower.
       if (AppConfig.googleAuthConfigured &&
           !ref.read(authServiceProvider).currentState.isAuthenticated) {
-        BootTrace.mark('splash: no session → auto sign-in from splash');
+        // No network at all -> the launch is HELD, not spent: Google's sheet would draw, take the
+        // account tap and fail. The wall shows the wait line and fires the sheet when the link is up.
+        final offline = await _knownOffline();
+        if (!mounted) return;
+        BootTrace.mark(
+          offline
+              ? 'splash: no session, offline → sign-in held for the network'
+              : 'splash: no session → auto sign-in from splash',
+        );
         unawaited(
           ref
                   .read(authControllerProvider.notifier)
-                  .autoSignIn(AuthProvider.google) ??
+                  .autoSignIn(AuthProvider.google, offline: offline) ??
               Future<void>.value(),
         );
       }
@@ -200,8 +227,51 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         AppConfig.hasBackend &&
         ref.read(authServiceProvider).currentState.isAuthenticated;
 
+    if (ref.read(launchArtProvider) is AwaitingRegionArt) {
+      if (!authed) await _awaitRegion();
+      ref.read(launchArtProvider.notifier).settle();
+      await _precacheLaunchArt();
+      if (!mounted) return;
+    }
+
     BootTrace.mark('splash: routing to ${authed ? '/browse' : '/sign-in'}');
     context.go(authed ? '/browse' : '/sign-in');
+  }
+
+  /// True only on a KNOWN `none` transport reading; loading past [_linkReadCap], or an error, is online.
+  Future<bool> _knownOffline() async {
+    final reading = ref.read(isOnlineProvider);
+    if (reading.hasValue) return reading.value == false;
+    try {
+      return !await ref.read(isOnlineProvider.future).timeout(_linkReadCap);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The regional arm on a launch `/geo` has not answered yet: hold the dark ground until the region
+  /// lands or [regionCap] passes, so the wall's first frame is already in its final language.
+  /// The Google sheet is not held — `autoSignIn` fired before this. A miss closes the live window:
+  /// the answer, whenever it comes, is kept for the next launch and never flips this one.
+  Future<void> _awaitRegion() async {
+    final answered =
+        _geoDone ||
+        await awaitRegionAnswer(_geoAsk, regionCap - _geoClock.elapsed);
+    if (!answered) ref.read(geoLanguageServiceProvider).closeLiveWindow();
+    BootTrace.mark(
+      'splash: region wait ended at ${_geoClock.elapsedMilliseconds}ms '
+      '(${answered ? 'settled' : 'cap'})',
+    );
+  }
+
+  /// Decodes the settled poster before routing -> the wall's first frame has it. Bounded: a slow
+  /// decode fades in on the wall instead of holding the route.
+  Future<void> _precacheLaunchArt() async {
+    final art = ref.read(launchArtProvider);
+    if (art is! PosterArt || !mounted) return;
+    await precacheImage(AssetImage(art.poster.asset), context)
+        .timeout(const Duration(milliseconds: 300), onTimeout: () {})
+        .catchError((Object _) {});
   }
 
   @override
@@ -212,6 +282,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final awaitingRegion = ref.watch(launchArtProvider) is AwaitingRegionArt;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -224,15 +295,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // Video paints edge-to-edge -> our own scrim below, no built-in overlay competing.
-            const VideoBackground(overlayOpacity: 0),
+            // Video or poster, edge-to-edge -> our own scrim below, no built-in overlay competing.
+            const LaunchBackdrop(),
 
-            // Spec > Splash: 180deg .25 → 0 @35% → 0 @55% → .82.
             const DecoratedBox(
               decoration: BoxDecoration(gradient: ArulTokens.splashBottomScrim),
             ),
 
-            // Bottom-centred column, bottom 64, gap 10 — the wordmark carries the brand alone.
             Positioned(
               left: 0,
               right: 0,
@@ -242,15 +311,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 children: [
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
-                  // Shrinks, never wraps — see the twin in sign_in_screen.dart.
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _tagline,
-                        maxLines: 1,
-                        style: ArulTokens.tagline,
+                  // Shrinks, never wraps — see the twin in sign_in_screen.dart. Held back while the
+                  // regional arm waits: the language is not known yet, and a line that changes
+                  // script under the reader is the flip this arm exists to remove.
+                  Visibility.maintain(
+                    visible: !awaitingRegion,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: _Tagline(
+                          AppLocalizations.of(context).splashTagline,
+                        ),
                       ),
                     ),
                   ),
@@ -319,6 +391,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           },
         ),
       ),
+    );
+  }
+}
+
+/// Latin in tracked caps; an Indic script untracked, because tracking splits its clusters apart.
+class _Tagline extends StatelessWidget {
+  const _Tagline(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final latin = Localizations.localeOf(context).languageCode == 'en';
+    return Text(
+      latin ? text.toUpperCase() : text,
+      maxLines: 1,
+      style: latin
+          ? ArulTokens.tagline
+          : ArulTokens.tagline.copyWith(letterSpacing: 0),
     );
   }
 }

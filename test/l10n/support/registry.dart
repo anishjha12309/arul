@@ -28,7 +28,6 @@ import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
-import 'package:arul/features/notifications/presentation/notification_settings_screen.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
@@ -238,18 +237,13 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   // ── Wallpapers tab states ──────────────────────────────────────────────
   ScreenEntry(
     id: 'feed.loading',
-    textFree: true,
     build: () => const Scaffold(
       body: FeedLoading(margin: EdgeInsets.all(12), radius: 28),
     ),
   ),
   ScreenEntry(
     id: 'feed.empty',
-    unlocalizedEnglish: true,
-    // The category label is interpolated into the body copy -> use the LONGEST of the six, never a short stand-in.
-    build: () => Scaffold(
-      body: FeedEmpty(categoryLabel: 'Ayyappan', onBrowseAll: () {}),
-    ),
+    build: () => Scaffold(body: FeedEmpty(onBrowseAll: () {})),
   ),
   ScreenEntry(
     id: 'feed.error',
@@ -413,12 +407,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // ── Reminders ──────────────────────────────────────────────────────────
-  ScreenEntry(
-    id: 'notifications.screen',
-    build: () => const NotificationSettingsScreen(),
-  ),
-
   // ── Refer & Earn ───────────────────────────────────────────────────────
   ScreenEntry(id: 'refer.screen', build: () => const ReferScreen()),
   ScreenEntry(
@@ -461,7 +449,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   // ── Apply ──────────────────────────────────────────────────────────────
   ScreenEntry(
     id: 'apply.sheet',
-    unlocalizedEnglish: true,
     build: () => SheetHost(
       open: (context) =>
           ApplySheet.show(context, wallpaper: kFakeWallpapers.first),
@@ -478,6 +465,10 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       id: 'signin.${outcome.name}',
       build: () => SignInScreen(debugOutcome: outcome),
     ),
+  ScreenEntry(
+    id: 'signin.waitingForInternet',
+    build: () => const SignInScreen(debugWaitingForInternet: true),
+  ),
 
   // ── The dock ───────────────────────────────────────────────────────────
   ScreenEntry(
@@ -523,7 +514,6 @@ Widget buildHarness({
         '/browse',
         '/ringtones',
         '/settings',
-        '/settings/notifications',
         '/refer',
         '/upload',
         '/premium',

@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/motion.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../app/widgets/skeleton.dart';
 import '../../../core/config/app_config.dart';
@@ -82,7 +83,7 @@ class _TileImage extends ConsumerWidget {
       imageUrl: wallpaper.posterUrl(AppConfig.cdnBaseUrl),
       fit: BoxFit.cover,
       memCacheWidth: decodeWidth,
-      fadeInDuration: const Duration(milliseconds: 180),
+      fadeInDuration: Motion.imageFade,
       placeholder: (_, _) => const Skeleton(borderRadius: BorderRadius.zero),
       errorWidget: (_, _, _) =>
           _TileFallback(wallpaper: wallpaper, decodeWidth: decodeWidth),

@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 class GopuramMark extends StatelessWidget {
   const GopuramMark({super.key, required this.size, required this.color});
 
-  /// Width in logical pixels (maps to the 44-unit viewBox width).
   final double size;
 
   final Color color;
@@ -32,17 +31,11 @@ class _GopuramPainter extends CustomPainter {
 
   final Color color;
 
-  // The five subpaths of the viewBox-0-0-44-40 mark, as vertex lists.
   static const List<List<Offset>> _tiers = [
-    // M20 0h4v3h-4z  — the finial
     [Offset(20, 0), Offset(24, 0), Offset(24, 3), Offset(20, 3)],
-    // M14 5h16l-2 5H16z
     [Offset(14, 5), Offset(30, 5), Offset(28, 10), Offset(16, 10)],
-    // M10 12h24l-2.5 6H12.5z
     [Offset(10, 12), Offset(34, 12), Offset(31.5, 18), Offset(12.5, 18)],
-    // M6 20h32l-3 7H9z
     [Offset(6, 20), Offset(38, 20), Offset(35, 27), Offset(9, 27)],
-    // M2 29h40l-2 8H4z
     [Offset(2, 29), Offset(42, 29), Offset(40, 37), Offset(4, 37)],
   ];
 

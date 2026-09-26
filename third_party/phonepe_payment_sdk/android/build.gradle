@@ -47,6 +47,6 @@ android {
     }
 
     dependencies {
-        implementation 'phonepe.intentsdk.android.release:IntentSDK:5.2.0'
+        implementation 'phonepe.intentsdk.android.release:IntentSDK:5.4.0'
     }
 }

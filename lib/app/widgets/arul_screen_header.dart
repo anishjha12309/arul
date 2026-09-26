@@ -34,17 +34,30 @@ class ArulScreenHeader extends StatelessWidget {
   /// The layout height stays [ArulTokens.headerControlSize], bounded by the band's spare room.
   final double titleDrop;
 
-  /// Optional glyph before the title. Sized to [ArulTokens.headerControlSize] by its own widget.
   final Widget? leading;
 
   /// Trailing controls, right-aligned with [_actionGap] between them.
-  /// Each MUST be [ArulTokens.headerControlSize] tall -> the band is the same height on every tab.
+  /// Each MUST be [bandHeight] tall and DRAW [ArulTokens.headerControlSize] inside [bandPadding]
+  /// (see [ArulEarnButton]) -> the band is the same height on every tab, and the control is tapped
+  /// at Android's 48 while the eye still sees 34.
   final List<Widget> actions;
 
-  /// Gap between the leading glyph and the title.
+  /// The band's full height: the control row plus the air either side. 48 — which is also
+  /// [ArulTokens.minHitTarget], so an action that spans the band is a real target for free.
+  static const double bandHeight =
+      ArulTokens.headerTopPadding +
+      ArulTokens.headerControlSize +
+      ArulTokens.headerBottomPadding;
+
+  /// Where the 34 px visual sits inside the band — the SAME insets the band used to wear as
+  /// padding, so nothing moved when the hit box grew.
+  static const EdgeInsets bandPadding = EdgeInsets.only(
+    top: ArulTokens.headerTopPadding,
+    bottom: ArulTokens.headerBottomPadding,
+  );
+
   static const double _leadingGap = 12;
 
-  /// Gap between two trailing controls.
   static const double _actionGap = 8;
 
   /// **Optical left inset for the title — tune it if the title reads too near the screen edge.**
@@ -56,43 +69,75 @@ class ArulScreenHeader extends StatelessWidget {
   /// A [leading] glyph keeps the true gutter — unlike type it has a real edge.
   static const double _titleOpticalInset = 3;
 
+  /// A localized title renders in its Noto fallback, whose taller ascent rides the ink 4–9 dp above
+  /// the Marcellus titles' (measured on device against the wordmark's). Drop it back per script.
+  static const _scriptDrop = <String, double>{
+    'hi': 7.2,
+    'kn': 8.8,
+    'ml': 6.1,
+    'ta': 3.6,
+    'te': 7.0,
+  };
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // The vertical air is INSIDE the band now (leading and title wear it as [bandPadding]) so an
+    // action can span the whole 48 and be tapped there; the band's height is unchanged, so the
+    // reel solved against it is too.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        ArulTokens.screenPadding,
-        ArulTokens.headerTopPadding,
-        ArulTokens.screenPadding,
-        ArulTokens.headerBottomPadding,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: ArulTokens.screenPadding),
       child: SizedBox(
-        height: ArulTokens.headerControlSize,
+        height: bandHeight,
         child: Row(
           children: [
             if (leading != null) ...[
-              leading!,
+              Padding(padding: bandPadding, child: leading),
               const SizedBox(width: _leadingGap),
             ],
             // A localized title runs half again as long and the OS font size is not clamped here.
             // So the title is what must give way -> Expanded, never a Spacer.
             Expanded(
-              // Horizontal is PADDING -> it reserves its 3px, so a long title ellipsises against
+              // Horizontal is PADDING -> it reserves its 3px, so a long title measures against
               // the real space it has.
               // Vertical is a TRANSLATE -> it must add no height, or the band grows and the reel with it.
               child: Padding(
-                padding: const EdgeInsets.only(left: _titleOpticalInset),
+                padding: bandPadding.add(
+                  const EdgeInsets.only(left: _titleOpticalInset),
+                ),
                 child: Transform.translate(
-                  offset: Offset(0, titleDrop),
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: (titleStyle ?? ArulTokens.screenHeaderTitle).copyWith(
-                      // Gold on dark, not ivory -> the header reads as brand, not as a page label.
-                      // Light keeps its ink — gold on ivory has nothing to carry it.
-                      color: isDark ? ArulTokens.gold : ArulTokens.lightText,
+                  offset: Offset(
+                    0,
+                    titleDrop +
+                        (titleStyle == null
+                            ? _scriptDrop[Localizations.localeOf(
+                                    context,
+                                  ).languageCode] ??
+                                  0
+                            : 0),
+                  ),
+                  // Shrinks, never clips — the dock's rule, applied to the title: a Malayalam
+                  // "Ringtones" at a 1.3 OS font size on a 320 dp phone lost its last letters to an
+                  // ellipsis, and a title cut mid-word reads as broken where a slightly smaller one
+                  // reads as the title. At every ordinary size the box is wider than the word and
+                  // scaleDown is a no-op, so the one type scale still holds across the tabs.
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        style: (titleStyle ?? ArulTokens.screenHeaderTitle).copyWith(
+                          // Gold on dark, not ivory -> the header reads as brand, not as a page
+                          // label. Light keeps its ink — gold on ivory has nothing to carry it.
+                          color: isDark
+                              ? ArulTokens.gold
+                              : ArulTokens.lightText,
+                        ),
+                      ),
                     ),
                   ),
                 ),

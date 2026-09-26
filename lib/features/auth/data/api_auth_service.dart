@@ -48,6 +48,9 @@ class ApiAuthService implements AuthService {
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
     // `_initialized`, which completes when this seed does.
     _initialized = _seedInitialState();
+    // A refresh that proves the session dead mid-process is the same verdict the seed reaches on a
+    // cold start -> signed out. Without it the UI stayed signed in and every gated call failed.
+    _api.sessionEnded.listen((_) => _endSession());
   }
 
   late final Future<void> _initialized;
@@ -77,7 +80,6 @@ class ApiAuthService implements AuthService {
 
   final _controller = StreamController<AuthUserState>.broadcast();
 
-  // Tracks the current state so [currentState] can return synchronously.
   AuthUserState _current = AuthUserState.unauthenticated();
 
   /// Checks secure storage for an existing access token and emits the right initial state.
@@ -138,7 +140,6 @@ class ApiAuthService implements AuthService {
       ),
     );
 
-    // 2. Background upgrade to the real user (or sign out if the session is dead).
     try {
       final data = await _api.get('/me');
       final user = data['user'] as Map<String, dynamic>?;
@@ -165,21 +166,26 @@ class ApiAuthService implements AuthService {
     } on ApiException catch (e) {
       if (e.status == 401) {
         await _api.clearTokens();
-        _crash.setUserId(null);
-        _emit(AuthUserState.unauthenticated());
+        _endSession();
       }
-      // Other statuses (offline, 5xx): keep the optimistic authenticated state.
     } catch (_) {
       // Network error: keep the optimistic authenticated state.
     }
+  }
+
+  /// A session that died on its own — no sign-out, so Google's credential state is left alone and
+  /// a one-account phone can be signed straight back in. Idempotent: a refresh failure and the
+  /// seed's own 401 can both land for one death.
+  void _endSession() {
+    if (!_current.isAuthenticated) return;
+    _crash.setUserId(null);
+    _emit(AuthUserState.unauthenticated());
   }
 
   void _emit(AuthUserState state) {
     _current = state;
     if (!_controller.isClosed) _controller.add(state);
   }
-
-  // ─── AuthService ───────────────────────────────────────────────────────────
 
   @override
   Stream<AuthUserState> get authStateChanges => _controller.stream;
@@ -193,6 +199,7 @@ class ApiAuthService implements AuthService {
     bool auto = false,
     bool returned = false,
     bool reconnected = false,
+    bool afterOffline = false,
     bool reopened = false,
   }) {
     switch (provider) {
@@ -201,6 +208,7 @@ class ApiAuthService implements AuthService {
           auto: auto,
           returned: returned,
           reconnected: reconnected,
+          afterOffline: afterOffline,
           reopened: reopened,
         );
     }
@@ -213,8 +221,6 @@ class ApiAuthService implements AuthService {
     final user = data['user'] as Map<String, dynamic>?;
     final newName = user?['displayName'] as String? ?? trimmed;
 
-    // Reflect the new name in the current state so the UI updates reactively,
-    // and refresh the local cache so it survives the next offline cold start.
     if (_current.isAuthenticated) {
       _emit(_current.copyWith(displayName: newName));
       await _api.cacheProfile(
@@ -237,7 +243,6 @@ class ApiAuthService implements AuthService {
     final refreshToken = await _api.readRefreshToken();
     if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
-        // Best-effort: denylist the refresh token on the server.
         await _api.post('/auth/logout', body: {'refreshToken': refreshToken});
       } catch (e) {
         debugPrint('[ApiAuthService] logout request failed (non-fatal): $e');
@@ -246,6 +251,8 @@ class ApiAuthService implements AuthService {
     await _api.clearTokens();
     await _clearGoogleCredentialState();
     _crash.setUserId(null);
+    // BEFORE the emit: the wall it raises fires sign-in events that must land on a fresh identity.
+    _analytics.reset();
     _emit(AuthUserState.unauthenticated());
     // Timing mark, readable in profile (and in a DIAG release): the baseline
     // harness reads logout duration — denylist round-trip + token clear — from
@@ -293,10 +300,9 @@ class ApiAuthService implements AuthService {
     await _api.clearTokens();
     await _clearGoogleCredentialState();
     _crash.setUserId(null);
+    _analytics.reset();
     _emit(AuthUserState.unauthenticated());
   }
-
-  // ─── Google ────────────────────────────────────────────────────────────────
 
   /// Monotonic attempt counter backing [abandonPendingSignIn]. Captured at
   /// launch, re-checked the moment `authenticate()` returns: a mismatch means
@@ -327,7 +333,6 @@ class ApiAuthService implements AuthService {
         ..._installProps,
         'provider': 'google',
         'kind': kind.name,
-        // Null-aware elements: dropped entirely when absent.
         'error': ?_trimForAnalytics(error),
         'gis_code': ?gisCode,
         'surface': ?_surface,
@@ -495,19 +500,28 @@ class ApiAuthService implements AuthService {
   /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetReconnect = 'sheet_reconnect';
 
+  /// The sheet of the launch HELD while the phone had no network: it follows no failure, so it alone
+  /// says whether waiting for the link beats letting the sheet fail offline.
+  /// A VALUE on the existing `surface` property — no new event, no new property.
+  static const _surfaceSheetAfterOffline = 'sheet_after_offline';
+
   /// The sheet's reported name for an attempt, given which re-arm fired it.
   ///
   /// A pure one-liner only because the service itself is unconstructable in a unit test (a real
   /// ApiClient, a real analytics sink, GMS): this is the only way the funnel's most load-bearing
   /// mapping — which `surface` value a re-armed attempt files itself under — is pinnable at all.
   /// A RETURN wins over a reconnect: the person came back to the app themselves, which is the
-  /// stronger fact about the attempt, and the two must never blend into a third name.
+  /// stronger fact about the attempt, and the two must never blend into a third name. A held
+  /// launch sits between them: it outranks a reconnect, which only ever retries a failure.
   @visibleForTesting
   static String sheetSurfaceFor({
     required bool returned,
     bool reconnected = false,
+    bool afterOffline = false,
   }) => returned
       ? _surfaceSheetReturn
+      : afterOffline
+      ? _surfaceSheetAfterOffline
       : reconnected
       ? _surfaceSheetReconnect
       : _surfaceSheet;
@@ -636,6 +650,7 @@ class ApiAuthService implements AuthService {
     required bool auto,
     required bool returned,
     required bool reconnected,
+    required bool afterOffline,
     required bool reopened,
   }) async {
     final attempt = ++_attemptSeq;
@@ -672,6 +687,7 @@ class ApiAuthService implements AuthService {
       final sheetSurface = sheetSurfaceFor(
         returned: returned,
         reconnected: reconnected,
+        afterOffline: afterOffline,
       );
       final buttonSurface = buttonSurfaceFor(reopened: reopened);
       _analytics.track(
@@ -696,24 +712,23 @@ class ApiAuthService implements AuthService {
       _surfaceClock.startAttempt(
         // Google's screen is up. For the people who then leave without a cancel, a success or a
         // failure, this is the one fact that separates "never saw the sheet" from "saw it and left".
-        onSurface: (ms) => _analytics.track(
-          'login_surface_shown',
-          properties: {
-            ..._installProps,
-            'provider': 'google',
-            'surface': ?_surface,
-            'auto': auto,
-            'ms_to_surface': ms,
-          },
-        ),
+        onSurface: (ms) {
+          _analytics.track(
+            'login_surface_shown',
+            properties: {
+              ..._installProps,
+              'provider': 'google',
+              'surface': ?_surface,
+              'auto': auto,
+              'ms_to_surface': ms,
+            },
+          );
+          SignInPhase.signals.add(SignInSignal.surfaceShown);
+        },
       );
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
         sheet: useSheet
             ? () => GoogleSignIn.instance.attemptLightweightAuthentication(
-                // The plugin's DEFAULT swallows canceled/interrupted/
-                // uiUnavailable into a null result, which would make a
-                // DISMISSED sheet indistinguishable from an empty one — and
-                // put the picker up over it.
                 reportAllExceptions: true,
               )
             : null,
@@ -741,7 +756,6 @@ class ApiAuthService implements AuthService {
       // drop the zombie before any side effect.
       if (attempt != _attemptSeq) return const AuthCancelled();
 
-      // v7: idToken is a synchronous property on GoogleSignInAuthentication.
       final idToken = account.authentication.idToken;
       if (idToken == null) {
         return _googleFailure(
@@ -780,7 +794,6 @@ class ApiAuthService implements AuthService {
             // and token claim disagree; both absent is still accepted, which is
             // what every build already in the field sends.
             'nonce': ?GoogleSignInInit.nonce,
-            // Null-aware elements: dropped entirely when absent.
             'referralCode': ?referralCode,
           },
           requiresAuth: false,
@@ -948,10 +961,6 @@ class ApiAuthService implements AuthService {
       // Last-resort fallback for non-GIS, non-platform exceptions only —
       // GoogleSignInException above owns the plugin's outcomes now.
       if (isNetworkError(e)) {
-        // Both exchange attempts (see _postLoginWithRetry) died on the wire.
-        // Reproduced on device 2026-08-31: the Google flow SURVIVED a 12s
-        // uplink blackout and delivered a credential — it was this POST that
-        // gave up. Say connection, not a generic "failed".
         return _googleFailure(
           AuthFailureKind.networkError,
           "Couldn't reach the server. Check your internet connection and try again.",
@@ -986,6 +995,7 @@ class ApiAuthService implements AuthService {
         SignInPhase.exchanging.value = false;
         _surfaceClock.endAttempt();
       }
+      SignInPhase.signals.add(SignInSignal.settled);
     }
   }
 

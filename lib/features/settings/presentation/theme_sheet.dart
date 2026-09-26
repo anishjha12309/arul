@@ -9,9 +9,6 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/theme_mode_provider.dart';
 
-/// The theme picker sheet, laid out to the mock's spec.
-///
-/// FUNCTIONAL, not a mock -> a row drives [themeModeProvider] (real switching), then closes.
 Future<void> showThemeSheet(BuildContext context) {
   return showArulSheet<void>(
     context,
@@ -21,7 +18,6 @@ Future<void> showThemeSheet(BuildContext context) {
   );
 }
 
-/// Human label for a [ThemeMode], used both here and for the settings row sub.
 String themeModeLabel(AppLocalizations l10n, ThemeMode mode) => switch (mode) {
   ThemeMode.system => l10n.themeSystemDefault,
   ThemeMode.light => l10n.themeLight,

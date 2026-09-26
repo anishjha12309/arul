@@ -12,7 +12,7 @@
 name: arul
 description: "Arul — South Indian wallpapers"
 publish_to: 'none'
-version: 1.0.0+82
+version: 1.0.0+86
 
 environment:
   sdk: ^3.12.0
@@ -47,6 +47,7 @@ dependencies:
   qr_flutter: ^4.1.0            # the mandate link as an on-screen QR for a phone with no UPI
                                 # app — pure Dart, no native code, no permission
   image: ^4.9.1                 # JPEG encode for the share watermark (in Isolate.run)
+  in_app_review: ^2.0.12        # Play's native review sheet (docs/review-prompt.md)
 
   # ── Local notifications (devotional reminders). The reminders themselves are
   # fully on-device: no network, no server. This plugin also owns the campaign
@@ -121,6 +122,8 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  fake_async: ^1.3.3   # timer ladders under test (appConfigProvider's retry)
+  webview_flutter_platform_interface: ^2.15.1   # a fake WebViewPlatform for the policy reader's tests
   flutter_native_splash: ^2.4.8
   build_runner: ^2.15.0
   riverpod_generator: ^4.0.4
@@ -148,6 +151,9 @@ flutter:
     # itself is NOT bundled (Play cannot language-split flutter_assets, so all
     # six cuts would ship to every install and one would ever play).
     - assets/images/onboarding/
+    # The regional arm's launch posters (exp_regional): frame 0 of each region's most-applied live
+    # wallpaper, 540x960 lossy WebP. Placement per poster lives in regional_art.dart.
+    - assets/images/regional/
     - assets/premium/
     # Ringtone row art: one transparent gold figure per deity, composited over
     # the hashed jewel-tone ground the app still draws. Bundled, not streamed —

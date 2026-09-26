@@ -5,7 +5,7 @@ import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// A centred confirm dialog — 24px margins, r22, gold-35% border on `#1A0B0F`.
-/// Title 18px/600, message 13.5px secondary, two 46px r999 buttons: outlined Cancel, solid confirm.
+/// Title 18px/600, message 13.5px secondary, two 48px r999 buttons: outlined Cancel, solid confirm.
 ///
 /// The dialog only RESOLVES the answer — `true` on confirm, `false` or `null` on cancel.
 /// The CALLER runs the real action (logout, delete account) on `true`.
@@ -15,17 +15,19 @@ Future<bool?> showArulConfirmDialog(
   required String title,
   required String message,
   required String confirmLabel,
+  String? cancelLabel,
 }) {
   return showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
     barrierLabel: title,
-    barrierColor: ArulTokens.dialogOverlay, // rgba(20,9,12,.60)
-    transitionDuration: ArulTokens.dialogEnter, // 250ms
+    barrierColor: ArulTokens.dialogOverlay,
+    transitionDuration: ArulTokens.dialogEnter,
     pageBuilder: (context, _, _) => _ConfirmDialog(
       title: title,
       message: message,
       confirmLabel: confirmLabel,
+      cancelLabel: cancelLabel,
     ),
     transitionBuilder: (context, anim, _, child) {
       final t = CurvedAnimation(parent: anim, curve: ArulTokens.sheetCurve);
@@ -45,11 +47,16 @@ class _ConfirmDialog extends StatelessWidget {
     required this.title,
     required this.message,
     required this.confirmLabel,
+    this.cancelLabel,
   });
 
   final String title;
   final String message;
   final String confirmLabel;
+
+  /// Defaults to the shared "Cancel". A dialog whose ACTION is a cancel must name its way out
+  /// differently, or both buttons read "cancel".
+  final String? cancelLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +81,6 @@ class _ConfirmDialog extends StatelessWidget {
 
     return Center(
       child: Padding(
-        // 24px side margins.
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Material(
           type: MaterialType.transparency,
@@ -103,12 +109,12 @@ class _ConfirmDialog extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: ArulTokens.body.copyWith(color: messageColor),
                 ),
-                const SizedBox(height: 20), // 8px gap + 12px margin-top
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
                       child: _DialogButton(
-                        label: AppLocalizations.of(context).cancel,
+                        label: cancelLabel ?? AppLocalizations.of(context).cancel,
                         filled: false,
                         borderColor: cancelBorder,
                         textColor: cancelText,
@@ -136,7 +142,6 @@ class _ConfirmDialog extends StatelessWidget {
   }
 }
 
-/// One 46px r999 dialog button — filled is solid maroon; outlined is transparent with a hairline.
 class _DialogButton extends StatefulWidget {
   const _DialogButton({
     required this.label,
@@ -153,9 +158,6 @@ class _DialogButton extends StatefulWidget {
   final Color? borderColor;
   final Color? textColor;
 
-  /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
-  /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String identifier;
 
   @override
@@ -167,12 +169,14 @@ class _DialogButtonState extends State<_DialogButton> {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = widget.filled
-        ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
-        : Colors.transparent;
     final Color textColor = widget.filled
         ? ArulTokens.ivory
         : (widget.textColor ?? ArulTokens.darkText);
+    // Cancel answers the finger too: a faint tint of its own ink while pressed, and the fill's own
+    // alpha-0 at rest — never `Colors.transparent`, which is transparent BLACK.
+    final Color bg = widget.filled
+        ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
+        : textColor.withValues(alpha: _pressed ? 0.10 : 0);
 
     return Semantics(
       button: true,
@@ -190,7 +194,7 @@ class _DialogButtonState extends State<_DialogButton> {
         onTapCancel: () => setState(() => _pressed = false),
         onTap: widget.onTap,
         child: Container(
-          height: ArulTokens.dialogButtonHeight, // 46
+          height: ArulTokens.dialogButtonHeight,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: bg,

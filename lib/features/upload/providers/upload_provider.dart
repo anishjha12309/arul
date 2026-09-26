@@ -12,9 +12,9 @@ import '../data/api_content_submission_repository.dart';
 ///
 /// Keyed on `kind`; `wallpaperType` only narrows the wallpaper branch and is ignored for a ringtone.
 abstract final class UploadConstraints {
-  static const int maxStaticWallpaper = 10 * 1024 * 1024; // 10 MB
-  static const int maxLiveWallpaper = 50 * 1024 * 1024; // 50 MB
-  static const int maxRingtone = 15 * 1024 * 1024; // 15 MB
+  static const int maxStaticWallpaper = 10 * 1024 * 1024;
+  static const int maxLiveWallpaper = 50 * 1024 * 1024;
+  static const int maxRingtone = 15 * 1024 * 1024;
 
   static const Set<String> staticWallpaperTypes = {
     'image/jpeg',
@@ -67,7 +67,6 @@ abstract final class UploadConstraints {
   }
 }
 
-/// Upload flow state: idle → loading, per stage → success or error.
 sealed class UploadState {
   const UploadState();
 }
@@ -94,7 +93,6 @@ final class UploadError extends UploadState {
   final String message;
 }
 
-/// Drives the content upload flow and exposes its [UploadState].
 class UploadNotifier extends Notifier<UploadState> {
   @override
   UploadState build() => const UploadIdle();
@@ -128,7 +126,6 @@ class UploadNotifier extends Notifier<UploadState> {
     final fileKey = 'user/$userId/submissions/${timestamp}_$fileName';
 
     try {
-      // 1. Presigned PUT URL from the Worker.
       state = const UploadLoading(stage: UploadStage.uploading);
       final urlData = await apiClient.post(
         '/media/upload-url',
@@ -146,7 +143,6 @@ class UploadNotifier extends Notifier<UploadState> {
         return;
       }
 
-      // 2. PUT the file bytes directly to R2.
       final fileBytes = await File(filePath).readAsBytes();
       final putResp = await http.put(
         Uri.parse(uploadUrl),
@@ -161,7 +157,6 @@ class UploadNotifier extends Notifier<UploadState> {
         return;
       }
 
-      // 3. Record the submission via the Worker.
       state = const UploadLoading(stage: UploadStage.saving);
       final repo = ApiContentSubmissionRepository(apiClient: apiClient);
       final trimmedTitle = title?.trim();

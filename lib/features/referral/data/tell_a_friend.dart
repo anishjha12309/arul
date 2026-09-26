@@ -7,6 +7,7 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
 import '../providers/referral_providers.dart';
+import '../../wallpapers/data/direct_share_service.dart';
 import 'install_referrer_service.dart';
 
 /// The ONE outbound "tell a friend" path, shared by every surface that offers it.
@@ -14,7 +15,7 @@ import 'install_referrer_service.dart';
 /// The copy and the attribution are the valuable parts, and every re-derivation risks both.
 /// So there is one place to get the voice right and one place to get the credit right.
 /// The payload here is TEXT ONLY -> WhatsApp by deep link, not the wallpaper share's file intent.
-/// With no file to carry, `whatsapp://send?text=` needs no platform channel.
+/// WhatsApp by a targeted text `ACTION_SEND`; `whatsapp://send?text=` is the fallback.
 /// [source] names the surface and rides on `referral_shared` -> dead entry points are findable.
 Future<void> tellAFriend(
   BuildContext context,
@@ -37,6 +38,10 @@ Future<void> tellAFriend(
         },
       );
 
+  // Targeted ACTION_SEND first: it keeps WhatsApp's picker in Arul's task, so Back comes home.
+  if (await ref.read(directShareServiceProvider).shareTextToWhatsApp(message)) {
+    return;
+  }
   final whatsapp = Uri.parse(
     'whatsapp://send?text=${Uri.encodeComponent(message)}',
   );

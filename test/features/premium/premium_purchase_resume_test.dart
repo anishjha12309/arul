@@ -153,8 +153,8 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         apiClientProvider.overrideWith((ref) => api),
         analyticsServiceProvider.overrideWith((ref) => analytics),
-        appConfigProvider.overrideWith(
-          (ref) async => const AppConfigModel(
+        appConfigProvider.overrideWithBuild(
+          (ref, _) async => const AppConfigModel(
             prices: {
               'monthly': {'amount': 19900},
             },
@@ -167,7 +167,6 @@ void main() {
             prefs: prefs,
             analytics: analytics,
             monthlyPriceRupees: () => 199,
-            isFreshInstall: true,
           ),
         ),
         ...overrides,
@@ -740,5 +739,95 @@ void main() {
     expect(eventsNamed('checkout_started'), hasLength(1));
     expect(container.read(premiumPurchaseProvider), isA<PurchaseResumable>());
     await drain(tester);
+  });
+
+  // ─── The return page's taps are tagged ────────────────────────────────────
+
+  group('surface', () {
+    testWidgets('a checkout from the return page says so, start to trial', (
+      tester,
+    ) async {
+      final api = _FakeApi(const ['trialing'], intentUrl: _noExpiryUrl);
+      final container = await build(tester, api);
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .startTrial(
+              targetApp: _phonePe,
+              trialEligible: true,
+              surface: 'return',
+            ),
+      );
+      await tester.pump(const Duration(seconds: 5));
+      expect(eventsNamed('checkout_started').single?['surface'], 'return');
+      expect(eventsNamed('trial_started').single?['surface'], 'return');
+      await drain(tester);
+    });
+
+    testWidgets("the trial screen's own checkout carries no surface", (
+      tester,
+    ) async {
+      final api = _FakeApi(const ['trialing'], intentUrl: _noExpiryUrl);
+      final container = await build(tester, api);
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .startTrial(targetApp: _phonePe, trialEligible: true),
+      );
+      await tester.pump(const Duration(seconds: 5));
+      expect(
+        eventsNamed('checkout_started').single?.containsKey('surface'),
+        isFalse,
+      );
+      expect(
+        eventsNamed('trial_started').single?.containsKey('surface'),
+        isFalse,
+      );
+      await drain(tester);
+    });
+
+    testWidgets('a resume from the return page tags the trial it wins', (
+      tester,
+    ) async {
+      final api = _FakeApi(const [
+        'pending',
+        'trialing',
+      ], intentUrl: _noExpiryUrl);
+      final container = await build(tester, api);
+      await launchThenReturn(tester, container);
+      expect(container.read(premiumPurchaseProvider), isA<PurchaseResumable>());
+
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .resumeIntent(surface: 'return'),
+      );
+      await tester.pump(const Duration(seconds: 5));
+      final trial = eventsNamed('trial_started').single;
+      expect(trial?['surface'], 'return');
+      expect(trial?['method'], 'upi_app_resumed');
+      // Still ONE checkout per decision — the resume is not a second one.
+      expect(eventsNamed('checkout_started'), hasLength(1));
+      await drain(tester);
+    });
+
+    testWidgets('a switch from the return page tags the fresh checkout', (
+      tester,
+    ) async {
+      final api = _FakeApi(const ['pending'], intentUrl: _noExpiryUrl);
+      final container = await build(tester, api);
+      await launchThenReturn(tester, container);
+      unawaited(
+        container
+            .read(premiumPurchaseProvider.notifier)
+            .switchApp(_gpay, trialEligible: true, surface: 'return'),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final checkouts = eventsNamed('checkout_started');
+      expect(checkouts, hasLength(2));
+      expect(checkouts.first?.containsKey('surface'), isFalse);
+      expect(checkouts.last?['surface'], 'return');
+      await drain(tester);
+    });
   });
 }

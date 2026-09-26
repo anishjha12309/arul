@@ -52,8 +52,6 @@ function countsAsUse(kind: string, action: unknown): boolean {
   return action === "apply";
 }
 
-// ── POST /media/signed-url ───────────────────────────────────────────────────
-
 export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -148,8 +146,6 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
   }
 }
 
-// ── POST /media/upload-url ───────────────────────────────────────────────────
-
 export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -208,8 +204,6 @@ export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Re
     return errorResponse(500, "server_error", "Failed to generate upload URL");
   }
 }
-
-// ── POST /media/confirm-upload ───────────────────────────────────────────────
 
 /** A pending row shields its R2 object from the sweep -> without this cap one user parks unlimited bytes forever. */
 export const MAX_PENDING_SUBMISSIONS = 10;
@@ -296,8 +290,6 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
 
 /** Extract and VERIFY the Bearer access token -> null means unauthenticated -> never decode without verifying. */
 async function requireAuth(c: Context<{ Bindings: Env }>): Promise<string | null> {

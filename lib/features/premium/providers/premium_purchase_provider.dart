@@ -33,17 +33,10 @@ final class PurchaseLoading extends PurchaseState {
   const PurchaseLoading();
 }
 
-/// SDK launched; waiting for the user to complete/cancel in PhonePe.
 final class PurchaseProcessing extends PurchaseState {
   const PurchaseProcessing();
 }
 
-/// The UPI app was launched, the user came back, and the mandate is STILL OPEN at PhonePe.
-///
-/// 84.4% of failed setups are `INTENT_EXPIRED` — the approval sheet was reached and not approved.
-/// Backing out of a UPI app tells PhonePe nothing, so returning to Arul is not a decision: the
-/// order lives until [expiresAt]. Destroying it on that return is what this state exists to stop.
-/// The user gets the SAME link back, never a second initiate, until the deadline retires it.
 final class PurchaseResumable extends PurchaseState {
   const PurchaseResumable({
     required this.intentUrl,
@@ -85,7 +78,6 @@ final class PurchaseScannable extends PurchaseState {
     required this.expiresAt,
   });
 
-  /// The `upi://mandate?...` link from the initiate, rendered verbatim as the QR payload.
   final String intentUrl;
   final String merchantOrderId;
 
@@ -104,7 +96,6 @@ final class PurchaseSuccess extends PurchaseState {
 /// region picks the app language most people run Arul in Tamil, Telugu, Kannada or Malayalam, and
 /// an English sentence at the one moment a payment went wrong is a line most of them cannot read.
 enum PurchaseErrorKind {
-  /// Anything with no better line — "Something went wrong. Please try again."
   generic,
 
   /// The link died before the Worker answered — the one failure the user can fix themselves.
@@ -128,11 +119,9 @@ final class PurchaseError extends PurchaseState {
 
   final PurchaseErrorKind kind;
 
-  /// True when the user backed out of PhonePe themselves -> a neutral toast, never a red failure.
   bool get cancelled => kind == PurchaseErrorKind.cancelled;
 }
 
-/// What one CTA tap may spend on a dead link — see [PremiumPurchase.initiateElapsedCap].
 class _InitiateBudget {
   _InitiateBudget(this.startedAt);
 
@@ -140,14 +129,6 @@ class _InitiateBudget {
   int linkFailures = 0;
 }
 
-/// Manages the PhonePe Standard Checkout trial-start flow.
-///
-/// Flow:
-///   1. POST /payments/initiate  → get orderId / token / merchantId / environment
-///   2. PhonePePaymentSdk.init() with the returned environment + merchantId
-///   3. PhonePePaymentSdk.startTransaction() with the order payload
-///   4. Poll POST /payments/status until status ∈ {trialing, active}
-///   5. Invalidate entitlementProvider so the UI reflects the new state
 @Riverpod(keepAlive: false)
 class PremiumPurchase extends _$PremiumPurchase {
   @override
@@ -198,7 +179,7 @@ class PremiumPurchase extends _$PremiumPurchase {
 
   /// Tracks a ★ conversion event with the monthly price and order id.
   ///
-  /// Fans out to PostHog, GA4 and Meta via the composite; a missing price just omits the value.
+  /// Fans out to PostHog, GA4 and Meta via the composite; the value is never omitted.
   /// A `trial_started` is then MARKED reported — AFTER the track, so nothing precedes the event.
   /// And BEFORE every caller's invalidate -> the refresh cannot fire [TrialConversionCatchUp]'s copy.
   void _trackConversion(String event, String merchantOrderId) {
@@ -214,13 +195,13 @@ class PremiumPurchase extends _$PremiumPurchase {
       properties: {
         'plan': 'monthly',
         'order_id': merchantOrderId,
-        // Null-aware element: omitted entirely when the price hasn't loaded.
-        'value': ?price,
+        'value': price,
         // Which handoff carried this mandate — the same keys `checkout_started` set at the tap, so
         // "which UPI app starts a trial" reads off PostHog the day it ships. Both omitted when the
         // conversion is a late catch-up: the process that knew the path is gone, and a guess is worse.
         'method': ?_checkoutMethod,
         'target_app': ?_checkoutTargetApp,
+        'surface': ?_checkoutSurface,
       },
     );
     if (event == ArulEvents.trialStarted) {
@@ -245,7 +226,8 @@ class PremiumPurchase extends _$PremiumPurchase {
         'plan': 'monthly',
         'method': method,
         'target_app': ?targetApp,
-        'value': ?price,
+        'value': price,
+        'surface': ?_checkoutSurface,
       },
     );
   }
@@ -266,6 +248,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         // Which handoff was in flight when it died — the whole point of the event.
         // Null only if a failure somehow precedes the tap.
         'method': ?_checkoutMethod,
+        'surface': ?_checkoutSurface,
       },
     );
   }
@@ -293,15 +276,23 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// So a failure names the path that died. Survives for the attempt's lifetime.
   String? _checkoutMethod;
 
-  /// The UPI package the handoff targeted, when [_checkoutMethod] is `upi_app`; null otherwise.
   String? _checkoutTargetApp;
 
-  /// Monthly price in rupees from the remote app_config; null until it loads.
-  /// Read synchronously from the already-cached provider -> no await on the success path.
-  double? _monthlyPriceRupees() => ref.mounted
-      ? monthlyPriceRupees(ref.read(appConfigProvider).asData?.value) ??
-            _priceAtStart
-      : _priceAtStart;
+  /// Which screen the tap came from — `return` for the return page, null for the trial screen —
+  /// riding the checkout, conversion and failure events so "did the return page win trials" is one
+  /// breakdown. Set per decision: at [startTrial] and at [resumeIntent], never inherited.
+  String? _checkoutSurface;
+
+  /// Monthly price in rupees from the remote app_config, else the tap's, else [monthlyPriceRupees]'s
+  /// fallback. Read synchronously from the already-cached provider -> no await on the success path.
+  double _monthlyPriceRupees() {
+    final config = ref.mounted
+        ? ref.read(appConfigProvider).asData?.value
+        : null;
+    return config != null
+        ? monthlyPriceRupees(config)
+        : _priceAtStart ?? monthlyPriceRupees(null);
+  }
 
   /// Price captured at the TAP -> a conversion reported after the paywall is gone still has a value.
   double? _priceAtStart;
@@ -343,9 +334,6 @@ class PremiumPurchase extends _$PremiumPurchase {
   DateTime? _intentLaunchedAt;
   DateTime? _intentExpiresAt;
 
-  /// PhonePe documents 15 min as the intent link's MAXIMUM life (`expireAt` is a request field and
-  /// the setup response carries no expiry at all). So a link whose own `QRexpire` we cannot read
-  /// gets a deliberately shorter window, and one that reads longer than the documented max is capped.
   static const _intentMaxWindow = Duration(minutes: 15);
   static const _intentFallbackWindow = Duration(minutes: 10);
 
@@ -372,6 +360,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     String? targetApp,
     bool trialEligible = false,
     bool asQr = false,
+    String? surface,
   }) async {
     // A resumable attempt owns the screen: its own order is still live at PhonePe, and a second
     // initiate would revoke it. Resume, [switchApp], or the deadline — nothing else moves from
@@ -390,6 +379,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     _clearIntentAttempt();
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
+    _checkoutSurface = surface;
     // The user has committed -> count the checkout BEFORE any network call.
     // So an initiate failure reads as an abandoned checkout, not as nothing having happened.
     // `upi_qr` is its own method, not `upi_app` with a package: the package was never launched and
@@ -399,9 +389,10 @@ class PremiumPurchase extends _$PremiumPurchase {
       asQr ? 'upi_qr' : (targetApp != null ? 'upi_app' : 'phonepe_sdk'),
       asQr ? null : targetApp,
     );
+    // Whatever trial this checkout starts is THIS install's to report, even if only the catch-up hears.
+    _catchUp.noteCheckout();
 
     try {
-      // Step 1: initiate payment on the server.
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
         'targetApp': ?targetApp,
@@ -468,7 +459,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         environment,
         merchantId,
         flowId,
-        kDebugMode, // enableLogging — only in debug builds
+        kDebugMode,
       );
 
       if (sdkInited != true) {
@@ -542,12 +533,8 @@ class PremiumPurchase extends _$PremiumPurchase {
         return;
       }
 
-      // Step 4: confirm status with the server, on a short-backoff poll.
       await _confirmWithServer(merchantOrderId);
     } on ApiException catch (e) {
-      // The server refuses a second mandate while a live one exists -> NOT a failure.
-      // It means the user is already subscribed and our entitlement snapshot was stale.
-      // So treat it as success and re-read -> the UI flips to Manage, not an error on a live account.
       if (e.code == 'already_subscribed') {
         // The narrowed entitlementProvider DERIVES from the detail one.
         // Invalidating only the narrow one re-reads the stale detail -> the UI never flips.
@@ -557,9 +544,6 @@ class PremiumPurchase extends _$PremiumPurchase {
         await _forgetUnfinished();
         return;
       }
-      // A setup of OUR OWN is still running — a double-tap, or a retry over a live first attempt.
-      // Emphatically NOT success: nothing is authorized, and claiming it would flip the UI wrongly.
-      // Ask them to wait — the in-flight attempt is what will actually settle.
       if (e.code == 'setup_in_progress') {
         _fail(
           'setup_in_progress',
@@ -661,7 +645,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// The live [PurchaseScannable], or null — including whenever the paywall is gone.
   PurchaseScannable? get _scannableState {
     if (!ref.mounted) return null;
     final current = state;
@@ -753,17 +736,6 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Guards against overlapping resume checkpoints (rapid backgrounding).
   bool _resolvingIntent = false;
 
-  /// App-resumed checkpoint for the intent flow.
-  ///
-  /// A third-party UPI app the user cancels out of tells PhonePe NOTHING; the order stays PENDING.
-  /// So the user returning to Arul is a checkpoint, NOT a decision:
-  ///
-  ///   1. check the server immediately — an approval settles here;
-  ///   2. still open → [PurchaseResumable]: the same link, one tap away, until the order's deadline.
-  ///
-  /// What this must NEVER do is abandon on a mere return. 84.4% of failed setups die as
-  /// `INTENT_EXPIRED` — the sheet was reached and not approved — and abandoning revoked the mandate
-  /// the user was still able to approve.
   Future<void> pollNowOnResume() async {
     final resumable = _resumableState;
     // A QR attempt sends nobody anywhere, but the user still leaves Arul — for the camera, or for
@@ -806,7 +778,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// The live [PurchaseResumable], or null — including whenever the paywall is gone.
   PurchaseResumable? get _resumableState {
     if (!ref.mounted) return null;
     final current = state;
@@ -982,7 +953,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// No `/payments/initiate` (a second one revokes the live order and burns the claim window) and no
   /// second `checkout_started` (the funnel counts ONE checkout per decision). The deadline is the
   /// order's, so it is carried over untouched however many times this runs.
-  Future<void> resumeIntent() async {
+  Future<void> resumeIntent({String? surface}) async {
     // Not resumable = already processing, already settled, or gone. Never a second launch.
     // Mid-switch counts as gone: the state still reads resumable while the abandon is in flight,
     // and re-opening an order that is being revoked server-side sends the user to a dead sheet.
@@ -993,6 +964,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     // The ONE marker that this attempt came back through the resume button. Terminal events read it:
     // `trial_started`/`subscription_active` via _trackConversion, `payment_failed` via _fail.
     _checkoutMethod = 'upi_app_resumed';
+    _checkoutSurface = surface;
     _setState(const PurchaseProcessing());
 
     final launched = await UpiApps.launch(
@@ -1045,6 +1017,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     String targetApp, {
     required bool trialEligible,
     bool asQr = false,
+    String? surface,
   }) async {
     final resumable = _resumableState;
     if (resumable == null ||
@@ -1071,6 +1044,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       targetApp: targetApp,
       trialEligible: trialEligible,
       asQr: asQr,
+      surface: surface,
     );
   }
 
@@ -1078,7 +1052,6 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// resumable, but that order is already being revoked, so the resume CTA above it must not fire.
   bool _switching = false;
 
-  /// Forgets the link, so nothing can resume an attempt that is over.
   void _clearIntentAttempt() {
     _intentUrl = null;
     _intentTargetApp = null;
@@ -1086,12 +1059,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     _intentExpiresAt = null;
   }
 
-  /// When the intent link dies at PhonePe.
-  ///
-  /// The setup response carries NO expiry — `expireAt` is a REQUEST field, capped at 15 min for an
-  /// intent — so the only deadline the app can read is the one PhonePe writes into the link itself
-  /// as `QRexpire`. Absent or unreadable (sandbox `ppesim://` links have none) -> a deliberately
-  /// SHORTER window than the documented maximum, which can only ever end an attempt early.
   @visibleForTesting
   static DateTime intentExpiry(String intentUrl, DateTime launchedAt) {
     final parsed = parseIntentExpiry(intentUrl)?.toLocal();
@@ -1102,12 +1069,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     return parsed.isAfter(latest) ? latest : parsed;
   }
 
-  /// `QRexpire` out of a `upi://mandate?...` link — ISO-8601 with an offset, and PhonePe writes
-  /// NANOSECONDS (`2026-04-14T11:26:11.582158634+05:30`), which `DateTime.parse` truncates happily.
-  ///
-  /// Hand-split rather than `Uri.queryParameters`: that decodes a raw `+` in a value as a SPACE, and
-  /// production links carry the `+05:30` offset unencoded — the offset became " 05:30" and every
-  /// link read as unparseable. [Uri.decodeComponent] keeps the plus and still handles `%2B`.
   @visibleForTesting
   static DateTime? parseIntentExpiry(String intentUrl) {
     final query = Uri.tryParse(intentUrl)?.query;
@@ -1166,7 +1127,6 @@ class PremiumPurchase extends _$PremiumPurchase {
           return;
         }
 
-        // If still pending, keep polling.
         if (serverStatus == 'pending') continue;
 
         // 'expired' during a setup poll = the setup died at the UPI app.
@@ -1183,7 +1143,6 @@ class PremiumPurchase extends _$PremiumPurchase {
           return;
         }
 
-        // Any other terminal state (cancelled etc.) = failure.
         debugPrint('[PremiumPurchase] terminal server status: $serverStatus');
         _fail(
           'server_terminal',
@@ -1191,7 +1150,6 @@ class PremiumPurchase extends _$PremiumPurchase {
         );
         return;
       } on ApiException catch (e) {
-        // 404 means no subscription yet — keep polling.
         if (e.status == 404) continue;
         rethrow;
       } catch (e) {
@@ -1235,16 +1193,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     );
   }
 
-  /// POST /payments/initiate, riding out 409 `setup_in_progress` silently.
-  ///
-  /// That 409 means our own previous claim is still inside the server's short backstop window.
-  /// Almost always a rapid re-tap racing the abandon call that releases the claim.
-  /// "Please wait and try again" for a wait measured in seconds reads as "payments broken".
-  /// So ride it out under the spinner instead.
-  /// The delays are PAIRED with SETUP_CLAIM_WINDOW_MS server-side and SUM past it.
-  /// So by the last retry any older claim has provably lapsed, and only a concurrent attempt 409s.
-  /// That one must refuse — the double-mandate guard is untouched.
-  /// Change the window and these delays together, keeping sum(delays) >= window.
   static const _initiateRetryDelays = [
     Duration(seconds: 2),
     Duration(seconds: 2),
@@ -1322,7 +1270,6 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
   }
 
-  /// Resets the state back to idle (e.g. to dismiss an error and allow retry).
   void reset() {
     state = const PurchaseIdle();
   }
@@ -1345,21 +1292,20 @@ class PremiumPurchase extends _$PremiumPurchase {
   ///
   /// Calls POST /payments/cancel — the server stops future debits but does NOT strip entitlement.
   /// The user keeps premium until the current period ends.
-  /// Returns null on success, or an error message to display.
+  /// Returns null on success, or the kind of failure — the caller shows [purchaseErrorText] for it.
+  /// Never the Worker's `message`: it is English and not written for a user, so it goes to
+  /// Crashlytics only (edge-cases: checkout failures show a localized line).
   /// Kept OFF the [PurchaseState] machine — the caller drives its own confirm dialog and snackbar.
-  Future<String?> cancel() async {
+  Future<PurchaseErrorKind?> cancel() async {
     try {
       await _api.post('/payments/cancel');
-      // Refresh entitlement so any UI bound to it re-reads the new state.
       _refreshEntitlement();
       return null;
-    } on ApiException catch (e) {
-      return e.message.isNotEmpty
-          ? e.message
-          : 'Could not cancel your subscription. Please try again.';
-    } catch (e) {
+    } catch (e, stack) {
+      if (isNetworkError(e)) return PurchaseErrorKind.network;
       debugPrint('[PremiumPurchase] cancel failed: $e');
-      return 'Something went wrong. Please try again.';
+      _crash.recordError(e, stack, reason: 'subscription cancel failed');
+      return PurchaseErrorKind.generic;
     }
   }
 }

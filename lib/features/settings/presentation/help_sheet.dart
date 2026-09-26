@@ -9,7 +9,6 @@ import '../../../data/models/subscription_model.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
 
-/// What the reader picked in the help sheet.
 enum HelpAction { support, manage, delete }
 
 /// The Need help? sheet — contact support, manage the plan, delete the account.

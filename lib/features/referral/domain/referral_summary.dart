@@ -1,7 +1,5 @@
 import '../../../data/models/referral_model.dart';
 
-/// Everything the Refer & Earn screen needs, from a single `/me/referrals` call.
-/// The caller's own code for the share link, their referrals, and the total free-premium days.
 class ReferralSummary {
   const ReferralSummary({
     required this.referralCode,
@@ -9,10 +7,8 @@ class ReferralSummary {
     required this.totalRewardDays,
   });
 
-  /// The current user's referral code (null only if the server omitted it).
   final String? referralCode;
 
-  /// Referrals where the current user is the referrer, newest first.
   final List<ReferralModel> referrals;
 
   /// Sum of reward_days across all referrals (30 per subscribed friend).

@@ -1,7 +1,7 @@
 // The contracts a device cannot be asked about later -> the ones that live in wiring rather than in pixels.
 // ONE row plays at a time -> tapping a second moves the state off the first, tapping the playing row stops the player.
 // The whole now-playing look derives from that single value -> assert the medallions' `playing` flags, never colours.
-// Category chips filter the list and only the list -> no All/New anywhere.
+// Category chips filter the list and only the list -> All and New are chips like any other.
 // "Set" is gated -> a free user never reaches setRingtone(), gets one `ringtone_set_blocked_premium`, lands on /premium.
 // A premium user goes straight through.
 // The real notifier owns a just_audio AudioPlayer, which needs a platform -> a stub with the SAME toggle semantics stands in.
@@ -76,6 +76,7 @@ class _StubPreview extends RingtonePreviewNotifier {
 
   @override
   Future<void> stop() async {
+    if (!ref.mounted) return;
     if (state.currentId != null) halts.add('stop:${state.currentId}');
     state = const RingtonePreviewState();
   }
@@ -254,6 +255,27 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
+      expect(preview.state.currentId, isNull);
+      expect(preview.halts, contains('stop:r3'));
+    });
+
+    testWidgets('disposing the screen stops preview without a mid-frame write', (
+      tester,
+    ) async {
+      await pumpScreen(tester, catalog: _catalog);
+      await tester.tap(playButtonOf('Kolaru Pathigam'));
+      await tester.pump();
+      expect(preview.state.currentId, 'r3');
+
+      // Sign-out and the dead-session route REPLACE the location -> the screen is disposed inside
+      // finalizeTree, where a provider write throws in debug and the next shell build then trips
+      // over a duplicate GlobalKey.
+      GoRouter.of(tester.element(find.byType(RingtonesScreen))).go('/refer');
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(RingtonesScreen), findsNothing);
       expect(preview.state.currentId, isNull);
       expect(preview.halts, contains('stop:r3'));
     });

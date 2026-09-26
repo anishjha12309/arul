@@ -13,7 +13,6 @@ import '../../wallpapers/providers/catalog_providers.dart'
 import '../data/cdn_ringtone_repository.dart';
 import '../domain/ringtone_repository.dart';
 
-/// CDN-backed ringtone repository (edge-cached catalog JSON, never the DB).
 final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
   (ref) => CdnRingtoneRepository(
     catalogClient: ref.watch(catalogHttpClientProvider),
@@ -177,6 +176,9 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   };
   final labels = <String, String>{};
   for (final r in all) {
+    // `others` is retired: never offered as a chip or an Upload category, only tolerated by the
+    // sort and art fallbacks. A stray row still shows under All.
+    if (r.category == othersCategorySlug) continue;
     labels.putIfAbsent(r.category, () => r.categoryLabel);
   }
   // A CMS order wins OUTRIGHT here, `others` included: dragging it off the end is a
@@ -189,8 +191,6 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   );
 });
 
-/// Slug of the catch-all category — tracks belonging to none of the five deities.
-/// Ringtones only; wallpapers have no such bucket.
 const String othersCategorySlug = 'others';
 
 /// [compareBrowseCategories] — Sivan first, then alphabetical — except `others` is always LAST.
@@ -261,7 +261,6 @@ final showNewRingtoneCategoryProvider = Provider<bool>((ref) {
   return all.any((r) => r.publishedAt != null);
 });
 
-/// The list the screen renders: [ringtoneFeedOrder] for the selected category.
 final ringtoneFeedProvider = Provider<AsyncValue<List<Ringtone>>>((ref) {
   final slug = ref.watch(selectedRingtoneCategoryProvider);
   return ref

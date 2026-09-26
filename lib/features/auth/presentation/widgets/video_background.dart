@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme/motion.dart';
 import '../../../../app/theme/tokens.dart';
 import '../../../../core/config/build_info.dart';
+import '../../../../core/perf/boot_trace.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
 /// Full-screen looping video background, playing `splash.mp4`.
@@ -17,8 +19,6 @@ import '../../../wallpapers/data/feed_video_player.dart';
 class VideoBackground extends StatefulWidget {
   const VideoBackground({super.key, this.overlayOpacity = 0.42});
 
-  /// How dark the translucent veil on top of the video should be.
-  /// 0.0 = no veil, 1.0 = fully black.
   final double overlayOpacity;
 
   @override
@@ -31,14 +31,9 @@ class _VideoBackgroundState extends State<VideoBackground>
   /// Still painted as the base layer -> any edge the poster's cover-fit leaves is never bare.
   static const _fallbackColor = ArulColors.ink;
 
-  /// FRAME 0 of `splash.mp4`, bundled (512×912 WebP, ~15 KB in the APK).
-  ///
-  /// After the OS splash hands off, the Media3 decoder has produced no frame yet.
-  /// The background was flat [_fallbackColor] until it did -> this is the shutter that covers it.
-  /// Media3's guidance is to hold a placeholder and reveal the video only on the first frame.
-  /// `PlayerView` does that with its own artwork; a raw [Texture] must supply it itself.
-  /// It is frame 0 of the very file the texture plays -> no crossfade, the swap is imperceptible.
   static const _posterAsset = 'assets/images/splash_poster.webp';
+
+  static const _source = 'asset:///flutter_assets/assets/video/splash.mp4';
 
   _SharedAuthVideoPlayer? _shared;
   FeedVideoPlayer? _player;
@@ -77,12 +72,8 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 
   Future<void> _init() async {
-    // A low-memory phone never gets a decoder here: the poster below IS the background.
-    // Google's sign-in step measured 2–3× slower on these handsets, and the looping video was
-    // competing with it for the same CPU and RAM on exactly the launch the funnel lives on.
-    // Decided BEFORE acquire -> no native player is ever created, not just left unpainted.
     if (await DeviceMemory.isLow || !mounted) return;
-    final shared = _SharedAuthVideoPlayer.acquire();
+    final shared = _SharedAuthVideoPlayer.acquire(_source);
     _shared = shared;
     final player = await shared.player;
     // A null player means the platform is unavailable -> keep the fallback colour, never block.
@@ -125,8 +116,6 @@ class _VideoBackgroundState extends State<VideoBackground>
         // Base colour: covers any edge the poster's cover-fit leaves bare.
         const ColoredBox(color: _fallbackColor),
 
-        // The shutter stays MOUNTED under the texture, like the feed's live cards.
-        // So a decoder that drops or restarts can never expose bare colour.
         const Image(
           image: AssetImage(_posterAsset),
           fit: BoxFit.cover,
@@ -136,29 +125,8 @@ class _VideoBackgroundState extends State<VideoBackground>
           filterQuality: FilterQuality.low,
         ),
 
-        // A raw Texture does not cover-fit itself -> a FittedBox(cover) at the intrinsic size, clipped.
-        if (_ready && player != null)
-          ValueListenableBuilder<Size?>(
-            valueListenable: player.videoSize,
-            builder: (context, size, child) {
-              if (size == null || size.width <= 0 || size.height <= 0) {
-                return const SizedBox.shrink();
-              }
-              return ClipRect(
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  clipBehavior: Clip.hardEdge,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: Texture(textureId: player.textureId),
-                  ),
-                ),
-              );
-            },
-          ),
+        if (_ready && player != null) _CoverTexture(player),
 
-        // Subtle darkening veil for legibility
         ColoredBox(
           color: Color.fromRGBO(0, 0, 0, widget.overlayOpacity.clamp(0, 1)),
         ),
@@ -167,13 +135,146 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 }
 
-/// Ref-counted owner of the ONE background player every [VideoBackground] mount in auth shares.
+/// The regional poster's own clip, laid over the poster in the same frame.
+///
+/// Opened PAUSED: its first frame is the poster's own pixels, so the fade over it is invisible and
+/// the clip starts moving only once it covers the poster. Until then — or forever, if it never
+/// decodes — this paints nothing and the poster shows. Rides the ONE shared auth player.
+class LaunchClipLayer extends StatefulWidget {
+  const LaunchClipLayer({super.key, required this.source});
+
+  /// A local file: the clip is never streamed before sign-in (launch-surface.md).
+  final String source;
+
+  /// Paints in the texture's place in tests, which have no decoder: the size matrix proves the clip
+  /// lands on the poster's pixels, and its dumps show the clip's real first frame there.
+  @visibleForTesting
+  static Widget Function(String source)? debugStandIn;
+
+  @override
+  State<LaunchClipLayer> createState() => _LaunchClipLayerState();
+}
+
+class _LaunchClipLayerState extends State<LaunchClipLayer>
+    with WidgetsBindingObserver {
+  _SharedAuthVideoPlayer? _shared;
+  FeedVideoPlayer? _player;
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _init();
+  }
+
+  Future<void> _init() async {
+    if (LaunchClipLayer.debugStandIn != null) return;
+    final shared = _SharedAuthVideoPlayer.acquire(
+      widget.source,
+      autoplay: false,
+    );
+    _shared = shared;
+    final player = await shared.player;
+    if (player == null || !mounted) return;
+    setState(() => _player = player);
+    if (player.firstFrame.value) {
+      _show();
+    } else {
+      player.firstFrame.addListener(_onFirstFrame);
+    }
+  }
+
+  void _onFirstFrame() {
+    if (_player?.firstFrame.value ?? false) _show();
+  }
+
+  void _show() {
+    if (_shown || !mounted) return;
+    BootTrace.mark('launch clip: first frame, crossfading');
+    setState(() => _shown = true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        _shared?.pauseForBackground();
+      case AppLifecycleState.resumed:
+        _shared?.resumeFromBackground();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _player?.firstFrame.removeListener(_onFirstFrame);
+    _player = null;
+    _shared?.release();
+    _shared = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final standIn = LaunchClipLayer.debugStandIn;
+    if (standIn != null) return standIn(widget.source);
+    final player = _player;
+    if (player == null) return const SizedBox.shrink();
+    return AnimatedOpacity(
+      opacity: _shown ? 1 : 0,
+      duration: context.reduceMotion ? Duration.zero : Motion.imageFade,
+      curve: Motion.settleCurve,
+      onEnd: () {
+        if (_shown) _shared?.start();
+      },
+      child: _CoverTexture(player),
+    );
+  }
+}
+
+/// A raw Texture does not cover-fit itself -> a FittedBox(cover) at the intrinsic size, clipped.
+class _CoverTexture extends StatelessWidget {
+  const _CoverTexture(this.player);
+
+  final FeedVideoPlayer player;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Size?>(
+      valueListenable: player.videoSize,
+      builder: (context, size, child) {
+        if (size == null || size.width <= 0 || size.height <= 0) {
+          return const SizedBox.shrink();
+        }
+        return ClipRect(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: Texture(textureId: player.textureId),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Ref-counted owner of the ONE background player every auth mount shares, lotus or regional clip.
 ///
 /// Created on the first [acquire]; torn down shortly after the LAST mount releases.
 /// A route replacement may dispose the old screen BEFORE the new one inits.
 /// That ordering would churn the decoder -> the grace timer bridges it.
 class _SharedAuthVideoPlayer {
-  _SharedAuthVideoPlayer._();
+  _SharedAuthVideoPlayer._(this._source, this._started);
 
   static _SharedAuthVideoPlayer? _instance;
 
@@ -181,28 +282,54 @@ class _SharedAuthVideoPlayer {
   /// Short enough that the decoder is freed promptly once the feed takes over.
   static const _releaseGrace = Duration(seconds: 2);
 
+  String _source;
+
+  /// Whether playback was asked for. A paused-open clip ([LaunchClipLayer]) holds still on its first
+  /// frame until [start]; nothing may resume what never started.
+  bool _started;
+
   int _refs = 0;
   bool _dead = false;
   Timer? _teardown;
   FeedVideoPlayerPool? _pool;
   Future<FeedVideoPlayer?>? _player;
 
-  /// Resolves to the shared player, or null when the platform side is unavailable.
   Future<FeedVideoPlayer?> get player => _player ?? Future.value();
 
-  static _SharedAuthVideoPlayer acquire() {
-    final holder = _instance ??= _SharedAuthVideoPlayer._();
+  static _SharedAuthVideoPlayer acquire(String source, {bool autoplay = true}) {
+    final holder = _instance ??= _SharedAuthVideoPlayer._(source, autoplay);
     holder._teardown?.cancel();
     holder._teardown = null;
     holder._refs++;
+    if (holder._player != null && holder._source != source) {
+      // One decoder for the auth screens, whatever they show -> swap the media, never add a player.
+      holder._source = source;
+      holder._started = autoplay;
+      holder._player = holder._player!.then((p) async {
+        await p?.open(source, playWhenReady: autoplay, looping: true);
+        return p;
+      });
+    }
     holder._player ??= holder._create();
     // Resume if a release-to-zero paused it — decoder and frame survive a pause, so it is instant.
     unawaited(
       holder._player!.then((p) {
-        if (!holder._dead && holder._refs > 0) p?.play();
+        if (!holder._dead && holder._refs > 0 && holder._started) p?.play();
       }),
     );
     return holder;
+  }
+
+  /// Starts a clip that was opened paused. Idempotent.
+  void start() {
+    final player = _player;
+    if (_started || player == null || _dead) return;
+    _started = true;
+    unawaited(
+      player.then((p) {
+        if (!_dead && _refs > 0) p?.play();
+      }),
+    );
   }
 
   Future<FeedVideoPlayer?> _create() async {
@@ -215,13 +342,9 @@ class _SharedAuthVideoPlayer {
         _pool = null;
         return null;
       }
-      // Media3 DefaultDataSource plays a Flutter asset via `asset:///`, out of flutter_assets.
+      // Media3 DefaultDataSource plays a Flutter asset via `asset:///`, and the regional clip's file.
       // Looped and muted — the pool creates muted, so no audio focus is taken.
-      await player.open(
-        'asset:///flutter_assets/assets/video/splash.mp4',
-        playWhenReady: true,
-        looping: true,
-      );
+      await player.open(_source, playWhenReady: _started, looping: true);
       return player;
     } catch (_) {
       // Native video unavailable — callers keep the solid fallback colour.
@@ -248,7 +371,7 @@ class _SharedAuthVideoPlayer {
     if (player == null || _dead) return;
     unawaited(
       player.then((p) {
-        if (!_dead && _refs > 0) p?.play();
+        if (!_dead && _refs > 0 && _started) p?.play();
       }),
     );
   }
@@ -291,7 +414,6 @@ class _SharedAuthVideoPlayer {
     final pool = _pool;
     _pool = null;
     _player = null;
-    // Disposing the pool releases the native player + its texture.
     if (pool != null) unawaited(pool.dispose());
   }
 }

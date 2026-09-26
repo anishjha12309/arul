@@ -19,7 +19,6 @@ enum ArulHapticStyle {
   /// The lightest tick — moving between discrete values: tabs, chips, radios, toggles.
   selection,
 
-  /// The default button press.
   tap,
 
   /// A weightier press for a deliberate, committing action.
@@ -44,25 +43,18 @@ abstract final class ArulHaptics {
 
   static bool _enabled = true;
 
-  /// Whether haptics are on app-wide.
   static bool get enabled => _enabled;
 
-  /// App-level kill switch, layered over the OS touch-feedback setting.
   static void setEnabled(bool value) => _enabled = value;
 
-  /// The lightest tick — a discrete value changed (tab, chip, toggle, radio).
   static void selection() => _impulse(HapticFeedback.selectionClick);
 
-  /// The standard button press.
   static void tap() => _impulse(HapticFeedback.lightImpact);
 
-  /// A weightier press for a deliberate action.
   static void firm() => _impulse(HapticFeedback.mediumImpact);
 
-  /// The strongest single beat.
   static void heavy() => _impulse(HapticFeedback.heavyImpact);
 
-  /// Fires the impulse for [style]; [ArulHapticStyle.none] is a no-op.
   static void fire(ArulHapticStyle style) => switch (style) {
     ArulHapticStyle.none => null,
     ArulHapticStyle.selection => selection(),
@@ -85,7 +77,6 @@ abstract final class ArulHaptics {
     _after(130, HapticFeedback.heavyImpact);
   }
 
-  /// Neutral news — a single medium beat (cancelled payment, info toast).
   static void warning() => firm();
 
   static void _impulse(Future<void> Function() feedback) {

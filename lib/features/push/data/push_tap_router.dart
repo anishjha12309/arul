@@ -26,10 +26,8 @@ class PushTapRouter {
   /// Selects the feed's category — BEFORE routing, so the feed's first build already filters.
   final void Function(String slug) onSelectCategory;
 
-  /// The destination of a tap that landed during the launch, applied once the launch is past.
   String? _held;
 
-  /// The two screens a person is on before the app knows who they are.
   static const _launchPaths = {'/', '/sign-in'};
 
   bool get _atLaunch =>
@@ -56,7 +54,6 @@ class PushTapRouter {
     _router.go(location);
   }
 
-  /// The route a target opens on. Content lands on its tab; premium carries `source=push`.
   static String locationFor(DeepLinkTarget target) => switch (target) {
     PremiumLinkTarget() => '/premium?source=push',
     _ => target.tab == ArulTab.ringtones ? '/ringtones' : '/browse',

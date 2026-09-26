@@ -59,7 +59,7 @@ brown-screen duration fell in two steps, to zero only once both were in.
   landed 9 s later and the feed's first art ~1 s later on LTE; the only gain was on a 7 KB/s link,
   where cellular-vs-Wi-Fi sign-in differs by ~2 pp. Speed at login won. Never re-add a gate.
 - **`GET /geo`'s timeout is 12 s, not 5.** There is no second ask, and a miss costs the whole first
-  launch its language; the budget is for a slow LINK, never for a slow Worker. Never awaited.
+  launch its language; the budget is for a slow LINK, never for a slow Worker.
 - **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
   `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
   splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under
@@ -77,8 +77,24 @@ brown-screen duration fell in two steps, to zero only once both were in.
 - **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
   may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
   the first-content gap).
-- **`GET /geo` fires beside the API warm-up and is NEVER awaited.** The wall may paint in the phone's
-  language and flip live when the answer lands; gating routing on it re-adds the wait ruled out above.
+- **`GET /geo` fires beside the API warm-up and only the `exp_regional` arm waits for it** — every
+  other launch routes on the auth seed alone. The arm waits at most `regionCap` (1,200 ms from the
+  ask, fresh-install first launch and signed-out only) AFTER `autoSignIn` fired, so Google's sheet is
+  never held. Measure with the `[boot]` marks `geo: answered in` / `splash: region wait ended`; if
+  the LTE p90 passes the cap, LOWER the cap, never raise it.
+- **The regional wall paints its final language and poster on its FIRST frame — never flip.**
+  While waiting the splash shows dark ground + wordmark only (no tagline: its language is not known
+  yet). At the cap `closeLiveWindow()` makes a late answer store-only (next launch), and
+  `LaunchArtNotifier.settle()` fixes the poster once. The control arm stores the region, never its
+  language (`Experiments.geoLanguageApplies`).
+- **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face.**
+  `RegionalPoster.zoom` about `pivot` moves it; the framing is the owner's, judged by eye. The render
+  matrix (`regional_wall_matrix_test.dart`) gates type and clip-on-poster, and reports faces.
+- **The poster's own live clip is a bonus, never the base.** It downloads (catalog row by
+  `wallpaperId`, feed cache, never a bundled key) only after the wall painted AND Google's surface
+  showed or settled — never signed in, on Data Saver or a poster-rule phone. It swaps onto the ONE
+  shared auth player (never a second decoder) paused, fades in on frame 0 = the poster's pixels,
+  then loops; a launch clip must stay one deity for its whole loop. Any failure keeps the poster.
 - **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
   what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
   second picker.
@@ -88,10 +104,16 @@ brown-screen duration fell in two steps, to zero only once both were in.
   persisted first-launch marker reads false and takes the keystore wait, so the picker can never fire
   over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before Firebase** —
   serialising them re-adds real time, and the post-login token write wants the keystore ready.
-- **A secure-storage read that THROWS settles the seed as signed out.** The Android Keystore refuses
-  outright on some low-RAM Android 9 phones ("Failed to generate key pair"). Escaping the seed failed
-  `initialized`, the splash's await threw before its `context.go`, and the app sat on the splash on
-  every launch. Never let the seed future complete with an error — nothing downstream catches it.
+- **A Keystore refusal moves the session to app-private storage.** Some Android 8.1/9 keymasters
+  answer every key generation or load with `KeyStoreException: Memory allocation failed` (error -41),
+  RSA and AES alike, on every retry: Google and `POST /auth/login` succeeded, then the token write
+  threw, so those phones never held a session. No `AndroidOptions` cipher helps, and changing it
+  migrates every healthy install. `ApiClient` switches to SharedPreferences (out of backup and device
+  transfer) on the first refusal and stays there for the install (`arul_keystore_refused`), so one
+  session never splits across two stores; the non-fatal `keystore refused` counts the phones.
+- **Any other secure-storage read that THROWS settles the seed as signed out.** Escaping the seed
+  failed `initialized`, the splash's await threw before its `context.go`, and the app sat on the
+  splash on every launch. Never let the seed future complete with an error — nothing catches it.
 
 ## Dead ends — do not re-attempt
 

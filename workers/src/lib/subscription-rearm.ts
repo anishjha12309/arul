@@ -15,7 +15,6 @@
 
 import type { getDb } from "./db.js";
 
-/** The row shape the restore hands back — the status route mirrors both onto its response. */
 export interface RearmedSubscription {
   status: string;
   next_debit_at: unknown;

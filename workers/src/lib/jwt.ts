@@ -9,17 +9,13 @@
 
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 export interface AccessClaims extends JWTPayload {
   sub: string;
-  /** Non-authoritative premium hint for client-side UI only. */
   prm?: boolean;
 }
 
 export interface RefreshClaims extends JWTPayload {
   sub: string;
-  /** UUID v4 used as the jti for denylist tracking. */
   jti: string;
 }
 
@@ -44,18 +40,13 @@ const TYP_REFRESH = "ref";
  * The token carries identity ONLY -> a stale one cannot survive a refund, expiry or cancellation
  * The whole cost is revocation latency on a STOLEN access token, <=60m -> refresh revocation stays immediate
  */
-const ACCESS_TTL_SECONDS = 60 * 60; // 60 minutes
-const REFRESH_TTL_SECONDS = 60 * 24 * 60 * 60; // 60 days
-
-// ── Key derivation ───────────────────────────────────────────────────────────
+const ACCESS_TTL_SECONDS = 60 * 60;
+const REFRESH_TTL_SECONDS = 60 * 24 * 60 * 60;
 
 function secretKey(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-// ── Token issuing ────────────────────────────────────────────────────────────
-
-/** Issue a short-lived access token. */
 export async function signAccessToken(
   sub: string,
   jwtSecret: string,
@@ -73,7 +64,6 @@ export async function signAccessToken(
   return builder.sign(secretKey(jwtSecret));
 }
 
-/** Issue a long-lived refresh token with a unique jti for denylist tracking. */
 export async function signRefreshToken(
   sub: string,
   jwtSecret: string,
@@ -87,8 +77,6 @@ export async function signRefreshToken(
 
   return { token, jti };
 }
-
-// ── Token verification ───────────────────────────────────────────────────────
 
 /** An invalid, expired or wrong-algorithm token THROWS -> there is no falsy return -> callers must catch. */
 export async function verifyAccessToken(
@@ -123,8 +111,6 @@ export async function verifyRefreshToken(
   }
   return payload as RefreshClaims;
 }
-
-// ── KV denylist helpers ──────────────────────────────────────────────────────
 
 const KV_JTI_PREFIX = "jti:";
 
@@ -164,7 +150,6 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-/** Remember the pair minted from `oldJti` so a retry of that refresh replays it. */
 export async function storeRotationReplay(
   kv: KVNamespace,
   oldJti: string,
@@ -175,7 +160,6 @@ export async function storeRotationReplay(
   });
 }
 
-/** The pair previously minted from `oldJti`, if still inside the grace window. */
 export async function readRotationReplay(
   kv: KVNamespace,
   oldJti: string,
@@ -203,7 +187,7 @@ export async function claimRefreshJti(
 ): Promise<boolean> {
   const key = `${KV_JTI_PREFIX}${jti}`;
   const existing = await kv.get(key);
-  if (existing !== null) return false; // already rotated or revoked
+  if (existing !== null) return false;
 
   const holder = crypto.randomUUID();
   const ttlSeconds = Math.max(60, expEpoch - Math.floor(Date.now() / 1000));
