@@ -1,25 +1,5 @@
 /**
  * Who a campaign reaches — THE one home for the segment SQL (docs/push.md).
- *
- * The CMS never writes a line of this: it POSTs the audience JSON to /internal/push/count and to the
- * campaign row, and both the count and the delivery fan-out run this same builder. A second copy in
- * the CMS would be a count that disagrees with the send.
- *
- * TEST ACCOUNTS GET REAL CAMPAIGNS TOO. A team member who sends to Everyone and hears nothing reads
- * it as a failed send, so `users.is_internal` no longer removes anyone from a real audience — it only
- * keeps those phones out of the campaign's Sent/Failed counters (cron/push-dispatch.ts) and its
- * Opened number (the CMS). `internal` still reaches ONLY them: it is what "Send to test accounts"
- * targets. Google Play's pre-launch robots are the one exclusion left, matched on Google's Test Lab
- * domain — the only safe email pattern on this user base ('%anish%' matches ~35 real paying users).
- *
- * PHONES THAT NEVER SIGNED IN ARE IN THE REGISTRY (user_id NULL, db/schema/18_push_journey.sql), so
- * every kind LEFT JOINs users and reads the email through `coalesce(…, false)`: an anonymous phone is
- * not a robot, and `all` reaches it. A plan is a fact about an account, so every plan state also
- * requires `d.user_id IS NOT NULL` — without it a phone with no account has no subscription row and
- * no reward credit, and would read as "free".
- *
- * `filter` is the combinable kind the composer builds today. `lang`, `premium` and `inactive` stay
- * because scheduled and historical campaign rows carry them.
  */
 
 import type postgres from "postgres";
@@ -51,13 +31,6 @@ const PREMIUM_STATES = ["free", "trialing", "paid", "lapsed"] as const;
 const INACTIVE_DAYS = [7, 14, 30] as const;
 const JOINED_HOURS = [1, 24, 168] as const;
 
-/**
- * Narrow untrusted JSON to an audience, or null.
- *
- * Returns null rather than defaulting to `all`: an audience the CMS mistyped must fail the request,
- * never silently become "everyone". For `filter` that means a key that is present but not one of the
- * offered values, a filter with no keys at all, and a plan asked of phones that never signed in.
- */
 export function parseAudience(raw: unknown): PushAudience | null {
   if (!raw || typeof raw !== "object") return null;
   const a = raw as Record<string, unknown>;
@@ -133,7 +106,8 @@ export function audienceLabel(a: PushAudience): string {
       if (a.lang) parts.push(LANG_LABELS[a.lang] ?? a.lang);
       if (a.plan) parts.push(PLAN_LABELS[a.plan]);
       if (a.idle_days) parts.push(`Haven't opened in ${a.idle_days} days`);
-      if (a.joined_hours) parts.push(JOINED_LABELS[a.joined_hours] ?? `Joined in the last ${a.joined_hours} hours`);
+      if (a.joined_hours)
+        parts.push(JOINED_LABELS[a.joined_hours] ?? `Joined in the last ${a.joined_hours} hours`);
       if (a.signed_in !== undefined) parts.push(a.signed_in ? "Signed in" : "Not signed in");
       return parts.join(" · ");
     }
@@ -174,9 +148,6 @@ export function audienceQuery(
   audience: PushAudience,
 ): postgres.PendingQuery<postgres.Row[]> {
   const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
-  // Every kind: not a robot, AND holds a token. SEND_BY is "token" (lib/fcm.ts), so a row with none
-  // can never be delivered to — left in, it only inflates total and Failed (126 NO_TOKEN failures on
-  // one Everyone send). The CMS's live count runs this same fragment, so it agrees.
   const eligible = sql`
     NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL
   `;
@@ -218,24 +189,11 @@ function idlePredicate(sql: postgres.Sql, days: number): postgres.PendingQuery<p
   return sql`d.last_seen_at < now() - (${String(days)} || ' days')::interval`;
 }
 
-/**
- * The four plan states the CMS shows, expressed against `d.user_id`.
- *
- * `paid` and `lapsed` both read `premiumPredicate` rather than re-deriving the rule (CLAUDE.md §5).
- * A copy here would drift the moment reward credit or the debit grace changed, and the audience would
- * quietly disagree with what the app's own gate lets those people do.
- */
-function planPredicate(
-  sql: postgres.Sql,
-  state: PlanState,
-): postgres.PendingQuery<postgres.Row[]> {
+function planPredicate(sql: postgres.Sql, state: PlanState): postgres.PendingQuery<postgres.Row[]> {
   return sql`d.user_id IS NOT NULL AND ${planState(sql, state)}`;
 }
 
-function planState(
-  sql: postgres.Sql,
-  state: PlanState,
-): postgres.PendingQuery<postgres.Row[]> {
+function planState(sql: postgres.Sql, state: PlanState): postgres.PendingQuery<postgres.Row[]> {
   const premium = premiumPredicate(sql, sql`d.user_id`);
   const hasRow = sql`EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id)`;
   switch (state) {
@@ -246,12 +204,6 @@ function planState(
         AND (u.reward_premium_until IS NULL OR u.reward_premium_until <= now())
       `;
     case "trialing":
-      // Still inside the trial, whether or not the mandate survives: removing the mandate flips the
-      // row to 'cancelled' while trial_end is still ahead, and that person is exactly who a "your
-      // trial ends soon" message is for. Without the second arm they belonged to no plan at all —
-      // not trialing (status), not lapsed (still entitled), not free (has a row). Seen on a real
-      // account on 2026-09-14. `lapsed` cannot overlap: it needs NOT premium, and a cancelled trial
-      // with trial_end ahead is premium until then.
       return sql`EXISTS (
         SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id
           AND (s.status = 'trialing'
@@ -263,9 +215,6 @@ function planState(
         AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id AND s.status = 'active')
       `;
     case "lapsed":
-      // Subscribed once, entitled no longer. Cancelled-but-still-inside-the-paid-period is NOT here:
-      // premiumPredicate still says yes for them, and telling a person who is paying today that their
-      // subscription stopped is the one message this segment must never send.
       return sql`${hasRow} AND NOT ${premium}`;
   }
 }

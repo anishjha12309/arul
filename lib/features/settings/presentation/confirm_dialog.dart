@@ -4,12 +4,8 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 
-/// A centred confirm dialog — 24px margins, r22, gold-35% border on `#1A0B0F`.
-/// Title 18px/600, message 13.5px secondary, two 48px r999 buttons: outlined Cancel, solid confirm.
-///
 /// The dialog only RESOLVES the answer — `true` on confirm, `false` or `null` on cancel.
 /// The CALLER runs the real action (logout, delete account) on `true`.
-/// Entrance is translateY(24)+fade over 250ms, behind [ArulTokens.dialogOverlay].
 Future<bool?> showArulConfirmDialog(
   BuildContext context, {
   required String title,
@@ -114,7 +110,8 @@ class _ConfirmDialog extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _DialogButton(
-                        label: cancelLabel ?? AppLocalizations.of(context).cancel,
+                        label:
+                            cancelLabel ?? AppLocalizations.of(context).cancel,
                         filled: false,
                         borderColor: cancelBorder,
                         textColor: cancelText,
@@ -169,12 +166,12 @@ class _DialogButtonState extends State<_DialogButton> {
 
   @override
   Widget build(BuildContext context) {
-    final Color textColor = widget.filled
+    final textColor = widget.filled
         ? ArulTokens.ivory
         : (widget.textColor ?? ArulTokens.darkText);
     // Cancel answers the finger too: a faint tint of its own ink while pressed, and the fill's own
     // alpha-0 at rest — never `Colors.transparent`, which is transparent BLACK.
-    final Color bg = widget.filled
+    final bg = widget.filled
         ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
         : textColor.withValues(alpha: _pressed ? 0.10 : 0);
 

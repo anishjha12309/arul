@@ -22,8 +22,6 @@ abstract interface class AnalyticsService {
   void reset();
 
   /// A property stamped on EVERY later event, not just on the person.
-  /// A person property is frozen onto each event at ingest (person-on-events), so anything captured
-  /// before `identify` carries none -> the sign-in funnel needs the value on the event itself.
   /// Survives [reset]: each sink re-applies what was registered, so a sign-out never strips it.
   void register(String key, Object value);
 }

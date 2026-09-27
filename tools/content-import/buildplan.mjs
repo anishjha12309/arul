@@ -1,15 +1,21 @@
 // Stage F-plan -> turn corrections.json + review-data.json into import-plan.json.
 // ONE fresh UUID per item serves both the R2 key stem and the DB id -> thumbs/<cat>/<stem>.jpg matches full_key's stem.
-import { readFileSync, writeFileSync } from "fs";
-import { randomUUID } from "crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 const ROOT = "c:/Anish/arul-import";
 const CATS = new Set(["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"]);
-const TITLE = { amman: "Amman", ayyappan: "Lord Ayyappan", murugan: "Lord Murugan", perumal: "Perumal", sivan: "Lord Sivan", temples: "Temple" };
+const TITLE = {
+  amman: "Amman",
+  ayyappan: "Lord Ayyappan",
+  murugan: "Lord Murugan",
+  perumal: "Perumal",
+  sivan: "Lord Sivan",
+  temples: "Temple",
+};
 
 const data = JSON.parse(readFileSync(`${ROOT}/review-data.json`, "utf8"));
 const corr = JSON.parse(readFileSync(`${ROOT}/corrections.json`, "utf8"));
 
-// validate coverage
 const dataBases = new Set(data.map((d) => d.base));
 const corrBases = new Set(Object.keys(corr));
 const missing = [...dataBases].filter((b) => !corrBases.has(b));
@@ -21,15 +27,24 @@ if (missing.length || extra.length) {
 }
 
 const plan = [];
-let skipped = 0, titleReset = 0, badCat = 0;
+let skipped = 0,
+  titleReset = 0,
+  badCat = 0;
 for (const d of data) {
   const decision = corr[d.base] ?? "SKIP";
-  if (decision === "SKIP") { skipped++; continue; }
-  if (!CATS.has(decision)) { badCat++; console.log(`  bad category "${decision}" for ${d.base} -> skipping`); continue; }
+  if (decision === "SKIP") {
+    skipped++;
+    continue;
+  }
+  if (!CATS.has(decision)) {
+    badCat++;
+    console.log(`  bad category "${decision}" for ${d.base} -> skipping`);
+    continue;
+  }
   const cat = decision;
   const changed = cat !== d.category;
   if (changed) titleReset++;
-  const title = changed ? TITLE[cat] : (d.title || TITLE[cat]);
+  const title = changed ? TITLE[cat] : d.title || TITLE[cat];
   const stem = randomUUID();
   const ext = d.kind === "image" ? "jpg" : "mp4";
   plan.push({
@@ -52,9 +67,17 @@ for (const d of data) {
 }
 
 writeFileSync(`${ROOT}/import-plan.json`, JSON.stringify(plan, null, 2));
-const byCat = {}; let vids = 0, imgs = 0;
-for (const p of plan) { byCat[p.category] = (byCat[p.category] || 0) + 1; if (p.kind === "video") vids++; else imgs++; }
+const byCat = {};
+let vids = 0,
+  imgs = 0;
+for (const p of plan) {
+  byCat[p.category] = (byCat[p.category] || 0) + 1;
+  if (p.kind === "video") vids++;
+  else imgs++;
+}
 console.log(`\nIMPORT PLAN: ${plan.length} items  (static=${imgs} live=${vids})`);
-console.log(`skipped: ${skipped}, re-categorized (title reset to default): ${titleReset}, bad-cat dropped: ${badCat}`);
+console.log(
+  `skipped: ${skipped}, re-categorized (title reset to default): ${titleReset}, bad-cat dropped: ${badCat}`,
+);
 console.log(`by category:`, JSON.stringify(byCat));
 console.log(`R2 objects to PUT: ${plan.length + vids} (${plan.length} media + ${vids} thumbs)`);

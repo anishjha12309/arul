@@ -9,8 +9,6 @@ import '../../../theme/arul_tokens.dart';
 import 'ringtones_screen.dart';
 
 /// Loading skeleton for the ringtone list, in the SAME geometry the real list uses.
-///
-/// Built on the sliding-gradient [Skeleton] — the one sanctioned pattern; no shimmer, no ShaderMask.
 /// A skeleton whose rows are a different height makes the list jump when the first page lands.
 class RingtonesLoading extends StatelessWidget {
   const RingtonesLoading({super.key});
@@ -35,10 +33,6 @@ class RingtonesLoading extends StatelessWidget {
 class _SkeletonRow extends StatelessWidget {
   const _SkeletonRow();
 
-  /// Read off [RingtoneRow], never re-typed. This was a hand-kept copy of a private constant, and
-  /// the hit-target raise is exactly the event that class of copy loses to: the gap BESIDE the two
-  /// trailing controls moved from 7 to 5 when their boxes went 44 -> 48, and a literal here would
-  /// have slid the skeleton's play button 4px sideways against the row that replaces it.
   static const double _titleSubGap = RingtoneRow.titleSubGap;
 
   @override

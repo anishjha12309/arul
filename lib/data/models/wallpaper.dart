@@ -5,7 +5,6 @@ part 'wallpaper.g.dart';
 
 /// DB column `type`: 'static' or 'live'.
 /// `static` is a Dart keyword -> the image case is named `image` and mapped via @JsonValue.
-/// A RENDERING hint only — never a browse or filter axis (CLAUDE.md §5b).
 enum WallpaperKind {
   @JsonValue('static')
   image,
@@ -83,8 +82,6 @@ abstract class Wallpaper with _$Wallpaper {
   String url(String cdnBase) => '$cdnBase/$key';
 
   /// The 720px still used by the grid, and as the viewer's instant poster.
-  ///
-  /// Thumbnails live under their OWN `thumbs/` prefix, deliberately not the sweep's `wallpapers/`.
   /// At `thumbs/<category>/<stem>.jpg`, where the stem is [key]'s basename without its extension.
   /// The catalog `id` is a DB UUID with NO relation to the thumb name -> derive from the KEY, not id.
   String thumbUrl(String cdnBase) {
@@ -95,12 +92,10 @@ abstract class Wallpaper with _$Wallpaper {
   }
 
   /// The image every surface should ASK FOR first — tile, viewer poster, splash warm.
-  ///
   /// **Only LIVE items have a `thumbs/` object** — the import writes `thumb_key` for video only.
   /// A static asking for [thumbUrl] spends a guaranteed 404 before falling back to the same JPG.
   /// So a static goes STRAIGHT to [url] -> no extra bytes, one less request per static card.
   /// Tile and viewer poster share a decode width -> keep every caller here, or the item decodes twice.
-  /// Live is untouched — the poster-under-texture contract depends on it.
   String posterUrl(String cdnBase) =>
       kind == WallpaperKind.live ? thumbUrl(cdnBase) : url(cdnBase);
 }
@@ -115,12 +110,6 @@ class WallpaperCategory {
   static const allSlug = '__all__';
 
   /// The New chip, the second piece of chrome in both rows.
-  ///
-  /// A SENTINEL, exactly like [allSlug], and for the same reason: New is a WINDOW over the feed,
-  /// not a value any row carries. Keeping it out of the `category` column is what stops it leaking
-  /// into the places a real category reaches — `categoriesProvider` derives chips from the items,
-  /// so the Upload picker (which reads that provider) can never offer it, the CMS never sees it,
-  /// and no import can write it. Both sentinels are `__`-fenced against a real slug colliding.
   static const newSlug = '__new__';
 }
 
@@ -130,7 +119,6 @@ const String sivanCategorySlug = 'sivan';
 
 /// Chip order for a browse row: [sivanCategorySlug] first, then alphabetical by label.
 /// The ringtone row layers `others`-last on top — see `compareRingtoneCategories`.
-/// Both rows are the ONE browse axis (CLAUDE.md §5b) and must not drift into two orders.
 /// This is the FALLBACK now: an operator order out of the CMS wins -> [orderedByCms].
 int compareBrowseCategories(WallpaperCategory a, WallpaperCategory b) {
   final aSivan = a.slug == sivanCategorySlug;
@@ -140,16 +128,6 @@ int compareBrowseCategories(WallpaperCategory a, WallpaperCategory b) {
 }
 
 /// Apply the operator's hand-set chip order from `app_config.category_order`.
-///
-/// [order] is a list of slugs for ONE scope, straight off the catalog. It is the whole
-/// decision where it applies: a listed slug sits exactly where the operator dropped it,
-/// which is why dragging `others` off the end of the ringtone row moves it (owner's call)
-/// rather than being quietly overridden by [compareRingtoneCategories].
-///
-/// It is deliberately NOT required to be complete. Anything unlisted keeps [fallback] and
-/// sorts AFTER everything listed, so a category published after the last drag still shows
-/// up — in its built-in slot — instead of vanishing or landing at a random index.
-/// An empty [order] is the ordinary case and leaves [fallback] in sole charge.
 List<WallpaperCategory> orderedByCms(
   List<WallpaperCategory> categories,
   List<String> order,

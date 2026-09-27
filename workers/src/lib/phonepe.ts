@@ -1,20 +1,11 @@
 /**
- * PhonePe Payment Gateway — Standard Checkout v2 (OAuth / O-Bearer).
- *
  * The endpoint table is docs/phonepe.md -> read it there, never from memory -> every shape here was verified live
- * OAuth is /v1/oauth/token even on the v2 flow -> "v2" names the product, not the token endpoint -> never "upgrade" it
- * The token goes out as `Authorization: O-Bearer <token>` -> a plain `Bearer` is rejected
- * Webhook auth is a bare header equal to SHA256(username + ":" + password) in hex -> no signature, no timestamp
- * Money-moving request bodies are spelled out at each call site below -> change one there, never here
  */
 
 import type { Env } from "../env.js";
 
 /**
  * Is this the production gateway? TRIMMED, and any unrecognised value THROWS. Both halves matter.
- *
- * A secret set through a shell pipe picks up a trailing newline -> a bare `=== "PRODUCTION"` fell to SANDBOX
- * Production credentials then posted to the preprod host and came back `401` -> that reads as "bad credentials"
  * Defaulting to sandbox is never safe for a payment gateway -> a typo must fail loudly, never downgrade
  */
 function isProduction(env: Env): boolean {
@@ -29,13 +20,7 @@ function isProduction(env: Env): boolean {
 
 /**
  * A non-2xx from PhonePe, carrying the HTTP status so callers can tell a TRANSIENT fault from a FINAL verdict.
- *
- * The autopay cron leaves a row untouched on any throw -> right for a 5xx or a dropped connection
- * Exactly wrong for a 4xx like SUBSCRIPTION_NOT_FOUND -> PhonePe already said the mandate does not exist
- * Unclassified, one such row burns two PhonePe calls and a Neon wake EVERY hour, forever
- * It also holds the cron's idle marker permanently clear -> no hour can ever skip the DB
  * The message format matches the plain Errors this replaced -> existing log greps and assertions still hit
- * Mirrored in Pakiza's workers/src/lib/phonepe.ts -> keep both in sync
  */
 export class PhonePeApiError extends Error {
   constructor(
@@ -80,11 +65,10 @@ interface CachedToken {
 }
 
 /**
- * A valid O-Bearer token, refetched only inside OAUTH_REFRESH_BUFFER_SECONDS of expiry. KV key "phonepe:oauth".
  * The KV TTL is (expires_at - now - buffer) -> the entry disappears BEFORE the token could go invalid
  */
 export async function getAccessToken(env: Env): Promise<string> {
-  const cached = await env.KV.get(OAUTH_KV_KEY, "json") as CachedToken | null;
+  const cached = (await env.KV.get(OAUTH_KV_KEY, "json")) as CachedToken | null;
   if (cached) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (cached.expires_at - nowSeconds > OAUTH_REFRESH_BUFFER_SECONDS) {
@@ -92,8 +76,6 @@ export async function getAccessToken(env: Env): Promise<string> {
     }
   }
 
-  // 2. Fetch a new token. Trimmed for the same reason as PHONEPE_ENV -> a piped secret can carry a newline
-  // URLSearchParams encodes that faithfully into the credential as %0A -> a 401 that reads as a wrong password
   const body = new URLSearchParams({
     client_id: env.PHONEPE_CLIENT_ID.trim(),
     client_secret: env.PHONEPE_CLIENT_SECRET.trim(),
@@ -112,7 +94,7 @@ export async function getAccessToken(env: Env): Promise<string> {
     throw new Error(`PhonePe OAuth error ${res.status}: ${text}`);
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     access_token: string;
     token_type: string;
     expires_at: number; // epoch seconds
@@ -136,7 +118,7 @@ export async function getAccessToken(env: Env): Promise<string> {
 async function authHeaders(env: Env): Promise<Record<string, string>> {
   const token = await getAccessToken(env);
   return {
-    "Authorization": `O-Bearer ${token}`,
+    Authorization: `O-Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -151,7 +133,6 @@ export interface SetupSubscriptionParams {
   /**
    * When set, the mandate is authorized via a REAL first debit of this amount
    * (authWorkflowType=TRANSACTION) instead of the ₹2 auto-reversed PENNY_DROP.
-   * Used for trial-consumed users: they pay ₹199 upfront, no second free trial.
    * Docs: for TRANSACTION, `amount` = the first debit amount (≥100 paise).
    */
   upfrontAmountPaise?: number | undefined;
@@ -167,21 +148,12 @@ export interface SetupSubscriptionResult {
   redirectUrl: string;
   /**
    * The SDK order token startTransaction() needs — the TOP-LEVEL `token` of /checkout/v2/sdk/order.
-   * NOT the mercury `redirectUrl?token=` -> that is a web-page token the SDK rejects with PR004/401
    */
   token: string | null;
   /** Epoch-ms expiry of the setup order -> the client shows its own timeout from this. */
   expireAt: number | null;
 }
 
-/**
- * Initiate a subscription mandate. Both variants: maxAmount 19900, frequency MONTHLY, productType UPI_MANDATE.
- *
- * Trial-eligible -> PENNY_DROP -> `amount` MUST be exactly 200 paise, auto-reversed, and grants the 1-day trial
- * The first real debit then lands the next day via the cron -> setup itself takes no real money
- * Trial consumed -> TRANSACTION -> `amount` is the REAL first debit (>=100 paise), charged during setup
- * That path makes the user 'active' for a month the moment setup completes -> there is no second free trial
- */
 export async function setupSubscription(
   env: Env,
   params: SetupSubscriptionParams,
@@ -212,9 +184,6 @@ export async function setupSubscription(
   };
 
   // MOBILE SDK -> the dedicated "Create SDK Order" endpoint, NEVER /checkout/v2/pay
-  // /checkout/v2/pay returns only a mercury redirectUrl whose ?token= is a WEB PAGE token
-  // Feed that to startTransaction and the SDK's internal PG_PAY_V2_SIMPLE answers 401 / PR004 "Unauthorized"
-  // /checkout/v2/sdk/order accepts the IDENTICAL body and returns the top-level `token` startTransaction needs
   const res = await fetch(`${base}/checkout/v2/sdk/order`, {
     method: "POST",
     headers,
@@ -226,7 +195,7 @@ export async function setupSubscription(
     throw new PhonePeApiError(`PhonePe setup error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     orderId: string;
     state: string;
     token?: string;
@@ -235,8 +204,6 @@ export async function setupSubscription(
   };
 
   // The top-level SDK order token is the ONLY source -> NEVER fall back to scraping ?token= out of redirectUrl
-  // That scraped value is a web-checkout token -> shipping one turns a loud server failure into a 200 that fails on device
-  // No token in a 200 IS the bug -> throw and say so, rather than hand the SDK a poisoned one
   const token: string | null = data.token ?? null;
   if (!token) {
     throw new Error(
@@ -270,13 +237,6 @@ export interface SetupIntentResult {
 }
 
 /**
- * POST {base}/subscriptions/v2/setup — the Autopay "API integration" variant.
- *
- * The returned intentUrl opens the chosen UPI app straight on its mandate sheet -> no SDK, no web checkout
- * So the PR004/web-token trap class does not exist on this path -> it is the frictionless route
- * Order status stays `/subscriptions/v2/order/{id}/status` -> the webhook and reconcile pipeline is unchanged
- * paymentFlow.type is "SUBSCRIPTION_SETUP" here, NOT the checkout variant's "SUBSCRIPTION_CHECKOUT_SETUP"
- * Sandbox answers a ppesim:// link for its simulator app; production answers upi://mandate
  * No intentUrl in a 200 is the missing-SDK-token trap again -> THROW so the caller falls back to the SDK page
  */
 export async function setupSubscriptionIntent(
@@ -310,14 +270,10 @@ export async function setupSubscriptionIntent(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new PhonePeApiError(
-      `PhonePe intent setup error ${res.status}: ${text}`,
-      res.status,
-      text,
-    );
+    throw new PhonePeApiError(`PhonePe intent setup error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     orderId: string;
     state: string;
     intentUrl?: string;
@@ -335,20 +291,13 @@ export async function setupSubscriptionIntent(
 
 /**
  * Merchant-initiated cancellation of an active mandate. No request body; success is 204 No Content.
- * After this no further debits fire -> confirm via getSubscriptionStatus or the subscription.cancelled webhook
  */
-export async function cancelSubscription(
-  env: Env,
-  merchantSubscriptionId: string,
-): Promise<void> {
+export async function cancelSubscription(env: Env, merchantSubscriptionId: string): Promise<void> {
   const base = getPgBase(env);
   const headers = await authHeaders(env);
   const enc = encodeURIComponent(merchantSubscriptionId);
 
   // Direct merchant -> send ONLY the O-Bearer auth -> X-MERCHANT-ID is for PARTNER integrations and flips auth mode
-  // PhonePe's DOCUMENTED cancel path /checkout/v2/subscriptions/{id}/cancel answers 401 AUTHORIZATION_FAILED
-  // The SAME token succeeds on /subscriptions/v2/* -> so /subscriptions/v2/{id}/cancel is PRIMARY here
-  // The documented path stays only as a fallback, in case PhonePe ever enables it
   const candidates = [
     `${base}/subscriptions/v2/${enc}/cancel`,
     `${base}/checkout/v2/subscriptions/${enc}/cancel`,
@@ -374,16 +323,11 @@ export async function cancelSubscription(
 
 /**
  * Cancel a mandate, tolerating the already-inactive case. True = confirmed no longer live.
- *
  * PhonePe answers non-2xx when cancelling an already-inactive mandate -> that IS the desired end state
- * A bank-initiated revoke often fires NO merchant webhook -> our row can still read live when the mandate is gone
  * So on cancel failure, re-check the live state -> report failure only when PhonePe still says the mandate is live
  * A failed re-check also reports failure -> conservative on purpose -> the caller asks the user to retry
  */
-export async function revokeMandateTolerant(
-  env: Env,
-  merchantSubscriptionId: string,
-): Promise<boolean> {
+export async function revokeMandateTolerant(env: Env, merchantSubscriptionId: string): Promise<boolean> {
   try {
     await cancelSubscription(env, merchantSubscriptionId);
     return true;
@@ -392,17 +336,12 @@ export async function revokeMandateTolerant(
     let stillLive = true;
     try {
       const st = await getSubscriptionStatus(env, merchantSubscriptionId);
-      stillLive =
-        st.state === "ACTIVE" || st.state === "ACTIVATION_IN_PROGRESS";
+      stillLive = st.state === "ACTIVE" || st.state === "ACTIVATION_IN_PROGRESS";
     } catch (statusErr) {
-      // A mandate the user never authorized does not exist at PhonePe at all -> cancel and status both 400 NOT_FOUND
-      // Nothing exists, so nothing can ever debit -> that IS the desired end state -> report success
-      // Without this branch every abandoned setup logged "may STILL BE LIVE" -> the one real alarm drowned in noise
       // Scoped to NOT_FOUND on purpose -> a 401/5xx means "we cannot see" -> the conservative false stays right there
       if (
         statusErr instanceof PhonePeApiError &&
-        (statusErr.status === 404 ||
-          statusErr.body.includes("SUBSCRIPTION_NOT_FOUND"))
+        (statusErr.status === 404 || statusErr.body.includes("SUBSCRIPTION_NOT_FOUND"))
       ) {
         stillLive = false;
       } else {
@@ -464,7 +403,7 @@ export async function notifyRedemption(
     throw new PhonePeApiError(`PhonePe notify error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     orderId: string;
     state: string;
     expireAt: number;
@@ -486,10 +425,7 @@ export interface ExecuteRedemptionResult {
  * POST /subscriptions/v2/redeem — pass the SAME merchantOrderId notifyRedemption used, or the debit has no notice.
  * Callers MUST confirm the subscription is ACTIVE first
  */
-export async function executeRedemption(
-  env: Env,
-  merchantOrderId: string,
-): Promise<ExecuteRedemptionResult> {
+export async function executeRedemption(env: Env, merchantOrderId: string): Promise<ExecuteRedemptionResult> {
   const base = getPgBase(env);
   const headers = await authHeaders(env);
 
@@ -506,7 +442,7 @@ export async function executeRedemption(
     throw new PhonePeApiError(`PhonePe execute error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as {
+  const data = (await res.json()) as {
     state: string;
     transactionId: string;
   };
@@ -540,7 +476,7 @@ export async function getSubscriptionStatus(
     {
       method: "GET",
       headers: {
-        "Authorization": `O-Bearer ${token}`,
+        Authorization: `O-Bearer ${token}`,
         "Content-Type": "application/json",
       },
     },
@@ -551,15 +487,11 @@ export async function getSubscriptionStatus(
     throw new PhonePeApiError(`PhonePe subscription status error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as SubscriptionStatusResult;
+  const data = (await res.json()) as SubscriptionStatusResult;
   return data;
 }
 
 export interface OrderStatusResult {
-  /**
-   * COMPLETED | FAILED | PENDING | NOTIFIED. NOTIFIED is redemption-only: announced, never executed.
-   * The list is OPEN -> PhonePe ships states not named here -> treat anything unrecognised as NON-terminal
-   */
   state: string;
   orderId: string;
   merchantOrderId: string;
@@ -576,10 +508,7 @@ export interface OrderStatusResult {
   };
 }
 
-export async function getOrderStatus(
-  env: Env,
-  merchantOrderId: string,
-): Promise<OrderStatusResult> {
+export async function getOrderStatus(env: Env, merchantOrderId: string): Promise<OrderStatusResult> {
   const base = getPgBase(env);
   const token = await getAccessToken(env);
 
@@ -588,7 +517,7 @@ export async function getOrderStatus(
     {
       method: "GET",
       headers: {
-        "Authorization": `O-Bearer ${token}`,
+        Authorization: `O-Bearer ${token}`,
         "Content-Type": "application/json",
       },
     },
@@ -599,15 +528,12 @@ export async function getOrderStatus(
     throw new PhonePeApiError(`PhonePe order status error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as OrderStatusResult;
+  const data = (await res.json()) as OrderStatusResult;
   return data;
 }
 
 /** Identical to getOrderStatus — a distinct name only so redemption call sites read clearly. */
-export async function getRedemptionStatus(
-  env: Env,
-  merchantOrderId: string,
-): Promise<OrderStatusResult> {
+export async function getRedemptionStatus(env: Env, merchantOrderId: string): Promise<OrderStatusResult> {
   return getOrderStatus(env, merchantOrderId);
 }
 
@@ -647,7 +573,7 @@ export async function initiateRefund(
     throw new PhonePeApiError(`PhonePe refund error ${res.status}: ${text}`, res.status, text);
   }
 
-  const data = await res.json() as RefundResult;
+  const data = (await res.json()) as RefundResult;
   return data;
 }
 
@@ -673,17 +599,6 @@ export async function verifyWebhookAuth(
   return verifyCallbackAuth(authHeader, username, password);
 }
 
-/**
- * Shape of a PhonePe Autopay v2 webhook POST body.
- *
- * Event types (source: webhook-handling docs):
- *   Setup:       checkout.order.completed | checkout.order.failed
- *   Notify:      subscription.notification.completed | subscription.notification.failed
- *   Redemption:  subscription.redemption.order.completed | subscription.redemption.order.failed
- *                subscription.redemption.transaction.completed | subscription.redemption.transaction.failed
- *   State:       subscription.paused | subscription.unpaused | subscription.revoked | subscription.cancelled
- *   Refund:      pg.refund.accepted | pg.refund.completed | pg.refund.failed
- */
 export interface PhonePeWebhookPayload {
   event?: string;
   /**
@@ -699,7 +614,6 @@ export interface PhonePeWebhookPayload {
     amount?: number;
     expireAt?: number;
     /**
-     * State-change events carry these at the TOP of `payload`; every ORDER event nests them under `paymentFlow`.
      * Read both homes, always through `merchantSubscriptionIdOf()` -> never reach for one field directly
      */
     merchantSubscriptionId?: string;
@@ -723,27 +637,18 @@ export interface PhonePeWebhookPayload {
   };
 }
 
-/**
- * The merchant subscription id wherever PhonePe put it — top-level on state changes, `paymentFlow.*` on orders.
- * Every real redemption webhook is an ORDER event -> reading only the top level acked them all as "Missing" -> zero marks
- */
 export function merchantSubscriptionIdOf(
   pp: PhonePeWebhookPayload["payload"] | undefined,
 ): string | undefined {
   return pp?.merchantSubscriptionId ?? pp?.paymentFlow?.merchantSubscriptionId;
 }
 
-export function phonePeSubscriptionIdOf(
-  pp: PhonePeWebhookPayload["payload"] | undefined,
-): string | null {
+export function phonePeSubscriptionIdOf(pp: PhonePeWebhookPayload["payload"] | undefined): string | null {
   return pp?.subscriptionId ?? pp?.paymentFlow?.subscriptionId ?? null;
 }
 
 async function sha256Hex(input: string): Promise<string> {
-  const buf = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(input),
-  );
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -751,7 +656,6 @@ async function sha256Hex(input: string): Promise<string> {
 
 /**
  * DKS_S_<userId-first-8>_<epoch-ms-base36>. PhonePe caps these at 63 chars of [A-Za-z0-9_-].
- * The `DKS_` prefix is Arul's and Pakiza's is `PKZ_` -> a deliberate delta -> never sync it across the repos
  */
 export function buildMerchantSubscriptionId(userId: string): string {
   const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
@@ -763,6 +667,9 @@ export function buildMerchantSubscriptionId(userId: string): string {
 export function buildMerchantOrderId(userId: string, tag = "O"): string {
   const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
   const ts = Date.now().toString(36).toUpperCase();
-  const rnd = Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, "0");
+  const rnd = Math.floor(Math.random() * 0xffff)
+    .toString(16)
+    .toUpperCase()
+    .padStart(4, "0");
   return `DKS_${tag}_${shortId}_${ts}_${rnd}`;
 }

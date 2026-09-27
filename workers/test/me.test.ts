@@ -38,12 +38,7 @@ function makeMockSql(rows: unknown[]): { sql: unknown; result: MockSqlResult } {
 }
 
 // A minimal Hono-like Context -> only what the handlers actually read
-function makeCtx(opts: {
-  token?: string;
-  sql: unknown;
-  jsonBody?: unknown;
-  invalidJson?: boolean;
-}): {
+function makeCtx(opts: { token?: string; sql: unknown; jsonBody?: unknown; invalidJson?: boolean }): {
   ctx: Parameters<typeof handleMe>[0];
   jsonCalls: Array<{ body: unknown; status: number }>;
 } {
@@ -59,13 +54,9 @@ function makeCtx(opts: {
     env,
     req: {
       header: (name: string) =>
-        name.toLowerCase() === "authorization" && opts.token
-          ? `Bearer ${opts.token}`
-          : undefined,
+        name.toLowerCase() === "authorization" && opts.token ? `Bearer ${opts.token}` : undefined,
       json: () =>
-        opts.invalidJson
-          ? Promise.reject(new Error("invalid json"))
-          : Promise.resolve(opts.jsonBody),
+        opts.invalidJson ? Promise.reject(new Error("invalid json")) : Promise.resolve(opts.jsonBody),
     },
     json: (body: unknown, status = 200) => {
       jsonCalls.push({ body, status });

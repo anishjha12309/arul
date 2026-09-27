@@ -26,7 +26,8 @@ Backfill/reference SQL: `tools/content-import/backfill-deity.sql`, which is idem
 re-run after an import.
 
 The ringtones tab is LIVE. Ringtone categories are NOT the wallpaper ones — five deities plus
-`others`, and no `temples`. A published ringtone reaches users exactly like a wallpaper does. **Bulk drops go through
+`others`, and no `temples`. A published ringtone reaches users exactly like a wallpaper does. **Bulk drops go
+through
 `tools/content-import/ringtones-plan.mjs` → `ringtones-import.mjs`**, not the CMS one-at-a-time
 form. They are incremental: the plan script dedups on title against the live catalog and continues
 `sort_order` past its high-water mark, so a re-run aborts rather than doubling the list.

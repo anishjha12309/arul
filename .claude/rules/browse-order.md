@@ -24,7 +24,7 @@ paths:
 - **The New chip is a WINDOW, not a category.** Sentinel `__new__`, chrome beside All, never in
   `categoriesProvider` — so never in the Upload picker or CMS, and never on a row. Client-side 7-day
   window (created_at would bury a late-published batch); `kNewMinItems` is a FLOOR, not a cap.
-- **New has its OWN order** (`newOrder`, owner's call 2026-09-15): `renewed_at` in the window (CMS
+- **New has its OWN order** (`newOrder`, an owner decision): `renewed_at` in the window (CMS
   Renew, last renewed on top) → `published_at` in the window, newest first → filler to 20 (membership
   by recency, ordered by uses). Ties: uses DESC, then `id` — never `feedRank`/position, because pins
   play NO part in New.

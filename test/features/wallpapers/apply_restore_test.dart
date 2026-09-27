@@ -5,11 +5,6 @@
 // The pending flags are consumed exactly once, even when the restore is rejected -> no stale flag hijacks a cold start.
 // The saved category chip is re-selected -> the feed lands on the wallpapers the user left, not on "All".
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
@@ -18,6 +13,10 @@ import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/wallpapers/presentation/apply_restore.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_apply_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Wallpaper _wp(String stem, String category) => Wallpaper.fromJson({
   'id': 'id-$stem',
@@ -140,7 +139,7 @@ void main() {
     });
 
     h.host.maybeRestoreAfterApply(_catalog);
-    await tester.pump(); // run the post-frame callback
+    await tester.pump();
 
     expect(h.host.restoreCalls, [(index: 2, category: 'sivan', wasLive: true)]);
     expect(
@@ -313,7 +312,6 @@ void main() {
     expect(h.host.restoreCalls, hasLength(1));
   });
 
-  // ── Deep link ──────────────────────────────────────────────────────────────
   // The other thing that turns a saved reference into a page index -> it shares the feedOrder() contract above.
   // An id resolved against the raw catalog would open a DIFFERENT wallpaper than the link named.
   group('deep link', () {

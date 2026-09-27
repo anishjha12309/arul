@@ -95,7 +95,5 @@ lists that need the user — NORMATIVE violations and CONTESTED claims — then 
 
 ## Boundaries
 
-- Reads Pakiza only if a claim explicitly names it; auditing Pakiza's docs is that repo's job (copy
-  this skill + agents there when ready).
 - The doc-sync hook is the write path (code changed → update doc); this skill is the read path (does
   the doc still tell the truth). Neither replaces the other, and both now cover the same tree.

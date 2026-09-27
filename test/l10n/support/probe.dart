@@ -329,7 +329,7 @@ List<Finding> _walkParagraphs(
 /// The nearest few ancestors -> a failure message points at a place in the code rather than at "a Text somewhere".
 String _chain(RenderObject object) {
   final parts = <String>[];
-  RenderObject? node = object.parent;
+  var node = object.parent;
   var depth = 0;
   while (node != null && depth < 5) {
     parts.add(node.runtimeType.toString());

@@ -2,7 +2,7 @@
 
 Read before touching `android/**/feedvideo/**`, `lib/features/wallpapers/data/**` or
 `video_preload_controller.dart`. Encoding rules and the dimension law:
-[media-conventions.md](media-conventions.md). Card geometry: [browse.md](browse.md).
+[media-conventions.md](media-conventions.md). Card geometry and the live mark: [feed-card.md](feed-card.md).
 
 Budget SoCs fit roughly two concurrent 1080p hardware decoder sessions. Everything here exists
 because exceeding that fails SILENTLY — a software fallback, a green edge strip, or a black card —
@@ -21,9 +21,9 @@ never with an error.
   `MediaCodecList`'s first enumeration is a binder round-trip to the codec service that some phones
   answer in seconds, and on main it ANR'd the first feed frame.
 - **Leaving the Wallpapers tab PAUSES at once and frees the decoders only after a grace period**
-  (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild:
-  measured on a Nothing A001 at **430 ms with no frame on the video surface**, and **10.4% of frames
-  over 33 ms** across a tab-switch window against 3.9% idle. The pause is what stops audio and decode
+  (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild —
+  hundreds of ms with no frame on the video surface and a burst of janky frames on every tab switch.
+  The pause is what stops audio and decode
   behind the ringtone list, and it is free; only the freeing is worth deferring. The other three
   release paths stay IMMEDIATE and must: the apply flow AWAITS one so the OS finds decoders free,
   backgrounding hands them to the OEM chooser, and `detach()` is a teardown.
@@ -77,21 +77,22 @@ live card that has not decoded yet is pixel-identical to a static one. That is d
 catalog.**
 
 The one thing that does distinguish them is `LiveMark`, and it is static by design
-([browse.md](browse.md) §The live mark).
+([feed-card.md](feed-card.md)).
 
 Poster, full image and video texture must all share `ViewerMedia.cropAlignment`, or the frame jumps
 on fade-in.
 
 ## Audio is decided at CREATE, not per open
 
-`create(audio:)` picks the `AudioAttributes` and focus handling once, so a player built muted never
-takes audio focus — raising its volume later changes focus behaviour not at all. Everything except
-the paywall's ONE audible player stays `audio: false`: a preview that took focus would pause the user's
-music while they browsed. The onboarding clip and the return page's clip SHARE that player — the feed
-under `/premium` still holds its decoders, so a second one would break the budget. Hand it over by
-giving the other card `null`, and take it back only after the return page's exit plus one frame: its
-card pauses the player as it disposes, which silenced a clip handed back any earlier. The clip's URL is the one thing `Log.i("audible open")` prints, which
-matters because the language cuts are the same footage and a screenshot cannot tell them apart.
+`create(audio:)` picks the `AudioAttributes` and focus handling once, so a player built muted never takes
+audio focus — raising its volume later changes focus behaviour not at all. Everything except the paywall's
+ONE audible player stays `audio: false`: a preview that took focus would pause the user's music while they
+browsed. The onboarding clip and the return page's clip SHARE that player — the feed under `/premium` still
+holds its decoders, so a second one would break the budget. Hand it over by giving the other card `null`,
+and take it back only after the return page's exit plus one frame: its card pauses the player as it
+disposes, which silenced a clip handed back any earlier. The clip's URL is the one thing
+`Log.i("audible open")` prints, which matters because the language cuts are the same footage and a
+screenshot cannot tell them apart.
 
 ## Noise to ignore
 

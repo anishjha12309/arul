@@ -13,17 +13,16 @@ Play requires at targetSdk 34+) and `lib/features/app_update/`. The policy is th
 
 ## When it never asks
 
-`UpdateHolds` (lib/core/update) is held while a sign-in attempt is in flight and while `/premium`
-is mounted, which covers the paywall, the UPI handoff, the QR and the return page. The splash (`/`)
-and the sign-in wall (`/sign-in`) are never covered, even between attempts (docs/auth.md): a check
-due there waits for the next route change. An apply, share or ringtone set still loading defers it
-too (a restart loses it, and the live chooser backgrounds us), polled every 2 s since those finish
-without notifying. The check also
-needs lifecycle `resumed`: Google's sheet and system dialogs leave the app `inactive`. A check deferred
-that way retries 2 s after the next resume. Without that retry, the notification ask right after
-sign-in swallowed the session's prompt (seen on device). A downloaded
-FLEXIBLE update installs through `completeUpdate()` only on a background with no holds. Play installs
-it silently there, so the app shows no restart prompt of its own.
+`UpdateHolds` (lib/core/update) is held while a sign-in attempt is in flight and while `/premium` is
+mounted, which covers the paywall, the UPI handoff, the QR and the return page. The splash (`/`) and the
+sign-in wall (`/sign-in`) are never covered, even between attempts ([auth.md](auth.md)): a check due there
+waits for the next route change. An apply, share or ringtone set still loading defers it too (a restart
+loses it, and the live chooser backgrounds us), polled every 2 s since those finish without notifying. The
+check also needs lifecycle `resumed`: Google's sheet and system dialogs leave the app `inactive`. A check
+deferred that way retries 2 s after the next resume. Without that retry, the notification ask right after
+sign-in swallowed the session's prompt. A downloaded FLEXIBLE update installs through `completeUpdate()`
+only on a background with no holds. Play installs it silently there, so the app shows no restart prompt of
+its own.
 
 ## What it asks for
 
@@ -49,7 +48,8 @@ failure set it `clear`.
   CMS "Advanced settings" JSON. It reaches the app through the catalog's `app_config.json`.
 - `min_supported_version` (CMS Config page) is read as a **build number**: `85` or `1.0.0+85`.
   Below it, every check prompts, and neither the mode nor the cooldown applies. Any other value is
-  no floor, including the historic `1.0.0`. Builds ≤ 84 ignore the field entirely.
+  no floor, including the historic `1.0.0`. Builds ≤ 84 carry no update code at all — only Play's own
+  auto-update reaches them.
 - It is not a blocking screen: Play offers nothing during a staged or halted rollout, so a hard
   block would strand users.
 
@@ -76,6 +76,5 @@ adb logcat -s ArulUpdate:W   # check -> flow started -> accepted -> result -> do
 - Sideloads, debug builds, emulators and `flutter test` no-op. The API errors there (APP_NOT_OWNED,
   API_NOT_AVAILABLE) and `PlayInstall.isPlay` gates the bootstrap. Test through internal app sharing
   with a lower versionCode installed.
-- Builds ≤ 84 carry no update code. Only Play's own auto-update reaches them.
 - Events are GA4 only (`app_update_prompt`, `app_update_result`, all string params). PostHog
   already splits every journey event by `$app_build`.

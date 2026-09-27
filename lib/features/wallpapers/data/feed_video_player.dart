@@ -6,19 +6,6 @@ import 'package:flutter/services.dart';
 /// Thin, typed Dart wrapper over the native Media3 ExoPlayer texture pool
 /// (`FeedVideoPlugin` on the Android side) — the wallpaper feed's live previews
 /// and the sign-in background video.
-///
-/// Player + surface REUSE is the whole design -> [FeedVideoPlayerPool.create] makes a session-long
-/// player and [FeedVideoPlayer.open] swaps its media (setMediaItem + prepare on the SURVIVING native
-/// player + surface) -> never dispose+recreate per swipe, never "simplify" to a per-swap dispose.
-/// A fresh Android surface per swipe floods `BLASTBufferQueue ... max frames` and settle jank on
-/// budget MediaTek SoCs -> reuse is what avoids it.
-/// Native [FeedVideoPlugin] holds ONE MethodChannel, ONE broadcast EventChannel and ONE `eventSink`,
-/// and Flutter allows ONE active stream listener -> a second `receiveBroadcastStream().listen(...)`
-/// overwrites the first sink and the loser gets NO `firstFrame` / `videoSize` / `error` -> every
-/// pool shares one process-global [_FeedVideoChannelHub].
-/// Two pools are alive at once (the feed's in `VideoPreloadController`, sign-in's in
-/// `VideoBackground`) -> per-pool subscriptions stranded the other pool's cards on a permanent
-/// poster/dark-fill (the "only the first live wallpaper renders" bug).
 /// The hub also holds every live handle across ALL pools, and native `playerId`s are globally unique
 /// (one shared `nextPlayerId`) -> a tagged event reaches its handle whichever pool created it.
 /// A pool owns only the handles IT created -> its [dispose] never tears down another pool's players.
@@ -57,12 +44,8 @@ class FeedVideoPlayerPool {
   bool _disposed = false;
 
   /// Creates a native ExoPlayer + its Flutter texture and returns a handle.
-  ///
   /// The player and surface live until [FeedVideoPlayer.dispose] -> null means the platform side is
   /// unavailable (e.g. a headless widget test) -> the caller falls back to poster-only.
-  /// [audio] opts the native player into real [AudioAttributes], audio focus and volume 1 -> a
-  /// preview that ducked the user's music while they only browsed would be a bug -> the feed and the
-  /// auth background stay false; the paywall's onboarding voiceover is the one caller passing true.
   Future<FeedVideoPlayer?> create({bool audio = false}) async {
     if (_disposed) return null;
     final res = await _hub.invokeCreate(audio: audio);
@@ -117,11 +100,6 @@ class FeedVideoPlayerPool {
 
 /// Process-global owner of the one native MethodChannel and the one EventChannel broadcast
 /// subscription, shared by every [FeedVideoPlayerPool].
-///
-/// Holds the registry of ALL live handles across ALL pools -> each tagged native event fans out to
-/// the handle its `playerId` belongs to.
-/// The only subscriber in the process -> native sees exactly one `onListen` and one live sink -> no
-/// second listener can clobber it.
 class _FeedVideoChannelHub {
   _FeedVideoChannelHub(this._method, this._events) {
     _eventSub = _events.receiveBroadcastStream().listen(
@@ -361,7 +339,10 @@ class FeedVideoPlayer {
   /// raising its volume changes nothing the user can hear.
   Future<void> setVolume(double volume) => _disposed
       ? Future<void>.value()
-      : _hub.invokeMethod('setVolume', {'playerId': playerId, 'volume': volume});
+      : _hub.invokeMethod('setVolume', {
+          'playerId': playerId,
+          'volume': volume,
+        });
 
   /// Stops playback, releasing the codec while KEEPING the native player and
   /// its surface (Media3 STATE_IDLE holds "only limited resources"; a later

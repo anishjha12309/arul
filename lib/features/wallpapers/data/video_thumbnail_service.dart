@@ -5,11 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Native first-frame stills for live wallpapers — the FALLBACK when a `thumbs/` object is missing.
-///
-/// The MP4s are `+faststart` -> the retriever pulls the header plus ~0.5s, tens of KB, not 4 MB.
-/// The decoded frame is then cached on disk forever.
-/// So a grid shows a live item WITHOUT holding a video decoder for it.
-/// A budget SoC has a handful of hardware decoders; a player per tile falls back to software.
 class VideoThumbnailService {
   VideoThumbnailService({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);

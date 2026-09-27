@@ -1,10 +1,9 @@
 // DataSaver is read synchronously by the prefetcher, so it caches the native answer and re-asks
 // in the background; a missing or failing channel must never read as ON.
 
+import 'package:arul/core/connectivity/data_saver.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:arul/core/connectivity/data_saver.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

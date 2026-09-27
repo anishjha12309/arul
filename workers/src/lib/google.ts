@@ -1,7 +1,5 @@
 /**
- * Google idToken verification via JWKS.
  * Spec: https://developers.google.com/identity/sign-in/web/backend-auth · JWKS: /oauth2/v3/certs
- *
  * `aud` is the WEB client id, never the Android one -> an Android-audience token is a different app's token
  * Google issues both bare and https `accounts.google.com` -> accept both issuers or half the tokens fail
  * The `nonce` claim is RETURNED, not checked -> only the caller knows what it asked for -> handleLogin compares

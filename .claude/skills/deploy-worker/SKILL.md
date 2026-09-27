@@ -7,7 +7,7 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
 
 0. Precondition: `workers/wrangler.toml` contains no `TODO_` placeholder — every binding id must be
    real. One that isn't means the resource was never created; STOP and name which.
-1. Check: `cd workers && npx tsc --noEmit && npx vitest run` — both green or STOP.
+1. Check: `cd workers && npm run check && npx tsc --noEmit && npx vitest run` — all green or STOP.
 2. Account: `npx wrangler whoami` must show **admin@hsrutility.com** (account
    `ba8dd87179e2ffd378a50292ca8e69e0`, pinned by `account_id` in wrangler.toml — wrangler will not
    fall back to another one). Wrong/no account → tell the user to `wrangler login` as admin.
@@ -22,8 +22,11 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    and the handler's `[cron] … complete` lines must appear before you ship.
 4. Deploy: `node tools/deploy-safe.mjs` — never a bare `wrangler deploy`. It deploys, probes BOTH
    hostnames plus the CDN pointer (`tools/smoke.mjs`: JSON 404 envelope, unauthenticated `/me` =
-   401, `catalog/version.json` has `built_at`), and on a failed probe runs `wrangler rollback --yes`
-   to the previous version and exits 1. Record the version id it prints — report it. Both hostnames
+   401, `catalog/version.json` has `built_at`), then soaks 15 min (`tools/soak-check.mjs`: Worker
+   exceptions, 5xx and the non-404 2xx share on the new version against the 24 h before; thresholds
+   calibrated on real 15-min buckets). A failed probe or soak runs `wrangler rollback --yes` to the
+   previous version and exits 1; a soak that cannot read analytics keeps the deploy and says so.
+   `--soak 0` skips it (hotfix). Record the version id it prints — report it. Both hostnames
    are the same deploy and both must keep working: `arul-api.hsrutility.com` is the `custom_domain`
    route wrangler owns, and `arul-api.twilight-smoke-d495.workers.dev` still serves every
    already-installed build (`workers_dev = true` is load-bearing — dropping it silently kills those

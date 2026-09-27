@@ -10,12 +10,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
@@ -27,6 +21,11 @@ import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];
@@ -278,7 +277,6 @@ void main() {
     },
   );
 
-  // ── The defect this group exists for ─────────────────────────────────────
   // The payment succeeds server-side while the app's polls die on a torn-down radio behind the UPI app.
   // The app gives up with "confirmation is delayed" -> it used to leave the pre-purchase entitlement snapshot in place.
   // The paywall then read "Start free trial" to a user who WAS premium.

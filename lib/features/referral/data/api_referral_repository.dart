@@ -11,7 +11,6 @@ class ApiReferralRepository implements ReferralRepository {
 
   @override
   Future<List<ReferralModel>> getReferrals(String referrerId) async {
-    // GET /me/referrals (architecture.md §3.5) -> { items: [...] }; 404 -> [].
     try {
       final data = await _api.get('/me/referrals');
       return _parseItems(data);

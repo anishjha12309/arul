@@ -5,14 +5,13 @@
 // A checkout on this install opens the marker, and a LATER order on the same install does fire.
 // Non-trialing rows fire nothing and merely open the marker; the value never goes out empty.
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];
@@ -135,15 +134,18 @@ void main() {
     expect(analytics.events.single.$2?['late'], isTrue);
   });
 
-  test('a checkout never reopens a marker that already names an order', () async {
-    final catchUp = await build(
-      stored: {TrialConversionCatchUp.prefsKey: 'DKS_ORDER_1'},
-    );
-    catchUp.noteCheckout();
-    expect(catchUp.isReported('DKS_ORDER_1'), isTrue);
-    expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
-    expect(analytics.events, isEmpty);
-  });
+  test(
+    'a checkout never reopens a marker that already names an order',
+    () async {
+      final catchUp = await build(
+        stored: {TrialConversionCatchUp.prefsKey: 'DKS_ORDER_1'},
+      );
+      catchUp.noteCheckout();
+      expect(catchUp.isReported('DKS_ORDER_1'), isTrue);
+      expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isFalse);
+      expect(analytics.events, isEmpty);
+    },
+  );
 
   test('non-trialing rows fire nothing and initialise the marker, so a trial '
       'lost LATER on the same install is recognised as new', () async {

@@ -3,11 +3,10 @@
 
 import 'dart:ui' show Locale;
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('every kind has a line in every locale, and Tamil is not English', () {

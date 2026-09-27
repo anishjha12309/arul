@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/tell_a_friend.dart';
 import '../providers/referral_providers.dart';
-import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Refer & Earn — a silk hero card with the WhatsApp CTA, a rewards card, a "how it works" card.
-///
-/// The CTA shares the referral-attributed Play link, WhatsApp-first with a share-sheet fallback.
-/// "Rewards earned" reads `/me/referrals` via [referralSummaryProvider].
-/// Both degrade to the plain link and the zero state while the summary loads, never in a real build.
-/// The spec's `featured_seasonal_and_gifts` icon has no Material equivalent -> card_giftcard_rounded.
 class ReferScreen extends ConsumerWidget {
   const ReferScreen({super.key});
 

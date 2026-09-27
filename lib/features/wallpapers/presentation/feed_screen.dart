@@ -7,19 +7,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_browse_header.dart';
+import '../../../app/widgets/arul_earn_button.dart';
+import '../../../app/widgets/arul_toast.dart';
+import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/haptics/arul_haptics.dart';
-import '../../../app/widgets/arul_browse_header.dart';
-import '../../../app/widgets/arul_earn_button.dart';
-import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/gopuram_mark.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../premium/presentation/trial_nudge_row.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../push/providers/push_providers.dart';
+import '../../review/presentation/review_prompt_trigger.dart';
+import '../../ringtones/providers/ringtone_set_provider.dart';
 import '../data/feed_video_player.dart';
 import '../data/wallpaper_apply_service.dart';
 import '../providers/catalog_providers.dart';
@@ -29,21 +34,13 @@ import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
 import 'feed_card_geometry.dart';
-import '../../premium/presentation/trial_nudge_row.dart';
-import '../../push/providers/push_providers.dart';
-import '../../review/presentation/review_prompt_trigger.dart';
-import '../../ringtones/providers/ringtone_set_provider.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
 import 'video_preload_controller.dart';
 import 'viewer_media.dart';
-import '../../../app/theme/motion.dart';
 
 /// The home surface: a Shorts-style vertical reel of wallpapers, one page each (Spec > Reel feed).
-///
-/// Chips ride the shared header; everything else is parented to the CARD, not the screen — see
-/// [_CardChrome]. Browse and preview are free -> Apply and Share are premium-gated (CLAUDE.md §5).
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
@@ -88,10 +85,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   int _index = 0;
 
-  // PostHog bills per EVENT, not per property -> one `feed_session_ended` carrying counts answers
-  // depth/mix/length for a fraction of the volume -> never one PostHog event per card.
-  // Per-card `wallpaper_engaged` still fires for GA4, which is free and unsampled.
-
   /// A swipe passing through is not engagement -> a card counts as engaged only after it dwells for
   /// [_dwellThreshold] -> reset the timer on every page change.
   Timer? _dwellTimer;
@@ -112,8 +105,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
   /// restored category's list lands, consumed by [_syncFeed].
   int? _pendingRestoreIndex;
 
-  /// A loading snapshot must never bounce a premium user to the paywall -> AWAIT
-  /// `entitlementProvider.future`, never read a snapshot (CLAUDE.md §5).
   /// A failed fetch gates closed -> the Worker's signed-url check stays authoritative either way.
   Future<bool> _isPremium() async {
     try {
@@ -135,11 +126,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
     // A cold CDN handshake was 1189ms of the 1499ms the paywall clip took to first frame; pooled it
     // reached 312ms -> pay DNS + TCP + TLS here so the clip does not.
-    //
     // Must be POST-AUTH: warming on the splash fought Google's token mint and POST /auth/login for
     // the same pipe and made first login 7-8s (splash_screen.dart) -> warm here, signed in.
-    // Not on the entitlement read either — it is lazy, and resolved 18s AFTER the paywall opened.
-    //
     // ExoPlayer is on HttpURLConnection -> only the NATIVE pool is one it finds warm -> issue from
     // there. A pooled connection is per HOST -> the clip's language is irrelevant; any cut reuses it.
     unawaited(
@@ -152,8 +140,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // Link, deferred delivery) would never re-run it, least of all parked offstage -> rebuild here.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
 
-    // The permission prompt fires once per install, on the first feed frame after sign-in: a dialog
-    // stacked on Google's flow costs sign-ins. Post-frame so it never shares the feed's first paint.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(ref.read(pushPermissionProvider).promptOnce());
@@ -383,10 +369,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       return;
     }
     if (!mounted) return;
-    // A gated tap is already an intent to act, and only the premium SCREEN can satisfy it (owner's
-    // call) -> track the blocked verb, then push STRAIGHT to /premium — every gated verb behaves
-    // like `ensurePremium`. Never re-introduce a nudge, teaser sheet or interstitial here.
-    // The wallpaper is attributed on the blocked event (docs/edge-cases.md).
     ref
         .read(analyticsServiceProvider)
         .track(
@@ -416,9 +398,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           w,
           target: target,
           feedPageIndex: _index,
-          // The CHIP the user is on, never the wallpaper's own category: `_index` is a position in
-          // that chip's served list, and apply_restore re-selects this slug and jumps to it. Saving
-          // `w.category` restored an All or New apply onto a category chip at a foreign index.
           category: ref.read(selectedCategoryProvider),
           // The wallpaper engine / chooser preview needs the hardware decoders the feed holds ->
           // a budget SoC has only a handful -> release them for the duration.
@@ -553,17 +532,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         body: SafeArea(
           child: Column(
             children: [
-              // Brand header — the wordmark anchors the app, so nothing sits on
-              // top of the chips. Shared with the other two tabs
-              // ([ArulScreenHeader]); its metrics are the ones the reel
-              // geometry below is solved against, so they did not move when the
-              // three headers were unified.
-              //
-              // Earn is the ONLY action up here. Settings used to sit beside it
-              // and no longer does: it is a dock branch with its own permanent
-              // tab, so a second entry in the corner was a duplicate control —
-              // and it made this header the one that differed from Ringtones'
-              // across the cross-fade.
               ArulBrowseHeader(
                 title: 'Arul',
                 // The WORDMARK, not a page title — bigger than Ringtones' and
@@ -666,10 +634,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // peek, then the gap. The end mark is the only screen-anchored thing left,
     // so it is the only one that needs it; forgetting it here would drop it
     // behind the pager.
-    //
-    // `underhang`, NOT the whole floor: half of it now sits above the card so
-    // the reel is centred, and measuring from the bottom with the full floor
-    // would put it half a floor too high.
     final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -699,20 +663,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           ),
         ),
 
-        // Media pager — one inset rounded card per page, top-aligned, with the
-        // inter-card gap below it and the peek showing beneath that.
-        // `padEnds: false` is what pins a snapped page flush to the top; the
-        // fraction (see [_pagerFor]) decides how much of the following one stays
-        // visible.
-        //
-        // The FLOOR is padding around the pager, not part of it: the reel's
-        // visible bottom edge sits above the system inset, so a card scrolling
-        // away is clipped at a deliberate line rather than sliding off the
-        // screen. Everything inside — card + gap + peek — fills exactly the
-        // height that is left (`geo.pagerHeight`), which is why splitting the
-        // floor across top and bottom recentres the reel without resizing
-        // anything in it.
-        //
         // Wrapped in a RefreshIndicator: on the first page a downward pull
         // has no previous page to reveal, so it overscrolls and refreshes
         // the whole catalog; on later pages the pull just navigates, so
@@ -739,12 +689,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 _precacheNextStatic(items, i);
                 _onCardSettled(i, items[i]);
               },
-              // Each page is a self-contained card: media, scrim, badge and the
-              // two buttons, all clipped to the same rounded rect. The controls
-              // therefore TRAVEL WITH their wallpaper — they slide in as it
-              // arrives and slide out with it, instead of hanging in a fixed
-              // layer the artwork passes behind.
-              //
               // The gap is bottom padding on the PAGE, so the page extent the
               // pager solves for is card + gap and the snap geometry stays a
               // stock PageView's.
@@ -867,12 +811,6 @@ class _CardChrome extends StatelessWidget {
 
   static const double stackHeight = FeedCardGeometry.scrimHeight;
 
-  /// Inset of the action row from the card's left, right and bottom edges —
-  /// Pakiza's `AppFeed.actionInset`, one number for all three.
-  ///
-  /// The row used to run edge to edge and lean on the Apply pill's own width to
-  /// stay clear of the corners, which stopped being true the moment the card
-  /// narrowed. Stating the gutter beats inferring it.
   static const double _barInset = FeedCardGeometry.actionInset;
   static const double _barInsetH = FeedCardGeometry.actionInset;
 
@@ -913,25 +851,9 @@ class _CardChrome extends StatelessWidget {
         ),
 
         // The live marker, and the ONLY thing in the card's upper field.
-        //
-        // A gold "LIVE" text pill sat here until 2026-08-11; it read as a
-        // warning on half the catalog and was untranslated English in a
-        // six-language app. [LiveMark] replaces it with the Share circle's own
-        // glass recipe at half scale — nothing to localize.
-        //
-        // Deliberately NOT on the action row's 14dp gutter (owner's call): at
-        // that inset the mark rides the rim, and the card's 26dp corner radius
-        // curves away right behind it, so it reads as stuck to the edge rather
-        // than placed on the wallpaper. [_liveMarkInset] clears the corner arc
-        // entirely and sits the mark inside the artwork's own field.
-        //
         // Pointer-transparent for the same reason the pill was: a DecoratedBox
         // hit-tests true anywhere in its box, so without this the mark would be
         // a dead zone over the pager.
-        //
-        // Inset from the CARD, not the status bar — the reel has sat below a
-        // header and a chips row for a while, so a `viewPadding.top` here would
-        // be ~24dp of phantom offset pushing the mark into the artwork.
         if (wallpaper.kind == WallpaperKind.live)
           const Positioned(
             top: _liveMarkInset,
@@ -945,13 +867,6 @@ class _CardChrome extends StatelessWidget {
 
 /// The feed's action bar: a wide Apply pill with a circular Share beside it,
 /// centred on the card's lower edge.
-///
-/// This replaces the old right-edge icon rail. The rail put the app's ONE
-/// primary verb (Apply) in the same visual weight as Share, in the zone the
-/// thumb uses to swipe — so the primary action both read as optional and shared
-/// its hit area with the gesture that drives the feed. A centred pill states the
-/// verb in words, sits where the thumb rests, and clears the swipe column.
-///
 /// Colour is deliberately NOT the design system's [ArulTokens.ctaGreen]: that
 /// token is for CTAs on THEMED surfaces (sheets, premium, sign-in), where the
 /// background is ours. Here the button sits directly on someone's artwork, and
@@ -1028,10 +943,6 @@ class _ApplyPill extends StatelessWidget {
             // whole card. Without it the box hugs the label and the minWidth
             // does the rest, so the pill keeps a constant, reference-like width
             // whatever the locale's verb is.
-            // The floor stops a one-word locale ("Set") collapsing the pill to a
-            // chip; the ceiling stops the longer ones (ta/ml/te set "Apply" as a
-            // whole word) stretching it across the card. Both fit the 329dp the
-            // row has inside an 18dp-guttered card — pill + 12 + a 52 circle.
             child: Container(
               height: _ActionBar.height,
               constraints: const BoxConstraints(
@@ -1135,11 +1046,6 @@ class _ShareCircle extends StatelessWidget {
 /// Hairline transfer bar across the top of the reel for an in-flight
 /// apply/share. Null [progress] renders indeterminate (a bar parked at 0% reads
 /// as stuck).
-///
-/// It carries no status-bar padding: the reel starts below the header, the chips
-/// and the divider, so the `viewPadding.top` this used to add was a leftover
-/// from the full-bleed layout and dropped the bar into the middle of the card's
-/// top edge.
 class _TransferProgress extends ConsumerWidget {
   const _TransferProgress();
 

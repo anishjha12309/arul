@@ -5,8 +5,6 @@ part 'subscription_model.g.dart';
 
 // An unknown status makes fromJson throw and errors the WHOLE entitlement fetch -> this enum must
 // cover every value the Worker can write to subscriptions.status.
-// /payments/initiate upserts the row as 'pending' BEFORE the mandate completes -> an abandoned or
-// webhook-lost setup leaves a pending row that /me/subscription serves -> `pending` is real.
 enum SubscriptionStatus {
   @JsonValue('pending')
   pending,
@@ -23,9 +21,6 @@ enum SubscriptionStatus {
 }
 
 /// A user's subscription row (Neon `subscriptions`).
-///
-/// Never derive premium from these fields -> the rule's one home is `premiumPredicate` in the
-/// Worker and the app reads the `premium` flag `GET /me` computes from it.
 @freezed
 abstract class SubscriptionModel with _$SubscriptionModel {
   @JsonSerializable(fieldRename: FieldRename.snake)

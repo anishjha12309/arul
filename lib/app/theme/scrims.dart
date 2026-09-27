@@ -2,20 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Gradient scrims — how chrome stays legible over an arbitrary wallpaper.
-///
-/// NOT glassmorphism: `BackdropFilter` costs ~6-9ms of raster per frame at a usable sigma on mid-tier
-/// Android -> on a budget SoC that alone blows the 16ms budget the video decoder already competes for.
-/// `ShaderMask` and anything forcing `saveLayer()` are out for the same reason — an offscreen pass per
-/// frame, per widget.
-/// A gradient is ordinary paint -> no offscreen buffer, no measurable cost -> and over full-bleed
-/// photography it reads richer than blur anyway (it is what the big video feeds ship).
-///
 /// The ground under a scrim is NOT ours -> tune every ramp against the worst case an image can show,
 /// a PURE WHITE frame -> the guarantee is the fraction of the scrim's height where text clears WCAG.
-/// Above that band chrome carries its own fill ([ArulColors.mediaFill]) -> not decoration: it is
-/// 2.2:1 versus 4.19:1 for the gold Apply ring.
-/// `Color(0x00000000)` is transparent BLACK -> only alpha moves -> no grey fringe mid-ramp.
 /// A straight two-stop ramp bands visibly where the tail meets the image -> a third, low-alpha stop
 /// near the end flattens it out for free.
 abstract final class ArulScrims {

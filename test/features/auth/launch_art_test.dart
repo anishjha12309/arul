@@ -4,14 +4,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:fake_async/fake_async.dart';
-
 import 'package:arul/core/experiments/experiments.dart';
 import 'package:arul/core/providers/geo_language_service.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/auth/domain/regional_art.dart';
 import 'package:arul/features/auth/providers/launch_art_provider.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -127,8 +126,10 @@ void main() {
       fakeAsync((clock) {
         final ask = Completer<void>();
         bool? answered;
-        awaitRegionAnswer(ask.future, const Duration(milliseconds: 1200))
-            .then((a) => answered = a);
+        awaitRegionAnswer(
+          ask.future,
+          const Duration(milliseconds: 1200),
+        ).then((a) => answered = a);
         clock.elapse(const Duration(milliseconds: 400));
         expect(answered, isNull);
         ask.complete();
@@ -137,24 +138,32 @@ void main() {
       });
     });
 
-    test('no answer ends the wait at the cap, and a late one changes nothing', () {
-      fakeAsync((clock) {
-        final ask = Completer<void>();
-        bool? answered;
-        awaitRegionAnswer(ask.future, const Duration(milliseconds: 1200))
-            .then((a) => answered = a);
-        clock.elapse(const Duration(milliseconds: 1199));
-        expect(answered, isNull);
-        clock.elapse(const Duration(milliseconds: 1));
-        expect(answered, isFalse);
-        ask.complete();
-        clock.flushMicrotasks();
-        expect(answered, isFalse);
-      });
-    });
+    test(
+      'no answer ends the wait at the cap, and a late one changes nothing',
+      () {
+        fakeAsync((clock) {
+          final ask = Completer<void>();
+          bool? answered;
+          awaitRegionAnswer(
+            ask.future,
+            const Duration(milliseconds: 1200),
+          ).then((a) => answered = a);
+          clock.elapse(const Duration(milliseconds: 1199));
+          expect(answered, isNull);
+          clock.elapse(const Duration(milliseconds: 1));
+          expect(answered, isFalse);
+          ask.complete();
+          clock.flushMicrotasks();
+          expect(answered, isFalse);
+        });
+      },
+    );
 
     test('a spent budget does not wait at all', () async {
-      expect(await awaitRegionAnswer(Completer<void>().future, Duration.zero), isFalse);
+      expect(
+        await awaitRegionAnswer(Completer<void>().future, Duration.zero),
+        isFalse,
+      );
     });
   });
 }

@@ -22,10 +22,6 @@ part 'come_back_reminder.g.dart';
 
 /// ONE local post about an hour after the install's FIRST Google surface, for the person who left
 /// with it up and never came back.
-///
-/// Every install on Android 12 and below — 13+ needs a permission the wall must never ask for.
-/// Armed once per install, disarmed by anything that shows the person came back: an attempt
-/// settling, a resume, or a cold start (docs/notifications.md).
 class ComeBackReminder {
   ComeBackReminder({
     required this._prefs,
@@ -103,8 +99,6 @@ class ComeBackReminder {
 @Riverpod(keepAlive: true)
 ComeBackReminder comeBackReminder(Ref ref) {
   final prefs = ref.read(sharedPreferencesProvider);
-  // QA seam, sideloads only: `QA_COME_BACK_DELAY_S=60` posts after a minute on ANY Android (grant
-  // POST_NOTIFICATIONS by adb on 13+), so the post itself is checkable on a modern test phone.
   const qaDelay = int.fromEnvironment('QA_COME_BACK_DELAY_S');
   final qa = qaDelay > 0 && !PlayInstall.isPlay;
   final reminder = ComeBackReminder(
@@ -125,9 +119,7 @@ ComeBackReminder comeBackReminder(Ref ref) {
           .read(geoLanguageServiceProvider)
           .settled
           .timeout(const Duration(seconds: 15), onTimeout: () {});
-      return _posterFile(
-        regionalPosterFor(prefs.getString(geoRegionPrefsKey)),
-      );
+      return _posterFile(regionalPosterFor(prefs.getString(geoRegionPrefsKey)));
     },
   );
   unawaited(reminder.coldStart());

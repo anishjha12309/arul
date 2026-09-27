@@ -9,12 +9,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
@@ -31,8 +25,11 @@ import 'package:arul/features/ringtones/presentation/ringtones_screen.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
 import 'package:arul/features/ringtones/providers/ringtone_set_provider.dart';
-
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Ringtone _rt(String id, String title, String category) =>
     Ringtone(id: id, title: title, category: category, audioKey: '$id.mp3');
@@ -111,8 +108,6 @@ class _RecordingAnalytics implements AnalyticsService {
   @override
   void register(String key, Object value) {}
 }
-
-// ─── Harness ──────────────────────────────────────────────────────────────────
 
 void main() {
   late _StubPreview preview;
@@ -199,8 +194,6 @@ void main() {
     matching: find.widgetWithText(GestureDetector, 'Set'),
   );
 
-  // ── One playing row at a time ──────────────────────────────────────────────
-
   group('now-playing is a single value', () {
     testWidgets('tapping a second row moves the state off the first', (
       tester,
@@ -281,8 +274,6 @@ void main() {
     });
   });
 
-  // ── Category filtering ─────────────────────────────────────────────────────
-
   group('category chips', () {
     testWidgets('selecting a category filters the list', (tester) async {
       await pumpScreen(tester, catalog: _catalog);
@@ -327,8 +318,6 @@ void main() {
       expect(find.widgetWithText(GestureDetector, 'Murugan'), findsNothing);
     });
   });
-
-  // ── The premium gate ───────────────────────────────────────────────────────
 
   group('Set is premium-gated', () {
     testWidgets('a free user is blocked, tracked once, and sent to /premium', (
@@ -425,8 +414,6 @@ void main() {
     });
   });
 
-  // ── Layout: the floating dock must never eat the last row ──────────────────
-
   testWidgets('with no dock overhead, the list reserves nothing for one', (
     tester,
   ) async {
@@ -488,7 +475,6 @@ void main() {
     );
   });
 
-  // ── Deep link ──────────────────────────────────────────────────────────────
   // A ringtone ad link (`/r/<id>`, `fb…://open?ringtone_id=`) lands here -> the row scrolls to the top of ALL.
   // The pref copy is cleared and the GA4-only landing event fires -> nothing auto-plays.
 

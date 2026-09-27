@@ -1,22 +1,26 @@
-// Non-comment token stream of a TypeScript file. The bare scanner cannot tell a regex
-// from a slash or a template tail from a brace without the parser's re-scans, so this
-// walks the parsed tree's leaf tokens; comments come from scanning the trivia before each
-// leaf, which holds only whitespace and comments, so the bare scanner is exact there.
+// Non-comment token stream of a TypeScript or JavaScript file. The bare scanner cannot tell a regex
+// from a slash or a template tail from a brace without the parser's re-scans, so this walks the
+// parsed tree's leaf tokens; comments come from scanning the trivia before each leaf, which holds
+// only whitespace and comments, so the bare scanner is exact there.
 //
 //   node tokens_ts.mjs <file>            one JSON-encoded token per line
 //   import { scanTs } from './tokens_ts.mjs'
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { extname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(new URL('../../workers/package.json', import.meta.url));
-const ts = require('typescript');
+const require = createRequire(new URL("../../workers/package.json", import.meta.url));
+const ts = require("typescript");
 
-export function scanTs(path, text = readFileSync(path, 'utf8')) {
-  const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const KIND = { ".tsx": "TSX", ".jsx": "JSX", ".js": "JS", ".mjs": "JS", ".cjs": "JS" };
+
+export function scanTs(path, text = readFileSync(path, "utf8")) {
+  const kind = ts.ScriptKind[KIND[extname(path)] ?? "TS"];
+  const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, kind);
   if (sf.parseDiagnostics.length) {
     const d = sf.parseDiagnostics[0];
-    throw new Error(`${path}@${d.start}: ${ts.flattenDiagnosticMessageText(d.messageText, ' ')}`);
+    throw new Error(`${path}@${d.start}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   }
   const tokens = [];
   const comments = new Map();

@@ -1,10 +1,9 @@
 // The button's Semantics excludes its GestureDetector child, so the tap action has to be
 // re-declared on the Semantics node itself, same as every other excludeSemantics site.
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/arul_earn_button.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 Widget _host(Widget child) => MaterialApp(
   localizationsDelegates: AppLocalizations.localizationsDelegates,

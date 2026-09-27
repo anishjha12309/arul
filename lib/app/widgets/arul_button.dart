@@ -37,7 +37,6 @@ class ArulButton extends StatefulWidget {
 
   /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
   /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String? identifier;
 
   @override
@@ -54,8 +53,6 @@ class _ArulButtonState extends State<ArulButton>
     super.dispose();
   }
 
-  /// Holds at 1 — the resting scale — when motion is reduced, so the button never dips and never
-  /// changes size. The haptic on press-down still fires: that is feedback, not animation.
   void _springTo(double target) {
     if (context.reduceMotion) {
       _c.value = 1;
@@ -78,7 +75,6 @@ class _ArulButtonState extends State<ArulButton>
       label: widget.label,
       identifier: widget.identifier,
       child: GestureDetector(
-        // Haptic on press-DOWN, in step with the spring dip -> the phone answers before the animation.
         // A disabled button is silent, and a press that turns into a scroll never reaches here.
         // Inside a scrollable the tap recognizer reports down only once it has survived the arena.
         onTapDown: _enabled

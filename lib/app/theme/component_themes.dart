@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Component themes, kept out of theme.dart so the palette stays readable.
-///
-/// Material renamed these classes -> always `*ThemeData` and `WidgetStateProperty`, never `Material*`.
-/// analysis_options.yaml promotes `deprecated_member_use` to an ERROR -> drifting back cannot compile.
 abstract final class ArulComponents {
-  /// The app bar. Ivory/ink, flat at rest.
-  ///
   /// A black drop shadow is invisible on a near-black surface -> it lifts in light, not in dark.
   /// So the scrolled-under state is an M3 surface TINT, never a shadow.
   static AppBarThemeData appBar(ColorScheme scheme, TextTheme text) =>
@@ -78,11 +72,8 @@ abstract final class ArulComponents {
     ),
   );
 
-  /// Category chips.
-  ///
   /// A selected ChoiceChip reads `secondarySelectedColor`/`secondaryLabelStyle`, not the first pair.
   /// Setting only the first pair gave onSurfaceVariant on primary, 1.6:1 in dark -> set BOTH pairs.
-  /// Measured: idle 5.11:1 (light) / 7.72:1 (dark); selected 8.60:1 / 4.75:1.
   static ChipThemeData chip(ColorScheme scheme, TextTheme text) =>
       ChipThemeData(
         backgroundColor: scheme.surfaceContainerHighest,

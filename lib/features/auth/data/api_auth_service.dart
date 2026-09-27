@@ -18,18 +18,6 @@ import '../domain/sign_in_outcome.dart';
 import 'sign_in_surface_clock.dart';
 
 /// [AuthService] implementation backed by the Cloudflare Worker API.
-///
-/// Google's own "Implement Sign in with Google" guide fixes the surface order -> Credential Manager
-/// BOTTOM SHEET first (automatic sign-in when exactly one authorized account exists), the "Sign in
-/// with Google" BUTTON flow as the fallback for a sheet that drew nothing, a sheet that could not
-/// run, and every user-initiated retry.
-///   sheet | button → idToken (+ per-process nonce) → POST /auth/login
-///
-/// EXACTLY ONE visible Google surface per attempt -> the picker follows a sheet only when the sheet
-/// drew NOTHING.
-/// A sheet run as a WARM-UP ahead of a picker is a different thing and stays forbidden -> measured,
-/// the user saw a drawer appear, hang and vanish, then the picker.
-///
 /// Auth state is derived from stored tokens (no server-side session stream) -> the stream fires
 /// immediately on construction, then again after every sign-in / sign-out.
 class ApiAuthService implements AuthService {
@@ -48,8 +36,6 @@ class ApiAuthService implements AuthService {
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
     // `_initialized`, which completes when this seed does.
     _initialized = _seedInitialState();
-    // A refresh that proves the session dead mid-process is the same verdict the seed reaches on a
-    // cold start -> signed out. Without it the UI stayed signed in and every gated call failed.
     _api.sessionEnded.listen((_) => _endSession());
   }
 
@@ -82,9 +68,6 @@ class ApiAuthService implements AuthService {
 
   AuthUserState _current = AuthUserState.unauthenticated();
 
-  /// Checks secure storage for an existing access token and emits the right initial state.
-  /// Called once in the constructor; fire-and-forget.
-  ///
   /// Tokens exist -> authenticate OPTIMISTICALLY from the stored token and emit at once, then
   /// upgrade to the real profile via `GET /me` in the background (ApiClient auto-refreshes on 401).
   /// Sign out only on a genuine 401 (refresh failed too) -> a network/server error keeps the
@@ -92,18 +75,7 @@ class ApiAuthService implements AuthService {
   /// Emitting before the network call -> the router leaves the splash on the storage read, not on a
   /// `/me` round-trip -> cold starts stay snappy and the Android 12+ wallpaper-apply activity
   /// recreation is a splash FLASH, not a multi-second splash-then-network wait.
-  /// Browse/preview is public -> safe to show before `/me` confirms; entitlement is re-checked live.
   Future<void> _seedInitialState() async {
-    // Tokens live in the app's own data dir and allowBackup is false -> no restore can resurrect
-    // them -> a true first launch cannot have a stored session, so skip the read entirely.
-    // An install's FIRST secure-storage read pays the keystore master-key setup (~970ms measured on
-    // a profile build) -> once everything else was overlapped it was the last thing gating the
-    // account picker, on exactly the launch the install→login funnel lives or dies on.
-    // The freshness signal is the persisted cohort draw (AnalyticsCohort.isFreshInstall) — the one
-    // durable first-launch marker, false in any process that never ran resolve() -> that degrades
-    // to the keystore wait below, never to a wrong verdict.
-    // main()'s warm-up still initialises the keystore in the background -> the post-login token
-    // WRITE finds it ready.
     if (_freshInstall) {
       BootTrace.mark('authSeed: fresh install → unauthenticated');
       _emit(AuthUserState.unauthenticated());
@@ -115,10 +87,6 @@ class ApiAuthService implements AuthService {
     try {
       hasToken = await _api.hasTokens();
     } catch (e, stack) {
-      // The Android Keystore can refuse the read outright on a low-RAM phone ("Failed to generate
-      // key pair", Android 9). Escaping from here failed [initialized], the splash's await threw
-      // before its `context.go`, and the app sat on the splash on EVERY launch. No readable session
-      // is the same verdict as no session -> the wall, where signing in writes fresh tokens.
       _crash.recordError(e, stack, reason: 'auth seed: secure storage read');
       hasToken = false;
     }
@@ -159,8 +127,6 @@ class ApiAuthService implements AuthService {
           displayName: displayName,
           email: email,
         );
-        // Tie crash reports to the restored session — one of the few high-value Crashlytics
-        // touch points.
         _crash.setUserId(userId);
       }
     } on ApiException catch (e) {
@@ -260,15 +226,6 @@ class ApiAuthService implements AuthService {
     debugPrint('[ApiAuthService] signed out in ${sw.elapsedMilliseconds}ms');
   }
 
-  /// Google's Credential Manager "Sign in with Google" guide, Handle sign-out:
-  /// call `clearCredentialState()` so every credential provider drops its
-  /// stored session for this app and "the next sign-in request gets full
-  /// sign-in options". The plugin's `signOut()` is exactly that call. Without
-  /// it a user who signed out to switch accounts can be handed the same
-  /// account again, and Google's precondition for automatic sign-in ("the
-  /// user has not explicitly signed out") is never recorded. Best-effort: the
-  /// local session is already gone by the time this runs, so a plugin error
-  /// must never strand the user signed in.
   Future<void> _clearGoogleCredentialState() async {
     try {
       await GoogleSignInInit.ready;
@@ -316,11 +273,6 @@ class ApiAuthService implements AuthService {
     _attemptSeq++;
   }
 
-  /// Tracks a Google sign-in failure and returns it. EVERY failure return in
-  /// [_signInWithGoogle] goes through here. The typed classification fixed
-  /// which outcomes are QUIET; this fixes which are COUNTED — six returns
-  /// showed the user an error and told analytics nothing, so those sign-ins
-  /// left the install→login funnel with no trace of why.
   AuthFailure _googleFailure(
     AuthFailureKind kind,
     String message, {
@@ -344,15 +296,6 @@ class ApiAuthService implements AuthService {
 
   /// Wall-clock since the CURRENT `authenticate()` call started, or null when
   /// the failure happened before it (config guard, unsupported device).
-  ///
-  /// This exists because `login_cancelled` is a MIXED bucket and cannot be read
-  /// as a UX metric without it: `google_sign_in_android`'s README states that
-  /// configuration errors (wrong signing SHA, wrong package name, wrong
-  /// serverClientId) make Credential Manager return `canceled` AFTER the user
-  /// has already picked an account, and "the plugin has no way to distinguish
-  /// this case from the user canceling sign-in". A real dismissal lands in a
-  /// couple of seconds; a post-selection failure lands materially later, so the
-  /// elapsed time is what splits the two populations.
   int? get _msSinceAuthenticate => _authClock?.elapsedMilliseconds;
 
   /// Started immediately before the FIRST Google surface of the attempt and
@@ -366,15 +309,7 @@ class ApiAuthService implements AuthService {
   /// PHONE'S wait (Google slow to draw) from the PERSON'S (a picker sat on and dismissed).
   int? get _msToSurface => _surfaceClock.msToSurface;
 
-  /// What the attempt actually did, for the nudge and for `login_cancelled.nudge`.
   /// TRUE when Credential Manager closed a BUTTON-flow session the user never touched.
-  ///
-  /// A user backing out of Google's picker reports "[16] Cancelled by user." — GMS's own wording.
-  /// "User cancelled the selector" is the FRAMEWORK's wording for its selector session ending,
-  /// which on the button flow (GMS's own activity, no framework selector on screen) only happens
-  /// when the OS finishes the picker under us — an app-icon launch on the live task, which
-  /// `clearTaskOnLaunch` turns into exactly that. Both measured on device, same phone, same minute.
-  /// On the SHEET the same string is the user's own swipe and never a strip.
   @visibleForTesting
   static bool isSelectorStrip({
     required String? surface,
@@ -400,19 +335,6 @@ class ApiAuthService implements AuthService {
     msToSurface: _msToSurface,
   );
 
-  /// Properties for every `login_cancelled` emission, so all three call sites
-  /// carry the same shape.
-  ///
-  /// [description] is the Credential Manager message — the ONLY signal that
-  /// splits a real dismissal ("activity is cancelled by the user") from a
-  /// GMS-side abort reported as a cancel ("[16] …", "Unable to get sync
-  /// account" — the official troubleshooting guide documents both). Elapsed
-  /// time cannot split them: measured on device (2026-08-31), a deliberate
-  /// dismissal and a mid-flow failure both land 5–30s after the auto-launched
-  /// `authenticate()`, because the clock starts at launch, not at the sheet.
-  ///
-  /// `nudge` is the LINE THE USER WAS SHOWN for this event, so the funnel reads the copy and the
-  /// outcome as one row instead of joining a message string to a screen state after the fact.
   /// Where the install came from and whether the phone is on the poster rule — the two cuts
   /// PostHog cannot make from its own properties, on every sign-in event rather than a new one.
   Map<String, Object> get _installProps => {
@@ -433,9 +355,6 @@ class ApiAuthService implements AuthService {
     'description': ?_trimForAnalytics(description),
   };
 
-  /// GA4 silently drops any parameter VALUE over 100 chars (the event
-  /// survives, the property vanishes), so every free-text property is cut to
-  /// fit both sinks — PostHog just gets the same first 100 chars.
   static String? _trimForAnalytics(String? s) =>
       s == null || s.length <= 100 ? s : s.substring(0, 100);
 
@@ -443,18 +362,6 @@ class ApiAuthService implements AuthService {
   /// until [maxAttempts] are spent or [elapsedCap] has passed since the first
   /// attempt started. A server RESPONSE (any [ApiException], even a 5xx) is
   /// never retried — the server spoke; retrying is the caller's decision.
-  ///
-  /// The two-knob shape matches the two failure modes measured on device
-  /// (2026-08-31 matrix, prod bits): fully OFFLINE fails INSTANTLY
-  /// (`Failed host lookup`), so the attempt budget is what matters — three
-  /// tries burn ~4.5s and then fail honestly; a mid-flow BLIP kills the
-  /// socket and surfaces as ApiClient's 12s timeout on a link that recovered
-  /// seconds earlier (matrix RUN101: a 5s cut lost the login with the
-  /// credential already in hand), so the elapsed cap is what matters — one
-  /// more 12s attempt fits, a third would not. Worst case 12 + 1.5 + 12 =
-  /// 25.5s, inside the stall guard's 30s continuous-foreground budget
-  /// (auth_providers.dart _guard, restarted on return from the sheet).
-  ///
   /// Pure and static so tests pin the policy without a platform channel.
   @visibleForTesting
   static Future<Map<String, dynamic>> postWithNetworkRetry(
@@ -487,32 +394,13 @@ class ApiAuthService implements AuthService {
   static const _surfaceSheet = 'sheet';
   static const _surfaceButton = 'button';
 
-  /// The sheet of an attempt the controller re-armed on a RETURN to the wall, kept apart from the
-  /// cold-start sheet: it is the only automatic surface a person has already walked away from once,
-  /// so it is the only one whose conversion says whether re-arming on a return earns its cancels.
-  /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetReturn = 'sheet_return';
 
-  /// The sheet of an attempt the controller re-armed when the LINK came back after a network-class
-  /// failure, kept apart from both other sheets: it is the only one fired at a person who never
-  /// left and never tapped, so it is the only one whose conversion says whether retrying a dead
-  /// link is worth a surface.
-  /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetReconnect = 'sheet_reconnect';
 
-  /// The sheet of the launch HELD while the phone had no network: it follows no failure, so it alone
-  /// says whether waiting for the link beats letting the sheet fail offline.
-  /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceSheetAfterOffline = 'sheet_after_offline';
 
   /// The sheet's reported name for an attempt, given which re-arm fired it.
-  ///
-  /// A pure one-liner only because the service itself is unconstructable in a unit test (a real
-  /// ApiClient, a real analytics sink, GMS): this is the only way the funnel's most load-bearing
-  /// mapping — which `surface` value a re-armed attempt files itself under — is pinnable at all.
-  /// A RETURN wins over a reconnect: the person came back to the app themselves, which is the
-  /// stronger fact about the attempt, and the two must never blend into a third name. A held
-  /// launch sits between them: it outranks a reconnect, which only ever retries a failure.
   @visibleForTesting
   static String sheetSurfaceFor({
     required bool returned,
@@ -526,89 +414,27 @@ class ApiAuthService implements AuthService {
       ? _surfaceSheetReconnect
       : _surfaceSheet;
 
-  /// The picker the guard reopens ONCE after Google's add-account flow returned with nothing
-  /// chosen. Kept apart from a tapped picker: it is the only button surface nobody asked for, so
-  /// it is the only one whose conversion says whether the reopen earns its place.
-  /// A VALUE on the existing `surface` property — no new event, no new property.
   static const _surfaceButtonAfterAddAccount = 'button_after_add_account';
 
-  /// The button flow's reported name for an attempt. Pinnable for the same reason as
-  /// [sheetSurfaceFor].
   @visibleForTesting
   static String buttonSurfaceFor({required bool reopened}) =>
       reopened ? _surfaceButtonAfterAddAccount : _surfaceButton;
 
-  /// The picker reached by DISMISSING the sheet, kept distinct from a picker
-  /// the sheet never contested: it is the only bucket where the user has
-  /// already said no once, so it is the only one whose conversion rate says
-  /// whether [pickerAfterDismiss] earns its second surface.
   static const _surfaceButtonAfterDismiss = 'button_after_dismiss';
 
   /// KILL SWITCH for sheet-first: `false` restores the previous behaviour —
   /// the button flow only, on every attempt.
-  ///
-  /// A `static const` (a BUILD revert, not a server flag) deliberately:
-  /// `feature_flags` reach the app through `catalog/app_config.json`
-  /// (`appConfigProvider`), which is not on disk on a FIRST launch — and the
-  /// first launch is the whole install→login funnel this flow exists for. A
-  /// flag that arrives after the surface has opened controls nothing.
   @visibleForTesting
   static const bool sheetFirst = true;
 
   /// ESCALATE a DISMISSED sheet to the account picker instead of stopping.
   /// `false` restores the guide's default — a dismissal ends the attempt and
   /// the wall's pill is the user's next surface.
-  ///
-  /// The escalation target is the BUTTON flow (`GetSignInWithGoogleOption`),
-  /// deliberately NOT a second `GetGoogleIdOption` pass, even though the
-  /// unfiltered pass is what "show all the accounts" sounds like:
-  ///  * Both One Tap passes are the SAME rate-limited surface. Google's own
-  ///    guidance — "implement your own rate limiting… if a user cancels
-  ///    several prompts in a row, the One Tap client will not prompt the user
-  ///    for the next 24 hours" — means re-drawing it doubles the cancels per
-  ///    attempt, and the 24 h suppression takes AUTOMATIC sign-in with it.
-  ///    That is the one thing on this screen that measurably works.
-  ///  * The unfiltered pass is a SUPERSET of what was just dismissed. On a
-  ///    one-account phone it redraws the identical account — the user reads
-  ///    that as the app ignoring them, and it is the 2026-08-11 "two pickers"
-  ///    complaint by another route.
-  ///  * The button flow is the remedy the SIWG guide names for a dismissal,
-  ///    and it alone shows accounts that need re-auth and can ADD an account.
-  ///
-  /// A BUILD const for the same reason as [sheetFirst].
   @visibleForTesting
   static const bool pickerAfterDismiss = true;
 
   /// The surface ORDER of Google's SIWG implementation guide, kept pure and
   /// generic so the contract is pinnable without a platform channel.
-  ///
-  /// One attempt shows ONE Google surface. The button flow follows the sheet
-  /// only when the sheet drew nothing at all:
-  ///   * credential → done, on the sheet. With a single authorized account
-  ///     this is Google's automatic sign-in: the sheet shows briefly and
-  ///     nobody taps, so no copy may assume a tap happened.
-  ///   * null → nothing was drawable (no accounts on the device, "Sign-in
-  ///     prompts" turned off in Google Account settings, or no credential
-  ///     after BOTH native steps — authorized-filtered, then unfiltered).
-  ///     Nothing was shown, so the button is still the user's first surface.
-  ///   * `canceled` → the user DISMISSED the sheet. Under
-  ///     [pickerAfterDismiss] this escalates ONCE to the button flow — a
-  ///     DIFFERENT surface, not the sheet again; read that const for why the
-  ///     unfiltered One Tap pass is the wrong target. It is reported as its
-  ///     own surface so the cost (a second dismissal) stays separable from
-  ///     the gain, and it is NOT sent to [onSheetUnavailable]: a dismissal is
-  ///     a decision, not a failure of the sheet.
-  ///   * any other code → the sheet could not COMPLETE (`uiUnavailable`,
-  ///     `interrupted`, an Android 14 `TransactionTooLargeException` on
-  ///     GMS < 24.40 arriving as `unknownError`, a future code): report it and
-  ///     fall through to the button, which none of those failures affect.
-  ///     This bucket includes a failure AFTER the user picked an account —
-  ///     offline, GMS returns `unknownError` "[28404] Failed to retrieve an ID
-  ///     token" (device 2026-09-01) — so the picker CAN follow a sheet the user
-  ///     touched. That is deliberate: the user asked to sign in and the sheet
-  ///     could not deliver, and no signal distinguishes it from a sheet that
-  ///     never drew. Only `canceled` — the user saying no — stops the attempt.
-  ///
   /// [sheet] is null when this attempt must not open one at all (a pill tap,
   /// or the kill switch off). Its FUTURE may be null too — the plugin's
   /// "no lightweight flow on this platform", handled exactly like a null
@@ -664,11 +490,6 @@ class ApiAuthService implements AuthService {
     _surfaceClock.endAttempt();
     SignInPhase.exchanging.value = false;
     try {
-      // v7: use the singleton. `initialize()` is STARTED in main() but no
-      // longer awaited there, so the contract (initialize → credential
-      // request) is honoured by awaiting it here instead — off the cold-start
-      // path, on the one path that actually needs it. Never throws (see
-      // GoogleSignInInit), and it is what put this process's nonce in place.
       await GoogleSignInInit.ready;
 
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
@@ -678,9 +499,6 @@ class ApiAuthService implements AuthService {
         );
       }
 
-      // Sheet first, but only for the automatic attempt: a tap means the user
-      // is already past what the sheet had to offer (see AuthService.signInWith
-      // and resolveGoogleCredential for the order and its reasons).
       final useSheet = sheetFirst && auto;
       // The re-arm markers ride the sheet's NAME: an attempt with no sheet is a pill tap, which
       // neither a return nor a reconnect ever is.
@@ -710,8 +528,6 @@ class ApiAuthService implements AuthService {
       // Same zero as [_authClock]; it stops at the first inactive/paused/hidden, which is Google's
       // surface arriving over ours -> the only signal the app gets that the sheet is up.
       _surfaceClock.startAttempt(
-        // Google's screen is up. For the people who then leave without a cancel, a success or a
-        // failure, this is the one fact that separates "never saw the sheet" from "saw it and left".
         onSurface: (ms) {
           _analytics.track(
             'login_surface_shown',
@@ -751,9 +567,6 @@ class ApiAuthService implements AuthService {
       );
       BootTrace.mark('signIn: credential in hand (surface=$_surface)');
 
-      // Abandoned by the stall guard while Credential Manager sat on its
-      // callback — a newer attempt (or none) owns the session now. Quietly
-      // drop the zombie before any side effect.
       if (attempt != _attemptSeq) return const AuthCancelled();
 
       final idToken = account.authentication.idToken;
@@ -789,10 +602,6 @@ class ApiAuthService implements AuthService {
           '/auth/login',
           body: {
             'idToken': idToken,
-            // The nonce Google minted this token against (one per process, set
-            // at initialize()). The Worker rejects a login whose request nonce
-            // and token claim disagree; both absent is still accepted, which is
-            // what every build already in the field sends.
             'nonce': ?GoogleSignInInit.nonce,
             'referralCode': ?referralCode,
           },
@@ -868,9 +677,6 @@ class ApiAuthService implements AuthService {
         userProperties: {
           'display_name': displayName,
           'provider': 'google',
-          // The UI language the user chose (not the device locale PostHog
-          // stamps as `$locale`) — the axis Arul's 6-locale cohorts split on.
-          // Login-time value; refreshed at the next sign-in, like Shubh's.
           'app_language': ?_appLanguage?.call(),
         },
       );
@@ -884,8 +690,6 @@ class ApiAuthService implements AuthService {
           // the pair that says whether sheet-first is working.
           'surface': ?_surface,
           'ms_since_authenticate': ?_msSinceAuthenticate,
-          // The same wait the nudges split cancels on, on the outcome that WORKED — without it
-          // "Google is slow on this phone" has no denominator.
           'ms_to_surface': ?_msToSurface,
           // Present only when the exchange was saved by the network retry —
           // the field readout for whether the retry earns its keep.
@@ -895,11 +699,6 @@ class ApiAuthService implements AuthService {
 
       return AuthSuccess(userId: userId);
     } on GoogleSignInException catch (e) {
-      // Typed classification, never string-sniffing. The old fallback matched
-      // any message containing "cancel" — and Credential Manager phrases REAL
-      // failures that way (a token mint dying on a fresh LTE link surfaced as
-      // a "cancel", device 2026-08-18), so infra failures became silent
-      // pill-bounces with zero telemetry while the funnel bled.
       debugPrint(
         '[ApiAuthService] GoogleSignInException ${e.code.name}: ${e.description}',
       );
@@ -910,8 +709,6 @@ class ApiAuthService implements AuthService {
       switch (mapped) {
         case AuthCancelled():
           if (isSelectorStrip(surface: _surface, description: e.description)) {
-            // Not a cancel: nobody touched anything -> no `login_cancelled`, the guard relaunches
-            // and files it as `login_failed{kind: surface_stripped}`.
             debugPrint(
               '[ApiAuthService] selector stripped by the OS (surface=$_surface)',
             );
@@ -920,9 +717,6 @@ class ApiAuthService implements AuthService {
             );
             break;
           }
-          // No error toast (the user may genuinely have closed the sheet) but
-          // tracked WITH the plugin's description — see _cancelProperties for
-          // why the message text is the dismissal-vs-GMS-failure split.
           final outcome = _outcomeFor(e.description);
           // Field triage: the classifier's verdict and the two clocks behind it, in one line.
           // Silenced in a Play release like every other debugPrint; a DIAG sideload gets it back.
@@ -1026,9 +820,6 @@ class ApiAuthService implements AuthService {
       default:
         // clientConfigurationError, uiUnavailable, userMismatch, unknownError
         // and any code a future plugin version adds: visible + retryable.
-        // The connection hint is earned by data, not guesswork: this bucket is
-        // network-dominated in the field (unknownError p50 ~4s/p90 ~39s), and
-        // a dead uplink mid-flow reproduces exactly here (device 2026-08-31).
         return const AuthFailure(
           message:
               "Sign-in didn't complete. Check your internet connection and try again.",

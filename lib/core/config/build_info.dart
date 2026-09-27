@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart'
-    show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -8,22 +7,9 @@ part 'build_info.g.dart';
 const _channel = MethodChannel('com.hsrutility.arul/build_info');
 
 /// Whether this build came from Google Play — the uploaded `.aab`, not a sideloaded APK.
-///
-/// No BuildConfig signal separates an APK from an AAB (both are `release`) -> the installer package
-/// is the runtime proxy -> only a Play install reports `com.android.vending`.
-/// FLAG_SECURE already rides the same check -> the native side owns it ([MainActivity.isPlayInstall])
-/// -> the two can never disagree.
-///
-/// ONE probe per process ([PlayInstall]), asked once and cached.
-///
 /// The analytics assembly is a synchronous provider that runs on the first `track()`, so the probe is
 /// kicked off in `main()` and its verdict parked in [PlayInstall.isPlay], the same shape
 /// `AnalyticsCohort.isMember` already uses for the same reason.
-///
-/// **Fails toward PLAY.** An unresolvable installer or a platform error answers `true`: a real
-/// user's events must never be dropped because a channel hiccuped.
-/// A MISSING channel is different from a failing one: no platform at all is `flutter test` or a host
-/// build, which is not a store build and must stay silent.
 abstract final class PlayInstall {
   static Future<bool>? _probe;
 
@@ -66,12 +52,6 @@ abstract final class PlayInstall {
 }
 
 /// How much this phone can afford: the ONE quality answer the app spends against.
-///
-/// Three rungs, resolved once per process by the native table in [MainActivity.deviceTier].
-/// `low` is EXACTLY the shipped poster rule (the Go flag, under 4.5 GiB, Android 12L and older) and
-/// nothing may widen it — that population is what the sign-in funnel is read against.
-///
-/// **Tier changes COST, never composition.** No layout branches on it.
 enum DeviceTier {
   low,
   mid,
@@ -86,11 +66,6 @@ enum DeviceTier {
 }
 
 /// The device tier, asked once and cached for the process.
-///
-/// **Fails open to [DeviceTier.mid]** on every failure path — no channel (`flutter test`), a
-/// platform error, an unparseable answer. Never to `low`, which would cripple a capable phone over
-/// a failed probe; never to `high`, which would overcommit a weak one.
-///
 /// The probe is kicked off in `main()`. [resolved] is the synchronous read for the two callers that
 /// cannot await — the image-cache ceiling and the feed's decoder budget — and answers `mid` until
 /// the probe lands, which is within the splash.
@@ -157,13 +132,6 @@ abstract final class DeviceQuality {
 Future<DeviceTier> deviceTier(Ref ref) => DeviceQuality.tier;
 
 /// Whether this phone takes the poster path — DERIVED from [DeviceQuality]: `tier == low`.
-///
-/// The rule itself lives in the native table ([MainActivity.deviceTier]), whose `low` rung is the
-/// Android Go flag, under 4.5 GiB of total RAM, or Android 12L and older; never the OS's momentary
-/// pressure flag (the reason is on [MainActivity.isLowRamDevice]).
-///
-/// The auth screens read it to show the splash's still poster instead of the looping video.
-/// One answer per process -> asked once, cached; every later caller gets the same future.
 /// **Fails OPEN** to `false`: the tier probe fails to `mid`, so an unexpected phone is treated as
 /// ordinary and gets the video, never a missing background.
 abstract final class DeviceMemory {
@@ -172,7 +140,6 @@ abstract final class DeviceMemory {
 
   /// The verdict once the probe has landed, else null. Read by the sign-in events, which fire
   /// after the splash already awaited [isLow] -> stamped on every install that reached the wall.
-  /// Null until the tier lands, exactly as before — `?DeviceMemory.resolved` drops the key then.
   static bool? get resolved => DeviceQuality.isResolved
       ? DeviceQuality.resolved == DeviceTier.low
       : null;
@@ -182,10 +149,6 @@ abstract final class DeviceMemory {
 }
 
 /// The device's `Build.VERSION.SDK_INT`, or null where there is no platform (`flutter test`).
-///
-/// Stamped on the push registry row ([PushRegistration]) so a delivery gap can be read per Android
-/// generation: the permission model, the channel rules and the trampoline rules all change with it,
-/// and no other field on the row says which phone this is.
 /// One probe per process — the answer cannot change while the app is running.
 abstract final class AndroidVersion {
   static Future<int?>? _probe;

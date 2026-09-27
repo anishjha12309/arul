@@ -11,11 +11,14 @@
 // Usage:
 //   node cms-watch.mjs                # tail both workers until Ctrl-C
 //   node cms-watch.mjs --report       # summarise what the tails captured
-import { spawn } from "child_process";
-import { mkdirSync, createWriteStream, existsSync, readFileSync, readdirSync } from "fs";
-import { join } from "path";
+import { spawn } from "node:child_process";
+import { mkdirSync, createWriteStream, existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
-const arg = (f, d) => { const i = process.argv.indexOf(f); return i > -1 ? process.argv[i + 1] : d; };
+const arg = (f, d) => {
+  const i = process.argv.indexOf(f);
+  return i > -1 ? process.argv[i + 1] : d;
+};
 const OUT = arg("--out", "c:/Anish/arul-import/cms-logs").replace(/\\/g, "/");
 const REPORT = process.argv.includes("--report");
 
@@ -24,24 +27,36 @@ const TARGETS = [
   { name: "arul-api", cwd: "c:/Anish/Arul/workers" },
 ];
 
-// ── report mode ───────────────────────────────────────────────────────────────
 if (REPORT) {
-  if (!existsSync(OUT)) { console.error(`no logs at ${OUT} — run the watcher first`); process.exit(2); }
+  if (!existsSync(OUT)) {
+    console.error(`no logs at ${OUT} — run the watcher first`);
+    process.exit(2);
+  }
   let total = 0;
   const bad = [];
   for (const f of readdirSync(OUT).filter((f) => f.endsWith(".jsonl"))) {
     for (const line of readFileSync(join(OUT, f), "utf8").split("\n")) {
       if (!line.trim()) continue;
-      let e; try { e = JSON.parse(line); } catch { continue; }
+      let e;
+      try {
+        e = JSON.parse(line);
+      } catch {
+        continue;
+      }
       total++;
       const status = e.event?.response?.status ?? null;
       const logs = (e.logs || []).filter((l) => l.level === "error" || l.level === "warn");
-      const isBad = (e.outcome && e.outcome !== "ok") || (e.exceptions || []).length > 0 ||
-        logs.length > 0 || (status !== null && status >= 400);
+      const isBad =
+        (e.outcome && e.outcome !== "ok") ||
+        (e.exceptions || []).length > 0 ||
+        logs.length > 0 ||
+        (status !== null && status >= 400);
       if (isBad) bad.push({ f, e, status, logs });
     }
   }
-  console.log(`${total} request(s) captured across ${TARGETS.length} worker(s); ${bad.length} with a problem\n`);
+  console.log(
+    `${total} request(s) captured across ${TARGETS.length} worker(s); ${bad.length} with a problem\n`,
+  );
   for (const { f, e, status, logs } of bad) {
     const url = e.event?.request?.url || e.event?.cron || "(non-http event)";
     const method = e.event?.request?.method || "";
@@ -56,7 +71,6 @@ if (REPORT) {
   process.exit(0);
 }
 
-// ── watch mode ────────────────────────────────────────────────────────────────
 mkdirSync(OUT, { recursive: true });
 console.log(`tailing ${TARGETS.map((t) => t.name).join(" + ")} → ${OUT}`);
 console.log(`Ctrl-C to stop, then: node cms-watch.mjs --report\n`);
@@ -67,7 +81,11 @@ function makeSplitter(onEvent) {
   let buf = "";
   return (chunk) => {
     buf += chunk;
-    let depth = 0, inStr = false, esc = false, start = -1, cut = 0;
+    let depth = 0,
+      inStr = false,
+      esc = false,
+      start = -1,
+      cut = 0;
     for (let i = 0; i < buf.length; i++) {
       const ch = buf[i];
       if (inStr) {
@@ -76,15 +94,22 @@ function makeSplitter(onEvent) {
         else if (ch === '"') inStr = false;
         continue;
       }
-      if (ch === '"') { inStr = true; continue; }
-      else if (ch === "{") { if (depth === 0) start = i; depth++; }
-      else if (ch === "}") {
+      if (ch === '"') {
+        inStr = true;
+      } else if (ch === "{") {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (ch === "}") {
         depth--;
-        if (depth === 0 && start >= 0) { onEvent(buf.slice(start, i + 1)); cut = i + 1; start = -1; }
+        if (depth === 0 && start >= 0) {
+          onEvent(buf.slice(start, i + 1));
+          cut = i + 1;
+          start = -1;
+        }
       }
     }
     buf = buf.slice(cut);
-    if (buf.length > (8 << 20)) buf = ""; // never grow without bound on malformed input
+    if (buf.length > 8 << 20) buf = ""; // never grow without bound on malformed input
   };
 }
 
@@ -102,27 +127,50 @@ function spawnTail(t) {
   const p = spawn(`npx wrangler tail ${t.name} --format json`, { cwd: t.cwd, shell: true });
   children.push(p);
   const split = makeSplitter((raw) => {
-    let e; try { e = JSON.parse(raw); } catch { return; }
+    let e;
+    try {
+      e = JSON.parse(raw);
+    } catch {
+      return;
+    }
     log.write(JSON.stringify(e) + "\n");
     const status = e.event?.response?.status ?? "";
     const errLogs = (e.logs || []).filter((l) => l.level === "error" || l.level === "warn");
-    const flag = (e.outcome && e.outcome !== "ok") || (e.exceptions || []).length ||
-      errLogs.length || (status && status >= 400);
+    const flag =
+      (e.outcome && e.outcome !== "ok") ||
+      (e.exceptions || []).length ||
+      errLogs.length ||
+      (status && status >= 400);
     const url = (e.event?.request?.url || "").replace(/^https?:\/\/[^/]+/, "") || e.event?.cron || "";
     console.log(`${flag ? "!!" : "  "} [${t.name}] ${status} ${e.event?.request?.method || ""} ${url}`);
     for (const x of e.exceptions || []) console.log(`      EXCEPTION ${x.name}: ${x.message}`);
     for (const l of errLogs) console.log(`      ${l.level.toUpperCase()} ${(l.message || []).join(" ")}`);
   });
   p.stdout.on("data", (b) => split(String(b)));
-  p.stderr.on("data", (b) => { const s = String(b).trim(); if (s) console.log(`[${t.name}/wrangler] ${s}`); });
+  p.stderr.on("data", (b) => {
+    const s = String(b).trim();
+    if (s) console.log(`[${t.name}/wrangler] ${s}`);
+  });
   p.on("exit", (code) => {
     if (stopping) return;
     console.log(`!! [${t.name}] tail EXITED (${code}) — session expired, respawning in 3s`);
-    setTimeout(() => { if (!stopping) spawnTail(t); }, 3000);
+    setTimeout(() => {
+      if (!stopping) spawnTail(t);
+    }, 3000);
   });
 }
 for (const t of TARGETS) spawnTail(t);
 
-const stop = () => { stopping = true; for (const p of children) { try { p.kill(); } catch { /* already gone */ } } process.exit(0); };
+const stop = () => {
+  stopping = true;
+  for (const p of children) {
+    try {
+      p.kill();
+    } catch {
+      /* already gone */
+    }
+  }
+  process.exit(0);
+};
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);

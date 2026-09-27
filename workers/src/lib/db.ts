@@ -1,11 +1,8 @@
 /**
- * Neon Postgres client via Cloudflare Hyperdrive.
  * https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/postgres-js/
- *
  * Hyperdrive needs postgres.js >= 3.4.5 and the `nodejs_compat` flag -> both are pinned in wrangler.toml
  * fetch_types:false -> skips a startup round-trip the Workers runtime cannot serve -> required, not a tuning knob
  * max:5 bounds the subrequest pool per invocation; prepare:true is safe because Hyperdrive supports named statements
- * Every caller must `ctx.waitUntil(sql.end())` -> an unreleased connection outlives the request
  */
 
 import postgres from "postgres";
@@ -13,10 +10,6 @@ import type { Env } from "../env.js";
 
 /**
  * Connect timeout, seconds. LOAD-BEARING for the crons — postgres.js defaults it to 30.
- *
- * Browse never touches the DB -> the Worker idles for hours -> Neon suspends and the pooled socket goes stale
- * The next cron's first query lands on a severed socket -> a 30 s reconnect wait outlives the invocation
- * That killed the catalog rebuild AND the autopay scan in one go -> 5 s, comfortably above a healthy connect
  * It does NOT cover a pooled socket that is already dead: there is no connect to time out
  * That path fails as `write CONNECTION_CLOSED` after ~15 s -> only each cron's retry-once recovers it
  */
@@ -39,18 +32,6 @@ export function toDate(value: unknown): Date | null {
 
 /**
  * Render a string[] as a Postgres array LITERAL, for `= ANY(${toPgTextArray(xs)}::text[])`.
- *
- * `fetch_types:false` is the reason this exists. postgres.js resolves an array's type OID from the
- * server's catalog at startup; skipping that fetch means it never registers an array serializer, so a
- * bound JS array is stringified as `'' + xs` — the elements comma-joined, no braces. Postgres then
- * rejects it: `malformed array literal: "a,b"`. It is not a driver bug and no amount of casting the
- * placeholder fixes it; the VALUE has to arrive already shaped like an array literal.
- *
- * This cost a production campaign. Every delivery sat 'pending' while the campaign held 'sending'
- * forever, because the error was thrown inside a waitUntil and surfaced nowhere the CMS could show
- * it. "Send to my phone" kept working the whole time — it sends per device and binds no array — so
- * the failure was invisible until the first scheduled send.
- *
  * ALWAYS pair it with an explicit cast: the literal is sent as an untyped string, and `ANY()` needs
  * to know what it is looking at. An empty list renders `{}`, which matches nothing rather than
  * throwing — the callers rely on that.

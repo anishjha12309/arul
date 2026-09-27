@@ -1,131 +1,105 @@
 # Launch surface — what the user sees before the feed
 
-Read before touching `values/styles.xml`, `MainActivity.onCreate`, `VideoBackground`, or the
-`flutter_native_splash` config. Two independent surfaces cover a cold start, and each one was a
-separate bare-screen bug. Measuring any of it: [perf-measurement.md](perf-measurement.md).
+Read before touching `values/styles.xml`, `MainActivity.onCreate`, `VideoBackground`, the splash, or the
+`flutter_native_splash` config. Two independent surfaces cover a cold start, and each was a separate
+bare-screen bug. Measuring any of it: [perf-measurement.md](perf-measurement.md).
 
 ## 1. The OS launch theme — `windowSplashScreen*` is Android 12+ ONLY
 
-`android:windowSplashScreenBackground` and `IconBackgroundColor` are platform attrs that **do nothing
-below API 31**. There the OS falls back to `android:windowBackground`, which was a `layer-list`
-holding one flat colour — so Android 12+ got the icon on the crimson field and **older Android got a
-bare ink rectangle for the entire cold start**, on a large minority of installs. Android's own
-migration guide names this outcome: migrating "using the `SplashScreen` API directly" leaves
-"Android 11 and earlier … exactly the same as before".
-
-The fix is `androidx.core:core-splashscreen`, which backports the Android 12 splash well below the
-app's own `minSdk`:
+`android:windowSplashScreenBackground` and friends **do nothing below API 31**: the OS falls back to
+`android:windowBackground`, so older Android showed a bare flat rectangle for the entire cold start.
+`androidx.core:core-splashscreen` backports the Android 12 splash below `minSdk`:
 
 - `LaunchTheme` parents **`Theme.SplashScreen.IconBackground`** and sets `postSplashScreenTheme`
-  (required by the library) plus `windowSplashScreenAnimatedIcon`.
-- `installSplashScreen()` runs in `MainActivity.onCreate` **before `super.onCreate()`** — the library
-  installs into the window before content exists; after `super` it is a no-op.
+  (required) plus `windowSplashScreenAnimatedIcon`.
+- `installSplashScreen()` runs in `MainActivity.onCreate` **before `super.onCreate()`** — after it, it
+  is a no-op.
 - The icon is `@mipmap/ic_launcher_foreground`, **not** `@mipmap/ic_launcher`: an
-  `AdaptiveIconDrawable` only resolves from API 26 and this app's `minSdk` is below that.
+  `AdaptiveIconDrawable` resolves only from API 26, below `minSdk`.
 - **Keep `values/` and `values-night/` identical** — the launch surface is dark in both themes.
 
-**`values/styles.xml` is HAND-OWNED.** `flutter_native_splash:create` rewrites it and emits none of
-the above, so a regen silently drops the backport and returns older Android to the flat rectangle.
-The warning lives beside the generator config in `pubspec.yaml`; re-apply the `LaunchTheme` block in
-BOTH files after any regen.
+**`values/styles.xml` is HAND-OWNED.** `flutter_native_splash:create` rewrites it and emits none of the
+above, silently returning older Android to the flat rectangle. Re-apply the `LaunchTheme` block in BOTH
+files after any regen (the warning sits beside the generator config in `pubspec.yaml`).
 
-## 2. The Flutter shutter — `VideoBackground` must hold artwork, not a colour
+## 2. The Flutter shutter — `VideoBackground` holds artwork, not a colour
 
-Once the OS splash hands off, the splash and sign-in screens are up but the Media3 decoder has not
-produced a frame. `VideoBackground` painted a flat colour until it did — a second brown gap *after*
-the launch theme was fixed.
-
-Media3's own UI guidance is to hold a placeholder until the first frame renders, then reveal;
-`PlayerView` does this with artwork behind its shutter. This widget drives a raw `Texture`, so it
-supplies the artwork itself: `assets/images/splash_poster.webp`, **frame 0 of `splash.mp4`**, 512×912
-and about 15 KB. Because it is that exact frame the handoff needs no crossfade — a fade would invent
-a transition the user would otherwise never see. It stays MOUNTED under the texture (the feed's live
-cards already work this way) so a decoder that drops can never re-expose bare colour.
-
-**Both fixes are required and neither is sufficient alone** — measured on a low-end device, the
-brown-screen duration fell in two steps, to zero only once both were in.
+Once the OS splash hands off, the decoder has not produced a frame yet, and a flat colour there was a
+second gap. `VideoBackground` holds `assets/images/splash_poster.webp` — **frame 0 of `splash.mp4`** —
+under the raw `Texture`, the way Media3's `PlayerView` holds artwork behind its shutter. Because it is
+that exact frame, the handoff needs no crossfade. It stays MOUNTED under the texture so a dropped decoder
+never re-exposes bare colour. **Both fixes are required; neither is sufficient alone.**
 
 ## The splash's own decisions
 
-- **Splash media warm is AUTH-GATED.** A signed-out session warms ONE poster and ZERO live MP4
-  bytes; the full warm fighting the sign-in's own network calls (Google token mint, Firebase id,
-  `POST /auth/login`) for one pipe WAS the slow first login, and Google's own credential step is
-  slowest on entry-level phones. Nothing is lost: the feed's `VideoPreloadController` re-runs the
-  full `prefetchAround` on mount. It runs INLINE, because with the brand beat gone its old post-frame
-  `!mounted` bail warmed nothing.
-- **The signed-out first second stays as it is: catalog drain, one poster, FCM registration and
-  Meta's fetch all start at launch** (~200 KB). Holding them behind the credential was built and
-  measured: Google's token step and `/geo` moved within noise on Wi-Fi and LTE, push registration
-  landed 9 s later and the feed's first art ~1 s later on LTE; the only gain was on a 7 KB/s link,
-  where cellular-vs-Wi-Fi sign-in differs by ~2 pp. Speed at login won. Never re-add a gate.
-- **`GET /geo`'s timeout is 12 s, not 5.** There is no second ask, and a miss costs the whole first
-  launch its language; the budget is for a slow LINK, never for a slow Worker.
-- **Low-memory and old phones get the poster ONLY — no auth video player.** `VideoBackground` asks
-  `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever created for the
-  splash or the sign-in screen. The native rule is three STABLE facts: the Android Go flag, under
-  4.5 GiB total RAM (a 4 GB phone reports ~3.6, a 6 GB ~5.5, so every 4 GB phone qualifies and no
-  6 GB phone does), and Android 12 and older. **Never add the OS's `lowMemory` pressure flag**: it is
-  set at random on the cold start right after a Play install, so capable Android 13+ phones got the
-  poster by chance, first-sheet dismissals rose on exactly those tiers both times it shipped, and the
-  phones it touched cannot be identified in analytics. Everything under the RAM line or on Android
-  12 and older is already on the poster, so the flag can only take video away from phones that
-  need it to wait through Google's sheet. The probe fails OPEN to the video: a missing channel or
-  a platform error must never leave a bare background. To test the poster path on a capable phone:
-  sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the answer is cached
-  per process), then `settings delete global arul_force_low_ram`. The override is gated on
-  `!isPlayInstall()` like the QA tools — armed on a Play build it does nothing, verified on device.
-- **The splash routes the moment the auth seed settles. There is NO fixed beat, and no timer floor
-  may be re-added** (owner's call — the old fixed delay measured as pure dead time and was most of
-  the first-content gap).
-- **`GET /geo` fires beside the API warm-up and only the `exp_regional` arm waits for it** — every
-  other launch routes on the auth seed alone. The arm waits at most `regionCap` (1,200 ms from the
-  ask, fresh-install first launch and signed-out only) AFTER `autoSignIn` fired, so Google's sheet is
-  never held. Measure with the `[boot]` marks `geo: answered in` / `splash: region wait ended`; if
-  the LTE p90 passes the cap, LOWER the cap, never raise it.
-- **The regional wall paints its final language and poster on its FIRST frame — never flip.**
-  While waiting the splash shows dark ground + wordmark only (no tagline: its language is not known
-  yet). At the cap `closeLiveWindow()` makes a late answer store-only (next launch), and
-  `LaunchArtNotifier.settle()` fixes the poster once. The control arm stores the region, never its
-  language (`Experiments.geoLanguageApplies`).
-- **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face.**
-  `RegionalPoster.zoom` about `pivot` moves it; the framing is the owner's, judged by eye. The render
-  matrix (`regional_wall_matrix_test.dart`) gates type and clip-on-poster, and reports faces.
-- **The poster's own live clip is a bonus, never the base.** It downloads (catalog row by
-  `wallpaperId`, feed cache, never a bundled key) only after the wall painted AND Google's surface
-  showed or settled — never signed in, on Data Saver or a poster-rule phone. It swaps onto the ONE
-  shared auth player (never a second decoder) paused, fades in on frame 0 = the poster's pixels,
-  then loops; a launch clip must stay one deity for its whole loop. Any failure keeps the poster.
-- **`autoSignIn` must stay BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, which is
-  what makes the sign-in screen's first-frame auto-launch JOIN that attempt instead of opening a
-  second picker.
-- **The stored-session seed SKIPS the secure-storage read on a TRUE FIRST LAUNCH.** A fresh install
-  cannot hold tokens, and that first read pays keystore master-key setup that was the last thing
-  gating the account picker. It is fail-safe by construction: a process that never resolved the
-  persisted first-launch marker reads false and takes the keystore wait, so the picker can never fire
-  over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before Firebase** —
-  serialising them re-adds real time, and the post-login token write wants the keystore ready.
-- **A Keystore refusal moves the session to app-private storage.** Some Android 8.1/9 keymasters
-  answer every key generation or load with `KeyStoreException: Memory allocation failed` (error -41),
-  RSA and AES alike, on every retry: Google and `POST /auth/login` succeeded, then the token write
-  threw, so those phones never held a session. No `AndroidOptions` cipher helps, and changing it
-  migrates every healthy install. `ApiClient` switches to SharedPreferences (out of backup and device
-  transfer) on the first refusal and stays there for the install (`arul_keystore_refused`), so one
-  session never splits across two stores; the non-fatal `keystore refused` counts the phones.
-- **Any other secure-storage read that THROWS settles the seed as signed out.** Escaping the seed
-  failed `initialized`, the splash's await threw before its `context.go`, and the app sat on the
-  splash on every launch. Never let the seed future complete with an error — nothing catches it.
+- **The splash routes the moment the auth seed settles — NO fixed beat, and no timer floor may be
+  re-added** (owner: the old delay measured as pure dead time).
+- **`autoSignIn` stays BEFORE the `context.go`**: it sets `_autoLaunched` synchronously, so the sign-in
+  screen's first-frame auto-launch JOINS that attempt instead of opening a second picker.
+- **Splash media warm is AUTH-GATED.** Signed out, it warms ONE poster and ZERO live MP4 bytes — the full
+  warm fighting Google's token mint, the Firebase id and `POST /auth/login` for one pipe WAS the slow
+  first login. The feed's `VideoPreloadController` re-runs `prefetchAround` on mount.
+- **The signed-out first second stays as it is: catalog drain, one poster, FCM registration and Meta's
+  fetch all start at launch.** Holding them behind the credential was built and measured: Google's step
+  and `/geo` moved within noise, push registration landed 9 s later and the feed's art later; the only
+  gain was on a pathologically slow link. Never re-add a gate.
+- **`GET /geo`'s timeout is 12 s, not 5** — there is no second ask in that launch, and a miss costs the
+  first launch its language. The budget is for a slow LINK, never a slow Worker.
+- **Only the `exp_regional` arm waits for `/geo`**, at most `regionCap` (1,200 ms from the ask, fresh
+  install, first launch, signed out) and only AFTER `autoSignIn` fired, so Google's sheet is never held.
+  Measure with the `[boot]` marks `geo: answered in` / `splash: region wait ended`; if the LTE p90
+  passes the cap, LOWER the cap, never raise it.
+- **The regional wall paints its final language and poster on its FIRST frame — never flip.** While
+  waiting the splash shows ground + wordmark only (the tagline's language is unknown). At the cap
+  `closeLiveWindow()` makes a late answer store-only (next launch), and `LaunchArtNotifier.settle()`
+  fixes the poster once.
+- **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face** —
+  `RegionalPoster.zoom` about `pivot` does; the framing is the owner's, judged by eye.
+  `regional_wall_matrix_test.dart` gates type and clip-on-poster.
+- **The poster's own live clip is a bonus, never the base.** It downloads (catalog row by `wallpaperId`,
+  feed cache, never a bundled key) only after the wall painted AND Google's surface showed or settled —
+  never signed in, on Data Saver or a poster-rule phone. It swaps onto the ONE shared auth player (never
+  a second decoder) paused, fades in on frame 0 = the poster's pixels, then loops; a launch clip stays
+  one deity for its whole loop. Any failure keeps the poster.
+
+## The poster rule — who gets no auth video
+
+`VideoBackground` asks `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever
+created for the splash or the wall on: the Android Go flag, under 4.5 GiB total RAM (every 4 GB phone
+reports ~3.6, no 6 GB phone qualifies), or Android 12L (API 32) and older. **Never add the OS's `lowMemory`
+pressure flag**: it is set at random on the cold start right after a Play install, so capable phones got
+the poster by chance, first-sheet dismissals rose on exactly those tiers both times it shipped, and the
+phones it touched cannot be identified in analytics. The probe fails OPEN to the video. Test the poster
+path on a capable phone: sideload, `adb shell settings put global arul_force_low_ram 1`, force-stop (the
+answer is cached per process), then `settings delete global arul_force_low_ram`. The override is gated
+on `!isPlayInstall()`.
+
+## The session seed
+
+- **A TRUE FIRST LAUNCH skips the secure-storage read** — a fresh install cannot hold tokens, and that
+  read pays keystore master-key setup that was the last thing gating the picker. Fail-safe: a process
+  that never resolved the first-launch marker reads false and takes the keystore wait, so the picker
+  can never fire over a signed-in user. Keep `warmSecureStorage` at the TOP of `main()`, **before
+  Firebase** — serialising them re-adds real time.
+- **A Keystore refusal moves the session to app-private storage.** Some Android 8.1/9 keymasters answer
+  every key generation or load with `KeyStoreException: Memory allocation failed` (-41), RSA and AES,
+  on every retry: sign-in succeeded, then the token write threw. No `AndroidOptions` cipher helps, and
+  changing it migrates every healthy install. `ApiClient` switches to SharedPreferences (out of backup
+  and transfer) on the first refusal and stays there for the install (`arul_keystore_refused`), so one
+  session never splits across two stores; the non-fatal `keystore refused` counts them.
+- **Any other secure-storage read that THROWS settles the seed as signed out.** An error escaping the
+  seed failed `initialized`, the splash's await threw before its `context.go`, and the app sat on the
+  splash forever. Never let the seed future complete with an error — nothing catches it.
 
 ## Dead ends — do not re-attempt
 
-- **Un-awaiting `GoogleSignIn.instance.initialize()` buys nothing.** With `google-services.json` the
-  native side is already up via Firebase's ContentProvider before Dart runs. The call is started in
-  `main()` and awaited via `GoogleSignInInit.ready` in the sign-in path — correct per the plugin's
-  own example, and worth no measurable time. Do not "optimise" it again.
-- **Deferring `Firebase.initializeApp()` off the startup path.** It is a small slice of a cold start,
-  and Firebase's docs warn that Analytics "collects events very early in the app start up flow, in
-  some occasions before the primary Firebase app instance has been configured", with ad-related data
-  at risk. `trial_started` is the only Google Ads conversion source — the trade is bad.
-- **Shrinking the live-wallpaper masters to cut decode cost.** 1024×1824 is already *below* a modern
-  screen and is capped by the hardware-decoder limit ([media-conventions.md](media-conventions.md)),
-  so a smaller master would upscale on every 1080p phone. Per-tier variants are the only correct
-  shape, and they double the encode and storage pipeline for decode time, not bandwidth.
+- **Un-awaiting `GoogleSignIn.instance.initialize()` buys nothing** — with `google-services.json` the
+  native side is already up via Firebase's ContentProvider. It starts in `main()` and is awaited via
+  `GoogleSignInInit.ready`, per the plugin's own example.
+- **Deferring `Firebase.initializeApp()`** — a small slice of a cold start, and Firebase warns Analytics
+  collects events before the app instance is configured, with ad-related data at risk. `trial_started`
+  is the only Google Ads conversion source.
+- **Shrinking the live-wallpaper masters to cut decode cost** — 1024×1824 is already below a modern
+  screen and capped by the hardware decoder ([media-conventions.md](media-conventions.md)), so a smaller
+  master upscales on every 1080p phone. Per-tier variants are the only correct shape, and they double
+  the encode and storage pipeline.

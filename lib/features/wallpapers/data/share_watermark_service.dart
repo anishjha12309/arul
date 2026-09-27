@@ -17,13 +17,8 @@ class ShareWatermarkException implements Exception {
 }
 
 /// The device cannot burn a watermark into VIDEO at all, below API 31.
-///
 /// A DESIGNED outcome, not a failure -> a distinct type; the caller shares the clean original.
 /// On a device that CAN watermark, a failure is a defect and fails the share instead.
-/// Media3's `ExoPlayerAssetLoader.Factory` references an API-31 type with no `SDK_INT` guard.
-/// So `Transformer.start()` throws `NoClassDefFoundError` on Android 11 and kills the process.
-/// androidx/media#2535, open; 1.7.1 is the last clean release.
-/// Statics are unaffected — that path never touches Media3.
 class ShareWatermarkUnsupportedException extends ShareWatermarkException {
   ShareWatermarkUnsupportedException(this.sdkInt)
     : super('video watermarking needs API 31, device is API $sdkInt');

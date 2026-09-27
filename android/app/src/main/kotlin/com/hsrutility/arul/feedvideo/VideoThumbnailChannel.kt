@@ -58,7 +58,6 @@ class VideoThumbnailChannel(private val context: Context) :
                         withContext(Dispatchers.Main) { result.success(path) }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            // Not fatal -> the caller falls back to a skeleton tile.
                             result.error("THUMB_FAILED", e.message, null)
                         }
                     }
@@ -69,7 +68,6 @@ class VideoThumbnailChannel(private val context: Context) :
         }
     }
 
-    /** Returns the on-disk path of the cached JPEG, extracting it first if absent. */
     private fun extract(url: String): String {
         val file = File(cacheDir, "${sha1(url)}.jpg")
         if (file.exists() && file.length() > 0) return file.absolutePath

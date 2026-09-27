@@ -16,23 +16,13 @@ import 'push_route.dart';
 import 'shell/app_shell.dart';
 import 'theme/theme.dart';
 
-/// Routes.
-///
-/// Splash decides imperatively: loading stays -> unauthed goes /sign-in -> authed goes /browse.
-/// Wallpapers · Ringtones · Settings are always-alive dock BRANCHES -> Settings is never a push.
-/// Their sub-screens (premium, refer, upload) stay top-level pushes OVER the shell.
 /// Every push goes through [ArulPushPage] -> read its doc before writing a pageBuilder here: a
 /// plain `CustomTransitionPage` opts the route out of predictive back.
 final router = GoRouter(
   initialLocation: '/',
   // Incoming links — the installed half of every ad/share URL (docs/deep-links.md).
-  // Android hands Flutter the intent's FULL URI -> scheme, host and query arrive exactly as sent.
-  // Shapes: App Link `https://arul.hsrutility.com/{w,r}/<id>?lang=` and `fb<APP_ID>://open?...`.
   // Meta's form has no path -> normalises to `/` -> redirect top-level, or it runs on every nav.
-  // Tabs are reachable only via the splash's auth decision -> park the target, return `/`, not /browse.
-  // An ad link with a typo must land on the app, not an error page -> every foreign scheme ends at `/`.
   // The PhonePe `arul://` return parses to nothing and resolves to `/` -> keep it that way.
-  // Internal navigations (`/browse`, `/premium?…`) carry no scheme -> stay a cheap null for them.
   redirect: (_, state) {
     if (state.uri.scheme.isEmpty) return null;
     final request = parseDeepLinkUri(state.uri, source: DeepLinkSource.appLink);
@@ -91,7 +81,6 @@ final router = GoRouter(
       path: '/upload',
       pageBuilder: (_, state) => _push(state, const UploadScreen()),
     ),
-    // Privacy / Terms, read in-app.
     // Pushed OVER the shell -> the Settings branch's own dock does not paint across it.
     // Push it with `PolicyDoc.route`, never a literal path.
     GoRoute(
@@ -103,8 +92,6 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/premium',
-      // THE premium route — paywall AND plan home in one screen, rendering the real subscription state.
-      // `source` is the blocked verb that sent the user here: apply/share/ringtone_set/feed/settings.
       // `ensurePremium` fires `${source}_blocked_premium` at the GATE before pushing -> never track here.
       // Sheets and dialogs inherit theme from the SCREEN's context, above anything its build wraps.
       // A Theme inside the screen left the UPI picker sheet dark -> pin LIGHT at the ROUTE level.
@@ -121,8 +108,6 @@ final router = GoRouter(
   ],
 );
 
-/// The page every pushed route builds.
-///
 /// go_router's own default page carries key, name, arguments and a restoration id -> a page built
 /// here owes the same four, or a route silently loses its restoration scope.
 ArulPushPage<void> _push(GoRouterState state, Widget child) =>

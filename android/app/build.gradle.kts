@@ -37,8 +37,6 @@ android {
     }
 
     compileOptions {
-        // flutter_local_notifications' zonedSchedule uses java.time -> old API levels need the desugaring backport.
-        // Turn it off and the build fails outright at checkDebugAarMetadata -> not a runtime-only concern.
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -47,10 +45,9 @@ android {
     defaultConfig {
         applicationId = "com.hsrutility.arul"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion   // 36 -> edge-to-edge is ENFORCED
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Launcher and themed icons are vectors -> old APIs cannot render them -> rasterise at build time.
         vectorDrawables.useSupportLibrary = true
 
         // These feed the com.facebook.sdk.* manifest meta-data -> unset or placeholder resolves to "" -> the SDK stays inert.
@@ -75,8 +72,6 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
-            // R8 shrinks only the Java/Kotlin layer -> libflutter/libapp dominate the APK -> expect a modest win, not a big one.
-            // shrinkResources requires minify -> the two flags move together.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -87,7 +82,6 @@ android {
     }
 }
 
-// ── Meta (Facebook) SDK config from dart-defines ──────────────────────────────
 // Flutter hands `--dart-define` values to Gradle as `dart-defines` -> a comma-separated list of base64 `KEY=VALUE` pairs.
 // Reading them here keeps Meta config out of strings.xml -> env/*.json stays the one source for both Dart and native.
 fun dartDefines(): Map<String, String> {
@@ -131,21 +125,15 @@ dependencies {
     // Java 8+ API desugaring -> flutter_local_notifications needs it for zonedSchedule -> version kept in step with Pakiza's.
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
-    // BACKPORTS the Android 12 splash (icon on a field) to API 23+ -> the platform attrs alone apply only on Android 12+.
-    // Without it API<=30 falls back to `windowBackground` -> a flat iconless colour for the whole cold start.
-    // Android's migration guide says the direct SplashScreen API leaves Android 11 and earlier unchanged -> use this library.
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    // Media3 is the app's ONLY video runtime -> feedvideo/FeedVideoPlugin and wallpaper/VideoRenderer both build on it.
     // Every media3 artifact below must share one version -> mixed versions fail at runtime, not at build time.
     implementation("androidx.media3:media3-exoplayer:1.10.1")
     implementation("androidx.media3:media3-common:1.10.1")
 
-    // Share-time watermarking -> Transformer re-encodes the live clip with a full-frame BitmapOverlay burned in.
     implementation("androidx.media3:media3-transformer:1.10.1")
     implementation("androidx.media3:media3-effect:1.10.1")
 
-    // Coroutines carry the apply channel's file writes off the main thread.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // MainActivity.fetchMetaDeferredLink needs AppLinkData/FacebookSdk -> a plugin's `implementation` deps are off our classpath.
@@ -170,7 +158,6 @@ dependencies {
     // Same floor rule: the transitive copy is off our classpath, and 1.9.0 is what Gradle resolves today.
     implementation("androidx.activity:activity:1.9.0")
 
-    // update/AppUpdateChannel -> Play in-app updates. 2.1.0 is the floor Play requires at targetSdk 34+.
     implementation("com.google.android.play:app-update:2.1.0")
 }
 

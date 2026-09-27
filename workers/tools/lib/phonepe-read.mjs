@@ -1,18 +1,9 @@
 /**
  * READ-ONLY PhonePe client for the ops tools. GET status only.
- *
  * There is deliberately no notify, no redeem and no cancel in this file, and none may be added: the
  * tools that import it are run to ANSWER a question about production, and a helper that can move
  * money is one typo away from charging every subscriber. Moving money is `/internal/run-redemptions`,
  * scoped to one merchantSubscriptionId, under OPS_SECRET — see .claude/skills/verify-payments.
- *
- * CREDENTIALS NEVER GO ON THE COMMAND LINE. A shell records argv in history and it lands in any
- * transcript, so `loadCreds` takes either real process env vars or the path to an env file. Prefer
- * the file, delete it afterwards.
- *
- * `PHONEPE_ENV` is an EXACT string compare in the Worker, and a trailing newline from a shell pipe
- * once routed production credentials to the sandbox host — whose reply is a 401 indistinguishable
- * from a bad credential. Everything here is trimmed for the same reason (docs/phonepe.md).
  */
 import fs from "node:fs";
 
@@ -66,10 +57,6 @@ export function loadCreds({ envFile } = {}) {
   return creds;
 }
 
-/**
- * OAuth is `/v1/oauth/token` and that is CORRECT on the v2 flow — "v2" names the product and the
- * credential set, not a token endpoint. Do not "upgrade" it (docs/phonepe.md).
- */
 export async function getToken(creds) {
   const res = await fetch(creds.oauth, {
     method: "POST",
@@ -83,7 +70,6 @@ export async function getToken(creds) {
   });
   const body = await res.text();
   if (!res.ok) {
-    // A 401 here is the wrong host or a whitespace-polluted credential, not necessarily a bad key.
     throw new Error(`OAuth ${res.status}: ${body.slice(0, 300)}`);
   }
   return JSON.parse(body).access_token;

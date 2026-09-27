@@ -3,26 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The live-wallpaper marker: a play triangle held in a small glass disc.
-///
-/// NEVER text (owner's call) -> the gold `LIVE` pill it replaced read as a warning on half the
-/// catalog and shipped untranslated English in a six-language app; a glyph has nothing to localize.
-///
-/// **The Share circle at half scale, with ONE deliberate difference.** Same
-/// [ArulTokens.overMediaGlassBorder] hairline, but SMOKED [ArulTokens.overMediaInkFill] where Share
-/// is frosted [ArulTokens.overMediaGlassFill] -> not drift; the two sit in different light.
-/// Share lives inside the bottom scrim, so a dark ground is guaranteed -> it can be the bright half.
-/// This mark sits on raw artwork and a third of the catalog is white marble -> ivory-on-white is
-/// invisible at any alpha -> the disc is the dark half and the ivory is kept for glyph and rim.
-///
-/// **No shadow** (owner's call) -> the rail glyphs' two-layer halo read as a black smudge over the
-/// artwork on EVERY wallpaper -> contrast belongs INSIDE the disc; do not re-add one.
-///
-/// Static — no controller, no ticker, no repaint boundary -> it shares a card with a live `Texture`
-/// and the cheapest mark is one that never asks for a frame.
-///
-/// It marks live-ness PERMANENTLY, not loading -> an undecoded live card is pixel-identical to a
-/// static one (`ViewerMedia` keeps a poster under the texture), so this is the only thing telling
-/// them apart; it stays once the clip plays — "will this move?" holds on a paused neighbour too.
 class LiveMark extends StatelessWidget {
   const LiveMark({super.key});
 

@@ -1,32 +1,13 @@
 // Deterministic ARB linter — the half of "is this translation correct?" that
 // needs no judgement.
-//
 //     dart run tools/l10n/lint_arb.dart              # table, exit 1 on ERROR
 //     dart run tools/l10n/lint_arb.dart --json       # machine-readable
-//
-// It exists because the language review is the expensive, fallible half: a
-// reviewer reading 800 strings will not notice that `{price}` became `{prize}`
-// in Kannada, or that one Malayalam value is Tamil text pasted into the wrong
-// file. Those are mechanical, so they are checked mechanically and never
-// re-litigated by eye.
-//
-// **The rules are a pure function of the catalog** ([lintCatalog]) so
-// `test/l10n/arb_lint_test.dart` can both run them on the real ARBs and plant a
-// defect per rule and watch it fire. A linter nobody has seen fail is a linter
-// nobody should trust — this one reported zero on its first green run, which is
-// exactly when that matters.
-//
 // Severities: ERROR is a defect by construction and fails the run. WARN needs a
 // human look and does not — failing on a class that has legitimate instances
 // only teaches people to ignore the tool.
-//
-// The twin of this file lives in the Pakiza repo (11 locales, its own brands).
-// Fix a rule in both.
 
 import 'dart:convert';
 import 'dart:io';
-
-// ─── Configuration ────────────────────────────────────────────────────────────
 
 class LintConfig {
   const LintConfig({
@@ -68,10 +49,6 @@ class LintConfig {
   /// Tamil speaker scanning the list looks for. So for these keys "wrong
   /// script", "no native script" and "identical to English" (`langNameEn` is
   /// English on purpose) are all the correct state, not defects.
-  ///
-  /// This is the one exemption in the linter, and it is narrow by design: it
-  /// keyed off 63 real dandas and two endonyms producing 222 false ERRORs,
-  /// which is how a tool gets switched off.
   final List<String> scriptExemptPrefixes;
 }
 
@@ -90,8 +67,6 @@ const kArulLintConfig = LintConfig(
 );
 
 const kArbDir = 'lib/app/l10n';
-
-// ─── Script ranges ────────────────────────────────────────────────────────────
 
 const kScriptRanges = <String, List<int>>{
   'Devanagari': [0x0900, 0x097F],
@@ -138,8 +113,6 @@ bool isIndicDigit(int r) {
   }
   return false;
 }
-
-// ─── Findings ─────────────────────────────────────────────────────────────────
 
 class Issue {
   Issue(this.severity, this.rule, this.locale, this.key, this.detail);
@@ -191,8 +164,6 @@ final _placeholderPattern = RegExp(r'\{(\w+)\}');
 
 Set<String> placeholdersIn(String s) =>
     _placeholderPattern.allMatches(s).map((m) => m.group(1)!).toSet();
-
-// ─── The rules ────────────────────────────────────────────────────────────────
 
 /// Lints a whole catalog. Pure: no I/O, no globals.
 List<Issue> lintCatalog(
@@ -489,8 +460,6 @@ List<Issue> lintCatalog(
 
   return issues;
 }
-
-// ─── CLI ──────────────────────────────────────────────────────────────────────
 
 Map<String, String> readArb(String dir, String locale) {
   final f = File('$dir/app_$locale.arb');

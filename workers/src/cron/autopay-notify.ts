@@ -1,16 +1,3 @@
-/**
- * Autopay cron — PhonePe Standard Checkout v2 (OAuth / O-Bearer). Three passes per run.
- *
- * It owns the quarter-hour cron trigger ALONE -> it never shares an invocation's wall clock or call budget
- * Folding it back into the hourly catalog trigger blew the subrequest cap mid-scan -> never do that again
- * The Notify API must be called BEFORE the debit date; Execute (redeem) only AT or after it
- * Pass A NOTIFY: rows trialing/active, next_debit_at within the window, notified_at NULL -> verify ACTIVE, then notify
- * Pass B EXECUTE: rows notified >= 24h ago and due -> redeem -> COMPLETED extends a month, FAILED climbs the ladder
- * Pass D RECHECK, top-of-hour only: rows parked `paused` -> mandate ACTIVE again -> restore and rearm; terminal -> cancelled
- * PENDING is left alone in both -> PhonePe's STANDARD strategy is still retrying it -> a second redeem is a 4xx
- * sendUserNotification is a log-only stub BY DESIGN -> PhonePe's own rails deliver the payer-facing notice
- */
-
 import type { Env } from "../env.js";
 import { getDb, toDate } from "../lib/db.js";
 import {
@@ -30,41 +17,12 @@ import {
 } from "../lib/phonepe.js";
 
 /** States PhonePe will never debit from again -> the answer is authoritative -> stop retrying the row, do not re-ask. */
-const TERMINAL_MANDATE_STATES = new Set([
-  "REVOKED",
-  "CANCELLED",
-  "EXPIRED",
-  "FAILED",
-]);
+const TERMINAL_MANDATE_STATES = new Set(["REVOKED", "CANCELLED", "EXPIRED", "FAILED"]);
 
-/**
- * The dunning ladder — days after the ORIGINAL due date at which each retry of a FAILED debit runs.
- *
- * The anchor is current_period_end, which the failure path NEVER moves -> the schedule cannot drift
- * Owner's rule: pursue a failed renewal for 45 days, spaced -> 7 attempts, not 45
- * Each rung is a FRESH notify + order -> that is the compliant unit
- * PhonePe's 1-attempt+3-retries/48h cap applies INSIDE one redemption order, and nothing caps notify cycles
- * The RBI 24h pre-debit notice rides Pass A's re-notify -> a rung without a fresh notify would be non-compliant
- * Spaced, not daily -> every rung pings the user through PhonePe's rails, and most recoveries happen in week one
- * The minimum 2-day gap also guarantees a new order never overlaps the previous order's 48h retry window
- * retry_count is the ladder INDEX -> walking off the end expires the row
- */
 const RETRY_OFFSET_DAYS = [2, 5, 10, 20, 32, 45];
 
-/**
- * The same 45-day rule as a hard wall on the RECYCLE path — the ladder alone cannot enforce it.
- * A row stuck forever NOTIFIED never goes terminal -> the FAILED ladder never advances -> it minted orders unbounded
- */
 const DUNNING_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
 
-/**
- * Land a ladder retry at the next 21:30 UTC (03:00 IST) at or after anchor+offset.
- *
- * NPCI executes autopay only in non-peak windows -> 21:31-09:59 and 13:01-16:59 IST
- * 03:00 IST puts BOTH the notify (~24h earlier, also ~03:00 IST) and the execute inside that window
- * Otherwise the timing is whenever the debit happened to fail -> that lands retries in peak hours
- * Alignment only ever moves FORWARD, by at most 24h -> a retry can never fire earlier than its rung
- */
 function nonPeakRetryAt(anchor: Date, offsetDays: number): Date {
   const due = new Date(anchor.getTime() + offsetDays * 24 * 60 * 60 * 1000);
   const aligned = new Date(due);
@@ -74,11 +32,6 @@ function nonPeakRetryAt(anchor: Date, offsetDays: number): Date {
 }
 
 /**
- * How long past due a debit may sit un-settled before we stop trusting `redeem` and ask for the order's real state.
- *
- * `executeRedemption` answering PENDING is NOT authoritative -> it only says "not terminal yet"
- * Without reconciliation a redemption PhonePe later settles is never observed -> the row keeps notified_at forever
- * current_period_end then stays in the past, the payer has no entitlement, and every run re-executes and logs PENDING
  * Two hours is well past the minutes a UPI debit takes -> a row still open here is webhook-lost or genuinely stuck
  * Reading order status does not interfere with PhonePe's own STANDARD retries -> they continue independently
  */
@@ -88,8 +41,6 @@ const RECONCILE_STUCK_AFTER_MS = 2 * 60 * 60 * 1000;
 const NOTIFY_WINDOW_HOURS = 24;
 
 /**
- * Rows fetched per pass, per run.
- *
  * This is a SEQUENTIAL loop of PhonePe HTTP calls inside one invocation bounded by the cron duration limit
  * Unbounded, a backlog of a few hundred due rows kills the invocation partway -> survivors retry, but it never drains
  * And nothing surfaces that it is stuck -> so bound it AND log when the bound is hit
@@ -97,69 +48,26 @@ const NOTIFY_WINDOW_HOURS = 24;
 const MAX_ROWS_PER_PASS = 200;
 
 /**
- * Ceiling on outbound PhonePe calls per run, shared by both passes. Pass A costs 2/row, Pass B costs 1-3.
- *
- * A WALL-CLOCK guard, NOT a subrequest guard -> Workers Paid allows 10,000 subrequests per invocation
- * The binding limit is the 15-minute cron duration cap -> calls are sequential at ~0.7-1 s -> ~800 fit, 600 leaves headroom
- * CPU is not the constraint -> the loop awaits network -> a sub-hourly cron gets 30 s of CPU
- * Under the old 50-subrequest cap this budget never tripped -> the runtime killed every call past ~50 instead
- * The run then died partway down an oldest-first list -> fresh cohorts behind the failing head were never reached
- * That cost 30+ hours of zero conversions -> a run that stops on its OWN budget with a warning is the failure mode we want
- * Throughput also comes from cadence -> this trigger fires every 15 min -> one run need not do everything
  * Raise it only after a real tick logs the warning, and add concurrency first (4 max; Workers allow 6 connections)
  */
 const MAX_PHONEPE_CALLS_PER_RUN = 600;
 
-/**
- * PhonePe will not execute a redemption until 24h after its notify — the mandatory pre-debit notice.
- *
- * Executing earlier answers 400 SUBSCRIPTION_DEBIT_EXECUTE_INTERVAL_NOT_STARTED -> the call cannot succeed
- * Pass A re-notifies a recycled order and Pass B executed it in the SAME run -> three wasted subrequests per row per tick
- * A row inside this window is skipped with NO call at all
- */
 const EXECUTE_AFTER_NOTIFY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Subrequests a COMPLETED settle spends OUTSIDE the PhonePe calls — PostHog: one fetch plus a KV get and put.
- *
- * GA4 and Meta reported from here too, at 9 -> both are removed -> the charge drops with them
- * Uncounted, five settles in one tick blew the then-50-subrequest cap -> every row behind them got no redeem at all
- * Workers Paid retired that cap, but these are still real wall time on a 15-minute clock -> keep charging them
  * Charged against the same budget, the run stops cleanly with rows left rather than dying mid-row
  */
 const SETTLE_REPORTER_SUBREQUESTS = 3;
 
-/**
- * An order past PhonePe's 48h retry window can only settle through PhonePe's OWN retries — redeeming again is a 4xx.
- *
- * It is recycled at ~72h anyway, once its expireAt passes -> polling it every quarter hour buys nothing
- * A pile of stale PENDING orders once ate most of a tick's call budget -> fresh executes starved behind them
- * So reconcile these on the TOP-OF-HOUR tick only -> at most 45 min of extra latency on a row that waited two days
- * Age is measured from `notified_at`, which Pass A resets on a fresh order -> a recycled row still runs every tick
- */
 const STALE_ORDER_MS = 48 * 60 * 60 * 1000;
 
-/**
- * Paused rows re-asked about per run — Pass D's cap, one PhonePe status call each, hourly.
- *
- * A pause is the ONE state this cron cannot leave on its own: the park NULLs next_debit_at and puts the
- * row outside both passes' status filter, so nothing here ever looks at it again. Only the
- * `subscription.unpaused` webhook or the user opening the paywall ever brought it back — and NO webhook
- * has EVER been delivered in production (docs/phonepe-webhook.md). A subscriber who paused in their UPI
- * app and unpaused there was simply never billed again. So the cron re-asks, which is the whole reason
- * the cron and not the webhook is the correct channel.
- * 50 fits any plausible paused population in one hourly tick and cannot crowd out a debit even if it does
- * not: the shared budget is checked per row, and the oldest-updated_at order rotates a longer backlog
- * through successive hours -> every checked row's updated_at moves, even one left exactly as it was
- */
 const MAX_PAUSED_RECHECK = 50;
 
-/** True only on the quarter-hour tick that coincides with the top of the hour -> the once-an-hour work rides this. */
 function isTopOfHourTick(): boolean {
   return new Date().getUTCMinutes() < 15;
 }
 
-/** The next instant a top-of-hour tick fires -> the idle marker may never reach past it while Pass D has rows. */
 function nextTopOfHourMs(): number {
   const next = new Date();
   next.setUTCMinutes(0, 0, 0);
@@ -174,9 +82,6 @@ function nextTopOfHourMs(): number {
 const NEXT_WORK_KEY = "autopay:next_work_at";
 
 export async function runAutopayNotify(env: Env): Promise<void> {
-  // ── Idle short-circuit ─────────────────────────────────────────────────────
-  // This cron fires forever -> querying `subscriptions` unconditionally woke the Neon compute on every single tick
-  // Neon bills compute-time and autosuspend is what keeps idle ticks near zero -> a marker makes an idle tick one KV read
   // Fail-open in every direction -> no marker, an unparseable marker or a KV error all fall through to the real query
   try {
     const cached = await env.KV.get(NEXT_WORK_KEY);
@@ -195,14 +100,9 @@ export async function runAutopayNotify(env: Env): Promise<void> {
 
   const sql = getDb(env);
   let phonePeCalls = 0;
-  const budgetLeft = (needed: number) =>
-    phonePeCalls + needed <= MAX_PHONEPE_CALLS_PER_RUN;
+  const budgetLeft = (needed: number) => phonePeCalls + needed <= MAX_PHONEPE_CALLS_PER_RUN;
 
   try {
-    // Wake the pooled connection BEFORE the passes -> browse never touches the DB -> Neon suspends between ticks
-    // The first query then lands on a severed socket and throws CONNECTION_CLOSED -> that kills the WHOLE scan
-    // No row notified, no debit executed, and the next attempt a tick away -> one retry recovers it
-    // A SECOND failure is real and propagates -> the caller logs it and the rows are picked up next tick
     try {
       await sql`SELECT 1`;
     } catch (err) {
@@ -213,24 +113,9 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     const now = new Date();
     const notifyThreshold = new Date(now.getTime() + NOTIFY_WINDOW_HOURS * 60 * 60 * 1000);
 
-    // Read ONCE for the whole run, then reused by Pass B's query AND its loop skip.
-    // A scan that spends its call budget runs for minutes and can outlive a 15-minute boundary ->
-    // two independent reads would disagree mid-run and fetch a row under one rule, skip it under the other
     const topOfHour = isTopOfHourTick();
 
-    /**
-     * Pass B's floor on `notified_at` — the stale-order deferral, expressed where the LIMIT can see it.
-     *
-     * The loop has always skipped these rows without a call, but that skip runs BELOW
-     * `LIMIT MAX_ROWS_PER_PASS` -> a row it had already ruled out still consumed one of the scan's slots.
-     * Measured in production: 56 of 150 fetched rows, a third of the capacity, read only to be dropped.
-     * Slots are the scarce resource, not calls (a tick uses ~100 of a 600 budget), and the cap is
-     * precisely what starves fresh debits behind an old head — the failure this cron already had once.
-     * Epoch on the hourly tick -> ONE statement, no stale row excluded, the query plan unchanged.
-     */
-    const staleFloor = topOfHour
-      ? new Date(0)
-      : new Date(now.getTime() - STALE_ORDER_MS);
+    const staleFloor = topOfHour ? new Date(0) : new Date(now.getTime() - STALE_ORDER_MS);
 
     const toNotify = await sql`
       SELECT
@@ -250,7 +135,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     if (toNotify.length === MAX_ROWS_PER_PASS) {
       console.warn(
         `[autopay-notify] Pass A hit the ${MAX_ROWS_PER_PASS}-row cap — a backlog exists; ` +
-        `remaining rows continue next run (soonest next_debit_at first)`,
+          `remaining rows continue next run (soonest next_debit_at first)`,
       );
     }
 
@@ -261,7 +146,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       if (!budgetLeft(2)) {
         console.warn(
           `[autopay-notify] Pass A stopping early — PhonePe call budget ` +
-          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+            `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
         );
         break;
       }
@@ -278,18 +163,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
             await parkMandate(env, sql, row.id as string, "cancelled");
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
-              `marked cancelled, next_debit_at cleared (access kept to current_period_end)`,
+                `marked cancelled, next_debit_at cleared (access kept to current_period_end)`,
             );
           } else if (subStatus.state === "PAUSED") {
             await parkMandate(env, sql, row.id as string, "paused");
-            console.warn(
-              `[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`,
-            );
+            console.warn(`[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`);
           } else {
             // ACTIVATION_IN_PROGRESS and friends are genuinely in-flight -> they resolve on their own -> retry next tick
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state}, not ACTIVE — ` +
-              `skipping notify, will retry next run`,
+                `skipping notify, will retry next run`,
             );
           }
           continue;
@@ -319,7 +202,6 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           userId,
           nextDebitAt: new Date(row.next_debit_at as string),
         });
-
       } catch (err) {
         // A 4xx is PhonePe's FINAL answer -> SUBSCRIPTION_NOT_FOUND is the one seen in the wild
         // Retrying it costs two PhonePe calls and a Neon wake per row per tick, forever, and never converges -> park it
@@ -328,8 +210,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           await parkMandate(env, sql, row.id as string, "cancelled", "rejected_by_phonepe");
           console.error(
             `[autopay-notify] Sub ${merchantSubId} rejected permanently by PhonePe ` +
-            `(HTTP ${err.status}) — marked cancelled to stop the hourly retry loop. ` +
-            `Access is kept to current_period_end. Body: ${err.body}`,
+              `(HTTP ${err.status}) — marked cancelled to stop the hourly retry loop. ` +
+              `Access is kept to current_period_end. Body: ${err.body}`,
           );
         } else {
           console.error(`[autopay-notify] Notify failed for sub ${merchantSubId}:`, err);
@@ -364,7 +246,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     // legitimately report different numbers off the same table, and the gap IS the stale pile
     console.log(
       `[autopay-notify] Pass B — ${toExecute.length} subscriptions due for execute ` +
-      `(${topOfHour ? "all orders, incl. past PhonePe's retry window" : "fresh orders only, stale deferred to the hourly tick"})`,
+        `(${topOfHour ? "all orders, incl. past PhonePe's retry window" : "fresh orders only, stale deferred to the hourly tick"})`,
     );
     if (toExecute.length === MAX_ROWS_PER_PASS) {
       console.warn(
@@ -386,20 +268,15 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       if (notifiedAt !== null && Date.now() - notifiedAt.getTime() < EXECUTE_AFTER_NOTIFY_MS) {
         console.log(
           `[autopay-notify] Sub ${merchantSubId} notified ${Math.round((Date.now() - notifiedAt.getTime()) / 3_600_000)}h ago ` +
-          `— inside PhonePe's 24h notify window, not executing yet`,
+            `— inside PhonePe's 24h notify window, not executing yet`,
         );
         continue;
       }
 
-      // A stale in-flight order is polled on the hour, never every tick -> see STALE_ORDER_MS
-      if (
-        notifiedAt !== null &&
-        Date.now() - notifiedAt.getTime() > STALE_ORDER_MS &&
-        !topOfHour
-      ) {
+      if (notifiedAt !== null && Date.now() - notifiedAt.getTime() > STALE_ORDER_MS && !topOfHour) {
         console.log(
           `[autopay-notify] Sub ${merchantSubId} order is ${Math.round((Date.now() - notifiedAt.getTime()) / 3_600_000)}h old ` +
-          `— past PhonePe's retry window, reconciled on the hourly tick only`,
+            `— past PhonePe's retry window, reconciled on the hourly tick only`,
         );
         continue;
       }
@@ -407,7 +284,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       if (!budgetLeft(1)) {
         console.warn(
           `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
-          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+            `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
         );
         break;
       }
@@ -430,12 +307,6 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
       let settled = false;
 
-      // ── Pass C first: the order's status is the only authority ───────────────
-      // `redeem` is a TRIGGER, not an answer -> a UPI debit settles seconds AFTER PhonePe accepts the call
-      // So its response is routinely non-terminal even as the money moves -> and a second redeem is then a 4xx
-      // Reconciling AFTER the redeem attempt means the throw SKIPS it forever -> the row keeps notified_at
-      // Pass A cannot re-select it either (it needs notified_at IS NULL) -> the payer sits in `trialing` having PAID
-      // Two live subscribers were stranded that way for two days, orders COMPLETED and Neon untouched
       // So: ask BEFORE acting, and never let the answer depend on the redeem call succeeding
       if (overdueMs > RECONCILE_STUCK_AFTER_MS && budgetLeft(1)) {
         phonePeCalls += 1;
@@ -443,9 +314,6 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         settled = r.settled;
         if (settled) phonePeCalls += SETTLE_REPORTER_SUBREQUESTS;
 
-        // The order outlived its window unsettled -> redeeming it again can only 4xx -> drop it for a fresh one
-        // UNLESS the row is past the dunning wall -> an order that only ever dies non-terminally never advances the ladder
-        // Without the wall such a row minted fresh orders without bound -> same business window as the last rung
         if (r.dead) {
           if (
             outcomeRow.periodEnd !== null &&
@@ -469,19 +337,15 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           await recycleRedemption(sql, outcomeRow.id);
           console.warn(
             `[autopay-notify] Order ${redemptionOrderId} for sub ${merchantSubId} ` +
-            `expired unsettled — cleared for re-notify, debit still owed`,
+              `expired unsettled — cleared for re-notify, debit still owed`,
           );
           continue;
         }
 
-        // PENDING means an attempt is ALREADY in flight and PhonePe owns the retry -> redeeming again is a 400
-        // Skipping is not just a saved call -> the pointless attempt logged an ERROR every tick for a HEALTHY debit
-        // A log where routine noise reads as failure is how the last stranding hid for two days
-        // Only NOTIFIED — announced, never triggered — still needs the trigger
         if (r.state === "PENDING") {
           console.log(
             `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
-            `(order PENDING) — PhonePe owns the retry, not re-redeeming`,
+              `(order PENDING) — PhonePe owns the retry, not re-redeeming`,
           );
           continue;
         }
@@ -492,7 +356,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       if (!budgetLeft(1)) {
         console.warn(
           `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
-          `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
+            `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
         );
         break;
       }
@@ -511,22 +375,17 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         if (!settled) {
           console.log(
             `[autopay-notify] Execute ${execResult.state} for sub ${merchantSubId} — ` +
-            `settles asynchronously; next run reconciles from order status`,
+              `settles asynchronously; next run reconciles from order status`,
           );
         }
       } catch (err) {
         // A throw is NOT evidence the debit failed -> the commonest cause is the order ALREADY settled
-        // PhonePe then refuses the second redeem -> reconciling here is what recovers money we already took
-        // DUPLICATE_TXN_REQUEST specifically means an attempt is in flight -> that is a HEALTHY debit
-        // The reconcile-first branch normally catches those -> this is the belt-and-braces path inside the window
-        // Log it as INFORMATION, never as an error -> normal traffic reading as failure is how a stranding hides
-        const inFlight =
-          err instanceof PhonePeApiError && err.body.includes("DUPLICATE_TXN_REQUEST");
+        const inFlight = err instanceof PhonePeApiError && err.body.includes("DUPLICATE_TXN_REQUEST");
 
         if (inFlight) {
           console.log(
             `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
-            `— PhonePe owns the retry`,
+              `— PhonePe owns the retry`,
           );
         } else {
           console.error(`[autopay-notify] Execute failed for sub ${merchantSubId}:`, err);
@@ -538,9 +397,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           if (settled) phonePeCalls += SETTLE_REPORTER_SUBREQUESTS;
         }
 
-        // Still open after a FINAL rejection -> the mandate itself is usually gone, revoked by the user at their bank
         // Pass A cannot park it -> that pass only selects rows with notified_at IS NULL -> park it HERE
-        // Otherwise it retries every tick, forever, against a mandate that will never debit
         // `inFlight` is excluded -> a duplicate proves the mandate works -> asking after its state learns nothing
         if (!settled && !inFlight && err instanceof PhonePeApiError && err.isPermanent && budgetLeft(1)) {
           phonePeCalls += 1;
@@ -550,38 +407,27 @@ export async function runAutopayNotify(env: Env): Promise<void> {
               await parkMandate(env, sql, outcomeRow.id, "cancelled");
               console.warn(
                 `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
-                `marked cancelled, debit abandoned (access kept to current_period_end)`,
+                  `marked cancelled, debit abandoned (access kept to current_period_end)`,
               );
             } else if (subStatus.state === "PAUSED") {
               // Same answer Pass A gives a paused mandate -> park it, and Pass D asks again hourly
               // Left in place it re-redeems every tick, forever, spending two calls on a 400 each time
               await parkMandate(env, sql, outcomeRow.id, "paused");
-              console.warn(
-                `[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`,
-              );
+              console.warn(`[autopay-notify] Sub ${merchantSubId} is PAUSED at PhonePe — row marked paused`);
             } else {
               // Name the state -> a row that rejects every tick with a non-terminal mandate is otherwise invisible
               console.warn(
                 `[autopay-notify] Sub ${merchantSubId} rejected the redeem but reads ${subStatus.state} at PhonePe — ` +
-                `left for the next tick`,
+                  `left for the next tick`,
               );
             }
           } catch (statusErr) {
-            console.error(
-              `[autopay-notify] Mandate status check failed for ${merchantSubId}:`,
-              statusErr,
-            );
+            console.error(`[autopay-notify] Mandate status check failed for ${merchantSubId}:`, statusErr);
           }
         }
       }
     }
 
-    // ── Pass D: recheck parked pauses ─────────────────────────────────────────
-    // A `paused` row is invisible to Pass A and Pass B by construction -> next_debit_at NULL, status out of scope
-    // Nothing in this Worker ever asked about it again: the unpause webhook has never once been delivered,
-    // so the only escape was the user happening to open the paywall (/payments/status heals it there)
-    // Meanwhile the mandate may be ACTIVE again at PhonePe and the subscriber simply never billed
-    // Hourly, not every tick -> an unpause costs one status call per paused row and can wait 45 min
     if (topOfHour && budgetLeft(1)) {
       const parkedPauses = await sql`
         SELECT id, merchant_subscription_id
@@ -601,7 +447,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         if (!budgetLeft(1)) {
           console.warn(
             `[autopay-notify] Pass D stopping early — PhonePe call budget ` +
-            `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next hour`,
+              `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next hour`,
           );
           break;
         }
@@ -614,12 +460,11 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         try {
           const subStatus = await getSubscriptionStatus(env, merchantSubId);
           if (subStatus.state === "ACTIVE") {
-            // The unpause we never heard about -> the SAME restore the webhook writes, rearm included
             await rearmUnpausedSubscription(sql, { subscriptionId });
             rearmed += 1;
             console.log(
               `[autopay-notify] Sub ${merchantSubId} is ACTIVE again at PhonePe — ` +
-              `unpaused, debit clock rearmed`,
+                `unpaused, debit clock rearmed`,
             );
           } else if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
             // Paused then killed -> the same park Pass B uses -> access still runs to current_period_end
@@ -627,12 +472,9 @@ export async function runAutopayNotify(env: Env): Promise<void> {
             cancelled += 1;
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
-              `marked cancelled (access kept to current_period_end)`,
+                `marked cancelled (access kept to current_period_end)`,
             );
           } else {
-            // Still PAUSED, or mid-transition, or a state we do not know -> the row is RIGHT as it stands
-            // Only updated_at moves, and only so the oldest-first cursor rotates past it next hour
-            // Without that, a backlog over the cap would re-ask the same head rows forever
             left += 1;
             await touchPausedRow(sql, subscriptionId);
           }
@@ -640,10 +482,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           // A failed read tells us nothing -> never park or restore on it -> but still rotate the cursor
           left += 1;
           await touchPausedRow(sql, subscriptionId);
-          console.warn(
-            `[autopay-notify] Pass D status check failed for ${merchantSubId}:`,
-            err,
-          );
+          console.warn(`[autopay-notify] Pass D status check failed for ${merchantSubId}:`, err);
         }
       }
 
@@ -651,32 +490,21 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       // the lines that DO matter get skimmed past
       console.log(
         `[autopay-notify] Pass D — ${checked} paused rows rechecked ` +
-        `(${rearmed} rearmed, ${cancelled} cancelled, ${left} left paused)`,
+          `(${rearmed} rearmed, ${cancelled} cancelled, ${left} left paused)`,
       );
     }
 
-    // ── Refresh the idle marker ───────────────────────────────────────────────
-    // The next moment this cron could have work = the soonest next_debit_at among live rows, minus the notify window
-    // Anything already due, or a row mid-flight with notified_at set, yields a past value -> store nothing, query next run
     await refreshIdleMarker(env, sql);
-
   } finally {
-    // This connection may have been severed mid-flight and reconnected -> tearing down a dead socket can itself REJECT
-    // Inside a `finally` that rejection REPLACES the result -> a scan that completed both passes reads as a failure
     await sql.end().catch(() => {});
   }
 }
 
 /**
- * Ask PhonePe for a redemption order's real state and apply it.
- *
  * `settled` -> the state was terminal and the row was updated
  * `dead` -> the read SUCCEEDED, the state is non-terminal, and the order is past its own `expireAt`
- * PhonePe stops retrying such an order -> nothing will ever settle it -> the row needs a fresh one
  * `dead` is only ever true off a SUCCESSFUL read -> a network blip cannot be mistaken for a dead order
- * Mistaking one would trigger a second charge -> a failed status call leaves both flags false
  * `state` is null when the read failed -> callers must never read null as "safe to skip"
- * Errors are swallowed deliberately -> this is the recovery path -> a failed read must not abort the scan
  */
 async function reconcileFromOrder(
   env: Env,
@@ -697,34 +525,23 @@ async function reconcileFromOrder(
     const order = await getOrderStatus(env, row.redemptionOrderId);
     console.log(
       `[autopay-notify] Reconcile sub=${row.merchantSubId} ` +
-      `order=${row.redemptionOrderId} state=${order.state} ` +
-      `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
+        `order=${row.redemptionOrderId} state=${order.state} ` +
+        `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
     );
     const settled = await applyDebitOutcome(env, sql, order.state, row);
     const dead =
-      !settled &&
-      typeof order.expireAt === "number" &&
-      order.expireAt > 0 &&
-      Date.now() > order.expireAt;
+      !settled && typeof order.expireAt === "number" && order.expireAt > 0 && Date.now() > order.expireAt;
     return { settled, dead, state: order.state };
   } catch (err) {
-    console.error(
-      `[autopay-notify] Reconcile failed for order ${row.redemptionOrderId}:`,
-      err,
-    );
+    console.error(`[autopay-notify] Reconcile failed for order ${row.redemptionOrderId}:`, err);
     return { settled: false, dead: false, state: null };
   }
 }
 
 /**
- * Drop a dead redemption order so Pass A can issue a fresh one.
- * Clearing `notified_at` is what returns the row to Pass A's window -> that pass selects on `notified_at IS NULL`
  * `next_debit_at` is left ALONE -> the debit is still owed -> only the order is being replaced
  */
-async function recycleRedemption(
-  sql: ReturnType<typeof getDb>,
-  subscriptionId: string,
-): Promise<void> {
+async function recycleRedemption(sql: ReturnType<typeof getDb>, subscriptionId: string): Promise<void> {
   await sql`
     UPDATE subscriptions
     SET notified_at         = NULL,
@@ -735,17 +552,9 @@ async function recycleRedemption(
 }
 
 /**
- * Move a paused row's rotation cursor and NOTHING else — Pass D's "left exactly as it was".
- *
- * Pass D takes the 50 least-recently-updated paused rows, so a row it decides not to change must still
- * go to the back of the queue or a backlog over the cap would re-ask the same head rows every hour
- * Guarded on `status = 'paused'` like every other write here -> a row that moved on under us is not touched
  * The updated_at trigger would do this by itself, but say it explicitly: this statement exists ONLY for it
  */
-async function touchPausedRow(
-  sql: ReturnType<typeof getDb>,
-  subscriptionId: string,
-): Promise<void> {
+async function touchPausedRow(sql: ReturnType<typeof getDb>, subscriptionId: string): Promise<void> {
   await sql`
     UPDATE subscriptions
     SET updated_at = now()
@@ -756,10 +565,8 @@ async function touchPausedRow(
 
 /**
  * Apply a terminal debit state to a subscription row. True = terminal and written; false = still open.
- *
  * Shared by Pass B's `redeem` response and Pass C's reconciled order status -> the two can never drift
  * A bug in one copy would otherwise grant a month the other refuses -> keep this the single writer
- * An unrecognised state returns false -> an unknown answer is "still open", never a settle
  */
 async function applyDebitOutcome(
   env: Env,
@@ -778,8 +585,6 @@ async function applyDebitOutcome(
 ): Promise<boolean> {
   if (state === "COMPLETED") {
     const nextPeriodEnd = addOneMonth(new Date());
-    // Every statement that grants a PAID period stamps the three debit-tracking columns -> the CMS reads them, nothing else
-    // first_debit_at is COALESCEd so a renewal never moves it; the count and the paise total grow on every settle
     const settled = (await sql`
       UPDATE subscriptions
       SET status             = 'active',
@@ -797,11 +602,6 @@ async function applyDebitOutcome(
     `) as unknown as { updated_at?: Date | string | null }[];
     // Referral reward on the referred user's FIRST paid debit -> the status<>'rewarded' guard makes a renewal a no-op
     await grantReferralReward(sql, row.userId);
-    // NO ad-platform conversion is reported from the server -> GA4 `purchase` and Meta `Subscribe` are BOTH gone from here
-    // A server-sent conversion is a SECOND source type for an event the app SDK also emits
-    // One conversion action fed by two sources desynchronises attribution -> raw counts stay right, campaigns lag
-    // `trial_started` / StartTrial — app-SDK, ONE source — is the only event campaigns bid on -> never add a second
-    // PostHog stays -> it is product analytics, not an attribution source -> a server-sent event there costs nothing
     // FIRST trial->paid only ('trialing' at settle) -> a renewal ends no journey funnel
     // Fail-open and KV-deduped per transaction -> the webhook settling the same debit cannot double-report
     if (row.priorStatus === "trialing") {
@@ -828,16 +628,10 @@ async function applyDebitOutcome(
       `;
       console.warn(
         `[autopay-notify] Sub ${row.merchantSubId} expired after ${retries} failed debits ` +
-        `across the 45-day dunning window`,
+          `across the 45-day dunning window`,
       );
     } else {
-      // Climb the ladder -> notified_at = NULL returns the row to Pass A's window
-      // The pushed-out next_debit_at is what SPACES the attempts -> Pass A's SELECT looks one notify-window ahead
-      // So Pass A re-notifies ~24h before the rung -> each retry carries its own fresh order and pre-debit notice
-      const nextAttempt = nonPeakRetryAt(
-        row.periodEnd ?? new Date(),
-        RETRY_OFFSET_DAYS[retries - 1],
-      );
+      const nextAttempt = nonPeakRetryAt(row.periodEnd ?? new Date(), RETRY_OFFSET_DAYS[retries - 1]);
       await sql`
         UPDATE subscriptions
         SET retry_count   = ${retries},
@@ -848,7 +642,7 @@ async function applyDebitOutcome(
       `;
       console.log(
         `[autopay-notify] Sub ${row.merchantSubId} debit FAILED (attempt ${retries}) — ` +
-        `next attempt ${nextAttempt.toISOString()} (day ${RETRY_OFFSET_DAYS[retries - 1]} of the ladder)`,
+          `next attempt ${nextAttempt.toISOString()} (day ${RETRY_OFFSET_DAYS[retries - 1]} of the ladder)`,
       );
     }
     return true;
@@ -861,10 +655,7 @@ async function applyDebitOutcome(
  * Cache "there is PROVABLY no autopay work before T" so an idle tick skips the DB.
  * Deliberately conservative -> any in-flight row, or any row already due, clears the marker instead
  */
-async function refreshIdleMarker(
-  env: Env,
-  sql: ReturnType<typeof getDb>,
-): Promise<void> {
+async function refreshIdleMarker(env: Env, sql: ReturnType<typeof getDb>): Promise<void> {
   try {
     const rows = (await sql`
       SELECT
@@ -882,8 +673,6 @@ async function refreshIdleMarker(
 
     const inFlight = Number(rows[0]?.in_flight ?? 0);
     const soonestRaw = rows[0]?.soonest ?? null;
-    // Pass D is work this marker would otherwise hide -> a paused row has no next_debit_at to be the soonest one
-    // The marker's TTL is an hour, so an idle population skipped EVERY :00 tick and the recheck never ran
     const pausedRechecks = Number(rows[0]?.paused_rechecks ?? 0);
     if (inFlight > 0 || soonestRaw === null) {
       await env.KV.delete(NEXT_WORK_KEY);
@@ -896,7 +685,6 @@ async function refreshIdleMarker(
       return;
     }
     // Work starts one notify-window BEFORE the debit itself -> the marker must be the earlier instant, not the due date
-    // A paused row waiting to be rechecked pulls it in to the next top of the hour, which is when Pass D runs
     const nextWorkMs = Math.min(
       soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000,
       pausedRechecks > 0 ? nextTopOfHourMs() : Infinity,
@@ -908,11 +696,8 @@ async function refreshIdleMarker(
     // TTL is capped at the CRON PERIOD, never at nextWorkMs -> a subscription can activate between runs
     // Its webhook writes a next_debit_at this marker knows nothing about -> a days-long marker would skip a real debit
     // That trades a lost ₹199 and a broken subscription for a fraction of a cent of Neon compute -> never worth it
-    // Capping at one period makes the worst case EXACTLY the un-cached behaviour
     await env.KV.put(NEXT_WORK_KEY, String(nextWorkMs), { expirationTtl: 3600 });
-    console.log(
-      `[autopay-notify] No work until ${new Date(nextWorkMs).toISOString()} — marker set`,
-    );
+    console.log(`[autopay-notify] No work until ${new Date(nextWorkMs).toISOString()} — marker set`);
   } catch (err) {
     // A marker we failed to write just means the next run does the full query -> never fail the scan over it
     console.warn("[autopay-notify] idle-marker refresh failed:", err);
@@ -921,12 +706,8 @@ async function refreshIdleMarker(
 
 /**
  * Take a subscription out of the autopay rotation WITHOUT touching entitlement.
- *
  * `next_debit_at = NULL` plus a status outside ('trialing','active') removes the row from BOTH passes' queries
  * That pair is what actually stops the loop -> changing only the status leaves it selectable
- * current_period_end is left ALONE -> 'cancelled' keeps premium to the end of the period already paid for
- * Parking is a BILLING decision, never a reason to strip bought access -> which is why we never park as 'expired'
- * Mirrored in Pakiza's workers/src/cron/autopay-notify.ts -> keep both in sync
  */
 async function parkMandate(
   env: Env,
@@ -983,6 +764,6 @@ interface UserNotificationParams {
 async function sendUserNotification(params: UserNotificationParams): Promise<void> {
   console.log(
     `[autopay-notify] TODO: push notify user=${params.userId}` +
-    ` debitAt=${params.nextDebitAt.toISOString()}`,
+      ` debitAt=${params.nextDebitAt.toISOString()}`,
   );
 }

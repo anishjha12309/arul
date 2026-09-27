@@ -4,17 +4,16 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/update/update_holds.dart';
 import 'package:arul/features/review/domain/review_ledger.dart';
 import 'package:arul/features/review/presentation/review_prompt_trigger.dart';
 import 'package:arul/features/review/providers/review_prompt_controller.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'review_fakes.dart';
 

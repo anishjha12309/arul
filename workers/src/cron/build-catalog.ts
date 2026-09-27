@@ -1,11 +1,6 @@
 /**
- * Catalog builder — the edge-cached catalog JSON, generated from Neon. The browse feed never reads the DB.
- *
  * The page shape `{ page, per_page, total, total_pages, has_more, items }` is an APP contract -> never change it
- * Change detection compares the app_config.content_version COLUMN against KV -> an unchanged scope skips its rebuild
  * That column, NOT feature_flags.content_version -> reading the wrong one silently froze the catalog
- * Writes go through the R2 Workers BINDING, not an S3 presign -> no outbound HTTP, no signing overhead
- * The bucket's public access is a dashboard setting -> the binding cannot set an ACL -> it is not expressible here
  */
 
 import type { Env } from "../env.js";
@@ -13,15 +8,10 @@ import { getDb } from "../lib/db.js";
 import { putPublicJson, getJsonString } from "../lib/r2.js";
 import { rankFor } from "../lib/feed-score.js";
 
-// The app drains a WHOLE catalog before rendering -> category filtering is client-side -> every page is first-paint latency
-// At 20/page that was ~5 s on device for both tabs, even through a 4-wide drain pool -> the page COUNT was the cost
 // 200/page holds ringtones to one page and the wallpaper library to a handful -> one parallel batch after page 1
 // The app reads per_page/total_pages out of the JSON -> this size is not a client contract -> it can change freely
 const PAGE_SIZE = 200;
 
-// Pages are fetched with `?v=<content_version>` -> a publish mints a new cache key -> a page body is immutable for its key
-// max-age=60 made the edge revalidate against R2 origin on nearly every real fetch -> 0.5-1 s per page, worse outliers
-// The only un-versioned fetch is the rare version.json-failed fallback -> a day bounds how stale that can get
 const CATALOG_PAGE_CACHE_CONTROL = "public, max-age=86400";
 
 type ContentRow = Record<string, unknown>;
@@ -34,21 +24,10 @@ interface ScopeResult {
 }
 
 interface BuildResults {
-  [scope: string]:
-    | ScopeResult
-    | { error: string }
-    | { skipped: "no_change" }
-    | { skipped: "locked" };
+  [scope: string]: ScopeResult | { error: string } | { skipped: "no_change" } | { skipped: "locked" };
 }
 
-export async function buildCatalog(
-  env: Env,
-  scope: string | null,
-  force = false,
-): Promise<BuildResults> {
-  // ── Mutual exclusion ───────────────────────────────────────────────────────
-  // The CMS rebuilds on EVERY content mutation while the hourly cron rebuilds independently
-  // So overlap is routine during a bulk publish -> and overlap is destructive here, two ways
+export async function buildCatalog(env: Env, scope: string | null, force = false): Promise<BuildResults> {
   // deleteOrphanedPages removes every page THIS build did not write -> it eats a concurrent build's higher pages
   // total_pages then advertises pages that 404 -> the feed truncates for everyone mid-scroll
   // writeVersionPointer is last-writer-wins -> an OLDER build finishing second rewinds version.json
@@ -96,11 +75,7 @@ async function releaseBuildLock(env: Env, holder: string): Promise<void> {
   }
 }
 
-async function buildCatalogLocked(
-  env: Env,
-  scope: string | null,
-  force: boolean,
-): Promise<BuildResults> {
+async function buildCatalogLocked(env: Env, scope: string | null, force: boolean): Promise<BuildResults> {
   const allScopes = ["wallpapers", "ringtones"];
   const scopes = scope ? [scope] : allScopes;
 
@@ -108,12 +83,7 @@ async function buildCatalogLocked(
   const results: BuildResults = {};
 
   try {
-    // ── Change-detection signal ──────────────────────────────────────────────
-    // The dedicated app_config.content_version COLUMN, NOT feature_flags -> a content write bumps it in that transaction
-    // Compared against the last-built version in KV -> an unchanged scope skips its rebuild entirely
     // It is a bigint -> postgres.js may hand it back as a string -> normalize before comparing, never lose precision
-    // RETRY ONCE: browse never touches the DB -> the Worker idles for hours -> this first query lands on a severed socket
-    // That is a stale-pool artifact, not an outage -> a second attempt reconnects -> without it the whole hour is lost
     let contentVersion: string | null = null;
     let appConfigRow: Record<string, unknown> | null = null;
     let cfgErr: unknown = null;
@@ -135,18 +105,13 @@ async function buildCatalogLocked(
       } catch (err) {
         cfgErr = err;
         if (attempt === 0) {
-          console.warn(
-            "[build-catalog] app_config read failed — retrying once on a fresh connection:",
-            err,
-          );
+          console.warn("[build-catalog] app_config read failed — retrying once on a fresh connection:", err);
         }
       }
     }
 
-    // ── Abort if the DB is genuinely unreachable ─────────────────────────────
     // A null contentVersion DISABLES the change-detection gate below -> falling through runs a FULL buildScope
     // That is the most expensive thing here, against the connection that just failed, and it skips version.json anyway
-    // The result was a 30 s stall the runtime killed -> it took the concurrently-scheduled autopay scan with it
     // Bail cheaply and mark every requested scope errored -> the caller's anyScopeError guard then skips the sweep
     if (cfgErr !== null) {
       console.error(
@@ -159,16 +124,9 @@ async function buildCatalogLocked(
       return results;
     }
 
-    // ── Always write the PUBLIC app_config.json subset ───────────────────────
-    // One R2 write, and the app reads it on every launch through the CDN -> cheap enough to do unconditionally
-    // NEVER include a secret -> only the public subset AppConfigModel expects reaches this file
     if (appConfigRow) {
       try {
-        await writeAppConfig(
-          env.R2 as R2Bucket,
-          appConfigRow,
-          await readCategoryOrder(sql),
-        );
+        await writeAppConfig(env.R2 as R2Bucket, appConfigRow, await readCategoryOrder(sql));
       } catch (err) {
         console.error("[build-catalog] Failed to write app_config.json:", err);
       }
@@ -199,13 +157,9 @@ async function buildCatalogLocked(
       }
     }
 
-    // ── Write the always-fresh version pointer LAST (commit marker) ───────────
-    // The app reads catalog/version.json for the current content_version, then appends ?v= to every catalog fetch
     // Written only AFTER every page body is durably in R2, and only when no scope errored -> this is the COMMIT
     // So advertising version N guarantees N's pages exist -> a polling app can never request a ?v=N that is unbuilt
-    const anyScopeError = Object.values(results).some(
-      (r) => r && typeof r === "object" && "error" in r,
-    );
+    const anyScopeError = Object.values(results).some((r) => r && typeof r === "object" && "error" in r);
     if (contentVersion !== null && !anyScopeError) {
       try {
         await writeVersionPointer(env.R2 as R2Bucket, contentVersion);
@@ -216,45 +170,21 @@ async function buildCatalogLocked(
 
     return results;
   } finally {
-    // Release on EVERY path, the early abort included -> the same try/finally autopay-notify.ts uses
-    // Tearing down a socket Neon already dropped can itself REJECT -> and this is a `finally`
-    // A rejection there REPLACES the return value -> a fully successful rebuild would surface as a failed promise
-    // The caller would then skip the canonical sweep and log a failure that never happened -> swallow it
     await sql.end().catch(() => {});
   }
 }
 
-/**
- * Cache policy for the version pointer — the first request of every cold start, since every `?v=` comes from here.
- *
- * `no-store` made it the ONE uncacheable request on that path -> every launch, every user, went to origin at ~240 ms
- * `max-age=0, s-maxage=30` did NOT fix it -> Cloudflare answered DYNAMIC on every request and ignored the s-maxage
- * A non-zero `max-age` is what actually caches here -> `max-age=0` reads as "do not cache" and the edge never helps
- * Holding it client-side costs nothing -> the app uses `package:http`, which implements no HTTP cache
- * The price is a bounded staleness window -> a client may pin the previous `?v=` briefly and self-corrects on the next poll
- * That is safe because the pointer HINTS at freshness, never at correctness -> it is written last, after the pages
- * Keep `stale-while-revalidate` well above `s-maxage` -> it stops a burst of cold starts stampeding origin at expiry
- */
-const VERSION_POINTER_CACHE_CONTROL =
-  "public, max-age=30, stale-while-revalidate=300";
+const VERSION_POINTER_CACHE_CONTROL = "public, max-age=30, stale-while-revalidate=300";
 
 /** The ONLY file the app must fetch near-fresh -> everything else is keyed by ?v= and stays fully edge-cacheable. */
-export async function writeVersionPointer(
-  r2Bucket: R2Bucket,
-  contentVersion: string,
-): Promise<void> {
+export async function writeVersionPointer(r2Bucket: R2Bucket, contentVersion: string): Promise<void> {
   // MONOTONIC -> never advertise a version older than the one already published
-  // content_version only ever rises -> a lower value here means THIS build read an older snapshot than a finished one
   // Writing it anyway rewinds every client's ?v= and hides freshly published content until the next bump
-  // Skipping is safe -> the newer pointer is already correct and this build's pages went to the same keys
   // Only a STRICTLY older version is refused -> re-writing the SAME one is allowed on purpose
   // Cache-Control is stored object METADATA -> a policy fix would otherwise wait for someone to publish content
-  // The rewrite is idempotent where it matters -> content_version is unchanged, only built_at and the headers move
   const current = await readVersionPointer(r2Bucket);
   if (current !== null && isNewerVersion(current, contentVersion)) {
-    console.log(
-      `[build-catalog] version.json already at ${current}; not rewinding to ${contentVersion}`,
-    );
+    console.log(`[build-catalog] version.json already at ${current}; not rewinding to ${contentVersion}`);
     return;
   }
   await putPublicJson(
@@ -293,14 +223,6 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 
 /**
  * Coerce a jsonb column to a real object, for LEGACY ROWS ONLY.
- *
- * This comment used to blame `fetch_types:false` for returning jsonb as a raw string. That is wrong,
- * and believing it is how the same bug reached the push composer: jsonb comes back parsed whatever
- * fetch_types says. The cause was always on the WRITE side, in the CMS — postgres.js reads a
- * `::jsonb` cast out of the template and stringifies the value itself, so the CMS's
- * `${JSON.stringify(x)}::jsonb` encoded twice and stored a jsonb STRING holding JSON. The CMS now
- * passes the object through sql.json; rows written before that still hold a string.
- *
  * Keep this until no such row is left, then delete it — a reader that silently repairs its input is
  * why nothing surfaced for months. AppConfigModel.fromJson cannot parse a double-encoded blob.
  */
@@ -330,9 +252,7 @@ export type CategoryOrder = Record<string, string[]>;
  * order. A missing table is the same case -> the CMS may be deployed before the
  * migration, and the hourly cron must not start failing over it.
  */
-export async function readCategoryOrder(
-  sql: ReturnType<typeof getDb>,
-): Promise<CategoryOrder> {
+export async function readCategoryOrder(sql: ReturnType<typeof getDb>): Promise<CategoryOrder> {
   try {
     const rows = (await sql`
       SELECT kind, slug FROM categories
@@ -343,6 +263,7 @@ export async function readCategoryOrder(
     for (const r of rows) {
       // CMS kinds are singular ('wallpaper'), catalog scopes plural ('wallpapers').
       const scope = r.kind === "ringtone" ? "ringtones" : "wallpapers";
+      // biome-ignore lint/suspicious/noAssignInExpressions: create-or-append idiom
       (out[scope] ??= []).push(r.slug);
     }
     return out;
@@ -375,7 +296,6 @@ export async function writeAppConfig(
   await putPublicJson(r2Bucket, "catalog/app_config.json", publicConfig);
 }
 
-// ── Postgres text[] normalization ──────────────────────────────────────────────
 // `fetch_types:false` cannot detect array column types -> text[] arrives as the raw literal string, e.g. "{Azaan}"
 // The Flutter models cast those fields to List -> convert here; an already-array value passes through untouched
 function pgTextArrayToList(v: unknown): string[] {
@@ -415,19 +335,12 @@ function pgTextArrayToList(v: unknown): string[] {
 const POPULARITY_TOTAL_KEY = "popularity_total";
 
 /**
- * Publish the day's accumulated apply/set counts to the feed.
- *
- * Applies land in Neon continuously, but the browse feed NEVER reads the DB -> a moved counter changes nothing
- * Only a new content_version mints a new `?v=` -> this bump IS the publish -> the next hourly build carries the order
- * It goes through the exact path a CMS publish uses -> nothing else has to know popularity exists
- * DAILY, never hourly -> popularity is a sort key, not news -> hourly would re-download the whole catalog 24x a day
- * Guarded on a KV-stored total -> a quiet day is a no-op, not a forced re-download for every install
  * Counters are increment-only -> the total only grows -> any difference is real
  * An unreadable KV falls through to bumping -> a needless rebuild is the safe direction, a stale order is not
  */
-export async function refreshPopularityOrder(env: Env): Promise<
-  { bumped: false; reason: string } | { bumped: true; total: number }
-> {
+export async function refreshPopularityOrder(
+  env: Env,
+): Promise<{ bumped: false; reason: string } | { bumped: true; total: number }> {
   const sql = getDb(env);
   try {
     const rows = await sql`
@@ -452,22 +365,14 @@ export async function refreshPopularityOrder(env: Env): Promise<
     await env.KV.put(POPULARITY_TOTAL_KEY, String(total));
     return { bumped: true, total };
   } finally {
-    // See buildCatalogLocked -> end() can reject on a dropped connection -> in a finally that REPLACES the result
     await sql.end().catch(() => {});
   }
 }
 
-// ── Feed order ────────────────────────────────────────────────────────────────
-// There is no ordering FUNCTION -> the order IS the ORDER BY in buildScope() below -> do not add one
-// lib/feed-score.ts owns only the rank numbering -> read it for why the decayed score and round-robin are gone
-
 /**
- * Coerce a Postgres `bigint` column to a JS number — the same trap `content_version` above documents.
- *
  * `fetch_types:false` hands bigint back as a STRING -> unconverted it ships as `"apply_count": "5"`
  * The Dart models cast that field to int -> EVERY catalog page then fails to parse -> the feed sticks on disk cache
  * Number() is exact here -> these are use counters, nowhere near 2^53
- * Null or absent normalizes to 0 -> the app never has to reason about a missing count
  */
 function pgBigintToNumber(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -484,7 +389,6 @@ export async function buildScope(
   r2Bucket: R2Bucket,
   scope: string,
 ): Promise<ScopeResult> {
-
   let rows: ContentRow[];
   if (scope === "wallpapers") {
     rows = await sql`
@@ -514,9 +418,7 @@ export async function buildScope(
         return false;
       }
       if (row["type"] === "live" && row["mime"] !== "video/mp4") {
-        console.warn(
-          `[build-catalog] skipping live wallpaper id=${row["id"]}: invalid mime=${row["mime"]}`,
-        );
+        console.warn(`[build-catalog] skipping live wallpaper id=${row["id"]}: invalid mime=${row["mime"]}`);
         skipped++;
         return false;
       }
@@ -535,30 +437,17 @@ export async function buildScope(
     return false;
   });
 
-  // ── The feed order ─────────────────────────────────────────────────────────
   // Already decided by the ORDER BY above -> validation only DROPS rows -> dropping preserves relative order
   // So the survivors are still in feed order and the ranks below stay contiguous, with no holes
   const orderedRows = validRows;
 
-  // ── Strip private keys + columns the app never reads ───────────────────────
   // The whole catalog is drained before first paint -> every column is download weight -> keep the models' fields only
   // A dropped column is always-null or unread today -> re-add it to the keep-set the moment a model starts reading it
-  // `category` is ALWAYS emitted -> it is the browse axis the feed chips filter on
-  // `created_at` STAYS on both -> postgres.js emits ISO-8601 "…Z", which Dart's DateTime.parse consumes directly
-  // `published_at` STAYS on both too, and is a DIFFERENT date -> created_at is when the row was IMPORTED
-  // It is what the app's New chip windows on, entirely client-side -> the chip must not depend on a rebuild
-  // The hourly build is a no-op while content_version holds, so a server-stamped is_new flag would freeze
-  // Null here means never published -> impossible on a published row once db/schema/15_published_at.sql lands
   // `renewed_at` STAYS on both as well -> tier 1 of New (a CMS Renew), windowed client-side exactly like published_at
   // It is not in either delete list below, so SELECT * carries it -> deleting it would silently flatten New's top tier
   // Ringtone `mime` STAYS -> set-as-ringtone infers the file extension from it
-  // `apply_count`/`set_count` are emitted as the lifetime number the CMS and older installs read
-  // They are also what the ORDER BY sorted on -> but the app must NOT re-sort -> `feed_rank` already encodes it
   // `apply_score`/`set_score`/`scored_at` are DROPPED -> retired decay state, read by nothing
   // Emitting them would invite the app to re-derive an order -> never put them back in the page
-  // `feed_rank` is COMPUTED here, never read off a row -> a sparse position (10, 20, 30 …) in the feed order
-  // The comparator already shipped in every install sorts on that name -> this order reaches phones that never update
-  // It works on category chips too -> a chip filters this page set, and filtering preserves relative order
   const publicRows = orderedRows.map((row, i) => {
     const r = { ...row } as Record<string, unknown>;
     // `fetch_types:false` returns an array column as the raw literal string -> the Flutter models cast `tags` to a List
@@ -571,15 +460,7 @@ export async function buildScope(
 
     if (scope === "wallpapers") {
       r["apply_count"] = pgBigintToNumber(r["apply_count"]);
-      for (const k of [
-        "audio_key",
-        "mime",
-        "duration_ms",
-        "width",
-        "height",
-        "bytes",
-        "apply_score",
-      ]) {
+      for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes", "apply_score"]) {
         delete r[k];
       }
       return r;
@@ -592,13 +473,10 @@ export async function buildScope(
     return r;
   });
 
-  // ── Write paginated "all" catalog ──────────────────────────────────────────
   // Track every key this build writes -> anything else under the scope is a page it no longer produces
   // build-catalog is otherwise write-only -> without this, a shrunk page count leaves an orphan serving deleted items
   const writtenKeys = new Set<string>();
 
-  // Math.max(1, …) -> a zero-row scope still writes an explicit EMPTY all_1.json
-  // The app's first-page fetch must get valid JSON -> a 404 there is ambiguous, and it means the build FAILED
   const totalPages = Math.max(1, Math.ceil(publicRows.length / PAGE_SIZE));
   for (let page = 1; page <= totalPages; page++) {
     const pageItems = publicRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -619,18 +497,12 @@ export async function buildScope(
     writtenKeys.add(key);
   }
 
-  // The app filters by CATEGORY client-side over this ONE all_*.json set -> never write per-category or per-tag pages
-  // A chip filters the same page set, so filtering preserves the feed order -> per-chip pages would let the two contradict
-
-  // ── Delete orphaned pages this build did not (re)write ─────────────────────
-  // Anything under catalog/<scope>/ this build did not write is stale -> a legacy tag page, or a now-too-high page number
   const deleted = await deleteOrphanedPages(r2Bucket, scope, writtenKeys);
 
   return { pages: totalPages, items: orderedRows.length, skipped, deleted };
 }
 
 /**
- * Delete catalog/<scope>/*.json objects the current build did NOT write. Returns the count deleted.
  * Scoped to catalog/<scope>/ -> version.json and app_config.json live at catalog/ -> they are never reachable here
  */
 export async function deleteOrphanedPages(

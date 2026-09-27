@@ -1,33 +1,8 @@
 /**
  * "Are payments working right now?" — ONE read-only command, production truth.
- *
- * WHY THIS EXISTS: answering that question used to mean hand-writing six ad-hoc SQL queries and a
- * throwaway PhonePe wrapper, every time, and the one tool that did exist (verify-debits.mjs) was
- * silently reading the DEBUG branch — it cried 209 STUCK while production had zero. Nothing tied the
- * four independent signals together, so "payments are fine" was never a claim anyone could check.
- *
- * The four signals, and why each is here rather than a proxy for another:
- *
- *   GATEWAY   Can we still authenticate at PhonePe, and does it agree with our rows? Only a live
- *             call proves the deployed credentials; Neon looking busy does not. Optional because it
- *             needs credentials that deliberately are NOT on this machine.
- *   CRON      Is the quarter-hour autopay scan running at all? A dead cron looks perfectly healthy
- *             in a revenue chart for a day, which is exactly how 30+ hours of zero conversions once
- *             passed unnoticed (docs/autopay-debits.md).
- *   MONEY     Are debits actually settling, or only being attempted?
- *   BACKLOG   Is anyone stuck mid-debit — paid at PhonePe with nothing to show for it?
- *
- * WHAT IS DELIBERATELY NOT AN ALARM: the day-over-day debit count. That series is pure binomial
- * noise — a chi-square over 27 Aug–7 Sep came out 9.5 on 11 df — so a low day means nothing and a
- * threshold on it would fire constantly and train everyone to ignore this tool. It is PRINTED, with
- * the same-hour comparison that makes a partial day readable, and it never touches the exit code.
- * The alarms are only the two things that are unambiguously wrong: a stuck row, and zero settles
- * across a window in which debits were actually due.
- *
  *   cd workers && node tools/payments-health.mjs
  *   cd workers && node tools/payments-health.mjs --phonepe /path/to/pp.env   # also probe the gateway
  *   cd workers && node tools/payments-health.mjs --debug                     # throwaway branch
- *
  * Exit 0 = healthy, 1 = something needs a human, 2 = usage/connection error.
  * Reads only: SELECTs and PhonePe GETs. No writes, no money moved, safe any time.
  */
@@ -56,7 +31,6 @@ const sql = openBranch({ useDebug });
 try {
   console.log(`PAYMENTS HEALTH — ${new Date().toISOString().replace("T", " ").slice(0, 16)}Z\n`);
 
-  // ── Cron liveness ──────────────────────────────────────────────────────────
   // The autopay scan only writes when there is work, so "no write" is not proof of death on its own.
   // The real proof of a dead cron is overdue work sitting un-notified, which the BACKLOG check owns;
   // these timestamps are here to tell a human WHICH failure they are looking at.
@@ -73,10 +47,7 @@ try {
   console.log(pad("last autopay notify") + `${beat.notify_min} min ago`);
   console.log(pad("last subscription write") + `${beat.write_min} min ago`);
 
-  // ── Money ──────────────────────────────────────────────────────────────────
   // first_debit_at is stamped once and never moved by a renewal, so it dates the FIRST ₹199 only.
-  // debit_count/paid_paise carry the rest. There is no backfill: the series starts the day the
-  // columns landed (db/schema/14_debit_tracking.sql), and an empty day before that is not a fault.
   const [money] = await sql`
     SELECT
       count(*) FILTER (WHERE first_debit_at > now() - interval '24 hours')::int AS debits_24h,
@@ -107,10 +78,9 @@ try {
   }
   console.log(
     "  A low day here is noise, not a signal: the daily series is statistically indistinguishable\n" +
-    "  from a coin flip, so judge it over a week and never off one day.",
+      "  from a coin flip, so judge it over a week and never off one day.",
   );
 
-  // ── Backlog ────────────────────────────────────────────────────────────────
   const { stuck, waiting, inFlight, upcoming } = await classify(sql, 4);
   console.log("\nBACKLOG");
   console.log(pad("due in the next 48h") + upcoming.length);
@@ -121,8 +91,8 @@ try {
   if (stuck.length > 0) {
     problems.push(
       `${stuck.length} subscription(s) STUCK past PhonePe's 72h settle deadline. ` +
-      `Run: node tools/verify-debits.mjs   (a row there may ALREADY have been debited — read the ` +
-      `order state before touching it, and never re-notify a paid order)`,
+        `Run: node tools/verify-debits.mjs   (a row there may ALREADY have been debited — read the ` +
+        `order state before touching it, and never re-notify a paid order)`,
     );
   }
 
@@ -137,21 +107,19 @@ try {
   if (money.debits_24h === 0 && dueRecently.n > 0) {
     problems.push(
       `ZERO debits settled in 24h while ${dueRecently.n} were due. This is the autopay-starvation ` +
-      `signature — check the quarter-hour cron is firing and read docs/autopay-debits.md.`,
+        `signature — check the quarter-hour cron is firing and read docs/autopay-debits.md.`,
     );
   }
   if (money.debits_24h === 0 && dueRecently.n === 0) {
     notes.push("No debits settled in 24h, but none were due either — quiet, not broken.");
   }
 
-  // ── Population ─────────────────────────────────────────────────────────────
   const counts = await sql`
     SELECT status, count(*)::int AS n FROM subscriptions GROUP BY status ORDER BY n DESC
   `;
   console.log("\nPOPULATION");
   console.log("  " + counts.map((r) => `${r.status} ${r.n}`).join(" · "));
 
-  // ── Gateway (optional) ─────────────────────────────────────────────────────
   if (ppEnvFile) {
     console.log("\nGATEWAY");
     const creds = loadCreds({ envFile: ppEnvFile });
@@ -180,7 +148,7 @@ try {
         if (o.json?.state !== "COMPLETED") {
           problems.push(
             `Newest settled row ${sample.merchant_subscription_id} reads ` +
-            `${o.json?.state ?? `HTTP ${o.status}`} at PhonePe but is marked paid in Neon.`,
+              `${o.json?.state ?? `HTTP ${o.status}`} at PhonePe but is marked paid in Neon.`,
           );
         }
         if (s.json?.state && s.json.state !== "ACTIVE") {
@@ -198,7 +166,6 @@ try {
     console.log("\nGATEWAY\n  not probed — pass --phonepe <envfile> to cross-check against PhonePe.");
   }
 
-  // ── Verdict ────────────────────────────────────────────────────────────────
   console.log("");
   for (const n of notes) console.log(`NOTE: ${n}`);
   if (problems.length === 0) {

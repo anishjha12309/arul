@@ -142,8 +142,6 @@ abstract interface class AuthService {
   });
 
   /// Declares every sign-in attempt started so far ABANDONED.
-  ///
-  /// Credential Manager can sit on its callback for minutes — observed 13 min on device.
   /// A late resolve is discarded before ANY side effect: no token exchange, no emit, no analytics.
   /// Called by the stall guard before it frees the UI -> a revived zombie cannot race its replacement.
   void abandonPendingSignIn();

@@ -1,10 +1,7 @@
 import 'analytics_service.dart';
 
 /// Forwards only an explicit allow-list of events to the wrapped service.
-///
-/// **Default-deny, deliberately** -> a new `track()` call site costs nothing until it is listed here.
 /// GA4 is wrapped separately and never passes through this decorator -> it still gets 100%.
-/// Pairs with `AnalyticsCohort`: that gate decides WHO sends, this one narrows WHAT a member sends.
 class AllowlistedAnalyticsService implements AnalyticsService {
   const AllowlistedAnalyticsService(this._inner, {required this.allowed});
 

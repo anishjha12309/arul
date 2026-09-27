@@ -1,15 +1,8 @@
 /**
- * The ONLY server-side analytics sink. GA4 and Meta server reporting are deleted -> never re-add either here.
- *
  * The FIRST trial->paid conversion settles app-closed (cron or S2S webhook) -> no client can ever emit it
- * Without this the PostHog journey ended at `trial_started` -> the funnel had no paid endpoint at all
- * SERVER-side only -> the client allow-list `postHogAllowedEvents` is unchanged, pinned by analytics_gating_test.dart
- * Join key is distinct_id = users.id -> the app identifies PostHog with the Neon user id at login
- * Capture API: POST {host}/i/v0/e with api_key + event + distinct_id (posthog.com/docs/api/capture)
  * It answers 200 even for events it DROPS -> the KV mark means "call accepted", never "event ingested"
  * PostHog dedupes on the whole key [timestamp, distinct_id, event, uuid] -> a deterministic uuid alone is not enough
  * So callers pass `occurredAt` — the transition's own RETURNING `updated_at` -> a resend keeps the same key
- * Stamping a resend with the wall clock would mint a new key every time -> `now()` is only the last-resort fallback
  * Fail-open EVERYWHERE -> analytics must never throw into, or block, a billing transition
  */
 
@@ -49,10 +42,7 @@ function eventTimestamp(occurredAt: Date | string | null | undefined): string {
 
 /** UUID-shaped and derived from (event, seed) -> a KV eventual-consistency double-send carries the SAME uuid. */
 async function deterministicUuid(event: string, seed: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(`arul:${event}:${seed}`),
-  );
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`arul:${event}:${seed}`));
   const b = new Uint8Array(digest);
   b[6] = (b[6] & 0x0f) | 0x40; // version nibble
   b[8] = (b[8] & 0x3f) | 0x80; // variant bits
@@ -67,10 +57,7 @@ async function deterministicUuid(event: string, seed: string): Promise<string> {
  * Capture one settled FIRST trial->paid debit as `subscription_active`.
  * The prior-status === 'trialing' gate is the CALLER's -> this function does not re-check it
  */
-export async function reportPostHogFirstConversion(
-  env: Env,
-  purchase: FirstConversion,
-): Promise<void> {
+export async function reportPostHogFirstConversion(env: Env, purchase: FirstConversion): Promise<void> {
   try {
     if (!env.POSTHOG_API_KEY) {
       console.log("[posthog] POSTHOG_API_KEY not configured — skipping subscription_active");
@@ -79,9 +66,7 @@ export async function reportPostHogFirstConversion(
 
     const dedupeKey = `ph:subscription_active:${purchase.transactionId}`;
     if (await env.KV.get(dedupeKey)) {
-      console.log(
-        `[posthog] subscription_active ${purchase.transactionId} already reported — skipping`,
-      );
+      console.log(`[posthog] subscription_active ${purchase.transactionId} already reported — skipping`);
       return;
     }
 
@@ -118,21 +103,18 @@ export async function reportPostHogFirstConversion(
     if (res.ok) {
       console.log(
         `[posthog] subscription_active captured txn=${purchase.transactionId} ` +
-        `user=${purchase.userId} value=₹${amountPaise / 100}`,
+          `user=${purchase.userId} value=₹${amountPaise / 100}`,
       );
       await env.KV.put(dedupeKey, "1", { expirationTtl: DEDUPE_TTL_SECONDS });
     } else {
       console.error(
         `[posthog] capture rejected (HTTP ${res.status}) for txn=${purchase.transactionId}: ` +
-        (await res.text()),
+          (await res.text()),
       );
     }
   } catch (err) {
     // Analytics must never break a billing transition.
-    console.error(
-      `[posthog] subscription_active failed for txn=${purchase.transactionId}:`,
-      err,
-    );
+    console.error(`[posthog] subscription_active failed for txn=${purchase.transactionId}:`, err);
   }
 }
 
@@ -171,10 +153,7 @@ const LIVE_STATUSES = new Set(["trialing", "active", "paused"]);
  * Three of the five channels above fire app-closed -> no client can emit this -> server-side only
  * Non-live priors are dropped HERE -> no call site has to remember the rule -> callers just pass priorStatus
  */
-export async function reportPostHogSubscriptionCancel(
-  env: Env,
-  cancel: SubscriptionCancel,
-): Promise<void> {
+export async function reportPostHogSubscriptionCancel(env: Env, cancel: SubscriptionCancel): Promise<void> {
   try {
     if (!env.POSTHOG_API_KEY) {
       console.log("[posthog] POSTHOG_API_KEY not configured — skipping subscription_cancel");
@@ -183,7 +162,7 @@ export async function reportPostHogSubscriptionCancel(
     if (!cancel.priorStatus || !LIVE_STATUSES.has(cancel.priorStatus)) {
       console.log(
         `[posthog] subscription_cancel skipped — prior status ${cancel.priorStatus ?? "null"} ` +
-        `is not a live subscription (user=${cancel.userId}, reason=${cancel.reason})`,
+          `is not a live subscription (user=${cancel.userId}, reason=${cancel.reason})`,
       );
       return;
     }
@@ -220,13 +199,12 @@ export async function reportPostHogSubscriptionCancel(
     if (res.ok) {
       console.log(
         `[posthog] subscription_cancel captured user=${cancel.userId} sub=${seed} ` +
-        `reason=${cancel.reason} prior=${cancel.priorStatus}`,
+          `reason=${cancel.reason} prior=${cancel.priorStatus}`,
       );
       await env.KV.put(dedupeKey, "1", { expirationTtl: DEDUPE_TTL_SECONDS });
     } else {
       console.error(
-        `[posthog] subscription_cancel rejected (HTTP ${res.status}) for ${seed}: ` +
-        (await res.text()),
+        `[posthog] subscription_cancel rejected (HTTP ${res.status}) for ${seed}: ` + (await res.text()),
       );
     }
   } catch (err) {

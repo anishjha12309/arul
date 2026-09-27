@@ -2,10 +2,9 @@
 // PostHog insights, GA4 key events, the Ads conversion import and Meta's StartTrial all key on it.
 // Renaming a constant renames the event everywhere at once -> a failure here means a dashboard or a bid goes dark.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/analytics/analytics_events.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('★ event names are frozen', () {

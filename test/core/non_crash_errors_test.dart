@@ -4,11 +4,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/crash/non_crash_errors.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   test('image pipeline and transport failures are non-crash', () {

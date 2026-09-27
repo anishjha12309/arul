@@ -17,10 +17,6 @@ typedef GeoAnswerHandler =
     Future<void> Function({String? lang, String? region, bool applyLive});
 
 /// A FRESH install's region hint, asked ONCE -> the Worker answers from Cloudflare's `request.cf`.
-///
-/// Fired from the splash beside `warmUp()`. Only the regional arm awaits it, under a cap
-/// (launch-surface.md); every other launch routes on the auth seed alone.
-/// Offline, timed out or not live yet -> nothing stored, pending kept -> the next cold start asks again.
 /// At most ONE request per process whatever happens -> no retry loop can ever come from here.
 class GeoLanguageService {
   GeoLanguageService({
@@ -83,7 +79,6 @@ class GeoLanguageService {
   }
 
   Future<Map<String, dynamic>> _ask() {
-    // Test seam: `DEBUG_GEO_LANG=ta` stands in for the Worker -> the Tamil path walks on a phone in the north.
     // Const-gated on the define -> a build without it compiles the seam away; a sideload release
     // may carry it (never a Play install), so the regional wall is walkable at release speed.
     // `DEBUG_GEO_REGION=KL` picks the regional arm's art the same way.
@@ -95,7 +90,6 @@ class GeoLanguageService {
     if (debugLang.isNotEmpty && (kDebugMode || !PlayInstall.isPlay)) {
       return Future.value({'lang': debugLang, 'region': debugRegion});
     }
-    // `v=2` is what earns a `lang` -> builds before the factorial flip nothing, so its cohort stays clean.
     return _api.get('/geo?v=2', requiresAuth: false).timeout(_timeout);
   }
 }

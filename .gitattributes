@@ -1,0 +1,8 @@
+# Biome formats JS/TS with LF; core.autocrlf=true would check these out as CRLF, which fails
+# `npm run check` on every file git rewrites.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.jsonc text eol=lf

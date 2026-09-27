@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/experiments/experiments.dart';
@@ -15,27 +16,19 @@ import '../../../core/perf/boot_trace.dart';
 import '../../../core/providers/geo_language_service.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../notifications/providers/come_back_reminder.dart';
 import '../../wallpapers/presentation/wallpaper_tile.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../../wallpapers/providers/wallpaper_prefetch_provider.dart';
-import '../../notifications/providers/come_back_reminder.dart';
 import '../domain/auth_service.dart';
 import '../domain/regional_art.dart';
 import '../providers/auth_providers.dart';
 import '../providers/launch_art_provider.dart';
 import '../providers/launch_clip_provider.dart';
 import 'widgets/launch_backdrop.dart';
-import '../../../app/theme/motion.dart';
 
-/// The launch screen.
-///
 /// The OS splash hands off to this, both painted on the same ink -> no seam, no white flash.
 /// The video's darkest tone IS that ink — if they disagreed the reveal would pop.
-/// On screen for exactly as long as the work takes, never a frame longer — see [_decideRoute].
-/// The catalog fetch and the media warm both start here -> the reel's first frame usually has data.
-/// The background player is SHARED with sign-in ([VideoBackground]'s ref-counted singleton).
-/// The same decoder crosses the route -> no MediaCodec re-init, which on a budget SoC flattens it.
-/// This screen paints `overlayOpacity: 0` and draws its own scrim and hairline loader on top.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -48,17 +41,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
 
   /// How many leading feed thumbnails to warm once the catalog lands.
-  ///
   /// Mirrors the prefetch service's window at index 0 (items 0..15) — the same soon-to-be-seen set.
   /// Thumbs past the in-memory LRU still land on DISK -> a later scroll re-decodes, never re-downloads.
-  /// AUTHED SESSIONS ONLY -> a signed-out session gets [_preAuthThumbWarmCount] and NO MP4 bytes.
-  /// The full warm (16 clips × 2–5 MB) fought the token mint and POST /auth/login -> a 7–8 s login.
-  /// Post-login the feed's own VideoPreloadController re-runs `prefetchAround` -> nothing is lost.
   static const _thumbWarmCount = 16;
 
   /// The signed-out slice — ONE poster, so the post-login feed's first card shows real art.
-  /// Tens of KB at most: nothing to crowd Google's sign-in step or the auth calls, which measured
-  /// 2–3× slower on entry-level phones. The rest of the screenful warms once the feed mounts.
   static const _preAuthThumbWarmCount = 1;
 
   /// The regional arm's longest wait for `/geo` before the wall paints in the phone's language.
@@ -150,12 +137,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final thumbCount = authed ? _thumbWarmCount : _preAuthThumbWarmCount;
 
     // Fire the poster warm NOW, while this screen is certainly mounted.
-    //
     // The splash routes away within a frame of the seed settling -> a post-frame callback warms NOTHING.
-    // That handed the reel a cold image cache on exactly the launch this was meant to speed up.
-    // Only the MediaQuery lookup needed the deferral, and the await above already passed `initState`.
-    // `precacheImage` reads the context once, synchronously, to build its ImageConfiguration.
-    // The decode belongs to the app-scoped cache -> it completes whatever happens to this screen.
     // A define-less build has no await ahead of it and may still be inside `initState`.
     // So that one case keeps the deferral — the lookup would throw there.
     if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle &&
@@ -197,16 +179,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       BootTrace.mark('splash: auth seed settled');
 
       // No stored session -> ask Google NOW, not at the sign-in screen's first frame a route away.
-      // The picker landed 2.9s after launch against a peer's 1.25s, nearly all of it waiting here.
-      // The picker is a system Activity that covers us -> the route below still runs underneath.
-      // Fired BEFORE that route -> the sign-in screen's auto-launch finds it in flight, stands down.
-      // That is what keeps the contract of EXACTLY ONE picker per sign-in (edge-cases.md §Auth).
       // NEVER before the seed resolves — an already-signed-in user may be behind it.
       // Showing THEM a picker is a worse bug than being a second slower.
       if (AppConfig.googleAuthConfigured &&
           !ref.read(authServiceProvider).currentState.isAuthenticated) {
-        // No network at all -> the launch is HELD, not spent: Google's sheet would draw, take the
-        // account tap and fail. The wall shows the wait line and fires the sheet when the link is up.
         final offline = await _knownOffline();
         if (!mounted) return;
         BootTrace.mark(
@@ -251,8 +227,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   /// The regional arm on a launch `/geo` has not answered yet: hold the dark ground until the region
   /// lands or [regionCap] passes, so the wall's first frame is already in its final language.
-  /// The Google sheet is not held — `autoSignIn` fired before this. A miss closes the live window:
-  /// the answer, whenever it comes, is kept for the next launch and never flips this one.
   Future<void> _awaitRegion() async {
     final answered =
         _geoDone ||

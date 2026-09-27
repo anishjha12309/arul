@@ -19,16 +19,16 @@ import 'core/analytics/analytics_cohort.dart';
 import 'core/analytics/analytics_events.dart';
 import 'core/analytics/analytics_service.dart';
 import 'core/analytics/posthog_analytics_service.dart';
-import 'core/deeplink/deep_link_target.dart';
-import 'core/experiments/experiments.dart';
-import 'core/deeplink/deferred_link_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
 import 'core/config/app_config.dart';
+import 'core/config/build_info.dart';
 import 'core/connectivity/connectivity_provider.dart';
 import 'core/connectivity/data_saver.dart';
-import 'core/config/build_info.dart';
 import 'core/crash/non_crash_errors.dart';
+import 'core/deeplink/deep_link_target.dart';
+import 'core/deeplink/deferred_link_service.dart';
+import 'core/experiments/experiments.dart';
 import 'core/perf/boot_trace.dart';
 import 'core/providers/geo_language_service.dart';
 import 'core/providers/locale_provider.dart';
@@ -122,7 +122,7 @@ Future<void> main() async {
 /// Crashlytics is the only diagnostic channel that reaches a Play install; nothing here changes that.
 void _silenceLogsInRelease() {
   if (kReleaseMode && !const bool.fromEnvironment('DIAG')) {
-    debugPrint = (String? message, {int? wrapWidth}) {};
+    debugPrint = (message, {wrapWidth}) {};
   }
 }
 

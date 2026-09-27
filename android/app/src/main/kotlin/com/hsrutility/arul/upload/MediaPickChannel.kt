@@ -21,20 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-// The upload screen's one file pick, straight on the system pickers.
-// It replaced the file_picker plugin, whose Android side carried Apache Tika for MIME sniffing ->
-// 370 KB of dex + XML for a job UploadConstraints.mimeFromName does from the extension anyway.
-// Neither picker needs a permission -> the manifest stays free of READ_MEDIA_*, which Play's
-// Photo and Video Permissions policy would otherwise ask this app to justify.
-// A wallpaper pick is the Android Photo Picker (androidx's PickVisualMedia contract builds the
-// intent and carries Google's own fallbacks: the system picker on 13+, the Play-services one where
-// it is installed, else ACTION_OPEN_DOCUMENT) -> an image or video, never audio.
-// A ringtone pick is ACTION_GET_CONTENT on audio/* opened at the audio root, exactly what the
-// plugin launched -> the same picker people have learnt, with music apps free to answer it.
-// The picked content:// stream is copied into the app cache and the COPY's path is returned ->
-// Dart reads a plain File, and a provider that revokes the grant on return cannot cut it off.
-// Contract the Dart caller is built against: pick(kind) -> {path, name} or null when dismissed.
-// The copy is Dart's to delete once it is rejected or replaced; this side only sweeps at engine start.
 class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCallHandler {
 
     companion object {
@@ -70,7 +56,6 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
         pending = result
         val intent = if (kind == "audio") audioIntent() else visualMediaIntent()
         try {
-            // No resolveActivity pre-flight: package-visibility filtering lies, the try/catch IS the probe.
             activity.startActivityForResult(intent, REQUEST_PICK)
         } catch (e: Exception) {
             Log.w(TAG, "no picker for kind=$kind", e)

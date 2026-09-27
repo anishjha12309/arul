@@ -11,8 +11,6 @@ class ApiSubscriptionRepository implements SubscriptionRepository {
 
   @override
   Future<Entitlement> getEntitlement(String userId) async {
-    // Cold start already fires /me for the auth upgrade -> folding entitlement into its
-    // `{user, subscription, premium}` adds no Neon request (ApiClient coalesces in-flight GETs).
     // `premium` is the Worker-computed flag and the ONLY source of the decision (see Entitlement) ->
     // strict `== true` fails CLOSED to free -> the Worker's /media/signed-url stays the real gate.
     try {

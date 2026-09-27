@@ -2,9 +2,8 @@
 // The shell, the feed, the Ringtones tab and the locale sync all rely on this contract.
 // Last write wins, a typed take never eats the other kind, listeners fire on every write, a take clears exactly once.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   setUp(ArulDeepLink.reset);

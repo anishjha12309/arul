@@ -1,8 +1,4 @@
 /**
- * Internal routes — operator and cron only. TWO different secrets guard them; check each handler.
- *
- * CATALOG_BUILD_SECRET guards the SAFE routes: build-catalog, sweep-submissions, sweep-canonical
- * OPS_SECRET guards the routes that MOVE MONEY: run-redemptions and refund -> never widen either
  * /internal/run-redemptions with { force: true } skips the next_debit_at and 24h checks
  * This Worker runs on PhonePe PRODUCTION credentials -> a forced redemption debits a REAL ₹199 -> not a dry run
  */
@@ -38,7 +34,7 @@ export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise
 
   let scope: string | null = null;
   try {
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (body?.scope && typeof body.scope === "string") {
       scope = body.scope;
     }
@@ -60,20 +56,13 @@ export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise
   }
 }
 
-// ── POST /internal/sweep-submissions ─────────────────────────────────────────
-//   Auth: Bearer CATALOG_BUILD_SECRET -> a content route, so the CMS's secret is the right one
-//   The backstop for the inline delete-on-approve/reject -> the daily cron runs it, this is the on-demand door
-
 export async function handleSweepSubmissions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
   const authHeader = c.req.header("Authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   if (token !== env.CATALOG_BUILD_SECRET) {
-    return Response.json(
-      { error: { code: "unauthorized", message: "Invalid secret" } },
-      { status: 401 },
-    );
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
   }
 
   try {
@@ -81,19 +70,9 @@ export async function handleSweepSubmissions(c: Context<{ Bindings: Env }>): Pro
     return c.json({ ok: true, result });
   } catch (err) {
     console.error("[internal/sweep-submissions] error:", err);
-    return Response.json(
-      { error: { code: "server_error", message: "Sweep failed" } },
-      { status: 500 },
-    );
+    return Response.json({ error: { code: "server_error", message: "Sweep failed" } }, { status: 500 });
   }
 }
-
-// ── POST /internal/sweep-canonical ───────────────────────────────────────────
-//   Auth: Bearer CATALOG_BUILD_SECRET -> a content route, so the CMS's secret is the right one
-//   Reclaims canonical objects no DB row references -> full_key, audio_key AND cover_key all count as references
-//   It catches abandoned CMS uploads and lost delete/replace cleanups -> neither is ever retried inline
-//   The hourly cron runs it only when a scope changed; the daily cron runs it unconditionally
-//   It deletes anything unreferenced under its prefixes -> NEVER share this bucket with another app
 
 export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -101,13 +80,9 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
   const authHeader = c.req.header("Authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   if (token !== env.CATALOG_BUILD_SECRET) {
-    return Response.json(
-      { error: { code: "unauthorized", message: "Invalid secret" } },
-      { status: 401 },
-    );
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
   }
 
-  // `?dry_run=1` -> decide everything, delete nothing, return `wouldDelete` -> read it BEFORE the real call
   // R2 has no versioning -> this is the only preview an operator gets of the one action with no undo
   const dryRun = c.req.query("dry_run") === "1";
   try {
@@ -115,10 +90,7 @@ export async function handleSweepCanonical(c: Context<{ Bindings: Env }>): Promi
     return c.json({ ok: true, dryRun, result });
   } catch (err) {
     console.error("[internal/sweep-canonical] error:", err);
-    return Response.json(
-      { error: { code: "server_error", message: "Sweep failed" } },
-      { status: 500 },
-    );
+    return Response.json({ error: { code: "server_error", message: "Sweep failed" } }, { status: 500 });
   }
 }
 
@@ -126,18 +98,14 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
   const env = c.env;
 
   // Auth: OPS_SECRET, NOT CATALOG_BUILD_SECRET -> force:true charges every due subscriber ₹199 immediately
-  // CATALOG_BUILD_SECRET is handed to the CMS just to trigger rebuilds -> one string must never authorize both
   if (!authorizeOps(c, env)) {
-    return Response.json(
-      { error: { code: "unauthorized", message: "Invalid secret" } },
-      { status: 401 },
-    );
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
   }
 
   let force = false;
   let targetMerchantSubId: string | null = null;
   try {
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (body?.force === true) force = true;
     if (typeof body?.merchantSubscriptionId === "string") {
       targetMerchantSubId = body.merchantSubscriptionId;
@@ -240,7 +208,6 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
             WHERE id = ${row.id as string}
           `;
         }
-
       } catch (err) {
         result.error = String(err);
         console.error(`[internal/run-redemptions] Error for sub ${merchantSubId}:`, err);
@@ -250,7 +217,6 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
     }
 
     return c.json({ ok: true, processed: results.length, results });
-
   } catch (err) {
     console.error("[internal/run-redemptions] error:", err);
     return Response.json(
@@ -262,27 +228,18 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
   }
 }
 
-// ── POST /internal/refund ────────────────────────────────────────────────────
-//   Auth: Bearer OPS_SECRET -> operator and support only -> this route moves real money
-//   Refunds a ₹199 monthly debit for a dispute or goodwill -> amountPaise defaults to the full month
-//   NEVER needed for the ₹2 trial validation -> PENNY_DROP auto-reverses that on its own
-//   The pg.refund.* webhook updates the audit log as the refund settles -> this call only starts it
-
 export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
   // Auth: OPS_SECRET -> this moves money -> see handleRunRedemptions
   if (!authorizeOps(c, env)) {
-    return Response.json(
-      { error: { code: "unauthorized", message: "Invalid secret" } },
-      { status: 401 },
-    );
+    return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
   }
 
   let originalMerchantOrderId: string | null = null;
   let amountPaise = 19900;
   try {
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (typeof body?.originalMerchantOrderId === "string") {
       originalMerchantOrderId = body.originalMerchantOrderId;
     }
@@ -354,29 +311,17 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
     const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, amountPaise);
     console.log(
       `[internal/refund] ${amountPaise} paise on ${originalMerchantOrderId} ` +
-      `(user ${ownerUserId}) -> ${result.state} refundId=${result.refundId}`,
+        `(user ${ownerUserId}) -> ${result.state} refundId=${result.refundId}`,
     );
     return c.json({ ok: true, merchantRefundId, ...result });
   } catch (err) {
     console.error("[internal/refund] error:", err);
-    return Response.json(
-      { error: { code: "phonepe_error", message: "Refund failed" } },
-      { status: 502 },
-    );
+    return Response.json({ error: { code: "phonepe_error", message: "Refund failed" } }, { status: 502 });
   }
 }
 
-// ── Campaign push routes (the CMS's Notifications page) ──────────────────────
-//   Auth: Bearer PUSH_SECRET -> a THIRD secret, deliberately.
-//   CATALOG_BUILD_SECRET already lives in the CMS to trigger rebuilds; one string must never
-//   authorize "rebuild the catalog" AND "message every user". OPS_SECRET moves money and stays
-//   nowhere near the CMS. Fails closed when unset, exactly like authorizeOps.
-
 /**
  * POST /internal/push/count { audience } -> { devices }
- *
- * The composer's live counts. The SQL lives in lib/push-audience.ts and NOWHERE else -> a copy in the
- * CMS would be a number that disagrees with what the send actually reaches.
  */
 export async function handlePushCount(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -412,9 +357,6 @@ export async function handlePushCount(c: Context<{ Bindings: Env }>): Promise<Re
 
 /**
  * POST /internal/push/dispatch { campaign_id } -> 202
- *
- * "Send now" only. A scheduled campaign needs no call at all — the minute cron picks it up on its own,
- * and this exists so the operator sees movement within seconds rather than at the next tick.
  * The campaign id is accepted for the log line; the dispatcher claims every due campaign regardless,
  * which is what keeps one code path for both doors.
  */
@@ -424,7 +366,7 @@ export async function handlePushDispatch(c: Context<{ Bindings: Env }>): Promise
     return Response.json({ error: { code: "unauthorized", message: "Invalid secret" } }, { status: 401 });
   }
   if (!pushEnabled(env)) {
-    console.log("[internal/push/dispatch] PUSH_ENABLED is not \"true\" — nothing claimed");
+    console.log('[internal/push/dispatch] PUSH_ENABLED is not "true" — nothing claimed');
     return c.json({ ok: true, dispatched: false, reason: "disabled" }, 202);
   }
 
@@ -481,10 +423,7 @@ export async function handlePushTest(c: Context<{ Bindings: Env }>): Promise<Res
     c.executionCtx.waitUntil(sql.end());
   }
   if (!campaign) {
-    return Response.json(
-      { error: { code: "not_found", message: "No such notification" } },
-      { status: 404 },
-    );
+    return Response.json({ error: { code: "not_found", message: "No such notification" } }, { status: 404 });
   }
 
   try {
@@ -492,10 +431,7 @@ export async function handlePushTest(c: Context<{ Bindings: Env }>): Promise<Res
     return c.json({ ok: true, ...result });
   } catch (err) {
     console.error("[internal/push/test] send failed:", err);
-    return Response.json(
-      { error: { code: "fcm_error", message: String(err) } },
-      { status: 502 },
-    );
+    return Response.json({ error: { code: "fcm_error", message: String(err) } }, { status: 502 });
   }
 }
 

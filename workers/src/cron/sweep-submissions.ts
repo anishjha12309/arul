@@ -1,10 +1,6 @@
 /**
- * Sweep cron — reclaim orphaned user-submission objects from R2. Approve and reject both delete inline.
- *
  * The inline delete is fire-and-forget in waitUntil -> it can be lost -> this is the backstop
  * A confirm-upload that never landed leaves bytes with NO submission row at all -> only a sweep finds those
- * An object is kept ONLY while it still backs a `pending` row -> everything else is deleted
- * Deletion waits out a grace window -> an upload whose row has not committed yet is never swept
  * Pending rows are not immortal: one past PENDING_EXPIRY_DAYS is auto-rejected FIRST, releasing its object here
  * Without that expiry, a single unmoderated pending row would shield its bytes from reclamation forever
  */
@@ -107,8 +103,6 @@ export async function sweepSubmissions(env: Env): Promise<SweepResult> {
 
     return result;
   } finally {
-    // Tearing down an already-severed socket can itself reject, and inside a finally that rejection
-    // REPLACES the return value -> a finished sweep would read as a failed one (docs/cron.md)
     await sql.end().catch(() => {});
   }
 }

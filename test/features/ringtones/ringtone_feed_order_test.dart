@@ -4,12 +4,11 @@
 // That wiring breaks silently -> a list that forgets `rank:`, or a chip that skips the sort, compiles and renders fine.
 // The tier logic is proven in test/features/wallpapers/catalog_providers_test.dart -> pinned here is that this tab uses it.
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _FakeCatalog extends RingtoneCatalogNotifier {
   _FakeCatalog(this._items);

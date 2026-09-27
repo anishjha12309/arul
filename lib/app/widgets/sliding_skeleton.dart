@@ -3,12 +3,6 @@ import 'package:flutter/material.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 
-/// Sliding-gradient skeleton, per the spec: `110deg #14090C 30% → #2A1218 50% → #14090C 70%`,
-/// background-size 200%, 1.8s linear loop.
-///
-/// A `ShaderMask` / masked shimmer forces `saveLayer()` — a full offscreen pass, every frame, per
-/// widget -> exactly the wrong tax over a video feed on a budget SoC -> slide an ordinary gradient
-/// FILL (via [GradientTransform]) instead: no mask, no offscreen buffer, no saveLayer.
 /// Fixed dark palette in BOTH themes -> a skeleton over full-bleed media must never flash white.
 /// An on-surface placeholder that follows the theme -> use the legacy [Skeleton] in skeleton.dart.
 class SlidingSkeleton extends StatefulWidget {
@@ -28,8 +22,6 @@ class _SlidingSkeletonState extends State<SlidingSkeleton>
   );
   // TickerMode is inherited from the route -> this parks itself when the page isn't current.
 
-  /// Started from [didChangeDependencies], not the field initializer: `reduceMotion` needs an
-  /// InheritedWidget lookup, and a repeating ticker must never be armed before that answer exists.
   bool _motionStarted = false;
 
   @override
@@ -38,8 +30,6 @@ class _SlidingSkeletonState extends State<SlidingSkeleton>
     if (_motionStarted) return;
     _motionStarted = true;
     if (context.reduceMotion) {
-      // Parked mid-sweep: a static sheen, the resting state of this loop. Never flat — flat reads
-      // as a dead box rather than a loading one.
       _c.value = 0.5;
     } else {
       _c.repeat();

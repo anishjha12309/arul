@@ -8,7 +8,8 @@ paths:
 
 **`flutter analyze` takes ~5 minutes cold here** (measured on a clean tree), so an agent that runs
 it per edit burns the session and one that skips it ships unanalysed code. Iterate on
-`mcp__dart__analyze_files` instead — the same analysis server the IDE drives, already warm, back in
+the Dart MCP's `analyze_files` instead (the `dart-flutter` plugin's server) — the same analysis server the IDE
+drives, already warm, back in
 under a second. `flutter analyze` stays the phase gate, where its cost buys the whole-project
 guarantee. `dart-analyze-gate.js` (Stop hook) holds the turn open if Dart was edited and neither ran.
 

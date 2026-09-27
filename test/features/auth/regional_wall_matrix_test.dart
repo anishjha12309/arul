@@ -171,9 +171,9 @@ void main() {
                     child: KeyedSubtree(
                       key: ValueKey(state),
                       child: buildHarness(
-                      entry: entry,
-                      locale: locale,
-                      config: config,
+                        entry: entry,
+                        locale: locale,
+                        config: config,
                       ),
                     ),
                   ),
@@ -187,7 +187,6 @@ void main() {
                 for (final o in overflows.toSet()) 'overflow: $o',
               ];
 
-              // ── Type: nothing truncated, panel and pill wholly on screen ───────────────
               for (final key in [kSignInTitleKey, kSignInSubtitleKey]) {
                 final para = _descendants(
                   tester.renderObject(find.byKey(key)),
@@ -214,7 +213,6 @@ void main() {
               );
               if (!_inside(pill, safe)) found.add('pill off screen $pill');
 
-              // ── Art: crown and face clear of the type and the edges ───────────────────
               final wordmark = _wordmarkGlyphs(tester);
               var wordGap = double.nan;
               var panelGap = double.nan;
@@ -254,10 +252,12 @@ void main() {
                 if (live) {
                   final clip = tester.getRect(find.byKey(_standInKey));
                   final poster = tester.getRect(
-                    find.descendant(
-                      of: find.byKey(kLaunchArtFrameKey),
-                      matching: find.byType(RawImage),
-                    ).first,
+                    find
+                        .descendant(
+                          of: find.byKey(kLaunchArtFrameKey),
+                          matching: find.byType(RawImage),
+                        )
+                        .first,
                   );
                   if ((clip.topLeft - poster.topLeft).distance > 0.01 ||
                       (clip.bottomRight - poster.bottomRight).distance > 0.01) {
@@ -284,7 +284,8 @@ void main() {
               for (final m in found) {
                 // Placement findings on a poster the owner has not re-framed are reported in the
                 // grid, never gated; everything about the type is gated on every art.
-                if (m.startsWith('face') && !_placementGated.contains(artName)) {
+                if (m.startsWith('face') &&
+                    !_placementGated.contains(artName)) {
                   continue;
                 }
                 failures.add('$where — $m');
@@ -386,7 +387,9 @@ Future<void> _dump(WidgetTester tester, LaunchArt art, String path) async {
     }
   });
   await tester.pump();
-  await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 50)),
+  );
   await tester.pump();
   await tester.runAsync(() async {
     final boundary = tester.renderObject<RenderRepaintBoundary>(

@@ -1,24 +1,10 @@
 /**
  * Campaign push dispatch — the "* * * * *" cron's whole job. Read docs/push.md before changing it.
- *
- * ITS OWN TRIGGER, never folded into another (.claude/rules/worker-infra.md): a separate cron
- * expression gets a separate invocation, so a draining campaign and the catalog rebuild each get a
- * full subrequest budget and a full wall clock. Sharing one is exactly what blew the cap mid-scan for
- * autopay, and a send stopping halfway is invisible — nobody complains about a notification that
- * never arrived.
- *
  * THE CLAIM IS THE SAFETY. `SELECT … FOR UPDATE SKIP LOCKED` inside one batch transaction means two
  * overlapping ticks divide the work instead of racing it, and a tick killed mid-batch rolls back to
  * 'pending' rather than losing the rows. (campaign_id, fid) is the primary key, so the retry cannot
  * create a second delivery for the same phone, and `collapse_key`/`tag` make even a genuine duplicate
  * replace itself in the drawer rather than stack.
- *
- * PUSH_ENABLED IS THE KILL SWITCH and it gates THIS function, not the send helper: with it off the
- * cron claims nothing at all, while /internal/push/test still reaches the owner's own phones.
- *
- * AN IDLE MINUTE PRUNES THE REGISTRY. A dead registration used to be found only by a send, so they
- * piled up between campaigns and each one cost the next campaign a delivery. A tick that started
- * nothing and drained nothing dry-runs a slice of tokens against FCM instead (`pruneRegistry`).
  */
 
 import type postgres from "postgres";
@@ -72,14 +58,6 @@ export interface PushDispatchResult {
   completed: number;
 }
 
-/**
- * Whether a campaign's Sent/Failed/total count the test accounts' phones.
- *
- * Test accounts receive every real campaign (lib/push-audience.ts) but stay out of its numbers: a
- * team that opens every send on reinstalled phones would otherwise move Failed and Opened on each
- * one. A campaign aimed AT them is the exception — there they are the only phones, and "Sent 0"
- * would hide whether the test went out.
- */
 export function countsTestAccounts(audience: PushAudience | null): boolean {
   return audience?.kind === "internal";
 }
@@ -91,11 +69,13 @@ export function pushEnabled(env: Env): boolean {
 
 export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
   const empty: PushDispatchResult = {
-    started: 0, attempted: 0, sent: 0, failed: 0, gone: 0, completed: 0,
+    started: 0,
+    attempted: 0,
+    sent: 0,
+    failed: 0,
+    gone: 0,
+    completed: 0,
   };
-  // SILENT while disabled. This runs 1,440 times a day and every failure path in this Worker is a
-  // bare console.error -> a line per tick would bury them inside the log retention window. The
-  // caller logs the disabled state once an hour so the switch still leaves a breadcrumb.
   if (!pushEnabled(env)) return { ...empty, skipped: "disabled" };
 
   const sql = getDb(env);
@@ -147,19 +127,6 @@ export async function runPushDispatch(env: Env): Promise<PushDispatchResult> {
   }
 }
 
-/**
- * Drop dead registrations, a slice per idle tick.
- *
- * 1,864 of one campaign's 1,982 "failures" were phones that had uninstalled since the previous one.
- * Each idle tick dry-runs PRUNE_SLICE tokens (`validateToken`, lib/fcm.ts — nothing is delivered),
- * deletes the ones FCM calls dead and stamps the rest, so the least-recently-checked row is always
- * next and a never-checked one (NULL) goes first. A transient FCM error stamps too: the row is not
- * dead, and the next pass asks again. Token-less rows unseen for a week go as well — `onTokenRefresh`
- * fills the column within a launch, so a week without one is a phone that never came back.
- *
- * Never throws and logs only when it removed something: this runs on nearly every one of the 1,440
- * ticks a day, and the prune is housekeeping that must not take the dispatcher down with it.
- */
 async function pruneRegistry(sql: postgres.Sql, env: Env, deadline: number): Promise<void> {
   try {
     const stale = (await sql`
@@ -203,9 +170,7 @@ async function pruneRegistry(sql: postgres.Sql, env: Env, deadline: number): Pro
       }
     }
     if (dead.length > 0 || stale.length > 0) {
-      console.log(
-        `[push] prune: dropped ${dead.length} dead registrations, ${stale.length} token-less`,
-      );
+      console.log(`[push] prune: dropped ${dead.length} dead registrations, ${stale.length} token-less`);
     }
   } catch (err) {
     console.error("[push] prune failed:", err);
@@ -352,17 +317,8 @@ function tokenFailureCount(lastError: string | null): number {
 }
 
 /**
- * One claim-send-record batch, inside ONE transaction.
- *
  * The claim flips the rows to 'sending' as well as locking them, so the row state is legible to
  * anyone reading the table mid-drain; the lock is what makes a concurrent tick skip them.
- *
- * A DEAD REGISTRATION IS NOT A FAILURE. A 404 UNREGISTERED is a phone that uninstalled, and a row
- * whose device is already gone is the same phone found a step later: nobody could have been reached,
- * so the send did not go wrong — the audience was smaller than the registry said. Those deliveries
- * count toward `gone` and come OUT of `total`, so a finished campaign reads total = sent + failed and
- * the card's progress (sent + failed) / total stays right mid-drain. The delivery row still says
- * 'failed' with its error: that is the audit trail; the counter is the card's number.
  */
 async function sendOneBatch(
   sql: postgres.Sql,
@@ -504,17 +460,7 @@ export async function runPushTest(
   }
 }
 
-/**
- * Daily retention, run from the 21:30 UTC cron.
- *
- * 270 days on a device is Firebase's own number: FCM garbage-collects an Android registration after
- * 270 days of inactivity, so a row older than that cannot be sent to and only inflates every count
- * the CMS shows. Deliveries are kept 30 days — long enough to explain a campaign, short enough that
- * the table does not grow without bound at tens of thousands of rows per send.
- */
-export async function sweepPush(
-  env: Env,
-): Promise<{ deliveries: number; devices: number; images: number }> {
+export async function sweepPush(env: Env): Promise<{ deliveries: number; devices: number; images: number }> {
   const sql = getDb(env);
   try {
     const deliveries = (await sql`
@@ -537,11 +483,6 @@ export async function sweepPush(
 const IMAGE_GRACE_MS = 90 * 24 * 60 * 60 * 1000;
 
 /**
- * Reclaim uploaded campaign pictures nothing references any more.
- *
- * `push/` sits OUTSIDE `CANONICAL_PREFIXES`, so the canonical sweep can never see these objects — it
- * would read "no wallpaper row references it" as "delete it" on every pass. This is their only
- * cleanup, and it is deliberately timid: only an object older than 90 days whose campaign row is gone.
  * Nothing here may abort on an empty reference set the way sweep-canonical must, because an Arul with
  * no campaigns genuinely references no pictures.
  */

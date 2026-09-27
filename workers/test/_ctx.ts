@@ -118,10 +118,7 @@ export function makeCtx(opts: {
       param: (name: string) => opts.params?.[name],
       raw: { cf: opts.cf },
       query: (name: string) => new URL(url).searchParams.get(name) ?? undefined,
-      json: () =>
-        opts.invalidJson
-          ? Promise.reject(new Error("bad json"))
-          : Promise.resolve(opts.jsonBody),
+      json: () => (opts.invalidJson ? Promise.reject(new Error("bad json")) : Promise.resolve(opts.jsonBody)),
       text: () =>
         Promise.resolve(
           opts.rawBody ?? (opts.invalidJson ? "{bad json" : JSON.stringify(opts.jsonBody ?? null)),
@@ -130,8 +127,7 @@ export function makeCtx(opts: {
     // The third arg mirrors Hono's -> extra response headers -> keep the signature identical or tests drift from prod
     json: (body: unknown, status = 200, headers?: Record<string, string>) =>
       Response.json(body, headers ? { status, headers } : { status }),
-    redirect: (location: string, status = 302) =>
-      new Response(null, { status, headers: { location } }),
+    redirect: (location: string, status = 302) => new Response(null, { status, headers: { location } }),
     executionCtx: { waitUntil: (_p: Promise<unknown>) => {} },
   } as unknown as Context<{ Bindings: Env }>;
 }

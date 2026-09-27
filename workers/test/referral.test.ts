@@ -89,9 +89,7 @@ describe("captureReferral", () => {
     expect(calls[0].values).toContain("new-user");
     // referred_by points the NEW user at the referrer -> never the other way round
     expect(calls[1].query).toContain("referred_by");
-    expect(calls[1].values).toEqual(
-      expect.arrayContaining(["referrer-1", "new-user"]),
-    );
+    expect(calls[1].values).toEqual(expect.arrayContaining(["referrer-1", "new-user"]));
     // The pending referrals row opens idempotently -> ON CONFLICT is what makes a re-login harmless
     expect(calls[2].query).toContain("INSERT INTO referrals");
     expect(calls[2].query).toContain("ON CONFLICT");

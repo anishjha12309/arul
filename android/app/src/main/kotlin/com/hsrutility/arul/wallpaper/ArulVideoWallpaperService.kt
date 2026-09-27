@@ -10,19 +10,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-// The system binds to THIS service when the user selects the app as their live wallpaper.
-// It loops the downloaded MP4 via [VideoRenderer], independently of the Flutter app -> it survives an app kill.
-// Config (video path, audio, loop) is written to SharedPreferences by [WallpaperApplyChannel].
-// It is read on surface creation, so the service starts correctly even after a process kill.
-// It is also OBSERVED live -> Android ignores a re-Set of the already-active component and never recreates the engine.
-// So a prefs change is the only signal a running engine gets that a new video was applied.
-// ONE video at a time, deliberately -> every engine, home or lock, follows the single shared [KEY_VIDEO_PATH].
-// No per-surface pinning -> identical behaviour on every Android version.
-// Every callback is wrapped -> a player must never crash the service.
 // Each engine plays its OWN private copy -> dual home/lock engines and a mid-run re-apply never yank a file from a decoder.
-// That copy is megabytes of file IO -> it runs on [ioExecutor], NEVER on the engine's callback thread.
-// The framework attaches an engine and delivers onSurfaceChanged on the service's main thread, and a copy
-// there on a budget phone's storage was an ANR ("slow IO operations").
 class ArulVideoWallpaperService : WallpaperService() {
 
     companion object {
@@ -34,11 +22,9 @@ class ArulVideoWallpaperService : WallpaperService() {
         const val KEY_ENABLE_AUDIO = "enable_audio"
         const val KEY_LOOP = "loop"
 
-        /** Directory under filesDir holding running engines' private copies. */
         const val ENGINE_PRIVATE_DIR = "arul_live_active"
 
-        /** Orphaned private copies older than this are swept on engine start. */
-        private const val ORPHAN_SWEEP_AGE_MS = 60L * 60L * 1000L // 1 hour
+        private const val ORPHAN_SWEEP_AGE_MS = 60L * 60L * 1000L
     }
 
     /** Private copies, their deletes and the orphan sweep -> one thread, so two engines never contend. */
@@ -65,10 +51,8 @@ class ArulVideoWallpaperService : WallpaperService() {
 
         private var videoRenderer: VideoRenderer? = null
 
-        /** Established once per engine; reused across surface recreations. */
         private var enginePrivatePath: String? = null
 
-        /** The prefs source the private copy was adopted from -> the staleness check reads it. */
         private var adoptedSourcePath: String? = null
 
         /** The source a background copy is running for -> a second trigger joins it instead of copying twice. */
@@ -79,11 +63,6 @@ class ArulVideoWallpaperService : WallpaperService() {
 
         private var destroyed = false
 
-        // Set by the first onSurfaceChanged carrying a non-zero size, cleared when the surface goes.
-        // Nothing decodes before it: the engine's final width and height arrive with onSurfaceChanged,
-        // never with onSurfaceCreated, and a frame rendered into not-yet-final geometry is the visible
-        // rescale. The framework always dispatches onSurfaceChanged in the same pass as onSurfaceCreated,
-        // so waiting for it costs no start-up time.
         private var surfaceSized = false
 
         private val prefs: SharedPreferences by lazy {
@@ -109,24 +88,19 @@ class ArulVideoWallpaperService : WallpaperService() {
                 }
             }
 
-        /** The single source video every engine follows. */
         private fun configuredSourcePath(): String? =
             prefs.getString(KEY_VIDEO_PATH, null)
 
         override fun onCreate(surfaceHolder: SurfaceHolder?) {
             super.onCreate(surfaceHolder)
-            // Pass touches through to the launcher.
             setTouchEventsEnabled(false)
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
-            // Deliberately does NOT start the renderer -> onSurfaceChanged owns that, once it has geometry.
         }
 
-        // This engine's copy already exists -> start now (a stat, no copy). Otherwise adopt one in the
-        // background; [showAdopted] starts the renderer when it lands.
         private fun startRenderer(holder: SurfaceHolder) {
             val existing = enginePrivatePath
             if (existing != null && File(existing).existsNonEmpty()) {
@@ -144,7 +118,6 @@ class ArulVideoWallpaperService : WallpaperService() {
                 videoRenderer = VideoRenderer(applicationContext).apply {
                     audioEnabled = enableAudio
                     loopEnabled = loop
-                    // Resume key = the adopted SOURCE -> the home engine continues where the chooser's preview engine was.
                     initialize(videoPath, holder, adoptedSourcePath ?: videoPath)
                 }
             } catch (e: Exception) {
@@ -205,7 +178,6 @@ class ArulVideoWallpaperService : WallpaperService() {
             if (renderer != null) {
                 renderer.swapVideo(path, surfaceHolder, adoptedSourcePath ?: path)
             } else {
-                // The first start, or the first apply landing on a blank-surface engine.
                 createRenderer(path, surfaceHolder)
             }
         }
@@ -307,7 +279,6 @@ class ArulVideoWallpaperService : WallpaperService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error in onDestroy", e)
             }
-            // Delete this engine's private copy now that its player is released.
             try {
                 enginePrivatePath?.let { path -> runIo { File(path).delete() } }
                 enginePrivatePath = null

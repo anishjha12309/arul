@@ -3,12 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/motion.dart';
 import '../theme/tokens.dart';
 
-/// Loading placeholder.
-///
-/// `shimmer` and `ShaderMask` both mask -> a mask forces `saveLayer()`, an offscreen pass per widget
-/// per frame -> never one of those over a video feed on a budget SoC.
-/// A sliding gradient FILL looks identical on a solid block and is an ordinary paint — no mask, no
-/// offscreen buffer, no saveLayer.
 class Skeleton extends StatefulWidget {
   const Skeleton({
     super.key,
@@ -37,8 +31,6 @@ class _SkeletonState extends State<Skeleton>
   // TickerMode from the route already parks this controller off-page -> a backgrounded feed page
   // requests no frames.
 
-  /// Started from [didChangeDependencies], not the field initializer: `reduceMotion` needs an
-  /// InheritedWidget lookup, and a repeating ticker must never be armed before that answer exists.
   bool _motionStarted = false;
 
   @override
@@ -47,8 +39,6 @@ class _SkeletonState extends State<Skeleton>
     if (_motionStarted) return;
     _motionStarted = true;
     if (context.reduceMotion) {
-      // Parked mid-sweep: a static sheen, the resting state of this loop. Never flat — flat reads
-      // as a dead box rather than a loading one.
       _c.value = 0.5;
     } else {
       _c.repeat();

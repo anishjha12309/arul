@@ -307,7 +307,6 @@ void main() {
       );
     });
 
-    // ── Negative cases ────────────────────────────────────────────────────
     // A rule that fires on correct input is worse than one that never fires -> it produces a wall nobody reads.
     // Both of these were real false-positive classes in Pakiza's catalog before the rules learned the difference.
 

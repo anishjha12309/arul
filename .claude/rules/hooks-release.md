@@ -29,6 +29,8 @@ Manifest invariants:
 **ABI rule:** the bundle stays whole (all three ABIs, the default — never `--split-per-abi` or
 `--target-platform` on an appbundle); every APK is arm64-only.
 
-Never casually edit the logic of `guard-secrets`, `version-commit`, `release-*` or `format-dart` —
-CLAUDE.md §8 and the `release-build` skill make claims about what they enforce. `node --check` every
-hook after an edit.
+Every hook is a module that `run.js` calls once per event (one process per Bash call, not four); a
+module that throws is skipped silently, so a broken hook fails OPEN. After editing one, `node --check`
+it and pipe a payload through `node .claude/hooks/run.js <pre-bash|post-edit|post-bash|stop>` with
+`CLAUDE_PROJECT_DIR` set. CLAUDE.md §6 and the `release-build` skill make claims about what these
+hooks enforce.

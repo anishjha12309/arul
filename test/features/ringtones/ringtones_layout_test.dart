@@ -5,11 +5,6 @@
 // Nothing here clamps the OS font-size setting -> a Row of inflexible children would push off a 320dp screen.
 // The test font makes every glyph a fixed-width box, WIDER than the real faces -> passing here leaves real text slack.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
@@ -20,6 +15,10 @@ import 'package:arul/features/ringtones/presentation/ringtone_states.dart';
 import 'package:arul/features/ringtones/presentation/ringtones_screen.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 class _FakeCatalog extends RingtoneCatalogNotifier {
   _FakeCatalog(this._items);

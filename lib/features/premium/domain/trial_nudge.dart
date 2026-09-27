@@ -1,12 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The record of a trial someone started and did not finish.
-///
-/// Only 12 in 100 trial-tappers ever make a second attempt, and second attempts convert at roughly
-/// twice the rate of first ones. The intent flow's one toast is the only thing that ever mentions
-/// the abandonment, and it is gone by the next screen — so the abandonment is written down instead,
-/// and two things read it back: a dismissible row on the next open, and one reminder the same day.
-///
 /// Pure prefs arithmetic, no plugins and no Riverpod, so the rules below can be pinned in tests.
 abstract final class TrialNudge {
   static const markerKey = 'arul_trial_unfinished_ms';
@@ -15,9 +9,6 @@ abstract final class TrialNudge {
   static const orderKey = 'arul_trial_unfinished_order';
 
   /// The instant the one reminder is due, epoch ms.
-  ///
-  /// Persisted rather than recomputed because `notificationBootstrap` re-arms it on every launch, and
-  /// re-arming from "now" would walk it further away on every launch until the user never got it.
   static const reminderDueKey = 'arul_trial_reminder_due_ms';
 
   /// How long an unfinished trial is worth mentioning. Past this the moment has gone.

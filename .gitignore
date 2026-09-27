@@ -65,7 +65,8 @@ __pycache__/
 *.log
 pubspec.lock.bak
 
-# Release hook state (local build history; see .claude/hooks/)
+# Claude Code: personal settings + release hook state (see .claude/hooks/)
+.claude/settings.local.json
 .claude/last-release-build.json
 .claude/last-release-build.pending.json
 .claude/release-commit-reminder.pending.json

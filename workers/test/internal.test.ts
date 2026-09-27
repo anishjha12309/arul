@@ -16,9 +16,7 @@ describe("POST /internal/build-catalog — auth gate", () => {
 
   it("401 when the bearer secret is wrong", async () => {
     const env = makeEnv({ CATALOG_BUILD_SECRET: "s3cret" });
-    const res = await handleBuildCatalog(
-      makeCtx({ env, token: "wrong-secret", jsonBody: {} }),
-    );
+    const res = await handleBuildCatalog(makeCtx({ env, token: "wrong-secret", jsonBody: {} }));
     expect(res.status).toBe(401);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("unauthorized");

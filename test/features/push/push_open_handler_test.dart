@@ -4,17 +4,16 @@
 
 import 'dart:async';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
-
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/crash/crash_reporter.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/features/push/data/push_open_handler.dart';
 import 'package:arul/features/push/data/push_tap_router.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 const _campaign = '11111111-2222-4333-8444-555555555555';
 const _wallpaper = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';

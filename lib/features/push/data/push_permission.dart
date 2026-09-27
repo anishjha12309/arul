@@ -29,10 +29,6 @@ class PushPermission {
   bool get alreadyPrompted => _prefs.getBool(_kPromptedKey) ?? false;
 
   /// Ask, if this install never has. Returns whether notifications are now permitted.
-  ///
-  /// Android below 13 has no runtime permission and answers `authorized` with no dialog at all — the
-  /// CHANNEL is what governs visibility there. The prompt is still recorded as spent so the two
-  /// paths behave identically on a later upgrade.
   Future<bool> promptOnce() async {
     if (_asking || alreadyPrompted) return false;
     _asking = true;

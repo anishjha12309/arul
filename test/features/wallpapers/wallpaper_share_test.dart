@@ -1,20 +1,15 @@
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:share_plus/share_plus.dart'
-    show ShareParams, ShareResult, ShareResultStatus;
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
+import 'package:arul/core/providers/locale_provider.dart';
+import 'package:arul/data/models/referral_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/referral/domain/referral_repository.dart';
 import 'package:arul/features/referral/domain/referral_summary.dart';
-import 'package:arul/data/models/referral_model.dart';
 import 'package:arul/features/wallpapers/data/direct_share_service.dart';
 import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_apply_service.dart';
@@ -22,11 +17,12 @@ import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_apply_provider.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_prefetch_provider.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_share_provider.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show Locale;
-
-import 'package:arul/core/providers/locale_provider.dart';
-
-// ─── Fakes ────────────────────────────────────────────────────────────────────
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:share_plus/share_plus.dart'
+    show ShareParams, ShareResult, ShareResultStatus;
 
 class _FakeApplyService implements WallpaperApplyService {
   _FakeApplyService(this.tmpDir);
@@ -184,8 +180,6 @@ class _RecordingAnalytics implements AnalyticsService {
   @override
   void register(String key, Object value) {}
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 Wallpaper _wallpaper({
   String id = 'w1',
@@ -362,7 +356,7 @@ void main() {
 
       final text = sheetCalls.single.text!;
       expect(
-        RegExp(r'https?://').allMatches(text),
+        RegExp('https?://').allMatches(text),
         hasLength(1),
         reason: 'a second URL splits the tap and loses the attribution',
       );
@@ -397,7 +391,7 @@ void main() {
         reason: 'plain lang= would override the language they chose',
       );
       expect(
-        RegExp(r'[?&]lang=').hasMatch(text),
+        RegExp('[?&]lang=').hasMatch(text),
         isFalse,
         reason: 'only ilang rides on a share',
       );

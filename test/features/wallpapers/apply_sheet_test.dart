@@ -2,12 +2,11 @@
 // ancestor excludes it — the same excludeSemantics regression as every other chip-shaped control.
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/wallpapers/presentation/apply_sheet.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 Wallpaper _wp() => Wallpaper.fromJson({
   'id': 'id-1',

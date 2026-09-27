@@ -6,19 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// Owns the ONE `google_sign_in` v7 `initialize()` call, awaitable off the cold-start critical path.
-///
-/// Awaiting it in `main()` made EVERY launch pay Credential Manager / Play Services init first.
-/// That included already-signed-in launches, which never call `authenticate()` at all.
-/// The plugin's own documented example does not await it either -> `unawaited(...)` and a chain.
-/// The wait is MOVED, not removed: [ready] is awaited right before `supportsAuthenticate()`.
-/// So the v7 contract (initialize → sheet/button) holds -> signed-out pays the same, signed-in none.
 /// [ready] NEVER throws — an unawaited throw reaches the zone handler and reports a FATAL crash.
 /// A failed init is swallowed here; the sign-in path surfaces its own localized failure and retry.
-/// NONCE — a PER-PROCESS value, never per-request: the plugin accepts one only at `initialize()`.
-/// It attaches that one to every later credential request, the sheet's and the button's alike.
-/// So it buys "only this process can redeem the token", NOT "the token can be redeemed once".
-/// The Worker matches the request nonce against the `nonce` claim in the ID token.
-/// Never log it and never track it — a credential-binding secret for the life of the process.
 abstract final class GoogleSignInInit {
   static Future<void>? _ready;
   static String? _nonce;

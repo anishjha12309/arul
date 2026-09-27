@@ -34,8 +34,6 @@ class ApiAppConfigRepository implements AppConfigRepository {
       debugPrint('[ApiAppConfigRepository] CDN fetch failed: $e');
     }
 
-    // NO Worker fallback route — catalog/app_config.json is the source (CLAUDE.md §4).
-    // Null only when the CDN file is absent, i.e. before the first build.
     return null;
   }
 }

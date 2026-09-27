@@ -1,18 +1,4 @@
 /**
- * Deep-link routes — PUBLIC, no JWT: browsers, Android's verifier and preview crawlers all fetch these.
- *
- * `/w/:id` is the ONE URL that ships in shares and ad creatives; `/r/:id` is the ringtone form, ads only
- * Both take `?ref=<code>` for referral attribution and `?lang=<code>` for the language the ad was in
- * App INSTALLED -> Android resolved this host against assetlinks.json -> the OS opens the app and never fetches here
- * App NOT installed -> the browser lands here -> we send the visitor to Play carrying the whole payload as `referrer`
- * Android replays that payload on first launch -> that is what opens the content, in the ad's language, AFTER install
- * The bounce is a 200 HTML page, NEVER a 302 -> Google Ads refuses an App-campaign deep link whose URL redirects
- * A 302 made every /w/ and /r/ unusable in the deep-link field while the app itself opened them correctly
- * Never reintroduce `<meta http-equiv="refresh">` -> it is the one redirect form an HTML-parsing validator still sees
- * The referrer must ride the store URL the BROWSER navigates to -> Play only replays a referrer it received itself
- * `location.replace()` is a real navigation -> the payload survives it unchanged
- * A preview crawler now renders THIS page instead of Play's listing card -> hence the og: tags and OG_IMAGE
- * Without an og:image every share card degraded from Play's icon card to bare text
  * An in-app browser (Facebook, Instagram) may load this URL itself instead of handing the OS an intent
  * An installed user then still gets the Play page -> the fix is the platform's deep-link field, not this route
  */
@@ -30,10 +16,6 @@ const PACKAGE_NAME = "com.hsrutility.arul";
 const LINK_HOST = "arul.hsrutility.com";
 
 /**
- * The card a link-preview crawler shows for every share — the app icon, from the CDN.
- *
- * Served from the CDN -> this route still never touches R2 or the DB
- * `brand/` sits OUTSIDE every sweep prefix -> no DB row has to exist to keep these bytes alive
  * Treat it as immutable -> to change the icon, upload a NEW key and point this at it, never overwrite and purge
  * It is square 512x512 -> the card type must be `summary`, since `summary_large_image` wants ~1200x630
  */
@@ -41,14 +23,12 @@ const OG_IMAGE = "https://arul-cdn.hsrutility.com/brand/arul-icon.png";
 const OG_IMAGE_PX = 512;
 
 /** Ids are `uuid` -> validating HERE keeps attacker text out of the Play referrer payload and the app's parser. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Referral codes are `^[A-Z0-9]{4,16}$` — same shape InstallReferrerService accepts. */
 const REF_RE = /^[A-Z0-9]{4,16}$/;
 
 /**
- * The six shipped UI languages — `supportedAppLocales` in the app.
  * The Worker has no Dart -> this list is duplicated by necessity -> a seventh language is an edit in BOTH places
  * An unknown code is DROPPED, not forwarded -> the app would drop it anyway and the referrer stays clean
  * Tested against the bare code only -> the caller strips case and region first -> keep in step with `normalizeLang`
@@ -62,14 +42,9 @@ export function handleAssetLinks(c: Context<{ Bindings: Env }>): Response {
     .filter(Boolean);
 
   if (fingerprints.length === 0) {
-    console.error(
-      "[assetlinks] ANDROID_CERT_SHA256 is unset — App Links cannot verify",
-    );
+    console.error("[assetlinks] ANDROID_CERT_SHA256 is unset — App Links cannot verify");
     // Deliberately not an empty array -> Android treats both as failure -> only a 503 with a reason is visible to a human
-    return c.json(
-      { error: "not_configured", message: "ANDROID_CERT_SHA256 is not set" },
-      503,
-    );
+    return c.json({ error: "not_configured", message: "ANDROID_CERT_SHA256 is not set" }, 503);
   }
 
   return c.json(
@@ -101,7 +76,6 @@ export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
 }
 
 /**
- * The bare link domain — `arul.hsrutility.com/?lang=hi` is what someone writes for "the app, in Hindi".
  * A 404 there costs the install it was bought for -> serve the bounce page
  * Builds before the exact `/` manifest filter open a BROWSER here when installed and lose the language
  * `/w/<uuid>?lang=hi` does every half on every build in the field -> keep recommending that form to ad ops
@@ -132,10 +106,7 @@ export function handleRootLink(c: Context<{ Bindings: Env }>): Response {
  * The store URL for an uninstalled visitor, with everything the link carried packed into `referrer`.
  * That payload is what Android replays to the app after install -> `kind` is the key the app's parser reads back
  */
-function playStoreUrl(
-  c: Context<{ Bindings: Env }>,
-  kind: "w" | "r",
-): string {
+function playStoreUrl(c: Context<{ Bindings: Env }>, kind: "w" | "r"): string {
   const id = (c.req.param("id") ?? "").trim().toLowerCase();
   const ref = (c.req.query("ref") ?? "").trim().toUpperCase();
   // Strip the region tag exactly as the app's `normalizeLang` does -> `hi-IN` becomes `hi`
@@ -143,9 +114,6 @@ function playStoreUrl(
   // Dropping them only here would hand a fresh install a different language than the same URL gives everyone else
   const norm = (raw: string) => raw.trim().toLowerCase().split(/[-_]/)[0];
   const lang = norm(c.req.query("lang") ?? "");
-  // `ilang` = INSTALL language -> an in-app share stamps it with the SHARER's UI language
-  // It reaches the app only through this referrer, never as a query the App Link parser reads
-  // So a friend's share seeds a FRESH install's language and leaves an existing user's Settings choice alone
   // `lang` is the ad form and always wins -> it takes precedence over `ilang`
   const ilang = norm(c.req.query("ilang") ?? "");
 
@@ -164,37 +132,26 @@ function playStoreUrl(
 
   const url = new URL("https://play.google.com/store/apps/details");
   url.searchParams.set("id", PACKAGE_NAME);
-  // Exactly ONE encodeURIComponent -> Play stores the payload and replays it verbatim
   // URLSearchParams.set encodes on its own -> encoding the string first as well double-encodes it
-  // The app's Uri.splitQueryString would then see one key literally named "ref=CODE&w=UUID"
   if (parts.length > 0) url.searchParams.set("referrer", parts.join("&"));
 
   return url.toString();
 }
 
 function esc(raw: string): string {
-  return raw
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 /**
  * The bounce page. Every value on it is validated, so no visitor-supplied text reaches the markup.
  * The escaping is belt-and-braces for the day someone adds an unvalidated key -> keep it
  * The `<a>` is the real fallback for a JS-off browser AND what a preview crawler renders
- * No `<meta http-equiv="refresh">` -> see the file header -> a validator still reads that as a redirect
  */
-function bounceToPlay(
-  c: Context<{ Bindings: Env }>,
-  kind: "w" | "r",
-): Response {
+function bounceToPlay(c: Context<{ Bindings: Env }>, kind: "w" | "r"): Response {
   const store = playStoreUrl(c, kind);
   const here = c.req.url;
   const title = "Arul — Devotional Wallpapers & Ringtones";
-  const blurb =
-    "South Indian devotional wallpapers and ringtones. Opening the Arul app…";
+  const blurb = "South Indian devotional wallpapers and ringtones. Opening the Arul app…";
 
   const html = `<!doctype html>
 <html lang="en">

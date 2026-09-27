@@ -1,45 +1,10 @@
 /**
- * FCM HTTP v1 — mint an OAuth access token from the service account, send one campaign message.
  * https://firebase.google.com/docs/cloud-messaging/send/v1-api · https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages
- *
- * NOTIFICATION MESSAGES BY DEFAULT, and there is no Dart background handler anywhere in the app.
- * ~70% of this base runs a vivo/Xiaomi/OPPO/realme battery manager that kills a background isolate on
- * sight; a notification message is posted by Google Play services without waking the app at all, so it
- * survives everything short of a user force-stop. It is also what keeps `priority: HIGH` honest —
- * Android 13 downgrades an app that consistently sends high-priority messages producing no
- * notification, and every message here produces one.
- *
- * THE ONE EXCEPTION IS A COLOURED CAMPAIGN to a build that carries the native renderer. FCM's
- * `color` tints the icon only, so a card background means the app draws the notification itself:
- * a data-only message handled by `ArulMessagingService` (Kotlin, no isolate), which still posts one
- * notification per message. Every other campaign, and every build below COLOR_MIN_BUILD, keeps the
- * notification-message path unchanged.
- *
- * IDENTITY IS THE `fid`, THE TARGET IS THE `token`, and they are not the same job. The REST reference
- * marks `message.token` deprecated in favour of `message.fid`, so this shipped targeting the fid —
- * and a real device rejected it. Measured on a registered phone, identical payload, same minute:
- *     { fid:   "eme780tIRqaKehWqThsmOX" }  -> HTTP 404 { errorCode: "UNREGISTERED" }
- *     { token: "eme780tIRqaKehWqThsmOX:APA91b..." } -> HTTP 200
- * So `fid` addressing is not actually serving for this project today whatever the reference says.
- * SEND_BY is the single switch; retest both before flipping it back, and never hedge with a
- * per-device fallback — a silent second path is how "it works on some phones" starts.
- *
- * The fid still earns its place as the PRIMARY KEY: it survives token rotation, so a phone keeps one
- * row across a refresh instead of accumulating one per token.
- *
- * `validate_only` IS WHAT THE REGISTRY PRUNE RELIES ON (cron/push-dispatch.ts). FCM runs a
- * validate-only request through every check, the target included, and delivers nothing. Proven on
- * the owner's phone on 2026-09-17: the live token answered HTTP 200 with
- * `name: …/messages/fake_message_id` and the drawer stayed empty; after an uninstall and reinstall
- * the old token answered HTTP 404 `{ errorCode: "UNREGISTERED" }` ("NotRegistered") within a minute,
- * and the new one 200 again. So a dry run reads exactly like a send to `isDeadRegistration`, and the
- * registry can be checked between campaigns instead of only by one.
  */
 
 import { importPKCS8, SignJWT } from "jose";
 import type { Env } from "../env.js";
 
-/** Which target field the message carries. One value, never a per-device fallback (see header). */
 const SEND_BY: "fid" | "token" = "token";
 
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -65,12 +30,6 @@ const PUSH_ICON = "ic_notification";
  */
 export const COLOR_MIN_BUILD = 76;
 
-/**
- * The build number inside a registered versionCode. Flutter's per-ABI builds report
- * 1000 × abiCode + build, and they are in the field: the one phone in the production registry on
- * 2026-09-14 reported 2075 for build 75. Compared raw, that passes `>= 76` and a build with no
- * renderer would be sent a data-only message it cannot show — so compare this, never the raw value.
- */
 export function buildNumber(appBuild: number): number {
   return appBuild % 1000;
 }
@@ -100,8 +59,6 @@ export type PushResult =
   | { ok: false; status: number; code: string; message: string };
 
 /**
- * A Google OAuth2 access token for the FCM scope, cached in KV.
- *
  * The service-account key arrives through `wrangler secret bulk` from a JSON file, so its PEM holds
  * literal backslash-n sequences rather than newlines and `importPKCS8` rejects it outright. Normalise
  * exactly that and nothing else — every other secret in this Worker is compared untrimmed, and a PEM
@@ -136,9 +93,12 @@ export async function getFcmAccessToken(env: Env): Promise<string> {
       assertion,
     }),
   });
-  const body = (await res.json().catch(() => null)) as
-    | { access_token?: string; expires_in?: number; error_description?: string; error?: string }
-    | null;
+  const body = (await res.json().catch(() => null)) as {
+    access_token?: string;
+    expires_in?: number;
+    error_description?: string;
+    error?: string;
+  } | null;
   if (!res.ok || !body?.access_token) {
     throw new Error(
       `FCM token exchange failed: HTTP ${res.status} ${body?.error_description ?? body?.error ?? ""}`.trim(),
@@ -151,10 +111,7 @@ export async function getFcmAccessToken(env: Env): Promise<string> {
 }
 
 /** The phone's own language if the editor wrote it, else English. Never a partially-filled locale. */
-export function textFor(
-  campaign: PushCampaign,
-  lang: string,
-): { title: string; body: string } {
+export function textFor(campaign: PushCampaign, lang: string): { title: string; body: string } {
   const own = campaign.texts?.[lang];
   const en = campaign.texts?.["en"];
   const pick = own?.title || own?.body ? own : en;
@@ -178,14 +135,10 @@ export async function sendPush(
   if (!projectId) {
     return { ok: false, status: 0, code: "NO_PROJECT_ID", message: "FIREBASE_PROJECT_ID is not set" };
   }
-  // A row with no token cannot be addressed while SEND_BY is "token". Fail the delivery with a
-  // reason rather than sending the fid in the token field: that comes back UNREGISTERED, which the
-  // caller reads as "dead registration" and DELETES a row that was only ever missing one column.
   if (SEND_BY === "token" && !device.token) {
     return { ok: false, status: 0, code: "NO_TOKEN", message: "Device row carries no FCM token" };
   }
-  const target =
-    SEND_BY === "fid" ? { fid: device.fid } : { token: device.token as string };
+  const target = SEND_BY === "fid" ? { fid: device.fid } : { token: device.token as string };
   const { title, body } = textFor(campaign, device.lang);
 
   // FCM requires every `data` VALUE to be a string; the 4096-byte payload cap is far away at this size.
@@ -216,10 +169,6 @@ export async function sendPush(
     android: {
       priority: "HIGH",
       ttl,
-      // No collapse_key: FCM documents NOTIFICATION messages as always collapsible, keyed by package,
-      // and ignores the field. A phone offline across two campaigns gets only the LATEST (measured with
-      // a shared key and with a per-campaign key alike: 2 sent in airplane mode, 1 arrived, both rows
-      // "sent"). Only data messages avoid it. `tag` de-dupes the drawer.
       notification: {
         channel_id: PUSH_CHANNEL_ID,
         icon: PUSH_ICON,
@@ -266,16 +215,10 @@ export async function sendPush(
 }
 
 /**
- * Ask FCM whether a token is still a live registration WITHOUT delivering anything (see header).
- *
  * No retry: a transient error leaves the row where it is and the next pass asks again. The texts
  * are never shown — they are there because a message needs a body to be validated at all.
  */
-export async function validateToken(
-  env: Env,
-  accessToken: string,
-  token: string,
-): Promise<PushResult> {
+export async function validateToken(env: Env, accessToken: string, token: string): Promise<PushResult> {
   const projectId = env.FIREBASE_PROJECT_ID ?? "";
   if (!projectId) {
     return { ok: false, status: 0, code: "NO_PROJECT_ID", message: "FIREBASE_PROJECT_ID is not set" };
@@ -309,9 +252,10 @@ async function postMessage(
   } catch (err) {
     return { ok: false, status: 0, code: "UNAVAILABLE", message: String(err) };
   }
-  const parsed = (await res.json().catch(() => null)) as
-    | { name?: string; error?: { message?: string; status?: string; details?: { errorCode?: string }[] } }
-    | null;
+  const parsed = (await res.json().catch(() => null)) as {
+    name?: string;
+    error?: { message?: string; status?: string; details?: { errorCode?: string }[] };
+  } | null;
   if (res.ok) return { ok: true, name: parsed?.name ?? "" };
   const detail = parsed?.error?.details?.find((d) => typeof d?.errorCode === "string");
   return {
@@ -322,11 +266,6 @@ async function postMessage(
   };
 }
 
-/**
- * Firebase's stated rule: a 404 UNREGISTERED or a 400 INVALID_ARGUMENT naming the target means the
- * registration is dead and the sender must stop keeping it. Anything else is transient and the row
- * stays — a quota or an outage must never empty the registry.
- */
 export function isDeadRegistration(result: PushResult): boolean {
   if (result.ok) return false;
   if (result.status === 404 && result.code === "UNREGISTERED") return true;

@@ -100,8 +100,6 @@ class _FakeResolver implements PlayServicesResolver {
   }
 }
 
-// ─── Domain model tests ───────────────────────────────────────────────────────
-
 void main() {
   // Google's account picker is a system Activity -> two overlapping attempts put two sheets on screen.
   // Zero attempts strand the user on a dead screen -> both shipped once -> these pin the guard from either side.
@@ -673,7 +671,7 @@ void main() {
 
     test('the link coming up releases it ONCE, as the automatic sheet, '
         'stamped sheet_after_offline', () async {
-      controller.autoSignIn(AuthProvider.google, offline: true);
+      unawaited(controller.autoSignIn(AuthProvider.google, offline: true));
 
       // No offline reading first: a wall that mounted offline only ever sees the link come UP.
       expect(controller.noteConnectivity(online: true), isTrue);
@@ -725,7 +723,7 @@ void main() {
     });
 
     test('the pill is never blocked, and a tap ends the wait', () async {
-      controller.autoSignIn(AuthProvider.google, offline: true);
+      unawaited(controller.autoSignIn(AuthProvider.google, offline: true));
       final tap = controller.signIn(AuthProvider.google);
       expect(auth.autoFlags, [false]);
       expect(controller.autoHeldOffline, isFalse);
@@ -739,7 +737,7 @@ void main() {
     });
 
     test('it spends none of the reconnect budget', () async {
-      controller.autoSignIn(AuthProvider.google, offline: true);
+      unawaited(controller.autoSignIn(AuthProvider.google, offline: true));
       expect(controller.noteConnectivity(online: true), isTrue);
       final first = controller.autoSignIn(AuthProvider.google)!;
       auth.settleLast(
@@ -774,7 +772,7 @@ void main() {
     });
 
     test('signing out starts a fresh stretch with nothing held', () async {
-      controller.autoSignIn(AuthProvider.google, offline: true);
+      unawaited(controller.autoSignIn(AuthProvider.google, offline: true));
       await controller.signOut();
       expect(controller.autoHeldOffline, isFalse);
     });
@@ -1074,7 +1072,6 @@ void main() {
       },
     );
 
-    // ─── The LOST callback: resumed, nothing of ours running, no outcome ──────
     // A destroyed CredentialSelectorActivity completes nothing at all -> returning to it used to
     // buy the corpse another full budget. `exchanging` tells a corpse from a live exchange.
 

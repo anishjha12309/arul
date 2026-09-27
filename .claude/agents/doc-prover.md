@@ -55,7 +55,7 @@ claim, write `EVIDENCE: NONE FOUND` — never substitute a weaker source.
 ## <doc path>
 ### C1 [DESCRIPTIVE] "condensed claim text" (doc line N)
 EVIDENCE: workers/src/lib/entitlement.ts:14 — `quoted line`
-ECHOES: CLAUDE.md §5, docs/architecture.md:40
+ECHOES: CLAUDE.md §1, docs/architecture.md:40
 NOTE: one sentence, only when the evidence needs interpretation
 ```
 

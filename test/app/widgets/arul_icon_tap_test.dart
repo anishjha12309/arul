@@ -1,11 +1,10 @@
 // `ArulIconTap` is the one shape every icon-only control takes -> its three promises are pinned:
 // the box is Android's 48 whatever the glyph size, the control is NAMED for TalkBack (the glyph
 // alone announces nothing), and a press lands on `onTap` once.
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/widgets/arul_icon_tap.dart';
 import 'package:arul/theme/arul_tokens.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),

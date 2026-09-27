@@ -10,11 +10,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
-import {
-  captureReferral,
-  grantReferralReward,
-  generateReferralCode,
-} from "../src/lib/referral.js";
+import { captureReferral, grantReferralReward, generateReferralCode } from "../src/lib/referral.js";
 import { isPremium } from "../src/lib/entitlement.js";
 
 const RUN = process.env.E2E_NEON === "1";

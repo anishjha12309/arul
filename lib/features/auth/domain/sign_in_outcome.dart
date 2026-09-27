@@ -1,15 +1,4 @@
 /// What actually happened to a sign-in attempt that ended without a session.
-///
-/// The screen shows ONE line about it, so that line must be TRUE and SPECIFIC: `login_cancelled`
-/// is a mixed bucket (docs/auth.md §Reading the failure buckets) and a single "try again" nudge
-/// told a user whose Play services closed the window the same thing as a user who tapped Back.
-/// Two different people, one useless sentence.
-///
-/// The split that matters is the PHONE'S wait versus the PERSON'S hesitation: Google's surface
-/// taking 8s to draw is not the same event as a user closing it in 2s, and only the second is a
-/// choice. Everything here is derived from evidence the attempt actually produced — the Credential
-/// Manager message and the two clocks. Nothing is inferred: an unrecognised message means we do not
-/// know, and "we do not know" is [backedOutQuick]'s plain retry line.
 library;
 
 /// The outcomes the sign-in screen can speak to. `name` is what analytics carries as `nudge`.
@@ -27,7 +16,6 @@ enum SignInOutcome {
 
   addAccountAbandoned,
 
-  /// Google could not re-verify the chosen account. Nothing the app can fix -> point at Settings.
   reauthFailed,
 
   /// The sign-in Activity was closed under us — GMS, not the user.

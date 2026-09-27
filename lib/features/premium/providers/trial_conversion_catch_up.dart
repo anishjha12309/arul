@@ -25,17 +25,6 @@ double monthlyPriceRupees(AppConfigModel? config) {
 }
 
 /// Fires `trial_started` LATE for a trial that was granted with the app closed.
-///
-/// `trial_started` is the ONLY event campaigns bid on, and it fired from ONE place: the poll loop.
-/// A trial granted any other way reached the Neon row and NO sink — 13–15% of real trials.
-/// The server must NOT send it instead: two source types for one conversion desyncs attribution.
-/// So the SAME app SDK fires it, just late — on the next `GET /me` showing an unreported trial.
-/// The marker is the last reported SETUP order id ([prefsKey]), written before the invalidate.
-/// So the refresh that follows an in-session fire can never re-fire it.
-/// Keyed on the ORDER, not a boolean -> a second account on the same device gets its own event.
-/// The ~85% that fire in-session are untouched — same instant, same path.
-/// No marker = this install never ran the checkout, so a trial it finds began elsewhere (reinstall,
-/// second phone, pre-catch-up update) -> recorded, never fired (docs/analytics-events.md).
 class TrialConversionCatchUp {
   TrialConversionCatchUp({
     required SharedPreferences prefs,
@@ -119,7 +108,6 @@ class TrialConversionCatchUp {
   }
 }
 
-/// App-wide [TrialConversionCatchUp].
 final trialConversionCatchUpProvider = Provider<TrialConversionCatchUp>((ref) {
   return TrialConversionCatchUp(
     prefs: ref.watch(sharedPreferencesProvider),

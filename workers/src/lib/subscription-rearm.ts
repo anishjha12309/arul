@@ -1,18 +1,3 @@
-/**
- * The ONE unpause restore — a paused row going back into the billing rotation, status AND clock.
- *
- * Three callers write it: the `subscription.unpaused` webhook, the `/payments/status` lost-unpause
- * heal (both routes/payments.ts) and the cron's Pass D recheck (cron/autopay-notify.ts).
- * It lives here because they must never drift:
- * REARMING IS NOT OPTIONAL. The cron's park NULLs `next_debit_at`, so a status-only restore leaves a
- * row neither Pass A nor Pass B can ever select again — the app says "Active" forever, nothing is
- * billed, and premium dies silently at period end. COALESCE keeps a webhook-paused row's original
- * schedule; `notified_at = NULL` sends it through Pass A for a fresh pre-debit notice first.
- *
- * The `AND status = 'paused'` guard is load-bearing in BOTH directions: a stray unpause must never
- * resurrect a cancelled or expired row, whose `next_debit_at` is gone ON PURPOSE.
- */
-
 import type { getDb } from "./db.js";
 
 export interface RearmedSubscription {

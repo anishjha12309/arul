@@ -5,18 +5,15 @@
 
 import 'dart:convert';
 
+import 'package:arul/core/api/api_client.dart';
+import 'package:arul/features/auth/domain/auth_service.dart';
+import 'package:arul/features/auth/providers/auth_providers.dart';
+import 'package:arul/features/upload/providers/upload_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-
-import 'package:arul/core/api/api_client.dart';
-import 'package:arul/features/auth/domain/auth_service.dart';
-import 'package:arul/features/auth/providers/auth_providers.dart';
-import 'package:arul/features/upload/providers/upload_provider.dart';
-
-// ─── UploadConstraints (pure) ─────────────────────────────────────────────────
 
 void main() {
   group('UploadConstraints (wallpaper + ringtone)', () {
@@ -91,8 +88,6 @@ void main() {
       },
     );
   });
-
-  // ─── UploadNotifier (reachable branches) ─────────────────────────────────────
 
   group('UploadNotifier.submit', () {
     setUp(() => FlutterSecureStorage.setMockInitialValues({}));

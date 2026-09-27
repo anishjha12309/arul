@@ -1,14 +1,3 @@
-/**
- * Canonical-media sweep cron — reclaim orphaned catalog objects from R2.
- *
- * A CMS presigned PUT lands the bytes BEFORE the row insert -> an abandoned form strands them with no row
- * A delete/replace whose old-object cleanup failed or was lost leaves the bytes with the row gone
- * Neither is retried inline -> without this sweep a tens-of-MB live wallpaper accumulates forever
- * An object is kept ONLY while a row references it as full_key / audio_key / cover_key -> draft rows count too
- * Deletion waits out a grace window -> a CMS upload whose row is not saved yet is never swept mid-edit
- * catalog/ and user/ are never touched -> only CANONICAL_PREFIXES are this cron's business
- */
-
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 
@@ -16,21 +5,14 @@ import { getDb } from "../lib/db.js";
 export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000;
 
 /**
- * The only prefixes this sweep manages.
- *
  * No DB column stores a thumb key -> a poster key is DERIVED from full_key (thumbKeyFor) -> and the bucket is ours alone
- * `thumbs/` sits at top level so this sweep could not mistake a poster for an orphan -> but nothing reclaimed it either
- * Thumb cleanup was CMS-inline fire-and-forget only -> every lost delete leaked forever -> derive the set instead
  */
 export const CANONICAL_PREFIXES = ["wallpapers/", "ringtones/", "thumbs/"] as const;
 
 /**
  * Blast-radius cap — wanting to delete more than this fraction of a prefix means the REFERENCE SET is wrong.
- *
  * A failed migration, a partial query result or a renamed column all look like a huge legitimate cleanup
  * So the whole prefix is skipped instead -> a wrong set must cost a missed sweep, never the library
- * "Is the set empty" alone was not enough: a merged wallpaper+ringtone set stayed non-empty when one table returned zero
- * The guard then passed and every wallpaper object was deleted -> R2 has no versioning to undo that
  */
 export const MAX_DELETE_FRACTION = 0.34;
 
@@ -38,8 +20,6 @@ export const MAX_DELETE_FRACTION = 0.34;
 export const DELETE_FRACTION_FLOOR = 25;
 
 /**
- * "wallpapers/<category>/<stem>.<ext>" -> "thumbs/<category>/<stem>.jpg".
- *
  * Maps STATIC keys too, deliberately -> only live videos get a poster -> the extra names point at nothing, harmlessly
  * Over-inclusive is the SAFE direction for a delete decision -> it can only ever protect more, never less
  * Must stay in sync with arulThumbKey() in the CMS registry (c:\Anish\Unified CMS\src\registry.ts)
@@ -148,7 +128,6 @@ export async function sweepCanonical(
       cover_key: string | null;
     }[];
     // Reference sets stay PER PREFIX, never merged -> a `wallpapers/` object may only be justified by a wallpaper row
-    // Merging them is exactly what let one table's rows vouch for the other table's objects (see MAX_DELETE_FRACTION)
     const wallpaperKeys = wpRows.map((r) => r.full_key).filter(Boolean);
     const referencedByPrefix: Record<string, Set<string>> = {
       "wallpapers/": new Set(wallpaperKeys),
@@ -158,19 +137,13 @@ export async function sweepCanonical(
         ...rtRows.map((r) => r.cover_key).filter((k): k is string => !!k),
       ]),
       // Derived, never stored -> one expected poster per wallpaper -> this set IS the only thing protecting them
-      "thumbs/": new Set(
-        wallpaperKeys
-          .map((k) => thumbKeyFor(k))
-          .filter((k): k is string => k !== null),
-      ),
+      "thumbs/": new Set(wallpaperKeys.map((k) => thumbKeyFor(k)).filter((k): k is string => k !== null)),
     };
 
     const nowMs = Date.now();
     for (const prefix of CANONICAL_PREFIXES) {
       const referenced = referencedByPrefix[prefix] ?? new Set<string>();
 
-      // Failsafe 1: an empty reference set marks EVERY object under this prefix for deletion
-      // A shipped catalog never legitimately has zero rows -> read it as a DB/config fault -> refuse the prefix
       if (referenced.size === 0) {
         const reason = "0 referenced keys for this prefix in DB";
         console.error(`[sweep-canonical] ABORT ${prefix} — ${reason} (failsafe)`);
@@ -195,13 +168,7 @@ export async function sweepCanonical(
 
       result.scanned += candidates.length;
 
-      const toDelete = selectCanonicalKeysToDelete(
-        candidates,
-        referenced,
-        nowMs,
-        CANONICAL_GRACE_MS,
-        prefix,
-      );
+      const toDelete = selectCanonicalKeysToDelete(candidates, referenced, nowMs, CANONICAL_GRACE_MS, prefix);
 
       const refusal = blastRadiusRefusal(toDelete.length, candidates.length);
       if (refusal !== null) {
@@ -217,7 +184,9 @@ export async function sweepCanonical(
       // Same decision, same failsafes, no delete -> the list is exactly what the real run would reclaim
       if (dryRun) {
         result.wouldDelete!.push(...toDelete);
-        console.log(`[sweep-canonical] DRY RUN ${prefix} — would delete ${toDelete.length} of ${candidates.length}`);
+        console.log(
+          `[sweep-canonical] DRY RUN ${prefix} — would delete ${toDelete.length} of ${candidates.length}`,
+        );
         continue;
       }
 
@@ -235,8 +204,6 @@ export async function sweepCanonical(
 
     return result;
   } finally {
-    // Tearing down an already-severed socket can itself reject, and inside a finally that rejection
-    // REPLACES the return value -> a finished sweep would read as a failed one (docs/cron.md)
     await sql.end().catch(() => {});
   }
 }

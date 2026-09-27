@@ -4,11 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import {
-  writeAppConfig,
-  deleteOrphanedPages,
-  readCategoryOrder,
-} from "../src/cron/build-catalog.js";
+import { writeAppConfig, deleteOrphanedPages, readCategoryOrder } from "../src/cron/build-catalog.js";
 
 // ── Mock R2 bucket that supports list() + delete() for orphan-cleanup tests ───
 function makeListableR2(keys: string[]): {
@@ -21,9 +17,7 @@ function makeListableR2(keys: string[]): {
   const bucket = {
     list: vi.fn(async (opts?: R2ListOptions) => {
       const prefix = opts?.prefix ?? "";
-      const objects = [...store]
-        .filter((k) => k.startsWith(prefix))
-        .map((key) => ({ key }));
+      const objects = [...store].filter((k) => k.startsWith(prefix)).map((key) => ({ key }));
       return { objects, truncated: false } as unknown as R2Objects;
     }),
     delete: vi.fn(async (key: string) => {
@@ -62,10 +56,7 @@ describe("Orphaned page cleanup (deleteOrphanedPages)", () => {
     const written = new Set(["catalog/wallpapers/all_1.json"]);
     const count = await deleteOrphanedPages(bucket, "wallpapers", written);
     expect(count).toBe(2);
-    expect(deleted.sort()).toEqual([
-      "catalog/wallpapers/new_1.json",
-      "catalog/wallpapers/temples_1.json",
-    ]);
+    expect(deleted.sort()).toEqual(["catalog/wallpapers/new_1.json", "catalog/wallpapers/temples_1.json"]);
   });
 
   it("deletes higher page numbers when a scope shrinks below a page boundary", async () => {
@@ -84,10 +75,7 @@ describe("Orphaned page cleanup (deleteOrphanedPages)", () => {
       "catalog/wallpapers/all_1.json",
       "catalog/wallpapers/all_2.json",
     ]);
-    const written = new Set([
-      "catalog/wallpapers/all_1.json",
-      "catalog/wallpapers/all_2.json",
-    ]);
+    const written = new Set(["catalog/wallpapers/all_1.json", "catalog/wallpapers/all_2.json"]);
     const count = await deleteOrphanedPages(bucket, "wallpapers", written);
     expect(count).toBe(0);
     expect(deleted).toEqual([]);
@@ -149,11 +137,7 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
 
   it("carries the hand-set chip order, keyed by SCOPE the way the app reads it", async () => {
     const { bucket, puts } = makeMockR2();
-    await writeAppConfig(
-      bucket,
-      {},
-      { wallpapers: ["amman", "sivan"], ringtones: ["others", "murugan"] },
-    );
+    await writeAppConfig(bucket, {}, { wallpapers: ["amman", "sivan"], ringtones: ["others", "murugan"] });
     const body = puts[0].body as Record<string, unknown>;
     expect(body.category_order).toEqual({
       wallpapers: ["amman", "sivan"],
@@ -235,8 +219,7 @@ describe("writeAppConfig (catalog/app_config.json)", () => {
 describe("readCategoryOrder", () => {
   /** Tagged-template stub: one row set, or a throw. */
   function sqlStub(rows: unknown[] | Error) {
-    return (() =>
-      rows instanceof Error ? Promise.reject(rows) : Promise.resolve(rows)) as never;
+    return (() => (rows instanceof Error ? Promise.reject(rows) : Promise.resolve(rows))) as never;
   }
 
   it("groups by scope and preserves the CMS's picker_order", async () => {

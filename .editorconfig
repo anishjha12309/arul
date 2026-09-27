@@ -1,0 +1,26 @@
+# Editor hints. dart format reads only analysis_options.yaml and biome.jsonc wins over this file, but
+# Android Studio lets this file override its Kotlin style scheme, so [*.{kt,kts}] must match the
+# Android Kotlin style guide.
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.dart]
+indent_size = 2
+
+[*.{kt,kts}]
+indent_size = 4
+max_line_length = 100
+
+[*.{ts,tsx,js,mjs,cjs,json,jsonc,yaml,yml,sql}]
+indent_size = 2
+
+[*.py]
+indent_size = 4

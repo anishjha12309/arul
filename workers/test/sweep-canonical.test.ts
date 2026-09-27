@@ -42,11 +42,7 @@ describe("selectCanonicalKeysToDelete", () => {
   it("keeps ringtone audio AND cover keys while a row references them", () => {
     const audio = "ringtones/murugan/abc.mp3";
     const cover = "ringtones/covers/murugan/abc.jpg";
-    const out = selectCanonicalKeysToDelete(
-      [obj(audio, OLD), obj(cover, OLD)],
-      new Set([audio, cover]),
-      NOW,
-    );
+    const out = selectCanonicalKeysToDelete([obj(audio, OLD), obj(cover, OLD)], new Set([audio, cover]), NOW);
     expect(out).toEqual([]);
   });
 
@@ -227,11 +223,7 @@ describe("sweepCanonical — per-prefix failsafes", () => {
       [], // wallpapers table came back empty — the fault condition
       ["ringtones/murugan/a.mp3"], // ringtones still populated
       {
-        "wallpapers/": [
-          "wallpapers/murugan/1.mp4",
-          "wallpapers/sivan/2.mp4",
-          "wallpapers/amman/3.mp4",
-        ],
+        "wallpapers/": ["wallpapers/murugan/1.mp4", "wallpapers/sivan/2.mp4", "wallpapers/amman/3.mp4"],
         "ringtones/": ["ringtones/murugan/a.mp3"],
       },
     );
@@ -246,11 +238,10 @@ describe("sweepCanonical — per-prefix failsafes", () => {
   it("refuses a prefix whose deletions exceed the blast-radius cap", async () => {
     // 1 of 40 wallpaper objects is still referenced -> 39/40 would be deleted -> far past the cap, so refuse
     const objects = Array.from({ length: 40 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
-    const { result, deleted } = await run(
-      ["wallpapers/murugan/0.mp4"],
-      ["ringtones/murugan/a.mp3"],
-      { "wallpapers/": objects, "ringtones/": ["ringtones/murugan/a.mp3"] },
-    );
+    const { result, deleted } = await run(["wallpapers/murugan/0.mp4"], ["ringtones/murugan/a.mp3"], {
+      "wallpapers/": objects,
+      "ringtones/": ["ringtones/murugan/a.mp3"],
+    });
 
     expect(deleted).toEqual([]);
     expect(result.aborted).toBe(true);
@@ -260,32 +251,22 @@ describe("sweepCanonical — per-prefix failsafes", () => {
 
   it("still reclaims genuine orphans in the normal case", async () => {
     const referenced = Array.from({ length: 30 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
-    const { result, deleted } = await run(
-      referenced,
-      ["ringtones/murugan/a.mp3"],
-      {
-        "wallpapers/": [...referenced, "wallpapers/murugan/orphan.mp4"],
-        "ringtones/": ["ringtones/murugan/a.mp3", "ringtones/sivan/orphan.mp3"],
-      },
-    );
+    const { result, deleted } = await run(referenced, ["ringtones/murugan/a.mp3"], {
+      "wallpapers/": [...referenced, "wallpapers/murugan/orphan.mp4"],
+      "ringtones/": ["ringtones/murugan/a.mp3", "ringtones/sivan/orphan.mp3"],
+    });
 
-    expect(deleted.sort()).toEqual(
-      ["ringtones/sivan/orphan.mp3", "wallpapers/murugan/orphan.mp4"].sort(),
-    );
+    expect(deleted.sort()).toEqual(["ringtones/sivan/orphan.mp3", "wallpapers/murugan/orphan.mp4"].sort());
     expect(result.aborted).toBe(false);
     expect(result.deleted).toBe(2);
   });
 
   it("a ringtone row can never vouch for a wallpaper object", async () => {
     // Both tables are populated, but the object under wallpapers/ matches only a RINGTONE key
-    const { deleted } = await run(
-      ["wallpapers/murugan/kept.mp4"],
-      ["ringtones/murugan/a.mp3"],
-      {
-        "wallpapers/": ["wallpapers/murugan/kept.mp4", "ringtones/murugan/a.mp3"],
-        "ringtones/": ["ringtones/murugan/a.mp3"],
-      },
-    );
+    const { deleted } = await run(["wallpapers/murugan/kept.mp4"], ["ringtones/murugan/a.mp3"], {
+      "wallpapers/": ["wallpapers/murugan/kept.mp4", "ringtones/murugan/a.mp3"],
+      "ringtones/": ["ringtones/murugan/a.mp3"],
+    });
     // The ringtones table does not protect it -> but it is not under a prefix it belongs to either
     // selectCanonicalKeysToDelete's prefix check keeps it out of scope -> a cross-table key is never judged
     expect(deleted).toEqual([]);

@@ -1,25 +1,10 @@
 /**
  * PhonePe webhook driver (Arul).
- *
- * The webhook moves NO money — it is a state callback. That is why it is safe
- * to exercise against production, while
- * /payments/initiate, notify, redeem and the operator-only /internal/refund and
- * /internal/run-redemptions routes are red-lined: mandates <= Rs 15,000
- * debit with no UPI PIN, so those genuinely move money.
- *
  * The path below is HARDCODED to /payments/webhook. This file cannot be pointed
  * at a money-moving route, whatever arguments it is given — that is the point,
  * and it is the actual boundary behind the `Bash(node tools/prod-webhook.mjs*)`
  * allow-rule. Do not parameterise the path.
- *
  *   node tools/prod-webhook.mjs <event> <merchantSubscriptionId> <orderId> [--prod]
- *
- * Defaults to http://127.0.0.1:8787 (the wrangler dev sandbox). --prod is
- * required, explicitly, to reach api.hsrutility.com — PhonePe delivers Arul
- * webhooks there too: the hsr-cms dispatcher forwards DKS_-prefixed
- * orders to arul-api over the service binding (docs/architecture.md).
- *
- * Credentials come from workers/.dev.vars and are never printed.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -33,9 +18,7 @@ const useProd = args.includes("--prod");
 const [event, msid, orderId] = args.filter((a) => a !== "--prod");
 
 if (!event || !msid || !orderId) {
-  console.error(
-    "usage: node tools/prod-webhook.mjs <event> <merchantSubscriptionId> <orderId> [--prod]",
-  );
+  console.error("usage: node tools/prod-webhook.mjs <event> <merchantSubscriptionId> <orderId> [--prod]");
   process.exit(2);
 }
 
@@ -56,7 +39,6 @@ const vars = Object.fromEntries(
     }),
 );
 
-// Authorization = SHA256(username + ":" + password) hex — payments.ts:300-302.
 const auth = createHash("sha256")
   .update(`${vars.PHONEPE_WEBHOOK_USERNAME}:${vars.PHONEPE_WEBHOOK_PASSWORD}`)
   .digest("hex");

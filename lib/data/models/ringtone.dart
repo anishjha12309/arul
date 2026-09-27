@@ -4,9 +4,6 @@ part 'ringtone.freezed.dart';
 part 'ringtone.g.dart';
 
 /// One ringtone catalog entry, from the Worker-built `catalog/ringtones/all_{page}.json`.
-///
-/// `audioKey` is the PUBLIC R2 key — preview streams free, the same soft gate as wallpaper browse.
-/// SETTING it as the device tone is the premium gate, live-checked by `/media/signed-url` (§5).
 @freezed
 abstract class Ringtone with _$Ringtone {
   const Ringtone._();

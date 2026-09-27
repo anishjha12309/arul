@@ -1,9 +1,5 @@
 /**
- * Auth routes — /auth/login exchanges a Google idToken for our pair; /auth/refresh rotates; /auth/logout revokes.
- *
  * The `sub` in every issued JWT is OUR users.id, NEVER Google's -> google_sub is only an identity lookup key
- * Every Neon query here is parameterized -> no string interpolation reaches SQL on the unauthenticated path
- * referral_code is unique-constrained -> a collision is expected, not exceptional -> retry once with a fresh code
  */
 
 import type { Context } from "hono";
@@ -43,9 +39,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   }
   // The referral code the friend arrived with (Play Install Referrer) -> honoured ONLY on first login, below
   const incomingReferralCode =
-    typeof body.referralCode === "string" && body.referralCode.trim()
-      ? body.referralCode
-      : null;
+    typeof body.referralCode === "string" && body.referralCode.trim() ? body.referralCode : null;
   let googleClaims;
   try {
     googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
@@ -54,29 +48,17 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     return errorResponse(401, "invalid_token", "Google idToken is invalid or expired");
   }
 
-  // The app generates one nonce per PROCESS and hands it to GoogleSignIn.initialize()
-  // So every ID token that process obtains carries it as a claim, and the exchange sends the same value
-  // Equal or both absent -> that is what binds a token to the app process that requested it
-  // Both absent is ACCEPTED on purpose -> older installs send no nonce -> requiring one signs them all out
-  // Checking the PAIR, not just "the body has one", is what closes the downgrade path
-  // Otherwise a nonce-bearing token could be replayed through an old-shaped request
-  const requestNonce =
-    typeof body.nonce === "string" && body.nonce ? body.nonce : null;
+  const requestNonce = typeof body.nonce === "string" && body.nonce ? body.nonce : null;
   const tokenNonce = googleClaims.nonce ?? null;
   if ((requestNonce || tokenNonce) && requestNonce !== tokenNonce) {
     const missing = !requestNonce ? "request" : !tokenNonce ? "token" : "neither";
-    console.warn(
-      `[auth/login] nonce mismatch for google_sub ${googleClaims.sub} (missing: ${missing})`,
-    );
+    console.warn(`[auth/login] nonce mismatch for google_sub ${googleClaims.sub} (missing: ${missing})`);
     return errorResponse(401, "nonce_mismatch", "Sign-in nonce did not match");
   }
 
   // Rate limit AFTER verification, keyed by the GOOGLE ACCOUNT -> never by IP
   // India is heavily carrier-grade NAT'd -> thousands of subscribers share one egress IP
   // An IP key would bucket a whole carrier together and 429 real sign-ins as the app grew
-  // One Google account signing in 20x a minute is not a person -> the account is the right unit of abuse
-  // Placing it after verifyGoogleIdToken means garbage tokens 401 before they ever reach the limiter
-  // And the thing actually worth protecting — the Neon read/write below — still sits behind it
   if (!(await allowRequest(env.RL_AUTH, `login:${googleClaims.sub}`))) {
     console.warn(`[auth/login] rate limited google_sub ${googleClaims.sub}`);
     return tooManyRequests("Too many sign-in attempts — please wait a minute");
@@ -111,9 +93,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
       referralCode = row.referral_code as string;
     } else {
       // New user -> generate a referral code and insert -> a unique-violation retries once with a fresh code
-      const insertUser = async (): Promise<
-        Array<Record<string, unknown>>
-      > => {
+      const insertUser = async (): Promise<Array<Record<string, unknown>>> => {
         referralCode = generateReferralCode();
         try {
           return await sql`
@@ -142,19 +122,11 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         }
       };
 
-      // The one-trial guard across deletions -> DELETE /me left a tombstone keyed by HMAC(google_sub)
-      // A hit pre-seeds a consumed-trial row -> /payments/initiate routes them to the paid ₹199 setup
       // Deliberately NOT best-effort -> a failure here must FAIL the login, or the guard can be raced
       // The lookup keys on google_sub alone -> it runs CONCURRENTLY with the insert, not after it
-      // This is every new user's FIRST login, the most latency-sensitive request in the funnel
       // Promise.all keeps the fail-closed property -> either query failing still fails the login
-      const lookupTombstone = async (): Promise<
-        Array<Record<string, unknown>>
-      > => {
-        const tombHash = await hashGoogleSub(
-          googleClaims.sub,
-          env.TRIAL_TOMBSTONE_SECRET,
-        );
+      const lookupTombstone = async (): Promise<Array<Record<string, unknown>>> => {
+        const tombHash = await hashGoogleSub(googleClaims.sub, env.TRIAL_TOMBSTONE_SECRET);
         return await sql`
           SELECT trial_end FROM trial_tombstones
           WHERE google_sub_hash = ${tombHash}
@@ -162,10 +134,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         `;
       };
 
-      const [inserted, tomb] = await Promise.all([
-        insertUser(),
-        lookupTombstone(),
-      ]);
+      const [inserted, tomb] = await Promise.all([insertUser(), lookupTombstone()]);
 
       const row = inserted[0];
       userId = row.id as string;
@@ -245,7 +214,6 @@ export async function handleRefresh(c: Context<{ Bindings: Env }>): Promise<Resp
   const won = await claimRefreshJti(env.KV, claims.jti, expEpoch);
   if (!won) {
     // We lost the rotation -> treating that as a revoked token signs the user OUT -> check for a retry first
-    // A client timeout, a dropped connection or a badly timed background all retry a refresh that already succeeded
     // Replaying the same pair inside the window makes a flaky network a no-op instead of a forced re-sign-in
     // This covers the SEQUENTIAL retry, the dominant real case -> two truly simultaneous refreshes can still 401
     // The loser can arrive before the winner has written the replay -> the client's own single-flight prevents that
@@ -309,20 +277,13 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
   return c.json({ ok: true });
 }
 
-function errorResponse(
-  status: number,
-  code: string,
-  message: string,
-): Response {
+function errorResponse(status: number, code: string, message: string): Response {
   return Response.json({ error: { code, message } }, { status });
 }
 
 function isUniqueViolation(err: unknown): boolean {
   // postgres.js wraps Postgres errors -> a unique violation is code 23505 on the wrapper, not on the message
   return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: string }).code === "23505"
+    typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "23505"
   );
 }

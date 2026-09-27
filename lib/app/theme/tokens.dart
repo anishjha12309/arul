@@ -1,17 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// The ONLY place a raw colour, radius, elevation or gap literal may appear in `lib/app/theme`.
-///
-/// [ArulTokens] in `lib/theme/arul_tokens.dart` is the normative source -> new code reads THAT by role.
-/// This is the LEGACY ladder schemes.dart and the shared widgets still consume -> never grow it.
-/// Its NAMES are kept only to avoid a big-bang rename; its VALUES are already the redesign palette:
-///
-///   * `rose*`  → maroon `#7A1E33` (the primary)
-///   * `teal*`  → gold `#D4A017` (there is no teal any more)
-///   * `tealCta`→ ctaGreen `#1FA75A` (ALL primary CTAs are green)
-///   * `gold*`  → gold `#D4A017`
-///   * `ink*`   → the dark surfaces `#14090C / #1A0B0F / #241014 / #2A1218`
-///   * `ivory*` → the light surfaces `#FAF5EC / #FFFFFF …`
 abstract final class ArulColors {
   static const roseDeep = Color(0xFF7A1E33);
 
@@ -65,8 +54,6 @@ abstract final class ArulColors {
   static const onEmberDeep = Color(0xFFFFF6F2);
   static const onEmber = Color(0xFF14090C);
 
-  /// The dark surface / splash background. Maroon-black `#14090C`.
-  ///
   /// MIRRORED OUTSIDE DART in android values/colors.xml and pubspec's `flutter_native_splash`.
   /// All three must change together -> or the OS splash flashes a different black than frame one.
   static const ink = Color(0xFF14090C);
@@ -99,7 +86,6 @@ abstract final class ArulColors {
 
   static const inverseLight = Color(0xFF2B1116);
 
-  // ─── Over media ─────────────────────────────────────────────────────────────
   // Chrome on an arbitrary wallpaper defends its own contrast: translucent dark fill plus a hairline.
   // ArulScrims owns the gradient half.
 
@@ -129,7 +115,6 @@ abstract final class Gap {
   static const huge = 48.0;
 }
 
-/// Corner radii. Generous and consistent = the single cheapest "premium" cue.
 abstract final class Radii {
   static const chip = 999.0;
   static const tile =
@@ -145,8 +130,6 @@ abstract final class Radii {
   static const sheetShape = BorderRadius.vertical(top: Radius.circular(sheet));
 }
 
-/// Elevation.
-///
 /// A black shadow is invisible on a near-black surface -> a shadow system works in one theme only.
 /// So hierarchy comes from surface COLOUR and a hairline outline, never a drop shadow.
 abstract final class Elevation {

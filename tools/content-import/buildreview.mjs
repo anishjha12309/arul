@@ -1,12 +1,13 @@
 // Stage E -> a self-contained review page from review-data.json, opened over file:// so local thumbs load.
 // Each card's category dropdown defaults to the classifier pick, or SKIP for a likely existing dup.
 // "Copy corrections" yields the FINAL {base: category|"SKIP"} map -> that is what buildplan.mjs consumes.
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "node:fs";
 const ROOT = "c:/Anish/arul-import";
 const CATS = ["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"];
 const data = JSON.parse(readFileSync(`${ROOT}/review-data.json`, "utf8"));
 
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const card = (it) => {
   const media = it.kind === "video" ? `normalized/${it.thumb}` : `normalized/${it.out}`;
   const def = it.existingDup ? "SKIP" : it.category;
@@ -14,11 +15,14 @@ const card = (it) => {
   const badges = [];
   if (it.kind === "video") badges.push(`<span class="b vid">▶ ${it.durationS ?? "?"}s</span>`);
   badges.push(`<span class="b c-${conf}">${conf}</span>`);
-  if (it.existingDup) badges.push(`<span class="b dup">DUP? ${esc(it.existMatch?.category)} d${it.existMatch?.hamming}</span>`);
+  if (it.existingDup)
+    badges.push(`<span class="b dup">DUP? ${esc(it.existMatch?.category)} d${it.existMatch?.hamming}</span>`);
   else if (it.batchNearDup) badges.push(`<span class="b near">batch-dup</span>`);
   for (const f of it.flags || []) badges.push(`<span class="b flag">${esc(f)}</span>`);
-  const opts = ['<option value="SKIP">— SKIP (don\'t import) —</option>',
-    ...CATS.map((c) => `<option value="${c}"${c === def ? " selected" : ""}>${c}</option>`)].join("");
+  const opts = [
+    '<option value="SKIP">— SKIP (don\'t import) —</option>',
+    ...CATS.map((c) => `<option value="${c}"${c === def ? " selected" : ""}>${c}</option>`),
+  ].join("");
   if (def === "SKIP") opts; // SKIP default handled below
   return `<div class="card" data-cat="${esc(it.category)}" data-conf="${conf}" data-dup="${it.existingDup ? 1 : 0}" data-flag="${(it.flags || []).length ? 1 : 0}">
     <div class="media" ${it.kind === "video" ? `onclick="window.open('normalized/${esc(it.out)}')"` : ""}>

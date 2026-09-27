@@ -1,12 +1,6 @@
 /// What a campaign notification's `data` map asked the app to open.
-///
 /// Pure, and the whole reason it is pure: this is the one piece of the tap path that can be tested
 /// without a device, a plugin or a live campaign. Everything downstream of it is routing.
-///
-/// **Every unreadable payload resolves to HOME.** A campaign composed against a newer app, a
-/// destination this build has never heard of, a wallpaper deleted since the send, a category
-/// retired last week — all of them open the app. A tap must never produce an error screen or a
-/// crash: the person tapped a notification we sent them, and landing somewhere is the floor.
 library;
 
 import '../../../core/deeplink/deep_link_target.dart';

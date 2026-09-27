@@ -114,7 +114,7 @@ class _Template {
     final placeholder = RegExp(r'\{(\w+)\}');
     for (final m in placeholder.allMatches(template)) {
       buf.write(RegExp.escape(template.substring(index, m.start)));
-      buf.write(r'.+?');
+      buf.write('.+?');
       index = m.end;
     }
     buf

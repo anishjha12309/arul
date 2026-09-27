@@ -10,12 +10,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show Locale;
 
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
@@ -27,6 +21,11 @@ import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/premium/presentation/premium_screen.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];
@@ -299,8 +298,6 @@ void main() {
     expect(state.kind, PurchaseErrorKind.generic);
     expect(eventsNamed('payment_failed').single?['reason'], 'unexpected_error');
   });
-
-  // ─── The line the person reads ────────────────────────────────────────────
 
   test('every failure kind has a line in every language', () {
     final english = lookupAppLocalizations(const Locale('en'));

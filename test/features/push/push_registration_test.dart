@@ -1,15 +1,14 @@
 import 'dart:async';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/config/build_info.dart';
 import 'package:arul/core/crash/crash_reporter.dart';
 import 'package:arul/features/push/data/push_permission.dart';
 import 'package:arul/features/push/data/push_registration.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Two contracts, both about restraint.
 ///

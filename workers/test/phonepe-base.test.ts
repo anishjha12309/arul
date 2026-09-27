@@ -47,9 +47,7 @@ describe("getPgBase — production can never be redirected", () => {
   });
 
   it("an empty-string override falls back to the sandbox, never to ''", () => {
-    expect(
-      getPgBase(env({ PHONEPE_ENV: "SANDBOX", PHONEPE_BASE_URL_OVERRIDE: "" })),
-    ).toBe(SANDBOX_HOST);
+    expect(getPgBase(env({ PHONEPE_ENV: "SANDBOX", PHONEPE_BASE_URL_OVERRIDE: "" }))).toBe(SANDBOX_HOST);
   });
 
   it("honours the override only in a non-production env", () => {
@@ -67,9 +65,7 @@ describe("getPgBase — production can never be redirected", () => {
     // isProduction() trims and uppercases -> a "Production\n" secret still means production
     // So the override must be unreachable for every one of those variants, not just the exact string
     expect(
-      getPgBase(
-        env({ PHONEPE_ENV: "Production", PHONEPE_BASE_URL_OVERRIDE: "http://127.0.0.1:8799" }),
-      ),
+      getPgBase(env({ PHONEPE_ENV: "Production", PHONEPE_BASE_URL_OVERRIDE: "http://127.0.0.1:8799" })),
     ).toBe(PROD_HOST);
     expect(getPgBase(env({ PHONEPE_ENV: " PRODUCTION\n" }))).toBe(PROD_HOST);
   });

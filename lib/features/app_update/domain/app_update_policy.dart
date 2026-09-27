@@ -92,8 +92,6 @@ UpdateAction decide({
   DateTime? declinedAt,
   bool flexibleStarted = false,
 }) {
-  // Play reports a FLEXIBLE download as in progress too -> resuming it as IMMEDIATE would throw a
-  // full-screen update over someone who chose to keep using the app.
   if (info.availability == UpdateAvailability.inProgress) {
     return flexibleStarted ? UpdateAction.none : UpdateAction.resumeImmediate;
   }
@@ -101,7 +99,6 @@ UpdateAction decide({
     return UpdateAction.none;
   }
   final belowFloor = minBuild != null && buildOf(installedBuild) < minBuild;
-  // Below the floor the CMS knob and the decline cooldown no longer apply: every check prompts.
   if (belowFloor) {
     if (info.immediateAllowed) return UpdateAction.immediate;
     if (info.flexibleAllowed) return UpdateAction.flexible;

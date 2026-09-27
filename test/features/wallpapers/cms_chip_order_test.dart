@@ -10,10 +10,9 @@
 // an install older than the field, a CMS nobody has dragged, and a config fetch that has
 // not landed (or failed). All three must leave the built-in rule in sole charge.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 WallpaperCategory _cat(String slug) =>
     WallpaperCategory(slug, slug[0].toUpperCase() + slug.substring(1));

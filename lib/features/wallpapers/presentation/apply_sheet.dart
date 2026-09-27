@@ -72,7 +72,6 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
       ),
     ];
     return Padding(
-      // Spec: pad 18 20 24; the grabber + its padding come from ArulSheet.
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,

@@ -4,11 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  selectKeysToDelete,
-  SWEEP_GRACE_MS,
-  type SweepCandidate,
-} from "../src/cron/sweep-submissions.js";
+import { selectKeysToDelete, SWEEP_GRACE_MS, type SweepCandidate } from "../src/cron/sweep-submissions.js";
 
 const NOW = 1_700_000_000_000;
 const OLD = NOW - SWEEP_GRACE_MS - 1; // just past the grace window
@@ -45,11 +41,7 @@ describe("selectKeysToDelete", () => {
 
   it("ignores keys that are not submission objects", () => {
     // The prefix is user/ but the INFIX guard is what actually scopes the sweep -> anything else is out of scope
-    const out = selectKeysToDelete(
-      [obj("user/u1/profile/avatar.png", OLD)],
-      new Set(),
-      NOW,
-    );
+    const out = selectKeysToDelete([obj("user/u1/profile/avatar.png", OLD)], new Set(), NOW);
     expect(out).toEqual([]);
   });
 

@@ -9,15 +9,9 @@ class AnalyticsCohort {
 
   static const _drawKey = 'analytics_posthog_cohort_draw_v1';
 
-  /// Share of installs in the panel.
-  ///
   /// **1.0 — every install reports.** Sampling is a cost control and there is no cost to control
   /// until the base is large: a few dozen installs × 5% is a panel of roughly ONE device, and
   /// PostHog then goes days at a time with no events at all.
-  /// Widening is safe BY CONSTRUCTION — the whole reason the draw is persisted ([_drawKey]) ->
-  /// raising the rate only ADDS installs, so no retention curve breaks at the change.
-  /// NARROWING is the one that hurts -> installs whose stored draw exceeds the new rate drop out and
-  /// any cohort spanning the change is discontinuous.
   /// Revisit near 30k MAU -> ~25 events/user/month starts approaching the 1M/month free tier.
   static const _rate = 1.0;
 

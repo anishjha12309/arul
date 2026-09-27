@@ -64,13 +64,6 @@ class ApiClient {
 
   /// Where the session lives once THIS install's Android Keystore has refused it: app-private
   /// storage, out of every backup and device transfer (data_extraction_rules, allowBackup=false).
-  ///
-  /// Some Android 8.1/9 phones' keymaster answers every key generation or load with
-  /// `KeyStoreException: Memory allocation failed` (keymaster error -41), AES and RSA alike, on
-  /// every retry — so no cipher option helps, and those phones could never hold a session: Google
-  /// and `POST /auth/login` succeeded, then the token write threw. Owner's call: plain storage
-  /// there. The switch is sticky per install ([_kKeystoreRefusedKey]) so one session never splits
-  /// across two stores. Null (tests, define-less runs) = no fallback, the refusal propagates.
   final SharedPreferences? _plainStore;
 
   /// Told once per process when the switch happens -> a non-fatal, so the fix stays countable.
@@ -123,8 +116,6 @@ class ApiClient {
     (plain) => plain.remove(_plainKey(key)),
   );
 
-  /// Hard ceiling on every HTTP round trip, request and refresh alike.
-  ///
   /// Without it an offline gated call hangs forever — no response, no socket error, no completion.
   /// Timing out throws [http.ClientException] -> classified connectivity-class -> offline UI + retry.
   /// 12s is well past any healthy round trip -> online behaviour is unchanged. Injectable for tests.
@@ -133,9 +124,6 @@ class ApiClient {
   Completer<void>? _refreshCompleter;
 
   /// Fires each time a refresh proves the session dead and the tokens are cleared.
-  ///
-  /// The auth state lives in the auth service, not here. Without this, a session that died
-  /// mid-process kept the UI signed in while every gated call failed until the next cold start.
   Stream<void> get sessionEnded => _sessionEnded.stream;
   final _sessionEnded = StreamController<void>.broadcast();
 
@@ -145,17 +133,13 @@ class ApiClient {
   }
 
   /// GET paths coalesced while in flight and briefly replayed after settling (see [_meFreshFor]).
-  ///
   /// Only `/me`: the Worker LEFT JOINs the subscription row -> one response serves auth AND entitlement.
   /// `/me/subscription` is deliberately absent — nothing calls it, and a dead path reads as live config.
   static const Set<String> _replayableGets = {'/me'};
 
-  /// How long a completed replayable GET may be replayed to a later caller.
-  ///
   /// The cold-start pair re-resolves ~1s apart -> the second read starts after the first settled.
   /// In-flight coalescing alone cannot collapse that -> every cold start made two Neon round trips.
   /// A few seconds covers that gap and nothing else.
-  /// Safe because the client copy is UX only — the Worker's live Neon check is the real gate (§5).
   /// [invalidateMe] fires after every mutating request -> a purchase or cancel is never masked.
   static const Duration _meFreshFor = Duration(seconds: 5);
 
@@ -167,10 +151,6 @@ class ApiClient {
   int _meEpoch = 0;
 
   /// Opens the encrypted-storage channel early, off the critical path.
-  ///
-  /// The FIRST read of a process pays the platform channel plus Android keystore init.
-  /// That was most of the ~990ms between first frame and knowing whether a session exists.
-  /// Fire-and-forget from `main()` -> the cost overlaps Firebase and prefs setup, never serialises.
   /// Uses the same default [FlutterSecureStorage] the constructor falls back to -> the same channel.
   /// It reads nothing anyone consumes and swallows every failure -> worst case is the old timing.
   static Future<void> warmSecureStorage() async {
@@ -218,7 +198,6 @@ class ApiClient {
   }
 
   Future<void> clearTokens() async {
-    // The in-memory `/me` snapshot belongs to the session being torn down -> drop it with the tokens.
     invalidateMe();
     await Future.wait([
       _delete(_kAccessTokenKey),
@@ -277,9 +256,6 @@ class ApiClient {
   }) => _requestWithRetry('POST', path, body: body, requiresAuth: requiresAuth);
 
   /// GETs [path]; refreshes the token + retries once on 401.
-  ///
-  /// `/me` is coalesced ([_meInFlight]) -> an in-flight request is handed to every extra caller.
-  /// It is also briefly reused ([_meFreshFor]) -> one that just completed is replayed.
   Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) {
     if (!_replayableGets.contains(path)) {
       return _requestWithRetry('GET', path, requiresAuth: requiresAuth);
@@ -436,7 +412,6 @@ class ApiClient {
     if (response.statusCode != 200) {
       // ONLY a 401 means the refresh token is genuinely dead.
       // 429, 5xx, a gateway blip, a Neon hiccup are TRANSIENT -> wiping tokens signs a payer out.
-      // That is the worst false positive: premium lost and a re-auth, for a fault that was not theirs.
       // So a transient failure surfaces as a retryable error and the stored tokens stay put.
       // `isSessionExpired` deliberately does NOT match this code -> the UI never says "session expired".
       if (response.statusCode != 401) {

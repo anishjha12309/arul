@@ -51,20 +51,14 @@ class MainActivity : FlutterFragmentActivity() {
 
         private const val RINGTONE_CHANNEL = "com.hsrutility.arul/ringtone_set"
 
-        // Request code for the pre-Android-10 WRITE_EXTERNAL_STORAGE grant a custom ringtone needs there.
         private const val STORAGE_PERMISSION_REQUEST = 5001
 
-        // Exposes isPlayInstall() to Dart -> the reminders screen gates its QA tools on it.
         private const val BUILD_INFO_CHANNEL = "com.hsrutility.arul/build_info"
 
         private const val NOTIFICATION_SETTINGS_CHANNEL = "com.hsrutility.arul/notification_settings"
 
-        // Below this the phone is "low memory" for the auth video: a 4 GB phone reports ~3.6 GiB
-        // and a 6 GB phone ~5.5 GiB -> 4.5 GiB puts every 4 GB phone on the poster and no 6 GB phone.
-        // Half of the handsets with the slowest Google sign-in step were 4 GB phones on Android 15.
         private const val LOW_RAM_TOTAL_BYTES = 4608L * 1024 * 1024
 
-        // QA-only override for the rule above -> honoured on sideloads only (see isLowRamDevice).
         private const val FORCE_LOW_RAM_SETTING = "arul_force_low_ram"
 
         // The `high` line: an 8 GB phone reports ~7.3 GiB and a 6 GB phone ~5.5 GiB -> 7 GiB puts
@@ -78,12 +72,6 @@ class MainActivity : FlutterFragmentActivity() {
 
         // SoC families that must never reach `high` however much RAM the phone carries.
         // Matched as a PREFIX against a lowercased `Build.SOC_MODEL`. Caps at `mid`, never at `low`.
-        //
-        // `mt68` is here on measurement, not on reputation: docs/perf-measurement.md records a
-        // heavy browse peaking at 525 MB PSS on an **mt6878** with a 48 MB image cache, which is
-        // why the shipped ceiling is 32. An 8 GB mt6878 would otherwise clear the RAM line and be
-        // handed the `high` ceiling the same phone was measured failing.
-        // The rest are families whose concurrent hardware decoder sessions run out early.
         private val BUDGET_SOC_PREFIXES = listOf(
             "mt65", "mt66", "mt67", "mt68", // Helio A/G/P and Dimensity 7000-class
             "sm4", "sm6",                   // Snapdragon 4xx / 6xx
@@ -92,13 +80,9 @@ class MainActivity : FlutterFragmentActivity() {
             "exynos7", "exynos8",           // budget Exynos
         )
 
-        // Firebase's documented deferred-deep-link storage -> the SDK may write it before OR after Flutter attaches.
-        // So onCreate buffers the value and the channel serves both an initial pull and a later push.
         private const val GOOGLE_DDL_PREFS = "google.analytics.deferred.deeplink.prefs"
         private const val GOOGLE_DDL_KEY = "deeplink"
 
-        // ONE bridge for every network-delivered deferred link -> Google Ads via GA4F, Meta via the FB SDK.
-        // Handled tokens persist -> a delivery is honoured once per install, however many Activity creations it spans.
         private const val DEFERRED_LINK_CHANNEL = "com.hsrutility.arul/deferred_link"
         private const val DEFERRED_STATE_PREFS = "arul.deferred_link"
         private const val DEFERRED_HANDLED_TOKENS_KEY = "handled_tokens"
@@ -140,8 +124,6 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // MUST run before super.onCreate() -> the library installs into the window before content exists.
-        // This is what renders LaunchTheme's splash on API<=30 -> without it those attrs are Android-12-only.
         installSplashScreen()
         super.onCreate(savedInstanceState)
         // Meta writes App Events to logcat only in debug mode -> debuggable builds only, so a sideload
@@ -152,10 +134,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()
-        // FLAG_SECURE blocks screenshots and recording and blanks the recents thumbnail -> Play builds only.
         // No BuildConfig signal separates an APK from an AAB (both are `release`) -> the installer package is the proxy.
-        // Sideloaded release APKs stay visible -> Play-listing screenshots still work -> that difference is intended.
-        // Set here, not in the manifest -> it re-applies on every activity recreate, wallpaper-apply included.
         // release-flag-secure-guard.js gates the .aab on an ACTIVE setFlags call -> never comment this out.
         if (isPlayInstall()) {
             window.setFlags(
@@ -165,10 +144,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // True only when Google Play delivered this build -> that is the uploaded AAB.
-    // Fails CLOSED when the installer cannot be resolved -> the published app is never left unprotected.
-    // The app's ONE definition of "the artifact Play ships" -> FLAG_SECURE and the reminders QA tools both read it.
-    // Keeping them on one predicate is what stops the two from disagreeing -> never fork it.
     private fun isPlayInstall(): Boolean {
         return try {
             val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -183,21 +158,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // The ONE device-quality answer for the whole process, resolved natively and read by Dart
-    // through [DeviceQuality]. Three rungs, and the rule is this table — never scattered conditionals:
-    //
-    //   | Tier   | Rule, first match wins                                                          |
-    //   | ------ | ------------------------------------------------------------------------------- |
-    //   | low    | isLowRamDevice() below — the Go flag, under 4.5 GiB, or Android 12L and older   |
-    //   | mid    | SOC_MODEL in a budget family, or total RAM under 7 GiB                          |
-    //   | high   | everything else: Android 13+, 7 GiB or more, and not a budget SoC               |
-    //
-    // **`low` is EXACTLY today's poster rule and nothing else may widen it.** That population is
-    // what the sign-in funnel is read against, and two builds that let a fourth signal in lost
-    // Android 13+ sign-ins. SOC_MODEL therefore only ever caps a phone at `mid`; it can never
-    // create a `low`.
-    //
-    // **Fails open to `mid`**, never to `low`: a probe that throws must not cripple a capable phone.
     private fun deviceTier(): String {
         return try {
             if (isLowRamDevice()) return TIER_LOW
@@ -213,8 +173,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // `Build.SOC_MODEL` is API 31+ and OEMs may return UNKNOWN — both cases answer false, which
-    // leaves the phone on whatever RAM and SDK already decided. A match only ever caps at `mid`.
     // The families listed are the ones whose hardware decoder sessions run out at 2 on this feed.
     private fun isBudgetSoc(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
@@ -249,27 +207,15 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     // The auth screens' looping video background is skipped on phones this answers true for.
-    // `isLowRamDevice` alone is the Android Go flag -> a 2–3 GB non-Go phone reports false, and those
-    // are exactly the handsets where Google's sign-in step measured 2–3× slower -> total RAM decides too.
     // Also the `low` rung of [deviceTier] — one rule, two readers, so they can never disagree.
     private fun isLowRamDevice(): Boolean {
         return try {
             val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val info = ActivityManager.MemoryInfo()
             am.getMemoryInfo(info)
-            // QA seam: a capable phone cannot be made low-RAM, so `adb shell settings put global
-            // arul_force_low_ram 1` forces the poster path. Gated on !isPlayInstall() exactly like
-            // the reminders screen's qaToolsEnabled -> inert in every build Play ships.
             val forced = Settings.Global.getInt(contentResolver, FORCE_LOW_RAM_SETTING, 0) == 1
             // Three STABLE facts only: the Go flag, total RAM, Android 12 and older. They name the
             // poster population in analytics and give the same answer on every launch.
-            // NEVER `info.lowMemory`: it is the OS's moment-in-time pressure bit (availMem under the
-            // kill threshold), and it is routinely set on the cold start right after a Play install,
-            // so capable Android 13+ phones got the still poster at random. Both builds that carried
-            // it lost Android 13+ sign-ins (more first-sheet dismissals, same speed as human swipes)
-            // while the phones it touched could not be identified afterwards. Phones under the RAM
-            // line or on Android 12 and older are already on the poster, so the flag can only ever
-            // hurt. The video is what keeps capable phones waiting through Google's sheet.
             (!isPlayInstall() && forced) ||
                 am.isLowRamDevice ||
                 info.totalMem < LOW_RAM_TOTAL_BYTES ||
@@ -282,8 +228,6 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // getDeferredDeepLinks covers values captured before the engine attached -> onDeferredDeepLink covers later ones.
-        // Flutter ACKs only after durably saving the target -> an Activity or process death cannot lose it.
         deferredLinkChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DEFERRED_LINK_CHANNEL,
@@ -319,9 +263,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
         pushPendingDeferredLinks()
 
-        // In-feed live previews -> the Dart VideoPreloadController drives a small REUSE pool of native players.
-        // Each renders into a Flutter Texture via a SurfaceProducer -> players are swapped, never recreated.
-        // An APPLIED live wallpaper runs in its own WallpaperService (wallpaper/) -> this plugin never touches it.
         feedVideoPlugin = FeedVideoPlugin(
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
@@ -344,7 +285,6 @@ class MainActivity : FlutterFragmentActivity() {
             VideoThumbnailChannel.CHANNEL,
         ).setMethodCallHandler(thumbs)
 
-        // Transformer burns the Dart-rendered full-frame overlay into the SHARED copy -> the original file stays clean.
         val watermark = ShareWatermarkChannel(applicationContext)
         shareWatermarkChannel = watermark
         MethodChannel(
@@ -359,8 +299,6 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "isPlayInstall" -> result.success(isPlayInstall())
                 "isLowRamDevice" -> result.success(isLowRamDevice())
-                // The three-rung quality ladder plus the facts behind it -> Dart logs one line per
-                // process and splits every later metric by tier.
                 "deviceTier" -> result.success(deviceTierInfo())
                 // Stamped on the push registry row so a delivery gap can be read per Android
                 // generation — the permission model, the channel rules and the trampoline rules all
@@ -371,29 +309,24 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        // ACTION_SEND aimed at ONE package (WhatsApp) -> the wallpaper FILE travels with the caption.
         // Stateless and activity-scoped -> it needs no disposal.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DirectShareChannel.CHANNEL,
         ).setMethodCallHandler(DirectShareChannel(this))
 
-        // Enumerates UPI apps for the paywall picker and launches PhonePe's intentUrl at the chosen one.
         // Stateless and activity-scoped -> it needs no disposal.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             UpiIntentChannel.CHANNEL,
         ).setMethodCallHandler(UpiIntentChannel(this))
 
-        // Google's own Update / Enable dialog for a phone whose Play services cannot sign in.
         // Stateless and activity-scoped -> it needs no disposal.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             PlayServicesChannel.CHANNEL,
         ).setMethodCallHandler(PlayServicesChannel(this))
 
-        // Upload-your-content's file pick on the system pickers -> its result comes back through
-        // onActivityResult below, and the copy it makes runs on a coroutine the disposal cancels.
         val mediaPick = MediaPickChannel(this)
         mediaPickChannel = mediaPick
         MethodChannel(
@@ -406,15 +339,11 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             AppUpdateChannel.CHANNEL,
         )
-        // The fake-update test hook is honoured only on a sideload -> a Play install can never be faked.
         val fakeUpdate = if (isPlayInstall()) null else intent?.getStringExtra(AppUpdateChannel.FAKE_EXTRA)
         val appUpdate = AppUpdateChannel(this, appUpdateLauncher, updateMethodChannel, fakeUpdate)
         appUpdateChannel = appUpdate
         updateMethodChannel.setMethodCallHandler(appUpdate)
 
-        // POST_NOTIFICATIONS refused for good -> the same shape as WRITE_SETTINGS: ask, then deep-link.
-        // Android stops showing its dialog once the user has refused twice, so the toggle would
-        // otherwise be a dead tap behind a toast naming a screen with no way to reach it.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             NOTIFICATION_SETTINGS_CHANNEL,
@@ -429,7 +358,6 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        // Ringtone set -> WRITE_SETTINGS check and deep-link, MediaStore register, then the default-tone set.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             RINGTONE_CHANNEL,
@@ -466,8 +394,6 @@ class MainActivity : FlutterFragmentActivity() {
                         return@setMethodCallHandler
                     }
 
-                    // Pre-Android-10 needs WRITE_EXTERNAL_STORAGE for the external MediaStore volume -> 10+ needs nothing.
-                    // Missing -> prompt and resume the set in onRequestPermissionsResult -> otherwise set now.
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
                         checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
                         PackageManager.PERMISSION_GRANTED
@@ -493,7 +419,6 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        // A destroyed engine must leave no dangling coroutine jobs, ExoPlayers or SurfaceProducers behind.
         wallpaperApplyChannel?.dispose()
         wallpaperApplyChannel = null
         appUpdateChannel?.dispose()
@@ -520,8 +445,6 @@ class MainActivity : FlutterFragmentActivity() {
         super.onDestroy()
     }
 
-    // Registering late misses the preference-change callback -> reading once misses a later network response.
-    // Firebase documents both paths as necessary -> listen AND read the current value.
     private fun registerGoogleDeferredLinkListener() {
         val prefs = getSharedPreferences(GOOGLE_DDL_PREFS, MODE_PRIVATE)
         googleDeferredPrefs = prefs
@@ -533,39 +456,26 @@ class MainActivity : FlutterFragmentActivity() {
         captureGoogleDeferredLink(prefs)
     }
 
-    /** Accepts only this app's verified App Link URLs before crossing to Dart. */
     private fun captureGoogleDeferredLink(prefs: SharedPreferences) {
         val raw = prefs.getString(GOOGLE_DDL_KEY, null)?.trim().orEmpty()
         if (raw.isEmpty()) return
         if (!isAppLinkUrl(raw)) {
-            // Not our host -> dropped. Dropping it silently is invisible -> the shipped build is FLAG_SECURE, so logcat is the only window.
             Log.w(TAG, "Deferred deep link ignored: not an arul.hsrutility.com link")
             return
         }
 
-        // The URL ALONE is the delivery identity, never url+timestamp -> GA4F writes those two keys independently.
-        // A composite token flips from "0:<url>" to "<bits>:<url>" -> the handled marker stops matching.
-        // An already-consumed wallpaper would then re-open on a later launch -> keep the token the bare URL.
-        // DDL is install-scoped anyway -> re-delivering the same URL is never something to honour.
         enqueueDeferredLink(raw, SOURCE_GOOGLE_ADS)
     }
 
     // The URL an ad's deep-link field carried, for a user who installed from it (docs/deferred-links.md §Meta).
-    // fetchDeferredAppLinkData asks Meta's Graph API once -> it logs NO app event -> attribution is unaffected.
-    // Runs in onCreate, so on a fresh install this Graph POST shares the first second's network with
-    // the sign-in and the catalog — on a 7 KB/s connection that queue starved all three once.
-    // The SDK was already initialised by its manifest ContentProvider -> this Activity does not init it.
-    // A null callback means "no link" AND "network failed" -> retry over the first launches, capped at META_MAX_ATTEMPTS.
     // Never throws -> a deferred link is never worth a crash on the launch path.
     private fun fetchMetaDeferredLink() {
         try {
             val state = getSharedPreferences(DEFERRED_STATE_PREFS, MODE_PRIVATE)
-            // Re-offer a link an earlier Activity captured but Flutter never ACKed -> enqueue's handled set keeps it once-only.
             state.getString(META_LINK_KEY, null)?.let { enqueueDeferredLink(it, SOURCE_META) }
             if (state.getBoolean(META_DONE_KEY, false)) return
             val attempts = state.getInt(META_ATTEMPTS_KEY, 0)
             if (attempts >= META_MAX_ATTEMPTS) return
-            // No META_APP_ID baked in (key-less dev build) -> there is nothing to ask for.
             if (!FacebookSdk.isInitialized() || FacebookSdk.getApplicationId().isNullOrBlank()) return
             state.edit().putInt(META_ATTEMPTS_KEY, attempts + 1).apply()
 
@@ -586,11 +496,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /**
-     * Any `https://arul.hsrutility.com/…` URL. Only the HOST is checked here; Dart's `parseDeepLink` decides what the
-     * path and query mean, and ACKs what it rejects. A path rule here once required `/w/<uuid>`, so the id-less
-     * `/w/?lang=ta` the ads carried was dropped on every Google Ads install while the Dart parser accepted it.
-     */
     private fun isAppLinkUrl(raw: String): Boolean {
         return try {
             val uri = Uri.parse(raw)
@@ -601,7 +506,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    /** `fb<APP_ID>://open?…` — Meta's custom-scheme form. Dart reads the query. */
     private fun isMetaSchemeUrl(raw: String): Boolean {
         return try {
             val uri = Uri.parse(raw)
@@ -640,9 +544,6 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // The per-package ACTION_MANAGE_WRITE_SETTINGS is unresolvable on some OEM builds -> startActivity throws there.
-    // So walk a chain: per-package grant page -> app-list grant page -> app details -> the last resolves everywhere.
-    // The Set tap opens this with no explainer -> if every intent fails the tap is a silent no-op -> accepted.
     private fun openWriteSettingsScreen() {
         val candidates = listOf(
             Intent(
@@ -679,10 +580,6 @@ class MainActivity : FlutterFragmentActivity() {
             !NotificationManagerCompat.from(this).areNotificationsEnabled()
         }
 
-    // Same fallback chain as WRITE_SETTINGS: the per-app notification page, then app details,
-    // which resolves everywhere. A tap that opens nothing is preferable to a crash.
-    // Android's Data Saver blocks background data on a METERED network and asks the foreground to
-    // use less. Both halves must hold: Data Saver on Wi-Fi restricts nothing.
     private fun dataSaverOn(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
         return try {

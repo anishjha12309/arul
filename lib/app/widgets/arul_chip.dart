@@ -33,7 +33,6 @@ class ArulChip extends StatefulWidget {
 
   /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
   /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String? identifier;
 
   /// The browse chip's fixed DRAWN height. Its tap target is [ArulTokens.minHitTarget].
@@ -89,8 +88,6 @@ class _ArulChipState extends State<ArulChip> {
     );
 
     final chip = GestureDetector(
-      // A chip picks between values -> the lightest tick, never a button press, and on press-DOWN;
-      // the pill dips under the finger until the selection lands on release.
       onTapDown: onTap == null
           ? null
           : (_) {
@@ -103,8 +100,6 @@ class _ArulChipState extends State<ArulChip> {
           : () => setState(() => _pressed = false),
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      // Every chip DRAWS its own height and is TAPPED at [ArulTokens.minHitTarget] — the visual is
-      // the handoff's and does not move, the slack above and below is transparent hit area.
       // `opaque` is what makes that slack tappable rather than decorative. The strips that host the
       // browse row own the matching height; a form's Wrap simply runs a little airier.
       child: SizedBox(
@@ -112,7 +107,6 @@ class _ArulChipState extends State<ArulChip> {
         child: Center(
           widthFactor: 1,
           child: AnimatedOpacity(
-            // Holds at 1 when motion is reduced; the tick still answers the press.
             opacity: _pressed && !context.reduceMotion ? 0.6 : 1,
             duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
             child: visual,
@@ -171,7 +165,6 @@ class _ArulChipState extends State<ArulChip> {
         );
       case ArulChipVariant.category:
         if (selected) {
-          // Solid gold on dark, solid maroon on light — borderless, so the pill reads as one token.
           final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
           final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
           return (fill, fill, fg);

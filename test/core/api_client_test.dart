@@ -7,14 +7,14 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:arul/core/api/api_client.dart';
+import 'package:arul/core/error/app_exception.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:arul/core/api/api_client.dart';
-import 'package:arul/core/error/app_exception.dart';
 
 // Runs [body] and returns what it threw — and FAILS if anything else escaped to the zone.
 // The single-flight completer is awaited only when a SECOND concurrent caller joins it. Its error
@@ -116,8 +116,6 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   ApiClient makeClient(MockClient mock) => ApiClient(httpClient: mock);
-
-  // ─── ApiException flags ──────────────────────────────────────────────────
 
   group('ApiException', () {
     test('isPremiumRequired only for 403 + premium_required code', () {
@@ -283,8 +281,6 @@ void main() {
     });
   });
 
-  // ─── Token persistence ───────────────────────────────────────────────────
-
   group('token storage', () {
     test('setTokens persists and reads back access + refresh tokens', () async {
       final c = makeClient(MockClient((_) async => _json({}, 200)));
@@ -310,8 +306,6 @@ void main() {
       expect(await c.hasTokens(), isFalse);
     });
   });
-
-  // ─── Request / response basics ─────────────────────────────────────────────
 
   group('request & response parsing', () {
     test('GET returns the decoded JSON body on 200', () async {
@@ -396,8 +390,6 @@ void main() {
       );
     });
   });
-
-  // ─── 401 refresh / retry ───────────────────────────────────────────────────
 
   group('401 → refresh → retry', () {
     test('refreshes once on 401, then retries the original request', () async {
@@ -598,8 +590,6 @@ void main() {
     );
   });
 
-  // ─── Request timeout (offline mid-call backstop) ────────────────────────────
-
   group('request timeout', () {
     const captureThrow = _captureThrow;
 
@@ -637,7 +627,7 @@ void main() {
         final c = ApiClient(
           httpClient: MockClient((req) {
             if (req.url.path == '/auth/refresh') {
-              return Completer<http.Response>().future; // never responds
+              return Completer<http.Response>().future;
             }
             return Future.value(
               _json({

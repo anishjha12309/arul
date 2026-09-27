@@ -1,26 +1,44 @@
 // Stage B -> compare each normalized item's dHash against refhashes.json and against the other batch items.
 // Flags likely duplicates for REVIEW -> it never auto-drops one.
-import { readFileSync, writeFileSync } from "fs";
-import { join } from "path";
-import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
 const ROOT = "c:/Anish/arul-import";
 const OUT = join(ROOT, "normalized");
 const EXIST_T = 10; // hamming <= this vs an existing object => likely already in storage
-const BATCH_T = 8;  // hamming <= this vs another batch item => near-dup within this import
+const BATCH_T = 8; // hamming <= this vs another batch item => near-dup within this import
 
 async function dhash(path) {
-  const { data } = await sharp(path).greyscale().resize(9, 8, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
-  let hash = 0n, bit = 0n;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= (1n << bit); bit++; }
+  const { data } = await sharp(path)
+    .greyscale()
+    .resize(9, 8, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let hash = 0n,
+    bit = 0n;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= 1n << bit;
+      bit++;
+    }
   return hash.toString(16).padStart(16, "0");
 }
-const ham = (a, b) => { let x = BigInt("0x" + a) ^ BigInt("0x" + b), c = 0; while (x) { c += Number(x & 1n); x >>= 1n; } return c; };
+const ham = (a, b) => {
+  let x = BigInt("0x" + a) ^ BigInt("0x" + b),
+    c = 0;
+  while (x) {
+    c += Number(x & 1n);
+    x >>= 1n;
+  }
+  return c;
+};
 
-const norm = JSON.parse(readFileSync(join(ROOT, "normalized-manifest.json"), "utf8")).filter((o) => !o.flags?.includes("ERROR"));
+const norm = JSON.parse(readFileSync(join(ROOT, "normalized-manifest.json"), "utf8")).filter(
+  (o) => !o.flags?.includes("ERROR"),
+);
 const refs = JSON.parse(readFileSync(join(ROOT, "refhashes.json"), "utf8")).filter((r) => r.dhash);
 
 const rows = [];
@@ -28,11 +46,13 @@ for (const o of norm) {
   const imgPath = o.kind === "video" ? join(OUT, o.thumb) : join(OUT, o.out);
   const dh = await dhash(imgPath);
   let best = { hamming: 999, id: null, category: null };
-  for (const r of refs) { const h = ham(dh, r.dhash); if (h < best.hamming) best = { hamming: h, id: r.id, category: r.category, full_key: r.full_key }; }
+  for (const r of refs) {
+    const h = ham(dh, r.dhash);
+    if (h < best.hamming) best = { hamming: h, id: r.id, category: r.category, full_key: r.full_key };
+  }
   rows.push({ ...o, dhash: dh, existMatch: best });
 }
 
-// intra-batch near-dup detection
 for (let i = 0; i < rows.length; i++) {
   let best = { hamming: 999, src: null };
   for (let j = 0; j < rows.length; j++) {

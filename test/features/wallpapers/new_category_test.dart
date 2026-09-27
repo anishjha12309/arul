@@ -4,12 +4,11 @@
 // hides half a bulk drop, a pin leaking into New puts the operator's All order on top of a chip they
 // ordered by hand, and windowing on created_at would bury a batch imported long before it was published.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// Fixed "now" -> the window is a boundary the tests have to stand on both sides of.
 final _now = DateTime.utc(2026, 9, 8, 12);

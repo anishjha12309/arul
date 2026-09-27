@@ -16,12 +16,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
@@ -32,6 +26,11 @@ import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/premium/domain/trial_nudge.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];
@@ -205,8 +204,6 @@ void main() {
   Future<void> drain(WidgetTester tester) =>
       tester.pump(const Duration(minutes: 20));
 
-  // ─── The deadline ─────────────────────────────────────────────────────────
-
   group('intent expiry', () {
     test('QRexpire is read off the link, nanoseconds and offset included', () {
       // PhonePe's own sample, verbatim: 9 fraction digits and an unencoded +05:30.
@@ -245,8 +242,6 @@ void main() {
       );
     });
   });
-
-  // ─── Coming back with the order still open ────────────────────────────────
 
   testWidgets('a return with the order open resumes, it does NOT abandon', (
     tester,
@@ -297,8 +292,6 @@ void main() {
     );
     await drain(tester);
   });
-
-  // ─── The resume button ────────────────────────────────────────────────────
 
   testWidgets('resuming re-fires the SAME link, with no new order and no ★', (
     tester,
@@ -362,7 +355,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── The deadline retires the order by itself ─────────────────────────────
   // There is no "Start over" button any more: this audience is not payment-literate, so the app
   // decides and keeps the screen automatic (owner's call). The ONE thing that ends a resumable
   // attempt is its own deadline, and it ends it SILENTLY.
@@ -443,8 +435,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── The approval that lands anyway ───────────────────────────────────────
-
   testWidgets('an approval during the wait settles by itself, unresumed', (
     tester,
   ) async {
@@ -500,8 +490,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── The deadline running out ─────────────────────────────────────────────
-
   testWidgets('the window closing abandons exactly once, quietly', (
     tester,
   ) async {
@@ -525,7 +513,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── The handoff is remembered, not only the ending ───────────────────────
   // Half of the people who tap the CTA never reach a terminal path: the process dies behind the UPI
   // app, or they come back and walk off the paywall with the order still open, which disposes the
   // notifier and ends its watch without an event. The marker is therefore written AT the handoff,
@@ -607,7 +594,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── Changing the app while the order is open ─────────────────────────────
   // "If PhonePe is there, only show PhonePe" is not a choice. The picker stays live, and picking
   // another app is one motion: this order dies exactly as the deadline kills it, and a fresh order
   // opens in the app they just chose. What they must NEVER see in between is a failure.
@@ -720,8 +706,6 @@ void main() {
     await drain(tester);
   });
 
-  // ─── The CTA is not a second door ─────────────────────────────────────────
-
   testWidgets('startTrial does nothing while an attempt is resumable', (
     tester,
   ) async {
@@ -740,8 +724,6 @@ void main() {
     expect(container.read(premiumPurchaseProvider), isA<PurchaseResumable>());
     await drain(tester);
   });
-
-  // ─── The return page's taps are tagged ────────────────────────────────────
 
   group('surface', () {
     testWidgets('a checkout from the return page says so, start to trial', (

@@ -10,21 +10,6 @@ import '../../../core/deeplink/deep_link_target.dart';
 import '../domain/push_payload.dart';
 
 /// Turns a tapped campaign notification into a screen, and reports the tap.
-///
-/// TWO TAP PATHS, and both are required on a real phone before this ships:
-///   * app dead → the tap launches `MainActivity` and the payload arrives via [getInitialMessage];
-///   * app alive in the background → `onMessageOpenedApp` fires.
-///
-/// `MainActivity` carries `clearTaskOnLaunch` (it fixes a stale-Google-picker defect and must not be
-/// removed), and `onNewIntent` does not fire on a launcher relaunch — so the background path is the
-/// one that can silently lose a payload. Whichever way it arrives, it ends in [_open].
-///
-/// **The foreground is ignored on purpose.** A notification posted over the app the person is already
-/// using is an interruption that answers nothing; `onMessage` only logs.
-///
-/// **Nothing here can throw its way onto the screen.** An unreadable payload, a deleted wallpaper, a
-/// retired category — all of them open the app. The person tapped a notification we chose to send;
-/// landing somewhere is the floor.
 class PushOpenHandler {
   PushOpenHandler({
     required ApiClient apiClient,

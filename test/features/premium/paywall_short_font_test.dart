@@ -29,7 +29,7 @@ Future<void> _paywallFonts() async {
   for (final e in families.entries) {
     final l = FontLoader(e.key);
     for (final p in e.value) {
-      l.addFont(File(p).readAsBytes().then((b) => ByteData.sublistView(b)));
+      l.addFont(File(p).readAsBytes().then(ByteData.sublistView));
     }
     await l.load();
   }

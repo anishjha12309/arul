@@ -10,11 +10,6 @@ import '../providers/trial_nudge_provider.dart';
 
 /// "Finish setting up your free trial" — one row above the browse chips, for someone whose mandate
 /// setup died at the UPI app.
-///
-/// The intent flow's one toast is the only other mention of that failure, and it is gone by the next
-/// screen: 12 in 100 trial-tappers ever try a second time, and second attempts convert at about
-/// twice the rate of first ones. So the abandonment is written down and asked about ONCE more.
-///
 /// Renders NOTHING unless there is an unfinished trial, so the header band it sits in is the same
 /// height it always was for everyone else.
 class TrialNudgeRow extends ConsumerWidget {

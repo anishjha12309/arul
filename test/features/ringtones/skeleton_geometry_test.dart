@@ -16,10 +16,6 @@
 //     Set pill, so its position shifts with whatever the Set pill measures as. Its Y and its 44x44
 //     size are asserted; its X is not.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/features/ringtones/presentation/ringtone_states.dart';
@@ -27,6 +23,9 @@ import 'package:arul/features/ringtones/presentation/ringtone_tile.dart';
 import 'package:arul/features/ringtones/presentation/ringtones_screen.dart';
 import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart';
 import 'package:arul/theme/arul_tokens.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// Idle, always -> the real notifier owns a `just_audio` player that needs a platform. RingtoneRow
 /// only reads `isPlayingId`/`isLoadingId` off the state, so idle is enough to render its RESTING
@@ -158,23 +157,18 @@ void main() {
       find.widgetWithText(GestureDetector, l10n.ringtoneSet),
     );
 
-    // ── The row: this is what actually stops the list jumping ───────────────────────────────
     expect(
       skeletonRow.height,
       closeTo(loadedRow.height, 1.0),
       reason: 'row height (RingtoneRow.extentFor on both sides)',
     );
 
-    // ── The art square: a fixed coverSize box on both sides -> full match ────────────────────
     expectFullRect(skeletonArt, loadedArt, 'art');
 
-    // ── Title: origin + line height match; width does not (see file header) ─────────────────
     expectOriginAndHeight(skeletonTitle, loadedTitle, 'title');
 
-    // ── Subtitle: same shape of match, same reason ───────────────────────────────────────────
     expectOriginAndHeight(skeletonSubtitle, loadedSubtitle, 'subtitle');
 
-    // ── Play control: Y + its square hit-box size match on both sides; X does not (header) ────
     expectSizeAndTop(skeletonPlay, loadedPlay, 'play control');
 
     // The box is the ACCESSIBILITY contract, not just a shared number -> assert the value, so a

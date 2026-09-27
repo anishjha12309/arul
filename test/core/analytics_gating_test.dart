@@ -1,12 +1,12 @@
 import 'dart:math';
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:arul/core/analytics/allowlisted_analytics_service.dart';
 import 'package:arul/core/analytics/analytics_cohort.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/analytics/composite_analytics_service.dart';
 import 'package:arul/features/wallpapers/presentation/premium_gate_action.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Records every call so we can assert exactly what reached PostHog.

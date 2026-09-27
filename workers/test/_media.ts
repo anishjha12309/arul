@@ -63,8 +63,19 @@ export function jpegFixture(width = 1080, height = 1920): Uint8Array {
   return pad(
     bytes(
       [0xff, 0xd8], // SOI
-      [0xff, 0xe0], u16be(16), "JFIF\0", [1, 1, 0], u16be(1), u16be(1), [0, 0], // APP0
-      [0xff, 0xc0], u16be(17), [8], u16be(height), u16be(width), [3, 1, 0x11, 0, 2, 0x11, 1, 3, 0x11, 1], // SOF0
+      [0xff, 0xe0],
+      u16be(16),
+      "JFIF\0",
+      [1, 1, 0],
+      u16be(1),
+      u16be(1),
+      [0, 0], // APP0
+      [0xff, 0xc0],
+      u16be(17),
+      [8],
+      u16be(height),
+      u16be(width),
+      [3, 1, 0x11, 0, 2, 0x11, 1, 3, 0x11, 1], // SOF0
       [0xff, 0xd9], // EOI
     ),
   );
@@ -172,17 +183,16 @@ export function mp4Fixture(
  * An R2 binding whose head/get serve REAL bytes, ranges included -> the media-verify gate runs for real here.
  * It records deletes -> that is what the auto-reject assertions read
  */
-export function makeQcR2(
-  objects: Record<string, { bytes: Uint8Array; contentType: string }>,
-): { bucket: R2Bucket; deletes: string[] } {
+export function makeQcR2(objects: Record<string, { bytes: Uint8Array; contentType: string }>): {
+  bucket: R2Bucket;
+  deletes: string[];
+} {
   const store = new Map(Object.entries(objects));
   const deletes: string[] = [];
   const bucket = {
     head: async (key: string) => {
       const o = store.get(key);
-      return o
-        ? { key, size: o.bytes.length, httpMetadata: { contentType: o.contentType } }
-        : null;
+      return o ? { key, size: o.bytes.length, httpMetadata: { contentType: o.contentType } } : null;
     },
     get: async (key: string, opts?: { range?: { offset?: number; length?: number } }) => {
       const o = store.get(key);

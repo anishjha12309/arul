@@ -60,7 +60,6 @@ class ArulPushRoute<T> extends PageRoute<T>
   bool get maintainState => true;
 }
 
-/// The timing, the reduced-motion branch and the outgoing delegate every Arul push shares.
 mixin _ArulPushMotion<T> on MaterialRouteTransitionMixin<T> {
   /// The theme's builder asks for 450ms — Android 16's own number, standing in for springs Flutter
   /// stable does not have. The house's page-level reveal is [Motion.enter].
@@ -97,8 +96,6 @@ mixin _ArulPushMotion<T> on MaterialRouteTransitionMixin<T> {
     );
   }
 
-  /// How the route BELOW this one animates out.
-  ///
   /// A plain tear-off, never a closure: `didChangeNext` compares this against the lower route's own
   /// delegate by identity, and a fresh closure each read makes it adopt ours — which then suppresses
   /// the lower route's secondary animation and freezes the shell mid-push.
@@ -106,8 +103,6 @@ mixin _ArulPushMotion<T> on MaterialRouteTransitionMixin<T> {
   DelegatedTransitionBuilder? get delegatedTransition => _pushedDelegate;
 }
 
-/// The shell's outgoing slide, and its absence under reduced motion.
-///
 /// Returning [child] untouched is what holds the page below still; the animated arm is the theme
 /// builder's own delegate, so a normal push looks exactly as it did before this page existed.
 Widget? _pushedDelegate(

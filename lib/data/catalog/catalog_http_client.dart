@@ -8,11 +8,6 @@ import '../models/catalog_page.dart';
 import 'catalog_version.dart';
 
 /// Fetches a paginated catalog JSON page from the CDN.
-///
-/// Key format `catalog/{scope}/{slug}_{page}.json` — [scope] is `wallpapers` or `ringtones`, [slug]
-/// a tag name or `all`.
-/// A [CatalogVersion] appends `?v=<version>` -> a freshly-published catalog is a new edge-cache key
-/// -> near-instant updates; the stamp is omitted when the version is unknown.
 /// A non-200 *response* (cache miss, 404 past the last page) or a parse failure returns null -> the
 /// caller renders an empty page. CDN-only: there is no DB fallback.
 /// A connectivity failure (offline / host unreachable / timeout) is NOT a CDN miss -> it throws
@@ -28,10 +23,6 @@ class CatalogHttpClient {
 
   final CatalogVersion? version;
 
-  // A single long-lived client so the connection pool reuses one TCP/TLS
-  // session across calls. This matters for the filtered-feed drain, which
-  // fetches every catalog page sequentially — the top-level `http.get` would
-  // otherwise open (and tear down) a fresh socket per page.
   final http.Client _client;
 
   Future<CatalogPage<T>?> fetchPage<T>({
@@ -56,9 +47,6 @@ class CatalogHttpClient {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       return CatalogPage.fromJson(json, itemFromJson);
     } catch (e) {
-      // Offline / unreachable host / timed-out socket → surface as a network
-      // error so the feed shows "check your internet" + retry. A parse error or
-      // any other non-connectivity failure stays a silent miss (null).
       if (isNetworkError(e)) {
         debugPrint('[CatalogHttpClient] network error for $url: $e');
         throw const NetworkException();

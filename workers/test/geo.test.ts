@@ -184,23 +184,22 @@ describe("real router: /geo", () => {
     return req;
   }
 
-  it.each([
-    "arul-api.hsrutility.com",
-    "arul-api.twilight-smoke-d495.workers.dev",
-    "arul.hsrutility.com",
-  ])("%s -> 200 JSON with the mapped language, never the bounce page", async (host) => {
-    const res = await worker.fetch(
-      request(host, { country: "IN", regionCode: "KL", region: "Kerala" }),
-      makeEnv(ON) as never,
-      { waitUntil() {}, passThroughOnException() {} } as never,
-    );
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("application/json");
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    const text = await res.text();
-    expect(text).not.toContain("location.replace");
-    expect(JSON.parse(text)).toEqual({ country: "IN", region: "KL", lang: "ml" });
-  });
+  it.each(["arul-api.hsrutility.com", "arul-api.twilight-smoke-d495.workers.dev", "arul.hsrutility.com"])(
+    "%s -> 200 JSON with the mapped language, never the bounce page",
+    async (host) => {
+      const res = await worker.fetch(
+        request(host, { country: "IN", regionCode: "KL", region: "Kerala" }),
+        makeEnv(ON) as never,
+        { waitUntil() {}, passThroughOnException() {} } as never,
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      const text = await res.text();
+      expect(text).not.toContain("location.replace");
+      expect(JSON.parse(text)).toEqual({ country: "IN", region: "KL", lang: "ml" });
+    },
+  );
 
   it("no cf on the request -> 200 with all three null", async () => {
     const res = await worker.fetch(

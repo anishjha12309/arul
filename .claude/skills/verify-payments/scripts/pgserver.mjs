@@ -42,7 +42,9 @@ const initialized = await db.query(
   "select 1 from information_schema.tables where table_schema='public' and table_name='subscriptions'",
 );
 if (initialized.rows.length === 0) {
-  for (const file of readdirSync(schemaDir).filter((f) => f.endsWith(".sql")).sort()) {
+  for (const file of readdirSync(schemaDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()) {
     await db.exec(readFileSync(resolve(schemaDir, file), "utf8"));
   }
   console.log("[pg] schema created from db/schema/*.sql");

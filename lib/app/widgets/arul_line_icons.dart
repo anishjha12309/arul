@@ -2,11 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The hand-drawn stroke glyphs the design handoffs specify by SVG path.
-///
-/// Material's `Icons` set stays the default everywhere else — it costs nothing and tree-shakes.
-/// These have no Material equivalent -> painting them adds no asset and no font.
-/// The gift replaces an emoji: budget Android 8–10 ROMs draw 🎁 as tofu or a monochrome fallback.
 /// This API is single-[color] stroke -> a filled or two-tone glyph is artwork, kept with its control.
 /// Every glyph is authored in the handoff's 24×24 viewBox and scaled to [ArulLineIcon.size].
 /// Strokes scale with it -> the optical weight holds at any size.
@@ -127,7 +122,6 @@ class _LineIconPainter extends CustomPainter {
     }
   }
 
-  /// Lid over a box, one ribbon down the middle, a two-loop bow sitting on the lid.
   void _gift(Canvas canvas, Paint paint) {
     canvas
       ..drawRRect(

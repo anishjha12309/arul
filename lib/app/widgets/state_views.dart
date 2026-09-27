@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/tokens.dart';
 import 'arul_button.dart';
 
-/// Empty / error surfaces.
-///
 /// Definition of Done -> no async surface may show a blank screen or an endless spinner -> each one
 /// renders a StateView, and they are ONE widget so the empty and error faces cannot drift apart.
 class StateView extends StatelessWidget {
@@ -44,7 +42,6 @@ class StateView extends StatelessWidget {
 
   /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
   /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String? actionIdentifier;
 
   @override

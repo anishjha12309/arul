@@ -4,12 +4,6 @@
 // The live-video pool is a native channel -> fake channels with null mock handlers keep FeedScreen off the real plugin.
 // The reel itself needs a device and is out of scope -> the online case is exercised via the normal empty state.
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
@@ -21,6 +15,11 @@ import 'package:arul/features/wallpapers/presentation/feed_states.dart';
 import 'package:arul/features/wallpapers/presentation/video_preload_controller.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
 import 'package:arul/features/wallpapers/providers/video_preload_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Wallpaper _wp(String id) => Wallpaper.fromJson({
   'id': id,

@@ -1,10 +1,6 @@
 import 'package:flutter/widgets.dart';
 
 /// One bundled launch poster: frame 0 of the region's most-applied live wallpaper, [wallpaperId].
-///
-/// A 9:16 master on a 9:19–9:20 phone crops only its SIDES, so no alignment can move a face up or
-/// down. [zoom] about [pivot] does: it puts each face near 0.3 of the height — under the wordmark,
-/// above the sign-in panel and Google's sheet — on every size the matrix covers (launch-surface.md).
 final class RegionalPoster {
   const RegionalPoster(
     this.asset, {

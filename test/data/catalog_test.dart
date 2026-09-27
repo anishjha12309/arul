@@ -3,15 +3,14 @@
 // Also CatalogPage.fromJson envelope parsing.
 // Also CatalogHttpClient: ?v= stamping via CatalogVersion, null on a CDN miss, NetworkException on a connectivity failure.
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-
 import 'package:arul/core/error/app_exception.dart';
 import 'package:arul/data/catalog/catalog_http_client.dart';
 import 'package:arul/data/catalog/catalog_version.dart';
 import 'package:arul/data/models/catalog_page.dart';
 import 'package:arul/data/models/wallpaper.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 Map<String, dynamic> _item({
   String id = 'a2b4c6d8-0000-0000-0000-000000000000',

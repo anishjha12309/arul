@@ -2,10 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Sends a wallpaper file straight to one app, skipping the system chooser.
-///
-/// WhatsApp is where these wallpapers travel, and every chooser tap is a share that does not happen.
-/// A wallpaper share's payload is the MEDIA, and `whatsapp://send?text=` carries text only.
-/// It would silently drop the file and send a naked caption -> a native targeted `ACTION_SEND`.
 /// [shareToWhatsApp] returning false is ROUTINE — no WhatsApp, or a refused mime type.
 /// So EVERY caller must fall back to the system sheet.
 class DirectShareService {

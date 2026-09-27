@@ -1,7 +1,4 @@
 /**
- * Typed environment bindings for the Arul Worker.
- *
- * Bindings come from the runtime, secrets from `wrangler secret bulk` -> wrangler.toml carries the full list
  * A field declared non-optional here is NOT enforced at deploy -> an unset secret fails at first use, not at boot
  */
 export interface Env {
@@ -9,7 +6,6 @@ export interface Env {
   HYPERDRIVE: Hyperdrive;
   R2: R2Bucket;
 
-  // ── Rate limiters (see wrangler.toml [[ratelimits]]) ─────────────────────
   // Optional so tests and any older deployment still run -> an absent limiter reads as "allow" (lib/ratelimit.ts)
   RL_PAYMENTS?: RateLimit;
   RL_AUTH?: RateLimit;
@@ -36,73 +32,36 @@ export interface Env {
 
   /**
    * LOCAL-DEV-ONLY override for the PhonePe PG base URL. Harness: .claude/skills/verify-payments/
-   *
-   * PhonePe's UAT sandbox never settles a redemption on demand -> it holds PENDING through its own retry cycle
-   * So the COMPLETED and FAILED branches were unreachable without spending real money -> point this at a local stub
    * getPgBase IGNORES it whenever PHONEPE_ENV resolves to PRODUCTION -> setting it on the deployed Worker is inert
    * Never set from wrangler.toml or a secret -> only workers/.dev.vars, git-ignored and read only by `wrangler dev`
    */
   PHONEPE_BASE_URL_OVERRIDE?: string;
 
-  /**
-   * The SAFE internal routes only: /internal/build-catalog, /internal/sweep-submissions, /internal/sweep-canonical.
-   *
-   * hsr-cms holds this string to trigger rebuilds -> its blast radius must stay content -> it authorizes no money route
-   */
   CATALOG_BUILD_SECRET: string;
 
-  /**
-   * Operator-only, for the routes that MOVE REAL MONEY: /internal/run-redemptions (debits ₹199), /internal/refund.
-   *
-   * CATALOG_BUILD_SECRET is distributed to hsr-cms -> one string must never authorize "rebuild" AND "charge everybody"
-   * Never hand this to the CMS or any other service -> it fails closed when unset, so a 401 means the wrong secret
-   */
   OPS_SECRET: string;
 
-  /**
-   * HMAC key for trial_tombstones.google_sub_hash (the delete-account trial guard).
-   * A new key orphans every existing tombstone -> trial farming re-opens -> NEVER rotate
-   */
   TRIAL_TOMBSTONE_SECRET: string;
 
-  /**
-   * Guards /internal/push/{count,dispatch,test}. A NEW secret, never CATALOG_BUILD_SECRET.
-   *
-   * The CMS holds both; one string must not authorize "rebuild the catalog" AND "message every user"
-   * Fails closed when unset -> a 401 on a push route means the wrong secret, never a widened one
-   */
   PUSH_SECRET: string;
 
   /** Service-account client_email from the Firebase console key (Project settings -> Service accounts). */
   FCM_SA_CLIENT_EMAIL: string;
-  /**
-   * The same key's private_key PEM. Set from a JSON file, so it arrives carrying literal `\n`
-   * sequences -> lib/fcm.ts normalises those to newlines before importPKCS8 and nothing else
-   */
   FCM_SA_PRIVATE_KEY: string;
   /** Firebase project id — "arul-prod-db4f8". Part of the messages:send URL, not a credential. */
   FIREBASE_PROJECT_ID: string;
 
   /**
    * Campaign-send kill switch, `"true"` or `"false"` -> wrangler.toml [vars], NOT a secret.
-   *
-   * Anything but the exact string "true" is OFF: runPushDispatch and /internal/push/dispatch claim
-   * NOTHING. /internal/push/test and /internal/push/count keep working either way, which is what lets
-   * the whole chain be proven on the owner's own phones while production stays dark.
-   * Flipping it in production is the OWNER's call (docs/push.md §Going live).
    */
   PUSH_ENABLED?: string;
 
   /**
    * Region-language kill switch for GET /geo, `"true"` or anything else -> wrangler.toml [vars], NOT a secret.
-   *
-   * Anything but the exact string "true" answers `lang: null` -> installs fall through to the phone's language
    * `country` and `region` keep flowing either way -> the accuracy measurement never goes dark with the default
    */
   GEO_LANG_ENABLED?: string;
 
-  // ── PostHog capture — the ONLY server-side analytics sink (lib/posthog.ts) ──
-  // GA4 and Meta server reporting were removed -> one conversion must have ONE data source -> never re-add them
   /**
    * PostHog project API key (phc_…) — write-only and already shipped in the APK, yet kept out of the repo.
    * Absent -> capture is skipped, never thrown -> analytics must not fail a payment (fail-open)

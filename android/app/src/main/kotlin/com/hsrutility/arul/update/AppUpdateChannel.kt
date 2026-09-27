@@ -20,13 +20,10 @@ import io.flutter.plugin.common.MethodChannel
 
 // Play's in-app update, driven from Dart (docs/app-update.md): check -> start -> completeUpdate.
 // Every Play call is Task-listener async on main -> a blocking Tasks.await here would be an ANR.
-// Sideloads, emulators and debug installs fail the check (API_NOT_AVAILABLE / APP_NOT_OWNED) -> Dart no-ops.
 class AppUpdateChannel(
     activity: Activity,
     private val launcher: ActivityResultLauncher<IntentSenderRequest>,
     private val channel: MethodChannel,
-    // Sideload-only test mode (MainActivity passes it only for a non-Play install): Play's own
-    // FakeAppUpdateManager replays accept / reject / download so the whole flow runs on a test phone.
     private val fakeMode: String? = null,
 ) : MethodChannel.MethodCallHandler {
 
@@ -101,7 +98,6 @@ class AppUpdateChannel(
                 val startable =
                     when (info.updateAvailability()) {
                         UpdateAvailability.UPDATE_AVAILABLE -> info.isUpdateTypeAllowed(options)
-                        // An immediate update the process lost (kill, icon relaunch) -> the docs resume it.
                         UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS ->
                             updateType == AppUpdateType.IMMEDIATE
                         else -> false

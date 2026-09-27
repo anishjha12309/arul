@@ -3,11 +3,6 @@
 
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
@@ -19,6 +14,10 @@ import 'package:arul/features/wallpapers/data/wallpaper_apply_service.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_apply_provider.dart';
 import 'package:arul/features/wallpapers/providers/wallpaper_prefetch_provider.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'review_fakes.dart';
 

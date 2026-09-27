@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/scrims.dart';
 import '../theme/tokens.dart';
 
-/// Silk ground, oil-lamp glow, kolam dot lattice, gopuram skyline.
-///
 /// `shouldRepaint => false` -> rasterises once, so animated foreground over it costs nothing extra.
 /// Painted rather than shipped as a PNG -> resolution-free, themeable, ~0 bytes of asset.
 class KolamPainter extends CustomPainter {

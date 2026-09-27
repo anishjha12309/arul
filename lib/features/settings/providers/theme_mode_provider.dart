@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 
 /// Theme mode, persisted: Light / Dark / System.
-/// NEVER seeded from the device wallpaper — this app's content IS wallpapers (CLAUDE.md §7).
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
   ThemeModeNotifier.new,
 );

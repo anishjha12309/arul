@@ -26,8 +26,6 @@ class WallpaperApplyException implements Exception {
   final String message;
 
   /// The native `PlatformException.code` from the apply channel; null otherwise.
-  ///
-  /// Discarded at the boundary, every apply failure looked identical to every sink.
   /// `wallpaper_apply_failed` reports it — the ONLY reason it is threaded through.
   /// The UI still maps failures to one localized line and must NOT branch on it.
   /// `unsupported` means two different things depending on which native method raised it.
@@ -35,9 +33,6 @@ class WallpaperApplyException implements Exception {
   final String? code;
 
   /// The Worker refused with 403 `premium_required`.
-  ///
-  /// An ordinary business condition, not a defect — entitlement is read live on every gated call.
-  /// A lapse or refund mid-session lands here while the client still believes it is premium.
   /// Callers route to the paywall and must NOT file a Crashlytics non-fatal.
   /// Doing so would bury real apply failures under expected ones.
   final bool premiumRequired;
@@ -47,9 +42,6 @@ class WallpaperApplyException implements Exception {
 }
 
 /// What the native side actually did with a live apply.
-///
-/// One outcome is an unobservable hand-off, the other a finished, confirmed apply.
-/// A single `null` answer made them indistinguishable, and they need OPPOSITE handling.
 enum LiveApplyOutcome {
   /// The system live-wallpaper chooser opened.
   /// The "Set" tap happens in an activity we cannot observe -> NEVER a success claim.
@@ -112,9 +104,6 @@ abstract class WallpaperApplyService {
   Future<void> applyStaticWallpaper(File file, ApplyTarget target);
 
   /// Sets [file] as a live wallpaper — the native side persists the video, then opens the chooser.
-  ///
-  /// ALWAYS the chooser, even when our service is already active -> no silent in-place swap.
-  /// The user's final "Set wallpaper" tap happens there, on every apply.
   /// [LiveApplyOutcome.staticFallback] instead when the device cannot run live wallpapers AT ALL.
   /// The first frame is already applied by then — a finished outcome, not a hand-off.
   /// Throws [WallpaperApplyException] on a real failure.
@@ -223,7 +212,7 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     );
 
     try {
-      await response.stream.listen((List<int> chunk) {
+      await response.stream.listen((chunk) {
         sink.add(chunk);
         received = received + chunk.length;
         if (total != null && total > 0) {
@@ -253,9 +242,6 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
   @override
   Future<void> applyStaticWallpaper(File file, ApplyTarget target) async {
     try {
-      // Native: setStream plus an OEM lock/both fallback, source normalized first.
-      // That normalization is what stops a 4K source OOMing a budget SoC.
-      // Returns null on success; throws PlatformException(code, message) on failure.
       await _channel.invokeMethod<void>('setImageWallpaper', {
         'filePath': file.path,
         'target': target.channelValue,
@@ -274,9 +260,6 @@ class CdnWallpaperApplyService implements WallpaperApplyService {
     ApplyTarget target,
   ) async {
     try {
-      // The native side copies the MP4 into app-internal storage, persistently.
-      // So the running wallpaper service reads a local file forever.
-      // It then saves the service config and opens the live-wallpaper chooser.
       // The CHOOSER owns the final home/lock decision -> [target] is not forwarded for live.
       final result = await _channel
           .invokeMapMethod<String, Object?>('setVideoWallpaper', {

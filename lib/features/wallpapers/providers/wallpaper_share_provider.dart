@@ -54,8 +54,7 @@ final class WallpaperShareError extends WallpaperShareState {
 /// Thin seam over the static [SharePlus.instance] -> tests can fake the system share sheet.
 final shareSheetLauncherProvider =
     Provider<Future<ShareResult> Function(ShareParams)>(
-      (ref) =>
-          (params) => SharePlus.instance.share(params),
+      (ref) => SharePlus.instance.share,
     );
 
 class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
@@ -382,7 +381,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
     final ext = dot == -1 ? '' : sharedPath.substring(dot);
     var slug = wallpaper.title
         .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp('[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-+|-+$'), '');
     if (slug.isEmpty) slug = 'wallpaper';
     if (slug.length > 40) slug = slug.substring(0, 40);

@@ -8,11 +8,6 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../../theme/arul_tokens.dart';
 
 /// Owns the [FlutterLocalNotificationsPlugin]: the campaign channel and the app's one-off local posts.
-///
-/// There is no reminder schedule and no setting. The CAMPAIGN channel ([updatesChannelId]) exists for
-/// FCM, which shows those pushes itself and needs the channel before a message arrives (docs/push.md).
-/// The only local posts are one-offs the app arms itself — the unfinished-trial reminder — and they
-/// ride that same channel, so the system settings list exactly one Arul channel.
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
@@ -107,10 +102,6 @@ class NotificationService {
     await _retireLegacyReminders();
   }
 
-  /// Cancels any devotional reminder an older build left armed. The weekly ones were native
-  /// recurring alarms, and the plugin re-creates a missing channel when it posts, so without this an
-  /// upgraded phone would keep receiving them and grow the deleted channels back.
-  /// PENDING ones by id only: never `cancelAll`, which also clears unread campaign pushes on screen.
   Future<void> _retireLegacyReminders() async {
     try {
       final pending = await _plugin.pendingNotificationRequests();
@@ -184,10 +175,6 @@ class NotificationService {
   );
 
   /// Arms the ONE unfinished-trial reminder for [due]. False when nothing was scheduled.
-  ///
-  /// NEVER requests the permission: this fires from a payment failing, which is not an opt-in to
-  /// notifications. A user who has not already said yes simply gets no reminder — the row on the
-  /// feed is what covers them.
   Future<bool> scheduleTrialReminder({
     required DateTime due,
     required String title,
@@ -203,8 +190,6 @@ class NotificationService {
         title: title,
         body: body,
         scheduledDate: when,
-        // The campaign channel, never a new one: a new id shows up as a second toggle in the
-        // system settings for one reminder.
         notificationDetails: _details(body: body),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         payload: trialReminderPayload,

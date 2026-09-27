@@ -28,17 +28,25 @@ import type { Env } from "../src/env.js";
 function makeMockKV(initial?: Map<string, string>): KVNamespace {
   const store = initial ?? new Map<string, string>();
   return {
-    put: vi.fn(async (key: string, value: string) => { store.set(key, value); }),
+    put: vi.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
     // Mirror real KV -> type="json" parses and returns the object, anything else returns the raw string
     get: vi.fn(async (key: string, type?: string) => {
       const raw = store.get(key) ?? null;
       if (raw === null) return null;
       if (type === "json") {
-        try { return JSON.parse(raw) as unknown; } catch { return null; }
+        try {
+          return JSON.parse(raw) as unknown;
+        } catch {
+          return null;
+        }
       }
       return raw;
     }),
-    delete: vi.fn(async (key: string) => { store.delete(key); }),
+    delete: vi.fn(async (key: string) => {
+      store.delete(key);
+    }),
     list: vi.fn(async () => ({ keys: [], list_complete: true, cursor: undefined })),
     getWithMetadata: vi.fn(async () => ({ value: null, metadata: null })),
   } as unknown as KVNamespace;
@@ -76,7 +84,12 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
 }
 
 /** A fake PhonePe OAuth token response -> `expires_at` is epoch SECONDS, which is what the cache TTL is derived from. */
-function fakeOAuthResponse(expiresInSeconds = 3600): { access_token: string; token_type: string; expires_at: number; issued_at: number } {
+function fakeOAuthResponse(expiresInSeconds = 3600): {
+  access_token: string;
+  token_type: string;
+  expires_at: number;
+  issued_at: number;
+} {
   return {
     access_token: "test-access-token-xyz",
     token_type: "O-Bearer",
@@ -88,15 +101,18 @@ function fakeOAuthResponse(expiresInSeconds = 3600): { access_token: string; tok
 // ── getAccessToken ────────────────────────────────────────────────────────────
 
 describe("getAccessToken", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("fetches a new token when KV is empty and caches it", async () => {
     const env = makeEnv();
     const oauthData = fakeOAuthResponse(3600);
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify(oauthData), { status: 200 }),
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
+    );
 
     const token = await getAccessToken(env);
     expect(token).toBe("test-access-token-xyz");
@@ -130,9 +146,10 @@ describe("getAccessToken", () => {
     const env = makeEnv({ KV: kv });
 
     const oauthData = { ...fakeOAuthResponse(3600), access_token: "fresh-token" };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify(oauthData), { status: 200 }),
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
+    );
 
     const token = await getAccessToken(env);
     expect(token).toBe("fresh-token");
@@ -143,9 +160,10 @@ describe("getAccessToken", () => {
     const env = makeEnv({ PHONEPE_ENV: "PRODUCTION" });
     const oauthData = fakeOAuthResponse();
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify(oauthData), { status: 200 }),
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
+    );
 
     await getAccessToken(env);
     const calledUrl = vi.mocked(fetch).mock.calls[0][0] as string;
@@ -156,9 +174,10 @@ describe("getAccessToken", () => {
     const env = makeEnv();
     const oauthData = fakeOAuthResponse();
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      new Response(JSON.stringify(oauthData), { status: 200 }),
-    ));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
+    );
 
     await getAccessToken(env);
     const call = vi.mocked(fetch).mock.calls[0];
@@ -173,9 +192,7 @@ describe("getAccessToken", () => {
 
   it("throws on non-OK OAuth response", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
-      new Response("Unauthorized", { status: 401 }),
-    ));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("Unauthorized", { status: 401 })));
     await expect(getAccessToken(env)).rejects.toThrow("PhonePe OAuth error 401");
   });
 });
@@ -183,12 +200,17 @@ describe("getAccessToken", () => {
 // ── setupSubscription ─────────────────────────────────────────────────────────
 
 describe("setupSubscription", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   function mockFetchWithOAuthThenSetup(setupResponse: object) {
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(setupResponse), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(setupResponse), { status: 200 })),
     );
   }
 
@@ -268,9 +290,7 @@ describe("setupSubscription", () => {
     });
 
     const setupCall = vi.mocked(fetch).mock.calls[1];
-    expect(setupCall[0]).toBe(
-      "https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/sdk/order",
-    );
+    expect(setupCall[0]).toBe("https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/sdk/order");
   });
 
   it("sends O-Bearer Authorization header", async () => {
@@ -325,7 +345,10 @@ describe("setupSubscription", () => {
     });
     await expect(
       setupSubscription(env, {
-        userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
+        userId: "u1",
+        merchantSubscriptionId: "S1",
+        merchantOrderId: "O1",
+        redirectUrl: "https://example.com/cb",
       }),
     ).rejects.toThrow(/no SDK token/i);
   });
@@ -335,19 +358,30 @@ describe("setupSubscription", () => {
     mockFetchWithOAuthThenSetup({ orderId: "X", state: "PENDING", redirectUrl: "upi://pay?pa=abc" });
     await expect(
       setupSubscription(env, {
-        userId: "u1", merchantSubscriptionId: "S1", merchantOrderId: "O1", redirectUrl: "https://example.com/cb",
+        userId: "u1",
+        merchantSubscriptionId: "S1",
+        merchantOrderId: "O1",
+        redirectUrl: "https://example.com/cb",
       }),
     ).rejects.toThrow(/no SDK token/i);
   });
 
   it("throws on non-OK response", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response("Bad Request", { status: 400 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response("Bad Request", { status: 400 })),
     );
     await expect(
-      setupSubscription(env, { userId: "u", merchantSubscriptionId: "s", merchantOrderId: "o", redirectUrl: "r" }),
+      setupSubscription(env, {
+        userId: "u",
+        merchantSubscriptionId: "s",
+        merchantOrderId: "o",
+        redirectUrl: "r",
+      }),
     ).rejects.toThrow("PhonePe setup error 400");
   });
 });
@@ -355,16 +389,21 @@ describe("setupSubscription", () => {
 // ── cancelSubscription ────────────────────────────────────────────────────────
 
 describe("cancelSubscription", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("POSTs to /subscriptions/v2/{id}/cancel with O-Bearer and no X-MERCHANT-ID", async () => {
     // The DOCUMENTED /checkout/v2/subscriptions/{id}/cancel answers 401 for our OAuth client
     // The working path is /subscriptions/v2/{id}/cancel -> it must be tried FIRST
     // X-MERCHANT-ID is partner-only -> sending it flips PhonePe into partner auth -> omit it
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response(null, { status: 204 })),
     );
 
     await cancelSubscription(env, "DKS_S_ABC_123");
@@ -381,10 +420,13 @@ describe("cancelSubscription", () => {
 
   it("falls back to /checkout/v2 when /subscriptions/v2 cancel fails", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 })) // /subscriptions/v2
-      .mockResolvedValueOnce(new Response(null, { status: 204 })),          // /checkout/v2 fallback
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response("Unauthorized", { status: 401 })) // /subscriptions/v2
+        .mockResolvedValueOnce(new Response(null, { status: 204 })), // /checkout/v2 fallback
     );
 
     await cancelSubscription(env, "DKS_S_ABC_123");
@@ -396,10 +438,13 @@ describe("cancelSubscription", () => {
 
   it("throws only after BOTH cancel paths fail", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response("Not Found", { status: 404 }))   // /subscriptions/v2
-      .mockResolvedValueOnce(new Response("Not Found", { status: 404 })),  // /checkout/v2 fallback
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response("Not Found", { status: 404 })) // /subscriptions/v2
+        .mockResolvedValueOnce(new Response("Not Found", { status: 404 })), // /checkout/v2 fallback
     );
     await expect(cancelSubscription(env, "MISSING")).rejects.toThrow(/cancel error.*404/);
     expect(vi.mocked(fetch).mock.calls.length).toBe(3);
@@ -409,17 +454,27 @@ describe("cancelSubscription", () => {
 // ── notifyRedemption ──────────────────────────────────────────────────────────
 
 describe("notifyRedemption", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("sends SUBSCRIPTION_REDEMPTION with STANDARD retry, autoDebit=false, amount=19900", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        orderId: "PP_NOTIFY_1",
-        state: "NOTIFICATION_IN_PROGRESS",
-        expireAt: Date.now() + 48 * 3600 * 1000,
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              orderId: "PP_NOTIFY_1",
+              state: "NOTIFICATION_IN_PROGRESS",
+              expireAt: Date.now() + 48 * 3600 * 1000,
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     await notifyRedemption(env, {
@@ -444,13 +499,21 @@ describe("notifyRedemption", () => {
 
   it("returns orderId and state from PhonePe", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        orderId: "PP_NOTIFY_7",
-        state: "NOTIFICATION_IN_PROGRESS",
-        expireAt: 9999999999000,
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              orderId: "PP_NOTIFY_7",
+              state: "NOTIFICATION_IN_PROGRESS",
+              expireAt: 9999999999000,
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await notifyRedemption(env, {
@@ -465,9 +528,12 @@ describe("notifyRedemption", () => {
 
   it("throws on non-OK response", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response("Forbidden", { status: 403 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(new Response("Forbidden", { status: 403 })),
     );
     await expect(
       notifyRedemption(env, { merchantSubscriptionId: "s", merchantOrderId: "o", amountPaise: 19900 }),
@@ -478,16 +544,26 @@ describe("notifyRedemption", () => {
 // ── executeRedemption ─────────────────────────────────────────────────────────
 
 describe("executeRedemption", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("POSTs to /subscriptions/v2/redeem with the merchantOrderId", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        state: "PENDING",
-        transactionId: "TXN_001",
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              state: "PENDING",
+              transactionId: "TXN_001",
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await executeRedemption(env, "DKS_R_ORDER_1");
@@ -503,12 +579,20 @@ describe("executeRedemption", () => {
 
   it("returns COMPLETED state on successful debit", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        state: "COMPLETED",
-        transactionId: "TXN_DONE",
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              state: "COMPLETED",
+              transactionId: "TXN_DONE",
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await executeRedemption(env, "ORDER_X");
@@ -520,17 +604,27 @@ describe("executeRedemption", () => {
 // ── initiateRefund ────────────────────────────────────────────────────────────
 
 describe("initiateRefund", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("POSTs to /payments/v2/refund with correct fields", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        refundId: "REF_001",
-        amount: 19900,
-        state: "PENDING",
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              refundId: "REF_001",
+              amount: 19900,
+              state: "PENDING",
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await initiateRefund(env, "ORIG_ORDER_1", "DKS_REF_1", 19900);
@@ -551,22 +645,32 @@ describe("initiateRefund", () => {
 // ── getSubscriptionStatus ─────────────────────────────────────────────────────
 
 describe("getSubscriptionStatus", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("GETs /subscriptions/v2/{merchantSubscriptionId}/status?details=true", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        merchantSubscriptionId: "DKS_S_TESTID",
-        subscriptionId: "PP_SUB_XYZ",
-        state: "ACTIVE",
-        authWorkflowType: "PENNY_DROP",
-        amountType: "FIXED",
-        maxAmount: "19900",
-        frequency: "MONTHLY",
-        expireAt: null,
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              merchantSubscriptionId: "DKS_S_TESTID",
+              subscriptionId: "PP_SUB_XYZ",
+              state: "ACTIVE",
+              authWorkflowType: "PENNY_DROP",
+              amountType: "FIXED",
+              maxAmount: "19900",
+              frequency: "MONTHLY",
+              expireAt: null,
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await getSubscriptionStatus(env, "DKS_S_TESTID");
@@ -579,21 +683,31 @@ describe("getSubscriptionStatus", () => {
 // ── getOrderStatus ────────────────────────────────────────────────────────────
 
 describe("getOrderStatus", () => {
-  beforeEach(() => { vi.restoreAllMocks(); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it("GETs /subscriptions/v2/order/{merchantOrderId}/status?details=true", async () => {
     const env = makeEnv();
-    vi.stubGlobal("fetch", vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        state: "COMPLETED",
-        orderId: "PP_ORD_1",
-        merchantOrderId: "DKS_O_ORDER1",
-        merchantId: "ARUL_MERCHANT",
-        amount: 200,
-        currency: "INR",
-        expireAt: 9999999999000,
-      }), { status: 200 })),
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(fakeOAuthResponse()), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              state: "COMPLETED",
+              orderId: "PP_ORD_1",
+              merchantOrderId: "DKS_O_ORDER1",
+              merchantId: "ARUL_MERCHANT",
+              amount: 200,
+              currency: "INR",
+              expireAt: 9999999999000,
+            }),
+            { status: 200 },
+          ),
+        ),
     );
 
     const result = await getOrderStatus(env, "DKS_O_ORDER1");

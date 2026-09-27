@@ -1,7 +1,7 @@
 // Stage F -> the live import: R2 PUT (media + thumbs) -> one Neon txn (rows + content_version bump) -> build-catalog.
 // R2 goes FIRST -> a failed insert leaves only orphans -> import-result.json records the commit for rollback.
-import { readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { AwsClient } from "aws4fetch";
 import postgres from "postgres";
 
@@ -9,7 +9,6 @@ const ROOT = "c:/Anish/arul-import";
 const CDN = "https://arul-cdn.hsrutility.com";
 const API = "https://arul-api.hsrutility.com";
 
-// ---- config from workers/.dev.vars ----
 function parseEnv(path) {
   const env = {};
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -26,18 +25,17 @@ function parseEnv(path) {
 const E = parseEnv("c:/Anish/Arul/workers/.dev.vars");
 const endpoint = E.R2_ENDPOINT.replace(/\/$/, "");
 const bucket = E.R2_BUCKET;
-const aws = new AwsClient({ accessKeyId: E.R2_ACCESS_KEY_ID, secretAccessKey: E.R2_SECRET_ACCESS_KEY, region: "auto", service: "s3" });
+const aws = new AwsClient({
+  accessKeyId: E.R2_ACCESS_KEY_ID,
+  secretAccessKey: E.R2_SECRET_ACCESS_KEY,
+  region: "auto",
+  service: "s3",
+});
 
 const plan = JSON.parse(readFileSync(join(ROOT, "import-plan.json"), "utf8"));
 console.log(`import-plan: ${plan.length} items`);
 
-// ---- 1. upload all R2 objects (media + video thumbs) ----
-
 // Media keys are content UUIDs and an object at a key NEVER changes -> a year + immutable, nothing to revalidate.
-// A replacement gets a new uuid and the old key is swept -> the key itself is never reused.
-// Without an origin header the edge falls back to Cloudflare's much shorter default TTL -> objects age out.
-// Every miss then costs an R2 Class B operation -> the one part of R2 that is NOT free (CLAUDE.md §2).
-// This only fixes objects uploaded FROM HERE ON -> older ones need an S3 CopyObject REPLACE or a Cache Rule.
 // See docs/caching.md and known-issues.md §Open.
 const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
@@ -52,7 +50,9 @@ async function put(key, bytes, ct) {
       });
       if (res.ok) return true;
       if (attempt === 3) throw new Error(`${res.status} ${await res.text().catch(() => "")}`);
-    } catch (e) { if (attempt === 3) throw e; }
+    } catch (e) {
+      if (attempt === 3) throw e;
+    }
     await new Promise((r) => setTimeout(r, 400 * attempt));
   }
 }
@@ -62,14 +62,27 @@ for (const p of plan) {
   if (p.thumb_key) jobs.push({ key: p.thumb_key, file: join(ROOT, p.localThumb), ct: "image/jpeg" });
 }
 console.log(`uploading ${jobs.length} objects to R2...`);
-let up = 0; const failed = [];
+let up = 0;
+const failed = [];
 async function pool(items, n, fn) {
   let i = 0;
-  await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; await fn(items[k]); } }));
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (i < items.length) {
+        const k = i++;
+        await fn(items[k]);
+      }
+    }),
+  );
 }
 await pool(jobs, 8, async (j) => {
-  try { await put(j.key, readFileSync(j.file), j.ct); up++; if (up % 20 === 0) console.log(`  ${up}/${jobs.length}`); }
-  catch (e) { failed.push({ key: j.key, error: String(e.message || e).slice(0, 200) }); }
+  try {
+    await put(j.key, readFileSync(j.file), j.ct);
+    up++;
+    if (up % 20 === 0) console.log(`  ${up}/${jobs.length}`);
+  } catch (e) {
+    failed.push({ key: j.key, error: String(e.message || e).slice(0, 200) });
+  }
 });
 console.log(`R2 upload: ${up} ok, ${failed.length} failed`);
 if (failed.length) {
@@ -78,7 +91,6 @@ if (failed.length) {
   process.exit(1);
 }
 
-// ---- 2. one Neon transaction: insert rows + bump content_version ----
 const sql = postgres(E.DATABASE_URL, { ssl: "require", prepare: false });
 let beforeCount, afterCount, newVersion;
 try {
@@ -97,18 +109,37 @@ try {
 } finally {
   await sql.end();
 }
-console.log(`DB: ${beforeCount} -> ${afterCount} rows (+${afterCount - beforeCount}); content_version now ${newVersion}`);
-writeFileSync(join(ROOT, "import-result.json"), JSON.stringify({ stage: "db-committed", newVersion, insertedIds: plan.map((p) => p.id), keys: jobs.map((j) => j.key) }, null, 2));
+console.log(
+  `DB: ${beforeCount} -> ${afterCount} rows (+${afterCount - beforeCount}); content_version now ${newVersion}`,
+);
+writeFileSync(
+  join(ROOT, "import-result.json"),
+  JSON.stringify(
+    { stage: "db-committed", newVersion, insertedIds: plan.map((p) => p.id), keys: jobs.map((j) => j.key) },
+    null,
+    2,
+  ),
+);
 
-// ---- 3. rebuild catalog ----
-const rb = await fetch(`${API}/internal/build-catalog`, { method: "POST", headers: { authorization: `Bearer ${E.CATALOG_BUILD_SECRET}` } });
+const rb = await fetch(`${API}/internal/build-catalog`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${E.CATALOG_BUILD_SECRET}` },
+});
 console.log(`build-catalog: ${rb.status} ${(await rb.text()).slice(0, 200)}`);
 
-// ---- 4. verify: catalog total + a few objects live ----
 await new Promise((r) => setTimeout(r, 1500));
 let catTotal = null;
-try { catTotal = (await (await fetch(`${CDN}/catalog/wallpapers/all_1.json`, { headers: { "cache-control": "no-cache" } })).json()).total; } catch {}
+try {
+  catTotal = (
+    await (
+      await fetch(`${CDN}/catalog/wallpapers/all_1.json`, { headers: { "cache-control": "no-cache" } })
+    ).json()
+  ).total;
+} catch {}
 console.log(`catalog total now: ${catTotal}`);
 const sample = plan.slice(0, 3).map((p) => p.full_key);
-for (const k of sample) { const h = await fetch(`${CDN}/${k}`, { method: "HEAD" }); console.log(`  ${h.status}  ${k}`); }
+for (const k of sample) {
+  const h = await fetch(`${CDN}/${k}`, { method: "HEAD" });
+  console.log(`  ${h.status}  ${k}`);
+}
 console.log(`\nDONE. imported ${plan.length}, content_version ${newVersion}, catalog total ${catTotal}.`);

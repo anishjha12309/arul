@@ -1,15 +1,3 @@
-/**
- * Media routes — ALL gated, every one requires a valid access JWT.
- *
- * Wallpaper full_key and ringtone audio_key are PUBLIC in the catalog -> browse and preview are free and never come here
- * This route is reached only at apply/set/save time -> the moment bytes are written to the device
- * ALL content is premium -> there is no per-row flag and no test allow-list -> every grant needs a live subscription
- * Entitlement is read LIVE from Neon on every request, never from the token -> a refund or expiry applies instantly
- * A SOFT gate by design -> the public CDN keys mean a determined user can still fetch raw URLs -> accepted for v1
- * It is also the app's POPULARITY meter -> every granted apply/set increments the row's counter, which orders the feed
- * That counter is the only 100%, unsampled, server-side record of a real use -> analytics is a sink, never a sort key
- */
-
 import type { Context } from "hono";
 import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
@@ -20,13 +8,7 @@ import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 import { verifyMediaObject } from "../lib/media-verify.js";
 
-// kind -> { table, privateKeyCol, lifetime counter }. Wallpaper full_key belongs here: it IS the apply-gate key
-// The decaying twin of each counter is gone from this map -> the columns survive on the tables, unread and unwritten
-// See lib/feed-score.ts -> do not re-introduce a second sort key beside the counter
-const KIND_TABLE: Record<
-  string,
-  { table: string; keyCol: string; countCol: string }
-> = {
+const KIND_TABLE: Record<string, { table: string; keyCol: string; countCol: string }> = {
   wallpaper: {
     table: "wallpapers",
     keyCol: "full_key",
@@ -76,26 +58,18 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     return errorResponse(400, "missing_field", "id is required");
   }
   if (!kind || !KIND_TABLE[kind]) {
-    return errorResponse(
-      400,
-      "invalid_kind",
-      "kind must be one of: wallpaper, ringtone",
-    );
+    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone");
   }
 
   const { table, keyCol, countCol } = KIND_TABLE[kind];
   const sql = getDb(env);
 
-  // Work this request must finish before the connection closes, but that the CALLER must never wait on
   // This is the app's most latency-sensitive route -> the popularity increment rides here, not on the response path
-  // sql.end() is CHAINED off this in the `finally` -> that is what stops the connection tearing down mid-UPDATE
-  // Two independent waitUntil() calls would leave their order undefined -> never split them
   let tail: Promise<unknown> = Promise.resolve();
 
   try {
     // Content key + entitlement in ONE round-trip -> two sequential awaits paid two Hyperdrive trips back to back
     // They are independent reads -> the DB answers both in a single statement -> on the hot path that halves it
-    // The premium half is the shared FRAGMENT from entitlement.ts, never a local copy -> a copy would drift
     const rows = await sql`
       SELECT
         (
@@ -113,8 +87,6 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
       return errorResponse(404, "not_found", "Content not found");
     }
 
-    // ALL content is premium -> every apply/set/share needs a subscription -> no per-row flag, no allow-list bypass
-    // Browse and preview stay free -> they read the public CDN keys directly and never reach this route
     if (rows[0]?.is_premium !== true) {
       return errorResponse(403, "premium_required", "Premium subscription required");
     }
@@ -123,8 +95,6 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     // Fired without await -> it runs alongside presignGet and is drained by the `finally` below
     // A failed write is logged and swallowed -> a sort key must never cost someone their wallpaper
     // ONE counter, ONE increment -> the lifetime total the CMS shows and the feed's ORDER BY reads
-    // This used to also decay `apply_score`/`set_score` and stamp `scored_at` -> that ranking is retired
-    // Keeping the decay would pay for a number nothing reads, and leave two plausible sort keys to choose wrongly between
     if (countsAsUse(kind, action)) {
       tail = sql`
         UPDATE ${sql(table)}
@@ -171,18 +141,10 @@ export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Re
   // The key must sit under the CALLER's own user/ namespace -> a presign is otherwise a write into anyone's prefix
   const allowedPrefix = `user/${sub}/`;
   if (!key.startsWith(allowedPrefix)) {
-    return errorResponse(
-      400,
-      "bad_key",
-      `key must start with user/<your-id>/`,
-    );
+    return errorResponse(400, "bad_key", `key must start with user/<your-id>/`);
   }
   if (!key.includes(SUBMISSION_INFIX)) {
-    return errorResponse(
-      400,
-      "bad_key",
-      `key must be under user/<your-id>/submissions/`,
-    );
+    return errorResponse(400, "bad_key", `key must be under user/<your-id>/submissions/`);
   }
 
   const maxBytes = ALLOWED[contentType];
@@ -245,8 +207,6 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
 
   // The upload must have LANDED and pass byte-level QC -> a signed PUT only ever checked the CLAIMED type and size
   // A failing object is auto-rejected -> deleted immediately, no submission row, and the reason is returned to the app
-  // The role is the SUBMITTED kind -> a constant here would QC audio against the wallpaper rules
-  // Every ringtone would then be rejected as "not a JPEG/PNG/WebP image or MP4"
   const qc = await verifyMediaObject(env.R2, fileKey, kind);
   if (!qc.ok) {
     if (qc.code === "not_found") {

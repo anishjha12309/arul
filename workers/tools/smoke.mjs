@@ -12,10 +12,7 @@
  */
 import { setTimeout as sleep } from "node:timers/promises";
 
-const HOSTS = [
-  "https://arul-api.hsrutility.com",
-  "https://arul-api.twilight-smoke-d495.workers.dev",
-];
+const HOSTS = ["https://arul-api.hsrutility.com", "https://arul-api.twilight-smoke-d495.workers.dev"];
 const CDN = "https://arul-cdn.hsrutility.com";
 
 /** Each probe: a URL, the status the healthy deploy returns, and a check on the JSON body. */
@@ -40,8 +37,7 @@ for (const host of HOSTS) {
     name: `${host} /geo`,
     url: `${host}/geo`,
     status: 200,
-    body: (j) =>
-      j && typeof j === "object" && ["country", "region", "lang"].every((k) => k in j),
+    body: (j) => j && typeof j === "object" && ["country", "region", "lang"].every((k) => k in j),
   });
 }
 // The catalog pointer is what every install reads first — must be JSON with a built_at.

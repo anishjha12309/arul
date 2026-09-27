@@ -1,15 +1,13 @@
-// Nobody knows which doc covers what -> scanning docs/ is expensive -> match the edited path against
-// a static table and print the doc name.
-// Reminds, never blocks -> always exits 0 -> no match prints nothing.
-// The table IS the maintenance job -> keep it in step with .claude/rules/ globs -> see
-// .claude/skills/doc-update/.
+// PostToolUse (Write|Edit): match the edited path against a static table and name the doc that owns
+// it. Reminds once per route per session, never blocks. The table IS the maintenance job: keep it in
+// step with the .claude/rules/ globs (doc-update skill).
+const path = require("node:path");
+const fs = require("node:fs");
+const os = require("node:os");
 
-// First match wins. Order specific -> general.
+// First match wins. Order specific -> general; the catch-all workers/src/lib/** row stays LAST.
 const ROUTES = [
-  {
-    when: ["lib/features/review/**"],
-    docs: ["docs/review-prompt.md", "docs/edge-cases.md §Review prompt"],
-  },
+  { when: ["lib/features/review/**"], docs: ["docs/review-prompt.md", "docs/edge-cases.md §Review prompt"] },
   {
     when: ["lib/features/app_update/**", "lib/core/update/**", "android/app/src/main/kotlin/**/update/**"],
     docs: ["docs/app-update.md", "docs/edge-cases.md §In-app update"],
@@ -35,7 +33,7 @@ const ROUTES = [
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
     docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
   },
-  // Must outrank the generic cron row below: push-dispatch IS a cron, but its rules are its own.
+  // Push is a cron too, so it must outrank the generic cron row.
   {
     when: [
       "workers/src/cron/push-dispatch.ts",
@@ -52,7 +50,12 @@ const ROUTES = [
   },
   {
     when: ["workers/src/lib/entitlement.ts", "lib/features/premium/**"],
-    docs: ["CLAUDE.md §5 Premium Entitlement", "docs/architecture.md §Entitlement", "docs/edge-cases.md §Premium / payments"],
+    docs: [
+      "docs/checkout.md",
+      "docs/architecture.md §Entitlement",
+      "docs/edge-cases.md §Premium / payments",
+      "CLAUDE.md §1 Product",
+    ],
   },
   {
     when: [
@@ -62,20 +65,23 @@ const ROUTES = [
       "lib/features/auth/**",
       "lib/core/auth/**",
     ],
-    docs: ["docs/auth.md", "docs/architecture.md §Security"],
+    docs: ["docs/auth.md", "docs/sign-in-wall.md", "docs/architecture.md §Security"],
   },
   {
-    when: ["workers/src/routes/media.ts", "workers/src/lib/r2.ts", "workers/src/lib/media-constraints.ts", "workers/src/lib/media-verify.ts"],
+    when: [
+      "workers/src/routes/media.ts",
+      "workers/src/lib/r2.ts",
+      "workers/src/lib/media-constraints.ts",
+      "workers/src/lib/media-verify.ts",
+    ],
     docs: ["docs/caching.md §Cache-Control written by this repo", "docs/media-conventions.md"],
   },
   {
     when: ["workers/src/routes/internal.ts", "lib/features/upload/**"],
     docs: ["docs/architecture.md §Uploads", "docs/edge-cases.md §Upload"],
   },
-  // Must outrank the referral route below: the install-referrer service is one of
-  // the THREE delivery paths for a wallpaper target (App Link, Play referrer,
-  // Google Ads DDL) and they share one persisted one-shot, so a change to any of
-  // them is a change to that contract. docs/deep-links.md had no route at all.
+  // The three delivery paths for a wallpaper target (App Link, Play referrer, Google Ads DDL) share one
+  // persisted one-shot, so the install-referrer service outranks the generic referral row below.
   {
     when: [
       "lib/core/deeplink/**",
@@ -84,8 +90,7 @@ const ROUTES = [
     ],
     docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
   },
-  // The region rung of the language precedence: the resolver, the one-shot ask and the route that
-  // answers it. Ahead of the generic routes row -> first match wins.
+  // The region rung of the language precedence, ahead of the generic routes row.
   {
     when: [
       "lib/core/providers/locale_provider.dart",
@@ -100,20 +105,14 @@ const ROUTES = [
   },
   {
     when: ["workers/src/env.ts", "env.example.json"],
-    docs: ["workers/README.md §Secrets", "CLAUDE.md §6 Secrets & environment"],
+    docs: ["workers/README.md §Secrets", "CLAUDE.md §4 Secrets"],
   },
   {
     when: ["workers/src/routes/**", "workers/src/index.ts", "lib/core/api/**"],
     docs: ["docs/architecture.md §API", "workers/README.md"],
   },
-  {
-    when: ["db/schema/**", "db/seed.sql"],
-    docs: ["docs/data-model.md", "docs/architecture.md §Schema"],
-  },
-  {
-    when: ["lib/features/notifications/**"],
-    docs: ["docs/notifications.md"],
-  },
+  { when: ["db/schema/**", "db/seed.sql"], docs: ["docs/data-model.md", "docs/architecture.md §Schema"] },
+  { when: ["lib/features/notifications/**"], docs: ["docs/notifications.md"] },
   {
     when: ["lib/core/analytics/**", "workers/src/lib/posthog.ts"],
     docs: ["docs/analytics-events.md", "docs/analytics-ops.md", "docs/google-ads.md"],
@@ -135,49 +134,29 @@ const ROUTES = [
     when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/share/**"],
     docs: ["docs/known-issues.md §Traps already paid for", "docs/share.md", "docs/deferred-links.md"],
   },
+  { when: ["lib/features/wallpapers/**/*share*"], docs: ["docs/share.md", "docs/edge-cases.md §Share"] },
+  { when: ["lib/theme/**", "lib/app/theme/**"], docs: ["docs/ui-direction.md", ".claude/rules/theming.md"] },
+  // Geometry sits under the browse glob below, so it goes first.
+  { when: ["lib/features/wallpapers/**/feed_card_geometry.dart"], docs: ["docs/feed-card.md"] },
   {
-    when: ["lib/features/wallpapers/**/*share*"],
-    docs: ["docs/share.md", "docs/edge-cases.md §Share"],
+    when: [
+      "workers/src/cron/build-catalog.ts",
+      "workers/src/lib/feed-score.ts",
+      "lib/features/wallpapers/**",
+    ],
+    docs: ["docs/browse.md", "CLAUDE.md §1 Product"],
   },
-  {
-    when: ["lib/theme/**", "lib/app/theme/**"],
-    docs: ["docs/ui-direction.md", ".claude/rules/theming.md"],
-  },
-  // Ahead of the browse row -> first match wins, and the geometry file is under its glob.
-  {
-    when: ["lib/features/wallpapers/**/feed_card_geometry.dart", "lib/features/wallpapers/**/*reel*"],
-    docs: ["docs/feed-card.md"],
-  },
-  {
-    when: ["workers/src/cron/build-catalog.ts", "workers/src/lib/feed-score.ts", "lib/features/wallpapers/**"],
-    docs: ["docs/browse.md", "CLAUDE.md §5b Browse Model"],
-  },
-  {
-    when: ["lib/features/ringtones/**"],
-    docs: ["docs/ringtones.md", "docs/architecture.md §API"],
-  },
-  // The hooks are CODE, not prose — CLAUDE.md §8 and release-build/SKILL.md both
-  // make claims about what they enforce, so changing one can silently contradict them.
+  { when: ["lib/features/ringtones/**"], docs: ["docs/ringtones.md", "docs/architecture.md §API"] },
+  // The hooks are code that CLAUDE.md §6 and the release-build skill make claims about.
   {
     when: [".claude/hooks/**"],
-    docs: ["CLAUDE.md §8 Definition of done & git", ".claude/skills/release-build/SKILL.md"],
+    docs: ["CLAUDE.md §6 Definition of done and git", ".claude/skills/release-build/SKILL.md"],
   },
-  // LAST, and it must stay last — it is a catch-all, and first-match-wins means
-  // anything above it wins. Seven of the twelve files in workers/src/lib were named
-  // individually and the other five (db, ga4, media-verify, ratelimit, tombstone)
-  // matched nothing at all, so editing a file two docs explicitly describe produced
-  // no reminder. A general rule cannot rot as files are added; a list of names does.
-  {
-    when: ["workers/src/lib/**"],
-    docs: ["docs/architecture.md", "workers/README.md"],
-  },
+  // LAST: a general rule cannot rot as files are added; a list of names does.
+  { when: ["workers/src/lib/**"], docs: ["docs/architecture.md", "workers/README.md"] },
 ];
 
-const path = require("node:path");
-const fs = require("node:fs");
-const os = require("node:os");
-
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const REPO_ROOT = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, "..", "..");
 
 function globToRegExp(glob) {
   let re = "";
@@ -195,6 +174,7 @@ function globToRegExp(glob) {
       } else {
         re += "[^/]*";
       }
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: regex metacharacters, not a template
     } else if (".+^${}()|[]\\?".includes(c)) {
       re += "\\" + c;
     } else {
@@ -204,11 +184,9 @@ function globToRegExp(glob) {
   return new RegExp("^" + re + "$");
 }
 
-// Remind once per route per session, not once per file. Editing eight files in
-// workers/src/cron/ should say "docs/cron.md" once.
+// Once per route per session: editing eight files under workers/src/cron/ says "docs/cron.md" once.
 function alreadyReminded(sessionId, key) {
-  if (!sessionId) return false;
-  const safe = String(sessionId).replace(/[^A-Za-z0-9._-]/g, "");
+  const safe = String(sessionId || "").replace(/[^A-Za-z0-9._-]/g, "");
   if (!safe) return false;
   const f = path.join(os.tmpdir(), `doc-sync-arul-${safe}.txt`);
   try {
@@ -216,68 +194,36 @@ function alreadyReminded(sessionId, key) {
     if (seen.includes(key)) return true;
     fs.appendFileSync(f, key + "\n");
   } catch {
-    /* dedupe is best-effort; never let it suppress or crash the reminder */
+    /* dedupe is best-effort */
   }
   return false;
 }
 
-let raw = "";
-process.stdin.on("data", (d) => (raw += d));
-process.stdin.on("end", () => {
-  try {
-    let file = "";
-    let sessionId = "";
-    try {
-      const j = JSON.parse(raw);
-      file =
-        (j.tool_input && j.tool_input.file_path) ||
-        (j.tool_response && j.tool_response.filePath) ||
-        "";
-      sessionId = j.session_id || "";
-    } catch {
-      return;
-    }
-    if (!file) return;
+// Prose edits ARE the doc update: docs/, the READMEs, the tools docs and .claude/{skills,agents,rules}
+// get no reminder. .claude/hooks/ stays routed — it is code that CLAUDE.md makes claims about.
+const EXEMPT =
+  /^(docs\/|CLAUDE\.md$|README\.md$|workers\/README\.md$|tools\/content-import\/.*\.md$|\.claude\/(skills|agents|rules)\/)/i;
 
-    // Generated code carries no documented contract.
-    if (/\.(g|freezed)\.dart$/i.test(file)) return;
+function post(input) {
+  const file = input.tool_input?.file_path || input.tool_response?.filePath || "";
+  if (!file || /\.(g|freezed)\.dart$/i.test(file)) return; // generated code carries no documented contract
 
-    let rel = path.isAbsolute(file) ? path.relative(REPO_ROOT, file) : file;
-    rel = rel.split(path.sep).join("/").replace(/^\.\//, "");
-    // Outside the repo, or a doc edit (the doc IS the update) — say nothing.
-    if (rel.startsWith("..")) return;
-    // Prose edits ARE the doc update -> a reminder there is noise -> exempt docs/, the READMEs,
-    // the tools docs and .claude/{skills,agents,rules}.
-    // .claude/hooks/ is deliberately NOT exempt -> it is code CLAUDE.md makes claims about ->
-    // suppressing the whole .claude/ tree is how the hooks drifted from those claims.
-    if (
-      /^(docs\/|CLAUDE\.md$|README\.md$|workers\/README\.md$|tools\/content-import\/.*\.md$|\.claude\/(skills|agents|rules)\/)/i.test(
-        rel
-      )
-    )
-      return;
+  let rel = path.isAbsolute(file) ? path.relative(REPO_ROOT, file) : file;
+  rel = rel.split(path.sep).join("/").replace(/^\.\//, "");
+  if (rel.startsWith("..") || EXEMPT.test(rel)) return;
 
-    const relLower = rel.toLowerCase();
-    for (const route of ROUTES) {
-      const hit = route.when.find((p) => globToRegExp(p.toLowerCase()).test(relLower));
-      if (!hit) continue;
-      if (alreadyReminded(sessionId, hit)) return;
-      const msg =
-        `[doc-sync] ${hit} changed → ${route.docs.join(", ")}\n` +
-        `Update the doc ONLY if a constraint changed: a new trap paid for on device, a changed ` +
-        `contract, a dead end worth not repeating. Moved/restyled UI, copy tweaks, refactors, and ` +
-        `anything readable from the code or the running app get NO doc update.`;
-      process.stdout.write(
-        JSON.stringify({
-          hookSpecificOutput: {
-            hookEventName: "PostToolUse",
-            additionalContext: msg,
-          },
-        })
-      );
-      return;
-    }
-  } catch {
-    /* a doc reminder must never break a session */
+  const relLower = rel.toLowerCase();
+  for (const route of ROUTES) {
+    const hit = route.when.find((p) => globToRegExp(p.toLowerCase()).test(relLower));
+    if (!hit) continue;
+    if (alreadyReminded(input.session_id, hit)) return;
+    const msg =
+      `[doc-sync] ${hit} changed → ${route.docs.join(", ")}\n` +
+      `Update the doc ONLY if a constraint changed: a new trap paid for on device, a changed contract, a dead ` +
+      `end worth not repeating. Moved/restyled UI, copy tweaks, refactors, and anything readable from the code ` +
+      `or the running app get NO doc update.`;
+    return { stdout: { hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: msg } } };
   }
-});
+}
+
+module.exports = { post, ROUTES };

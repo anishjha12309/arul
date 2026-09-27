@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../../app/theme/motion.dart';
 
 /// One row: the native label over the English name. Both come from `locale_provider.dart`, the one
 /// home for the language tables -> the sheet, Settings and the sign-in trigger cannot drift apart.
@@ -23,13 +23,8 @@ final _langs = <_Lang>[
     ),
 ];
 
-/// The language picker sheet — 2-column grid, gap 10, six r16 tiles, native 17px over English 12px.
-/// Selected is a gold 1.5px border, gold-tint ground and gold native text.
-///
 /// The sheet only RESOLVES the choice and applies nothing — it returns the chosen English name.
 /// The caller persists it and drives the app locale from it.
-/// [brightness] pins the sheet's form instead of following the app theme -> the sign-in screen is
-/// always dark over video whatever the user picked, so its picker follows the DEVICE instead.
 Future<String?> showLanguageSheet(
   BuildContext context,
   String current, {
@@ -64,13 +59,6 @@ class _LanguageSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           // Height comes from the CONTENT, never from the width.
-          //
-          // This was `childAspectRatio: 165 / 74`, measured on a 428dp frame. On the 360dp screen
-          // that is 54% of installs the same ratio yields a ~69dp tile, and the tile needs 74:
-          // Devanagari and the Indic scripts set taller than Latin at the same 17px, so "हिन्दी"
-          // over its caption overflowed the Column by 7.5px on the single most common phone.
-          // A ratio also shrinks the tile as the phone narrows, which is exactly backwards.
-          //
           // The text half scales with the user's text size; the 32dp of padding does not.
           GridView.builder(
             shrinkWrap: true,
@@ -122,16 +110,16 @@ class _LangTileState extends State<_LangTile> {
 
     // The reference sheet is dark-only -> the light unselected tile is an assumption: white, maroon.
     // Selected is gold in both themes, per spec.
-    final Color bg = on
+    final bg = on
         ? ArulTokens.goldTintFill14
         : (isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight);
-    final Color border = on
+    final border = on
         ? ArulTokens.gold
         : (isDark ? ArulTokens.cardBorderDark14 : ArulTokens.cardBorderLight);
-    final Color nativeColor = on
+    final nativeColor = on
         ? ArulTokens.gold
         : (isDark ? ArulTokens.darkText : ArulTokens.lightText);
-    final Color nameColor = isDark
+    final nameColor = isDark
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
 
@@ -152,7 +140,6 @@ class _LangTileState extends State<_LangTile> {
         onTapCancel: () => setState(() => _pressed = false),
         onTap: onTap,
         child: AnimatedOpacity(
-          // Holds at 1 when motion is reduced; the tick still answers the press.
           opacity: _pressed && !context.reduceMotion ? 0.6 : 1,
           duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
           child: Container(

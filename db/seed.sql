@@ -1,5 +1,3 @@
--- Arul — Neon seed data; run AFTER every db/schema/*.sql on a fresh database.
--- Only app_config is seeded -> wallpaper and ringtone rows arrive via tools/content-import or the CMS.
 -- `prices` is PAYWALL DISPLAY only (paise, INR) -> the debit amount is a constant in workers/src -> change both.
 
 insert into app_config (

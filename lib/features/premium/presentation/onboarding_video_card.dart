@@ -11,26 +11,18 @@ import '../../wallpapers/data/feed_video_player.dart';
 import '../domain/onboarding_video.dart';
 
 /// ONE bundled shutter frame for every language.
-///
 /// The cuts are the same footage re-voiced -> their opening frames measure ~41 dB PSNR apart.
 /// Per-language posters would cost 38 KB to ship five pictures of the same thing.
-/// The English cut is the master, not a dub, so it diverges more — but it only shows until reveal.
 const kOnboardingPoster = 'assets/images/onboarding/poster.webp';
 
 /// The return page's shutter — that clip's own first frame, for the same one-frame-for-all reason.
 const kReturnPoster = 'assets/images/onboarding/return_poster.webp';
 
 /// The onboarding clip on the trial screen — and ONLY there.
-///
 /// It replaces the PREMIUM/ARUL lockup, set in Cinzel, which renders no Indic script at all.
 /// The screen is English by decision -> this card is the only thing that speaks the ad's language.
-/// It is a voiceover pitch and carries no message silent -> plays WITH SOUND, on a LOOP.
-/// That makes it the one player created with `audio: true` — the feed stays muted and focus-free.
-/// A mute control is always on screen.
 /// **This widget does not own the player** — [PremiumScreen] creates and opens it on route entry.
 /// That runs in PARALLEL with `GET /me`, which the screen would otherwise have waited on.
-/// Serialised, the round trip plus a channel create plus the fetch is why the poster used to sit.
-/// Here the card only attaches, plays and reveals.
 class ArulOnboardingVideoCard extends ConsumerStatefulWidget {
   const ArulOnboardingVideoCard({
     super.key,

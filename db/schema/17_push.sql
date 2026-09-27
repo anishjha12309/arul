@@ -1,22 +1,8 @@
--- Arul — campaign push notifications (CMS composes, the Worker's minute cron sends over FCM HTTP v1).
 -- Read docs/push.md before changing anything here.
---
 -- ADDITIVE ONLY, and that is the whole backwards-compatibility contract: no existing table or column
 -- changes, so every app build already in the field keeps working against the migrated database. A
 -- campaign simply cannot reach a phone whose build never registered — there is no backfill and none
 -- is possible, because a Firebase Installation ID only exists once the app asks for one.
---
--- WHY A DEVICE REGISTRY AND NOT FCM TOPICS. The audiences the CMS offers are "hasn't opened the app
--- in 30 days" and "is paying" — neither is expressible as a topic, both are one join away here. Once
--- every send is a per-device request, topics would be a second code path buying nothing.
---
--- WHY `fid` IS THE KEY AND `token` IS THE TARGET — two different jobs, and both columns are needed.
--- The fid is stable across token rotation, so a phone keeps ONE row through a refresh instead of
--- accumulating one per token; that is what makes it the primary key. The token is what a send is
--- actually addressed to: FCM's REST reference marks `message.token` deprecated in favour of
--- `message.fid`, but a registered phone answered 404 UNREGISTERED to the fid and 200 to the token on
--- an identical payload (workers/src/lib/fcm.ts records the measurement). A row with no token is
--- registered but unreachable until `onTokenRefresh` fills it in — never delete it for that.
 create table if not exists push_devices (
   fid            text primary key,                  -- Firebase Installation ID
   user_id        uuid not null references users(id) on delete cascade,
@@ -37,7 +23,7 @@ create index if not exists push_devices_seen_idx on push_devices(last_seen_at);
 --   scheduled -> sending -> sent | failed, or scheduled -> cancelled (only while still scheduled).
 create table if not exists push_campaigns (
   id             uuid primary key default gen_random_uuid(),
-  status         text not null default 'scheduled', -- scheduled | sending | sent | cancelled | failed
+  status         text not null default 'scheduled',
   texts          jsonb not null,                    -- {"en":{"title","body"},"ta":{…}} ; en required
   dest           text not null default 'home',      -- home | wallpaper | ringtone | category | premium
   dest_id        text,                              -- wallpaper/ringtone uuid or category slug

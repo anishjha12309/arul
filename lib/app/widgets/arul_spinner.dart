@@ -6,12 +6,6 @@ import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 
 /// Arul's branded busy ring — replaces the stock Material progress ring everywhere in the app.
-///
-/// A comet arc (partial ring, gradient tail) turns over a faint full-circle track. The gradient is a
-/// `Paint.shader` inside a [CustomPainter] -> one ordinary paint call, never `ShaderMask`, which
-/// forces an offscreen `saveLayer()` pass every frame. [Motion] drives the turn and `reduceMotion`
-/// (from `motion.dart`) parks it -> the SAME track the spinning state already paints, one alpha step
-/// up, stands in for motion: never a sweep frozen mid-turn, which reads as a stuck control.
 class ArulSpinner extends StatefulWidget {
   const ArulSpinner({
     super.key,
@@ -46,8 +40,6 @@ class _ArulSpinnerState extends State<ArulSpinner>
   // TickerMode from the route already parks this controller off-page -> a backgrounded screen
   // requests no frames.
 
-  /// Armed from [didChangeDependencies], not the field initializer: `reduceMotion` needs an
-  /// InheritedWidget lookup, and a repeating ticker must never start before that answer exists.
   bool _motionStarted = false;
 
   /// Rest state skips the ticker entirely and paints the track alone, one alpha step up -> never a
@@ -148,7 +140,6 @@ class _ArulSpinnerPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
-      // A gradient FILL, not a mask -> the sheen the house style asks for, drawn in the same pass.
       ..shader = SweepGradient(
         endAngle: _sweep,
         transform: GradientRotation(start),

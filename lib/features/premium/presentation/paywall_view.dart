@@ -4,12 +4,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../theme/arul_tokens.dart';
 import 'paywall_ornaments.dart';
-import '../../../app/theme/motion.dart';
 
 /// A letter-spaced display label — "SUBSCRIPTION", "PREMIUM", "PER MONTH", "REFUNDED INSTANTLY".
 ///
@@ -48,13 +48,8 @@ class PaywallDisplayLabel extends StatelessWidget {
 }
 
 /// THE paywall — `design_handoff_arul_premium`, "holy authenticity".
-///
 /// One shell, two variants: the ₹199 monthly sell and the ₹2 free-trial sell.
 /// Only the shrine panel's contents and the CTA label differ -> [trialEligible] is the one switch.
-/// Localised into all six -> every string here comes from the ARBs.
-/// The bundled Latin-subset faces need no guard: Flutter falls back per GLYPH, so an Indic run
-/// lands on the system stack on its own. Only the letter-SPACED labels change treatment, via
-/// [PaywallDisplayLabel] -> tracking is a Latin device and detaches Indic combining marks.
 /// Owns no state beyond the social-proof rotation — entitlement, purchase and UPI live upstream.
 class ArulPaywallView extends StatelessWidget {
   const ArulPaywallView({
@@ -93,7 +88,6 @@ class ArulPaywallView extends StatelessWidget {
   /// The clip caps its own height against the screen so that block always fits.
   final Widget? onboardingVideo;
 
-  /// Null when no mandate-capable UPI app is installed -> the install prompt replaces the row.
   final UpiApp? selectedUpiApp;
   final bool canChangeUpiApp;
 
@@ -154,14 +148,6 @@ class ArulPaywallView extends StatelessWidget {
             ),
           ] else ...[
             // Clip layout: offer read FIRST, clip under it, features last.
-            // All three SCROLL as one block between the pinned nav and the pinned CTA.
-            // Pinning the offer and clip instead failed at 360x640dp — the pinned blocks alone
-            // exceed the screen.
-            // Flex children got zero and BOTH the clip and the feature row vanished behind a stripe.
-            // Scrolling keeps the ordering promise -> the clip is fully on screen at rest, every size.
-            // Only the features fall below the fold, and only when there is genuinely no room.
-            // The clip is capped at a THIRD of the viewport -> it cannot crowd the price out.
-            // On a tall screen that cap sits above its natural 16:9 height and does nothing.
             Expanded(
               child: _ClipMiddle(
                 showSocialProof: showSocialProof,
@@ -386,10 +372,7 @@ class _HeaderBlock extends StatelessWidget {
   }
 }
 
-/// Centred when there is slack, scrollable when there is not.
-/// Both layouts put whatever must never be clipped through here.
 /// Everything between the pinned nav and the pinned CTA in the clip layout.
-///
 /// Offer read FIRST, clip under it, features last, scrolling as one block — when that block puts
 /// the whole clip on the first screenful. At 360×724 dp and 1.3× font the pinned CTA grows so tall
 /// that the clip landed under the fold (a 40 dp strip in Tamil), and the owner's rule is that the
@@ -432,11 +415,16 @@ class _ClipMiddleState extends State<_ClipMiddle> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final clip = _clipKey.currentContext?.findRenderObject() as RenderBox?;
-      final port = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-      if (clip == null || port == null || !clip.hasSize || !port.hasSize) return;
+      final port =
+          _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (clip == null || port == null || !clip.hasSize || !port.hasSize) {
+        return;
+      }
       // The FRAME must clear the fold; the card's own bottom gutter may tuck under the CTA.
       final clipBottom = clip
-          .localToGlobal(Offset(0, clip.size.height - ArulTokens.paywallBrandBottomPadding))
+          .localToGlobal(
+            Offset(0, clip.size.height - ArulTokens.paywallBrandBottomPadding),
+          )
           .dy;
       final portBottom = port.localToGlobal(Offset(0, port.size.height)).dy;
       if (clipBottom > portBottom + 0.5) setState(() => _pinnedFor = h);
@@ -908,11 +896,6 @@ class _PriceDivider extends StatelessWidget {
 }
 
 /// The price — a rupee sign set optically smaller beside the amount, and genuinely centred on it.
-///
-/// A text box is positioned by the font's ascent and descent, not by where the ink falls.
-/// Gelasio carries old-style figures: 1 and 2 stop at x-height, 3/5/7/9 drop below the baseline.
-/// So the amount's ink sits low in its box while the full-height ₹ sits centred in its own.
-/// Centring the BOXES floats the rupee ~8px high on "₹199" -> never a plain centre-aligned `Row`.
 /// This aligns the BASELINES, then shifts the rupee by the difference between the two ink centres.
 /// [_gelasioInk] is the glyph table it is solved from -> any amount config sends stays centred.
 class PriceLockup extends StatelessWidget {
@@ -959,7 +942,7 @@ class PriceLockup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final split = price.indexOf(RegExp(r'[0-9]'));
+    final split = price.indexOf(RegExp('[0-9]'));
     final symbol = split <= 0 ? '₹' : price.substring(0, split);
     final amount = split <= 0 ? price : price.substring(split);
 
@@ -1017,8 +1000,6 @@ class _FeatureRow extends StatelessWidget {
     return Padding(
       // Tighter than the handoff's 24/6 — the clip below may never shrink (owner's call).
       // So this row is where the vertical budget comes from; three icons and two words afford it.
-      // Without it the second line of "Unlimited HD Wallpapers" was sliced by the fold at 360x640.
-      //
       // 12, not 24, on the sides: a third of 360dp less 24+8 each side left the longest label an
       // 87dp column, where it took THREE lines and the row fell past the fold. Width is the only
       // thing that buys a line back — the labels are content and may not shrink (see [_Feature]).
@@ -1157,16 +1138,11 @@ class _Footer extends StatelessWidget {
   final VoidCallback onChangeUpiApp;
   final VoidCallback onPurchase;
 
-  /// See [ArulPaywallView.onPayByQr]. Null leaves the install prompt exactly as it was.
   final VoidCallback? onPayByQr;
 
   @override
   Widget build(BuildContext context) {
     final app = selectedUpiApp;
-    // No app can take the mandate -> the CTA sells the QR instead of an app. It is the SAME button
-    // and the same words: a phone with nothing installed has exactly one way to pay, so naming it is
-    // a decision to make for the user, not a second option to put in front of them. Dead only while
-    // the probe is still out, which is sub-second.
     final payByQr = app == null ? onPayByQr : null;
     final canBuy = app != null || payByQr != null;
     return Padding(
@@ -1178,10 +1154,9 @@ class _Footer extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (app == null) ...[
-            // Nothing above the CTA: no app to name, and the store links that used to sit here asked
-            // someone mid-checkout to go and install a payment app first.
-          ] else ...[
+          if (app == null)
+            ...[]
+          else ...[
             // Label and chip share ONE line only while both fit on it. Past 1.2 the label was
             // ellipsised to "Selected UPI Ap…" — a truncated label naming a payment app is worse
             // than a taller footer, so above that the pair stacks and each gets the full width.
@@ -1263,9 +1238,6 @@ class _Footer extends StatelessWidget {
             ornament: PaywallOrnament.footerRule,
             width: ArulTokens.paywallFooterRuleWidth,
           ),
-          // The audience is not payment-literate -> no cancel affordance while the UPI app is up,
-          // and none when they come back either. The CTA re-opens the sheet they left; when the
-          // order's own deadline passes the app retires it and the CTA sells again, silently.
         ],
       ),
     );
@@ -1427,7 +1399,6 @@ class _ShrineCtaState extends State<ShrineCta> {
         onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
         onTap: _enabled ? widget.onPressed : null,
         child: AnimatedScale(
-          // Parked at the resting scale when motion is reduced; the haptic still answers the press.
           scale: _pressed && !context.reduceMotion
               ? ArulTokens.paywallPressScale
               : 1,

@@ -9,27 +9,18 @@
 /// That is what keeps sign-in from auto-launching `authenticate()` and the entitlement provider off Neon.
 library;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-// `Override` is only exported from the misc entry point in Riverpod 3.
-import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:flutter_test/flutter_test.dart' show TestDefaultBinaryMessenger;
-import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
+import 'package:arul/core/providers/locale_provider.dart';
+import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/ringtone.dart';
 import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
-import 'package:arul/core/providers/locale_provider.dart';
-import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/presentation/trial_nudge_row.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
@@ -50,6 +41,14 @@ import 'package:arul/features/upload/presentation/upload_screen.dart';
 import 'package:arul/features/wallpapers/presentation/apply_sheet.dart';
 import 'package:arul/features/wallpapers/presentation/feed_states.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// `Override` is only exported from the misc entry point in Riverpod 3.
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart' show TestDefaultBinaryMessenger;
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'envelope.dart';
 import 'real_font_theme.dart';
@@ -131,8 +130,6 @@ class _SheetHostState extends State<SheetHost> {
   @override
   Widget build(BuildContext context) => const Scaffold(body: SizedBox.expand());
 }
-
-// ─── Fake data ───────────────────────────────────────────────────────────────
 
 /// Realistic-length titles ON PURPOSE -> a fake catalog of "a", "b", "c" gives every row acres of free space.
 /// That would hide the very overflows this matrix exists to find.
@@ -230,11 +227,8 @@ List<Override> _online({bool premium = true}) => [
   entitlementProvider.overrideWith((ref) async => premium),
 ];
 
-// ─── The registry ────────────────────────────────────────────────────────────
-
 /// Every surface the matrix measures.
 final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
-  // ── Wallpapers tab states ──────────────────────────────────────────────
   ScreenEntry(
     id: 'feed.loading',
     build: () => const Scaffold(
@@ -290,7 +284,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // ── Ringtones tab ──────────────────────────────────────────────────────
   ScreenEntry(
     id: 'ringtones.loading',
     textFree: true,
@@ -323,7 +316,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ],
   ),
 
-  // ── Settings ───────────────────────────────────────────────────────────
   ScreenEntry(id: 'settings.screen', build: () => const SettingsScreen()),
   ScreenEntry(
     id: 'settings.language_sheet',
@@ -333,7 +325,7 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ),
   ScreenEntry(
     id: 'settings.theme_sheet',
-    build: () => SheetHost(open: (context) => showThemeSheet(context)),
+    build: () => SheetHost(open: showThemeSheet),
   ),
   ScreenEntry(
     id: 'settings.edit_name_sheet',
@@ -407,7 +399,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // ── Refer & Earn ───────────────────────────────────────────────────────
   ScreenEntry(id: 'refer.screen', build: () => const ReferScreen()),
   ScreenEntry(
     id: 'refer.share_moment',
@@ -439,14 +430,12 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // ── Upload ─────────────────────────────────────────────────────────────
   ScreenEntry(
     id: 'upload.screen',
     textField: true,
     build: () => const UploadScreen(),
   ),
 
-  // ── Apply ──────────────────────────────────────────────────────────────
   ScreenEntry(
     id: 'apply.sheet',
     build: () => SheetHost(
@@ -455,7 +444,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // ── Auth ───────────────────────────────────────────────────────────────
   // Idle plus every failure the screen can speak to -> the nudge lines are the ONE place the app
   // writes a different sentence per outcome, so a translation that only fits in the idle state
   // would ship unmeasured. `debugOutcome` renders one without running an attempt.
@@ -470,7 +458,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     build: () => const SignInScreen(debugWaitingForInternet: true),
   ),
 
-  // ── The dock ───────────────────────────────────────────────────────────
   ScreenEntry(
     id: 'shell.dock',
     build: () => Scaffold(
@@ -493,8 +480,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 ];
-
-// ─── Pumping ─────────────────────────────────────────────────────────────────
 
 /// Wraps [entry] in the app's real theme, real delegates and the configuration under test.
 /// The theme goes through [applyRealFonts] -> every style descending from it names a real face.

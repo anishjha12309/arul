@@ -1,7 +1,7 @@
 // mapException() is the data-layer boundary -> raw errors become typed AppExceptions there -> this pins that mapping.
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:arul/core/error/app_exception.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppException defaults', () {

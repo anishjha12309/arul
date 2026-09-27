@@ -12,20 +12,10 @@ import '../../features/ringtones/providers/ringtone_preview_provider.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
-import '../widgets/arul_line_icons.dart';
 import '../theme/motion.dart';
+import '../widgets/arul_line_icons.dart';
 
 /// The tabbed scaffold around Wallpapers / Ringtones / Settings — everything else pushes OVER it.
-///
-/// The stateful shell keeps every branch ALIVE -> hidden media never tears itself down -> referee:
-///
-///   * leaving Wallpapers -> `releaseDecodersOnLeave()`: pauses AT ONCE, so a hidden feed never
-///     keeps playing behind the ringtone list, but frees the decoders only after a grace period —
-///     budget SoCs hold a handful, and a user who taps straight back should not pay three
-///     MediaCodec rebuilds (430 ms of dropped frames) for a trip they did not make;
-///   * returning -> `reclaimDecoders()` cancels that pending release and reconciles onto the
-///     current page; list and index live in the app-scoped controller;
-///   * leaving Ringtones -> preview audio stops; the screen's own route listener double-stops, idempotently.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -36,11 +26,8 @@ class AppShell extends ConsumerStatefulWidget {
   static const int settingsBranch = 2;
 
   /// Bottom padding a scrollable owes the floating dock it runs under — 0 when there is no dock.
-  ///
   /// The handoff's 120 assumes a 390×844 frame with no gesture bar -> add the bottom safe area on top.
   /// Otherwise the last row hides behind the capsule on exactly the phones that have a gesture pill.
-  /// Sub-screens pushed OVER the shell have no [AppShell] ancestor -> 0, not a flat 120 of dead space.
-  /// So the ancestor check is what makes this safe to call without knowing how the screen was opened.
   static double dockClearance(BuildContext context) {
     if (context.findAncestorWidgetOfExactType<AppShell>() == null) return 0;
     return ArulTokens.listBottomInsetUnderDock +
@@ -60,7 +47,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void initState() {
     super.initState();
-    // A first tap on Ringtones paid a ~5 s cold CDN drain -> warm the catalog once a frame is up.
     // Post-frame keeps it off the launch-critical path; the shell only mounts after auth.
     // Read-only: the provider is keepAlive and its own offline-recheck ladder owns every failure.
     // The tab's loading/error states still cover a drain that is slow or failing when the user lands.
@@ -83,8 +69,6 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// Written from go_router's redirect, and `goBranch` must not navigate during a build -> microtask.
   void _onDeepLinkChanged() => scheduleMicrotask(_followDeepLink);
 
-  /// Switch to the branch the pending target lives on.
-  ///
   /// A wallpaper/ringtone target is only PEEKED -> the tab's screen consumes it once it resolves the id.
   /// A tab-only target (`screen=ringtones`, no id) has nothing further to show -> consumed on the switch.
   void _followDeepLink() {
@@ -145,12 +129,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      // The dock FLOATS -> branch content runs full-bleed behind it and scrolls under the capsule.
       extendBody: true,
       body: widget.navigationShell,
-      // The dock speaks the user's language: the three labels are short everyday words in every
-      // locale (the plural forms that once overflowed were replaced, not demoted), and the cell's
-      // FittedBox still shrinks any word an OS font size makes too wide.
       bottomNavigationBar: ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,
@@ -168,12 +148,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 typedef ArulNavItem = ({ArulLineGlyph glyph, String label});
 
 /// Cross-fades between branches over [ArulTokens.tabSwitch] instead of cutting between them.
-///
 /// `indexedStack` swaps branches on ONE frame -> a hard cut from a playing reel to a list of cards.
-///
-///   * every branch stays MOUNTED -> each tab keeps its own scroll position;
 ///   * only the incoming and outgoing branches are [Offstage]-visible -> an idle branch never paints;
-///   * `TickerMode` is off outside the current branch -> hidden animations stop, never burn frames.
 class ArulBranchCrossfade extends StatefulWidget {
   const ArulBranchCrossfade({
     super.key,
@@ -202,8 +178,6 @@ class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
     super.didUpdateWidget(old);
     if (widget.currentIndex != old.currentIndex) {
       _previous = old.currentIndex;
-      // Holds at the RESTING state (the new branch fully opaque) rather than cross-fading -> the
-      // tab still changes, it just changes in one frame.
       if (context.reduceMotion) {
         _c.value = 1;
       } else {
@@ -251,12 +225,8 @@ class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
   }
 }
 
-/// The floating island dock — a detached capsule; branch content scrolls full-bleed behind it.
-///
 /// Three tabs need names -> every tab shows icon AND label, and the active cell moves, never glides.
 /// A label on the active side only made the other two read as unlabelled glyphs under a sliding pill.
-/// `BackdropFilter` costs ~6–9 ms of raster per frame on mid-tier Android, over a live video feed.
-/// So no blur -> the opaque [ArulTokens.dockFillDark] carries the same separation (ui-direction > Perf).
 /// Without a fade behind the capsule, rows keep scrolling in the 18px side channels and 14px below.
 /// The eye reads that as a bar with rows sliding out from under it -> fade to the surface's own colour.
 /// The fade absorbs no touches -> a drag starting in the transparent zone still scrolls the list.
@@ -282,8 +252,6 @@ class ArulNavDock extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          // Colors.transparent is transparent BLACK -> lerping through it greys the ivory fade.
-          // So fade to the SURFACE's own alpha-0, never Colors.transparent.
           colors: [
             surface.withValues(alpha: 0),
             surface.withValues(alpha: ArulTokens.dockScrimAlpha),
@@ -299,7 +267,6 @@ class ArulNavDock extends StatelessWidget {
           padding: const EdgeInsets.symmetric(
             horizontal: ArulTokens.dockSideInset,
           ),
-          // Fixed height, fixed-size labels -> an unclamped 2x system font scale bursts the pane.
           child: MediaQuery.withClampedTextScaling(
             maxScaleFactor: 1.1,
             child: Container(
@@ -393,8 +360,6 @@ class _DockTab extends StatelessWidget {
                         ? ArulTokens.goldBorder45
                         : ArulTokens.goldBorder50,
                   ),
-                  // The handoff's 20px gold glow fogged the cell edge and hazed
-                  // the dark theme -> no halo; fill and rim already say active.
                 )
               : null,
           child: Column(
@@ -406,8 +371,6 @@ class _DockTab extends StatelessWidget {
                 color: fg,
               ),
               const SizedBox(height: ArulTokens.dockTabGap),
-              // A fixed 58 cell inside a fixed 78 capsule -> a 2× OS font size overflows the label.
-              // Flexible hands it less room and scaleDown fits the type to that -> the dock never breaks.
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

@@ -1,10 +1,5 @@
 /**
- * GET /geo — PUBLIC, no JWT: the region hint a FRESH install reads once to open in its state's language.
- *
  * Answers from `request.cf` alone -> no DB, no KV, no R2, no rate limiter -> it can never wake Neon or cost a subrequest
- * The app stores the first answer for the life of the install -> one call per fresh install, never per launch
- * State-level IP geolocation is an estimate (carrier CGNAT moves Airtel users between states day to day)
- * So `region` always ships raw, switch on or off -> the app records it as `geo_region` and accuracy is measured
  * `cf` is undefined in the preview, local `wrangler dev` and tests -> all three null, still 200 -> only `--remote` has it
  * Never city, coordinates or postal code -> not needed, not stored
  */
@@ -13,8 +8,6 @@ import type { Context } from "hono";
 import type { Env } from "../env.js";
 
 /**
- * India only, by ISO 3166-2 code -> the owner's map, state by state.
- * Delhi, Maharashtra, Gujarat and every other state are unmapped ON PURPOSE -> the app falls through to the phone
  * Telangana has carried both TS and TG -> accept both
  */
 const LANG_BY_CODE: Readonly<Record<string, string>> = {
@@ -63,10 +56,7 @@ export function handleGeo(c: Context<{ Bindings: Env }>): Response {
   const code = known(cf?.regionCode);
   const name = known(cf?.region);
 
-  // regionCode is scoped to its country -> US+TN is Tennessee -> the country gate comes first
   // A known code never falls back to the name -> the code is the stronger reading
-  // Anything but the exact string "true" is OFF -> lang goes null and country/region keep flowing for measurement
-  // Only a caller sending v=2 (the factorial build on) gets a lang -> fielded builds keep the phone's language
   const versioned = c.req.query("v") === "2";
   let lang: string | null = null;
   if (c.env.GEO_LANG_ENABLED === "true" && versioned && country === "IN") {

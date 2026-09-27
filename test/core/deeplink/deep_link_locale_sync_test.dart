@@ -2,15 +2,14 @@
 // It goes through the same persisted `arul_locale` that Settings writes -> the deferred pending copy is cleared.
 // An unsupported code changes nothing.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/deeplink/deep_link_locale_sync.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(ArulDeepLink.reset);

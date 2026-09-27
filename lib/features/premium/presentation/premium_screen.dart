@@ -14,9 +14,9 @@ import '../../../app/theme/theme.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
-import '../../../core/connectivity/data_saver.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/data_saver.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
@@ -27,14 +27,14 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
-import '../../wallpapers/data/feed_video_player.dart';
 import '../../settings/presentation/confirm_dialog.dart';
+import '../../wallpapers/data/feed_video_player.dart';
 import '../data/return_clip_cache.dart';
 import '../domain/entitlement.dart';
+import '../domain/onboarding_video.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
 import 'member_view.dart';
-import '../domain/onboarding_video.dart';
 import 'onboarding_video_card.dart';
 import 'paywall_view.dart';
 import 'resubscribe_view.dart';
@@ -74,12 +74,6 @@ String purchaseErrorText(AppLocalizations l10n, PurchaseErrorKind kind) =>
     };
 
 /// The `paywall_shown` payload — pure, so its shape is pinned by a test, not by a screen.
-///
-/// Every value is a STRING on purpose. GA4 does not parse numeric event-parameter values into
-/// event-scoped custom dimensions on APP streams, so a count sent as `3` is collected and can never
-/// be broken down; a bool is worse, since the GA4 sink coerces it to 1/0. `has_upi_app` rides beside
-/// the app list because two values can never be condensed into GA4's `(other)` row, whatever the
-/// combinations do.
 @visibleForTesting
 Map<String, Object?> paywallShownProperties({
   required String source,
@@ -89,29 +83,16 @@ Map<String, Object?> paywallShownProperties({
   required String variant,
   List<String> otherPackages = const [],
 }) {
-  // SORTED, not in picker order: the remembered app is floated to the head for the UI, and letting
-  // that order reach the value would file one installed set under as many names as it has orders.
   final codes = [for (final a in apps) upiAppCode(a.packageName)]..sort();
   return {
-    // `paywall_source`, never `source` — GA4 already owns `source` as a traffic dimension.
     'paywall_source': source,
     'variant': variant,
     'has_upi_app': codes.isEmpty ? 'no' : 'yes',
     'upi_app_count': _countBucket(codes.length),
-    // Packed the same way as the refused names below, rather than cut at a fixed count: the
-    // allowlist grew to PhonePe's full published seven and a hardcoded `take(6)` silently dropped
-    // the last app on any phone carrying them all. Every code is short, so all eight (the seven
-    // plus the sandbox simulator) sit inside GA4's 100-char limit with room to spare.
     'upi_apps': codes.isEmpty ? 'none' : _packWithinGa4Limit(codes),
     'default_app': defaultPackage == null ? 'none' : upiAppCode(defaultPackage),
     'trial_eligible': trialEligible ? 'yes' : 'no',
-    // The apps the phone HAS and the allowlist refuses. `has_upi_app: no` alongside a non-zero
-    // count here is not a phone that cannot pay — it is a phone we declined to sell to, and the
-    // two were indistinguishable while 13% of Subscribe taps went to the SDK path.
     'upi_other_count': _countBucket(otherPackages.length),
-    // RAW package names, not codes: the whole point is to learn names we do not have a code for,
-    // and `other` would hide every one of them inside one word. The count above is what survives
-    // truncation, so a phone carrying more names than fit still reports how many there were.
     'upi_others': otherPackages.isEmpty
         ? 'none'
         : _packWithinGa4Limit([...otherPackages]..sort()),
@@ -119,11 +100,6 @@ Map<String, Object?> paywallShownProperties({
 }
 
 /// Whether a purchase-state change is an unapproved return that opens the return page.
-///
-/// Only the step INTO resumable counts: the order is still open at PhonePe after the person came
-/// back, which is "came back without approving". It fires on every such return (owner's call), but
-/// never while the page is already up — a return to the page itself lands back on it — and never on
-/// a spent-trial sell, whose ₹199 offer the clip's "start your ₹2 trial" would misdescribe.
 @visibleForTesting
 bool opensReturnPage({
   required PurchaseState? previous,
@@ -187,15 +163,6 @@ String? _formatDate(AppLocalizations l10n, DateTime? d) =>
     d == null ? null : l10n.premiumPlanDate(d.toLocal());
 
 /// THE premium screen — paywall and plan home in ONE route.
-///
-/// Two screens made a free user tap "premium" twice to see a price -> `/premium` renders the state:
-///   • no plan / expired / paused / pending → the paywall (perks, plan card, UPI picker, CTA);
-///   • trialing / active                   → plan + billing details + Cancel;
-///   • cancelled, still paid-through       → "auto-renew off" + billing + an INLINE Resubscribe.
-///
-/// `source` is the blocked verb that sent the user here — which entry point actually sells.
-/// The gate fires its own `*_blocked_premium` at `ensurePremium`; the only event raised HERE is
-/// `paywall_shown`, which carries that same verb as `paywall_source`.
 /// This is also the only route that can reach `POST /payments/cancel`.
 class PremiumScreen extends ConsumerStatefulWidget {
   const PremiumScreen({super.key, required this.source});
@@ -245,8 +212,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   late final VoidCallback _releaseUpdateHold;
 
   /// UPI app the user picked, restored from [_kUpiAppKey] on open.
-  /// The build then falls back to the first installed app — allowlist order puts Paytm first.
-  /// No installed UPI apps → no picker → the hosted-page flow.
   String? _selectedUpiPackage;
 
   /// Cancel-subscription in flight, kept OFF the purchase state machine — the dialog owns feedback.
@@ -279,11 +244,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   /// Reports `paywall_shown` ONCE per state of the sell — GA4 only, deliberately off the PostHog
   /// allow-list ([docs/analytics-events.md]).
-  ///
   /// The signature is the variant and the INSTALLED APPS, never the whole payload: picking another
   /// app in the picker moves `default_app` and is a choice inside one view, not a second view.
-  /// Installing one from the prompt does change it, and that second report is the only way the
-  /// prompt's effect on a dead CTA is visible at all.
   void _trackPaywallShown(Map<String, Object?> properties) {
     final signature = '${properties['variant']}/${properties['upi_apps']}';
     if (_paywallShown == signature) return;
@@ -301,7 +263,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   @override
   void initState() {
     super.initState();
-    // A forced restart here would kill the UPI handoff and its poll -> no update while mounted.
     _releaseUpdateHold = UpdateHolds.hold();
     WidgetsBinding.instance.addObserver(this);
     // Synchronous by construction — `sharedPreferencesProvider` is overridden in main() after its await.
@@ -348,7 +309,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   // The card cannot mount until `entitlementDetailProvider` resolves.
   // So leaving the player with it serialised `GET /me`, a channel `create` and the media fetch.
   // Starting here overlaps all three with the entitlement call.
-  // Measured cause of "the poster showed for way too long" — the file was never the bottleneck.
 
   FeedVideoPlayerPool? _videoPool;
   FeedVideoPlayer? _videoPlayer;
@@ -421,10 +381,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   Future<void> _reconcileOnOpen() async {
     try {
       // Unconditional, and deliberately NOT gated on the cached entitlement.
-      //
       // The row only becomes 'pending' at initiate -> a snapshot warmed before the purchase is stale.
-      // The guard then found nothing to reconcile at the exact moment there was something.
-      // A settled mandate stayed unclaimable from inside the app.
       // The cost guard now lives server-side: no subscription row -> an early return, no PhonePe call.
       await ref.read(premiumPurchaseProvider.notifier).refreshStatus();
     } catch (_) {
@@ -433,9 +390,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   /// Offers the share, then closes the screen.
-  ///
-  /// Order matters — the sheet shows while this route is mounted, and the pop waits for it.
-  /// So it can never be left floating over a screen that has gone.
   /// Entirely skippable: "Not now" is one tap and lands where closing the screen would.
   Future<void> _celebrate(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
@@ -528,11 +482,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   /// The QR route: the same mandate, rendered for a second phone to scan.
-  ///
-  /// It still names a package. PhonePe makes `paymentMode.targetApp` mandatory on UPI_INTENT, and
-  /// the `upi://mandate` they hand back carries no app binding of its own — the name is a formality
-  /// their API requires, not a claim about this phone, and the Worker files the order under `qr` so
-  /// the column that answers "which app completes a mandate" is not told a phone had PhonePe.
   static const _kQrFormalityPackage = 'com.phonepe.app';
 
   void _startQrPurchase({required bool trialEligible}) {
@@ -606,9 +555,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         // The UPI app has the screen: pull the return clip to disk while the mandate sheet is up.
         case PurchaseProcessing() when _sellIsTrial:
           _warmReturnClip();
-        // Back from the UPI app with the order still open = came back WITHOUT approving. Every such
-        // return opens the page (owner's call), unless it is already up — a second unapproved return
-        // from the page itself lands back on it.
         case PurchaseResumable()
             when opensReturnPage(
               previous: prev,
@@ -651,9 +597,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final purchase = ref.watch(premiumPurchaseProvider);
     final purchaseBusy =
         purchase is PurchaseLoading || purchase is PurchaseProcessing;
-    // The mandate is still open at PhonePe and the user is back in Arul -> the CTA becomes
-    // "open it again"; picking another app in the chip, or the order's own deadline, is the only
-    // other way out. Never a toast: nothing failed.
     final resumable = purchase is PurchaseResumable ? purchase : null;
     // A UPI return is being checked: the answer decides within a second whether the return page
     // covers the trial clip, so the clip does not start talking in the meantime.
@@ -744,11 +687,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       UpiApps.ordered(apps, _selectedUpiPackage);
 
   /// The picker, open in EVERY state including a resumable one.
-  ///
-  /// An order already open at PhonePe never narrows the choice to the app holding it: picking a
-  /// different one there is a decision to pay with that app instead, and [PremiumPurchase.switchApp]
-  /// carries it out in one motion — this order abandoned, a fresh one initiated in the new app.
-  /// Picking the app that already holds the order changes nothing at all.
   Future<void> _openUpiPicker(
     List<UpiApp> upiApps,
     String currentPackage, {
@@ -768,10 +706,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
     if (picked == null || !mounted) return;
 
-    // The QR is a ONE-TIME route, never a remembered default: nothing is written to [_kUpiAppKey]
-    // and `_selectedUpiPackage` is left alone, so the next visit's CTA still opens their own app.
-    // Someone who taps this out of curiosity keeps the one tap that is strictly faster for them,
-    // and there is no state here to strand — the code dies with its own deadline either way.
     if (picked == kUpiPickQr) {
       // An order already open at an app is abandoned first, exactly as switching apps does: two
       // live mandates on one user is what the server refuses, and `startTrial` would otherwise
@@ -817,13 +751,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   /// Pushes the return page over the trial screen and, once it is gone, gives the trial screen its
   /// clip back.
-  ///
-  /// The page BORROWS this screen's one audible player rather than creating a second: the feed under
-  /// /premium still holds its decoders, budget SoCs fit about two, and a second voice-capable player
-  /// would contend for audio focus with the first. The trial card lets go first (it is handed null),
-  /// the player is re-opened on the return clip, and the reverse happens after the page has fully
-  /// left — the page's card pauses the player as it disposes, and a handback before that pause
-  /// would silence the trial clip it had just restarted.
   Future<void> _openReturnPage(PurchaseResumable resumable) async {
     if (_returnRoute != null || !mounted) return;
     final config = ref.read(appConfigProvider).asData?.value;
@@ -1022,8 +949,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final config = ref.watch(appConfigProvider).asData?.value;
     final monthlyPrice = _monthlyPrice(config?.prices);
 
-    // Installed mandate-capable UPI apps — best-effort. Empty AND answered puts the install prompt
-    // in the picker's place and kills the CTA; empty and still loading shows neither.
     final upiAsync = ref.watch(installedUpiAppsProvider);
     final upiScan = upiAsync.asData?.value ?? const UpiScan.empty();
     final upiApps = _orderedUpiApps(upiScan.apps);
@@ -1060,8 +985,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       });
     }
 
-    // Reported only once the app probe has ANSWERED: the first build here always has an empty list,
-    // and reporting that would stamp "no UPI app" on every install that ever opened the paywall.
     if (upiAsync.hasValue) {
       _trackPaywallShown(
         paywallShownProperties(
@@ -1079,8 +1002,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       );
     }
 
-    // The clip is for the TRIAL SELL ONLY — its script ends "start your 1-day trial".
-    // That is a lie on the ₹199 variant a spent-trial user sees.
     // `localeProvider` is WATCHED, not read: deferred deliveries can land after the user arrives.
     // Watching re-resolves the source, and the card swaps its media in place.
     // Opened back in initState -> by this build the clip has decoded for as long as `GET /me` took.
@@ -1246,12 +1167,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 }
 
 /// The picker — an Arul sheet listing every installed mandate-capable UPI app.
-/// The tapped row pops with its package name.
-///
-/// Rendered in the PAYWALL's system, not `_Palette`: the sheet opens over a hand-built cream and
-/// maroon screen, and a stock white list carrying the app's GENERIC maroon put two different
-/// maroons on one screen. `showArulSheet` gets `paywallCream` for the same reason.
-///
 /// Deliberately carries NO price and NO mandate footer (owner's call). Both live on the paywall
 /// behind it, and repeating them here made the sheet read as a second checkout step.
 class _UpiPickerSheet extends StatelessWidget {

@@ -10,8 +10,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
 import '../../../app/theme/motion.dart';
-import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_browse_header.dart';
+import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_earn_button.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
@@ -69,9 +69,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   }
 
   /// Open the ringtone a link asked for — the ringtone twin of the feed's `maybeOpenDeepLink`.
-  ///
-  /// Always lands on **All**, never the ringtone's own category — All is the only chip with every row.
-  /// The index resolves through [ringtoneFeedOrder]: a position in the list the tab SERVES.
   /// The row scrolls to the TOP and nothing auto-plays — preview is a tap the user makes.
   /// A miss is silent and normal: the ringtone may have been unpublished since the ad was built.
   /// Takes ONLY a ringtone target; a pending wallpaper passes through untouched for the feed.
@@ -153,9 +150,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
     super.dispose();
   }
 
-  /// Premium gate for "Set as ringtone" — AWAITS the entitlement future (CLAUDE.md §5).
-  /// A loading snapshot must never bounce a premium user.
-  /// On a free user ensurePremium tracks the block and routes `/premium?source=ringtone_set`.
   Future<void> _onSetTapped(Ringtone ringtone) async {
     if (!await ensurePremium(context, ref, source: 'ringtone_set')) return;
     unawaited(
@@ -526,10 +520,6 @@ class RingtoneRow extends ConsumerWidget {
   static const double gap = 12;
 
   /// The transparent slack a trailing control's hit box carries on each side of its own visual.
-  ///
-  /// DERIVED, never written down: [ArulTokens.minHitTarget] rose from iOS's 44 to Android's 48 and
-  /// this is the number that absorbed it. The visual stayed 34 and the drawn gap stayed [gap] —
-  /// only the invisible box grew.
   static const double controlSlack =
       (ArulTokens.minHitTarget - _PlayButton.visualSize) / 2;
 
@@ -566,8 +556,6 @@ class RingtoneRow extends ConsumerWidget {
     final lit = isPlaying || isBuffering;
 
     return Container(
-      // PINNED, never the content's own height — see [innerHeightFor]. A row that grew with its own
-      // title would break the deep-link scroll, which multiplies one extent out by the row index.
       height: extentFor(MediaQuery.textScalerOf(context)),
       padding: const EdgeInsets.symmetric(horizontal: _padH, vertical: _padV),
       decoration: BoxDecoration(
@@ -636,7 +624,6 @@ class RingtoneRow extends ConsumerWidget {
                         // The tone the SYSTEM currently holds, never a locally remembered id -> a
                         // tone changed outside Arul matches nothing and the badge simply goes
                         // ([currentRingtoneIdProvider]); loading and error both render as no badge.
-                        //
                         // On the SUBTITLE line, not the outer row. Beside the title it ate the
                         // width the title needs and turned "Venkatesha Garuda Dhvaja" into
                         // "Venkate sha Ga…" on a 720p phone. The deity label is one short word and
@@ -678,10 +665,6 @@ class RingtoneRow extends ConsumerWidget {
 }
 
 /// The row's preview toggle — a 34px circle centred in a [ArulTokens.minHitTarget] box.
-/// The handoff is explicit: the VISUAL stays 34 and only the hit area grows. It grew again when the
-/// hit target went to Android's 48; [RingtoneRow.controlGap] is what absorbed it, so the gap the eye
-/// sees on either side of this control is unchanged.
-///
 /// While lit, [_PositionRing] draws a thin gold ring around the circle (W6) — OUTSIDE the 34px
 /// visual and INSIDE the hit box, so neither the control's size nor its tap target moves for it.
 class _PlayButton extends StatelessWidget {

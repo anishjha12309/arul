@@ -2,13 +2,12 @@
 // The payload is persisted BEFORE it is ACKed -> the ACK is the commit point.
 // A token seen twice is inert, and the source rides through to the target.
 
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/deeplink/deferred_link_service.dart';
 import 'package:arul/features/referral/data/install_referrer_service.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _w = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
 const _r = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';

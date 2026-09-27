@@ -1,9 +1,4 @@
 /**
- * JWT helpers for Arul's access + refresh token lifecycle. jose ^5, first-party Workers support.
- *
- * Access: HS256, `sub` + a `prm` hint, 60 min. Refresh: HS256, `sub` + `jti`, 60 days, rotating.
- * `prm` is a UI hint and NEVER authoritative -> every gated action re-reads entitlement live from Neon
- * /auth/refresh denylists the old jti and issues a new pair; /auth/logout denylists the presented jti
  * HS256 is safe here only because this Worker is the sole issuer AND verifier -> a third-party audience needs EdDSA
  */
 
@@ -33,11 +28,8 @@ const TYP_REFRESH = "ref";
 
 /**
  * Access-token lifetime: 60 minutes, deliberately not 15.
- *
  * Every expiry costs a /auth/refresh -> one KV read plus a KV write that lives the FULL 60-day refresh TTL
  * At 15 min that is ~4 near-permanent denylist entries per user per active hour -> the keyspace grows unbounded
- * Write volume would scale with DAU x session length -> a cost driven by nothing security-relevant
- * The token carries identity ONLY -> a stale one cannot survive a refund, expiry or cancellation
  * The whole cost is revocation latency on a STOLEN access token, <=60m -> refresh revocation stays immediate
  */
 const ACCESS_TTL_SECONDS = 60 * 60;
@@ -47,11 +39,7 @@ function secretKey(secret: string): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-export async function signAccessToken(
-  sub: string,
-  jwtSecret: string,
-  prmHint?: boolean,
-): Promise<string> {
+export async function signAccessToken(sub: string, jwtSecret: string, prmHint?: boolean): Promise<string> {
   const builder = new SignJWT({
     sub,
     typ: TYP_ACCESS,
@@ -79,10 +67,7 @@ export async function signRefreshToken(
 }
 
 /** An invalid, expired or wrong-algorithm token THROWS -> there is no falsy return -> callers must catch. */
-export async function verifyAccessToken(
-  token: string,
-  jwtSecret: string,
-): Promise<AccessClaims> {
+export async function verifyAccessToken(token: string, jwtSecret: string): Promise<AccessClaims> {
   const { payload } = await jwtVerify(token, secretKey(jwtSecret), {
     algorithms: ["HS256"],
   });
@@ -96,10 +81,7 @@ export async function verifyAccessToken(
 }
 
 /** Signature only — this does NOT consult the KV denylist -> a revoked token verifies here -> callers must claim it. */
-export async function verifyRefreshToken(
-  token: string,
-  jwtSecret: string,
-): Promise<RefreshClaims> {
+export async function verifyRefreshToken(token: string, jwtSecret: string): Promise<RefreshClaims> {
   const { payload } = await jwtVerify(token, secretKey(jwtSecret), {
     algorithms: ["HS256"],
   });
@@ -115,30 +97,21 @@ export async function verifyRefreshToken(
 const KV_JTI_PREFIX = "jti:";
 
 /** TTL is the token's REMAINING lifetime -> KV expires the entry exactly when the token could no longer be used. */
-export async function denylistJti(
-  kv: KVNamespace,
-  jti: string,
-  expEpoch: number,
-): Promise<void> {
+export async function denylistJti(kv: KVNamespace, jti: string, expEpoch: number): Promise<void> {
   const ttlSeconds = Math.max(60, expEpoch - Math.floor(Date.now() / 1000));
   await kv.put(`${KV_JTI_PREFIX}${jti}`, "1", {
     expirationTtl: ttlSeconds,
   });
 }
 
-export async function isJtiDenylisted(
-  kv: KVNamespace,
-  jti: string,
-): Promise<boolean> {
+export async function isJtiDenylisted(kv: KVNamespace, jti: string): Promise<boolean> {
   const val = await kv.get(`${KV_JTI_PREFIX}${jti}`);
   return val !== null;
 }
 
 /**
  * Reuse-grace window — how long the pair minted from a rotated refresh token stays replayable to that same token.
- *
  * Rotation is one-shot -> any retry of a refresh that already succeeded server-side would 401
- * A client timeout, a dropped mobile connection or a background/foreground race all do exactly that
  * A 401 there signs a paying user out -> replaying the same pair briefly makes the retry a no-op instead
  * Short on purpose -> a genuinely stolen refresh token is used minutes to days later, outside this, and still 401s
  */
@@ -150,20 +123,13 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-export async function storeRotationReplay(
-  kv: KVNamespace,
-  oldJti: string,
-  pair: TokenPair,
-): Promise<void> {
+export async function storeRotationReplay(kv: KVNamespace, oldJti: string, pair: TokenPair): Promise<void> {
   await kv.put(`${KV_ROTATION_PREFIX}${oldJti}`, JSON.stringify(pair), {
     expirationTtl: ROTATION_REPLAY_TTL_SECONDS,
   });
 }
 
-export async function readRotationReplay(
-  kv: KVNamespace,
-  oldJti: string,
-): Promise<TokenPair | null> {
+export async function readRotationReplay(kv: KVNamespace, oldJti: string): Promise<TokenPair | null> {
   const raw = await kv.get(`${KV_ROTATION_PREFIX}${oldJti}`, "json");
   if (!raw) return null;
   const pair = raw as Partial<TokenPair>;
@@ -180,11 +146,7 @@ export async function readRotationReplay(
  * A caller that reads back a different holder id knows it lost -> with the client's single-flight refresh that is enough
  * An attacker racing inside KV's replication lag is NOT defended -> that needs a Durable Object
  */
-export async function claimRefreshJti(
-  kv: KVNamespace,
-  jti: string,
-  expEpoch: number,
-): Promise<boolean> {
+export async function claimRefreshJti(kv: KVNamespace, jti: string, expEpoch: number): Promise<boolean> {
   const key = `${KV_JTI_PREFIX}${jti}`;
   const existing = await kv.get(key);
   if (existing !== null) return false;

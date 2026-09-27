@@ -5,19 +5,11 @@ import 'component_themes.dart';
 import 'schemes.dart';
 import 'typography.dart';
 
-/// Light + dark, fixed brand palette.
-///
-/// The app's whole job is showing wallpapers -> a theme recoloured from the current one fights its
-/// own content -> NEVER seed from device wallpaper or dynamic colour.
 /// Dark is primary (media-first, night sessions), but light is designed, not derived -> its own
 /// hand-specified scheme in schemes.dart, its own deepened rose/gold (the dark values fail 4.5:1 on
 /// ivory), and a hairline-outlined card treatment dark does not need.
 abstract final class ArulTheme {
   /// Both themes are built ONCE, lazily, and reused forever.
-  ///
-  /// [_build] is not cheap (a 15-slot [TextTheme] plus fifteen component sub-themes) and the root
-  /// rebuilds on theme, locale and the notification bootstrap -> building per call costs two full
-  /// [ThemeData] every time.
   /// Cacheable ONLY because the palette is fixed — no dynamic colour, no wallpaper seeding -> no
   /// input can make a second call differ from the first.
   static final ThemeData _light = _build(

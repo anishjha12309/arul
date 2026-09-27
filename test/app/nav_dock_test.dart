@@ -2,12 +2,11 @@
 // The active cell is whichever the shell says is active -> tapping a tab reports its OWN index.
 // Settings is a dock BRANCH, not a pushed route -> it must never silently land on the wrong index.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/theme/arul_tokens.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const items = <ArulNavItem>[

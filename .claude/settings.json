@@ -1,56 +1,56 @@
 {
-  "attribution": {
-    "commit": "",
-    "pr": ""
-  },
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Bash(flutter analyze*)",
-      "Bash(flutter test*)",
-      "Bash(flutter gen-l10n*)",
-      "Bash(flutter doctor*)",
-      "Bash(dart format*)",
-      "Bash(dart analyze*)",
-      "Bash(dart run build_runner*)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git show*)",
-      "Bash(git branch*)",
-      "Bash(npx tsc*)",
-      "Bash(npx vitest*)",
-      "Bash(adb devices*)",
-      "Bash(adb logcat*)",
-      "Bash(adb shell pidof*)",
-      "Bash(adb shell dumpsys*)",
-      "Bash(adb shell getprop*)",
-      "Bash(adb shell wm size*)",
-      "Bash(adb shell am start*)",
-      "Bash(adb exec-out screencap*)"
+      "Bash(flutter analyze *)",
+      "Bash(flutter test *)",
+      "Bash(flutter gen-l10n *)",
+      "Bash(flutter doctor *)",
+      "Bash(dart format *)",
+      "Bash(dart analyze *)",
+      "Bash(dart run build_runner *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npx wrangler whoami *)",
+      "Bash(npx wrangler deploy --dry-run *)",
+      "Bash(adb devices *)",
+      "Bash(adb logcat *)",
+      "Bash(adb shell pidof *)",
+      "Bash(adb shell dumpsys *)",
+      "Bash(adb shell getprop *)",
+      "Bash(adb shell wm size *)",
+      "Bash(adb shell am start *)",
+      "Bash(adb exec-out screencap *)"
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/run.js", "pre-bash"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/format-dart.js",
-            "timeout": 30,
-            "statusMessage": "dart format"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/version-commit.js post",
-            "timeout": 30,
-            "statusMessage": "version-bump commit"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/doc-sync-reminder.js",
-            "timeout": 15,
-            "statusMessage": "doc-sync route lookup"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/run.js", "post-edit"],
+            "timeout": 30
           }
         ]
       },
@@ -59,15 +59,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/release-version-guard.js post",
-            "timeout": 30,
-            "statusMessage": "release-version guard (record)"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/release-commit-reminder.js post",
-            "timeout": 30,
-            "statusMessage": "release commit reminder"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/run.js", "post-bash"],
+            "timeout": 30
           }
         ]
       }
@@ -77,50 +71,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/release-version-guard.js reconcile",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/release-commit-reminder.js reconcile",
-            "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/dart-analyze-gate.js",
-            "timeout": 15,
-            "statusMessage": "dart analyze gate"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node .claude/hooks/guard-secrets.js",
-            "timeout": 15,
-            "statusMessage": "secret-staging guard"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/release-version-guard.js pre",
-            "timeout": 30,
-            "statusMessage": "release-version guard"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/release-flag-secure-guard.js",
-            "timeout": 15,
-            "statusMessage": "FLAG_SECURE guard (.aab)"
-          },
-          {
-            "type": "command",
-            "command": "node .claude/hooks/release-commit-reminder.js pre",
-            "timeout": 15,
-            "statusMessage": "release commit reminder (arm)"
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/run.js", "stop"],
+            "timeout": 90
           }
         ]
       }

@@ -1,5 +1,3 @@
-library;
-
 const String _base = 'assets/ringtones';
 
 const String kFallbackDeityAsset = '$_base/fallback.webp';

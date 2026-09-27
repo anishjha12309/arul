@@ -1,7 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/features/push/domain/push_payload.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// The tap path's one testable piece: what a campaign's `data` map opens.
 ///
@@ -47,7 +46,7 @@ void main() {
 
     test('EVERY unreadable payload falls back to home instead of throwing', () {
       final payloads = <Map<String, Object?>>[
-        {'dest': 'wallpaper'}, // no id at all
+        {'dest': 'wallpaper'},
         {'dest': 'wallpaper', 'id': ''},
         {'dest': 'wallpaper', 'id': 'not-a-uuid'},
         {'dest': 'ringtone', 'id': '123'},
@@ -55,7 +54,7 @@ void main() {
         {'dest': 'screen'}, // a destination this build has never heard of
         {'dest': ''},
         {'dest': 42}, // the Worker only ever writes strings; survive it anyway
-        {'id': wallpaperId}, // an id with no destination
+        {'id': wallpaperId},
       ];
       for (final payload in payloads) {
         expect(

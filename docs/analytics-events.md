@@ -1,220 +1,126 @@
-# Analytics Events
+# Analytics events
 
-**Never call SDKs from widgets — always `AnalyticsService`**, which fans out to three sinks. Consoles
-and reading the data: [analytics-ops.md](analytics-ops.md). Ads traps: [google-ads.md](google-ads.md).
+**Never call an SDK from a widget — always `AnalyticsService`**, which fans out to three sinks. Consoles,
+the Play-install gate and reading the data: [analytics-ops.md](analytics-ops.md) · Ads:
+[google-ads.md](google-ads.md). The event list is the `track()` call sites; the ★ names and the PostHog
+allow-list are exact sets pinned by tests — a typo drops silently.
 
-- **PostHog** — every PLAY install, and **only the journey**: `Application Installed` → `login_success` →
-  `trial_started` → `wallpaper_applied` / `wallpaper_shared` → `ringtone_set`, plus the two sign-in
-  diagnostics below. Two gates: `AnalyticsCohort` (is this install in the panel?) and
-  `AllowlistedAnalyticsService` (is this event on the list?). SDK lifecycle autocapture is **off**, so
-  the install event is emitted by hand in `main.dart` — the one PostHog event that never passes
-  through `AnalyticsService`.
-- **GA4** (`firebase_analytics`) — **every event at 100%, from every install**, under its raw name,
-  plus ★ events emitting GA4 *standard* `login`/`begin_checkout`. **The complete record.**
-- **Meta App Events** — ONLY ★ events; installs/launches are auto-logged natively.
+- **PostHog** — PLAY installs only, and **only the journey** (`login_success` → `trial_started` →
+  `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus the sign-in diagnostics below. Gated by
+  `AnalyticsCohort` (is this install in the panel?) and `AllowlistedAnalyticsService` (is the event on
+  the list?). `Application Installed` is emitted by hand in `main.dart` — the one PostHog event that
+  bypasses `AnalyticsService`.
+- **GA4** — **every event at 100%, from every install**, under its raw name, plus ★ events as GA4
+  *standard* `login`/`begin_checkout`. The complete record.
+- **Meta App Events** — ★ events only; installs and launches are auto-logged natively.
 
-★ = `login_success` (GA4 `login`, Meta CompleteRegistration) · `checkout_started` (GA4
-`begin_checkout`, Meta InitiateCheckout) · `trial_started` (Meta StartTrial) · `subscription_active`
-(nothing to GA4 or Meta).
+★ = `login_success` (GA4 `login`, Meta CompleteRegistration) · `checkout_started` (GA4 `begin_checkout`,
+Meta InitiateCheckout) · `trial_started` (Meta StartTrial).
 
-## ONE conversion action, ONE data source — the rule that must not be re-opened
+## ONE conversion action, ONE data source — never re-open this
 
-**No paid conversion reaches any ad platform** (owner's call). GA4 `purchase` and Meta `Subscribe`
-are gone from BOTH sides — client mappings, the Worker's GA4-MP and Meta-CAPI reporters, the
-`app_instance_id`/`meta_anon_id` uploads, and the `GA4_*`/`META_*` secrets.
+**No paid conversion reaches any ad platform** (owner). GA4 `purchase` and Meta `Subscribe` are gone
+from both sides — client mappings, the Worker's GA4-MP and Meta-CAPI reporters, their id uploads and
+secrets. `purchase` had TWO source types (the app SDK for the app-open setup, the server for the
+app-closed settle) reconciling on different schedules, so the Ads campaign column ran a day behind and
+undercounted while GA4's raw counts looked right. **`trial_started`/StartTrial is the ONLY event
+campaigns bid on** — app SDK, in-session, one source. Accepted cost: no revenue or ROAS signal
+anywhere. Revenue truth is Neon.
 
-**Why it must not come back:** `purchase` had TWO source types — the app SDK for the app-open setup,
-the server (GA4 MP; Meta CAPI, filed as a WEBSITE event) for the app-closed settle — reconciling on
-different schedules, so the Ads CAMPAIGN column ran a day behind and undercounted while GA4's raw
-counts stayed right. **`trial_started`/StartTrial is the ONLY event campaigns bid on** — app SDK,
-in-session, one source. **Accepted cost: no revenue or ROAS signal on either platform. Revenue truth
-is Neon.**
+`trial_started` carries `plan`, `order_id`, `value` and — only when the SAME process ran the checkout —
+`method` and `target_app`. **Never omit `value`** (₹199 before `app_config` lands): Ads books a
+valueless conversion at ₹1. It fires from the purchase poll or, for a trial granted APP-CLOSED (webhook
+resurrect, process killed behind the UPI app, poll budget out), late from `TrialConversionCatchUp` on
+the next `GET /me` showing `trialing` for an order this install never reported (`late: true`, once per
+order). The catch-up marks BEFORE invalidating entitlement and fires only once its marker is open (a
+no-trial read or the checkout tap): a trial found on a reinstall or second phone is recorded, never
+fired — GA4 does not dedupe a custom event, and the copy would credit the reinstall's ad.
 
-`trial_started` carries `plan`, `order_id`, `value`, and — when the SAME process ran the checkout —
-`method` and `target_app`; a late catch-up copy omits both rather than guess. Never omit `value` (₹199
-before app_config lands) — Ads books a valueless conversion at ₹1. It fires from the purchase poll — or, for a
-trial granted APP-CLOSED (webhook resurrect, process killed behind the UPI app, poll budget out),
-late from `TrialConversionCatchUp` on the next `GET /me` showing `trialing` for an order this install
-never reported (`late: true`, once per order). The catch-up marks BEFORE invalidating entitlement and
-fires only once its marker is open (a no-trial read or the checkout tap): a trial found earlier —
-reinstall, second phone, update — is recorded, never fired, since GA4 does not dedupe a custom event by
-order and the copy credits the reinstall's ad. **Same app SDK, one source — never a server copy.**
-
-`subscription_active` reaches **PostHog only** (server, first trial→paid settle) — product analytics
-is not an attribution source; renewals reach nothing. It carries `target_app` from the row's
-`upi_target_app` (`unknown` for rows older than the column) — the SAME key `checkout_started` and
-`trial_started` carry, so "which UPI app starts, completes and expires a mandate" is one axis. `subscription_cancel` is server-only too:
-one event per mandate from every channel that ends a LIVE row, carrying `reason`, `prior_status` and
-`during_trial`. Restore-to-cancelled writes after a failed re-setup are NOT cancels.
+`subscription_active` (first trial→paid settle) and `subscription_cancel` (one per mandate, from every
+channel that ends a LIVE row, with `reason`, `prior_status`, `during_trial`) are server-side and reach
+**PostHog only** — product analytics, never an attribution source; renewals reach nothing. A
+restore-to-cancelled after a failed re-setup is NOT a cancel. `subscription_active` carries
+`target_app` from `upi_target_app` — the SAME key `checkout_started` and `trial_started` carry, so
+"which UPI app starts, completes and expires a mandate" is one axis.
 
 ## The sign-in diagnostics
 
-`login_attempt`, `login_cancelled` and `login_failed` are on the PostHog allow-list as a **diagnostic exception** to
-the journey-only rule; taking them off is the owner's call. An attempt with no cancel, success or
-failure is a process that died under Google's picker — the only way that loss is visible. Both carry `gis_code`,
-`ms_since_authenticate` and `surface`. `login_cancelled` adds `nudge` (the classified outcome; the
-screen shows one retry line whatever it is) and `ms_to_surface`, carried by `login_success` too — the slow-surface split needs a
-succeeding population for its denominator. Both: [auth.md](auth.md).
-`login_surface_shown` (once per attempt, `surface`/`auto`/`ms_to_surface`) proves Google's screen
-appeared — for the installs with no outcome at all it splits "never saw the sheet" from "saw it and
-left". `surface` values: `sheet`, `sheet_return` (the automatic attempt a return to the wall
-re-armed), `sheet_reconnect` (the one the link coming back after a network-class failure re-armed;
-a return outranks it), `sheet_after_offline` (the cold-start sheet HELD while the phone had no
-network, fired when the link came up; outranks a reconnect, loses to a return), `button`, `button_after_dismiss`, `button_after_add_account` (the picker the
-guard reopens once after Google's add-account flow); a re-armed attempt that escalates to the picker
-carries its sheet's name on its `login_attempt` only. **PostHog sends every event immediately (`flushAt = 1`)**: the default 20-event/30 s batch
-lost the install and the sign-in outcome of everyone who left inside that window, which is how 6 in
-100 installs read as "install, then nothing". Expect the measured install→login rate to read LOWER
-from build 74 on — the denominator now includes people it used to miss.
-Every sign-in event also carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` /
-`share` / `link` / `other` / `unknown`, off the Play referrer, `install_utm_source` and
-`install_utm_campaign` beside it; Play carries only same-session clicks, so an install it leaves
-`organic`/`unknown`/`other` is relabelled `meta_ads` when Meta's Install Referrer (the Facebook/
-Instagram/Lite apps' provider, `MetaInstallReferrer.kt`) holds a view-through or later-session touch; an install that arrived on a wallpaper or ringtone link adds
-`+wallpaper` / `+ringtone` to the SAME value — split on `+`, never compare the whole string) and **`low_ram`** (the poster rule's verdict) — the two cuts
-PostHog's own properties cannot make, on the events that exist rather than new ones.
+`login_attempt`, `login_surface_shown`, `login_cancelled` and `login_failed` are on the PostHog list as
+a **diagnostic exception** to the journey rule; taking them off is the owner's call. An attempt with no
+outcome is a process that died under Google's surface — the only way that loss is visible.
+`login_surface_shown` (once per attempt) splits "never saw the sheet" from "saw it and left".
 
-**The two events spell the Credential Manager message differently: `login_cancelled` carries
-`description`, `login_failed` carries `error`.** A query that splits "on `description`" returns
-nothing for `login_failed`. Why the split matters at all — the mixed-bucket problem — is in
-[auth.md](auth.md).
+- Outcomes carry `gis_code`, `ms_since_authenticate` and `surface`; `login_cancelled` adds `nudge` (the
+  classified outcome) and `ms_to_surface`, which `login_success` carries too as the denominator. The
+  message field names and how to read the buckets: [auth.md](auth.md) §Reading the failure buckets.
+- `surface`: `sheet`, `sheet_return`, `sheet_reconnect`, `sheet_after_offline` (a return outranks it,
+  it outranks a reconnect), `button`, `button_after_dismiss`, `button_after_add_account`. A re-armed
+  attempt that escalates to the picker carries its sheet's name on its `login_attempt` only. The stall
+  guard's abandons are `login_failed.kind`: `stalled`, `stalled_resumed`, `surface_stripped`.
+  `sheet_unavailable` (GA4-only) fires when the sheet could not RUN.
+- **`flushAt = 1`** — PostHog's default 20-event/30 s batch lost the install and sign-in outcome of
+  everyone who left inside that window.
+- Every sign-in event carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` / `share` /
+  `link` / `other` / `unknown`, off the Play referrer, with `install_utm_source`/`_campaign` beside it).
+  Play carries only same-session clicks, so an `organic`/`unknown`/`other` install is relabelled
+  `meta_ads` when Meta's Install Referrer (`MetaInstallReferrer.kt`) holds a view-through or
+  later-session touch. A wallpaper or ringtone link adds `+wallpaper`/`+ringtone` to the SAME value —
+  split on `+`, never compare the whole string. Also **`low_ram`** (the poster rule's verdict).
+- Free-text values stay ≤100 chars; GA4 silently drops longer ones.
 
-The sign-in SURFACE split is GA4-only, deliberately not on the PostHog list:
-`login_attempt{provider, surface, auto}` once per attempt, carrying the FIRST surface tried, and
-`sheet_unavailable{gis_code, description, ms_since_authenticate}` when the sheet could not RUN and the
-button took over. A sheet that drew nothing emits nothing — nothing failed. Free-text values stay ≤100
-chars; GA4 silently drops longer ones.
+## The checkout and paywall events (GA4-only)
 
-## The rest of the catalogue
+- `checkout_started` fires at the TAP, before `/payments/initiate`, so an initiate failure still reads
+  as an abandoned checkout. `method` (`upi_app`|`phonepe_sdk`|`upi_qr`) and `target_app`; `upi_qr`
+  carries NO `target_app` — the named package never launched and the approval may land on another
+  phone. Once the resume button is used, `method` reads `upi_app_resumed` on `trial_started`,
+  `subscription_active` and `payment_failed`; `checkout_started` fires once per decision, never on a
+  resume.
+- `paywall_shown`, `payment_failed` and their value rules: [checkout.md](checkout.md) §Events.
+- The return page adds `trial_return_shown` and `return_video_start`/`return_video_muted`; a tap from
+  it stamps `surface: return` on the checkout events (absent = the trial screen). The sign-in events use
+  `surface` for their own values — filter by event before splitting.
+- Campaign push has two events, `push_opened` and `push_permission`, GA4-only; the CMS's Opened number
+  reads Neon's `push_opens`, never GA4. Upload is untracked on purpose.
 
-`checkout_started` fires at the TAP, before `/payments/initiate`, so an initiate failure still reads
-as an abandoned checkout. Its `method` (`upi_app`|`phonepe_sdk`|`upi_qr`) and `target_app` answer "which
-UPI app expires the mandate" — where the paid funnel is actually lost. `upi_qr` carries NO
-`target_app`: the package it named was never launched and the approval may land on another phone, so
-reporting it would corrupt that ranking. It is a bare string literal, not
-an `ArulEvents` constant.
+## PostHog is the journey view — keep it that way
 
-`paywall_shown` reports the sell ONCE the installed-app probe has ANSWERED — the list arrives
-asynchronously, and reporting the first build stamps `has_upi_app: no` on every install that ever
-opened the paywall. **GA4-only**, pinned off the PostHog list by the gating test. It answers which
-UPI apps a user was actually offered: `has_upi_app`, `upi_app_count`, `upi_apps` (short codes,
-**sorted** — the picker floats the remembered app to the head, and picker order would file one
-installed set under every rotation of it), `default_app`, plus `upi_other_count` and `upi_others` — the mandate handlers the
-phone HAS and the allowlist refuses, as RAW package names (a code would hide the very names this
-exists to learn) packed to whole entries inside the 100-char limit, with the count surviving any
-truncation. `has_upi_app: no` beside a non-zero count is not a phone that cannot pay, it is one we
-declined to sell to, and those two were indistinguishable. Then `trial_eligible`, `variant`
-(`trial`|`paid`|`resubscribe`|`unknown`, the last being an entitlement that would not load) and
-`paywall_source`, the gate verb — GA4 owns the bare `source` as a traffic dimension. **Every value
-is a string**: GA4 parses no numeric parameter into an event-scoped custom dimension on APP streams
-and the sink coerces a bool to 1/0, so a count sent as a number is collected and can never be broken
-down. It repeats inside one visit only when the installed SET changes, which is the only proof the
-install prompt ever works.
+**Cost sets the COHORT** (PostHog bills per event); **readability sets the LIST** — re-adding an event is
+a decision, not a cleanup.
 
-`payment_failed` is GA4-only (a failure is a diagnostic; an ad optimiser fed one trains on the wrong
-outcome) and covers EVERY terminal exit of the purchase notifier through one `_fail()`, so a new error
-path cannot silently skip it. **`reason` is a short stable code, NEVER the user-facing copy**, which
-is prose and would fragment the metric. `network_error` is a dead link on the initiate after its
-retries; `unexpected_error` is what is left — a genuine defect, also recorded to Crashlytics — so
-never compare it across the split. A resumable intent that ends without approval says
-`intent_app_switched` (the user picked ANOTHER UPI app — there is no start-over button) or
-`intent_resume_expired` (the link's deadline); a PhonePe verdict stays `expired`. All three are
-silent on screen: the event counts it, the user sees no failure. Once the resume button was used, `method` reads `upi_app_resumed` on
-`trial_started`, `subscription_active` and `payment_failed` — `checkout_started` keeps `upi_app` and
-fires once per decision, never on a resume.
+- **`AnalyticsCohort` gates `Posthog().setup()` itself.** The stored value is the **draw, not a
+  boolean**, so raising the rate only ever adds installs; lowering it drops every install whose draw
+  exceeds the new rate and breaks any cohort spanning the change. If it must narrow, sample users,
+  never events — a 10% numerator over a 100% denominator is meaningless.
+- **`captureApplicationLifecycleEvents = false`** — the flag is all-or-nothing, and keeping
+  `Application Installed` bought `Opened`/`Backgrounded` on every launch. `main.dart` re-emits
+  `Application Installed` under the SDK's own name once per install, gated on the persisted draw, so old
+  installs cannot be back-dated into a spike. PostHog DAU means "did a journey thing"; GA4's
+  `first_open`/`session_start` are the "opened the app" record.
+- `Posthog().setup()` is not awaited — native init stays off the first-frame path.
+- **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
+  risk; `deep_link_opened` stays off too and must never feed an optimiser.
+- **Analytics is never a ranking source** — the feed orders by server-side counters
+  ([browse.md](browse.md)).
 
-The return page adds `trial_return_shown` (once per open) and `return_video_start`/`return_video_muted`
-beside `onboarding_video_*` — all GA4-only, `lang` = the cut that PLAYED (`hi` plays `en`). A tap
-from that page stamps `surface: return` on `checkout_started`, `trial_started`, `subscription_active`
-and `payment_failed`; the trial screen sends no `surface`, so an absent key IS the trial screen. The
-sign-in events use the same parameter name for their own values — filter by event before splitting.
+## Property conventions
 
-The event LIST is the `track()` call sites — no table here to drift. The ★ NAMES and the PostHog
-allow-list are exact sets pinned by tests: every sink matches the literal, a typo drops silently.
-
-## PostHog is the journey view — and the gates that keep it that way
-
-Two different reasons trim this stream; confusing them leads to the wrong fix. **Cost sets the
-COHORT** (PostHog bills per event, 1M/month free). **Readability sets the LIST** — install → login →
-trial → apply/share → ringtone set answers the only questions PostHog is asked here. Re-adding an
-event is a decision, not a cleanup.
-
-- **NO SIDELOADED BUILD REPORTS TO POSTHOG** (owner's rule) — `PlayInstall` gates the sink, GA4/Meta/
-  Crashlytics deliberately not. Why and how it fails: [analytics-ops.md](analytics-ops.md).
-- **`AnalyticsCohort` gates `Posthog().setup()` itself**, so a non-panel install does zero PostHog
-  work. **Widening is safe by construction; narrowing is not:** the stored value is the **draw, not a
-  boolean**, so raising the rate only ever *adds* installs, while lowering it drops every install
-  whose draw exceeds the new rate and makes any cohort spanning the change discontinuous. If it must
-  narrow, prefer user-level over event-level sampling — event-level silently corrupts funnels (a 10%
-  numerator over a 100% denominator is meaningless).
-- **`captureApplicationLifecycleEvents = false`** — the SDK's lifecycle events bypass
-  `AnalyticsService`, and the flag is all-or-nothing: keeping `Application Installed` also buys
-  `Opened`/`Backgrounded` on every launch (most of the stream, none of the funnel). So it is off and
-  `main.dart` re-emits `Application Installed` under the SDK's own name (existing insights keep
-  resolving), once per install, gated on the persisted cohort draw — the first-launch marker, so old
-  installs cannot be back-dated into a spike. The flag leaves the lifecycle observer, so `$session_id`
-  still works. PostHog DAU therefore means "did a journey thing", not "opened the app" — GA4's auto
-  `first_open`/`session_start` remain that record.
-- **`Posthog().setup()` is not awaited** — native init must not sit on the path to first frame.
-  `sessionReplay`/`surveys` off, no observer, so there is no `$screen`.
-- **Feed engagement is GA4-only.** `wallpaper_engaged` fires once per dwelled card — the one genuine
-  volume risk in the app, and the thing that must never land in PostHog. `deep_link_opened` is
-  GA4-only for the same reason and must never feed an optimiser.
-- Failures and rare account admin stay off — Crashlytics/GA4/Neon questions. **Default-deny:** a new
-  `track()` call site costs nothing until it is on `postHogAllowedEvents`.
-- **Analytics is never a ranking source.** The feed is ordered by counters counted server-side in
-  `/media/signed-url` ([browse.md](browse.md)), never by `wallpaper_applied` — a sampled,
-  client-reported event cannot order a feed.
-
-## Property convention
-
-Wallpaper funnel events carry **`wallpaper_id` + `category`**; ringtone events **`ringtone_id` +
-`category`** — `category` is the browse axis, so "which collections convert" is answerable off the
-events alone. Two holes before slicing: `ringtone_set_blocked_premium` sends NO properties, so that
-paywall funnel cannot split by category, and `share_watermark_*` carries `wallpaper_id` + `type`.
-
-Static-vs-live rides along as **`type`**, spelled identically on all four wallpaper funnel events so
-the funnel joins on it — a rendering hint, never a browse axis. **Analytics values are `image`/`live`
-while catalog and Neon wire values are `static`/`live`**, so an event↔Neon join on `type` silently
-matches nothing.
-
-**`app_language`, `language_source` and `geo_region` ride EVERY event via `AnalyticsService.register`,
-never only `identify`** — a person property, frozen at ingest, leaves every pre-login event blank;
-`reset()` runs on sign-out and account deletion, before the wall appears, so the next person's
-events never land on the last user. PostHog's reset strips super properties, so that sink re-applies
-them. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`** — that mints a new app instance
-id and cuts the Google Ads attribution of a re-login.
-**The PostHog sink also stamps them onto the capture itself**, primed from prefs before `setup()`:
-the sheet-first `login_attempt` lands before the `register` round trip, and the SDK alone left it
-blank on four cold-start attempts in five. A blank `app_language` bucket is installs that predate the
-register, cold-start attempts before that stamp, and the Worker's server-side events.
-
-**`exp_regional` (`control`|`regional`)** is the only sign-in coin: dealt once per fresh install in
-`main()`, primed and registered like `app_language`, never on installs that predate the draw. It
-carries the ASSIGNMENT, not the kill state; `feature_flags.exp_regional = false` turns the arm off
-from the next cold start (the first launch has no config). No new events. The come-back reminder is
-no longer a coin — SDK ≤32 gets it unconditionally, so it has no arm, no property and no kill
-switch ([notifications.md](notifications.md)).
-
-`language_source` (`pick` · `link` · `geo` · `phone` · `default`) and `geo_region` (Cloudflare's raw
-region or `none`) measure the region default. A fresh install's install event and first-frame
-`login_attempt` fire BEFORE `GET /geo` answers, so they carry the phone's language and `phone`; later
-events carry `geo`. An older stored pick reads `pick`. GA4 hides both until registered as user-scoped
-custom dimensions.
-
-Reading these without a wrong conclusion — what `confirmed` counts, which metrics are tripwires,
-where a join silently matches nothing: [analytics-ops.md](analytics-ops.md) §Reading.
-
-## Deltas vs Pakiza — do not unify
-
-- Gated-action keys are **`apply`/`share`**, not Pakiza's `wallpaper_apply`/`wallpaper_share` — the
-  `PremiumGateAction` enum name supplies the `?source=` route param, so the short name is load-bearing.
-- **`category` is ADDED alongside `type`, not a swap for it** — Arul events carry both, Pakiza
-  carries `type` only and its values differ, so never join the two apps' events on it.
-- `wallpaper_applied.confirmed` has no Pakiza equivalent (Pakiza carries `is_live`).
-- **The PostHog LISTS are not shared.** Sync the MECHANISM (cohort gate, allow-list decorator,
-  lifecycle flag off), never the contents.
-- Upload is untracked on purpose — no revenue path. Campaign push has exactly two events, both
-  GA4-only and off the PostHog list: `push_opened` on a tap and `push_permission` on the one prompt.
-  The CMS's "Opened" number reads Neon's `push_opens`, never GA4 — one conversion, one source
-  ([push.md](push.md)).
+- Wallpaper funnel events carry **`wallpaper_id` + `category`**, ringtone events **`ringtone_id` +
+  `category`**. Holes: `ringtone_set_blocked_premium` sends no properties; `share_watermark_*` carries
+  `wallpaper_id` + `type`.
+- **`type` is `image`/`live` in analytics but `static`/`live` in the catalog and Neon** — an event↔Neon
+  join on `type` silently matches nothing.
+- Gated-action keys are `apply`/`share`: the `PremiumGateAction` enum name supplies the `?source=` route
+  param, so the short name is load-bearing.
+- **`app_language`, `language_source` and `geo_region` ride EVERY event via `register`, never only
+  `identify`** — a person property leaves every pre-login event blank. PostHog's reset strips super
+  properties, so that sink re-applies them, and it also stamps them onto the capture itself, primed from
+  prefs before `setup()` — the first `login_attempt` lands before `register`. `reset()` runs on sign-out
+  and deletion before the wall shows. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`**,
+  which mints a new app instance id and cuts the Ads attribution of a re-login.
+- `language_source` (`pick`·`link`·`geo`·`phone`·`default`) and `geo_region` (Cloudflare's region or
+  `none`): a fresh install's first events fire before `GET /geo` answers, so they carry `phone`. GA4
+  hides both until registered as user-scoped custom dimensions.
+- **`exp_regional` (`control`|`regional`)** is the only sign-in coin: dealt once per fresh install in
+  `main()`, registered like `app_language`, carrying the ASSIGNMENT, not the kill state;
+  `feature_flags.exp_regional = false` turns the arm off from the next cold start.

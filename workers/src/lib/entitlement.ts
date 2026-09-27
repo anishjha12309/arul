@@ -1,39 +1,18 @@
 /**
- * Entitlement check — ALWAYS live from Neon. THE one home of the premium rule (CLAUDE.md §5).
- *
- * Premium = a live paid subscription OR unexpired referral-reward credit -> either alone is enough
- *   A) status IN ('trialing','active','cancelled','pending') AND current_period_end > now()
- *   B) users.reward_premium_until > now()
- * 'cancelled' is in the list -> the current period is already paid for -> keep access to period end
- * 'paused' and 'expired' get NO access and no grace -> access lapses on its own at period end
- * The renewal debit rides the hourly cron -> a flawless payer is past period end for a tick plus UPI settle
- * A strict `> now()` therefore gated EVERY payer at EVERY period boundary -> 6 h DEBIT_GRACE
- * Grace is 'trialing'/'active' ONLY -> a renewal is genuinely in flight, and it absorbs a short bank retry
- * A dunning failure flips the row to 'expired' -> grace ends the same instant -> it cannot be milked
- * The reward pool is granted on a referred friend's FIRST paid debit -> decoupled from the subscription
- * So reward credit stacks with and outlives any PhonePe state -> it never collides with the debit/expiry crons
- * NEVER derive entitlement from the JWT -> `prm` is a UI hint -> every gated action issues this live read
  * Gated actions are a tiny fraction of traffic -> the round-trip is affordable -> do not cache it
- * There is NO test or allow-list bypass -> a declined payment could otherwise grant access -> never add one
  */
 
 import type postgres from "postgres";
 
 /** `userId` is the VERIFIED JWT sub -> a client-supplied id here would be a self-service entitlement. */
-export async function isPremium(
-  sql: postgres.Sql,
-  userId: string,
-): Promise<boolean> {
+export async function isPremium(sql: postgres.Sql, userId: string): Promise<boolean> {
   const rows = await sql`SELECT ${premiumPredicate(sql, userId)} AS ok`;
   return rows[0]?.ok === true;
 }
 
 /**
- * The entitlement rule as a composable boolean SQL fragment.
- *
  * A caller already fetching another row (/media/signed-url needs the key) inlines this -> one round-trip, not two
  * Exported as a fragment, never copied -> a drifted second copy hands premium to a lapsed user or locks out a payer
- *
  * `userId` takes a BOUND VALUE (one caller, one user) or a SQL FRAGMENT naming a column, which is
  * what makes the rule usable per row. The push audience query needs "every device whose owner is
  * paying" and passes `sql`d.user_id`` -> the EXISTS becomes correlated against the outer row instead

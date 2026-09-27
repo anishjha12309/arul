@@ -11,21 +11,18 @@
 // MUST run from a directory where `postgres` resolves -> the staging ROOT holds this pipeline's node_modules.
 // Objects go up through `wrangler r2 object put --remote`, never the S3 API -> those keys are not on disk in this repo.
 // wrangler is already authenticated against the account that owns the bucket -> same bytes, one less credential.
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import postgres from "postgres";
 
 const ROOT = process.env.ROOT || "c:/Anish/arul-import";
-const WRANGLER =
-  process.env.WRANGLER || "c:/Anish/Arul/workers/node_modules/wrangler/bin/wrangler.js";
+const WRANGLER = process.env.WRANGLER || "c:/Anish/Arul/workers/node_modules/wrangler/bin/wrangler.js";
 const BUCKET = "south-indian-wallpapers";
 const CDN = "https://arul-cdn.hsrutility.com";
 const API = "https://arul-api.hsrutility.com";
 const DRY = process.argv.includes("--dry-run");
 
-// Media keys are content UUIDs and an object at a key NEVER changes -> a year + immutable is correct (see import.mjs).
-// It keeps R2 Class B operations, the one part of R2 that is not free, off the hot path.
 const MEDIA_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 function parseEnv(path) {
@@ -36,8 +33,7 @@ function parseEnv(path) {
     const i = t.indexOf("=");
     if (i < 0) continue;
     let v = t.slice(i + 1).trim();
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))
-      v = v.slice(1, -1);
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     env[t.slice(0, i).trim()] = v;
   }
   return env;
@@ -47,15 +43,12 @@ const E = parseEnv("c:/Anish/Arul/workers/.dev.vars");
 const plan = JSON.parse(readFileSync(join(ROOT, "ringtone-import-plan.json"), "utf8"));
 console.log(`plan: ${plan.length} ringtones${DRY ? "  (DRY RUN)" : ""}`);
 
-// ─── 1. Upload audio to R2 ───────────────────────────────────────────────────
 // A checkpoint file makes a re-run after a partial failure cheap -> already-PUT keys are skipped, not re-uploaded.
 // It is scoped to the CURRENT plan -> a stale checkpoint would mark this drop's fresh keys done and skip real uploads.
 const ckPath = join(ROOT, "ringtone-upload-checkpoint.json");
 const planKeys = new Set(plan.map((p) => p.audio_key));
 const done = new Set(
-  (existsSync(ckPath) ? JSON.parse(readFileSync(ckPath, "utf8")) : []).filter((k) =>
-    planKeys.has(k),
-  ),
+  (existsSync(ckPath) ? JSON.parse(readFileSync(ckPath, "utf8")) : []).filter((k) => planKeys.has(k)),
 );
 
 const failed = [];
@@ -75,10 +68,17 @@ for (const [i, p] of plan.entries()) {
     execFileSync(
       process.execPath,
       [
-        WRANGLER, "r2", "object", "put", `${BUCKET}/${p.audio_key}`,
-        "--file", p.localFile,
-        "--content-type", p.mime,
-        "--cache-control", MEDIA_CACHE_CONTROL,
+        WRANGLER,
+        "r2",
+        "object",
+        "put",
+        `${BUCKET}/${p.audio_key}`,
+        "--file",
+        p.localFile,
+        "--content-type",
+        p.mime,
+        "--cache-control",
+        MEDIA_CACHE_CONTROL,
         "--remote",
       ],
       { stdio: ["ignore", "pipe", "pipe"] },
@@ -108,7 +108,6 @@ if (DRY) {
   process.exit(0);
 }
 
-// ─── 2. One Neon transaction: rows + content_version bump ────────────────────
 const sql = postgres(E.DATABASE_URL, { ssl: "require", prepare: false });
 let before, after, newVersion;
 try {
@@ -158,14 +157,12 @@ writeFileSync(
   ),
 );
 
-// ─── 3. Rebuild the catalog ──────────────────────────────────────────────────
 const rb = await fetch(`${API}/internal/build-catalog`, {
   method: "POST",
   headers: { authorization: `Bearer ${E.CATALOG_BUILD_SECRET}` },
 });
 console.log(`build-catalog: ${rb.status} ${(await rb.text()).slice(0, 300)}`);
 
-// ─── 4. Verify ───────────────────────────────────────────────────────────────
 await new Promise((r) => setTimeout(r, 1500));
 try {
   const cat = await (
@@ -176,7 +173,6 @@ try {
 } catch (e) {
   console.error("catalog read failed:", e.message);
 }
-// GET, never HEAD -> HEAD does not populate Cloudflare's cache -> it reports DYNAMIC on a rule that works fine.
 for (const p of plan.slice(0, 3)) {
   const r = await fetch(`${CDN}/${p.audio_key}`);
   console.log(

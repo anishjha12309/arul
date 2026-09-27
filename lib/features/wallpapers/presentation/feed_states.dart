@@ -2,22 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../app/widgets/sliding_skeleton.dart';
-import '../../../app/widgets/arul_chip.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
-import '../../../app/theme/motion.dart';
 import 'feed_card_geometry.dart';
 
 /// The horizontal category-chip row on the feed's solid top bar.
-///
 /// Sits on the themed frame, not over media -> the chips follow light/dark.
 /// [ArulChipVariant.category] — the SAME variant the ringtone browse row uses.
-/// Both rows are the one browse axis (CLAUDE.md §5b) doing one job.
 /// Different variants made the two tabs disagree on height, inactive fill and label weight.
 /// The chip is the same control; it gets the same clothes.
 class FeedChips extends ConsumerWidget {
@@ -34,11 +32,6 @@ class FeedChips extends ConsumerWidget {
     // The loading case never reaches here — FeedChipsSkeleton holds the height, so nothing jumps.
     if (categories.isEmpty) return const SizedBox.shrink();
 
-    // All, then New, then the catalog's own chips. Both leaders are CHROME built here, which is why
-    // neither can reach `categoriesProvider` — and so neither can reach the Upload picker, which
-    // reads that provider to decide what a user may submit into. A window is not a submittable
-    // category. `orderedByCms` sorts only what came off the catalog, so an operator's drag can
-    // never move these two either.
     final items = <WallpaperCategory>[
       // The same ARB key the ringtone row reads -> the two tabs can never disagree on this word.
       WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll),
@@ -111,7 +104,6 @@ class FeedChipsSkeleton extends StatelessWidget {
 }
 
 /// Feed loading fill — the sliding-gradient card with a centred gopuram that pulses on opacity only.
-/// NO masked shimmer, no spinner.
 /// Renders in the same inset rounded card as the reel -> the loading → content swap never jumps.
 class FeedLoading extends StatelessWidget {
   const FeedLoading({super.key, required this.margin, required this.radius});
@@ -234,7 +226,6 @@ class _OpacityPulseState extends State<_OpacityPulse>
     duration: Motion.loadingPulse,
   );
 
-  /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup.
   bool _motionStarted = false;
 
   @override
@@ -321,9 +312,6 @@ class FeedEmpty extends StatelessWidget {
 }
 
 /// Outlined accent pill — `border gold-50%, pad 12 26, r999`; gold on dark, maroon on light.
-///
-/// Answers the finger like every other button: a tap haptic on press-DOWN, a tint while pressed,
-/// and a [ArulTokens.minHitTarget] hit box around the drawn pill.
 class _OutlinedAccentPill extends StatefulWidget {
   const _OutlinedAccentPill({required this.label, required this.onTap});
 

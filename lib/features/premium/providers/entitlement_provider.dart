@@ -13,12 +13,7 @@ import 'trial_conversion_catch_up.dart';
 import 'trial_nudge_provider.dart';
 
 /// Premium entitlement — a LIVE read from the Worker (`GET /me`), never a cached or JWT claim.
-///
-/// So a purchase, expiry or refund takes effect on the very next gated tap (CLAUDE.md §5).
-/// `ref.invalidate(entitlementDetailProvider)` after a purchase or cancel re-reads it.
-/// `isPremium` is the SERVER's flag from workers/src/lib/entitlement.ts — never re-derived here.
 /// No backend, or signed out -> nobody is premium; the gate fails CLOSED, the correct default.
-/// The Worker's `/media/signed-url` stays the authoritative gate either way.
 /// This carries the FULL entitlement — the flag AND the row the Manage screen displays.
 /// [entitlementProvider] narrows it to the bool the gate wants -> one read, two consumers.
 final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
@@ -52,11 +47,6 @@ final entitlementDetailProvider = FutureProvider<Entitlement>((ref) async {
 });
 
 /// A premium read retires the unfinished-trial marker, HERE and not only in the feed row.
-///
-/// The marker is written when the UPI app takes over, so an approval the app never saw (killed
-/// behind PhonePe, confirmation unreachable) leaves it live with a reminder armed — and someone
-/// who comes back through a ringtone link or sits on Settings never builds that row. Every late
-/// grant passes through the entitlement read; none of them should be told "you didn't finish".
 /// Guarded twice over, sync and async: a marker must never fail the entitlement.
 @visibleForTesting
 void retireUnfinishedTrial(Ref ref, Entitlement entitlement) {
@@ -81,9 +71,6 @@ final entitlementProvider = FutureProvider<bool>((ref) async {
 });
 
 /// THE client gate. Call before every gated action — UX only; `/media/signed-url` is the real gate.
-///
-/// Reading a loading snapshot bounces a paying user to the paywall on a cold start.
-/// So it AWAITS the future and never reads `.valueOrNull` — the signature exists to force that.
 Future<bool> ensurePremium(
   BuildContext context,
   WidgetRef ref, {

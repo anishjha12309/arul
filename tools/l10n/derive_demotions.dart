@@ -191,15 +191,6 @@ String _signature(Map<String, dynamic> f) =>
 /// UNFLEXED `Text`, which stays on one line and demands its full intrinsic
 /// width. So: rank by intrinsic-width growth, and DISCOUNT anything that gained
 /// lines.
-///
-/// This distinction is not academic. Ranking right-overflows by lines (the
-/// first version of this function did) blamed the longest wrapping body copy on
-/// each screen and demoted eight keys — forty translations — that provably
-/// could not have caused the frames they were blamed for: an `Expanded` child
-/// cannot overflow its Row, and a chip inside a horizontally scrolling ListView
-/// cannot overflow anything. The four real culprits were all unflexed header
-/// titles (`uploadTitle`, `referTitle`, `remindersTitle`) or the one unflexed
-/// sibling in a header Row (`earn`).
 String? _blameOverflow(
   Map<String, dynamic> overflow,
   List<Map<String, dynamic>> measurements,

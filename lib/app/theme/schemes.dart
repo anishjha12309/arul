@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// The two ColorSchemes, every role spelled out — maroon primary, gold accents, ivory/`#14090C` grounds.
-///
-/// `fromSeed` rotates hue off the seed for secondary/tertiary -> a maroon seed invents the wrong gold.
-/// Gold is a fixed brand accent, not a derivation -> every role is hand-specified here.
-/// These roles drive ThemeData chrome only -> screens read exact values from [ArulTokens].
 abstract final class ArulSchemes {
   static const ColorScheme lightScheme = ColorScheme(
     brightness: Brightness.light,

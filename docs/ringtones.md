@@ -7,10 +7,9 @@ shared with wallpapers: [browse.md](browse.md).
 ## The two axes
 
 **`category` is the browse axis and it is NOT the wallpaper set**: the five deities
-(`perumal·murugan·sivan·amman·ayyappan`) and **no `temples`**. `others` is RETIRED — the CMS no longer
-has it and the app must never offer it; `compareRingtoneCategories`' others-last rule and the art
-fallbacks stay so an old catalog still renders. Each tab derives its chips from its own catalog, so
-the two lists differing is correct, not a bug.
+(`perumal·murugan·sivan·amman·ayyappan`) and **no `temples`**. `others` is retired — never offer it;
+`compareRingtoneCategories`' others-last rule and the art fallbacks stay so an old catalog still
+renders. Each tab derives its chips from its own catalog, so the two lists differing is correct.
 
 **`deity` is a second, DISPLAY-ONLY axis** — row art and subtitle, never browse: no chip filters on
 it, nothing orders by it. It is finer than `category`, which stays coarse (`perumal` alone spans
@@ -18,8 +17,6 @@ venkateswara/krishna/rama/narasimha). Resolution is deity → its CATEGORY's def
 so a null or unknown deity degrades to the right family of god instead of breaking. `vishnu` and
 `devi` are the generic defaults and must stay unattributed. **A new deity is an insert plus an app
 release for its WebP, never a migration.**
-
-**Classify from LYRICS, never file names** — a name-based first pass got 5 of 30 wrong.
 
 ## Draining the catalog
 
@@ -92,7 +89,7 @@ category — every tile draws the SAME skeleton and permutes parameters, never a
 Its grounds and ink are ARTWORK, not chrome, and must not become tokens
 ([ui-direction.md](ui-direction.md) §Drawn art).
 
-`cover_key` is null on every row and nothing has ever been written under `ringtones/covers/…`.
-**Never upload anything there:** it lands inside the swept `ringtones/` prefix with no row that can
+**There is no cover pipeline: `cover_key` is null on every row — never re-add one.** Nothing may be
+uploaded under `ringtones/covers/`: it lands inside the swept `ringtones/` prefix with no row that can
 reference it, so the canonical sweep deletes it — and a handful of objects sits under the deletion
-floor, so the blast-radius failsafe will not save it.
+floor, so the blast-radius failsafe will not save it. The CMS refuses to presign a cover.

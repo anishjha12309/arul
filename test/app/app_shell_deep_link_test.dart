@@ -4,11 +4,6 @@
 // A real GoRouter + StatefulShellRoute, because `goBranch` is the thing under test.
 // The branches are stand-ins -> the feed and the ringtone list have their own suites for what follows the switch.
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
-
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
@@ -20,6 +15,10 @@ import 'package:arul/features/ringtones/providers/ringtone_preview_provider.dart
 import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/presentation/video_preload_controller.dart';
 import 'package:arul/features/wallpapers/providers/video_preload_provider.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 /// The real controller talks to the native decoder pool on every branch change -> this one records only the ask.
 class _StubVideo extends VideoPreloadController {

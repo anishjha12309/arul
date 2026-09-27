@@ -22,13 +22,12 @@
 
 import 'dart:async';
 
+import 'package:arul/features/auth/domain/auth_service.dart';
+import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:arul/features/auth/domain/auth_service.dart';
-import 'package:arul/features/auth/providers/auth_providers.dart';
 
 /// Records every state the stream pushes; `push`/`fail` drive it from outside like a real
 /// `AuthService` implementation would.

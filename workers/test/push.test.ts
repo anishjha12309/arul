@@ -10,19 +10,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type postgres from "postgres";
 
-import {
-  audienceLabel,
-  audienceQuery,
-  parseAudience,
-  type PushAudience,
-} from "../src/lib/push-audience.js";
-import {
-  COLOR_MIN_BUILD,
-  isDeadRegistration,
-  sendPush,
-  textFor,
-  type PushCampaign,
-} from "../src/lib/fcm.js";
+import { audienceLabel, audienceQuery, parseAudience, type PushAudience } from "../src/lib/push-audience.js";
+import { COLOR_MIN_BUILD, isDeadRegistration, sendPush, textFor, type PushCampaign } from "../src/lib/fcm.js";
 import { handleRegisterDevice, handleRegisterAnonDevice, handlePushOpened } from "../src/routes/me.js";
 import { handlePushCount, handlePushDispatch, handlePushTest } from "../src/routes/internal.js";
 import { signAccessToken } from "../src/lib/jwt.js";
@@ -32,7 +21,6 @@ const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const CAMPAIGN_ID = "22222222-2222-2222-2222-222222222222";
 
-// ── A SQL mock that renders NESTED fragments ─────────────────────────────────
 // postgres.js inlines an interpolated query as a fragment; the shared makeMockSql resolves every tag
 // to rows, which loses that nesting. This one keeps the tree so the composed text is assertable.
 
@@ -68,8 +56,6 @@ function fragmentSql(): postgres.Sql {
   });
   return fn as unknown as postgres.Sql;
 }
-
-// ── audienceQuery ────────────────────────────────────────────────────────────
 
 describe("audienceQuery", () => {
   const sql = fragmentSql();
@@ -120,7 +106,9 @@ describe("audienceQuery", () => {
 
   it("a plan is never satisfied by a phone with no account — `free` would otherwise match it", () => {
     for (const state of ["free", "trialing", "paid", "lapsed"] as const) {
-      expect(flat(audienceQuery(sql, { kind: "premium", state })), state).toContain("d.user_id IS NOT NULL AND");
+      expect(flat(audienceQuery(sql, { kind: "premium", state })), state).toContain(
+        "d.user_id IS NOT NULL AND",
+      );
       expect(flat(audienceQuery(sql, { kind: "filter", plan: state })), state).toContain(
         "d.user_id IS NOT NULL AND",
       );
@@ -140,7 +128,14 @@ describe("audienceQuery", () => {
 
   it("filter ANDs every picked row and nothing else", () => {
     const text = flat(
-      audienceQuery(sql, { kind: "filter", lang: "ta", plan: "free", idle_days: 7, joined_hours: 24, signed_in: true }),
+      audienceQuery(sql, {
+        kind: "filter",
+        lang: "ta",
+        plan: "free",
+        idle_days: 7,
+        joined_hours: 24,
+        signed_in: true,
+      }),
     );
     expect(text).toContain("AND d.lang = ?");
     expect(text).toContain("NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = d.user_id)");
@@ -155,7 +150,9 @@ describe("audienceQuery", () => {
   });
 
   it("signed_in maps to the device's user_id, both ways", () => {
-    expect(flat(audienceQuery(sql, { kind: "filter", signed_in: true }))).toMatch(/AND d\.user_id IS NOT NULL$/);
+    expect(flat(audienceQuery(sql, { kind: "filter", signed_in: true }))).toMatch(
+      /AND d\.user_id IS NOT NULL$/,
+    );
     const no = flat(audienceQuery(sql, { kind: "filter", signed_in: false }));
     expect(no).toMatch(/AND d\.user_id IS NULL$/);
     expect(no).not.toContain("d.user_id IS NOT NULL");
@@ -229,7 +226,14 @@ describe("parseAudience", () => {
     }
     expect(parseAudience({ kind: "filter", signed_in: false })).toEqual({ kind: "filter", signed_in: false });
     expect(
-      parseAudience({ kind: "filter", lang: "hi", plan: "paid", idle_days: 7, joined_hours: 24, signed_in: true }),
+      parseAudience({
+        kind: "filter",
+        lang: "hi",
+        plan: "paid",
+        idle_days: 7,
+        joined_hours: 24,
+        signed_in: true,
+      }),
     ).toEqual({ kind: "filter", lang: "hi", plan: "paid", idle_days: 7, joined_hours: 24, signed_in: true });
     // Unknown keys are dropped, not carried into the row the dispatcher reads.
     expect(parseAudience({ kind: "filter", lang: "ta", extra: 1 })).toEqual({ kind: "filter", lang: "ta" });
@@ -279,8 +283,6 @@ describe("audienceLabel", () => {
   });
 });
 
-// ── sendPush ─────────────────────────────────────────────────────────────────
-
 const CAMPAIGN: PushCampaign = {
   id: CAMPAIGN_ID,
   texts: { en: { title: "Hello", body: "World" }, ta: { title: "வணக்கம்", body: "உலகம்" } },
@@ -318,9 +320,6 @@ describe("sendPush", () => {
       message: Record<string, unknown>;
     };
     const m = body.message;
-    // Targeted by TOKEN. The REST reference deprecates `message.token` in favour of `message.fid`,
-    // but a registered phone answered 404 UNREGISTERED to the fid and 200 to the token on the same
-    // payload in the same minute (lib/fcm.ts header). The fid stays the registry's primary key.
     expect(m["token"]).toBe("tok-1");
     expect(m["fid"]).toBeUndefined();
     const android = m["android"] as Record<string, unknown>;
@@ -435,12 +434,18 @@ describe("sendPush", () => {
   });
 
   it("404 UNREGISTERED is a dead registration; a 500 is not", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => fcmErr(404, "UNREGISTERED")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmErr(404, "UNREGISTERED")),
+    );
     const dead = await sendPush(makeEnv(), "tok", DEVICE, CAMPAIGN);
     expect(dead.ok).toBe(false);
     expect(isDeadRegistration(dead)).toBe(true);
 
-    vi.stubGlobal("fetch", vi.fn(async () => fcmErr(503, "UNAVAILABLE")));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmErr(503, "UNAVAILABLE")),
+    );
     vi.useFakeTimers();
     const pending = sendPush(makeEnv(), "tok", DEVICE, CAMPAIGN);
     await vi.advanceTimersByTimeAsync(1100);
@@ -482,7 +487,6 @@ describe("textFor", () => {
   });
 });
 
-// ── The claim loop ───────────────────────────────────────────────────────────
 // runPushDispatch reaches the DB through getDb -> route the mock per statement so the loop's two
 // exits (nothing pending, wall clock spent) can be told apart.
 
@@ -539,7 +543,7 @@ describe("runPushDispatch", () => {
     vi.useRealTimers();
   });
 
-  it("claims nothing at all while PUSH_ENABLED is not exactly \"true\"", async () => {
+  it('claims nothing at all while PUSH_ENABLED is not exactly "true"', async () => {
     const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
     const routed = routedSql([]);
     for (const value of ["false", "TRUE", "1", undefined]) {
@@ -614,8 +618,6 @@ describe("runPushDispatch", () => {
   });
 });
 
-// ── /me/device and /me/push-opened ───────────────────────────────────────────
-
 function recordingSql(rows: unknown[] = []) {
   const captured: unknown[][] = [];
   const fn = vi.fn((...args: unknown[]) => {
@@ -650,21 +652,24 @@ describe("a drain that blows up", () => {
     const routed = routedSql([
       { match: /SET status = 'sending', started_at/, rows: [] },
       running(),
-      { match: /AND status = 'pending'\s+LIMIT/, throws: "malformed array literal: \"fid-1\"" },
+      { match: /AND status = 'pending'\s+LIMIT/, throws: 'malformed array literal: "fid-1"' },
       { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 1 }] },
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
     const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => fcmOk()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmOk()),
+    );
 
     // The pass itself must not reject — one broken campaign is not a broken tick.
     const result = await runPushDispatch(env);
     expect(result.sent).toBe(0);
 
     expect(routed.text()).toContain("SET last_error");
-    const written = routed.bound.find(
-      (v) => typeof v === "string" && v.startsWith("Sending failed:"),
-    ) as string | undefined;
+    const written = routed.bound.find((v) => typeof v === "string" && v.startsWith("Sending failed:")) as
+      | string
+      | undefined;
     expect(written, "the failure must reach the row, not just the log").toBeTruthy();
     expect(written).toContain("malformed array literal");
     // And it must NOT be marked sent: nothing was delivered.
@@ -689,7 +694,10 @@ describe("a drain that blows up", () => {
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
     const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => fcmOk()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmOk()),
+    );
 
     const result = await runPushDispatch(env);
     // The second campaign still finished, which is the whole point of catching per campaign.
@@ -699,12 +707,6 @@ describe("a drain that blows up", () => {
 });
 
 describe("array parameters", () => {
-  // `fetch_types:false` means postgres.js never registers an array serializer, so a bound JS array
-  // is sent as `'' + xs` — the elements comma-joined, no braces — and Postgres answers
-  // `malformed array literal: "a,b"`. It cost a live campaign: every delivery sat 'pending' while
-  // the campaign held 'sending' forever, and the throw happened inside a waitUntil so nothing
-  // surfaced. "Send to my phone" kept working throughout, because it sends per device and binds no
-  // array — which is exactly why this survived the on-device walk.
   it("toPgTextArray renders a literal, not a JS array", async () => {
     const { toPgTextArray } = await import("../src/lib/db.js");
     expect(toPgTextArray(["a", "b"])).toBe('{"a","b"}');
@@ -736,7 +738,10 @@ describe("array parameters", () => {
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
     const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => fcmOk()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmOk()),
+    );
 
     const result = await runPushDispatch(env);
     expect(result.sent).toBe(1);
@@ -785,7 +790,10 @@ describe("test accounts in a campaign's numbers", () => {
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
     const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => fcmOk()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcmOk()),
+    );
     const result = await runPushDispatch(env);
     const counter = routed.statements.find((s) => s.includes("SET sent = sent +"));
     return { result, counter };
@@ -825,15 +833,14 @@ describe("test accounts in a campaign's numbers", () => {
       const totalWrite = routed.statements.find((s) => s.includes("SET total ="))!;
       // Whether it is finished is decided on EVERY delivery: a real campaign that only reached test
       // phones still has rows to drain.
-      expect(totalWrite).toContain("WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0");
+      expect(totalWrite).toContain(
+        "WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0",
+      );
     }
   });
 });
 
 describe("a dead registration is not a failure", () => {
-  // 1,864 of one Everyone send's 1,982 "failures" were phones that had uninstalled. Nobody there
-  // could have been reached, so those deliveries move to `gone` and leave `total`: a finished card
-  // reads total = sent + failed, and Failed is left for sends that actually went wrong.
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -851,9 +858,7 @@ describe("a dead registration is not a failure", () => {
       {
         match: /AND status = 'pending'\s+LIMIT/,
         get rows() {
-          return claims++ === 0
-            ? [{ fid: "fid-real" }, { fid: "fid-test" }, { fid: "fid-orphan" }]
-            : [];
+          return claims++ === 0 ? [{ fid: "fid-real" }, { fid: "fid-test" }, { fid: "fid-orphan" }] : [];
         },
       },
       // fid-orphan has no device row: the delivery outlived its registration.
@@ -868,7 +873,10 @@ describe("a dead registration is not a failure", () => {
     ]);
     const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
     const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => fcm()));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => fcm()),
+    );
     const result = await runPushDispatch(env);
     const counter = routed.statements.find((s) => s.includes("SET sent = sent +"))!;
     return { result, counter, routed };
@@ -985,7 +993,10 @@ describe("the idle tick prunes the registry", () => {
     const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
     const routed = idle([{ fid: "live", token: "tok-live" }]);
     const env = makeEnv({ PUSH_ENABLED: "true", KV: makeMockKV(), _testSql: routed.sql });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 })),
+    );
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(runPushDispatch(env)).resolves.toMatchObject({ started: 0 });
     expect(error).toHaveBeenCalledTimes(1);
@@ -1065,7 +1076,9 @@ describe("POST /push/device", () => {
       }),
     );
     expect(res.status).toBe(200);
-    expect(db.text()).toContain("INSERT INTO push_devices (fid, token, lang, app_build, android_sdk, last_seen_at)");
+    expect(db.text()).toContain(
+      "INSERT INTO push_devices (fid, token, lang, app_build, android_sdk, last_seen_at)",
+    );
     expect(db.text()).toContain("ON CONFLICT (fid) DO UPDATE");
     // The whole safety property: an unauthenticated caller cannot detach a phone from its account.
     expect(db.text()).not.toContain("user_id");
@@ -1126,8 +1139,6 @@ describe("POST /me/push-opened", () => {
   });
 });
 
-// ── /internal/push/* auth ────────────────────────────────────────────────────
-
 describe("/internal/push/* auth gate", () => {
   const handlers = [
     ["count", handlePushCount, { audience: { kind: "all" } }],
@@ -1186,7 +1197,11 @@ describe("/internal/push/* auth gate", () => {
 
     const before = db.captured.length;
     const contradiction = await handlePushCount(
-      makeCtx({ env, token: "s", jsonBody: { audience: { kind: "filter", plan: "paid", signed_in: false } } }),
+      makeCtx({
+        env,
+        token: "s",
+        jsonBody: { audience: { kind: "filter", plan: "paid", signed_in: false } },
+      }),
     );
     expect(contradiction.status).toBe(400);
     expect(db.captured).toHaveLength(before);
@@ -1195,9 +1210,11 @@ describe("/internal/push/* auth gate", () => {
   it("dispatch is inert while PUSH_ENABLED is off, but still answers the CMS", async () => {
     const db = recordingSql();
     const env = makeEnv({ PUSH_SECRET: "s", PUSH_ENABLED: "false", _testSql: db.sql });
-    const res = await handlePushDispatch(makeCtx({ env, token: "s", jsonBody: { campaign_id: CAMPAIGN_ID } }));
+    const res = await handlePushDispatch(
+      makeCtx({ env, token: "s", jsonBody: { campaign_id: CAMPAIGN_ID } }),
+    );
     expect(res.status).toBe(202);
-    expect((await res.json() as { dispatched: boolean }).dispatched).toBe(false);
+    expect(((await res.json()) as { dispatched: boolean }).dispatched).toBe(false);
     expect(db.captured).toHaveLength(0);
   });
 });

@@ -1,12 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_config.dart';
+import '../../../app/theme/motion.dart';
 import '../../../app/theme/tokens.dart';
+import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
 import 'video_preload_controller.dart';
 import 'wallpaper_tile.dart';
-import '../../../app/theme/motion.dart';
 
 /// The media layer of one page: poster below, full image or ExoPlayer texture faded in above.
 ///

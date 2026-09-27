@@ -9,13 +9,6 @@ import '../../../data/models/wallpaper.dart';
 
 /// Prefetches upcoming LIVE wallpaper MP4s to a local disk cache, ahead of the feed reaching them.
 /// The player then opens from a local FILE — instant first frame — never a cold CDN stream.
-///
-/// The **data window** half of the feed's two-window strategy, decoupled from the DECODER window.
-/// Prefetching downloads bytes only — NO ExoPlayer, NO decoder -> many items ahead cost no decoders.
-/// Conflating the two is what made a 3-player preload pool choke budget SoCs: a decoder per slot.
-/// Prefetching on ANY connection favours scroll smoothness over mobile-data thrift, deliberately —
-/// but the window depth is the DATA-PLAN budget: a clip averages ~4.5 MB, so every card the window
-/// reaches costs that whether or not the user ever gets there. [_maxCacheObjects] bounds disk use.
 class WallpaperPrefetchService {
   WallpaperPrefetchService({required this.cdnBaseUrl});
 
@@ -23,13 +16,6 @@ class WallpaperPrefetchService {
   final String cdnBaseUrl;
 
   /// How many items AHEAD of the current index to pull to disk. Deliberately SHALLOW.
-  ///
-  /// Prefetch is bytes-only -> the window costs network and disk, never the decoder budget, and
-  /// nearest-first ordering plus [_maxConcurrent] keep the nearest item from waiting. But depth is
-  /// what turns scrolling into data: at 15 the queue never drained while the user swiped, so the
-  /// pipe ran flat out for the whole scroll — ~5 MB/s, 505 MB in 90 s of flinging on a 3 GB Vivo.
-  /// Three covers the next swipe or two and then lets the pipe IDLE until the next page settles,
-  /// so bytes track cards actually reached (~one clip per swipe), not time spent scrolling.
   static const _ahead = 3;
 
   /// The ahead-window the FIRST pass of a process uses, until [_widened].
@@ -55,8 +41,6 @@ class WallpaperPrefetchService {
   static const _maxConcurrent = 3;
 
   /// LRU bound on object COUNT — flutter_cache_manager has no byte cap.
-  /// Deliberately far deeper than the window: this cache is what makes a cached cold start open
-  /// every recent card from a local file, so a shallower window must not shrink it.
   static const _maxCacheObjects = 120;
 
   /// Shared across controller re-creations -> the on-disk cache and its LRU survive an apply recreate.

@@ -11,8 +11,8 @@ Run at the end of every phase.
 ```bash
 dart run build_runner build --delete-conflicting-outputs   # generated files are TRACKED — stale
 flutter analyze && flutter test                            # codegen commits clean and green
-cd workers && npx tsc --noEmit && npx vitest run   # if workers/ touched
-npx wrangler deploy                                 # if workers/ touched — deploy IS part of done
+cd workers && npm run check && npx tsc --noEmit && npx vitest run   # if any JS/TS touched (Biome covers tools/ + hooks too)
+node tools/deploy-safe.mjs                          # if workers/ touched — deploy IS part of done (deploy-worker skill)
 ```
 `gen_l10n` runs inside the flutter tool (`pubspec.yaml generate: true`), so ARBs need no separate
 step — but `*.g.dart`/`*.freezed.dart` do, and nothing below catches them being stale.

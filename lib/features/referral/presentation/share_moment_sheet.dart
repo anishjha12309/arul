@@ -14,9 +14,6 @@ import '../data/tell_a_friend.dart';
 
 /// A short, dismissible invitation to pass Arul on, at the two moments a user was just given something.
 /// Their subscription starting, and their own wallpaper going in for review.
-///
-/// Since Flutter 3.38 a SnackBar with an action stops auto-dismissing — a permanent bar.
-/// So [showArulToast] has no action button, and anything asking for a decision belongs here.
 /// It never blocks: dismissing is one tap, and the caller continues either way.
 class ShareMomentSheet {
   const ShareMomentSheet._();

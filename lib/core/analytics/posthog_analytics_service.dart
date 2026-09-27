@@ -6,21 +6,10 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'analytics_service.dart';
 
 /// Real [AnalyticsService] backed by PostHog.
-///
 /// `Posthog().setup(...)` runs in `main()` -> this class only forwards onto that singleton.
-/// Chosen over [NoOpAnalyticsService] only when a real project key is present
-/// (`analytics_provider.dart`) -> tests and key-less dev builds stay offline.
-/// The SDK queues and batch-uploads in the background -> fire-and-forget, never awaited on the UI path.
 class PostHogAnalyticsService implements AnalyticsService {
   const PostHogAnalyticsService();
 
-  /// Registered properties ride on the capture itself, under the event's own keys, not only through
-  /// the SDK's `register`. `setup()` is fire-and-forget in `main()`, so on a FRESH install the
-  /// sheet-first `login_attempt` lands after native setup (a capture before it is dropped) but
-  /// before the Dart `register` round trip -> 80% of a build's cold-start attempts carried no
-  /// `app_language` while the install event 20 ms later did. Merging here closes that window and
-  /// costs one small map spread per event; the SDK's own register keeps the same value, never a
-  /// different one.
   @override
   void track(String event, {Map<String, Object?>? properties}) {
     unawaited(
@@ -55,10 +44,6 @@ class PostHogAnalyticsService implements AnalyticsService {
   @override
   void reset() => unawaited(_resetKeepingRegistered());
 
-  /// A PostHog super property. Held here as well as in the SDK for two windows the SDK cannot cover:
-  /// `setup()` is fire-and-forget in `main()`, so the root listener's first call can arrive before
-  /// native init (see [started]); and `reset()` "resets all cached properties", super properties
-  /// included, so a sign-out would strip it from every event until the next change.
   @override
   void register(String key, Object value) {
     _registered[key] = value;

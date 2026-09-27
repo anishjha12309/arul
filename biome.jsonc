@@ -1,0 +1,58 @@
+{
+  // One config for every JS/TS file in the repo; the binary is a workers/ dev dependency, so run
+  // `npm run check` (or `npm run fix`) from workers/.
+  "$schema": "./workers/node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "workers/src/**",
+      "workers/test/**",
+      "workers/tools/**/*.mjs",
+      "workers/vitest.config.ts",
+      "tools/**/*.mjs",
+      ".claude/hooks/*.js",
+      ".claude/skills/**/scripts/*.mjs"
+    ]
+  },
+  // Measured least churn against the existing code: 110 columns (100 and 120 both moved more lines).
+  "formatter": { "indentStyle": "space", "lineWidth": 110 },
+  // organizeImports would reorder imports in most files; not adopted.
+  "assist": { "enabled": false },
+  "linter": {
+    "rules": {
+      "complexity": {
+        // Bracket access marks a key read from a Record/index signature, which may be absent.
+        "useLiteralKeys": "off"
+      },
+      "style": {
+        // Its fix swaps `!` for `?.`, which changes behaviour.
+        "noNonNullAssertion": "off",
+        // Style only; `url + encodeURIComponent(x)` keeps the escaping step visible.
+        "useTemplate": "off"
+      },
+      "suspicious": {
+        // tsc (noImplicitAny) already types a declare-then-assign `let` from its assignments.
+        "noImplicitAnyLet": "off",
+        // forEach ignores the callback's return value.
+        "useIterableCallbackReturn": { "level": "error", "options": { "checkForEach": false } }
+      },
+      "nursery": {
+        // The runtime may end the isolate before a floating promise settles (Cloudflare Workers best
+        // practices). A types-domain rule only starts Biome's type inference when enabled here, not in
+        // an override, so it is on here and off below for everything outside workers/src.
+        "noFloatingPromises": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      // The CMS keeps a byte-mirror of this file (its test/feed-order.test.ts); format both or neither.
+      "includes": ["workers/src/lib/feed-score.ts"],
+      "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["**", "!workers/src/**"],
+      "linter": { "rules": { "nursery": { "noFloatingPromises": "off" } } }
+    }
+  ]
+}

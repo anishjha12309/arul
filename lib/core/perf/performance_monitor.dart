@@ -1,9 +1,6 @@
 /// Single interface for custom performance traces (Firebase Performance Monitoring).
-///
 /// Perf auto-collects app-start and every HTTP/S trace with NO code -> catalog, API and CDN latency
 /// are already covered -> hand-write a trace only for what it misses (v1: wallpaper apply).
-/// Never touch `FirebasePerformance` from a widget -> depend on this via `performanceMonitorProvider`,
-/// which picks the no-op when Firebase is not initialised.
 abstract interface class PerformanceMonitor {
   /// Starts (and returns) a running custom trace -> always pair with [PerfTrace.stop].
   Future<PerfTrace> startTrace(String name);

@@ -6,14 +6,13 @@
 
 import 'dart:async';
 
+import 'package:arul/core/analytics/analytics_provider.dart';
+import 'package:arul/core/analytics/analytics_service.dart';
+import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-
-import 'package:arul/core/analytics/analytics_provider.dart';
-import 'package:arul/core/analytics/analytics_service.dart';
-import 'package:arul/features/premium/providers/entitlement_provider.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];

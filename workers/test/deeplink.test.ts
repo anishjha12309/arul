@@ -137,22 +137,16 @@ describe("link-preview card", () => {
 
 describe("GET /w/:id", () => {
   it("sends the visitor to Play carrying the wallpaper id AND the referral code", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234`));
 
     expect(res.status).toBe(200);
     const location = await dest(res);
-    expect(location.origin + location.pathname).toBe(
-      "https://play.google.com/store/apps/details",
-    );
+    expect(location.origin + location.pathname).toBe("https://play.google.com/store/apps/details");
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
     // Exactly ONE level of encoding -> Play stores this string and replays it VERBATIM to the app
     // The app's Uri.splitQueryString then reads `ref` and `w` as two keys
     // Double-encoding hands it a single key literally named "ref=…&w=…" -> attribution and the deferred link both die
-    expect(location.searchParams.get("referrer")).toBe(
-      `ref=ABCD1234&w=${WALLPAPER_ID}`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&w=${WALLPAPER_ID}`);
   });
 
   it("carries the id alone when there is no referral code", async () => {
@@ -164,9 +158,7 @@ describe("GET /w/:id", () => {
 
   it("still sends a malformed link to the store, without the junk", async () => {
     // A broken link must never 404 at someone who tapped an ad -> and unvalidated text must not reach the payload
-    const res = handleWallpaperLink(
-      ctxFor("https://arul.hsrutility.com/w/not-a-uuid?ref=%3Cscript%3E"),
-    );
+    const res = handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/not-a-uuid?ref=%3Cscript%3E"));
 
     expect(res.status).toBe(200);
     const location = await dest(res);
@@ -175,14 +167,10 @@ describe("GET /w/:id", () => {
   });
 
   it("normalises a lowercase referral code to the stored uppercase form", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=abcd1234`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=abcd1234`));
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `ref=ABCD1234&w=${WALLPAPER_ID}`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&w=${WALLPAPER_ID}`);
   });
 
   it("carries the ad's language through to the referrer", async () => {
@@ -192,15 +180,11 @@ describe("GET /w/:id", () => {
     );
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `ref=ABCD1234&w=${WALLPAPER_ID}&lang=hi`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&w=${WALLPAPER_ID}&lang=hi`);
   });
 
   it("drops a language outside the six shipped codes, keeps the rest", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=fr`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=fr`));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
@@ -223,20 +207,14 @@ describe("GET /w/:id", () => {
     ["ta_IN", "ta"],
     ["TA-in", "ta"],
   ])("strips the region tag off %s like the app does", async (raw, want) => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=${raw}`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=${raw}`));
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `w=${WALLPAPER_ID}&lang=${want}`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=${want}`);
   });
 
   it("still drops a region-tagged language we do not ship", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=pt-BR`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=pt-BR`));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
@@ -252,19 +230,13 @@ describe("GET /r/:id", () => {
 
     expect(res.status).toBe(200);
     const location = await dest(res);
-    expect(location.origin + location.pathname).toBe(
-      "https://play.google.com/store/apps/details",
-    );
+    expect(location.origin + location.pathname).toBe("https://play.google.com/store/apps/details");
     expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
-    expect(location.searchParams.get("referrer")).toBe(
-      `ref=ABCD1234&r=${RINGTONE_ID}&lang=ta`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&r=${RINGTONE_ID}&lang=ta`);
   });
 
   it("still sends a malformed ringtone link to the store, without the junk", async () => {
-    const res = handleRingtoneLink(
-      ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=%3Cscript%3E"),
-    );
+    const res = handleRingtoneLink(ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=%3Cscript%3E"));
 
     expect(res.status).toBe(200);
     const location = await dest(res);
@@ -285,9 +257,7 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
 
     expect(res.status).toBe(200);
     const location = await dest(res);
-    expect(location.origin + location.pathname).toBe(
-      "https://play.google.com/store/apps/details",
-    );
+    expect(location.origin + location.pathname).toBe("https://play.google.com/store/apps/details");
     expect(location.searchParams.get("referrer")).toBe(`lang=${want}`);
   });
 
@@ -296,38 +266,28 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
   // A fresh install would then land on the feed -> `screen=` is a key the app already reads
   // So this works on builds that shipped before the id-less path meant anything
   it("marks the ringtone path so a fresh install lands on that tab", async () => {
-    const res = handleRingtoneLink(
-      ctxFor("https://arul.hsrutility.com/r/?lang=ta"),
-    );
+    const res = handleRingtoneLink(ctxFor("https://arul.hsrutility.com/r/?lang=ta"));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
   });
 
   it("does NOT mark the wallpaper path — it is the language-only shape", async () => {
-    const res = handleWallpaperLink(
-      ctxFor("https://arul.hsrutility.com/w/?lang=ta"),
-    );
+    const res = handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/?lang=ta"));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("lang=ta");
   });
 
   it("a real ringtone id wins over the tab marker", async () => {
-    const res = handleRingtoneLink(
-      ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`),
-    );
+    const res = handleRingtoneLink(ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`));
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `r=${RINGTONE_ID}&lang=ta`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`r=${RINGTONE_ID}&lang=ta`);
   });
 
   it("marks a typo'd ringtone id too — it still named ringtones", async () => {
-    const res = handleRingtoneLink(
-      ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=ta"),
-    );
+    const res = handleRingtoneLink(ctxFor("https://arul.hsrutility.com/r/not-a-uuid?lang=ta"));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe("screen=ringtones&lang=ta");
@@ -348,32 +308,22 @@ describe("GET /w/ and /r/ without an id (language-only links)", () => {
 describe("ilang (share install-language)", () => {
   it("folds ilang into the referrer's lang", async () => {
     const res = handleWallpaperLink(
-      ctxFor(
-        `https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&ilang=ta`,
-      ),
+      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ref=ABCD1234&ilang=ta`),
     );
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `ref=ABCD1234&w=${WALLPAPER_ID}&lang=ta`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&w=${WALLPAPER_ID}&lang=ta`);
   });
 
   it("normalises ilang exactly like lang", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=TA-in`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=TA-in`));
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `w=${WALLPAPER_ID}&lang=ta`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=ta`);
   });
 
   it("drops an ilang outside the six shipped codes", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=fr`),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?ilang=fr`));
 
     const location = await dest(res);
     expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}`);
@@ -381,16 +331,10 @@ describe("ilang (share install-language)", () => {
 
   // An ad creative would never send both -> if one ever does, the explicit ad language is what the campaign paid for
   it("lets an explicit lang beat ilang", async () => {
-    const res = handleWallpaperLink(
-      ctxFor(
-        `https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=hi&ilang=ta`,
-      ),
-    );
+    const res = handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=hi&ilang=ta`));
 
     const location = await dest(res);
-    expect(location.searchParams.get("referrer")).toBe(
-      `w=${WALLPAPER_ID}&lang=hi`,
-    );
+    expect(location.searchParams.get("referrer")).toBe(`w=${WALLPAPER_ID}&lang=hi`);
   });
 });
 
@@ -435,9 +379,7 @@ describe("GET / on the link domain", () => {
   const rootCtx = (url: string) => makeCtx({ env: makeEnv(), url });
 
   it("sends a language-only root link to Play", async () => {
-    const res = handleRootLink(
-      rootCtx("https://arul.hsrutility.com/?lang=hi"),
-    );
+    const res = handleRootLink(rootCtx("https://arul.hsrutility.com/?lang=hi"));
 
     expect(res.status).toBe(200);
     const location = await dest(res);
@@ -446,17 +388,13 @@ describe("GET / on the link domain", () => {
   });
 
   it("sends a bare root link to Play with no referrer", async () => {
-    const res = handleRootLink(
-      rootCtx("https://arul.hsrutility.com/"),
-    );
+    const res = handleRootLink(rootCtx("https://arul.hsrutility.com/"));
 
     expect((await dest(res)).searchParams.get("referrer")).toBeNull();
   });
 
   it("still 404s on the API host", async () => {
-    const res = handleRootLink(
-      rootCtx("https://arul-api.hsrutility.com/?lang=hi"),
-    );
+    const res = handleRootLink(rootCtx("https://arul-api.hsrutility.com/?lang=hi"));
 
     expect(res.status).toBe(404);
   });

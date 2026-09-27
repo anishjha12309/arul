@@ -1,14 +1,6 @@
 /**
- * Server-side media QC — the byte-level gate every upload passes before a DB row may reference it.
- *
  * Reads through the R2 BINDING in ranged few-KB GETs -> Class B ops, no egress -> a full download is never needed
  * A signed PUT enforces only the CLAIMED Content-Type and size -> this is the first place real BYTES are checked
- *   image  magic bytes match the stored type (JPEG/PNG/WebP) and header dimensions sit inside the per-role bounds
- *   video  ftyp present, moov found by a top-level box walk (moov-at-end and 64-bit largesize both handled)
- *   video  exactly the hw-decoder-safe WALLPAPER_VIDEO geometry, H.264 only, at least one video track
- *   audio  MP3/ADTS-AAC magic, or an m4a whose tracks carry audio and NO video -> a renamed video cannot pass
- * There is NO ringtone-cover role -> row art is drawn on the client from the row's id -> no cover object exists
- * SHARED MODULE, copied verbatim into Pakiza's worker as media-constraints.ts is -> keep the copies in sync
  */
 
 import { MAX_BYTES_BY_MIME } from "./media-constraints.js";
@@ -47,13 +39,7 @@ export interface VerifyOk {
 
 export interface VerifyFail {
   ok: false;
-  code:
-    | "not_found"
-    | "bad_type"
-    | "too_large"
-    | "corrupt"
-    | "bad_dimensions"
-    | "bad_codec";
+  code: "not_found" | "bad_type" | "too_large" | "corrupt" | "bad_dimensions" | "bad_codec";
   message: string;
 }
 
@@ -200,8 +186,7 @@ async function parseJpegDims(reader: R2Reader): Promise<Dims | null> {
     }
     const segLen = u16(buf, o + 2);
     if (segLen < 2) return null;
-    const isSof =
-      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
     if (isSof) {
       if (o + 9 > buf.length) return null;
       return { width: u16(buf, o + 7), height: u16(buf, o + 5) };
@@ -250,7 +235,10 @@ async function readImageDims(reader: R2Reader, ct: string): Promise<Dims | "mism
 async function verifyWallpaperImage(reader: R2Reader, ct: string): Promise<VerifyResult> {
   const dims = await readImageDims(reader, ct);
   if (dims === "mismatch") {
-    return fail("bad_type", `The file's contents are not a valid ${ct.replace("image/", "").toUpperCase()} image`);
+    return fail(
+      "bad_type",
+      `The file's contents are not a valid ${ct.replace("image/", "").toUpperCase()} image`,
+    );
   }
   if (!dims) return fail("corrupt", "Could not read the image's dimensions — the file may be corrupt");
   const { width, height } = dims;
@@ -402,8 +390,7 @@ async function verifyLiveWallpaper(reader: R2Reader, ct: string): Promise<Verify
   if (!mp4) return fail("corrupt", "The file's contents are not a valid MP4 video");
   const video = mp4.videoTracks[0];
   if (!video) return fail("corrupt", "The MP4 has no video track — a live wallpaper must be a video");
-  const { widthMultiple, heightMultiple, maxShortSide, maxLongSide, allowedCodecs } =
-    WALLPAPER_VIDEO;
+  const { widthMultiple, heightMultiple, maxShortSide, maxLongSide, allowedCodecs } = WALLPAPER_VIDEO;
   if (!(allowedCodecs as readonly string[]).includes(video.codec)) {
     return fail(
       "bad_codec",

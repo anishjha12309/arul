@@ -34,7 +34,6 @@ class _ArulAppState extends ConsumerState<ArulApp> {
   @override
   void initState() {
     super.initState();
-    // The unfinished-trial reminder goes back to the paywall.
     ref.read(notificationServiceProvider).onOpenTrialReminder = () {
       if (!mounted) return;
       router.go('/premium?source=trial_reminder');
@@ -79,9 +78,6 @@ class _ArulAppState extends ConsumerState<ArulApp> {
           .recordError(error, stack, reason: 'router back'),
     );
 
-    // The UI language on EVERY event, not only on the person at sign-in: pre-login events (install,
-    // the sign-in wall) otherwise carry no language, and a `lang=` link applying mid-launch is
-    // exactly what the funnel needs to see. Fires now and on each change (link or Settings).
     ref.listenManual(
       localeProvider,
       (_, next) => ref
@@ -96,9 +92,11 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       analytics.register(kLanguageSourceProperty, next.source.key);
       analytics.register(kGeoRegionProperty, next.geoRegion);
     }, fireImmediately: true);
-    // The factorial's arms on every event, for GA4 as much as PostHog. Fixed for the process -> once.
     final analytics = ref.read(analyticsServiceProvider);
-    ref.read(experimentsProvider).analyticsProperties.forEach(analytics.register);
+    ref
+        .read(experimentsProvider)
+        .analyticsProperties
+        .forEach(analytics.register);
     // How much phone this is, on every later event. One probe per process, so this fires once;
     // events captured before it lands simply carry no tier rather than a guessed one.
     unawaited(
@@ -124,13 +122,8 @@ class _ArulAppState extends ConsumerState<ArulApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Re-arms the unfinished-trial reminder once on startup, from its persisted instant.
     ref.watch(notificationBootstrapProvider);
 
-    // Campaign push (docs/push.md), watched at the ROOT for the same reason: neither depends on a
-    // user opening a screen. `pushBootstrap` registers this phone once a session exists and re-posts
-    // on a language change; `pushChannelName` renames the "Updates from Arul" channel into the
-    // user's language (the channel itself is created by NotificationService.initialize at launch).
     ref.watch(pushBootstrapProvider);
     ref.watch(pushChannelNameProvider);
 
@@ -143,8 +136,6 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       child: MaterialApp.router(
         title: 'Arul',
         debugShowCheckedModeBanner: false,
-        // The router's parts rather than `routerConfig`: that is the only way to hand it a back
-        // dispatcher of our own -> see SafeBackButtonDispatcher for the go_router crash it contains.
         routerDelegate: router.routerDelegate,
         routeInformationParser: router.routeInformationParser,
         routeInformationProvider: router.routeInformationProvider,
@@ -154,9 +145,7 @@ class _ArulAppState extends ConsumerState<ArulApp> {
         themeMode: ref.watch(themeModeProvider),
 
         // MaterialApp otherwise wraps the app in an AnimatedTheme -> themes lerp for 200ms.
-        // The lerp re-interpolates a whole ThemeData and every `Theme.of` dependant, per frame.
         // Over live video textures that is the stutter read as jank -> noAnimation, a plain Theme.
-        // One-frame swap -> the sheet's own dismiss animation is left to run alone.
         themeAnimationStyle: AnimationStyle.noAnimation,
         locale: ref.watch(localeProvider),
         localizationsDelegates: AppLocalizations.localizationsDelegates,

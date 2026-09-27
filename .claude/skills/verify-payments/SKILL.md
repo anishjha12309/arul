@@ -12,8 +12,7 @@ Two different questions live here. Pick the one you are actually asking — they
 | Is production healthy **right now**? | [A — production read](#mode-a--production-read) | seconds, read-only |
 | Will this change break billing? | [B — sandbox harness](#mode-b--sandbox-harness) | ~30 min, local |
 
-Never answer the first with the second. A green sandbox run says nothing about whether money moved
-last night, and it is the question that gets asked when a payer complains.
+A green sandbox run says nothing about whether money moved last night.
 
 ## Mode A — production read
 

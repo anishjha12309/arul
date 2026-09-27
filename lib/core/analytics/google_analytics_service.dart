@@ -6,23 +6,7 @@ import 'analytics_events.dart';
 import 'analytics_service.dart';
 
 /// [AnalyticsService] backed by Firebase Analytics (Google Analytics 4).
-///
-/// Two jobs: product analytics (EVERY event is forwarded) and the conversion source for Google Ads.
-/// Ads cannot ingest app conversions directly -> it reads them from a linked GA4 property.
-/// So ★ events ALSO map onto GA4 *standard* events, emitted IN ADDITION to the raw-named one:
-///
-///   login_success    → login          (standard)
-///   checkout_started → begin_checkout (standard, value+INR)
-///
 /// **NO `purchase` EVENT IS EMITTED ANYWHERE**, client or server (owner's call).
-/// It was split by settle location -> ONE conversion action fed by the app SDK AND the server MP.
-/// Two source types desynchronise attribution -> the campaign column lagged, raw counts looked right.
-/// A conversion action must have ONE data source -> keep `purchase` UNMARKED in GA4 and OUT of Ads.
-/// `trial_started` is the ONLY key event imported into Ads — app-SDK-sourced, in-session, one source.
-/// Trial→paid is ~84% -> bidding on it loses no signal; the accepted cost is no ROAS signal in Ads.
-/// Neon is revenue truth — it always was.
-/// GA4 auto-collects `first_open`, `session_start` and `screen_view` -> [screen] is a no-op here.
-/// Fire-and-forget; selected only when Firebase is enabled -> tests never touch the platform channel.
 /// The SDK needs snake_case names ≤40 chars and String/num values -> [_clean] coerces, never rejects.
 class GoogleAnalyticsService implements AnalyticsService {
   GoogleAnalyticsService([FirebaseAnalytics? analytics])
@@ -34,7 +18,6 @@ class GoogleAnalyticsService implements AnalyticsService {
 
   @override
   void track(String event, {Map<String, Object?>? properties}) {
-    // Always log the raw event, for product-analytics parity.
     unawaited(_analytics.logEvent(name: event, parameters: _clean(properties)));
 
     // Then the GA4 STANDARD event for ★ events -> only those can be marked as an Ads conversion.
@@ -44,7 +27,6 @@ class GoogleAnalyticsService implements AnalyticsService {
           _analytics.logLogin(loginMethod: properties?['provider'] as String?),
         );
       case 'checkout_started':
-        // The mid-funnel standard event.
         // `begin_checkout` throws only on a value WITHOUT a currency -> pass INR unconditionally.
         unawaited(
           _analytics.logBeginCheckout(
@@ -52,8 +34,6 @@ class GoogleAnalyticsService implements AnalyticsService {
             value: _value(properties),
           ),
         );
-      // A trial moves no money and `purchase` is REMOVED everywhere -> neither emits a standard event.
-      // The raw `trial_started` above carries value/plan/order_id and is the ONLY key event for Ads.
       case ArulEvents.trialStarted:
       case ArulEvents.subscriptionActive:
         break;
@@ -70,8 +50,6 @@ class GoogleAnalyticsService implements AnalyticsService {
     // No-op: GA4 auto-collects screen_view; PostHog owns explicit screens.
   }
 
-  /// Drops the user id only. Never `resetAnalyticsData`: it mints a new app instance id, and Google
-  /// Ads ties a conversion to the ad click through that id -> a re-login would lose its attribution.
   @override
   void reset() => unawaited(_analytics.setUserId(id: null));
 

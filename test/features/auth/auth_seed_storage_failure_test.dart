@@ -5,13 +5,12 @@
 // the splash's `await initialized` threw before its `context.go`, and the app sat on the splash on
 // every launch. An unreadable session is the same verdict as no session -> the wall.
 
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/crash/crash_reporter.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _SilentAnalytics implements AnalyticsService {
   @override

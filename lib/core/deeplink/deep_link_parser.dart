@@ -14,14 +14,6 @@ const String kDeepLinkHost = 'arul.hsrutility.com';
 const String kMetaLinkHost = 'open';
 
 /// The two URL shapes the ad team pastes, and what every path resolves to (docs/deep-links.md):
-///
-/// ```text
-/// https://arul.hsrutility.com/w/<uuid>?lang=hi                 wallpaper
-/// https://arul.hsrutility.com/r/<uuid>?lang=ta                 ringtone
-/// fb<APP_ID>://open?wallpaper_id=<uuid>&lang=hi                 wallpaper (Meta)
-/// fb<APP_ID>://open?screen=ringtones&ringtone_id=<uuid>&lang=hi ringtone (Meta)
-/// ```
-///
 /// Query keys work on BOTH hosts, the path form only on ours -> either creative style resolves.
 /// The Play referrer payload the Worker writes reads the same keys, via [parseReferrerPayload].
 final RegExp _uuid = RegExp(
@@ -117,8 +109,6 @@ DeepLinkRequest? parseDeepLink(String? raw, {required DeepLinkSource source}) {
 }
 
 /// Parse the Play Install Referrer payload the Worker's `/w/:id` and `/r/:id` redirects hand Play.
-/// Android replays it to the app on the first launch after the install.
-///
 /// An ad click carries `w=` with no `ref=`; a Refer & Earn share carries `ref=` with no target.
 /// So either half missing must not discard the other -> the target is parsed independently.
 DeepLinkRequest? parseReferrerPayload(

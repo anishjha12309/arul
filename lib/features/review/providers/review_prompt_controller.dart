@@ -23,9 +23,6 @@ enum ReviewAskOutcome {
 }
 
 /// Asks Play for its review sheet at most once per process, and only when a success is pending.
-///
-/// Play reports neither whether the sheet showed nor whether a rating was left, so a completed
-/// call is the only fact there is: it consumes the arm and counts against the cap either way.
 class ReviewPromptController {
   ReviewPromptController({
     required this._ledger,

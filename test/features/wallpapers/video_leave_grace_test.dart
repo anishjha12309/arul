@@ -13,12 +13,11 @@
 // and fall back to their poster), releaseDecodersOnLeave() does not. So a notification means the
 // teardown actually ran. The pause half needs players in the pool to observe and is covered on
 // device, not here.
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/features/wallpapers/data/feed_video_player.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/presentation/video_preload_controller.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const _method = MethodChannel('arul_test/feed_video_grace');
 

@@ -1,15 +1,8 @@
 /**
  * READ-ONLY PhonePe probe. Fetches an OAuth token and GETs order + mandate status.
  * Moves no money: no /notify, no /redeem, no /cancel — only GET status.
- *
- * Credentials come from real env vars OR from `--env-file <path>`, never from argv — a shell records
- * argv in its history and it lands in any transcript. The env-file form exists because the live
- * credentials are NOT in `.dev.vars` (that file holds the SANDBOX set, which is correct for local
- * dev), so a production probe has to supply them; write them to a scratchpad file, probe, delete it.
- *
  *   PP_ENV=PRODUCTION PP_CLIENT_ID=… PP_CLIENT_SECRET=… node tools/phonepe-status.mjs <sub>[,<order>] …
  *   node tools/phonepe-status.mjs --env-file /tmp/pp.env DKS_S_…,DKS_S_…_B338
- *
  * Each argument is `merchantSubscriptionId` or `merchantSubscriptionId,merchantOrderId` — OUR ids,
  * not PhonePe's OMS…/OMO… ones. Exit 0 = every probe answered 2xx.
  */

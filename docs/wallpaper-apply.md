@@ -1,8 +1,7 @@
 # Wallpaper apply — the OS hand-off
 
-Read before touching `android/**/wallpaper/**` or `wallpaper_apply_provider.dart`.
-
-Do not re-add the in-place live swap Arul used to carry.
+Read before touching `android/**/wallpaper/**` or `wallpaper_apply_provider.dart`. Reading the apply
+events: [analytics-ops.md](analytics-ops.md).
 
 **The download streams into `<name>.part` and renames only on success, and the `.part` is KEPT on
 failure.** The rename is atomic, so the final name is never a truncated file the "exists and
@@ -14,10 +13,10 @@ delete-on-failure. Same shape in `ringtone_set_service.dart` ([ringtones.md](rin
 
 ## Static apply
 
-**Hand the OS a bitmap ALREADY centre-cropped to the display aspect** (`ImageNormalizer
-.cropToDisplayAspect`). With a wider bitmap and no hint the OS keeps the slack as parallax room
+**Hand the OS a bitmap ALREADY centre-cropped to the display aspect**
+(`ImageNormalizer.cropToDisplayAspect`). With a wider bitmap and no hint the OS keeps the slack as parallax room
 anchored at the LEFT edge and the launcher pans inside it, so every subject right of centre is cut.
-Never go back to `visibleCropHint = null` on the raw file; verify by template-matching a launcher
+Never go back to `visibleCropHint = null` on the raw file; prove a change by template-matching a launcher
 screencap against the source.
 
 The OEM zoom-crops UNIFORMLY past the minimum cover, so the static path does **not** distort —
@@ -25,8 +24,8 @@ measured on device. Stop re-deriving it.
 
 ## Live apply
 
-- **EVERY live apply opens the system chooser — there is no in-place swap.** The user's "Set" tap is
-  unobservable, so the notifier finishes IDLE and never claims success.
+- **EVERY live apply opens the system chooser — never re-add an in-place swap.** The user's "Set" tap
+  is unobservable, so the notifier finishes IDLE and never claims success.
 - The chooser previews THIS service, so its preview and the applied wallpaper share ONE renderer and
   one scaling mode: `SCALE_TO_FIT_WITH_CROPPING`, set on the player in `VideoRenderer.initialize()`
   and inherited by `swapVideo`. Without it a 9:16 source fills a 9:20 engine surface non-uniformly —
@@ -40,7 +39,7 @@ measured on device. Stop re-deriving it.
   on every app switch and once on first apply (the home engine started at 0 while the chooser's
   preview engine was mid-clip). `VideoRenderer` keeps the last position per ADOPTED SOURCE path,
   process-wide, and passes it as `setMediaItem(item, startMs)` on every rebuild — the key is the
-  source, not the engine's private copy, so the preview→home hand-off continues too. Verify with a
+  source, not the engine's private copy, so the preview→home hand-off continues too. Prove it with a
   10 fps screen recording across a HOME press: the first home frame must match the clip's phase,
   not its opening shot. The codec's scaling mode was NOT the cause: the recorded frames were
   aspect-true. Passing `android._video-scaling` in the configure `MediaFormat` is dead weight —
@@ -93,10 +92,6 @@ The native result distinguishes the two outcomes (`{outcome: chooser}` vs
 `{outcome: staticFallback, reason}`) so Dart never has to branch on the `unsupported` code, which
 means different things in each native method. The fallback then takes STATIC semantics whole: flags
 cleared, `confirmed: true` + `fallback: true`, its own toast.
-
-**Watch `wallpaper_apply_live_fallback` against live `wallpaper_apply_attempt`** — the fallback is
-for devices where live is impossible, so on mainstream hardware it must sit near zero. A rise means
-capable devices are being routed to a still image.
 
 ## Surviving the recreate
 

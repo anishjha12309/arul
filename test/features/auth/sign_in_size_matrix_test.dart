@@ -124,7 +124,6 @@ void main() {
               failures.add('$where — $message');
             }
 
-            // ── The title: ONE line, never truncated ───────────────────────────────────
             // It may be scaled down: that is a button label absorbing a long translation, and
             // `scaleDown` is the pill's own handling of it.
             final titleBox = tester.renderObject<RenderBox>(
@@ -140,7 +139,6 @@ void main() {
               );
             }
 
-            // ── The subtitle: inside its line budget, never an ellipsis ────────────────
             final subtitle = tester.renderObject<RenderParagraph>(
               find.byKey(kSignInSubtitleKey),
             );

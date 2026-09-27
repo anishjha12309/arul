@@ -4,16 +4,10 @@ import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 
-/// An icon-only tappable, built the way every icon control here should be.
-///
 /// A [ArulTokens.minHitTarget] box around the glyph (the glyph itself never grows), a name for
 /// TalkBack, the tap haptic on press-DOWN and a dip while pressed. Material's `IconButton` brings a
 /// ripple and its own splash palette; this one paints nothing but the glyph, so it sits on a silk
 /// card or a header without a foreign circle appearing under the finger.
-///
-/// The box is [ArulTokens.minHitTarget] on both sides, so a caller that used to give a bare glyph a
-/// gap writes `gap - slack`, where `slack = (minHitTarget - size) / 2` — the glyph then lands
-/// exactly where it did.
 class ArulIconTap extends StatefulWidget {
   const ArulIconTap({
     super.key,
@@ -76,7 +70,6 @@ class _ArulIconTapState extends State<ArulIconTap> {
           dimension: ArulTokens.minHitTarget,
           child: Center(
             child: AnimatedOpacity(
-              // Holds at full opacity when motion is reduced; the haptic still answers.
               opacity: _pressed && !context.reduceMotion ? 0.55 : 1,
               duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
               child: Icon(widget.icon, size: widget.size, color: widget.color),

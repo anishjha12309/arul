@@ -139,7 +139,7 @@ async function main() {
     }
 
     case "q": {
-      if (!arg) throw new Error("usage: q \"<SQL>\"");
+      if (!arg) throw new Error('usage: q "<SQL>"');
       console.log(JSON.stringify(await sql.unsafe(arg), null, 2));
       return;
     }

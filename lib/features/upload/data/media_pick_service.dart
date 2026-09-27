@@ -20,9 +20,6 @@ enum MediaPickKind {
 }
 
 /// Asks the native side to open the system picker for [MediaPickKind] and hand back a copy.
-///
-/// Replaces the file_picker plugin: the pickers need no permission, and the plugin's Android side
-/// carried an Apache Tika MIME sniffer the app never used (the extension allow-list decides).
 /// Resolves to null when the person dismissed the picker, or when there is no native side to ask.
 /// Throws only for a pick that STARTED and then failed (no picker on the phone, an unreadable
 /// provider) — the caller shows the reason rather than a silent nothing.

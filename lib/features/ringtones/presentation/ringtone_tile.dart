@@ -1,29 +1,20 @@
 /// The ringtone row's artwork — a bundled gold deity figure on a jewel-tone ground.
 /// An oil-lamp diya is raised over it while the track previews.
-///
 /// Three layers, bottom to top:
 ///   1. a gradient ground with a hairline rim, drawn and hashed per track ([RingtoneTileSpec]);
 ///   2. the deity PNG ([deityAsset]) — the only fetched-from-disk part;
 ///   3. only while previewing, a scrim plus a diya whose flame sways.
-///
-/// A motif per CATEGORY can only be as specific as the browse axis, which is deliberately coarse.
-/// So the art is keyed by `deity` instead — 35 `perumal` tracks are not all Venkateswara.
-/// The GROUND stays hashed: ten jewel tones are what stop 35 Murugan tracks being 35 identical tiles.
 /// A kolam ring is NOT viable here — the figures fill the tile edge to edge, so dots read as clutter.
 /// Any ring wants a smaller figure first; the two cannot both own the outer band.
-/// The grounds, the `#EBD6A3` ink, the scrim and the flame colours are ARTWORK, not UI chrome.
-/// They are one drawing's palette, have no role elsewhere, and must NEVER grow into `ArulTokens`.
-/// Everything that IS chrome — radius, sizes, motion — does come from the tokens.
-/// The PNGs are inked in that same `#EBD6A3` -> the constant below and the asset pipeline move together.
 library;
 
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/motion.dart';
 import '../../../theme/arul_tokens.dart';
 import 'deity_art.dart';
-import '../../../app/theme/motion.dart';
 
 /// Everything that makes one tile's GROUND look like itself.
 ///
@@ -79,10 +70,8 @@ class RingtoneTileSpec {
 }
 
 /// One row's artwork. Pass [playing] to raise the scrim and diya over it.
-///
 /// The flame's sway drives the painter through `foregroundPainter.repaint`, never a widget rebuild.
 /// The ticker runs only while this row is the playing one.
-/// `MediaQuery.disableAnimations` holds the flame still, with the glow parked at 0.4.
 class RingtoneTile extends StatefulWidget {
   const RingtoneTile({
     super.key,

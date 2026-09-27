@@ -3,9 +3,6 @@ package com.hsrutility.arul.wallpaper
 import android.os.Build
 import java.util.Locale
 
-// Some OEM ROMs make a third-party lock-screen write via setStream silently no-op.
-// [ImageWallpaperManager] uses this to FORCE the decoded-bitmap retry on those devices.
-// The wallpaper-id change check is the safety net for OEMs not listed here.
 // A false positive only costs a redundant second write -> the list is deliberately broad.
 // It includes OEM families nobody here can test on directly.
 object OemPolicy {

@@ -16,11 +16,7 @@ vi.mock("../src/lib/db.js", () => ({
   getDb: (env: { _testSql: unknown }) => env._testSql,
 }));
 
-import {
-  handleSignedUrl,
-  handleUploadUrl,
-  handleConfirmUpload,
-} from "../src/routes/media.js";
+import { handleSignedUrl, handleUploadUrl, handleConfirmUpload } from "../src/routes/media.js";
 
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 const USER_ID = "11111111-1111-1111-1111-111111111111";
@@ -79,9 +75,7 @@ describe("POST /media/signed-url", () => {
 
   it("returns a 300s signed URL for a premium user", async () => {
     // The combined query returns the content key and the live entitlement in ONE row -> the mock mirrors that shape
-    const { env } = envWithSql([
-      { private_key: "wallpapers/murugan/live.mp4", is_premium: true },
-    ]);
+    const { env } = envWithSql([{ private_key: "wallpapers/murugan/live.mp4", is_premium: true }]);
     const res = await handleSignedUrl(
       makeCtx({ env, token: await token(), jsonBody: { id: "w1", kind: "wallpaper" } }),
     );
@@ -95,16 +89,12 @@ describe("POST /media/signed-url", () => {
   it("403 premium_required when the live entitlement read says not premium", async () => {
     // The key exists and is published, but the entitlement half of the row is false
     // Entitlement is read LIVE from Neon, never from the JWT -> a lapsed or refunded user is refused with a valid token
-    const { env } = envWithSql([
-      { private_key: "wallpapers/murugan/live.mp4", is_premium: false },
-    ]);
+    const { env } = envWithSql([{ private_key: "wallpapers/murugan/live.mp4", is_premium: false }]);
     const res = await handleSignedUrl(
       makeCtx({ env, token: await token(), jsonBody: { id: "w1", kind: "wallpaper" } }),
     );
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
-      "premium_required",
-    );
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("premium_required");
   });
 
   // ── Popularity counter ─────────────────────────────────────────────────────
@@ -168,9 +158,7 @@ describe("POST /media/signed-url", () => {
       const { env, capturedArgs } = envWithSql([
         { private_key: "ringtones/murugan/abc.mp3", is_premium: true },
       ]);
-      await handleSignedUrl(
-        makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }),
-      );
+      await handleSignedUrl(makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }));
       const text = sqlText(capturedArgs);
       expect(text).toContain("UPDATE");
       expect(text).toContain("set_count");
@@ -195,9 +183,7 @@ describe("POST /media/signed-url", () => {
 
   it("resolves kind=ringtone via audio_key and returns a signed URL for a premium user", async () => {
     // The same combined-row shape as the wallpaper path -> the ringtones lookup surfaces audio_key AS private_key
-    const { env } = envWithSql([
-      { private_key: "ringtones/murugan/abc.mp3", is_premium: true },
-    ]);
+    const { env } = envWithSql([{ private_key: "ringtones/murugan/abc.mp3", is_premium: true }]);
     const res = await handleSignedUrl(
       makeCtx({ env, token: await token(), jsonBody: { id: "r1", kind: "ringtone" } }),
     );
@@ -541,9 +527,7 @@ describe("POST /media/confirm-upload", () => {
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect(((await first.json()) as { id: string }).id).toBe(
-      ((await second.json()) as { id: string }).id,
-    );
+    expect(((await first.json()) as { id: string }).id).toBe(((await second.json()) as { id: string }).id);
 
     const insertSql = capturedArgs
       .map((args) => (args[0] as unknown as string[]).join(" "))

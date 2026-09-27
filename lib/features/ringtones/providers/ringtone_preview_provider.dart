@@ -56,9 +56,6 @@ class RingtonePreviewState {
 }
 
 /// One SHARED [AudioPlayer] for all preview playback — starting a track stops the old one.
-/// So two previews can never play at once, and only ONE decoder is held.
-/// This screen shares the device with the feed's video pool.
-///
 /// A tap to a different row while one plays cross-fades on this SAME player rather than hard
 /// cutting: the outgoing clip ramps to silence while the incoming one loads, then the incoming
 /// one ramps up from silence. A true overlap would need a second decoder this app does not spend.
@@ -161,10 +158,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   }
 
   /// TRANSIENT focus, not the `music()` default GAIN.
-  ///
-  /// A preview is a few seconds of audition, so it must borrow the output and hand it
-  /// back: `GAIN_TRANSIENT` pauses the user's music and Android resumes it the moment
-  /// focus is abandoned, where a permanent gain kills it for the rest of the session.
   /// Attributes stay media/music — the clip rides the media volume the user expects.
   Future<void> _configureSession() async {
     try {
@@ -218,16 +211,13 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
               _duckedByInterruption = true;
               unawaited(_setVolumeSafe(_duckVolume));
             }
-            break;
           case AudioInterruptionType.pause:
             if (state.isPlaying) {
               _pausedByInterruption = true;
               unawaited(_player.pause());
             }
-            break;
           case AudioInterruptionType.unknown:
             unawaited(stop());
-            break;
         }
       } else {
         if (_duckedByInterruption) {
@@ -392,7 +382,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     // setAudioSource swap (its source docs preload as forced true while `playing`) is what
     // retires the old source the instant the new one is set.
     final outgoingId = state.isPlaying ? state.currentId : null;
-    Future<void> outgoingFaded = Future<void>.value();
+    var outgoingFaded = Future<void>.value();
     if (outgoingId != null && !reduceFx) {
       debugPrint('[RingtonePreview] crossfade $outgoingId -> ${ringtone.id}');
       final outGeneration = ++_fadeGeneration;

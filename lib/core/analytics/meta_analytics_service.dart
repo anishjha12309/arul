@@ -43,8 +43,6 @@ class MetaAnalyticsService implements AnalyticsService {
             currency: _currency,
           ),
         );
-      // `subscription_active` deliberately emits NOTHING — see the class doc.
-      // Every other product event stays PostHog-only — intentionally dropped.
     }
   }
 

@@ -1,18 +1,7 @@
 /**
  * Production Neon helper that CAN WRITE. Handle accordingly.
- *
- * Exists for the scenarios that genuinely need it — the grant/revoke
- * restore (subscription grant/revoke restore), tombstone checks, and cascade verification. For
- * reads use tools/prod-query.mjs, which refuses writes and is the safer default.
- *
- * A write requires the explicit --write flag, so a mistyped statement cannot
- * mutate production by accident:
- *
  *   node tools/prod-sql.mjs "SELECT …"                    # reads, no flag needed
  *   node tools/prod-sql.mjs --write "UPDATE subscriptions SET … WHERE …"
- *
- * Guard: a bare UPDATE/DELETE with no WHERE is always refused, flag or not.
- * Connection string comes from workers/.dev.vars, never the CLI.
  */
 import fs from "node:fs";
 import postgres from "postgres";
@@ -23,7 +12,7 @@ const allowWrite = args.includes("--write");
 const useDebug = args.includes("--debug");
 const statement = args.filter((a) => a !== "--write" && a !== "--debug")[0];
 
-if (!statement || !statement.trim()) {
+if (!statement?.trim()) {
   console.error('usage: node tools/prod-sql.mjs [--write] [--debug] "<SQL>"');
   process.exit(2);
 }
@@ -33,9 +22,7 @@ const stripped = statement
   .replace(/--[^\n]*/g, " ")
   .trim();
 
-const isWrite = /\b(insert|update|delete|drop|truncate|alter|create|grant|revoke|copy)\b/i.test(
-  stripped,
-);
+const isWrite = /\b(insert|update|delete|drop|truncate|alter|create|grant|revoke|copy)\b/i.test(stripped);
 
 if (isWrite && !allowWrite) {
   console.error("REFUSED: that statement writes. Re-run with --write if you mean it.");
@@ -49,8 +36,6 @@ if (/^\s*(update|delete)\b/i.test(stripped) && !/\bwhere\b/i.test(stripped)) {
   process.exit(1);
 }
 
-// Named variable, not "the first postgres:// in the file" — .dev.vars holds several, and the debug
-// branch must never be reachable by accident from a prod command or the other way round.
 const key = useDebug ? "DEBUG_DATABASE_URL" : "DATABASE_URL";
 const m = fs
   .readFileSync(new URL("../.dev.vars", import.meta.url), "utf8")

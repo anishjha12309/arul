@@ -6,11 +6,10 @@
 
 import 'dart:async';
 
+import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:arul/core/connectivity/connectivity_provider.dart';
 
 /// Minimal fake: a seeded [checkConnectivity] result plus an optional change stream.
 /// `noSuchMethod` covers any interface members the provider does not use.

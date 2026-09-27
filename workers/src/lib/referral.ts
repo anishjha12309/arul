@@ -1,9 +1,3 @@
-/**
- * Referral code generation + reward logic. Plain parameterized SQL — the Worker holds full DB creds.
- *
- * The reward is credited once per PAIR, on the referred friend's first PAID debit -> never on signup
- */
-
 import type postgres from "postgres";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no O, 0, I, 1 (ambiguous)
@@ -58,17 +52,12 @@ export async function captureReferral(
 }
 
 /**
- * Grant the referral reward for a user whose first paid debit just succeeded.
- *
  * Both the payment webhook and the autopay execute cron flip a user to 'active' -> this runs twice -> idempotent
  * The `status <> 'rewarded'` guard is what makes it so -> a renewal or a retried webhook never double-credits
  * The credit is applied ONLY when that UPDATE changed a row -> RETURNING is the idempotency test, not a convenience
  * Credit stacks from the LATER of now and the existing expiry -> a second reward extends, it does not restart
  */
-export async function grantReferralReward(
-  sql: postgres.Sql,
-  referredUserId: string,
-): Promise<void> {
+export async function grantReferralReward(sql: postgres.Sql, referredUserId: string): Promise<void> {
   const rewarded = await sql<{ referrer_id: string }[]>`
     UPDATE referrals
     SET status = 'rewarded', reward_days = ${REWARD_DAYS}

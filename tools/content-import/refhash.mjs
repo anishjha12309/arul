@@ -1,9 +1,8 @@
 // Stage B-ref -> dHash every EXISTING R2 object so new imports can be checked against them.
 // static hashes full_key's jpg, live hashes thumbs/<cat>/<stem>.jpg -> writes refhashes.json.
 // dHash ignores exact bytes -> the index survives a re-encode of the same content.
-import { writeFileSync } from "fs";
-import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
+import { writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
@@ -17,11 +16,16 @@ function arulThumbKey(fullKey) {
 }
 
 export async function dhash(buf) {
-  const { data } = await sharp(buf).greyscale().resize(9, 8, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
-  let hash = 0n, bit = 0n;
+  const { data } = await sharp(buf)
+    .greyscale()
+    .resize(9, 8, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let hash = 0n,
+    bit = 0n;
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
-      if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= (1n << bit);
+      if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= 1n << bit;
       bit++;
     }
   }
@@ -31,16 +35,22 @@ export async function dhash(buf) {
 async function pool(items, n, fn) {
   const out = new Array(items.length);
   let i = 0;
-  await Promise.all(Array.from({ length: n }, async () => {
-    while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); }
-  }));
+  await Promise.all(
+    Array.from({ length: n }, async () => {
+      while (i < items.length) {
+        const k = i++;
+        out[k] = await fn(items[k], k);
+      }
+    }),
+  );
   return out;
 }
 
-// 1. read the live catalog
 const items = [];
 for (let p = 1; p <= 40; p++) {
-  const r = await fetch(`${CDN}/catalog/wallpapers/all_${p}.json`, { headers: { "cache-control": "no-cache" } });
+  const r = await fetch(`${CDN}/catalog/wallpapers/all_${p}.json`, {
+    headers: { "cache-control": "no-cache" },
+  });
   if (!r.ok) break;
   const j = await r.json();
   items.push(...j.items);
@@ -48,8 +58,8 @@ for (let p = 1; p <= 40; p++) {
 }
 console.log(`existing catalog items: ${items.length}`);
 
-// 2. hash each (from its representative jpg)
-let ok = 0, fail = 0;
+let ok = 0,
+  fail = 0;
 const refs = await pool(items, 10, async (it) => {
   const key = it.type === "live" ? arulThumbKey(it.full_key) : it.full_key;
   try {
@@ -61,7 +71,14 @@ const refs = await pool(items, 10, async (it) => {
     return { id: it.id, type: it.type, category: it.category, full_key: it.full_key, dhash: dh };
   } catch (e) {
     fail++;
-    return { id: it.id, type: it.type, category: it.category, full_key: it.full_key, dhash: null, error: String(e.message || e) };
+    return {
+      id: it.id,
+      type: it.type,
+      category: it.category,
+      full_key: it.full_key,
+      dhash: null,
+      error: String(e.message || e),
+    };
   }
 });
 

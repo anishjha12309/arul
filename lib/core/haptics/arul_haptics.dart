@@ -28,14 +28,9 @@ enum ArulHapticStyle {
   heavy,
 }
 
-/// The app's haptic vocabulary. Ported from Pakiza's `PkHaptics` — shared behaviour, keep in step.
-///
 /// 1. **One haptic per beat.** A press fires exactly one; the *outcome* fires exactly one more.
 ///    Nothing in between — sheet opens and route pushes are silent, the tap already answered.
-/// 2. **Press-down, not release.** Controls fire as the finger lands, in step with the press dip.
-///
 /// A reel that buzzed on every flick would fire dozens of times a minute -> swipes get NO haptic.
-/// Every call is fire-and-forget and swallows platform errors -> no vibrator, no channel, no throw.
 /// Android's `performHapticFeedback` already honours the system-wide touch-feedback setting.
 /// [setEnabled] is an in-app preference layered on top of that.
 abstract final class ArulHaptics {

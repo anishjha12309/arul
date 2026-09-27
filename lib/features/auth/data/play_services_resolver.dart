@@ -13,10 +13,6 @@ enum PlayServicesFix {
 
 /// Asks the native side to check Play services against what Credential Manager needs and, below
 /// that, to show GOOGLE'S repair dialog.
-///
-/// The sign-in wall may not grow a sentence or a link, so a phone whose Play services cannot sign in
-/// gets Google's dialog, never copy of ours. A healthy phone sees nothing: the native side answers
-/// [PlayServicesFix.available] before any dialog call is made.
 /// Never throws — every failure to ask reads as [PlayServicesFix.unresolved], which changes nothing.
 class PlayServicesResolver {
   const PlayServicesResolver({MethodChannel? channel})

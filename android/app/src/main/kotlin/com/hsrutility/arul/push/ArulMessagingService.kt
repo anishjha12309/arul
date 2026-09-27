@@ -27,30 +27,6 @@ import kotlin.math.pow
 
 /**
  * Draws a COLOURED campaign notification itself (docs/push.md §Coloured campaigns).
- *
- * FCM's notification `color` tints the small icon only, so a card background needs the app to post
- * the notification. The Worker sends a coloured campaign as a DATA-ONLY message to builds >= 76; every
- * other campaign stays a notification message that Play services posts without this class running.
- *
- * WHY THIS SUBCLASSES THE PLUGIN'S SERVICE, read off firebase_messaging 16.6.0's Android source:
- *  (a) Messages reach the plugin through `FlutterFirebaseMessagingReceiver` (the raw c2dm broadcast)
- *      — its `FlutterFirebaseMessagingService.onMessageReceived` is deliberately empty. The receiver
- *      still runs for every message after this change, so nothing Dart sees moves. It starts no
- *      isolate because no `onBackgroundMessage` is registered.
- *  (b) A tap is rebuilt from the launch intent's `google.message_id`, looked up in the receiver's
- *      in-memory map or in `FlutterFirebaseMessagingStore` — and the receiver stores ONLY messages
- *      with a notification block. So this class stores the data-only message itself and puts the
- *      message id on the tap intent: `getInitialMessage()` (killed app) and `onMessageOpenedApp`
- *      (backgrounded app) then return it exactly as they return a plain campaign, and
- *      push_open_handler.dart runs unchanged — `/me/push-opened` and GA4 `push_opened` included.
- *  (c) Token refresh reaches Dart through that same service's `onNewToken`. Subclassing inherits it.
- * Only ONE service may own MESSAGING_EVENT, so the manifest removes the plugin's declaration and
- * registers this one; the alternative (a priority race between two services) is not documented
- * behaviour to rely on.
- *
- * WHAT IT DOES NOT CARRY: FCM's automatic `notification_receive` / `notification_open` Analytics
- * events exist only for notification messages. The CMS numbers and the app's own `push_opened` are
- * unaffected.
  */
 class ArulMessagingService : FlutterFirebaseMessagingService() {
 
@@ -125,7 +101,6 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
             Log.i(TAG, "coloured campaign $campaignId dropped: notifications are off for Arul")
             return
         }
-        // Stored BEFORE it can be tapped: getInitialMessage() on a killed app reads nothing else.
         FlutterFirebaseMessagingStore.getInstance().storeFirebaseMessage(message)
         try {
             manager.notify(tag, 0, builder.build())

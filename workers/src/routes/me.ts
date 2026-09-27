@@ -1,19 +1,12 @@
 /**
- * "Me" routes — all JWT-gated, every query scoped to the VERIFIED `sub`, which is users.id.
- *
  * The user id is NEVER read from a request body -> only the verified subject scopes a query here
  * Every response shape matches the Flutter models exactly -> they rename fields to snake_case -> so must every key
  * GET /me re-reads the row rather than trusting the token -> it confirms the row still exists and returns live fields
- * GET /me/subscription is kept only for old clients -> GET /me already carries the same subscription object
  */
 
 import type { Context } from "hono";
 import type { Env } from "../env.js";
-import {
-  verifyAccessToken,
-  verifyRefreshToken,
-  denylistJti,
-} from "../lib/jwt.js";
+import { verifyAccessToken, verifyRefreshToken, denylistJti } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
 import { premiumPredicate } from "../lib/entitlement.js";
 import { revokeMandateTolerant } from "../lib/phonepe.js";
@@ -21,10 +14,6 @@ import { hashGoogleSub } from "../lib/tombstone.js";
 import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 
 /**
- * GET /me carries the caller's subscription row in the SAME query — a cold-start merge.
- *
- * The app reads profile and entitlement in one launch request instead of two -> half the startup Neon round trips
- * subscriptions is 1:0..1 to users -> a LEFT JOIN stays a single-row result whether or not they ever subscribed
  * The `user` shape is UNCHANGED -> old builds must keep parsing it -> never rename a key here
  * The `subscription` object matches handleMeSubscription byte for byte -> same keys, same serialization
  */
@@ -36,10 +25,6 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
   const sql = getDb(env);
   try {
     // Alias every joined subscriptions column as sub_* -> a shared column name would silently collide with users
-    // `premium` is the SERVER-COMPUTED entitlement from premiumPredicate -> the one place the rule lives
-    // The app's gate reads THIS flag and never re-derives the rule from the row
-    // A client copy of the rule drifted once -> it knew nothing of reward_premium_until
-    // That bounced a reward-only referrer to the paywall while /media/signed-url would have signed for them
     // The row still ships alongside -> the premium screen needs status and dates to say anything true
     const rows = await sql`
       SELECT u.id, u.display_name, u.email, u.referral_code,
@@ -70,10 +55,8 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
             user_id: row.sub_user_id as string,
             status: row.sub_status as string,
             plan: (row.sub_plan as string | null) ?? null,
-            phonepe_subscription_id:
-              (row.sub_phonepe_subscription_id as string | null) ?? null,
-            merchant_subscription_id:
-              (row.sub_merchant_subscription_id as string | null) ?? null,
+            phonepe_subscription_id: (row.sub_phonepe_subscription_id as string | null) ?? null,
+            merchant_subscription_id: (row.sub_merchant_subscription_id as string | null) ?? null,
             // The SETUP order id — the same value the app sends as `order_id` -> the trial_started catch-up dedupes on it
             // A trial granted app-closed never fired the event in-session -> a webhook resurrect, or a killed process
             // This is how the next launch knows WHICH trial it still owes -> one event per order, never a repeat
@@ -108,9 +91,7 @@ const MAX_DISPLAY_NAME = 200;
  * POST /me/profile — update the caller's editable profile fields.
  * Setting a name flips display_name_custom = true -> that is what stops login overwriting it from Google
  */
-export async function handleUpdateProfile(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleUpdateProfile(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -130,11 +111,7 @@ export async function handleUpdateProfile(
     return errorResponse(400, "invalid_name", "Name cannot be empty");
   }
   if (displayName.length > MAX_DISPLAY_NAME) {
-    return errorResponse(
-      400,
-      "invalid_name",
-      `Name must be at most ${MAX_DISPLAY_NAME} characters`,
-    );
+    return errorResponse(400, "invalid_name", `Name must be at most ${MAX_DISPLAY_NAME} characters`);
   }
 
   const sql = getDb(env);
@@ -168,19 +145,10 @@ export async function handleUpdateProfile(
 
 /**
  * DELETE /me — permanently delete the caller's account. THE ORDER OF THE THREE STEPS IS LOAD-BEARING.
- *
  * 1. Revoke any live PhonePe mandate FIRST -> deleting the row first keeps debiting a user we no longer know
  *    It aborts with 502 while PhonePe still reports the mandate live -> never delete past that
- * 2. ONE transaction: write the trial tombstone, only when the free trial was consumed, then delete the users row
- *    Everything else cascades -> subscriptions, submissions, referrals; another user's referred_by goes NULL
- * 3. The user's R2 submission objects become orphans -> the sweep cron reclaims them -> no R2 work belongs here
- *    Approved content was COPIED to canonical keys at publish -> it stays in the catalog, anonymous and PII-free
- * The optional { refreshToken } is revoked after deletion -> the access token expires on its own
- * That is safe because every gated action reads live DB state, and the row is gone
  */
-export async function handleDeleteAccount(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleDeleteAccount(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -211,7 +179,6 @@ export async function handleDeleteAccount(
 
     // 1. A mandate may be live under any non-terminal status, 'pending' included -> setup can complete after this read
     if (merchantSubId && status !== null && status !== "cancelled" && status !== "expired") {
-      // A re-subscribe PARKS the mandate it replaces -> that one is still billing and must die with the account too
       const parkedMandateId = (row.superseded_mandate_id as string | null | undefined) ?? null;
       const revoked =
         (await revokeMandateTolerant(env, merchantSubId)) &&
@@ -237,9 +204,7 @@ export async function handleDeleteAccount(
     // 2. Tombstone (only when the trial was consumed) and the cascade delete, ATOMICALLY -> a split loses the guard
     const trialEnd = row.trial_end as Date | null;
     const subHash =
-      trialEnd === null
-        ? null
-        : await hashGoogleSub(row.google_sub as string, env.TRIAL_TOMBSTONE_SECRET);
+      trialEnd === null ? null : await hashGoogleSub(row.google_sub as string, env.TRIAL_TOMBSTONE_SECRET);
     await sql.begin(async (tx) => {
       if (subHash !== null) {
         // ON CONFLICT keeps the EARLIEST tombstone -> it only ever needs to exist, never to be current
@@ -273,9 +238,7 @@ export async function handleDeleteAccount(
   }
 }
 
-export async function handleMeSubscription(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleMeSubscription(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -316,9 +279,7 @@ export async function handleMeSubscription(
   }
 }
 
-export async function handleMeSubmissions(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleMeSubmissions(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -356,9 +317,7 @@ export async function handleMeSubmissions(
   }
 }
 
-export async function handleMeReferrals(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleMeReferrals(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -393,8 +352,7 @@ export async function handleMeReferrals(
         created_at: toIso(row.created_at),
         // Prefer the friend's name, then a MASKED email, then null -> the referrer must never see a full address
         referred_name:
-          (row.referred_name as string | null)?.trim() ||
-          maskEmail(row.referred_email as string | null),
+          (row.referred_name as string | null)?.trim() || maskEmail(row.referred_email as string | null),
       };
     });
 
@@ -412,8 +370,6 @@ export async function handleMeReferrals(
 }
 
 /**
- * The six shipped app languages, normalised the way the deep-link bounce does it.
- *
  * Duplicated by necessity (the Worker has no Dart) -> a seventh language is an edit here, in
  * `routes/deeplink.ts`'s LANG_RE and in `supportedAppLocales`. Anything unrecognised becomes `en`
  * rather than being rejected: a phone whose locale this Worker has never heard of must still register
@@ -428,20 +384,11 @@ function normalizePushLang(raw: unknown): string {
 }
 
 /**
- * POST /me/device — register (or refresh) this phone in the campaign-push registry.
- *
- * ADDITIVE, and that is the backwards-compatibility contract: builds 68-74 never call it, keep
- * working untouched, and simply cannot be reached by a campaign. There is no backfill — a Firebase
- * Installation ID only exists once an app asks for one — so expect about a fortnight for a new build
- * to reach most of the active base.
- *
  * ONE PHONE, ONE SIGNED-IN USER. A FID that reappears under a different account is RE-POINTED, never
  * duplicated: the alternative is the previous owner of a shared phone receiving the new owner's
  * segment. Every field but `fid` is optional so a later build can send less without a Worker deploy.
  */
-export async function handleRegisterDevice(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleRegisterDevice(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
@@ -504,19 +451,10 @@ function readDeviceBody(body: Record<string, unknown>): DeviceBody | null {
 const ANON_DEVICE_BODY_MAX_BYTES = 2048;
 
 /**
- * POST /push/device — register a phone that has not signed in. No JWT.
- *
- * This is what makes "joined in the last hour" and "never signed in" reachable: the app calls it on
- * every launch while signed out. The upsert NEVER touches `user_id` — a new row gets NULL, and a row
- * an account already claimed keeps that account, so an unauthenticated caller can refresh a token but
- * can never detach a phone from its user or attach one to someone else.
- *
  * Unauthenticated writes are safe to accept: a junk fid with an unroutable token comes back
  * UNREGISTERED on its first send and the dispatcher deletes it.
  */
-export async function handleRegisterAnonDevice(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handleRegisterAnonDevice(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
   const raw = await c.req.text().catch(() => "");
@@ -558,17 +496,13 @@ export async function handleRegisterAnonDevice(
 }
 
 /**
- * POST /me/push-opened — the app reporting that this person tapped a campaign.
- *
  * Keyed per USER, not per device: the same person tapping the same campaign on two phones is ONE
  * open, which is what "Opened 14.8%" has to mean on the CMS card. `ON CONFLICT DO NOTHING` is the
  * whole dedup — a tap replayed by `getInitialMessage()` on a relaunch must not inflate the number.
  * A body naming a campaign that does not exist is accepted and ignored, never a 4xx: the app fires
  * this off the tap path and an error there would be noise in Crashlytics, not information.
  */
-export async function handlePushOpened(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response> {
+export async function handlePushOpened(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");

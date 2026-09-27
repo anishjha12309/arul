@@ -24,4 +24,5 @@ a revenue bug in either direction.
 - Re-applying or re-sharing an already-cached file still calls `/media/signed-url` — a cache must
   never become a permanent licence. Offline with bytes on disk is the one allowed pass-through.
 
-Read [docs/architecture.md](../../docs/architecture.md) §Entitlement before changing any of it.
+Read [docs/architecture.md](../../docs/architecture.md) §Entitlement before changing any of it; the app's
+checkout flow (picker, QR, return, poll) is [docs/checkout.md](../../docs/checkout.md).

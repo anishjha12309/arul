@@ -72,8 +72,6 @@ class BindingSignInSurfaceClock
       case AppLifecycleState.hidden:
         final ms = clock.elapsedMilliseconds;
         _msToSurface = ms;
-        // Fired ONCE per attempt, the first time something covers us: the only proof the app has
-        // that Google's screen actually appeared for people who then vanish without an outcome.
         _onSurface?.call(ms);
       case AppLifecycleState.resumed:
       case AppLifecycleState.detached:

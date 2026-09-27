@@ -23,23 +23,21 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  flutter_riverpod: ^3.3.2      # state; the only cross-layer glue
-  go_router: ^17.3.0            # nav
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.3.0
   cached_network_image: ^3.4.1  # static wallpapers (decoded at display size)
-  shared_preferences: ^2.5.5    # theme mode, locale
-  http: ^1.2.0                  # CDN catalog fetches
+  shared_preferences: ^2.5.5
+  http: ^1.2.0
   connectivity_plus: ^7.2.0     # offline gate — transport-level online/offline
-  url_launcher: ^6.3.2          # support mail, share sheet, links OUT of the
-                                # in-app policy reader (mailto:, PhonePe, Google)
+  url_launcher: ^6.3.2
   webview_flutter: ^4.14.1      # the in-app Privacy/Terms reader. Policy pages
                                 # must open INSIDE the app, never in the browser
                                 # (reviewer, 2026-08-12) — see policy_screen.dart
-  package_info_plus: ^10.2.0    # version row in Settings
+  package_info_plus: ^10.2.0
 
-  # ── Live wallpapers + apply (ported with the native Media3 pipeline).
-  path_provider: ^2.1.5         # app-internal dirs for the applied live video
+  path_provider: ^2.1.5
   flutter_cache_manager: ^3.4.1 # disk cache for prefetched MP4s (shared w/ CNI)
-  share_plus: ^13.2.0           # share a wallpaper file
+  share_plus: ^13.2.0
   just_audio: ^0.10.6           # ringtone preview — ONE shared AudioPlayer
                                 # (ringtone_preview_provider), streamed from CDN
   audio_session: ^0.2.4         # just_audio's own dep, made DIRECT so the
@@ -57,12 +55,12 @@ dependencies:
   flutter_timezone: ^5.1.0      # device IANA timezone → tz.setLocalLocation
 
   # ── Phase 4 logic port (versions pinned to the reference app's pubspec).
-  riverpod_annotation: ^4.0.3   # codegen'd providers (auth/analytics/premium/…)
-  freezed_annotation: ^3.1.0    # models
+  riverpod_annotation: ^4.0.3
+  freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
-  flutter_secure_storage: ^10.3.1 # JWT pair + cached profile (ApiClient)
+  flutter_secure_storage: ^10.3.1
   google_sign_in: ^7.2.0        # v7 flow: instance → initialize → authenticate
-  play_install_referrer: ^0.5.0 # referral attribution (Play Install Referrer)
+  play_install_referrer: ^0.5.0
   posthog_flutter: ^5.28.0      # product analytics — manual events only,
                                 # autocapture/replay OFF (behind AnalyticsService)
   facebook_app_events: ^0.30.1  # Meta ★ conversion events only; OFF until
@@ -138,7 +136,7 @@ dependency_overrides:
     path: third_party/phonepe_payment_sdk
 
 flutter:
-  generate: true          # gen_l10n
+  generate: true
   uses-material-design: true
   assets:
     - assets/images/

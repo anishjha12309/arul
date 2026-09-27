@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../core/connectivity/connectivity_provider.dart';
-
 import '../../core/config/app_config.dart';
+import '../../core/connectivity/connectivity_provider.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/premium/data/api_subscription_repository.dart';
 import '../../features/premium/domain/subscription_repository.dart';

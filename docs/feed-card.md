@@ -6,16 +6,15 @@ reel card. Feed ORDER and the chips are a different area: [browse.md](browse.md)
 ## Reel card geometry
 
 **All of it lives in `feed_card_geometry.dart`, pinned by its test.** The numbers are Shubh's tile
-(owner's instruction, measured from Shubh's own accessibility tree on a Nothing A001): 16 dp gutters,
-16 dp gap, 24 radius, peek pinned at `minPeek` (25), **1:1.86 asked** and no floor. `card + gap +
-peek + floor` fills the reel exactly. Re-measure Shubh (`uiautomator dump` — its screenshots are
-FLAG_SECURE-blank) before moving a knob.
+(owner's instruction, measured from Shubh's own accessibility tree); `card + gap + peek + floor` fills
+the reel exactly. Re-measure Shubh (`uiautomator dump` — its screenshots are FLAG_SECURE-blank) before
+moving a knob.
 
 - **The card is HEIGHT-CLAMPED on a real phone, so `cardAspect` is a request and the reel decides
   what ships.** Read the solved size, never the constant. `gutter` buys WIDTH only; `minPeek` is the
   only knob that buys height.
 - **The floor is split either side of the reel** — `headroom` above, `underhang` below, with
-  `underhang` carrying the odd pixel so the two sum exactly. It is frequently ZERO, because at 1.86
+  `underhang` carrying the odd pixel so the two sum exactly. It is frequently ZERO, because at the asked 1:1.86
   the card consumes the whole reel on an ordinary phone; it earns its keep on tall screens. Anything
   screen-anchored offsets by `underhang + peek + gap`, **not** the whole floor.
 - Short-screen degradation, in order: floor, then peek down to `minPeek`, only then the card. A card
@@ -24,8 +23,13 @@ FLAG_SECURE-blank) before moving a knob.
   flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases
   the window UP for that case and is LIVE on the phones this ships to — do not delete it as unused.
 - Skeleton and reel must read the SAME geometry, or the card resizes when the first page lands.
-- Rejected shapes, do not revisit: device-aspect 1:2.22 · Pakiza's 1:1.63 verbatim · short-and-wide
-  1:1.40.
+- Rejected shapes, do not revisit: device-aspect 1:2.22 · 1:1.63 · short-and-wide 1:1.40.
+
+## Action row
+
+Apply is a centred pill with Share beside it, **never an edge icon rail**: the edge is the thumb's
+swipe column, and a rail gives the one primary verb the same weight as Share while sharing its hit
+area with the gesture that drives the feed.
 
 ## The live mark
 

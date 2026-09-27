@@ -38,8 +38,6 @@ class _HelpSheet extends ConsumerWidget {
     // the row must appear when it lands rather than on the next visit.
     final entitlement = ref.watch(entitlementDetailProvider).asData?.value;
     // Non-null is BOTH the row's visibility and its sub -> the two can never disagree.
-    // These are exactly the states where `/premium` renders a manage view (member or resubscribe);
-    // every other one is a sell, and a row named "Manage subscription" may never lead to one.
     // Not a second entitlement rule: the flag stays the server's and this reads the same `status`
     // field `/premium` itself switches on.
     final manageSub = entitlement?.isPremium != true

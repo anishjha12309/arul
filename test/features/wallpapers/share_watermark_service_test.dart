@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-
-import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 
 /// A tiny logo PNG generated in memory -> the tests never depend on bundled-asset loading under plain `flutter test`.
 /// The service takes it through the `loadLogoBytes` constructor seam.

@@ -6,17 +6,19 @@
 //
 // Usage: node archive-index.mjs [--root c:/Anish/arul-import] [--out <path>]
 //        node archive-index.mjs --dry-run     # print the tally, write nothing
-import { readdirSync, statSync, writeFileSync, readFileSync, existsSync } from "fs";
-import { execFileSync } from "child_process";
-import { join, relative } from "path";
-import { createHash } from "crypto";
-import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
+import { readdirSync, statSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, relative } from "node:path";
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
-const arg = (f, d) => { const i = process.argv.indexOf(f); return i > -1 ? process.argv[i + 1] : d; };
-const ROOT = (arg("--root", "c:/Anish/arul-import")).replace(/\\/g, "/");
+const arg = (f, d) => {
+  const i = process.argv.indexOf(f);
+  return i > -1 ? process.argv[i + 1] : d;
+};
+const ROOT = arg("--root", "c:/Anish/arul-import").replace(/\\/g, "/");
 const OUT = arg("--out", join(import.meta.dirname, "archive-index.json")).replace(/\\/g, "/");
 const DRY = process.argv.includes("--dry-run");
 
@@ -25,20 +27,33 @@ const IMG = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 // Folder -> category. Scratch stages (drive/, normalized/) are overwritten every run -> they carry no category.
 // Theirs is resolved from the import-plan join below.
 const FOLDER_CAT = {
-  "masters-amman": "amman", "masters-amman-new": "amman", "drive-amman-0730": "amman",
-  "masters-ayyappan": "ayyappan", "masters-ayyappa-new": "ayyappan",
-  "masters-murugan": "murugan", "masters-perumal": "perumal",
-  "masters-sivan": "sivan", "masters-sivan-new": "sivan",
+  "masters-amman": "amman",
+  "masters-amman-new": "amman",
+  "drive-amman-0730": "amman",
+  "masters-ayyappan": "ayyappan",
+  "masters-ayyappa-new": "ayyappan",
+  "masters-murugan": "murugan",
+  "masters-perumal": "perumal",
+  "masters-sivan": "sivan",
+  "masters-sivan-new": "sivan",
   "masters-temples": "temples",
 };
 const SKIP_DIR = new Set(["node_modules", "thumbs", ".git"]);
 
-// ---- hashes -----------------------------------------------------------------
 // dHash computed EXACTLY as refhash.mjs and dedup.mjs do -> the values stay comparable across all three indexes.
 async function dhashBuf(buf) {
-  const { data } = await sharp(buf).greyscale().resize(9, 8, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
-  let hash = 0n, bit = 0n;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= (1n << bit); bit++; }
+  const { data } = await sharp(buf)
+    .greyscale()
+    .resize(9, 8, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let hash = 0n,
+    bit = 0n;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) {
+      if (data[r * 9 + c] < data[r * 9 + c + 1]) hash |= 1n << bit;
+      bit++;
+    }
   return hash.toString(16).padStart(16, "0");
 }
 // Frame at 1s matches the thumbnail clean-batch.mjs makes -> shorter clips fall back to frame 0.
@@ -46,11 +61,32 @@ async function dhashBuf(buf) {
 function frameVF(path, vf) {
   for (const ss of ["1", "0"]) {
     try {
-      const buf = execFileSync("ffmpeg", ["-v", "error", "-ss", ss, "-i", path, "-frames:v", "1",
-        ...(vf ? ["-vf", vf] : []), "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "3", "pipe:1"],
-        { maxBuffer: 1 << 26, stdio: ["ignore", "pipe", "ignore"] });
+      const buf = execFileSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-ss",
+          ss,
+          "-i",
+          path,
+          "-frames:v",
+          "1",
+          ...(vf ? ["-vf", vf] : []),
+          "-f",
+          "image2pipe",
+          "-vcodec",
+          "mjpeg",
+          "-q:v",
+          "3",
+          "pipe:1",
+        ],
+        { maxBuffer: 1 << 26, stdio: ["ignore", "pipe", "ignore"] },
+      );
       if (buf?.length) return buf;
-    } catch { /* try the next seek point */ }
+    } catch {
+      /* try the next seek point */
+    }
   }
   return null;
 }
@@ -59,19 +95,40 @@ const sha = (p) => createHash("sha256").update(readFileSync(p)).digest("hex").sl
 
 function probe(path) {
   try {
-    const out = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries",
-      "stream=width,height:format=duration", "-of", "json", path], { encoding: "utf8" });
+    const out = execFileSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height:format=duration",
+        "-of",
+        "json",
+        path,
+      ],
+      { encoding: "utf8" },
+    );
     const j = JSON.parse(out);
     const s = j.streams?.[0] || {};
     const dur = parseFloat(j.format?.duration);
-    return { w: s.width ?? null, h: s.height ?? null, ms: isFinite(dur) ? Math.round(dur * 1000) : null };
-  } catch { return { w: null, h: null, ms: null }; }
+    return {
+      w: s.width ?? null,
+      h: s.height ?? null,
+      ms: Number.isFinite(dur) ? Math.round(dur * 1000) : null,
+    };
+  } catch {
+    return { w: null, h: null, ms: null };
+  }
 }
 
-// ---- walk -------------------------------------------------------------------
 function walk(dir, acc = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) { if (!SKIP_DIR.has(e.name)) walk(join(dir, e.name), acc); continue; }
+    if (e.isDirectory()) {
+      if (!SKIP_DIR.has(e.name)) walk(join(dir, e.name), acc);
+      continue;
+    }
     const ext = e.name.slice(e.name.lastIndexOf(".")).toLowerCase();
     if (VID.has(ext) || IMG.has(ext)) acc.push(join(dir, e.name));
   }
@@ -80,11 +137,11 @@ function walk(dir, acc = []) {
 
 const dirs = readdirSync(ROOT, { withFileTypes: true })
   .filter((e) => e.isDirectory() && !SKIP_DIR.has(e.name))
-  .map((e) => e.name).sort();
+  .map((e) => e.name)
+  .sort();
 const files = dirs.flatMap((d) => walk(join(ROOT, d)));
 console.log(`scanning ${files.length} media files across ${dirs.length} folders under ${ROOT}`);
 
-// ---- import-plan join: base -> shipped library row --------------------------
 // plan-batch.mjs always writes import-plan.json -> each batch clobbered the last -> provenance is partial by design.
 // Missing plans are expected -> the dHash match against the live catalog is the authoritative coverage check.
 const plans = readdirSync(ROOT).filter((f) => /^import-plan.*\.json$/.test(f));
@@ -94,14 +151,19 @@ for (const p of plans) {
     for (const it of JSON.parse(readFileSync(join(ROOT, p), "utf8"))) {
       if (it?.base) byBase.set(it.base, { id: it.id, title: it.title, cat: it.category, key: it.full_key });
     }
-  } catch (e) { console.log(`  ! unreadable plan ${p}: ${e.message}`); }
+  } catch (e) {
+    console.log(`  ! unreadable plan ${p}: ${e.message}`);
+  }
 }
 console.log(`import-plan provenance: ${byBase.size} bases from ${plans.length} plan file(s)`);
 
 // stem() must match clean-batch.mjs -> that is what joins a master filename to the plan's `base`.
-const stem = (f) => f.replace(/\.[^.]+$/, "").replace(/\s+\(\d+\)$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+const stem = (f) =>
+  f
+    .replace(/\.[^.]+$/, "")
+    .replace(/\s+\(\d+\)$/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
 
-// ---- build ------------------------------------------------------------------
 // MERGE, never truncate -> after archive-prune.mjs the media this index describes is GONE.
 // A plain rebuild would scan the survivors and drop the record of everything deleted -> the whole point of the file.
 // Existing records are seeded first and never removed -> a re-scan only adds clips and fills in blanks.
@@ -111,9 +173,14 @@ if (existsSync(OUT)) {
     const prev = JSON.parse(readFileSync(OUT, "utf8"));
     for (const c of prev.clips || []) bySha.set(c.s, c);
     console.log(`merging into existing index: ${bySha.size} clip(s) already recorded`);
-  } catch (e) { console.log(`! existing index unreadable, starting fresh: ${e.message}`); }
+  } catch (e) {
+    console.log(`! existing index unreadable, starting fresh: ${e.message}`);
+  }
 }
-let i = 0, failed = 0, added = 0, dupCopies = 0;
+let i = 0,
+  failed = 0,
+  added = 0,
+  dupCopies = 0;
 for (const path of files) {
   i++;
   const rel = relative(ROOT, path).replace(/\\/g, "/");
@@ -128,6 +195,7 @@ for (const path of files) {
     const r = bySha.get(s);
     if (!r.f.includes(folder)) r.f.push(folder);
     if (!r.cat && FOLDER_CAT[folder]) r.cat = FOLDER_CAT[folder];
+    // biome-ignore lint/suspicious/noAssignInExpressions: create-or-append idiom
     (r._paths ||= []).push(path);
     dupCopies++;
     continue;
@@ -135,20 +203,31 @@ for (const path of files) {
 
   const buf = IMG.has(ext) ? readFileSync(path) : frame(path);
   let d = null;
-  if (buf) { try { d = await dhashBuf(buf); } catch { /* recorded as null below */ } }
-  if (!d) { failed++; console.log(`  ! no frame/hash: ${rel}`); }
+  if (buf) {
+    try {
+      d = await dhashBuf(buf);
+    } catch {
+      /* recorded as null below */
+    }
+  }
+  if (!d) {
+    failed++;
+    console.log(`  ! no frame/hash: ${rel}`);
+  }
   const { w, h, ms } = VID.has(ext) ? probe(path) : { ...probe(path), ms: null };
   const hit = byBase.get(stem(name));
 
   const rec = { n: name, s, d, b: bytes, w, h, ms, f: [folder], cat: FOLDER_CAT[folder] || hit?.cat || null };
-  if (hit) { rec.id = hit.id; rec.t = hit.title; }
+  if (hit) {
+    rec.id = hit.id;
+    rec.t = hit.title;
+  }
   rec._paths = [path]; // stripped before write; the coverage pass needs to re-read the file
   bySha.set(s, rec);
   added++;
   if (i % 25 === 0 || i === files.length) console.log(`  [${i}/${files.length}]`);
 }
 
-// ---- coverage stamp: is this clip actually in the live library? --------------
 // MUST happen here, while the media still exists -> a pruned clip has no file left to re-extract from.
 // A raw master is watermarked 720x1280 while the shipped thumb comes from the CLEANED 1024x1824 clip.
 // The Veo path crops 40 bottom rows first -> a raw-vs-shipped dHash is not like-for-like.
@@ -158,15 +237,34 @@ const REF = join(ROOT, "refhashes.json");
 if (existsSync(REF)) {
   const refs = JSON.parse(readFileSync(REF, "utf8")).filter((r) => r.dhash);
   const liveIds = new Set(refs.map((r) => r.id));
-  const ham = (a, b) => { let x = BigInt("0x" + a) ^ BigInt("0x" + b), c = 0; while (x) { c += Number(x & 1n); x >>= 1n; } return c; };
+  const ham = (a, b) => {
+    let x = BigInt("0x" + a) ^ BigInt("0x" + b),
+      c = 0;
+    while (x) {
+      c += Number(x & 1n);
+      x >>= 1n;
+    }
+    return c;
+  };
   const SPEC = "scale=1024:1824:force_original_aspect_ratio=increase:flags=lanczos,crop=1024:1824,setsar=1";
-  const best = (d) => refs.reduce((b, r) => { const h = ham(d, r.dhash); return h < b.h ? { h, r } : b; }, { h: 999, r: null });
+  const best = (d) =>
+    refs.reduce(
+      (b, r) => {
+        const h = ham(d, r.dhash);
+        return h < b.h ? { h, r } : b;
+      },
+      { h: 999, r: null },
+    );
   console.log(`\ncoverage: matching ${bySha.size} clips against ${refs.length} live catalog items`);
   for (const rec of [...bySha.values()]) {
     // A stamped verdict stands -> it was reached while the clip was on disk and could be re-extracted.
     // Re-deriving it from the raw hash alone would be strictly worse -> never overwrite one.
     if (rec.live !== undefined && !rec._paths) continue;
-    if (rec.id && liveIds.has(rec.id)) { rec.live = 1; rec.hd = 0; continue; } // plan UUID still in catalog
+    if (rec.id && liveIds.has(rec.id)) {
+      rec.live = 1;
+      rec.hd = 0;
+      continue;
+    } // plan UUID still in catalog
     let b = rec.d ? best(rec.d) : { h: 999, r: null };
     if (b.h > 6) {
       const path = [...(rec._paths || [])][0];
@@ -174,28 +272,48 @@ if (existsSync(REF)) {
         if (!path || !existsSync(path)) break;
         const buf = frameVF(path, vf);
         if (!buf) continue;
-        try { const c = best(await dhashBuf(buf)); if (c.h < b.h) b = c; } catch { /* keep current best */ }
+        try {
+          const c = best(await dhashBuf(buf));
+          if (c.h < b.h) b = c;
+        } catch {
+          /* keep current best */
+        }
       }
     }
     rec.hd = b.h === 999 ? null : b.h;
     // 10 is dedup.mjs's "already in storage" threshold -> reused here for the same question.
-    if (b.h <= 10) { rec.live = 1; if (!rec.id && b.r) rec.lid = b.r.id; }
-    else rec.live = 0;
+    if (b.h <= 10) {
+      rec.live = 1;
+      if (!rec.id && b.r) rec.lid = b.r.id;
+    } else rec.live = 0;
   }
   const nl = [...bySha.values()].filter((r) => !r.live);
   console.log(`  in library: ${bySha.size - nl.length}   NOT in library: ${nl.length}`);
-  for (const r of nl) console.log(`  ! ${(r.cat || "?").padEnd(9)} nearest=${r.hd}  ${r.n}${r.t ? `  [was ${r.t}, row since deleted]` : ""}`);
+  for (const r of nl)
+    console.log(
+      `  ! ${(r.cat || "?").padEnd(9)} nearest=${r.hd}  ${r.n}${r.t ? `  [was ${r.t}, row since deleted]` : ""}`,
+    );
 }
 for (const r of bySha.values()) delete r._paths;
 
 const recs = [...bySha.values()].sort((a, b) => a.n.localeCompare(b.n));
-const tally = recs.reduce((a, r) => (a[r.cat || "?"] = (a[r.cat || "?"] || 0) + 1, a), {});
-console.log(`\nunique clips recorded: ${recs.length} (${added} added from ${files.length} file(s) scanned; ${dupCopies} byte-identical copy/copies collapsed)`);
+// biome-ignore lint: assign-and-return tally reducer
+const tally = recs.reduce((a, r) => ((a[r.cat || "?"] = (a[r.cat || "?"] || 0) + 1), a), {});
+console.log(
+  `\nunique clips recorded: ${recs.length} (${added} added from ${files.length} file(s) scanned; ${dupCopies} byte-identical copy/copies collapsed)`,
+);
 console.log(`no dHash: ${failed}`);
-console.log(`by category: ${Object.entries(tally).map(([k, v]) => `${k}=${v}`).join(", ")}`);
+console.log(
+  `by category: ${Object.entries(tally)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ")}`,
+);
 console.log(`with import provenance: ${recs.filter((r) => r.id).length}`);
 
-if (DRY) { console.log("\n--dry-run: nothing written"); process.exit(0); }
+if (DRY) {
+  console.log("\n--dry-run: nothing written");
+  process.exit(0);
+}
 
 // Minified on purpose -> this file is read by tools, not by eye -> archive-check.mjs pretty-prints its matches.
 const payload = {

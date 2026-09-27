@@ -26,9 +26,7 @@ Future<void> _loadPaywallFonts() async {
   for (final MapEntry(key: family, value: paths) in families.entries) {
     final loader = FontLoader(family);
     for (final path in paths) {
-      loader.addFont(
-        File(path).readAsBytes().then((b) => ByteData.sublistView(b)),
-      );
+      loader.addFont(File(path).readAsBytes().then(ByteData.sublistView));
     }
     await loader.load();
   }
@@ -59,7 +57,6 @@ ArulPaywallView _paywall({required bool trialEligible}) => ArulPaywallView(
 );
 
 void main() {
-  // ─── The price lockup ─────────────────────────────────────────────────────
   // The one piece of this screen with arithmetic behind it -> the rupee sign is 16px smaller and must land centred.
   // Gelasio carries Georgia's old-style figures -> a digit string's ink centre MOVES with the digits.
   // So "₹2" and "₹199" need different offsets -> a fixed nudge would be right for at most one price.
@@ -117,8 +114,8 @@ void main() {
     const boundaryKey = ValueKey('lockup');
 
     Future<void> check(WidgetTester tester, String price) async {
-      final symbol = price.substring(0, price.indexOf(RegExp(r'[0-9]')));
-      final amount = price.substring(price.indexOf(RegExp(r'[0-9]')));
+      final symbol = price.substring(0, price.indexOf(RegExp('[0-9]')));
+      final amount = price.substring(price.indexOf(RegExp('[0-9]')));
 
       await tester.pumpWidget(
         _host(
@@ -199,8 +196,6 @@ void main() {
     testWidgets('₹2', (tester) => check(tester, '₹2'));
     testWidgets('₹1499', (tester) => check(tester, '₹1499'));
   });
-
-  // ─── The two screens ──────────────────────────────────────────────────────
 
   group('ArulPaywallView', () {
     setUpAll(_loadPaywallFonts);
@@ -338,7 +333,6 @@ void main() {
     });
   });
 
-  // ─── No mandate-capable app on the phone ────────────────────────────────────
   // 13.4% of everyone who tapped Subscribe landed here. The hosted PhonePe page that used to catch
   // them completed 4 setups in 790, and the install links that replaced it asked someone mid-checkout
   // to go and fetch a payment app first. Both are gone: the CTA keeps its own words and opens the QR,
@@ -446,7 +440,6 @@ void main() {
     });
   });
 
-  // ─── The mandate the user has not approved yet ──────────────────────────────
   // They came back from the UPI app without approving, and the order is STILL LIVE at PhonePe.
   // So the footer stops selling and starts pointing: one line saying what has to happen and the CTA
   // re-opening the app that holds the sheet. Nothing else — no way out to find, because the

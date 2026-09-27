@@ -30,9 +30,7 @@ Future<void> _loadPaywallFonts() async {
   for (final MapEntry(key: family, value: paths) in families.entries) {
     final loader = FontLoader(family);
     for (final path in paths) {
-      loader.addFont(
-        File(path).readAsBytes().then((b) => ByteData.sublistView(b)),
-      );
+      loader.addFont(File(path).readAsBytes().then(ByteData.sublistView));
     }
     await loader.load();
   }

@@ -41,9 +41,7 @@ abstract final class AppConfig {
   );
 
   /// Privacy policy — Arul's OWN page, never a shared one.
-  ///
   /// The old `/privacy/` still resolves so older installs do not 404, but it now describes the WEBSITE.
-  /// So it must never be pointed at again (CLAUDE.md §1).
   /// The trailing slash is REQUIRED — Astro serves these as directories and 308s the slash-less form.
   /// Without it the WebView shows a redirect nobody asked for on the way to a policy screen.
   /// The Play listing carries its OWN copy of this URL -> the two must not disagree; update both.
@@ -93,9 +91,6 @@ abstract final class AppConfig {
   );
 
   /// Whether Firebase (Crashlytics + Performance + GA4) initialises and receives events.
-  ///
-  /// Runs in every real build — debug, profile, release — and is skipped only under `flutter test`.
-  /// Gated on the `FIREBASE_ENABLED` define so tests and define-less builds stay inert.
   /// The flag without android/app/google-services.json makes `Firebase.initializeApp()` fail.
   /// That file is git-ignored -> a fresh clone must supply its own before turning the flag on.
   static bool get firebaseEnabled =>

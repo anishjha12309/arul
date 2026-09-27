@@ -34,11 +34,7 @@ function encodeKey(key: string): string {
 export const SUBMISSION_PREFIX = "user/";
 export const SUBMISSION_INFIX = "/submissions/";
 
-export async function presignGet(
-  env: Env,
-  key: string,
-  ttlSecs = 300,
-): Promise<string> {
+export async function presignGet(env: Env, key: string, ttlSecs = 300): Promise<string> {
   const client = makeClient(env);
   const endpoint = env.R2_ENDPOINT.replace(/\/$/, "");
   const url = `${endpoint}/${env.R2_BUCKET}/${encodeKey(key)}?X-Amz-Expires=${ttlSecs}`;
@@ -49,12 +45,7 @@ export async function presignGet(
   return signed.url.toString();
 }
 
-export async function presignPut(
-  env: Env,
-  key: string,
-  contentType: string,
-  ttlSecs = 300,
-): Promise<string> {
+export async function presignPut(env: Env, key: string, contentType: string, ttlSecs = 300): Promise<string> {
   const client = makeClient(env);
   const endpoint = env.R2_ENDPOINT.replace(/\/$/, "");
   const url = `${endpoint}/${env.R2_BUCKET}/${encodeKey(key)}?X-Amz-Expires=${ttlSecs}`;
@@ -84,10 +75,7 @@ export async function putPublicJson(
   });
 }
 
-export async function getJsonString(
-  bucket: R2Bucket,
-  key: string,
-): Promise<string | null> {
+export async function getJsonString(bucket: R2Bucket, key: string): Promise<string | null> {
   const obj = await bucket.get(key);
   if (!obj) return null;
   return obj.text();

@@ -4,15 +4,14 @@
 
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:fake_async/fake_async.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/settings/domain/app_config_repository.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _FakeConnectivity implements Connectivity {
   _FakeConnectivity(this._initial, this._changes);

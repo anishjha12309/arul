@@ -2,18 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'tokens.dart';
 
-/// Type scale.
-///
 /// `fontFamily` is null everywhere = the platform stack (Roboto plus Android's Noto fallbacks).
-/// Bundling faces for five Indic scripts adds megabytes to reproduce what the OS renders for free.
-/// A face covering Latin but not Tamil falls back mid-sentence -> worse than never leaving the stack.
-/// So hierarchy is bought with size, weight, case, tracking and colour, and nothing else:
-///   * a real size jump per tier (40 → 26 → 21 → 18 → 15), never a 1pt nudge that reads as a mistake;
-///   * weight only ever 400 / 600 / 700 -> three steps, so each one means something;
-///   * NEGATIVE tracking on everything ≥18pt — large system type set at 0 looks loose and default;
-///   * WIDE tracking + uppercase on the 11pt eyebrow — the cheapest "considered" cue in the app;
-///   * colour as the third axis: onSurface for what you read, muted for what you glance at.
-///
 /// An unset slot falls back to Material's own TextTheme, in its BLACK/WHITE colour rather than ours.
 /// So every slot is filled deliberately -> no widget can silently paint outside the palette.
 abstract final class ArulType {
@@ -118,8 +107,6 @@ abstract final class ArulType {
   static TextTheme onMedia() => scale(Colors.white, ArulColors.ivoryText);
 
   /// The wordmark — "Arul", and ONLY "Arul".
-  ///
-  /// A serif at display size reads as a designed mark rather than as UI text.
   /// Marcellus is Latin-only -> a localized string set in it falls back per glyph, in a face nobody chose.
   /// So this is a factory and NOT a TextTheme slot -> reaching for it has to be a deliberate act.
   static TextStyle wordmark(Color color) => TextStyle(

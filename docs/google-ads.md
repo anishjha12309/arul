@@ -71,7 +71,7 @@ window, not a consent fault.** Re-read the day once it has settled before conclu
 ## There is ONE Firebase↔Ads link, and GA4 owns it
 
 Firebase → Project settings → Integrations → Google Ads is a read-only mirror ("Google Ads linking is
-now managed within Google Analytics"). Don't hunt for a second link to repair. Verify at GA4 → Admin
+now managed within Google Analytics"). Don't hunt for a second link to repair. Read it at GA4 → Admin
 → Product links → **Google Ads links**: account type must read **Account**, not Manager — if the Ads
 account sits under an MCC, the property must be linked to the MANAGER, not the child.
 

@@ -1,13 +1,4 @@
 /**
- * Payment routes — PhonePe Standard Checkout v2 (OAuth / O-Bearer). /payments/webhook is the only un-JWT'd one.
- *
- * ONE FREE TRIAL PER USER, and `trial_end` is the consumed-marker -> it is written exactly ONCE, never overwritten
- * trial_end NULL -> trial-eligible -> PENNY_DROP setup, ₹2 auto-reversed by PhonePe
- * trial_end NOT NULL -> trial consumed -> TRANSACTION setup, a REAL ₹199 first debit at setup time
- * A completed first setup lands 'trialing'; a completed repeat setup lands 'active', already charged
- * The autopay cron then notifies 24h ahead and executes at next_debit_at -> success extends a month
- * Webhook events are deduped by the KV key "txn:<orderId>" -> PhonePe redelivers, so every write must be idempotent
- * The webhook is authenticated by a header equal to SHA256(username + ":" + password) -> there is no body signature
  * Every response shape here is parsed by the shipped Flutter models -> a renamed key breaks installs that never update
  */
 
@@ -16,10 +7,7 @@ import type { Env } from "../env.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
-import {
-  reportPostHogFirstConversion,
-  reportPostHogSubscriptionCancel,
-} from "../lib/posthog.js";
+import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import {
@@ -43,23 +31,14 @@ const MONTHLY_PRICE_PAISE = 19900;
 
 /**
  * Free-trial length. The ₹2 PENNY_DROP only AUTHORIZES the mandate — the trial itself is ours.
- *
  * Both the webhook and the /payments/status reconcile grant it -> they MUST agree -> one constant, never two literals
- * A drift gives two users different trials depending on which path confirmed their mandate first
  * It is also the debit clock -> next_debit_at = now + this -> the paywall copy must say the same number
  */
 const TRIAL_DAYS = 1;
 const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
 
 /**
- * How long a claimed-but-unfinished mandate setup blocks a second attempt.
- *
- * It only needs to outlive the PhonePe setup call itself, observed at 1-3 s
- * The users-row lock serializes concurrent initiates, and /payments/abandon releases a claim the moment the SDK returns
- * This window is the backstop for attempts that CANNOT abandon -> app killed at the sheet, network gone mid-flow
- * Every second here is a second a returning user stares at "setup in progress" -> at 15 s a double-tap surfaced it
  * PAIRED with the client's silent retries -> their delays SUM to this window
- * So by the final retry a claim born before the first attempt has provably lapsed -> only a concurrent attempt refuses
  * Change either side and re-check that sum(retry delays) >= this window
  */
 const SETUP_CLAIM_WINDOW_MS = 4_000;
@@ -75,10 +54,6 @@ interface PriorSubscription {
 
 /**
  * Why a claim was refused. The two reasons MUST stay distinguishable all the way out to the client.
- *
- * "You already pay us" is a SUCCESS the app celebrates -> it flips to Manage Subscription
- * "Your own setup is still running" is a TRANSIENT retry -> the app tries again
- * Answering the second with the first told a double-tapping user their purchase succeeded when NO mandate existed
  */
 type ClaimConflict = "active_subscription" | "setup_in_flight";
 
@@ -111,43 +86,24 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return errorResponse(400, "invalid_plan", "plan must be 'monthly' or 'yearly'");
   }
 
-  // Direct UPI-intent flow, additive and opt-in -> the app sends the package of the UPI app the user picked
-  // It gets back an intentUrl opening that app straight on its mandate sheet -> no hosted PAY_PAGE at all
-  // Absent or malformed -> the SDK page flow, exactly as before -> old builds are untouched
   // Shape check only -> PhonePe validates the package itself -> do not maintain an allow-list here
   const targetApp =
-    typeof body.targetApp === "string" &&
-    /^[a-zA-Z][a-zA-Z0-9._]{2,100}$/.test(body.targetApp)
+    typeof body.targetApp === "string" && /^[a-zA-Z][a-zA-Z0-9._]{2,100}$/.test(body.targetApp)
       ? body.targetApp
       : null;
 
-  // On-screen QR: the app has NO mandate-capable UPI app and renders the intentUrl for a second
-  // phone to scan. PhonePe makes paymentMode.targetApp mandatory on UPI_INTENT, so the app still
-  // names a package -> the QR is the truth of the handoff and the package is a formality PhonePe
-  // requires. The returned upi://mandate carries no app binding of its own, which is what lets any
-  // scanner take it. Recorded as its own `upi_target_app` value: filing these under com.phonepe.app
-  // would put mandates PhonePe never saw into the column that answers "which app completes one".
   const qrMode = body.mode === "qr" && targetApp !== null;
   const recordedTargetApp = qrMode ? "qr" : (targetApp ?? "phonepe_page");
 
   const sql = getDb(env);
   try {
-    // ── One free trial per user ────────────────────────────────────────────
-    // trial_end is written EXACTLY ONCE, at the first completed setup -> webhook and reconcile COALESCE, never overwrite
-    // So a non-null trial_end means the trial is consumed -> authorize with a REAL ₹199 TRANSACTION, not a PENNY_DROP
     // Build the ids up front -> the claim below writes them BEFORE PhonePe is called
     // That is what lets a concurrent request see a setup is already underway
     const merchantSubscriptionId = buildMerchantSubscriptionId(sub);
     const merchantOrderId = buildMerchantOrderId(sub, "S");
 
-    // ── Serialize every initiate for this user ─────────────────────────────
-    // Read-then-call-PhonePe-then-write let two concurrent initiates read the SAME prior row and both create a mandate
-    // The second then overwrote the first's merchant_subscription_id -> mandate #1 stayed live at PhonePe, unreferenced
-    // Its webhook matched no row -> 200 OK, no grant, no PhonePe retry -> the debit had nowhere to land
-    // And /payments/cancel and DELETE /me could never revoke it -> both look the id up from the row
     // The lock is on the USERS row, NOT subscriptions -> a first-time subscriber has no subscriptions row to lock
     // FOR UPDATE there would lock nothing and the exact race would slip through
-    // Inside the lock, three things happen atomically: re-read the prior row, refuse an in-flight setup, CLAIM the new ids
     // Claiming BEFORE the PhonePe call is what makes the in-flight check work at all
     // The marker must be visible to the second request while the first is still waiting on PhonePe
     const claim = (await sql.begin(async (tx) => {
@@ -161,18 +117,12 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       const existing = prior[0] ?? null;
 
       const priorPeriodEnd = toDate(existing?.current_period_end);
-      const hasLivePeriod =
-        priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
-      if (
-        existing &&
-        (existing.status === "trialing" || existing.status === "active") &&
-        hasLivePeriod
-      ) {
+      const hasLivePeriod = priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
+      if (existing && (existing.status === "trialing" || existing.status === "active") && hasLivePeriod) {
         return { conflict: "active_subscription" } as ClaimResult;
       }
 
       // A pending row touched moments ago means another request is MID-SETUP -> refuse, never authorize a second mandate
-      // Its causes: a double-tap that beat the CTA disable, a timeout retry whose first attempt succeeded, a relaunch
       // The caller retries and gets the settled state -> refusing costs a retry, authorizing costs a stranded mandate
       const claimedAt = toDate(existing?.updated_at);
       if (
@@ -186,10 +136,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
       // Whatever mandate this row pointed at is about to become unreachable -> capture it UNDER the lock
       // Otherwise a losing concurrent request revokes the WINNER's mandate, using an id it read before the race
-      // A trialing/active/paused row whose period lapsed is a mandate STILL BILLING -> its dunning ladder is running
-      // Revoking it here killed 155 of 179 such mandates checked at PhonePe, while 95% of the replacements were never approved
-      // So PARK it: the grant on the new mandate revokes it, a failed or abandoned setup hands the row back to it
-      // Only a pending or expired row's mandate is revoked now -> never approved, or the ladder already gave up on it
       // A parked id already on the row rides along -> a second re-subscribe over an unapproved one must not lose it
       const keepAlive =
         existing !== null &&
@@ -199,9 +145,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         ? existing.merchant_subscription_id
         : (existing?.superseded_mandate_id ?? null);
       const superseded =
-        existing &&
-        existing.merchant_subscription_id &&
-        (existing.status === "pending" || existing.status === "expired")
+        existing?.merchant_subscription_id && (existing.status === "pending" || existing.status === "expired")
           ? existing.merchant_subscription_id
           : null;
 
@@ -240,8 +184,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     })) as unknown as ClaimResult;
 
     if (claim.conflict === "setup_in_flight") {
-      // A DISTINCT code on purpose -> the app turns `already_subscribed` into a SUCCESS state
-      // Nothing has been authorized here yet -> reusing that code would be a lie -> see ClaimConflict
       return errorResponse(
         409,
         "setup_in_progress",
@@ -249,11 +191,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       );
     }
     if (claim.conflict) {
-      return errorResponse(
-        409,
-        "already_subscribed",
-        "You already have an active subscription",
-      );
+      return errorResponse(409, "already_subscribed", "You already have an active subscription");
     }
 
     const { supersededMandateId, trialEligible } = claim;
@@ -274,8 +212,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       `;
     };
 
-    // The mandate this row pointed at before the claim is now unreferenced -> revoke it
-    // Otherwise the user ends up with TWO live mandates debiting them -> that is the failure this prevents
     // Captured under the user-row lock -> in a real race this is the OTHER request's mandate, not a pre-race snapshot
     // Best-effort and OFF the response path -> a PhonePe hiccup must never break a legitimate retry
     const revokeSuperseded = () => {
@@ -291,18 +227,12 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
               }
             })
             .catch((err: unknown) => {
-              console.error(
-                `[payments/initiate] Revoke of superseded mandate ${staleMandateId} threw:`,
-                err,
-              );
+              console.error(`[payments/initiate] Revoke of superseded mandate ${staleMandateId} threw:`, err);
             }),
         );
       }
     };
 
-    // ── Direct UPI-intent path (app sent targetApp) ────────────────────────
-    // Falls back to the SDK setup below on ANY failure, reusing the SAME claimed ids
-    // A second initiate here would bounce off its own SETUP_CLAIM_WINDOW_MS -> reuse is the only workable path
     // Accepted edge: a 200 without an intentUrl leaves an order at PhonePe under this merchantOrderId
     // The sdk/order fallback may then 409/400 -> the user's next tap supersedes it cleanly
     if (targetApp) {
@@ -357,8 +287,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       return errorResponse(502, "phonepe_error", "PhonePe gateway error");
     }
 
-    // Diagnostic for the PR004/Unauthorized class of on-device failure -> the SDK authenticates with merchantId + token
-    // The Worker validates NEITHER -> a wrong merchant id or a web-checkout token both still return 200 from here
     // They only blow up inside the SDK -> log their SHAPE, never their value, so the next failed tap names the culprit
     console.log(
       `[payments/initiate] env=${env.PHONEPE_ENV} ` +
@@ -372,8 +300,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     await attachPhonePeOrder(ppResult.orderId, "phonepe_page");
     revokeSuperseded();
 
-    // The Flutter SDK's startTransaction needs the SDK order token, returned as
-    // the top-level `token` by the Create SDK Order endpoint — see phonepe.ts.
     return c.json({
       merchantSubscriptionId,
       merchantOrderId,
@@ -391,8 +317,6 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       // host while the app inits the SDK with "PRODUCTION\n" — the two would
       // silently disagree. The client rejects an empty/missing value outright.
       environment: env.PHONEPE_ENV.trim(),
-      // Additive — old app versions ignore these. trialEligible=false means the
-      // user is being charged ₹199 upfront (amountPaise) at mandate setup.
       trialEligible,
       amountPaise: trialEligible ? 200 : MONTHLY_PRICE_PAISE,
     });
@@ -424,27 +348,22 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   const authValid = await verifyCallbackAuth(authHeader, webhookUsername, webhookPassword);
   if (!authValid) {
     // LOUD on purpose -> a silent 401 made two very different situations look identical from outside
-    // "PhonePe never sent us anything" and "PhonePe sends everything and our credentials reject all of it"
-    // Both produce zero DB writes, zero KV marks and zero log lines -> a broken webhook reads exactly like an idle one
-    // It stays that way until someone notices renewals are not landing -> log the failure, loudly
     // Log SHAPE, never content -> whether a header arrived, its length, whether it looks like 64-char lowercase hex
     // Never the header itself and never the configured credentials -> a log is not a place to leak either
-    // Mirrored in Pakiza's workers/src/routes/payments.ts -> keep both in sync
     const looksLikeSha256Hex = /^[0-9a-f]{64}$/.test(authHeader.trim());
     let eventPeek = "<unparseable>";
     try {
       const peek = JSON.parse(rawBody) as PhonePeWebhookPayload;
-      eventPeek =
-        `${peek.event ?? peek.type ?? "?"} sub=${merchantSubscriptionIdOf(peek.payload) ?? "?"}`;
+      eventPeek = `${peek.event ?? peek.type ?? "?"} sub=${merchantSubscriptionIdOf(peek.payload) ?? "?"}`;
     } catch {
       // leave the placeholder
     }
     console.error(
       `[payments/webhook] REJECTED a delivery on auth. ` +
-      `authHeader present=${authHeader.length > 0} len=${authHeader.length} ` +
-      `sha256HexShaped=${looksLikeSha256Hex} event=${eventPeek}. ` +
-      `If this is PhonePe, the dashboard's webhook username/password do not match ` +
-      `PHONEPE_WEBHOOK_USERNAME/PHONEPE_WEBHOOK_PASSWORD on this Worker.`,
+        `authHeader present=${authHeader.length > 0} len=${authHeader.length} ` +
+        `sha256HexShaped=${looksLikeSha256Hex} event=${eventPeek}. ` +
+        `If this is PhonePe, the dashboard's webhook username/password do not match ` +
+        `PHONEPE_WEBHOOK_USERNAME/PHONEPE_WEBHOOK_PASSWORD on this Worker.`,
     );
     return errorResponse(401, "invalid_signature", "Webhook authorization failed");
   }
@@ -463,12 +382,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   const pp = payload.payload ?? {};
 
   // 3. Idempotency — dedupe on (event, PhonePe orderId). The EVENT MUST be part of the key
-  // One redemption cycle reuses a single merchantOrderId across notify and redeem
-  // So PhonePe emits several DISTINCT events carrying the SAME orderId -> notification, order, transaction
-  // With an order-only key the first arrival burned the slot -> usually the unhandled notification event
-  // Every later event for that order was then dropped as "already processed" -> the debit-success handler never ran
-  // status stayed 'trialing', the period never extended, the referral reward never granted
-  // Scoping per event still dedupes a genuine duplicate DELIVERY -> each distinct event is processed exactly once
   const dedupeKey = pp.orderId ?? pp.merchantOrderId ?? "";
   if (!dedupeKey) {
     console.error("[payments/webhook] Missing orderId/merchantOrderId, event:", event);
@@ -488,7 +401,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
     // A corrected redelivery of that same event could then never be handled -> ack 200, but leave the slot free
     console.error(
       `[payments/webhook] Missing merchantSubscriptionId — not marking processed. ` +
-      `event=${event} order=${dedupeKey}`,
+        `event=${event} order=${dedupeKey}`,
     );
     return new Response("ok", { status: 200 });
   }
@@ -499,29 +412,20 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   if (!merchantSubId.startsWith("DKS_")) {
     console.error(
       `[payments/webhook] merchantSubscriptionId ${merchantSubId} is not an Arul id — ` +
-      `misrouted by the dispatcher; not processing and not marking`,
+        `misrouted by the dispatcher; not processing and not marking`,
     );
     return new Response("ok", { status: 200 });
   }
 
   const sql = getDb(env);
   try {
-    // 4. Route by event type. Setup success arrives under TWO names, one per setup surface
-    // The SDK/hosted-page flow emits checkout.order.completed; the UPI-intent flow emits subscription.setup.order.completed
-    // Identical meaning and identical payload nesting -> both must route to the SAME grant
-    // The dashboard webhook must have the subscription.setup.order.* events SELECTED or PhonePe never sends them
     if (
       event === "checkout.order.completed" ||
       event === "checkout.setup.order.completed" ||
       event === "subscription.setup.order.completed"
     ) {
-      // Mandate setup succeeded. ONE FREE TRIAL PER USER, decided off trial_end
-      // trial_end IS NULL -> first ever setup -> 'trialing' plus the free trial
-      // trial_end NOT NULL -> initiate authorized this mandate with a real ₹199 TRANSACTION -> 'active' for a month
       // The CASE expressions read the row's OLD trial_end under Postgres SET semantics -> decide and write in ONE statement
-      // COALESCE keeps the ORIGINAL trial_end forever -> that column is the consumed-marker, not a date to refresh
       // The ELSE branch is itself a ₹199 debit -> the three debit-tracking columns move on it and ONLY on it
-      // Same rule as the cron settle: first_debit_at is stamped once, the count and paise total grow every time
       const trialEnd = new Date(Date.now() + TRIAL_MS);
       const paidEnd = addOneMonth(new Date());
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
@@ -530,7 +434,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // The trial/paid decision reads the row's OWN trial_end, and the app's status poll runs the identical reconcile
       // Whichever lands first writes trial_end -> the second then re-reads it and concludes "repeat subscriber"
       // It would hand out 'active', a FULL MONTH of premium and a referral reward off a ₹2 PENNY_DROP
-      // The reconcile path was always scoped to pending -> this branch was the unguarded half
       // KV dedupe cannot cover it -> the two writers are the webhook and the app poll, which share no key
       // COALESCE on phonepe_subscription_id -> a payload that omits subscriptionId must never blank an id we hold
       const updated = await sql<{ user_id: string; status: string }[]>`
@@ -559,13 +462,9 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       let row = updated[0];
 
       if (!row) {
-        // The app auto-resolves an intent setup the user walked away from -> that can RACE a genuine approval by seconds
-        // Abandon leaves the row 'expired', or 'cancelled' when it restored a still-paid period
         // The user PAID -> a ₹199 TRANSACTION, or an authorized trial mandate -> refusing the grant eats real money
         // So resurrect, scoped to the EXACT ids of THIS event and only those two post-abandon statuses
         // An OLD dunning-expired or user-cancelled subscription can never match -> fresh setups carry fresh ids
-        // And this order's own completion was KV-deduped at setup time -> only the abandon-raced claim qualifies
-        // 'cancelled' is in the list for the restore rule -> without it a late-landing approval swallows a real ₹199
         const resurrected = await sql<{ user_id: string; status: string }[]>`
           UPDATE subscriptions
           SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
@@ -593,21 +492,15 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           row = resurrected[0];
           console.log(
             `[payments/webhook] Setup completed for sub ${merchantSubId} — ` +
-            `RESURRECTED an abandon-expired claim (approval raced the auto-cancel); grant applied`,
+              `RESURRECTED an abandon-expired claim (approval raced the auto-cancel); grant applied`,
           );
         }
       }
 
       if (!row) {
-        // Either the poll already reconciled this exact setup, the common benign case, or the id matches nothing
         // Both are state no-ops but they are NOT the same operationally -> the log must say which
-        // phonepe_subscription_id is still backfilled when NULL -> the reconcile path reads it from order-status
-        // That response does not always carry paymentFlow.subscriptionId, whereas the webhook payload does
-        // The write is idempotent with no financial effect -> it is the only field the guard above would strand empty
         // The ::text casts are LOAD-BEARING -> `fetch_types:false` gives Postgres no type context for a bare parameter
         // A parameter appearing only inside `${x} IS NOT NULL` then fails the whole statement on type inference
-        // That threw for EVERY completed setup whose row was not 'pending' -> the common poll-reconciled-first case
-        // The catch below turned it into a 500 -> PhonePe retried a delivery with nothing left to do
         const diag = await sql<{ status: string; had_sub_id: boolean }[]>`
           UPDATE subscriptions
           SET phonepe_subscription_id = COALESCE(phonepe_subscription_id, ${phonepeSubId}::text),
@@ -619,20 +512,18 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           RETURNING status, (phonepe_subscription_id IS NOT NULL) AS had_sub_id
         `;
         if (diag.length === 0) {
-          console.error(
-            `[payments/webhook] Setup completed for UNKNOWN sub ${merchantSubId} — no such row`,
-          );
+          console.error(`[payments/webhook] Setup completed for UNKNOWN sub ${merchantSubId} — no such row`);
         } else {
           console.log(
             `[payments/webhook] Setup completed for sub ${merchantSubId} but row is ` +
-            `'${diag[0].status}', not 'pending' — already reconciled by the status poll; ` +
-            `no state change (phonepe_subscription_id present=${diag[0].had_sub_id})`,
+              `'${diag[0].status}', not 'pending' — already reconciled by the status poll; ` +
+              `no state change (phonepe_subscription_id present=${diag[0].had_sub_id})`,
           );
         }
       } else {
         console.log(
           `[payments/webhook] Setup completed for sub ${merchantSubId} → ` +
-          `${row.status}, amount=${pp.amount ?? "?"}`,
+            `${row.status}, amount=${pp.amount ?? "?"}`,
         );
       }
 
@@ -651,17 +542,11 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           );
         }
       }
-
     } else if (
       event === "checkout.order.failed" ||
       event === "checkout.setup.order.failed" ||
       event === "subscription.setup.order.failed"
     ) {
-      // Mandate setup failed, on either setup surface -> RESTORE, never simply expire
-      // A resubscribe rides over the user's ONE row -> at claim time a cancelled-but-still-paid row became 'pending'
-      // Flipping a failed attempt to 'expired' therefore STRIPPED days the user had already paid for
-      // While current_period_end is still ahead the correct post-failure state is 'cancelled'
-      // That is entitled to what they paid for, with no future debits -> exactly where they stood before Resubscribe
       await sql`
         UPDATE subscriptions
         SET status                   = CASE
@@ -678,24 +563,19 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         WHERE merchant_subscription_id = ${merchantSubId}
           AND status = 'pending'
       `;
-
     } else if (
       (event === "subscription.redemption.order.completed" ||
         event === "subscription.redemption.transaction.completed") &&
       typeof pp.state === "string" &&
       pp.state !== "COMPLETED"
     ) {
-      // PhonePe: "always use the root-level payload.state" -> a transaction.completed can carry an order still PENDING
-      // The order event, or the cron's reconcile, grants once the ORDER is COMPLETED -> nothing to do here
       console.log(
         `[payments/webhook] ${event} for sub ${merchantSubId} carries state=${pp.state} — not a settled order, no grant`,
       );
-
     } else if (
       event === "subscription.redemption.order.completed" ||
       event === "subscription.redemption.transaction.completed"
     ) {
-      // Debit succeeded -> move to active and extend the period by a month
       // The self-join FROM reads the row's PRE-UPDATE snapshot -> the only place the prior status still exists
       // 'trialing' at settle = the FIRST trial->paid conversion; 'active' = a renewal
       // Every SET and WHERE column is qualified -> both aliases expose the same column names
@@ -735,17 +615,11 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
 
       // Referral reward -> this user just made a paid debit -> only the FIRST ever grants, via the status<>'rewarded' guard
       if (activated.length > 0) {
-        // The debit landed on a PARKED mandate while a re-subscribe was pending -> the paid mandate is the live one again
-        // The newer setup was never approved (it is what the row held) -> retire it so nothing can approve it later
         const priorMandateId = activated[0].prior_mandate_id ?? null;
         if (priorMandateId && priorMandateId !== merchantSubId) {
           revokeInBackground(c, priorMandateId, "payments/webhook");
         }
         await grantReferralReward(sql, activated[0].user_id);
-        // NO ad-platform conversion is reported from the server -> GA4 `purchase` and Meta `Subscribe` are BOTH gone
-        // One conversion action fed by two source types desynchronises attribution -> see cron/autopay-notify.ts
-        // `trial_started` / StartTrial is the only event campaigns bid on -> Neon is revenue truth
-        // PostHog stays -> product analytics, not an ad-attribution source
         // FIRST trial->paid only, judged on prior_status='trialing' -> renewals stay out
         // The order and transaction events for one debit both land here -> only the first sees 'trialing'
         // The per-transaction KV mark inside dedupes against the cron settling the same debit
@@ -759,25 +633,14 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           });
         }
       }
-
     } else if (
       event === "subscription.redemption.order.failed" ||
       event === "subscription.redemption.transaction.failed"
     ) {
-      // Debit failed -> ACKNOWLEDGE ONLY, never touch the row -> retry_count is the dunning ladder's INDEX
-      // The cron's reconcile applies the FAILED transition once per order and schedules the next rung off it
-      // An increment here advances the index WITHOUT scheduling anything -> a skipped rung and a shortened window
-      // It also double-counted -> the webhook adds one, then the cron's reconcile adds one for the same order
       console.log(
         `[payments/webhook] Redemption failed for sub ${merchantSubId}, event: ${event} — cron owns dunning`,
       );
-
-    } else if (
-      event === "subscription.revoked" ||
-      event === "subscription.cancelled"
-    ) {
-      // Mandate revoked, by the user in their PSP app or by our own cancel call -> stop future debits
-      // Do NOT strip entitlement -> they already paid for the current cycle -> premium runs to current_period_end
+    } else if (event === "subscription.revoked" || event === "subscription.cancelled") {
       const parked = (await sql`
         UPDATE subscriptions AS s
         SET status        = 'cancelled',
@@ -801,7 +664,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           occurredAt: parked[0].updated_at ?? null,
         });
       } else {
-        // A PARKED mandate the user revoked mid-re-subscribe -> there is nothing to hand the row back to any more
         await sql`
           UPDATE subscriptions
           SET superseded_mandate_id = NULL,
@@ -809,7 +671,6 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           WHERE superseded_mandate_id = ${merchantSubId}
         `;
       }
-
     } else if (event === "subscription.paused") {
       await sql`
         UPDATE subscriptions
@@ -817,13 +678,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             updated_at = now()
         WHERE merchant_subscription_id = ${merchantSubId}
       `;
-
     } else if (event === "subscription.unpaused") {
-      // Resume -> back to active, or trialing while still inside the trial window, with the DEBIT CLOCK REARMED
-      // The statement lives in lib/subscription-rearm.ts: the cron's Pass D heals this same lost event
-      // hourly, and one restore written twice is a restore that will one day disagree with itself
       await rearmUnpausedSubscription(sql, { merchantSubscriptionId: merchantSubId });
-
     } else if (
       event === "pg.refund.accepted" ||
       event === "pg.refund.completed" ||
@@ -833,9 +689,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // Do NOT mutate subscription state -> a refund does not end the mandate -> log it for the audit trail only
       console.log(
         `[payments/webhook] Refund event ${event} for sub ${merchantSubId}, ` +
-        `order=${pp.merchantOrderId ?? pp.orderId}, state=${pp.state}`,
+          `order=${pp.merchantOrderId ?? pp.orderId}, state=${pp.state}`,
       );
-
     } else {
       // Unhandled event -> log and ACK -> a 4xx here makes PhonePe retry something we will never handle
       console.log(`[payments/webhook] Unhandled event: ${event}, sub: ${merchantSubId}`);
@@ -843,13 +698,10 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
 
     await env.KV.put(kvKey, "1", { expirationTtl: KV_TXN_TTL });
     return new Response("ok", { status: 200 });
-
   } catch (err) {
     console.error("[payments/webhook] DB error:", err);
     // 500 so PhonePe RETRIES -> a transient Neon fault on a completed setup used to be acked 200
-    // The user had paid, the row never updated, and the event was gone forever with no dead-letter
     // Retrying is safe precisely because the idempotency mark is written ONLY on the success path
-    // So a redelivery re-runs from a clean slate and lands exactly one state transition
     return errorResponse(500, "server_error", "Temporary failure — please retry");
   } finally {
     c.executionCtx.waitUntil(sql.end());
@@ -889,20 +741,14 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
     // Scoped to 'pending' -> both reconcile branches below are no-ops for any other status
     // Calling PhonePe for a lapsed row spent a real API request that could never change an outcome
     // It matters because the paywall reconciles on EVERY open -> that is a lot of pointless calls
-    // The guard used to live on the client, keyed off a cached entitlement that was stale exactly when it counted
-    // It lives here now -> the ROW decides, never a cache
     if (merchantOrderId && (row.status as string) === "pending") {
       try {
         const orderStatus = await getOrderStatus(env, merchantOrderId);
         phonePeStatus = { state: orderStatus.state, orderId: orderStatus.orderId };
 
         // PhonePe says COMPLETED while we still say pending -> reconcile -> this MIRRORS the webhook's grant branch
-        // trial_end IS NULL -> the first trial; already set -> a repeat subscriber who paid ₹199 at setup
         // The two paths must stay identical -> whichever lands first decides, and they cannot disagree
-        if (
-          orderStatus.state === "COMPLETED" &&
-          (row.status as string) === "pending"
-        ) {
+        if (orderStatus.state === "COMPLETED" && (row.status as string) === "pending") {
           const trialEnd = new Date(Date.now() + TRIAL_MS);
           const paidEnd = addOneMonth(new Date());
           const phonepeSubId = orderStatus.paymentFlow?.subscriptionId ?? null;
@@ -957,11 +803,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           (row.status as string) === "pending"
         ) {
           // Setup died at the UPI app -> the direct-intent flow's user-cancel lands HERE, with no SDK callback
-          // Mirror the failed-setup webhook, RESTORE rule included -> the two paths must never disagree
-          // A failed resubscribe over a still-paid period goes back to 'cancelled', the entitlement they owned
-          // Only a genuinely period-less or lapsed row becomes 'expired'
           // Without this branch a cancelled intent setup polled its whole budget against a row nothing would flip
-          // Without the restore it STRIPPED a live trial
           const failed = await sql<{ status: string }[]>`
             UPDATE subscriptions
             SET status                   = CASE
@@ -988,16 +830,8 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
     }
 
     // Reconcile the live mandate for revoke/cancel AND pause/unpause -> a user acting in their UPI app fires no webhook
-    // So the row goes stale in EITHER direction -> all three heals below are needed
-    // CANCELLED/REVOKED while we say live -> flip to 'cancelled', KEEPING current_period_end, which they paid for
-    // PAUSED while we say live -> park as 'paused'
-    // ACTIVE while we say 'paused' -> the unpause webhook was lost -> restore AND rearm next_debit_at
-    // Without that rearm the row is a zombie: "Active" forever, never billed, premium dying at period end
     // Scoped to these statuses -> the pending-setup poll above is not charged a second call, and free users cost nothing
-    if (
-      merchantSubId &&
-      ["trialing", "active", "paused"].includes(row.status as string)
-    ) {
+    if (merchantSubId && ["trialing", "active", "paused"].includes(row.status as string)) {
       try {
         const subStatus = await getSubscriptionStatus(env, merchantSubId);
         phonePeStatus = phonePeStatus ?? { state: subStatus.state };
@@ -1038,12 +872,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           `;
           row.status = "paused";
           row.next_debit_at = null;
-        } else if (
-          subStatus.state === "ACTIVE" &&
-          (row.status as string) === "paused"
-        ) {
-          // Lost-unpause heal -> the same restore AND rearm as the unpaused webhook -> the rearm is not optional
-          // Literally the same statement: three callers, one home, none of them able to forget the clock
+        } else if (subStatus.state === "ACTIVE" && (row.status as string) === "paused") {
           const restored = await rearmUnpausedSubscription(sql, {
             subscriptionId: row.id as string,
           });
@@ -1057,10 +886,6 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
       }
     }
 
-    // ── A debit that settled while nobody was looking ───────────────────────
-    // The cron reconciles trialing/active rows only. A row that left that set with its redemption order still open
-    // (cancelled in-app, or claimed by a re-subscribe) can have that order COMPLETE afterwards -> money taken, no premium
-    // Two live users were found that way. Only a row that NEVER converted qualifies -> a paid period is never granted twice
     const redemptionOrderId = (row.redemption_order_id as string | null | undefined) ?? null;
     const trialEndAt = toDate(row.trial_end);
     const periodEndAt = toDate(row.current_period_end);
@@ -1158,7 +983,6 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
       },
       phonepe: phonePeStatus,
     });
-
   } catch (err) {
     console.error("[payments/status] error:", err);
     return errorResponse(500, "server_error", "Internal server error");
@@ -1166,11 +990,6 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
     c.executionCtx.waitUntil(sql.end());
   }
 }
-
-// ── POST /payments/cancel ──────────────────────────────────────────────────────
-// User-initiated cancellation from Manage Subscription -> revoke the mandate so no further debit occurs
-// Entitlement is NOT stripped -> premium runs to current_period_end, which they paid for
-// The subscription.cancelled webhook finalizes the status -> we write it locally too, so the UI updates at once
 
 export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -1206,21 +1025,15 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
 
     // Tolerates the already-inactive case -> a user who revoked in their UPI app is already at the desired end state
     // Only a mandate PhonePe still reports LIVE is a genuine failure worth asking the user to retry
-    // "Cancel" means every mandate of theirs -> a PARKED one (re-subscribe pending) is still billing too
     const revoked =
       (await revokeMandateTolerant(env, merchantSubId)) &&
       (parkedMandateId === null ||
         parkedMandateId === merchantSubId ||
         (await revokeMandateTolerant(env, parkedMandateId)));
     if (!revoked) {
-      return errorResponse(
-        502,
-        "phonepe_error",
-        "Could not cancel with PhonePe. Please try again.",
-      );
+      return errorResponse(502, "phonepe_error", "Could not cancel with PhonePe. Please try again.");
     }
 
-    // Stop future debits locally -> keep entitlement to current_period_end -> cancelling is not a refund
     const cancelled = (await sql`
       UPDATE subscriptions
       SET status                = 'cancelled',
@@ -1249,14 +1062,6 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 }
 
-// ── POST /payments/abandon ───────────────────────────────────────────────────
-// Called the moment the PhonePe SDK returns without a success -> backed out, interrupted, or an SDK failure
-// The claimed 'pending' row is what makes /payments/initiate answer 409 setup_in_progress
-// So an explicit release is what lets the very next tap start a fresh setup instead of waiting out the claim window
-// Guarded against the one case where "the SDK said cancel" is a LIE -> the stuck-webview class, where it COMPLETED
-// So ask PhonePe for the order's live state and REFUSE to expire a completed setup
-// The app then gets settled:true and runs its normal status poll, whose reconcile grants exactly like the webhook
-
 export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
 
@@ -1274,8 +1079,7 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
   } catch {
     return errorResponse(400, "invalid_body", "Request body must be valid JSON");
   }
-  const merchantOrderId =
-    typeof body.merchantOrderId === "string" ? body.merchantOrderId.trim() : "";
+  const merchantOrderId = typeof body.merchantOrderId === "string" ? body.merchantOrderId.trim() : "";
   if (!merchantOrderId) {
     return errorResponse(400, "invalid_body", "merchantOrderId is required");
   }
@@ -1318,9 +1122,6 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
       return c.json({ abandoned: false, settled: false });
     }
 
-    // RESTORE rule, shared with the failed-setup webhook and the status reconcile -> all three must agree
-    // Releasing a claim that rode over a still-paid period returns the row to 'cancelled', never 'expired'
-    // That is the entitlement the user already owned -> expiring here stripped a live trial on a backed-out resubscribe
     const released = await sql<{ id: string }[]>`
       UPDATE subscriptions
       SET status                   = CASE
@@ -1340,8 +1141,6 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
       RETURNING id
     `;
 
-    // A never-authorized mandate lapses at PhonePe on its own, and the next initiate's supersede path revokes it
-    // This only makes sure nothing lingers when the user never retries -> best-effort, off the response path
     // GUARDED ON THE UPDATE ACTUALLY FIRING -> zero rows means the row stopped being 'pending' mid-abandon
     // That is the grant landing between the read above and this write -> revoking there tears down a LIVE, paid mandate
     // The user would keep entitlement we can no longer bill -> the read-time checks cannot close this
@@ -1365,13 +1164,12 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
   }
 }
 
-// ── GET /payments/callback ───────────────────────────────────────────────────────
-// Where PhonePe redirects the in-app browser after the mandate -> setupSubscription's redirectUrl points here
 // Authoritative state comes from the S2S webhook and the app's status poll -> this page decides NOTHING
 // It exists only so the redirect does not 404, and to nudge the user back to the app
 
 export function handleCallback(c: Context<{ Bindings: Env }>): Response {
-  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">` +
+  const html =
+    `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>Arul</title></head><body style="font-family:system-ui;text-align:center;padding:48px 24px;color:#2B1116">` +
     `<h2 style="color:#1FA75A">Payment received</h2>` +
     `<p>You can return to the Arul app. Your subscription will activate in a moment.</p>` +
@@ -1380,8 +1178,6 @@ export function handleCallback(c: Context<{ Bindings: Env }>): Response {
 }
 
 /**
- * The approval of a re-subscribe. The mandate initiate PARKED (superseded_mandate_id) has been replaced by an
- * approved one -> revoke it now, and clear the column in the same statement so a retried webhook cannot revoke twice.
  * Self-join so the PRIOR value rides back -> RETURNING alone would hand back the NULL just written.
  */
 async function releaseSupersededMandate(
@@ -1410,7 +1206,9 @@ function revokeInBackground(c: Context<{ Bindings: Env }>, merchantSubId: string
     revokeMandateTolerant(c.env, merchantSubId)
       .then((revoked) => {
         if (!revoked) {
-          console.error(`[${tag}] mandate ${merchantSubId} may STILL BE LIVE at PhonePe — manual revoke required`);
+          console.error(
+            `[${tag}] mandate ${merchantSubId} may STILL BE LIVE at PhonePe — manual revoke required`,
+          );
         }
       })
       .catch((err: unknown) => {

@@ -230,7 +230,7 @@ class AndroidRingtoneSetService implements RingtoneSetService {
     );
 
     try {
-      await response.stream.listen((List<int> chunk) {
+      await response.stream.listen((chunk) {
         sink.add(chunk);
         received += chunk.length;
         if (total != null && total > 0) {

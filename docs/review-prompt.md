@@ -58,7 +58,7 @@ the guard sees it. Every one of these skips this cold open:
 `requests_30d` as a string) is **GA4-only** — off the PostHog allow-list, which is journey-only. It
 means "we asked Play", never "the user saw it" or "rated". Skips emit nothing.
 
-## Verifying the real sheet
+## Seeing the real sheet
 
 `flutter run`, a sideload or an emulator never shows it. Upload the `.aab` to **internal app
 sharing** (or the internal track), install from that link with a Gmail tester account whose Play

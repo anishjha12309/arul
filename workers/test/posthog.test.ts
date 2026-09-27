@@ -5,10 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  reportPostHogFirstConversion,
-  reportPostHogSubscriptionCancel,
-} from "../src/lib/posthog.js";
+import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../src/lib/posthog.js";
 import type { Env } from "../src/env.js";
 
 function makeEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -51,9 +48,7 @@ describe("reportPostHogFirstConversion", () => {
     expect(body.event).toBe("subscription_active");
     // distinct_id = users.id -> the SAME value the app identifies PostHog with at login -> that join is the whole point
     expect(body.distinct_id).toBe("user-1");
-    expect(body.uuid).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
+    expect(body.uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(body.properties).toMatchObject({
       plan: "monthly",
       order_id: "DKS_x_R_1",
@@ -200,11 +195,7 @@ describe("reportPostHogSubscriptionCancel", () => {
       merchant_subscription_id: "DKS_S_1",
       $lib: "arul-worker",
     });
-    expect(env.KV.put).toHaveBeenCalledWith(
-      "ph:subscription_cancel:DKS_S_1",
-      "1",
-      expect.anything(),
-    );
+    expect(env.KV.put).toHaveBeenCalledWith("ph:subscription_cancel:DKS_S_1", "1", expect.anything());
   });
 
   it("stamps the cancel with the row's own instant when given", async () => {
@@ -248,11 +239,7 @@ describe("reportPostHogSubscriptionCancel", () => {
       merchantSubId: null,
       reason: "account_deleted",
     });
-    expect(env.KV.put).toHaveBeenCalledWith(
-      "ph:subscription_cancel:user:user-1",
-      "1",
-      expect.anything(),
-    );
+    expect(env.KV.put).toHaveBeenCalledWith("ph:subscription_cancel:user:user-1", "1", expect.anything());
   });
 
   it("never throws — a network failure is logged and swallowed", async () => {

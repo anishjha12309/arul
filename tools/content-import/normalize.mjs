@@ -5,12 +5,11 @@
 // CRF 24, tuned for native masters, put compression mush on an already-soft frame -> lanczos + unsharp at CRF 21 fixed it.
 // Native or downscaled sources skip the heavy sharpening -> it only adds halos there -> they take CRF 20.
 // Geometry is a COVER fit -> scale(increase) + crop NEVER stretches -> a 9:16 source loses 2px of width and no height.
-import { readFileSync, writeFileSync, mkdirSync, statSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
-import { createRequire } from "module";
+import { readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 
-// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
@@ -36,26 +35,40 @@ const MAX_VID_SECONDS = 10;
 function videoArgs(srcWidth, { maxrateK } = {}) {
   const upscaling = (srcWidth ?? 0) < TARGET_VID.w;
   const sharpen = upscaling
-    ? "unsharp=5:5:0.6:3:3:0.3"   // restore detail the 1.4x upscale softens
-    : "unsharp=3:3:0.3:3:3:0.0";  // near-1:1 resample: a touch only, no halos
+    ? "unsharp=5:5:0.6:3:3:0.3" // restore detail the 1.4x upscale softens
+    : "unsharp=3:3:0.3:3:3:0.0"; // near-1:1 resample: a touch only, no halos
   const vf =
     `scale=${TARGET_VID.w}:${TARGET_VID.h}:force_original_aspect_ratio=increase:` +
     `flags=lanczos:out_range=tv,crop=${TARGET_VID.w}:${TARGET_VID.h},` +
     `${sharpen},setsar=1,format=yuv420p`;
   return [
-    "-vf", vf,
-    "-c:v", "libx264", "-profile:v", "high", "-preset", "slow",
-    "-crf", upscaling ? "21" : "20",
-    "-x264-params", "aq-mode=3",
+    "-vf",
+    vf,
+    "-c:v",
+    "libx264",
+    "-profile:v",
+    "high",
+    "-preset",
+    "slow",
+    "-crf",
+    upscaling ? "21" : "20",
+    "-x264-params",
+    "aq-mode=3",
     ...(maxrateK ? ["-maxrate", `${maxrateK}k`, "-bufsize", `${maxrateK * 2}k`] : []),
-    "-movflags", "+faststart", "-an",
+    "-movflags",
+    "+faststart",
+    "-an",
   ];
 }
 
 const inv = JSON.parse(readFileSync(join(ROOT, "inventory.json"), "utf8"));
 const work = inv.filter((i) => !i.dupOf); // skip exact intra-batch dupes
 
-const stem = (f) => f.replace(/\.[^.]+$/, "").replace(/\s+\(\d+\)$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+const stem = (f) =>
+  f
+    .replace(/\.[^.]+$/, "")
+    .replace(/\s+\(\d+\)$/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
 const mb = (b) => Math.round((b / 1048576) * 10) / 10;
 
 const out = [];
@@ -84,8 +97,20 @@ for (const it of work) {
       const bytes = statSync(outFile).size;
       if (bytes > 10 * 1048576) flags.push("oversize");
       if (upscalingImg) flags.push("upscaled");
-      out.push({ src: it.file, kind: "image", base, ext: "jpg", out: `${base}.jpg`, thumb: null, bytes, srcDims: `${it.width}x${it.height}`, flags });
-      console.log(`[${done}/${work.length}] img ${it.file} -> ${base}.jpg (${mb(bytes)}MB) ${flags.join(",")}`);
+      out.push({
+        src: it.file,
+        kind: "image",
+        base,
+        ext: "jpg",
+        out: `${base}.jpg`,
+        thumb: null,
+        bytes,
+        srcDims: `${it.width}x${it.height}`,
+        flags,
+      });
+      console.log(
+        `[${done}/${work.length}] img ${it.file} -> ${base}.jpg (${mb(bytes)}MB) ${flags.join(",")}`,
+      );
     } else {
       const outFile = join(OUT, `${base}.mp4`);
       // Auto-trim (owner's call) -> drops have arrived at 30-45 s against a library that sits at 4-10 s.
@@ -94,18 +119,21 @@ for (const it of work) {
       const srcSeconds = it.durationS ?? 0;
       const trimmed = srcSeconds > MAX_VID_SECONDS;
       const trimArgs = trimmed ? ["-t", String(MAX_VID_SECONDS)] : [];
-      execFileSync("ffmpeg", [
-        "-y", "-i", src, ...trimArgs, ...videoArgs(it.width), outFile,
-      ], { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 64 * 1048576 });
+      execFileSync("ffmpeg", ["-y", "-i", src, ...trimArgs, ...videoArgs(it.width), outFile], {
+        stdio: ["ignore", "ignore", "ignore"],
+        maxBuffer: 64 * 1048576,
+      });
       let bytes = statSync(outFile).size;
 
       // Best detail-per-byte under a HARD ceiling -> quality-first CRF, and only an overshooting clip pays a bitrate cap.
       if (bytes > MAX_VID_BYTES) {
         const seconds = Math.max(1, trimmed ? MAX_VID_SECONDS : srcSeconds || MAX_VID_SECONDS);
-        const maxrateK = Math.floor((MAX_VID_BYTES * 8) / seconds / 1000 * 0.92);
-        execFileSync("ffmpeg", [
-          "-y", "-i", src, ...trimArgs, ...videoArgs(it.width, { maxrateK }), outFile,
-        ], { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 64 * 1048576 });
+        const maxrateK = Math.floor(((MAX_VID_BYTES * 8) / seconds / 1000) * 0.92);
+        execFileSync(
+          "ffmpeg",
+          ["-y", "-i", src, ...trimArgs, ...videoArgs(it.width, { maxrateK }), outFile],
+          { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 64 * 1048576 },
+        );
         bytes = statSync(outFile).size;
         flags.push("bitrate-capped");
       }
@@ -115,15 +143,35 @@ for (const it of work) {
       if ((it.width ?? 9999) < TARGET_VID.w) flags.push("upscaled");
       // The thumbnail comes from the NORMALIZED clip -> the frame matches what ships.
       const thumbFile = join(THUMB, `${base}.jpg`);
-      execFileSync("ffmpeg", [
-        "-y", "-ss", "1", "-i", outFile, "-vframes", "1",
-        "-vf", "scale=640:-2", "-q:v", "3", thumbFile,
-      ], { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 32 * 1048576 });
-      out.push({ src: it.file, kind: "video", base, ext: "mp4", out: `${base}.mp4`, thumb: `thumbs/${base}.jpg`, bytes, srcDims: `${it.width}x${it.height}`, durationS: it.durationS, flags });
-      console.log(`[${done}/${work.length}] vid ${it.file} -> ${base}.mp4 (${mb(bytes)}MB) ${flags.join(",")}`);
+      execFileSync(
+        "ffmpeg",
+        ["-y", "-ss", "1", "-i", outFile, "-vframes", "1", "-vf", "scale=640:-2", "-q:v", "3", thumbFile],
+        { stdio: ["ignore", "ignore", "ignore"], maxBuffer: 32 * 1048576 },
+      );
+      out.push({
+        src: it.file,
+        kind: "video",
+        base,
+        ext: "mp4",
+        out: `${base}.mp4`,
+        thumb: `thumbs/${base}.jpg`,
+        bytes,
+        srcDims: `${it.width}x${it.height}`,
+        durationS: it.durationS,
+        flags,
+      });
+      console.log(
+        `[${done}/${work.length}] vid ${it.file} -> ${base}.mp4 (${mb(bytes)}MB) ${flags.join(",")}`,
+      );
     }
   } catch (e) {
-    out.push({ src: it.file, kind: it.kind, base, error: String(e.message || e).slice(0, 300), flags: ["ERROR"] });
+    out.push({
+      src: it.file,
+      kind: it.kind,
+      base,
+      error: String(e.message || e).slice(0, 300),
+      flags: ["ERROR"],
+    });
     console.log(`[${done}/${work.length}] ERROR ${it.file}: ${String(e.message || e).slice(0, 120)}`);
   }
 }

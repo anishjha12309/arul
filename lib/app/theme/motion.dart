@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/config/build_info.dart';
 
-/// Motion vocabulary.
-///
 /// `Easing` and `Durations` are Material's own M3 tokens and ARE in stable -> use them, not hand cubics.
-/// Material 3 *Expressive* is NOT in Flutter stable — it is deferred to a placeholder `material_ui`.
-/// So "expressive" here is our own restraint plus spring -> never import M3E.
 abstract final class Motion {
   static const quick = Durations.short4;
   static const quickCurve = Easing.standard;
@@ -57,18 +53,11 @@ abstract final class Motion {
 }
 
 /// Whether this frame should hold still.
-///
 /// TWO signals, one answer:
 ///   - `MediaQuery.disableAnimations` — Android's Remove animations (transition scale 0). Battery
 ///     Saver does not set it on every ROM (Nothing OS 16 leaves the scales at 1);
 ///   - [DeviceTier.low] — a 2–3 GB two-decoder phone, where every repainting pixel competes with
 ///     the video decoder for the same budget.
-///
-/// **Animations HOLD at their resting state, they are not removed.** A skeleton parks its sheen
-/// mid-sweep rather than going flat, a sheet sits at its settled offset rather than at +24, a press
-/// scale stays at 1. Nothing moves position when the flag flips, so a phone that turns the setting
-/// on mid-session sees stillness, never a re-layout.
-///
 /// The tier half is read from the resolved static, not watched: the probe lands inside the splash,
 /// before any animated screen builds, and a tier cannot change while the process lives.
 extension ReduceMotion on BuildContext {

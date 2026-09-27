@@ -46,7 +46,8 @@ only `debugPrint`). **A Play install shows only Kotlin `Log.w/e` and native/syst
 `ActivityTaskManager: Displayed`, `MediaCodec`) — no Dart line, no `FeedVideoPlugin`/`FA` chatter;
 beyond those, Crashlytics is the only diagnostic channel that reaches it.
 
-Known-benign: `BLASTBufferQueue ... max frames` while the feed idles = compositor noise, 0 crashes — do NOT chase it.
+Known-benign: `BLASTBufferQueue ... max frames` while the feed idles = compositor noise, 0 crashes — do NOT
+chase it.
 
 **Measuring speed on device** — frame timing, cold start, jank: read
 [docs/perf-measurement.md](../../../docs/perf-measurement.md) FIRST. `dumpsys gfxinfo` reads 0
@@ -60,20 +61,11 @@ recording and the recents thumbnail — driving that one visually is impossible;
 Raw bytes come back through `exec-out`, never `shell`: `adb shell` translates LF to CRLF and
 corrupts a piped PNG or zip. `shell` acts on the device, `exec-out` streams from it.
 
-**Ringtone Set below Android 10** takes a different code path (public Ringtones dir + a runtime
-`WRITE_EXTERNAL_STORAGE` prompt) than API 29+ — when touching Set, exercise BOTH paths: a modern
-phone alone never executes the pre-Q branch.
-
 **GA4 DebugView:** `adb shell setprop debug.firebase.analytics.app com.hsrutility.arul` → Firebase console → DebugView. Off: same command with `.none.` (trailing dot — that exact sentinel). Release builds have no DebugView, and the in-app `FA` tag is `Log.v/d` (R8-stripped, `DIAG` does not restore it) — in release only the Play-services side `FA-SVC` survives (docs/analytics-ops.md).
-
-**Wallpaper-apply testing:** apply triggers an OS activity recreate — the `configChanges` fix must keep the app alive; a cold restart on apply = regression (docs/edge-cases.md).
-
-**Video QC on budget devices:** watch for green edge strips on live cards (dimension rule violated or
-software-decoder fallback — see docs/media-conventions.md) and for black cards (decoder budget).
 
 **Automate the loop — act by label, not screenshot.** Two layers, split by scope:
 
-*In-app (Dart MCP server, repo `.mcp.json` — approve it on first session):* run with the driver
+*In-app (the Dart MCP server from the `dart-flutter` plugin):* run with the driver
 extension on top of the usual defines —
 `flutter run --dart-define-from-file=env/dev.json --dart-define=ENABLE_FLUTTER_DRIVER=true` —
 then connect to the running app: the server's `dtd` tool discovers it and `flutter_driver_command`
@@ -120,7 +112,8 @@ toasts. Uncut clips: `DEBUG_RETURN_CLIP_DIR=/data/user/0/com.hsrutility.arul/fil
 **Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
 for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`
 between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: cmd.exe
-cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. A release/profile build shows NO
+cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. A release/profile build shows
+NO
 labels until an accessibility service is on (Flutter builds semantics only then): `adb shell settings put secure enabled_accessibility_services com.android.systemui.accessibility.accessibilitymenu/com.android.systemui.accessibility.accessibilitymenu.AccessibilityMenuService` + `settings put secure accessibility_enabled 1` → dump → `settings delete secure enabled_accessibility_services` + `accessibility_enabled 0`. A Play install is FLAG_SECURE as well: `shot` is black there, dump is not.
 
 **Automation guard-rails.** dev.json points at the LIVE worker: a signed-in automated run writes

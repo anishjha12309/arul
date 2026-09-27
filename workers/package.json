@@ -7,7 +7,9 @@
     "deploy": "wrangler deploy",
     "build": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check": "biome check ..",
+    "fix": "biome check --write .."
   },
   "dependencies": {
     "aws4fetch": "^1.0.20",
@@ -16,6 +18,7 @@
     "postgres": "^3.4.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@cloudflare/workers-types": "^4.20260621.0",
     "happy-dom": "^17.5.0",
     "typescript": "^5.8.3",

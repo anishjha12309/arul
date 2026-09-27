@@ -8,30 +8,23 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_chip.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
-import '../../../theme/arul_tokens.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
 import '../../ringtones/providers/ringtone_catalog_providers.dart';
 import '../../wallpapers/providers/catalog_providers.dart';
 import '../data/media_pick_service.dart';
 import '../providers/upload_provider.dart';
-import '../../../app/widgets/arul_pushed_header.dart';
 
 /// Upload-your-content — WALLPAPERS **and** RINGTONES.
-///
-/// Kind picker, dashed pick zone, optional title, the chosen kind's categories, rights, submit.
-///
-/// [_pickFile] validates MIME type and size against [UploadConstraints] before accepting a file.
-/// Submit stays disabled until a validated file, a category and the rights checkbox are all present.
 /// Upload categories are the LIVE ones off the browse catalog, with the shipped six as an
 /// offline fallback. A submission still lands only in a moderator-known slug: a catalog chip
 /// exists because a PUBLISHED row carries it, so a CMS draft category is never offered.
-/// The two kinds do NOT share a list — ringtones drop `temples` (CLAUDE.md §5b).
-/// The CMS re-checks the slug against the matching set at approve time.
 /// A ringtone's `deity` is NEVER collected here — it is classified from LYRICS, not a filename.
 /// The row lands with a null deity and degrades to its category's default art.
 class UploadScreen extends ConsumerStatefulWidget {
@@ -43,9 +36,6 @@ class UploadScreen extends ConsumerStatefulWidget {
 
 class _UploadScreenState extends ConsumerState<UploadScreen> {
   /// FALLBACK ONLY — what to offer before the catalog has loaded, or offline.
-  ///
-  /// The live list comes from the catalog now (see [_categories]), so a category added
-  /// in the CMS becomes submittable as soon as it is published, with no app release.
   /// These stay because an empty chip row would make the screen unusable on a cold,
   /// offline start; they are the six the app shipped with.
   static const _fallbackWallpaperCategories = [
@@ -77,11 +67,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
 
   final _titleController = TextEditingController();
 
-  /// One picker per app. The pick zone is a bare GestureDetector, so a double tap is one tap too
-  /// many: with the old file_picker plugin the second call was an uncaught PlatformException that
-  /// took the process down (5 users in the 8 days to 10 Sep); with our own channel it would open
-  /// a second picker over the first. Guarding the CALL, not the widget, covers every future caller
-  /// of [_pickFile] rather than one button's onTap.
   bool _picking = false;
 
   static const _picker = MediaPickService();
@@ -89,13 +74,6 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   bool get _isRingtone => _kind == 'ringtone';
 
   /// The categories a submission may claim — the LIVE ones, off the catalog.
-  ///
-  /// Still a closed list, and still only ever moderator-known slugs: a catalog chip
-  /// exists because a PUBLISHED row carries it, so a draft category in the CMS is not
-  /// offered here either. That was the whole point of the old hardcoded consts, kept —
-  /// what changes is that adding a category no longer needs an app release to accept
-  /// uploads into it.
-  ///
   /// Falls back to the shipped six when the catalog has not arrived, so the screen is
   /// never a dead end offline.
   List<WallpaperCategory> get _categories {

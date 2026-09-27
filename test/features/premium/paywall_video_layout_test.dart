@@ -9,8 +9,8 @@ import 'package:arul/features/premium/presentation/paywall_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// `flutter test` ships Ahem, not the app's bundled families -> register the type by hand or the heights are fiction.
 Future<void> _loadPaywallFonts() async {
@@ -27,9 +27,7 @@ Future<void> _loadPaywallFonts() async {
   for (final MapEntry(key: family, value: paths) in families.entries) {
     final loader = FontLoader(family);
     for (final path in paths) {
-      loader.addFont(
-        File(path).readAsBytes().then((b) => ByteData.sublistView(b)),
-      );
+      loader.addFont(File(path).readAsBytes().then(ByteData.sublistView));
     }
     await loader.load();
   }

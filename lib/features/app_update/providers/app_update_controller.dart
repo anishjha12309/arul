@@ -39,7 +39,6 @@ void appUpdateBootstrap(Ref ref) {
         0,
     routeChanges: router.routerDelegate,
     location: () => router.routerDelegate.currentConfiguration.uri.path,
-    // A restart mid-apply or mid-set loses it, and the live chooser hides us -> held while loading.
     hostBusy: () =>
         ref.read(wallpaperApplyProvider) is WallpaperApplyLoading ||
         ref.read(wallpaperShareProvider) is WallpaperSharePreparing ||
@@ -47,8 +46,6 @@ void appUpdateBootstrap(Ref ref) {
   );
   ref.onDispose(controller.dispose);
   UpdateHolds.launch.value = UpdateLaunch.undecided;
-  // Sideloads and debug installs are not Play-owned -> the API only ever errors there, unless the
-  // test hook put Play's fake manager behind the channel.
   unawaited(() async {
     if (PlayInstall.isPlay || await client.isFake()) {
       controller.start();
@@ -87,13 +84,10 @@ class AppUpdateController {
 
   static const _declinedAtKey = 'arul_update_declined_at';
   static const _flexibleStartedKey = 'arul_update_flexible_started';
-  // The splash and the sign-in wall are never covered (docs/auth.md) -> checks wait for the feed.
   static const _neverOver = {'/', '/sign-in'};
-  // Past the splash, autoSignIn has already taken its hold -> the check cannot beat the sheet.
   static const _launchSettle = Duration(milliseconds: 1500);
   static const _holdSettle = Duration(seconds: 2);
   static const _resumeAway = Duration(seconds: 60);
-  // Returning from Play's own screen is a resume too -> without this a cancel re-prompts forever.
   static const _ownFlowEcho = Duration(seconds: 5);
 
   AppLifecycleListener? _lifecycle;
@@ -153,7 +147,6 @@ class AppUpdateController {
 
   void _onHide() {
     _awaySince ??= _now();
-    // A backgrounded completeUpdate installs silently (Play docs) -> no restart prompt of ours.
     if (_downloaded &&
         !_busy &&
         UpdateHolds.active.value == 0 &&
@@ -167,8 +160,6 @@ class AppUpdateController {
     final away = _awaySince;
     _awaySince = null;
     if (_busy) return;
-    // A check deferred by a system dialog (the notification ask right after sign-in) only ever
-    // saw `inactive` -> no hold drops and no away time, so nothing else would retry it.
     final pending = _pending;
     if (pending != null) {
       _schedule(pending, _holdSettle);
@@ -186,7 +177,6 @@ class AppUpdateController {
     _timer = Timer(delay, () => unawaited(_evaluate(trigger)));
   }
 
-  // Google's sign-in sheet and system dialogs leave us `inactive` -> only `resumed` is clear.
   bool get _clear =>
       UpdateHolds.active.value == 0 &&
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
@@ -195,7 +185,6 @@ class AppUpdateController {
 
   void _defer(UpdateTrigger trigger) {
     _pending = trigger;
-    // An apply or set finishing notifies nothing -> poll only while that is the one blocker.
     if (UpdateHolds.active.value == 0 &&
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
         !_neverOver.contains(location())) {
@@ -273,7 +262,6 @@ class AppUpdateController {
         properties: {...props, 'result': result},
       );
     } catch (e) {
-      // Never let an update check surface as an error: the app carries on without it.
       debugPrint('[AppUpdate] check failed: $e');
     } finally {
       _busy = false;

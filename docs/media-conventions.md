@@ -10,10 +10,9 @@ Everything is **category-partitioned**: `wallpapers/<category>/<uuid>.{jpg|mp4}`
 wallpaper categories. Some older objects use a 16-hex stem instead of a UUID — `full_key` is
 arbitrary text, so both are fine and old keys stay as they are.
 
-**Do NOT adopt Pakiza's `posters/` vs `full/` split.** That partitions by static-vs-live; Arul
-partitions by category, because category is the browse axis and approval of a user submission copies
-the object into that category's prefix. The sweep prefix stays `wallpapers/`, so it covers every
-category folder.
+**Never partition by static-vs-live (a `posters/` vs `full/` split).** Category is the browse axis, and
+approving a user submission copies the object into that category's prefix. The sweep prefix stays
+`wallpapers/`, so it covers every category folder.
 
 | Type | R2 key | Input | Output | Max |
 |------|--------|-------|--------|-----|
@@ -26,9 +25,8 @@ on both paths, but the Worker's server-side ceiling for `video/mp4` is far highe
 user-submitted MP4 well over 15 MB passes server-side validation. Only `verify.mjs` enforces the
 bulk-import figure.
 
-**There is no ringtone cover role** — row art is drawn in-app, so the role was removed and the CMS
-refuses to presign one. Do not re-add a cover pipeline. The canonical sweep still reads `cover_key`
-(null on every row) into its keep-set alongside `audio_key`; leave that as it is.
+**There is no ringtone cover role** — row art is bundled in-app ([ringtones.md](ringtones.md) §Row art).
+The canonical sweep still reads `cover_key` (null on every row) into its keep-set; leave that as it is.
 
 ## THE video rule: width % 128 == 0, height % 32 == 0, inside the 1088×1920 hw-decoder cap
 
@@ -49,9 +47,9 @@ through a video decoder, so do not "align" them.
 
 **Sources usually arrive at 720×1280, so most clips are UPSCALED to 1024 wide** — and upscaling
 cannot add detail, so use `lanczos` plus a light `unsharp` and a lower CRF than a native-res master
-wants (the old value laid mush on an already-soft frame). A source at or above the target is
-DOWNSCALING — token sharpen only, more just adds halos. **The geometry never changed and cannot
-stretch:** `scale(…increase)` + `crop` is a COVER fit — on a 9:16 source it trims a couple of pixels
+wants (a native-res CRF lays mush on an already-soft frame). A source at or above the target is
+DOWNSCALING — token sharpen only, more just adds halos. **The geometry cannot stretch:**
+`scale(…increase)` + `crop` is a COVER fit — on a 9:16 source it trims a couple of pixels
 of width and no height. Stretched output? Suspect the renderer.
 
 **Static wallpaper** (`upscale` chain shown; drop `unsharp` when the source is ≥1080 wide):
@@ -102,14 +100,12 @@ ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3
 - Live MP4: faststart (moov before mdat) · **no audio stream** · first frame representative, not
   black — the card holds the `thumbs/` poster until the texture reveals, so a black first frame does
   not read as "loading", it reads as a good image being replaced by a broken one.
-- **≤10 s, and `normalize.mjs` auto-trims to the first 10 s** (owner's call, after a drop arrived
-  with 40-second clips). **The cut is BLIND**: it takes the leading window, so it can land mid-motion
-  and will not respect a loop point. It flags `trimmed:<n>s` — review those before publishing.
-  `verify.mjs` fails anything still over 10 s.
+- **≤10 s, and `normalize.mjs` auto-trims to the first 10 s** (owner's call). **The cut is BLIND**: it takes
+  the leading window, so it can land mid-motion and will not respect a loop point. It flags `trimmed:<n>s` —
+  review those before publishing. `verify.mjs` fails anything still over 10 s.
 - Loops seamlessly (first ≈ last frame). Nothing enforces this; generator drops usually do NOT loop,
   so a visible jump every cycle is a content decision, not an encoder bug.
-- **Keep the masters somewhere outside the repo.** The original master folder no longer exists on
-  disk; `tools/content-import/` stages under `c:/Anish/arul-import/`. Pakiza's catalogue once had to
-  be fully re-encoded, and that only worked because masters existed.
+- **Keep the masters outside the repo** (`tools/content-import/` stages under `c:/Anish/arul-import/`)
+  — a whole catalogue once had to be re-encoded, which worked only because masters existed.
 - Moderation queue: **never approve a user-submitted video whose dimensions fail the rule** — the
   approve flow copies bytes verbatim. Re-encode with the recipe above, or reject.

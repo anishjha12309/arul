@@ -1,10 +1,6 @@
 import 'analytics_service.dart';
 
 /// Fans every [AnalyticsService] call out to a list of delegates.
-///
-/// Several SDKs must receive the same event -> fan out HERE -> the single `AnalyticsService` seam
-/// holds (widgets never touch SDKs) and call sites stay identical. Delegates: `analyticsService`.
-/// Each delegate filters for itself -> this one never decides who gets what.
 /// One SDK throwing must not swallow another's event -> every call is wrapped; delegates are
 /// fire-and-forget internally, so this only guards SYNCHRONOUS throws.
 class CompositeAnalyticsService implements AnalyticsService {

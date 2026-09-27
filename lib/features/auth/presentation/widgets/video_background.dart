@@ -9,13 +9,8 @@ import '../../../../core/perf/boot_trace.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
 /// Full-screen looping video background, playing `splash.mp4`.
-///
 /// Shows a solid dark colour until the first frame renders -> no blank-white flash on first paint.
-/// On a low-memory phone ([DeviceMemory.isLow]) it is the still poster only — no player, no decoder.
 /// Backed by the same Media3 texture pool as the feed's live previews -> ONE video stack in the app.
-/// All mounts share ONE native player via [_SharedAuthVideoPlayer].
-/// Recreating a MediaCodec per screen swap is slow on budget SoCs -> the fallback would sit visible.
-/// Handing the live player across screens -> every screen after the first paints video immediately.
 class VideoBackground extends StatefulWidget {
   const VideoBackground({super.key, this.overlayOpacity = 0.42});
 
@@ -47,9 +42,6 @@ class _VideoBackgroundState extends State<VideoBackground>
   }
 
   /// Stop decoding while the app is off-screen.
-  ///
-  /// The ref count is held by the MOUNT, not by visibility -> backgrounding left `_refs == 1`.
-  /// The player then decoded a looping video nobody could see — measured on device.
   /// This PAUSES and deliberately does NOT tear the decoder down.
   /// Teardown would free ~110MB of graphics memory, but a 20-run harness showed ZERO LMK kills.
   /// The cost is certain either way: the fallback colour flashes on every return from the picker.
@@ -113,7 +105,6 @@ class _VideoBackgroundState extends State<VideoBackground>
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Base colour: covers any edge the poster's cover-fit leaves bare.
         const ColoredBox(color: _fallbackColor),
 
         const Image(
@@ -136,10 +127,6 @@ class _VideoBackgroundState extends State<VideoBackground>
 }
 
 /// The regional poster's own clip, laid over the poster in the same frame.
-///
-/// Opened PAUSED: its first frame is the poster's own pixels, so the fade over it is invisible and
-/// the clip starts moving only once it covers the poster. Until then — or forever, if it never
-/// decodes — this paints nothing and the poster shows. Rides the ONE shared auth player.
 class LaunchClipLayer extends StatefulWidget {
   const LaunchClipLayer({super.key, required this.source});
 
@@ -269,10 +256,6 @@ class _CoverTexture extends StatelessWidget {
 }
 
 /// Ref-counted owner of the ONE background player every auth mount shares, lotus or regional clip.
-///
-/// Created on the first [acquire]; torn down shortly after the LAST mount releases.
-/// A route replacement may dispose the old screen BEFORE the new one inits.
-/// That ordering would churn the decoder -> the grace timer bridges it.
 class _SharedAuthVideoPlayer {
   _SharedAuthVideoPlayer._(this._source, this._started);
 

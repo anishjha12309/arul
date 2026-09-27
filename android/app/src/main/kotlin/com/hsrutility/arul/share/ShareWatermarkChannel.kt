@@ -19,24 +19,10 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 // Burns the watermark into a live wallpaper's MP4 at SHARE time via Media3 Transformer -> no ffmpeg on device.
-// The CDN keeps serving the clean original -> the watermark exists only in the shared copy.
-// Dart renders the ENTIRE overlay as one full-frame transparent PNG with alpha pre-baked, and hands over bytes.
-// So this class does zero layout math -> decode, static BitmapOverlay, re-encode.
-// Contract the Dart caller is built against: videoWatermarkSupport {} -> {supported, sdkInt}.
-// watermarkVideo {inputPath, outputPath, overlayPng} -> outputPath on success.
-// Errors are "bad_input", "unsupported_api" below API 31, and "transform_failed" for an export error or a busy call.
 // REQUIRES API 31 -> Media3's ExoPlayerAssetLoader.Factory references android.media.metrics.LogSessionId unguarded.
-// ART resolves that API-31 type on every API level -> Transformer.start() dies with NoClassDefFoundError on Android 11.
-// Upstream androidx/media#2535, still open -> below API 31 do NOT export at all and share the clean original.
-// A pre-Android-12 share is untraced BY DESIGN.
-// Everything here catches Throwable, never Exception -> NoClassDefFoundError is an Error, not an Exception.
-// A `catch (Exception)` let that library defect past the handler and out through Looper.loop(), killing the app.
-// A watermark must never break the share -> that promise is only real if the net catches Errors too.
 // Only ONE export runs at a time -> Transformer holds a hardware decoder AND an encoder for the duration.
 // On budget SoCs that budget is shared with the feed's preview pool -> a concurrent export is decoder starvation.
-// Clips are 1024x1824 H.264, well inside 1080p-class hardware encoders -> the encoder factory's fallback covers stragglers.
 // MethodChannel handlers arrive on the platform main thread, which has a Looper -> exactly what Transformer requires.
-// Listener callbacks come back on that same thread -> no hopping is needed.
 @UnstableApi
 class ShareWatermarkChannel(private val context: Context) :
     MethodChannel.MethodCallHandler {
@@ -140,8 +126,6 @@ class ShareWatermarkChannel(private val context: Context) :
             transformer.start(editedItem, outputPath)
         } catch (e: Throwable) {
             // Throwable, NOT Exception -> androidx/media#2535 threw NoClassDefFoundError straight out of start().
-            // An `Exception` handler could not see it -> a library defect became a process kill.
-            // Anything that escapes start() is a failed export, whatever its supertype.
             Log.e(TAG, "watermark start failed", e)
             activeExport = null
             File(outputPath).delete()
@@ -172,7 +156,6 @@ class ShareWatermarkChannel(private val context: Context) :
         }
     }
 
-    /** Reply exactly once and clear the busy slot, whatever the outcome. */
     private inline fun finish(reply: (ActiveExport) -> Unit) {
         val export = activeExport ?: return
         activeExport = null
@@ -188,7 +171,6 @@ class ShareWatermarkChannel(private val context: Context) :
 
     private fun toFileUri(file: File): android.net.Uri = android.net.Uri.fromFile(file)
 
-    /** Called from MainActivity.cleanUpFlutterEngine — cancel any running export. */
     fun dispose() {
         val export = activeExport ?: return
         activeExport = null

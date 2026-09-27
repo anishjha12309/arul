@@ -101,7 +101,6 @@ class Device:
     def shell(self, cmd: str) -> str:
         return self._run(["shell", cmd])
 
-    # ── display config ───────────────────────────────────────────────────
     def density(self) -> str:
         out = self.shell("wm density")
         m = re.search(r"Override density: (\d+)", out) or re.search(
@@ -118,7 +117,6 @@ class Device:
     def set_font_scale(self, scale: str):
         self.shell(f"settings put system font_scale {scale}")
 
-    # ── app ──────────────────────────────────────────────────────────────
     def set_locale(self, pkg: str, tag: str):
         self.shell(f"cmd locale set-app-locales {pkg} --locales {tag}")
 

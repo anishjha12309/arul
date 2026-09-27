@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
+import '../../../app/widgets/arul_icon_tap.dart';
 import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
@@ -23,7 +24,6 @@ import '../../legal/presentation/policy_screen.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../referral/data/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
-import '../../../app/widgets/arul_icon_tap.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
 import 'help_sheet.dart';
@@ -781,14 +781,14 @@ class _LogoutButtonState extends State<_LogoutButton> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Derived from ArulTokens.maroon where no token exposes these alphas; light is maroonTintFill08.
-    final Color bg = isDark
+    final bg = isDark
         ? ArulTokens.maroon.withValues(alpha: _pressed ? 0.5 : 0.35)
         : ArulTokens.maroonTintFill08;
-    final Color border = isDark
+    final border = isDark
         ? ArulTokens.maroon.withValues(alpha: 0.6)
         : ArulTokens.maroon.withValues(alpha: 0.35);
     // `#F0C9BA` has no token and is not cleanly derivable — nearest is a light ivory→maroon lerp.
-    final Color text = isDark ? _logoutTextDark : ArulTokens.maroon;
+    final text = isDark ? _logoutTextDark : ArulTokens.maroon;
 
     return GestureDetector(
       // Signing out is deliberate but not destructive — a firm press, one step below delete.

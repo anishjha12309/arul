@@ -8,8 +8,8 @@ import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
-import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../core/update/update_holds.dart';
 import '../../referral/providers/referral_providers.dart';
 import '../data/api_auth_service.dart';
@@ -69,7 +69,6 @@ class AuthController extends _$AuthController {
   /// The sign-in currently in flight, already wrapped by [_guard] -> joiners share ONE future.
   /// Identity matters — the tests pin `identical(join, first)`.
   /// The picker is a system Activity -> two overlapping `signInWith` calls put TWO sheets on screen.
-  /// One of them appears, hangs and vanishes. That shipped once -> every caller goes through here.
   Future<AuthResult>? _inFlight;
 
   /// How long a sign-in may sit unresolved with OUR OWN UI foregrounded before the guard abandons it.
@@ -88,11 +87,6 @@ class AuthController extends _$AuthController {
   Duration stallResumeGrace = const Duration(seconds: 2);
 
   /// How often the guard re-reads the lifecycle while an attempt is pending.
-  ///
-  /// It once slept through its whole budget and read the lifecycle only when that ran out, so a
-  /// Home-and-back inside the first 30 s was invisible: the icon relaunch had already stripped
-  /// Google's sheet (clearTaskOnLaunch), nothing would ever land, and the pill spun until "taking
-  /// too long" — reproduced on device from the sheet, the picker and mid token-mint alike.
   @visibleForTesting
   Duration stallTick = const Duration(milliseconds: 250);
 
@@ -134,10 +128,7 @@ class AuthController extends _$AuthController {
   bool _disposed = false;
 
   /// Whether the ONE automatic sign-in of the CURRENT signed-out stretch has been spent.
-  ///
   /// Re-armed by [signOut]/[deleteAccount] -> process scope left the post-logout screen with no picker.
-  /// A session dying on its own (401) is detected during the startup seed, before the auto-launch.
-  /// So no re-arm is needed there — the flag is still false when it matters.
   /// Also re-armed by [noteAppLifecycle] when the user LEFT the wall and came back: a cancel still
   /// never relaunches, but a return after a real away stretch is a fresh visit, not a retry.
   /// And by [noteConnectivity] when the link that killed the last attempt came back.
@@ -149,10 +140,6 @@ class AuthController extends _$AuthController {
   DateTime? _awaySince;
 
   /// When the link was last read as DOWN, cleared on every online reading.
-  ///
-  /// The reading is TRANSPORT-level (connectivity_plus reports the transport, never reachability),
-  /// so a Wi-Fi with no internet behind it reads online. That costs nothing here: the transition is
-  /// only ever a permission to retry a failure the link already caused, never a claim of anything.
   DateTime? _offlineSince;
 
   /// When the last attempt SETTLED — success, cancel, failure, or one of the guard's abandons.
@@ -160,13 +147,6 @@ class AuthController extends _$AuthController {
   DateTime? _lastOutcomeAt;
 
   /// Whether that settled outcome was a NETWORK-class failure — the only one a reconnect may retry.
-  ///
-  /// `networkError` and the `unknown` bucket, which is where Play services' own token failure lands
-  /// (`[28404] Failed to retrieve an ID token`, seen on device with mobile data off) — see
-  /// `ApiAuthService.mapGoogleSignInException`, plus the ONE cancel GMS words as a network failure
-  /// (`[16] Account reauth failed` from the picker, offline). Every other cancel is a refusal and
-  /// never qualifies; `noPlayServices`, `serverError` and `tokenExchangeFailed` survive a reconnect
-  /// unchanged.
   bool _lastOutcomeNetworkFailure = false;
 
   /// Whether THIS failure's one reconnect has already been spent; cleared when the next outcome
@@ -174,11 +154,6 @@ class AuthController extends _$AuthController {
   bool _reconnectSpent = false;
 
   /// How many reconnect re-arms ONE signed-out stretch may spend, across every failure in it.
-  ///
-  /// A link that flaps — a lift, a train, a phone at the edge of a cell — delivers an
-  /// offline->online transition every few seconds, and each one lands on a fresh failure of its
-  /// own, so the per-failure allowance alone would let it loop the sheet. Re-armed with the
-  /// automatic launch itself, by [signOut] and [deleteAccount].
   static const _reconnectsPerStretch = 2;
   int _reconnectBudget = _reconnectsPerStretch;
 
@@ -201,18 +176,6 @@ class AuthController extends _$AuthController {
   /// One lifecycle transition, from the sign-in wall's observer. Returns true when the caller should
   /// fire the automatic attempt again — the SCREEN stays the single joiner, so the toast and route
   /// handling live in one place.
-  ///
-  /// The whole rule, for the 52-in-722 who only ever get in on a later return: a person who left the
-  /// wall and came back lands on a bare pill today, because the process's one automatic surface was
-  /// spent minutes ago. This gives that return its own surface, ONCE, and only when all of these
-  /// hold — nothing in flight (the guard owns that case, `stalled_resumed`/`surface_stripped`), still
-  /// signed out, an away stretch of at least [returnAwayThreshold] that STARTED after the last
-  /// outcome settled, and at least [returnCooldown] since that outcome.
-  ///
-  /// The away-started-after-the-outcome clause is what keeps "never auto-relaunch on a cancel"
-  /// intact: a dismissal followed by a return on the SAME foreground stretch re-arms nothing.
-  /// Recents, the launcher icon and a screen lock/unlock all read as paused -> all count as a
-  /// return. A rotation or a Google surface reads as inactive -> none of them do.
   bool noteAppLifecycle(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.paused:
@@ -250,24 +213,6 @@ class AuthController extends _$AuthController {
   /// One connectivity reading, from the wall's own listener. Returns true when the caller should
   /// fire the automatic attempt again — same shape and same contract as [noteAppLifecycle], and the
   /// SCREEN still decides nothing.
-  ///
-  /// The case, measured on device with mobile data off: the sheet draws, the account tap dies inside
-  /// Play services in 3 s (`[28404] Failed to retrieve an ID token`), the attempt escalates to the
-  /// picker, the second pick fails the same way — and when data comes back NOTHING happens. The
-  /// person is left in front of a pill nobody told them to tap, holding a phone that now works.
-  ///
-  /// Google's Credential Manager guidance forbids an automatic retry after a CANCELLATION and only
-  /// that ("this error indicates a lack of consent"). A link that was down is not a refusal, so this
-  /// one surface is allowed where a re-arm after a cancel never is.
-  ///
-  /// Conditions, all required: an OFFLINE reading came first (the transition is the event, not the
-  /// online reading on its own), the last settled outcome was a network-class failure
-  /// ([_lastOutcomeNetworkFailure]), the transition lands after that outcome settled, nothing in
-  /// flight (the stall guard owns that case), still signed out, and our own UI is RESUMED — a link
-  /// returning behind another app must not push a sheet in front of it.
-  ///
-  /// Bounded twice over, because the link is the one condition that can repeat by itself: ONE
-  /// re-arm per failure ([_reconnectSpent]) and [_reconnectBudget] per signed-out stretch.
   bool noteConnectivity({required bool online}) {
     if (!online) {
       // The FIRST of a run of offline readings owns the stretch; the stream is already `distinct()`.
@@ -316,13 +261,7 @@ class AuthController extends _$AuthController {
       !ref.read(authServiceProvider).currentState.isAuthenticated;
 
   /// Starts a sign-in, or joins the one already running.
-  ///
   /// Safe from a button — a tap while a sheet is up gets that sheet's result, never a second sheet.
-  /// [auto] passes straight through to the service, which picks the FIRST Google surface.
-  /// Not a policy this layer owns.
-  /// [returned] is analytics only: it stamps this attempt as the one a RETURN re-armed.
-  /// [reconnected] is the same for the one a RECONNECT re-armed; `returned` wins if both are set.
-  /// [afterOffline] is the same for the launch that was held while offline.
   Future<AuthResult> signIn(
     AuthProvider provider, {
     bool auto = false,
@@ -348,7 +287,6 @@ class AuthController extends _$AuthController {
     // Cleared at the START, not on the settle: [_guard] can return without the classifier below
     // ever running, and a stale `true` would hand the NEXT reconnect a sheet it never earned.
     _lastOutcomeNetworkFailure = false;
-    // An update screen over Google's sheet would cancel the attempt -> held until it settles.
     final releaseUpdateHold = UpdateHolds.hold();
     late final Future<AuthResult> guarded;
     guarded = _guard(raw, started, provider, auto, returned, reconnected, afterOffline)
@@ -380,34 +318,6 @@ class AuthController extends _$AuthController {
   }
 
   /// Wraps one sign-in attempt with the lost-callback stall guard.
-  ///
-  /// `authenticate()` has no timeout and Credential Manager can drop its callback outright.
-  /// That froze the pill's spinner forever, and a busy pill ignores taps -> sign-in bricked for good.
-  /// The guard frees the UI only when THREE hold: budget spent, app RESUMED a full budget, attempt current.
-  /// A sheet on top or a backgrounding makes us inactive/paused/hidden -> extend, never abandon.
-  /// Abandoning discards the zombie's eventual result, tracks the stall, and shows the retry pill.
-  /// The budget clock RESTARTS on every return to the foreground after a mid-flow stretch.
-  /// Measuring from the attempt's start abandoned a HEALTHY attempt 20ms before its exchange finished.
-  /// The session landed while the screen said "taking too long" — a signed-in user stranded on sign-in.
-  /// One pill tap away from a second picker over a live session.
-  /// Post-sheet exchange is PROGRESS -> the pathology is an attempt dead through a CONTINUOUS budget.
-  ///
-  /// RESUMING is not progress on its own. A destroyed `CredentialSelectorActivity` delivers no
-  /// result, no cancellation and no exception -> the androidx.credentials continuation never
-  /// completes. Returning to a corpse used to buy it a whole fresh budget, so the pill span 30s
-  /// more over nothing. [SignInPhase.exchanging] is the discriminator and it was already here:
-  /// true means OUR `POST /auth/login` is live and the full budget is exactly right; false means
-  /// nothing of ours is running and no Google surface is on top (one would keep us inactive), so
-  /// the sheet is gone and only a real back-from-the-sheet outcome can still land — which takes
-  /// milliseconds, not seconds. Hence [stallResumeGrace], then abandon.
-  ///
-  /// The lifecycle is read every [stallTick], not once per budget: the return to the foreground is
-  /// the event, and it happens whenever the user comes back, not when a timer says so.
-  ///
-  /// One `canceled` IS retried: [SignInOutcome.selectorStripped], the one an icon relaunch
-  /// manufactures by finishing Google's picker (the service tells it apart by wording). The user
-  /// made no choice there. Every other cancellation settles the attempt, as Google's guidance
-  /// requires.
   Future<AuthResult> _guard(
     Future<AuthResult> raw,
     DateTime started,
@@ -465,18 +375,6 @@ class AuthController extends _$AuthController {
     }
 
     /// The attempt that replaces a settled one, or null when [result] stands.
-    ///
-    /// Add-account: Google's own flow hands the user back with ONE cancellation whether they added
-    /// an account, gave up, or were bounced by Google's own "verify it's you" prompt cancelling
-    /// itself (seen on an unattended device) -> nothing reopened, and 76% of those people cancel again.
-    /// The PICKER comes back once (never the One Tap sheet, which a cancel must not redraw): a
-    /// fresh account is then one tap away, and someone who was bounced still has their accounts.
-    ///
-    /// Play services: "Tap again" can never work on a phone whose Play services is below what
-    /// Credential Manager needs, so the failure also asks for GOOGLE'S update dialog. It replaces
-    /// nothing and waits for nothing — the failure stands and the pill frees as before; the way
-    /// back in is the person's return from the Play Store, which [noteAppLifecycle] or a cold
-    /// start already turns into a sign-in.
     Future<({Future<AuthResult> next})?> recover(AuthResult result) async {
       if (result is AuthFailure &&
           result.kind == AuthFailureKind.noPlayServices) {
@@ -532,8 +430,6 @@ class AuthController extends _$AuthController {
         wasMidFlow = false;
         if (SignInPhase.exchanging.value) {
           // Our own `POST /auth/login` is live -> a fresh foreground budget, exactly as before.
-          // This is the regression the guard exists for: an exchange abandoned 20ms before it
-          // landed strands a signed-in user on the wall, one tap from a second picker.
           sinceForeground = now;
           continue;
         }
@@ -591,10 +487,6 @@ class AuthController extends _$AuthController {
   }
 
   /// Discards the zombie's eventual result and counts the stall.
-  ///
-  /// `kind` is a VALUE on an event already on the allow-list — `stalled` (never left the
-  /// foreground), `stalled_resumed` (came back to a dead sheet), `surface_stripped` (an icon
-  /// relaunch finished Google's picker). No new event, no new property.
   void _abandonStalled({required String kind}) {
     ref.read(authServiceProvider).abandonPendingSignIn();
     ref
@@ -619,14 +511,9 @@ class AuthController extends _$AuthController {
   }
 
   /// The automatic sign-in, fired ONCE per signed-out stretch by whichever screen gets there first.
-  ///
   /// The splash the moment it knows there is no stored session, else the sign-in screen's first frame.
   /// Null once that attempt is spent and settled -> the signal to show the retry pill and stay put.
   /// Without it a cancelled sheet re-launches the instant the splash routes, and nobody escapes.
-  /// [noteAppLifecycle] can re-arm it once for a RETURN and [noteConnectivity] once for a
-  /// RECONNECT; those attempts carry the `sheet_return` / `sheet_reconnect` stamp so the funnel can
-  /// price each re-arm on its own.
-  ///
   /// [offline] = the caller KNOWS there is no network: the launch is HELD ([autoHeldOffline]) and this
   /// returns null without spending it. An unknown reading is online — a slow probe must never cost a
   /// phone with a network its sheet.

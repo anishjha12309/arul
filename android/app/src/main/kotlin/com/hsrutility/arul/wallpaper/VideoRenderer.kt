@@ -18,37 +18,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-// Bridges the Engine's [SurfaceHolder] to Media3 ExoPlayer -> every decision below was earned on budget hardware.
 // ExoPlayer does NOT free the decoder on pause() -> it holds the MediaCodec for the player's whole lifetime.
-// On a SoC with 2-3 concurrent decoders a paused-but-alive wallpaper occupies a slot WHILE INVISIBLE.
-// That is exactly when the feed pool and the next apply preview need one -> release on invisible, re-create on visible.
-// The cost is a brief re-buffer on return, which is the right trade here.
 // The release is debounced by [INVISIBLE_RELEASE_DELAY_MS] -> a shade pull or recents peek pauses and resumes seamlessly.
 // Only a sustained absence frees the decoder.
-// Every error is caught and never crashes the service -> a crashing wallpaper service drops the user to the default.
-// Loop is REPEAT_MODE_ALL for seamlessness; audio is volume 0 or 1 and is never removed from the pipeline.
-// Scaling is SCALE_TO_FIT_WITH_CROPPING -> sources are ~9:16 and every modern screen is taller.
-// The default SCALE_TO_FIT filled the surface NON-uniformly -> on a 1080x2392 panel that is a ~24% vertical stretch.
-// It showed on the applied wallpaper AND in the OS chooser preview, which previews this very service.
-// SCALE_TO_FIT_WITH_CROPPING scales uniformly and centre-crops -> aspect-true and full-bleed, like the feed's BoxFit.cover.
-// The native window applies it at composite time from whatever surface the engine hands over.
-// So it needs no display metrics, holds on every device and aspect, and re-derives itself on rotation or resize.
-// ONE mode, but it is set MANY times: the mode lives on the MediaCodec, not on the player, and the platform
-// documents it as reset to the default on an output-buffer change, requiring a re-set before the next buffer
-// is rendered. Media3 only re-applies it on an output FORMAT change, so a codec that re-allocates its output
-// buffers renders stretched until the next format change -- for a looping wallpaper, a whole loop.
-// A codec is (re)created on every visibility resume here, so that window reopens on EVERY home<->app switch.
-// [assertScalingMode] is therefore called wherever the codec could have lost it: after the surface is
-// (re)attached, on visibility resume, and as soon as the renderer reports a size or a first frame.
-// Do not try to pass the mode through the configure MediaFormat (`android._video-scaling`): MediaCodec overwrites
-// it with its own default at configure, so the codec still logs `= 1` and the key is dead weight.
-//
-// A rebuilt codec means a RESTARTED clip. Releasing the decoder while invisible is right for the budget,
-// but re-creating the player at position 0 replays the clip's opening on every return to the home screen.
-// A generated clip often opens on a wide shot and zooms in -> the user reads that replay as the wallpaper
-// "stretching in, then out" every time (and once on first apply, when the home engine starts at 0 while the
-// chooser's preview engine was mid-clip). [resumePositions] keeps the last position per source path,
-// process-wide, so a rebuilt player and a brand-new engine both continue from where the clip was.
 // THREADING. A Media3 player may only be touched from the one thread it was built on, and the
 // framework's own teardown path calls straight into it: WallpaperService.Engine.detach() ->
 // reportSurfaceDestroyed() -> ExoPlayer's SurfaceHolder.Callback. Left to itself Media3 adopts the
@@ -58,37 +30,24 @@ import java.util.concurrent.TimeUnit
 // holder, and the framework's next callback kills the PROCESS, dropping the user to the default
 // wallpaper. So the looper is PINNED to main and every entry point goes through [onMain]. On a
 // device whose engine already runs on main this changes nothing: that is the looper Media3 picked.
-// Pinning alone was not enough. Media3 documents setVideoSurfaceHolder as "the thread that calls the
-// SurfaceHolder.Callback methods must be the thread associated with getApplicationLooper", and a
-// wallpaper engine cannot promise that: several OEM Android 12 builds fire surfaceChanged on the
-// service's own HandlerThread, which walked straight into ExoPlayer's own holder callback and its
-// verifyApplicationThread -> IllegalStateException -> the process. So the player is handed the raw
-// [Surface] via setVideoSurface, on main, and NEVER the holder: the engine's callbacks are already
-// forwarded here through [onMain], so nothing is lost, and Media3 registers no callback of its own.
-// A destroy from off-main waits, bounded, for the player to let go before the framework frees the
-// Surface underneath it.
 @UnstableApi
 class VideoRenderer(private val context: Context) {
 
     companion object {
         private const val TAG = "VideoRenderer"
 
-        /** Grace period before a now-invisible wallpaper releases its decoder. */
         private const val INVISIBLE_RELEASE_DELAY_MS = 500L
 
-        /** How long an off-main surface destroy waits for the player to release the Surface -> see the header. */
         private const val SURFACE_RELEASE_WAIT_MS = 1_000L
 
         /** The ONE scaling mode. Never derived from display metrics, never a second mode. */
         private const val SCALING_MODE = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
 
-        /** Last playback position per source path, shared by every engine in this process -> see the header. */
         private val resumePositions = ConcurrentHashMap<String, Long>()
 
         /** Renderers currently PLAYING a source -> a new engine can take the live position when none was stored yet. */
         private val liveByKey = ConcurrentHashMap<String, VideoRenderer>()
 
-        /** Debug-only log -> the BuildConfig.DEBUG gate strips it from a release build. */
         private fun logd(msg: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, msg)
         }
@@ -171,7 +130,6 @@ class VideoRenderer(private val context: Context) {
         this.resumeKey = resumeKey
         currentSurfaceHolder = surfaceHolder
 
-        // Release any existing player but keep the retained path and holder above.
         releasePlayerInstance()
 
         try {
@@ -186,16 +144,12 @@ class VideoRenderer(private val context: Context) {
                 .setLooper(Looper.getMainLooper())
                 .build()
                 .apply {
-                // The raw Surface, never the holder -> read the threading note in the header.
                 setVideoSurface(surfaceHolder.surface)
-                // Aspect-true full-bleed -> set on the PLAYER, not per item, so swapVideo keeps it when it reuses this instance.
-                // A re-created player passes through here again. It is re-asserted later too — see [assertScalingMode].
                 setVideoScalingMode(SCALING_MODE)
                 volume = if (audioEnabled) 1.0f else 0.0f
                 repeatMode = if (loopEnabled) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
                 playWhenReady = true
                 addListener(createPlayerListener())
-                // Continue where this clip was, not from its opening shot -> see the header.
                 setMediaItem(MediaItem.fromUri("file://$videoPath"), startMs)
                 prepare()
             }
@@ -207,12 +161,9 @@ class VideoRenderer(private val context: Context) {
         }
     }
 
-    // Swaps the playing video in place, same engine and same player.
-    // It is needed because Android ignores a re-Set of the same component and never recreates the engine.
     // If the player is already released, past the invisible grace period, only the retained path is updated.
     // The next visibility gain then re-initializes with the new video through that path.
     // Deliberately does NOT force play() -> playWhenReady is preserved, so an invisible-paused player stays paused.
-    // A pending [releaseOnIdle] still frees the decoder.
     fun swapVideo(videoPath: String, surfaceHolder: SurfaceHolder, resumeKey: String = videoPath) = onMain {
         logd("Swapping video in place: $videoPath")
         this.resumeKey?.let { resumePositions.remove(it) }
@@ -307,7 +258,6 @@ class VideoRenderer(private val context: Context) {
     private fun releasePlayerInstance() {
         try {
             player?.let { p ->
-                // Remember where the clip was so the rebuilt player, or the next engine, resumes there.
                 resumeKey?.let { key ->
                     val pos = p.currentPosition
                     if (pos > 0L) resumePositions[key] = pos

@@ -1,15 +1,5 @@
 /**
  * The ONE home for "which Neon branch is this tool about to read?".
- *
- * WHY THIS EXISTS: `.dev.vars` holds FOUR postgres strings — DATABASE_URL (production,
- * `ep-fancy-grass`), DEBUG_DATABASE_URL (the throwaway `debug` branch, `ep-wandering-dawn`) and the
- * two Hyperdrive local-override names, which also point at debug. A tool that grabs "the first
- * postgres:// in the file" therefore reads the DEBUG branch, because the Hyperdrive lines sit above
- * DATABASE_URL. `verify-debits.mjs` did exactly that and spent its life reporting on debug data: it
- * cried 209 STUCK subscriptions while production had zero. The dangerous direction is the other one
- * — that tool would have reported HEALTHY straight through a real billing outage, which is the
- * precise silent failure it was written to catch.
- *
  * So: select by NAME, never by position, and always say out loud which branch was opened.
  */
 import fs from "node:fs";

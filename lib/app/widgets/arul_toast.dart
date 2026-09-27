@@ -6,9 +6,6 @@ import '../theme/tokens.dart';
 enum ToastKind { info, success, error }
 
 /// Branded toast, on ScaffoldMessenger so it survives navigation and stacks, default surface stripped.
-///
-/// Flutter 3.38+ -> a SnackBar WITH an action no longer auto-dismisses, turning a transient toast
-/// into a permanent bar -> no action button here; anything needing a decision belongs in a sheet.
 /// Every meaningful outcome lands here -> this is the ONE place the outcome haptic fires, keyed off
 /// [kind] -> callers must never add their own; `haptic: false` marks a toast that is pure chrome.
 void showArulToast(

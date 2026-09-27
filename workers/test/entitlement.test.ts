@@ -12,9 +12,7 @@ function makeMockSql(rows: unknown[]): postgres.Sql {
 
 /** isPremium composes premiumPredicate as a NESTED tagged template -> the SQL spans several mock calls -> join them all. */
 function allQueryText(mockFn: ReturnType<typeof vi.fn>): string {
-  return mockFn.mock.calls
-    .map((call) => ((call as unknown[])[0] as string[]).join(""))
-    .join(" ");
+  return mockFn.mock.calls.map((call) => ((call as unknown[])[0] as string[]).join("")).join(" ");
 }
 
 describe("entitlement.isPremium", () => {

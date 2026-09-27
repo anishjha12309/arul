@@ -16,9 +16,7 @@ function makeR2(existing: string[] = []) {
       return {} as R2Object;
     }),
     list: vi.fn(async (opts?: R2ListOptions) => ({
-      objects: [...store.keys()]
-        .filter((k) => k.startsWith(opts?.prefix ?? ""))
-        .map((key) => ({ key })),
+      objects: [...store.keys()].filter((k) => k.startsWith(opts?.prefix ?? "")).map((key) => ({ key })),
       truncated: false,
     })),
     delete: vi.fn(async (key: string) => {
@@ -69,7 +67,15 @@ describe("buildScope", () => {
     const item = (store.get("catalog/wallpapers/all_1.json") as Page).items[0];
     expect(item["apply_count"]).toBe(5);
     expect(item["tags"]).toEqual(["a", "b"]);
-    for (const k of ["apply_score", "scored_at", "pre_renew_published_at", "width", "height", "bytes", "mime"]) {
+    for (const k of [
+      "apply_score",
+      "scored_at",
+      "pre_renew_published_at",
+      "width",
+      "height",
+      "bytes",
+      "mime",
+    ]) {
       expect(item).not.toHaveProperty(k);
     }
     expect(item["category"]).toBe("murugan");
@@ -98,7 +104,16 @@ describe("buildScope", () => {
     const { bucket, store } = makeR2();
     await buildScope(
       sqlReturning([
-        { id: "r1", title: "r1", category: "sivan", audio_key: "r/r1.mp3", mime: "audio/mpeg", set_count: "9", full_key: "x", set_score: 2 },
+        {
+          id: "r1",
+          title: "r1",
+          category: "sivan",
+          audio_key: "r/r1.mp3",
+          mime: "audio/mpeg",
+          set_count: "9",
+          full_key: "x",
+          set_score: 2,
+        },
         { id: "r2", title: "r2", category: "sivan", audio_key: null },
       ]),
       bucket,

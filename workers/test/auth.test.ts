@@ -97,9 +97,7 @@ describe("POST /auth/login", () => {
   function routedSql(routes: Array<{ match: RegExp; rows: unknown[] }>) {
     const calls: Array<{ text: string; values: unknown[] }> = [];
     const fn = vi.fn((...args: unknown[]) => {
-      const text = Array.isArray(args[0])
-        ? (args[0] as string[]).join("¤")
-        : String(args[0]);
+      const text = Array.isArray(args[0]) ? (args[0] as string[]).join("¤") : String(args[0]);
       calls.push({ text, values: args.slice(1) });
       const r = routes.find((rt) => rt.match.test(text));
       return Promise.resolve(r ? r.rows : []);
@@ -120,7 +118,7 @@ describe("POST /auth/login", () => {
       nonce: undefined,
     });
     const { sql, calls } = routedSql([
-      { match: /UPDATE users[^]*google_sub/, rows: [] }, // no account
+      { match: /UPDATE users[\s\S]*google_sub/, rows: [] }, // no account
       {
         match: /INSERT INTO users/,
         rows: [{ id: USER_ID, display_name: "Back Again", referral_code: "NEWCODE1" }],
@@ -137,11 +135,14 @@ describe("POST /auth/login", () => {
     // The lookup must use the SAME HMAC DELETE /me wrote -> recompute it INDEPENDENTLY here, not via the lib
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
-      "raw", enc.encode(TOMB_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+      "raw",
+      enc.encode(TOMB_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
     );
     const sig = await crypto.subtle.sign("HMAC", key, enc.encode("google-sub-returning"));
-    const expectedHash = [...new Uint8Array(sig)]
-      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    const expectedHash = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
     const tombLookup = calls.find((c) => /trial_tombstones/.test(c.text));
     expect(tombLookup?.values).toContain(expectedHash);
@@ -164,7 +165,7 @@ describe("POST /auth/login", () => {
       nonce: undefined,
     });
     const { sql, calls } = routedSql([
-      { match: /UPDATE users[^]*google_sub/, rows: [] },
+      { match: /UPDATE users[\s\S]*google_sub/, rows: [] },
       {
         match: /INSERT INTO users/,
         rows: [{ id: USER_ID, display_name: "Fresh", referral_code: "NEWCODE2" }],
@@ -214,9 +215,7 @@ describe("POST /auth/login", () => {
     it("401 nonce_mismatch when the values differ", async () => {
       const res = await loginWith("n-abc", "n-xyz");
       expect(res.status).toBe(401);
-      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
-        "nonce_mismatch",
-      );
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("nonce_mismatch");
     });
 
     it("accepts a login with no nonce on either side (builds in the field)", async () => {
@@ -227,17 +226,13 @@ describe("POST /auth/login", () => {
     it("401 when the TOKEN carries a nonce the request omits (downgrade)", async () => {
       const res = await loginWith("n-abc");
       expect(res.status).toBe(401);
-      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
-        "nonce_mismatch",
-      );
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("nonce_mismatch");
     });
 
     it("401 when the REQUEST carries a nonce the token does not", async () => {
       const res = await loginWith(undefined, "n-abc");
       expect(res.status).toBe(401);
-      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
-        "nonce_mismatch",
-      );
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("nonce_mismatch");
     });
   });
 });
@@ -253,9 +248,7 @@ describe("POST /auth/refresh", () => {
 
   it("401 for a malformed refresh token", async () => {
     const env = makeEnv({ JWT_SECRET });
-    const res = await handleRefresh(
-      makeCtx({ env, jsonBody: { refreshToken: "not.a.jwt" } }),
-    );
+    const res = await handleRefresh(makeCtx({ env, jsonBody: { refreshToken: "not.a.jwt" } }));
     expect(res.status).toBe(401);
   });
 
@@ -263,9 +256,7 @@ describe("POST /auth/refresh", () => {
     const env = makeEnv({ JWT_SECRET });
     const { token, jti } = await signRefreshToken(USER_ID, JWT_SECRET);
 
-    const res = await handleRefresh(
-      makeCtx({ env, jsonBody: { refreshToken: token } }),
-    );
+    const res = await handleRefresh(makeCtx({ env, jsonBody: { refreshToken: token } }));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { accessToken: string; refreshToken: string };
     expect(typeof body.accessToken).toBe("string");
@@ -281,9 +272,7 @@ describe("POST /auth/refresh", () => {
     const { token, jti } = await signRefreshToken(USER_ID, JWT_SECRET);
     await denylistJti(env.KV, jti, Math.floor(Date.now() / 1000) + 3600);
 
-    const res = await handleRefresh(
-      makeCtx({ env, jsonBody: { refreshToken: token } }),
-    );
+    const res = await handleRefresh(makeCtx({ env, jsonBody: { refreshToken: token } }));
     expect(res.status).toBe(401);
   });
 });
@@ -293,9 +282,7 @@ describe("POST /auth/refresh", () => {
 describe("POST /auth/logout", () => {
   it("401 without an access token", async () => {
     const env = makeEnv({ JWT_SECRET });
-    const res = await handleLogout(
-      makeCtx({ env, jsonBody: { refreshToken: "x" } }),
-    );
+    const res = await handleLogout(makeCtx({ env, jsonBody: { refreshToken: "x" } }));
     expect(res.status).toBe(401);
   });
 
@@ -304,9 +291,7 @@ describe("POST /auth/logout", () => {
     const access = await signAccessToken(USER_ID, JWT_SECRET);
     const { token: refresh, jti } = await signRefreshToken(USER_ID, JWT_SECRET);
 
-    const res = await handleLogout(
-      makeCtx({ env, token: access, jsonBody: { refreshToken: refresh } }),
-    );
+    const res = await handleLogout(makeCtx({ env, token: access, jsonBody: { refreshToken: refresh } }));
     expect(res.status).toBe(200);
     expect(await isJtiDenylisted(env.KV, jti)).toBe(true);
   });
@@ -315,9 +300,7 @@ describe("POST /auth/logout", () => {
     const env = makeEnv({ JWT_SECRET });
     const access = await signAccessToken(USER_ID, JWT_SECRET);
 
-    const res = await handleLogout(
-      makeCtx({ env, token: access, jsonBody: { refreshToken: "garbage" } }),
-    );
+    const res = await handleLogout(makeCtx({ env, token: access, jsonBody: { refreshToken: "garbage" } }));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);

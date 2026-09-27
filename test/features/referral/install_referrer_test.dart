@@ -1,12 +1,11 @@
 // InstallReferrerService parses a Play Install Referrer payload into a referral code and a deep-link request.
 // This pins that parsing, the links it builds and the persisted handoff -> no platform channel is involved.
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:arul/core/deeplink/deep_link_parser.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/features/referral/data/install_referrer_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('InstallReferrerService.parseReferralCode', () {

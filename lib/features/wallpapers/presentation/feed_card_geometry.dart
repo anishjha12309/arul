@@ -20,10 +20,6 @@ class FeedCardGeometry {
   final double peek;
 
   /// Frame-coloured space left over once card, gap and peek are placed.
-  ///
-  /// SPLIT either side of the reel ([headroom]/[underhang]) -> the card is centred, not hung from top.
-  /// Frequently ZERO: at [cardAspect] 1.86 the card consumes the whole reel on an ordinary phone.
-  /// It earns its keep on tall screens, where the slack is real.
   final double floor;
 
   double get headroom => floor / 2;
@@ -32,17 +28,12 @@ class FeedCardGeometry {
   double get underhang => floor - headroom;
 
   /// Side gutters — tight; the artwork carries the screen and the frame is breathing room, not a mount.
-  ///
   /// **This is the WIDTH knob.** The card is height-clamped by the reel, so the gutter sets its width.
-  /// And it moves the realised aspect as it goes.
   static const gutter = 16.0;
 
   /// Card height ÷ width — the aspect the card ASKS for.
-  ///
   /// **The one number that controls the crop's direction.** 1.78 is exactly lossless.
-  /// At 1.86 the card is taller than the artwork -> the trim is horizontal.
   /// An ordinary phone's reel cannot grant it -> read the card's own size, never this constant.
-  /// Below 1.78 the crop flips to top/bottom and gets expensive fast — a boundary, not a slider.
   static const cardAspect = 1.86;
 
   /// Vertical gap between cards. It lives on the PAGE -> the extent solved for is card + gap.
@@ -78,9 +69,6 @@ class FeedCardGeometry {
   static const applyPillMaxWidth = 240.0;
 
   /// How much of the next card we aim to reveal — an AIM, not a promise.
-  ///
-  /// At [cardAspect] the card takes more than the whole reel -> a normal phone clamps to [minPeek].
-  /// The generous value earns its keep on a tall screen, keeping the reel from ending in dead space.
   static const targetPeek = 168.0;
 
   /// The peek is squeezed to here before the CARD gives up any height.
@@ -114,9 +102,6 @@ class FeedCardGeometry {
     var height = width * cardAspect;
     var peek = targetPeek;
 
-    // Everything below the card fits in what is left — on a tall phone the slack becomes the floor.
-    // On a short one the PEEK gives way first, and only then the card.
-    // A card taller than its own viewport cannot snap -> it may never overflow.
     var floor = reelHeight - height - gap - peek;
     if (floor < 0) {
       peek = math.max(minPeek, peek + floor);

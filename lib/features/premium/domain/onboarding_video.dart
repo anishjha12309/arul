@@ -28,9 +28,6 @@ class OnboardingVideoSource {
 const _defaultLangs = <String>['en', 'ta', 'te', 'kn', 'ml'];
 
 /// Resolves the clip for [languageCode], or null when onboarding video is off.
-///
-/// `feature_flags.onboarding_video` holds the kill switch, the cache-busting version and the set of
-/// languages that exist -> a re-cut or the Hindi dub is an upload plus a CMS edit, never a release ->
 /// the MP4s live on the CDN and are NEVER bundled (Play cannot language-split `flutter_assets`).
 /// Shown on the TRIAL variant of `/premium` only — its script says "start your 1-day trial".
 OnboardingVideoSource? resolveOnboardingVideo(
@@ -72,7 +69,7 @@ OnboardingVideoSource? _resolveClip(
   required String folder,
 }) {
   final raw = config?.featureFlags[flag];
-  final map = raw is Map ? raw : const {};
+  final map = raw is Map ? raw : const <dynamic, dynamic>{};
 
   // A cold start reaches the paywall before /config lands on a slow link -> only an explicit
   // `enabled: false` gates the feature off, never an absent config.

@@ -8,8 +8,8 @@ from inside this repo** without the recipe under each.
 ## Shared bridge contract (`com.hsrutility.arul/deferred_link`)
 
 - [ ] **Delivery identity is the URL ALONE.** Native keys its queue and its persisted
-      `handled_tokens` set by the URL; Dart de-dups on the same token. For GA4F never url+`timestamp`
-      (see below).
+      `handled_tokens` set by the URL; Dart de-dups on the same token — never url+`timestamp` (§Google
+      Ads DDL).
 - [ ] Native buffers across the Flutter-engine startup race (a `getDeferredDeepLinks` pull plus an
       `onDeferredDeepLink` push per link), and Flutter ACKs only after
       `InstallReferrerService.queueRequest` has **persisted** the target — the ACK is the commit
@@ -36,7 +36,9 @@ instead of the app. A JS navigation is real, so Play still gets the referrer.
 A preview crawler (WhatsApp, on every share) renders that page rather than Play's card — hence the
 `og:` tags and an `og:image` under `brand/`, a prefix deliberately outside every sweep's prefixes.
 Android replays the referrer to `captureOnce` on first launch, once per install (the `_kChecked`
-pref).
+pref). The `ref=` code rides the next `/auth/login` as `referralCode` (the Worker links the accounts)
+and is cleared only once that login's tokens are stored, so a later account on the phone is never
+re-attributed.
 
 Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
 `adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`
@@ -107,7 +109,7 @@ flutter build apk --debug --split-per-abi --dart-define-from-file=env/dev.json -
 adb shell pm clear com.hsrutility.arul   # between runs: both seams are once-per-install like the real thing
 ```
 Without the geo seam, the state a fresh install reads depends on the network path, not only the
-place ([known-issues.md](known-issues.md)).
+place ([deep-links.md](deep-links.md) §Language precedence).
 **A FILE, never `--dart-define=…&lang=…` on the command line** — cmd.exe cuts it at the `&`
 ([known-issues.md](known-issues.md)). The seams feed the SAME `queueRequest` the real callbacks feed,
 so parse → persist → shell → screen → language runs end to end; only the network fetch is skipped.

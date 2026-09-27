@@ -1,12 +1,11 @@
 // QC -> verify every imported file against docs/media-conventions.md.
 // Static: mjpeg 1080x1920, <=10MB. Live: h264 yuv420p 1024x1824, no audio, faststart (moov<mdat).
 // Live also: <=15MB, <=10s, w%128==0, h%32==0, fits 1088x1920, non-black frame 0.
-import { readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "fs";
-import { execFileSync } from "child_process";
-import { join } from "path";
-import { tmpdir } from "os";
-import { createRequire } from "module";
-// sharp is borrowed from the hsr-cms checkout -> this repo carries no such dependency.
+import { readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 const require = createRequire("c:/Anish/Unified CMS/");
 const sharp = require("sharp");
 
@@ -15,33 +14,51 @@ const plan = JSON.parse(readFileSync(join(ROOT, "import-plan.json"), "utf8"));
 const tmp = mkdtempSync(join(tmpdir(), "qc-"));
 
 function ffprobe(file) {
-  return JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", file], { encoding: "utf8", maxBuffer: 64 << 20 }));
+  return JSON.parse(
+    execFileSync("ffprobe", ["-v", "error", "-show_streams", "-show_format", "-of", "json", file], {
+      encoding: "utf8",
+      maxBuffer: 64 << 20,
+    }),
+  );
 }
 function faststart(path) {
-  const fd = openSync(path, "r"), size = statSync(path).size, buf = Buffer.alloc(16);
-  let pos = 0, moov = -1, mdat = -1;
+  const fd = openSync(path, "r"),
+    size = statSync(path).size,
+    buf = Buffer.alloc(16);
+  let pos = 0,
+    moov = -1,
+    mdat = -1;
   try {
     while (pos < size) {
-      const n = readSync(fd, buf, 0, 16, pos); if (n < 8) break;
-      let bs = buf.readUInt32BE(0); const type = buf.toString("ascii", 4, 8);
-      if (bs === 1) bs = Number(buf.readBigUInt64BE(8)); else if (bs === 0) bs = size - pos;
+      const n = readSync(fd, buf, 0, 16, pos);
+      if (n < 8) break;
+      let bs = buf.readUInt32BE(0);
+      const type = buf.toString("ascii", 4, 8);
+      if (bs === 1) bs = Number(buf.readBigUInt64BE(8));
+      else if (bs === 0) bs = size - pos;
       if (type === "moov" && moov < 0) moov = pos;
       if (type === "mdat" && mdat < 0) mdat = pos;
       if (moov >= 0 && mdat >= 0) break;
-      if (bs <= 0) break; pos += bs;
+      if (bs <= 0) break;
+      pos += bs;
     }
-  } finally { closeSync(fd); }
+  } finally {
+    closeSync(fd);
+  }
   return moov >= 0 && mdat >= 0 && moov < mdat;
 }
 async function frame0Luma(file) {
   const out = join(tmp, "f0.png");
-  execFileSync("ffmpeg", ["-y", "-i", file, "-vf", "select=eq(n\\,0)", "-vframes", "1", out], { stdio: ["ignore", "ignore", "ignore"] });
+  execFileSync("ffmpeg", ["-y", "-i", file, "-vf", "select=eq(n\\,0)", "-vframes", "1", out], {
+    stdio: ["ignore", "ignore", "ignore"],
+  });
   const s = await sharp(out).greyscale().stats();
   return Math.round(s.channels[0].mean);
 }
 
 const fails = [];
-let sOk = 0, vOk = 0;
+let sOk = 0,
+  vOk = 0;
 for (const p of plan) {
   const f = join(ROOT, p.localMedia);
   const bytes = statSync(f).size;

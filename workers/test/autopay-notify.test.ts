@@ -1,11 +1,5 @@
 /**
  * cron/autopay-notify.ts — Pass B, the half that takes money. Everything is mocked: no network, no DB, no money.
- *
- * This cron had no test at all, and the gap cost real money -> two subscribers were debited while their rows stayed trialing
- * They paid and were locked out for two days -> the defect was ORDERING, not logic
- * The reconcile that recovers an already-settled order sat INSIDE the try, BELOW the `redeem` call
- * So the moment `redeem` started throwing, the recovery became unreachable and the row was stranded forever
- * Two properties make that class of bug impossible, and both are asserted here
  * 1. ORDER STATUS, never the `redeem` response, is the authority on whether money moved
  *    It is consulted BEFORE re-charging and AGAIN on the throw path
  * 2. A row can never be left both unsettled and unchanged -> it settles, is parked, or gets a fresh order
@@ -24,7 +18,11 @@ const phonepe = vi.hoisted(() => ({
 /** Mirrors the real PhonePeApiError's isPermanent split -> 4xx is final, 429 is not -> that split drives every branch. */
 const { FakePhonePeApiError } = vi.hoisted(() => ({
   FakePhonePeApiError: class extends Error {
-    constructor(message: string, readonly status: number, readonly body: string) {
+    constructor(
+      message: string,
+      readonly status: number,
+      readonly body: string,
+    ) {
       super(message);
       this.name = "PhonePeApiError";
     }
@@ -41,8 +39,6 @@ vi.mock("../src/lib/phonepe.js", () => ({
 
 const referral = vi.hoisted(() => ({ grantReferralReward: vi.fn() }));
 vi.mock("../src/lib/referral.js", () => referral);
-
-
 
 const posthog = vi.hoisted(() => ({
   reportPostHogFirstConversion: vi.fn(),
@@ -308,12 +304,6 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
     }
   });
 
-  /**
-   * The skip above is necessary but not sufficient: it runs BELOW `LIMIT MAX_ROWS_PER_PASS`.
-   * A stale row the loop will never touch still consumed one of the scan's 200 slots -> measured at
-   * 56 of 150 rows in production, a third of the capacity spent fetching rows already ruled out.
-   * The cap is what starves fresh debits behind an old head, so the deferral has to be a QUERY bound.
-   */
   it("bounds the Pass B query itself off the top of the hour — a stale row never takes a slot", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-25T05:30:00Z"));
@@ -325,9 +315,7 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
 
       const passB = executed.find((e) => e.text.includes("notified_at IS NOT NULL"));
       expect(passB).toBeDefined();
-      expect(passB!.values).toContain(
-        new Date(Date.now() - 48 * HOUR).toISOString(),
-      );
+      expect(passB!.values).toContain(new Date(Date.now() - 48 * HOUR).toISOString());
     } finally {
       vi.useRealTimers();
     }
@@ -346,9 +334,7 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
       expect(passB).toBeDefined();
       // Epoch, not the 48h floor -> the same statement, no stale row excluded
       expect(passB!.values).toContain(new Date(0).toISOString());
-      expect(passB!.values).not.toContain(
-        new Date(Date.now() - 48 * HOUR).toISOString(),
-      );
+      expect(passB!.values).not.toContain(new Date(Date.now() - 48 * HOUR).toISOString());
     } finally {
       vi.useRealTimers();
     }
@@ -512,17 +498,6 @@ describe("Pass B — a row is never stranded", () => {
   });
 });
 
-/**
- * Pass D — the pause nobody ever told us ended.
- *
- * The park that discovers a PAUSED mandate NULLs next_debit_at, which is exactly what removes the row
- * from both passes' queries -> after that, nothing in this cron looks at it again.
- * The only ways back were the `subscription.unpaused` webhook, which has NEVER been delivered in
- * production, and the user happening to open the paywall. So a subscriber who paused and then unpaused
- * in their UPI app was never billed again, silently — 11 such rows were live when this pass was added.
- * The restore is the WEBHOOK'S OWN statement, shared through lib/subscription-rearm.ts: a second copy
- * of it here is a copy that one day rearms the status without the clock, which is the original bug.
- */
 describe("Pass D — a paused mandate the webhook never told us about", () => {
   it("rearms a paused row whose mandate is ACTIVE again at PhonePe", async () => {
     atTick(0);
@@ -533,10 +508,7 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
 
       await runAutopayNotify(makeEnv());
 
-      expect(phonepe.getSubscriptionStatus).toHaveBeenCalledWith(
-        expect.anything(),
-        "DKS_S_PAUSED",
-      );
+      expect(phonepe.getSubscriptionStatus).toHaveBeenCalledWith(expect.anything(), "DKS_S_PAUSED");
       const rearm = updates(executed).find((u) =>
         u.text.includes("COALESCE(next_debit_at, current_period_end)"),
       );
@@ -601,9 +573,7 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
       await runAutopayNotify(makeEnv());
 
       // Not even the SELECT -> a pause can wait 45 min; a debit due this tick cannot
-      expect(
-        executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'")),
-      ).toBe(false);
+      expect(executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'"))).toBe(false);
       expect(phonepe.getSubscriptionStatus).not.toHaveBeenCalled();
       expect(updates(executed)).toHaveLength(0);
     } finally {
@@ -627,9 +597,7 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
 
       // Debits outrank pause housekeeping: Pass D stops before its first call, and retries next hour
       expect(phonepe.getSubscriptionStatus).not.toHaveBeenCalled();
-      expect(
-        executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'")),
-      ).toBe(false);
+      expect(executed.some((e) => e.text.includes("FROM subscriptions WHERE status = 'paused'"))).toBe(false);
       expect(updates(executed).some((u) => u.text.includes("status = 'active'"))).toBe(true);
     } finally {
       vi.useRealTimers();
@@ -638,10 +606,6 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
 });
 
 describe("Pass B — the 45-day dunning ladder", () => {
-  // The business rule: a failed renewal debit is pursued for 45 days on a SPACED ladder, not daily until five failures
-  // Each rung is a FRESH notify plus order -> PhonePe's 1-attempt+3-retries/48h cap applies INSIDE one order
-  // Each retry lands at 21:30 UTC, which is 03:00 IST -> inside NPCI's non-peak autopay execution window
-
   const failedOrder = () =>
     phonepe.getOrderStatus.mockResolvedValue({
       state: "FAILED",
@@ -650,9 +614,7 @@ describe("Pass B — the 45-day dunning ladder", () => {
 
   /** The ladder reschedule UPDATE, if the run issued one -> its absence is as load-bearing as its contents. */
   const ladderUpdate = (executed: Executed[]) =>
-    updates(executed).find(
-      (u) => u.text.includes("retry_count") && u.text.includes("next_debit_at"),
-    );
+    updates(executed).find((u) => u.text.includes("retry_count") && u.text.includes("next_debit_at"));
 
   it("schedules the first retry ~2 days out at 21:30 UTC — not tomorrow", async () => {
     const { sql, executed } = makeSql([dueRow(3 * HOUR)]);

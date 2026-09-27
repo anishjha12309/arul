@@ -6,11 +6,6 @@ import '../../../core/upi/upi_apps.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// What the picker pops for its QR row, in place of a package name.
-///
-/// A sentinel rather than a package because the QR is not one: it names PhonePe's package only to
-/// satisfy PhonePe's mandatory `targetApp`, and letting that name come back through the picker would
-/// write PhonePe into the remembered-app pref and make the next visit's CTA silently launch an app
-/// the user never chose. The return page's QR row selects this same value.
 /// Shaped so no real package can collide with it — a package name has no leading `#`.
 const kUpiPickQr = '#qr';
 

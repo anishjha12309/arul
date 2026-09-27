@@ -39,10 +39,6 @@ class TrialNudgeNotifier extends _$TrialNudgeNotifier {
     await TrialNudge.mark(_prefs, orderId: orderId, now: now);
     state = true;
 
-    // Permission is NEVER requested here — this fires from a payment the user started, and the row
-    // covers anyone who has not already opted in. `scheduleTrialReminder` answers false when it did
-    // not arm, and the instant is persisted only when it did, so the launch re-arm stays honest.
-    //
     // Best-effort, and the marker does not depend on it: the ROW is the half that works for
     // everyone, and a notification layer that is absent or refuses must not cost it.
     var armed = false;

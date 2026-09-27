@@ -1,9 +1,8 @@
 // The wallpaper chip row's ORDER -> Sivan leads right after All (owner's instruction), the rest follow alphabetically.
 // Chip ORDER only -> items inside a chip keep their merit order (CLAUDE.md §5b) -> a chip can never contradict All.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/data/models/wallpaper.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 List<String> _ordered(List<WallpaperCategory> input) =>
     (input.toList()..sort(compareBrowseCategories))

@@ -10,7 +10,6 @@ class ApiContentSubmissionRepository implements ContentSubmissionRepository {
 
   @override
   Future<List<ContentSubmissionModel>> getSubmissions(String userId) async {
-    // GET /me/submissions (architecture.md §3.5) -> { items: [...] }; 404 -> [].
     try {
       final data = await _api.get('/me/submissions');
       final items = data['items'] as List? ?? [];

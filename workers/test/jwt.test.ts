@@ -39,9 +39,7 @@ describe("JWT — access token", () => {
 
   it("rejects a token signed with a different secret", async () => {
     const token = await signAccessToken("user-uuid-123", TEST_SECRET);
-    await expect(
-      verifyAccessToken(token, "wrong-secret-must-be-at-least-32-bytes!!"),
-    ).rejects.toThrow();
+    await expect(verifyAccessToken(token, "wrong-secret-must-be-at-least-32-bytes!!")).rejects.toThrow();
   });
 
   it("rejects a malformed token", async () => {
@@ -77,7 +75,9 @@ describe("JWT — KV denylist", () => {
         store.set(key, value);
       }),
       get: vi.fn(async (key: string) => store.get(key) ?? null),
-      delete: vi.fn(async (key: string) => { store.delete(key); }),
+      delete: vi.fn(async (key: string) => {
+        store.delete(key);
+      }),
       list: vi.fn(async () => ({ keys: [], list_complete: true, cursor: undefined })),
       getWithMetadata: vi.fn(async () => ({ value: null, metadata: null })),
     } as unknown as KVNamespace;

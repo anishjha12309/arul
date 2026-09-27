@@ -14,10 +14,6 @@ enum DeepLinkSource {
   meta,
 
   /// A campaign notification tapped on the phone (`docs/push.md`).
-  ///
-  /// A push target parks in the same one-shot slot as a link's, so the tab that shows it fires
-  /// `deep_link_opened` either way. Without a value of its own every campaign tap would report as
-  /// `app_link` and quietly inflate the channel that ad spend is read against.
   push,
 
   debug;
@@ -41,9 +37,6 @@ enum DeepLinkSource {
 ///   · [TabLinkTarget]       — just a tab (`screen=ringtones` with no id).
 ///   · [CategoryLinkTarget]  — the browse feed filtered to one category.
 ///   · [PremiumLinkTarget]   — the premium screen.
-///
-/// The last two are reachable ONLY from a campaign push, never from a URL: no ad or share link
-/// parses into either, so nothing in `deep_link_parser.dart` emits them.
 sealed class DeepLinkTarget {
   const DeepLinkTarget({required this.source});
 
@@ -143,10 +136,6 @@ final class TabLinkTarget extends DeepLinkTarget {
 }
 
 /// The browse feed filtered to one category — a campaign push's "Opens: a category".
-///
-/// Its [tab] is Wallpapers because that is the only tab a category chip filters; the handler selects
-/// the category BEFORE routing, exactly as the local reminder's `onOpenCategory` does, so the feed's
-/// first build already filters and there is no flash of the previous category.
 /// A slug the catalog no longer carries must land on the feed, never on an empty screen or an error.
 final class CategoryLinkTarget extends DeepLinkTarget {
   const CategoryLinkTarget(this.slug, {super.source = DeepLinkSource.appLink});
@@ -208,18 +197,9 @@ class _DeepLinkNotifier extends ChangeNotifier {
 
 /// What a link asked the app to open, held until the screen that can show it is ready.
 /// Plus the language it asked for, held until the app root can apply it.
-///
-/// Five paths write here, and consumers must not care which:
-///   · **App Link / Meta scheme** — installed already; go_router's top-level redirect parks it here;
-///   · **Play Install Referrer** — NOT installed; Play replays the Worker's payload on first launch;
-///   · **Google Ads DDL** and **Meta deferred** — fetched by GA4F / the Meta SDK after an ad install;
-///   · the debug test seams.
-///
 /// Written from go_router's `redirect`, which runs before there is an element to read a container from.
 /// So a plain STATIC, never a provider — a provider works on a warm link and drops the cold one.
 /// The cold one is the case that matters: an ad tap is almost always cold.
-/// [changes] fires on every write -> a screen already up can react to a target that lands late.
-/// GA4F and Meta deliver mid-startup, and an App Link can arrive while the app is warm.
 class ArulDeepLink {
   const ArulDeepLink._();
 
@@ -265,8 +245,6 @@ class ArulDeepLink {
   static DeepLinkTarget? get pendingTarget => _target;
 
   /// Take the pending target if it is a wallpaper, clearing it.
-  ///
-  /// The feed builds before the shell switched tabs -> a wallpaper take must never eat a ringtone.
   /// Read-and-clear in ONE call: a target left behind drags the user back on every later rebuild.
   static WallpaperLinkTarget? consumeWallpaper() {
     final t = _target;

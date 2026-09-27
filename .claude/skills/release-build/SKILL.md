@@ -37,7 +37,8 @@ disable-model-invocation: true
      NEVER pass `--split-per-abi` or `--target-platform` here. Play generates the per-device
      split itself from the bundle; stripping an architecture out of the upload means every device
      on that ABI simply cannot install, and it is invisible until a real user hits it.
-   - **APKs, release AND debug: arm64-v8a ONLY** (owner's call — the other two are noise). `--split-per-abi` names the file per ABI, `--target-platform` builds just the one:
+   - **APKs, release AND debug: arm64-v8a ONLY** (owner's call — the other two are noise). `--split-per-abi`
+     names the file per ABI, `--target-platform` builds just the one:
      ```bash
      flutter build apk --release --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/prod.json
      flutter build apk --debug   --split-per-abi --target-platform android-arm64 --dart-define-from-file=env/dev.json

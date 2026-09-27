@@ -7,15 +7,14 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-
 import 'package:arul/data/catalog/catalog_http_client.dart';
 import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 Map<String, dynamic> _item(
   String stem, {

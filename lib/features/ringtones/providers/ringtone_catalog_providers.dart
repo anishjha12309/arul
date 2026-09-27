@@ -20,11 +20,8 @@ final ringtoneRepositoryProvider = Provider<RingtoneRepository>(
 );
 
 /// The full ringtone catalog, drained to one list — the screen filters by category client-side.
-///
-/// Category is THE browse axis (CLAUDE.md §5b); New is a chip beside the categories, not a tab.
 /// Sorted by `sort_order` then title, so authoring order holds.
 /// NO disk snapshot: a handful of tiny pages, and this tab is not the launch surface.
-/// [AppShell] warms it post-first-frame -> the drain has usually finished before the user arrives.
 /// An empty catalog is DATA, not an error -> the designed empty state, never a spinner or a wall.
 final ringtoneCatalogProvider =
     AsyncNotifierProvider<RingtoneCatalogNotifier, List<Ringtone>>(
@@ -39,10 +36,8 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
   static const _maxConcurrentPages = 4;
 
   /// Delays between automatic re-checks while the list is parked on a network error, showing nothing.
-  ///
   /// Riverpod's own ~13 s of quick retries cover a cold-start radio or DNS blip, and nothing else.
   /// A user in a lift gets the error card, signal returns, and no connectivity listener notices.
-  /// The card then stayed until a manual Retry -> this ladder is the fix, mirrored in both feeds.
   /// It lengthens to two minutes and HOLDS -> an offline device settles, never spins the radio.
   /// Empty disables it (tests).
   @visibleForTesting
@@ -122,8 +117,6 @@ class RingtoneCatalogNotifier extends AsyncNotifier<List<Ringtone>> {
 
   /// Drains the full catalog — page 1 carries `total_pages`, then the rest, at most
   /// [_maxConcurrentPages] in flight, reassembled in page order.
-  ///
-  /// A sequential drain measured ~5 s on first open: 8 pages, one CDN round trip each.
   /// The repository maps a CDN miss to an EMPTY page -> an absent catalog is an empty LIST.
   /// A genuine connectivity failure throws [NetworkException] instead -> AsyncError, then retry.
   /// An empty later page means end-of-pages or a transient miss -> everything before it is served.
@@ -181,9 +174,6 @@ final ringtoneCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
     if (r.category == othersCategorySlug) continue;
     labels.putIfAbsent(r.category, () => r.categoryLabel);
   }
-  // A CMS order wins OUTRIGHT here, `others` included: dragging it off the end is a
-  // deliberate act, and silently overriding it would be the CMS showing one order and
-  // the app another. With no CMS order, `others`-last still holds.
   return orderedByCms(
     labels.entries.map((e) => WallpaperCategory(e.key, e.value)).toList(),
     categoryOrderFor(cfg?.categoryOrder, 'ringtones'),
@@ -220,14 +210,8 @@ class SelectedRingtoneCategory extends Notifier<String> {
 }
 
 /// The list the screen serves for [slug] — the ONE definition of ringtone order.
-///
 /// The ringtone twin of `feedOrder()`: filtered by category, then rank, then most-SET, then position.
 /// Identical rule to the wallpaper feed through the same [orderedByUse] -> the two cannot drift.
-/// See catalog_providers.dart for why rank is nulls-last and the position tiebreaker is load-bearing.
-/// All and every category get that comparator — a category is All restricted to that category.
-/// New does not: it is the wallpaper row's [newOrder] verbatim — renewed, then debuts, then filler by
-/// sets — one window, one floor, one set of rules for both tabs, over this tab's own list.
-/// A deep link resolves its row index through this too: raw catalog order would scroll elsewhere.
 List<Ringtone> ringtoneFeedOrder(
   String slug,
   List<Ringtone> all, {

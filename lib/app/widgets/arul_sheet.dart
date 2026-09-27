@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/haptics/arul_haptics.dart';
 import '../../theme/arul_tokens.dart';
-import '../theme/theme.dart';
 import '../theme/motion.dart';
+import '../theme/theme.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
-///
-/// Spec: top r24; `#1A0B0F` dark or white light; gold-35% top hairline on dark; 44×4 r2 grabber.
-/// Entrance is translateY(24)+fade over 300ms ease, behind a `rgba(20,9,12,.58)` barrier scrim.
 /// [gradient] true gives the premium sheet's `#241014 → #1A0B0F` top.
 /// [brightness] pins the sheet to one form instead of the app theme -> for a caller whose own
 /// surface does not follow that theme (the sign-in wall is always dark over video, so its sheet
@@ -36,7 +33,6 @@ Future<T?> showArulSheet<T>(
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay,
-    // Every Arul sheet follows the app theme — ArulSheet reads `Theme.of(context).brightness` itself.
     builder: (context) {
       final sheet = ArulSheet(
         gradient: gradient,
@@ -94,7 +90,6 @@ class _ArulSheetState extends State<ArulSheet>
     if (_motionStarted) return;
     _motionStarted = true;
     if (context.reduceMotion) {
-      // Straight to the SETTLED state: full opacity, zero offset. The sheet appears, it does not rise.
       _c.value = 1;
     } else {
       _c.forward();
@@ -152,7 +147,6 @@ class _ArulSheetState extends State<ArulSheet>
           child: Stack(
             children: [
               surface,
-              // Clipped to the rounded top by the enclosing ClipRRect.
               if (isDark && widget.topHairline)
                 Positioned(
                   top: 0,
@@ -191,12 +185,6 @@ class _Grabber extends StatelessWidget {
 }
 
 /// One option in an Arul sheet — icon chip, title, one short sub, on its own bordered card.
-///
-/// Every sheet that offers a LIST of choices reads this, so the theme picker and the help sheet
-/// cannot drift apart; the language picker is the same card language laid out as a 2-column grid.
-/// Flat rows separated by nothing read as one undifferentiated block — the gap and the rim are what
-/// make three options look like three things.
-///
 /// [selected] is the picker state — gold rim, gold tint, gold type and a check, as on a language
 /// tile. [destructive] is the one irreversible act. A row is never both.
 class ArulSheetRow extends StatelessWidget {
@@ -245,32 +233,32 @@ class ArulSheetRow extends StatelessWidget {
     // Gold TYPE dies on ivory -> goldInkLight is the ink role for exactly this (arul_tokens.dart).
     final goldInk = isDark ? ArulTokens.gold : ArulTokens.goldInkLight;
 
-    final Color fill = selected ? ArulTokens.goldTintFill10 : surface;
+    final fill = selected ? ArulTokens.goldTintFill10 : surface;
     // On LIGHT the neutral row is already maroon-tinted, so maroonBorder18 / maroonTintFill08 land
     // a percent or two off it and the delete row read identical to its neighbour on device. The rim
     // and chip take the logout pill's values instead — the app's existing destructive voice.
-    final Color border = selected
+    final border = selected
         ? ArulTokens.gold
         : destructive
         ? (isDark ? _maroonRimDark : _maroonRimLight)
         : (isDark ? ArulTokens.cardBorderDark14 : ArulTokens.cardBorderLight);
     // Inverted on a selected row: a quiet well inside the gold card, so the chip does not silt up.
-    final Color chipBg = selected
+    final chipBg = selected
         ? surface
         : destructive
         ? (isDark ? _maroonChipDark : _maroonChipLight)
         : (isDark ? ArulTokens.goldTintFill10 : ArulTokens.maroonTintFill07);
     // Maroon ink dies on the dark ground -> the logout pill's warm pale, the app's one destructive
     // voice on dark (`_LogoutButton` derives the same lerp; no token exposes it).
-    final Color accent = selected
+    final accent = selected
         ? goldInk
         : destructive
         ? (isDark ? _destructiveInkDark : ArulTokens.maroon)
         : (isDark ? ArulTokens.gold : ArulTokens.maroon);
-    final Color titleColor = (selected || destructive)
+    final titleColor = (selected || destructive)
         ? accent
         : (isDark ? ArulTokens.darkText : ArulTokens.lightText);
-    final Color subColor = isDark
+    final subColor = isDark
         ? ArulTokens.darkTextSecondary
         : ArulTokens.lightSecondary;
 

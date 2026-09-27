@@ -10,10 +10,8 @@ import '../data/feed_video_player.dart';
 import '../data/wallpaper_prefetch_service.dart';
 
 /// How long the feed must rest on a page before its player is reassigned and its media opened.
-///
 /// A fast fling snaps PageView through intermediate pages, firing onPageChanged for each.
 /// Without this gate every passing page re-`open()`s a player, churning faster than it settles.
-/// While settling, nothing new is mounted and no player is reassigned.
 const Duration _settleDebounce = Duration(milliseconds: 160);
 
 /// A live-video slot for one index — the texture id, the video's intrinsic size, a first-frame flag.
@@ -49,13 +47,6 @@ class LiveVideoSlot {
 }
 
 /// One pooled native player — a [FeedVideoPlayer] handle plus the bookkeeping that drives reveal.
-///
-/// **Created ONCE and reused across feed indices** — ExoPlayer, [Texture] and surface all survive.
-/// Moving to a new index is a [FeedVideoPlayer.open], NEVER a dispose+recreate.
-/// Recreating per swipe allocated a fresh Android surface each time.
-/// That surface churn — not the decode — caused the settle-frame jank on budget MediaTek SoCs.
-/// It also produced the `BLASTBufferQueue ... Already acquired max frames` flood.
-/// Each new surface renegotiates the display refresh rate -> reuse makes a swipe a media swap.
 class _PooledPlayer {
   _PooledPlayer({required this.handle});
 
@@ -109,24 +100,6 @@ class _PooledPlayer {
 
 /// Drives the reel's live previews over a small FIXED REUSE POOL of native Media3 players.
 /// Backed by a separate disk byte-prefetcher.
-///
-/// **Two decoupled windows** — the key to fast previews on budget SoCs:
-///   - **Data window** ([WallpaperPrefetchService]) — downloads upcoming MP4 BYTES to disk.
-///     No player and no decoder, just network and disk -> many items ahead, cheaply;
-///   - **Decoder window** ([_keepBehind] behind, [_preloadAhead] ahead) — the only place real
-///     ExoPlayers, and so hardware decoders and surfaces, exist.
-///
-/// The decoder window is previous + current + next, so a back-swipe lands pre-decoded too.
-/// A held decoder is scarce on budget MediaTek SoCs, and the wallpaper service claims one for good.
-/// So 3 is the HARD CEILING here.
-/// **Reuse, not recreate** — the pool holds at most [_poolSize] players for the whole session.
-/// A page change reassigns via `open()`, never disposing the outgoing player.
-/// Recreating per swipe allocated a fresh surface each time, and that churn caused the jank.
-/// Players are disposed only on [releaseDecoders] and [dispose] — never per scroll.
-/// Players open the PREFETCHED LOCAL FILE when present, falling back to the CDN URL.
-/// Only the CURRENT index plays; neighbours open with `playWhenReady: false` and paint one frame.
-/// A live item outside the window has no player and shows its poster alone.
-/// On background every player is disposed -> the OEM chooser or our own service can claim a decoder.
 class VideoPreloadController extends ChangeNotifier
     with WidgetsBindingObserver {
   VideoPreloadController({
@@ -157,9 +130,7 @@ class VideoPreloadController extends ChangeNotifier
   // keepBehind = 1 keeps the PREVIOUS player alive -> a back-swipe lands pre-decoded, like forward.
   // Cost: at most previous + current + next = 3 concurrent decoders, one over the budget-SoC 2.
   // Affordable only because players open from the DISK prefetch, not a cold stream.
-  // And because only the current index plays, while the pool reuses players across indices.
   // 3 is the CEILING on the lowest-end target SoC — the wallpaper service claims one permanently.
-  // So re-verify deep-scroll stability on a real budget device.
   static const _keepBehind = 1;
   static const _preloadAhead = 1;
 
@@ -168,16 +139,6 @@ class VideoPreloadController extends ChangeNotifier
   static const _poolSize = _keepBehind + 1 + _preloadAhead;
 
   /// **Adaptive decoder budget** — how many concurrent decoders the feed may hold.
-  ///
-  /// Session-sticky: it survives a feed remount, and resets on app restart for a fresh try.
-  /// Starts at the full window -> a capable device keeps the exact previous+current+next pipeline.
-  /// Budget SoCs cap hardware decoder instances, commonly at 2 -> the 3rd `prepare()` fails init.
-  /// That card then stayed permanently on its poster.
-  /// Capability APIs lie in BOTH directions -> **attempt-and-degrade**, never trust them.
-  /// A REPEATED decoder-class error on one open demotes the budget by one ([_demoteBudget]).
-  /// The previous-index slot drops first; worst case is current-only.
-  /// Devices that never error never demote.
-  ///
   /// **Seeded from [DeviceQuality]**, not from [_poolSize]: a `low` phone starts at 2 rather than
   /// paying the third `prepare()` failure first. Attempt-and-degrade still owns everything above
   /// that — the tier only picks where the ladder starts, never where it ends.
@@ -221,10 +182,6 @@ class VideoPreloadController extends ChangeNotifier
   Timer? _settleTimer;
 
   /// How long the pool survives after the user leaves the Wallpapers tab.
-  ///
-  /// Emptying it costs three `MediaCodec` instantiations to rebuild — measured at 430 ms with no
-  /// frame on the video surface, and 10.4% of frames over 33 ms across a tab-switch window. That is
-  /// worth paying when the user has actually gone; it is pure loss when they tap straight back.
   static const _leaveGrace = Duration(seconds: 3);
   Timer? _leaveTimer;
 
@@ -237,11 +194,8 @@ class VideoPreloadController extends ChangeNotifier
   int _creating = 0;
 
   /// The slot serving [index] — null when the item is static, out of window, or unassigned.
-  ///
   /// Deliberately does NOT withhold the slot while [_settling].
   /// The settle gate debounces REASSIGNMENT only; it must not unmount an already-serving player.
-  /// Dropping every slot on page-change tore down the just-landed card's texture and remounted it.
-  /// Its first frame was already decoded, so the remount flashed dark `fill` — the black blink.
   /// Keeping an in-window served slot mounted -> a swipe onto a neighbour shows its frame continuously.
   /// Indices with no serving player still return null, so a fast fling is unaffected.
   LiveVideoSlot? slotForIndex(int index) {
@@ -308,21 +262,7 @@ class VideoPreloadController extends ChangeNotifier
     return _assignPlayerReady(0, playWhenReady: true);
   }
 
-  /// Disposes every pooled player immediately. The pool re-creates lazily as cards go active again.
-  ///
-  /// The future completes once every native player finished its platform `dispose`.
-  /// The native handler releases codec and surface synchronously before replying.
-  /// The apply flow AWAITS this before the native call -> the OS finds the decoders free.
-  /// Fire-and-forget call sites — lifecycle pause, screen dispose — just ignore the future.
   /// Leaving the Wallpapers tab: stop NOW, free the decoders only if the user stays away.
-  ///
-  /// The pause is what the immediate release was really buying — no audio and no decode behind the
-  /// ringtone list — and it is free. Freeing the decoders is the expensive half, and it is the only
-  /// half a quick return can make pointless, so it waits [_leaveGrace].
-  ///
-  /// Deliberately NOT used by the other three release paths, which must stay immediate: the apply
-  /// flow AWAITS a release so the OS finds decoders free, backgrounding hands them to the OEM
-  /// chooser, and [detach] is a teardown. Only the tab switch can be undone.
   void releaseDecodersOnLeave() {
     if (_disposed) return;
     _pauseAll();

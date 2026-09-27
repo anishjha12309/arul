@@ -13,22 +13,16 @@
 //
 // Writes <ROOT>/ringtone-import-plan.json.
 // No credentials and no writes outside ROOT -> the only network call is a READ of the live catalog, for dedup.
-import { readdirSync, statSync, writeFileSync } from "fs";
-import { execFileSync } from "child_process";
-import { join, basename, extname } from "path";
-import { randomUUID } from "crypto";
+import { readdirSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, basename, extname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 const SRC = process.env.SRC || "c:/ringtones/output";
 const ROOT = process.env.ROOT || "c:/Anish/arul-import";
 const CDN = process.env.CDN || "https://arul-cdn.hsrutility.com";
 const ALLOW_DUPES = process.argv.includes("--allow-duplicate-titles");
 
-// ─── Classification ──────────────────────────────────────────────────────────
-// Category is THE browse axis (CLAUDE.md §5b) and the ringtone medallion picks its motif from it.
-// A category outside the supported set renders an arbitrary hashed motif -> a real cost, not a cosmetic one.
-// RINGTONE CATEGORIES ARE NOT THE WALLPAPER ONES -> there is no `temples`, and there IS an `others` (owner's call).
-// The five deities are perumal · murugan · sivan · amman · ayyappan -> anything belonging to none of them is `others`.
-// Each tab derives its chips from its own catalog -> the two tabs legitimately differ.
 // Classify from the track's LYRICS, NEVER from its file name -> a name-based pass got five of thirty wrong.
 // Generated drops ship auto-titles ("Divine Call", "Devout Offering") -> they say nothing about the deity.
 
@@ -119,7 +113,6 @@ const SOFT_MAX_SECONDS = 40;
 
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-// ─── Read the drop ───────────────────────────────────────────────────────────
 /** "Amme Narayana-30s.mp3" -> "Amme Narayana" — a cut length must never reach a title the user reads. */
 function titleFrom(file) {
   const t = basename(file, extname(file))
@@ -161,11 +154,16 @@ function probe(path) {
   const out = execFileSync(
     "ffprobe",
     [
-      "-v", "error",
-      "-select_streams", "a:0",
-      "-show_entries", "stream=codec_name,channels,sample_rate",
-      "-show_entries", "format=duration,bit_rate",
-      "-of", "json",
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_entries",
+      "stream=codec_name,channels,sample_rate",
+      "-show_entries",
+      "format=duration,bit_rate",
+      "-of",
+      "json",
       path,
     ],
     { encoding: "utf8" },
@@ -181,7 +179,6 @@ function probe(path) {
   };
 }
 
-// ─── Live catalog, for dedup + the sort_order high-water mark ────────────────
 // Read from the CDN, not the DB -> no credentials, and the catalog is what users actually see.
 // A drop re-run by mistake is the failure this prevents -> nothing else in the pipeline would notice duplicate rows.
 async function readLiveCatalog() {
@@ -209,7 +206,6 @@ const liveByTitle = new Map(live.map((i) => [norm(i.title), i.title]));
 const maxSortOrder = live.reduce((m, i) => Math.max(m, Number(i.sort_order ?? 0)), 0);
 console.log(`live catalog: ${live.length} ringtones, max sort_order ${maxSortOrder}`);
 
-// ─── Classify + QC ───────────────────────────────────────────────────────────
 const items = [];
 const problems = [];
 const warnings = [];
@@ -219,9 +215,7 @@ const seen = new Map();
 
 for (const src of sources) {
   if (!src.category) {
-    unclassified.push(
-      src.folder ? `${src.title}  (folder "${src.folder}" unmapped)` : src.title,
-    );
+    unclassified.push(src.folder ? `${src.title}  (folder "${src.folder}" unmapped)` : src.title);
     continue;
   }
 
@@ -239,7 +233,9 @@ for (const src of sources) {
   if (bytes > MAX_BYTES) problems.push(`${src.title}: ${(bytes / 1048576).toFixed(1)}MB > 15MB`);
   if (!p.durationMs) problems.push(`${src.title}: unreadable duration`);
   if (p.durationMs > SOFT_MAX_SECONDS * 1000)
-    warnings.push(`${src.title}: ${(p.durationMs / 1000).toFixed(1)}s > ${SOFT_MAX_SECONDS}s (recommended max)`);
+    warnings.push(
+      `${src.title}: ${(p.durationMs / 1000).toFixed(1)}s > ${SOFT_MAX_SECONDS}s (recommended max)`,
+    );
 
   const id = randomUUID();
   items.push({
@@ -280,7 +276,6 @@ if (collisions.length && !ALLOW_DUPES) {
   process.exit(1);
 }
 
-// ─── Interleave → sort_order ─────────────────────────────────────────────────
 // A drop is ONE transaction -> without an explicit sort_order every new row ties and clumps by insertion order.
 // Continue from the live high-water mark -> an existing user's first screen does not re-shuffle.
 // Round-robin the categories inside the new block -> it alternates deities instead of running one for 18 rows.
@@ -299,7 +294,6 @@ ordered.forEach((it, i) => {
   it.sort_order = maxSortOrder + i + 1;
 });
 
-// ─── Report + write ──────────────────────────────────────────────────────────
 const counts = {};
 for (const it of ordered) counts[it.category] = (counts[it.category] ?? 0) + 1;
 

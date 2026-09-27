@@ -16,12 +16,11 @@ paths:
   **Never seed from device wallpaper or dynamic color.**
 - Light, Dark and System are all required, and the choice is persisted.
 - **Every animation routes through `context.reduceMotion`** (`lib/app/theme/motion.dart`) and HOLDS at
-  its resting state rather than being removed. It is true on `MediaQuery.disableAnimations` (a11y and
-  battery saver) or `DeviceTier.low`. Arm repeating controllers from `didChangeDependencies`.
+  its resting state rather than being removed. It is true on `MediaQuery.disableAnimations` (Remove
+  animations; Battery Saver skips it on some ROMs) or `DeviceTier.low`. Arm repeating controllers from `didChangeDependencies`.
   Durations/curves: `Motion` or `ArulTokens`, never a literal.
 - **`DeviceQuality` tiers buy COST, never composition** — never branch layout on the tier.
-- **The UI is Arul's own** — never clone Pakiza's look or sync a theme change. The single exception is
-  `ArulEarnButton`, a deliberate port (CLAUDE.md §0).
+- **The UI is Arul's own** — never import another app's look, theme or components.
 - Perf rules SHAPE the design and are not optional polish: no glassmorphism anywhere including the
   dock, no `shimmer` package and no `ShaderMask` (a mask forces an offscreen pass — slide a gradient
   fill instead), and no `google_fonts` or `font_awesome_flutter`. Marcellus is BUNDLED, which is the

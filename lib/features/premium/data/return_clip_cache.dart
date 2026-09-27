@@ -4,12 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 /// The return page's clip, pulled to disk while the person is inside the UPI app.
-///
-/// The clip LOOPS, and a looping CDN stream re-downloads the whole file every lap (ExoPlayer keeps
-/// no back buffer) — 2.6 MB per 37 s on a data plan, and an under-run on a slow link. Opening a local
-/// file costs the bytes once. The download starts at the UPI handoff, so only people who tapped the
-/// CTA pay for it, and it has the whole mandate sheet's worth of time to land.
-///
 /// Its own cache, not the feed's: that one is an LRU of 120 wallpapers that would evict this clip
 /// within a scroll, and this one holds a language cut or two, forever warm for the next abandon.
 abstract final class ReturnClipCache {

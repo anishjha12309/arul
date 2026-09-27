@@ -43,7 +43,6 @@ class CtaButton extends StatefulWidget {
 
   /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
   /// the UI layer and survives every locale.
-  /// Never announced and never visible — see that folder's README for the list.
   final String? identifier;
 
   @override
@@ -100,7 +99,6 @@ class _CtaButtonState extends State<CtaButton> {
       // The label IS the visible word -> without this it announces the label then the label again.
       excludeSemantics: true,
       child: GestureDetector(
-        // The haptic rides press-DOWN -> it lands in step with the scale dip and the colour swap.
         onTapDown: _enabled
             ? (_) {
                 ArulHaptics.fire(widget.haptic);
@@ -111,7 +109,6 @@ class _CtaButtonState extends State<CtaButton> {
         onTapCancel: _enabled ? () => setState(() => _pressed = false) : null,
         onTap: _enabled ? widget.onPressed : null,
         child: AnimatedScale(
-          // Parked at the resting scale when motion is reduced; the haptic still answers the press.
           scale: _pressed && !context.reduceMotion ? 0.97 : 1,
           duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
           child: Opacity(

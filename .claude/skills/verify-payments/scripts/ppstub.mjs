@@ -1,20 +1,8 @@
 /**
  * PhonePe stub — the only way to reach a TERMINAL redemption state locally.
- *
- * PhonePe's UAT sandbox accepts notify and redeem (both verified live), but it
- * holds the redemption PENDING through its own retry cycle and offers no way to
- * settle one on demand. So the branches that actually matter —
- *
- *   COMPLETED → status='active', current_period_end +1 month, referral reward
- *   FAILED    → retry_count++, re-notify next run, expire at MAX_RETRIES
- *
- * — are unreachable against UAT. This stub makes both deterministic.
- *
  * Reads ./mode.txt on EVERY request, so you can switch outcomes mid-run without
  * restarting:  echo FAILED > mode.txt
- *
  * Valid modes: COMPLETED | FAILED | PENDING   (default COMPLETED)
- *
  * Reached only via PHONEPE_BASE_URL_OVERRIDE in workers/.dev.vars, which
  * getPgBase ignores outright when PHONEPE_ENV=PRODUCTION.
  */
@@ -75,9 +63,7 @@ createServer((req, res) => {
       // URL contains both "/subscriptions/v2/" and "/status", so the generic
       // branch would swallow it and answer with a mandate shape.
       const m = modes().order;
-      const moid = decodeURIComponent(
-        url.split("/subscriptions/v2/order/")[1].split("/status")[0],
-      );
+      const moid = decodeURIComponent(url.split("/subscriptions/v2/order/")[1].split("/status")[0]);
       out = {
         orderId: `STUB_PP_${moid}`,
         merchantOrderId: moid,
@@ -104,9 +90,7 @@ createServer((req, res) => {
       return;
     } else if (url.includes("/subscriptions/v2/") && url.includes("/status")) {
       // Pass A refuses to notify unless the mandate is ACTIVE.
-      const msid = decodeURIComponent(
-        url.split("/subscriptions/v2/")[1].split("/status")[0],
-      );
+      const msid = decodeURIComponent(url.split("/subscriptions/v2/")[1].split("/status")[0]);
       out = {
         merchantSubscriptionId: msid,
         subscriptionId: "STUB_SUB_1",

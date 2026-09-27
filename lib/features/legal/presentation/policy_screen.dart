@@ -54,20 +54,10 @@ enum PolicyDoc {
 const Duration _kRasterHold = Duration(milliseconds: 50);
 
 /// Privacy Policy / Terms & Conditions / Refund Policy, read INSIDE the app.
-///
 /// The reviewer requires a policy to open WITHIN the app, with a back button that returns to it.
 /// So this is an app screen with the standard sub-screen header, and the web page is only the body.
 /// A bundled copy would freeze at whatever the last release shipped -> the document stays REMOTE.
 /// The cost is that this screen needs the network -> it has a real offline state.
-/// These are Arul's OWN pages and link only to each other -> a link cannot land on Pakiza's.
-///
-/// What keeps it from reading as "a website in a box":
-///  * the site's navbar, mobile menu and footer are suppressed — no second chrome, no way out;
-///  * the page is held back until that is applied, so the nav never flashes in and out;
-///  * the site's theme is pinned to the app's, so a dark-mode app does not open a white page,
-///    and its colour TRANSITIONS are killed so that pinning lands instantly rather than animating
-///    a 250ms wash into view (the page resolves `prefers-color-scheme` from the OS, which is a
-///    different thing from the app's theme, so its first paint is often the wrong one).
 class PolicyScreen extends StatefulWidget {
   const PolicyScreen({super.key, required this.doc});
 

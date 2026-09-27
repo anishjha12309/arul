@@ -4,11 +4,8 @@ name = "arul-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-25"
 compatibility_flags = ["nodejs_compat"]
-account_id = "ba8dd87179e2ffd378a50292ca8e69e0"   # same CF account as Pakiza
+account_id = "ba8dd87179e2ffd378a50292ca8e69e0"
 
-# Declaring any [[routes]] entry defaults workers.dev to FALSE -> installed builds 1042 -> keep this true
-# arul-api.twilight-smoke-d495.workers.dev is what shipped builds call -> keep both hosts serving
-# Retire it only when a custom-domain-only release has fully rolled out
 # A [table] header above this key swallows it (once became triggers.workers_dev) -> keep it above all tables
 workers_dev = true
 
@@ -18,83 +15,55 @@ workers_dev = true
 # Turn on only for a deliberate staging host behind Cloudflare Access
 preview_urls = false
 
-# ─── Plain-text vars ─────────────────────────────────────────────────────────
 
-# Server-side capture host (lib/posthog.ts) -> must match the app's POSTHOG_HOST dart-define -> US Cloud
-# The project api key is a secret (wrangler secret bulk) -> never a [vars] entry
 POSTHOG_HOST = "https://us.i.posthog.com"
 
 
-# Served in /.well-known/assetlinks.json -> anyone can curl it -> [vars], not a secret
-# Play re-signs every AAB -> upload-key-only values fail on every Play install -> list the Play App Signing cert
-# App Link failures log NOTHING (links just open a browser) -> the console page has been wrong -> read the cert off the device
-#   adb shell pm get-app-links com.hsrutility.arul -> `Signatures:` is ground truth, state 1024 = failed
 #   1st = the cert Play ACTUALLY signs with (every Play install)
 #   2nd/3rd = console-reported app-signing + upload certs, so sideloaded release APKs verify too
 ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:61:7A:50:84:9E:B6:53:75:CA:E2:1A:D2:5F,EA:6F:C5:C7:D4:61:9F:FA:65:6A:FB:FF:99:08:69:E9:EE:EE:D3:A4:C1:72:DD:3A:A8:34:DD:9C:1C:1E:60:D3,0E:29:23:B9:57:58:66:DD:92:9B:37:5F:89:E7:9C:4C:E7:94:85:CC:99:E7:86:E5:BA:0F:A1:FC:A9:C1:35:D9"
 
-# ─── [vars] ──────────────────────────────────────────────────────────────────
 # THE TWO KEYS ABOVE ARE NOT IN THIS TABLE ON PURPOSE. They are bare top-level keys with no [vars]
 # header, so wrangler discards them with a warning and the same-named SECRETS are what actually serve
-# (docs/known-issues.md). Moving them in here would make the toml's three-fingerprint
-# ANDROID_CERT_SHA256 overwrite the live two-fingerprint secret and change what assetlinks.json
-# serves -> that is an open decision, not a side effect of adding a switch.
 # This table holds only keys that have never had a secret. It sits ABOVE the first [[table]] and below
 # every bare top-level key, which is the one position where both kinds deploy as written.
 [vars]
 # Campaign-push kill switch (docs/push.md). "true" and nothing else turns sends on; any other value,
 # or none, means the minute cron and /internal/push/dispatch claim NOTHING.
-# /internal/push/test and /internal/push/count keep working with it off -> that is what lets the whole
-# chain be proven on the owner's own phones while production stays dark.
 # Flipping it to "true" is the OWNER's call, not an agent's.
 PUSH_ENABLED = "true"
-# Region-language kill switch for GET /geo (routes/geo.ts). "true" and nothing else answers `lang`;
-# any other value answers `lang: null` with country/region intact -> fresh installs fall back to the
-# phone's language while the accuracy measurement keeps flowing. Turning it off = edit here, deploy.
 GEO_LANG_ENABLED = "true"
 
-# ─── KV namespace ────────────────────────────────────────────────────────────
-# Holds: refresh-jti denylist · webhook idempotency "txn:<orderId>" · "phonepe:oauth" · catalog_version:<scope>
 # Create: cd workers && npx wrangler kv namespace create KV  (+ --preview)
 [[kv_namespaces]]
 binding = "KV"
 id = "8bf33c34e2ec41cd8ca98611dc5a70fb"
 preview_id = "7314407718774cfe8388a3f365cd7c37"
 
-# ─── Hyperdrive (Neon Postgres) ──────────────────────────────────────────────
 # Create: npx wrangler hyperdrive create arul-hyperdrive --connection-string="postgres://…"
-# Query caching stays OFF -> cached reads went ~60s stale -> never enable it
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "19dda46cef1c42fc9d3176704feb74dc"
 
-# ─── R2 bucket (build-catalog writes via binding; public read ON at bucket level) ──
 [[r2_buckets]]
 binding = "R2"
 bucket_name = "south-indian-wallpapers"
 preview_bucket_name = "south-indian-wallpapers"
 
-# ─── Rate limiters ────────────────────────────────────────────────────────────
-# /payments/initiate creates a REAL PhonePe mandate order per call -> spam costs money -> limited
-# /auth/login costs a Google JWKS verify + a Neon write; /media/signed-url a live Neon entitlement read
-# Counters are PER CLOUDFLARE LOCATION and eventually consistent -> abuse dampeners, not quotas
-# Limits sit well above real user behaviour -> a real user must never hit one
 # namespace_id is per-account -> Pakiza's 1001-1003 are its own -> keep these distinct
 # `period` accepts only 10 or 60
 [[ratelimits]]
 name = "RL_PAYMENTS"
 namespace_id = "2001"
   [ratelimits.simple]
-  limit = 15       # mandate-setup attempts per user per minute. Generous ON PURPOSE:
-                   # blocking someone TRYING TO PAY is the worst false positive -> 15/min still stops abuse
+  limit = 15
   period = 60
 
 [[ratelimits]]
 name = "RL_AUTH"
 namespace_id = "2002"
   [ratelimits.simple]
-  limit = 20       # login/refresh per IDENTITY per minute (google_sub / user id,
-                   # never IP -> carrier NAT shares one IP across users -> see routes/auth.ts)
+  limit = 20
   period = 60
 
 [[ratelimits]]
@@ -104,32 +73,16 @@ namespace_id = "2003"
   limit = 60       # signed-url grants per user per minute (bulk apply/share)
   period = 60
 
-# ─── Scheduled triggers ──────────────────────────────────────────────────────
-# 0 * * * *    -> build-catalog, then sweep-canonical only when the catalog changed
-# */15 * * * * -> autopay notify/execute ONLY; folding it into the hourly run blew the subrequest cap
-# 30 21 * * *  -> (03:00 IST, off-peak) unconditional sweeps + the popularity content_version bump
-# * * * * *    -> campaign push dispatch ONLY; its own invocation for the same reason autopay has one,
-#                 and a scheduled campaign is picked up here without the CMS calling anything
-#                 Idle ticks log nothing and touch no binding while PUSH_ENABLED is not "true"
-# Deploying ships this list -> a removed line silently removes that cron
 [triggers]
 crons = ["0 * * * *", "*/15 * * * *", "30 21 * * *", "* * * * *"]
 
-# ─── Custom domain (API) ─────────────────────────────────────────────────────
-# `custom_domain = true` -> wrangler makes the CF domain + DNS record on deploy -> no dashboard step, no zone id
-# A subdomain of a zone we already own is free -> Workers custom domains carry no per-hostname charge
-# This block is what flips workers.dev off -> `workers_dev = true` at the TOP counteracts it -> leave it there
 
 [[routes]]
 pattern = "arul-api.hsrutility.com"
 custom_domain = true
 
-# ─── Custom domain (deep links) ──────────────────────────────────────────────
-# The host inside every share and ad creative: https://arul.hsrutility.com/w/<wallpaper-id>
 # Android verifies App Links per HOST -> users and advertisers read that host -> a second hostname, not a path
 # "arul-api.hsrutility.com/w/…" reads as an API endpoint in a WhatsApp preview -> keep the names apart
-# Both hostnames hit this same Worker -> /w/:id and assetlinks.json answer on both, all else 404s -> deliberate
-# Only the app talks to arul-api, only browsers talk to arul
 [[routes]]
 pattern = "arul.hsrutility.com"
 custom_domain = true
@@ -137,30 +90,11 @@ custom_domain = true
 # arul-cdn.hsrutility.com attaches to the R2 BUCKET, not to this Worker -> wrangler.toml cannot express it
 #   npx wrangler r2 bucket domain add south-indian-wallpapers \
 #     --domain arul-cdn.hsrutility.com --zone-id <hsrutility.com zone id>
-# Cloudflare treats r2.dev as development-only and rate-limits it -> never serve media from it
-# Caching does not apply to r2.dev AT ALL -> the edge-cached zero-egress cost model collapses -> CDN host only
 # The host lives in R2_CDN_BASE_URL (secret + env/dev.json + env/prod.json) -> change it in all three
 # Catalog rows carry relative keys, not absolute URLs -> moving the CDN host needs no rebuild
 
-# ─── Secrets (`npx wrangler secret put <NAME>` — full descriptions: README.md) ──
-# JWT_SECRET  GOOGLE_WEB_CLIENT_ID
-# R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_ENDPOINT  R2_BUCKET  R2_CDN_BASE_URL
-# PHONEPE_MERCHANT_ID  PHONEPE_CLIENT_ID  PHONEPE_CLIENT_SECRET  PHONEPE_CLIENT_VERSION
-# PHONEPE_ENV  PHONEPE_WEBHOOK_USERNAME  PHONEPE_WEBHOOK_PASSWORD
-# CATALOG_BUILD_SECRET  TRIAL_TOMBSTONE_SECRET(never rotate)  ALLOWED_ORIGINS
-# PUSH_SECRET  FCM_SA_CLIENT_EMAIL  FCM_SA_PRIVATE_KEY  FIREBASE_PROJECT_ID
-# PUSH_SECRET guards /internal/push/* and is handed to the CMS as ARUL_PUSH_SECRET -> a THIRD secret,
-#   because CATALOG_BUILD_SECRET must never also authorize "message every user"
-# The FCM pair is the Firebase console service-account key (Project settings -> Service accounts ->
-#   Generate new private key); set via `secret bulk` from that JSON, so the PEM carries literal 
 
-#   -> lib/fcm.ts normalises exactly that and nothing else
-# OPS_SECRET is operator-only and MOVES REAL MONEY: /internal/run-redemptions debits ₹199, /internal/refund
-# CATALOG_BUILD_SECRET is handed to the CMS -> one string must never authorize "rebuild" AND "charge everybody"
-# OPS_SECRET fails closed when unset -> a 401 on a money route means the wrong secret -> never widen it
-# No ADMIN_*, no CF_ZONE_ID/CF_PURGE_TOKEN -> authoring is hsr-cms's and `?v=` replaced purging -> do not re-add
 
-# ─── Observability (Workers Logs) ─────────────────────────────────────────────
 # Wrangler treats this file as authoritative -> no [observability] block means stored logs OFF -> declare it
 # Every failure path here is console.error and nothing else -> without retention they are unrecoverable
 # A [table] header captures every bare key after it -> a top-level key below is swallowed -> KEEP THIS LAST
@@ -168,7 +102,6 @@ custom_domain = true
 enabled = true
 head_sampling_rate = 1
 
-# ─── Placement ─────────────────────────────────────────────────────────────────
 # Every DB route does 2–3 Hyperdrive round trips to Neon in ap-southeast-1, and about a fifth of Indian
 # traffic enters Cloudflare in Europe (Jio peering -> MRS), so those requests paid EU->SIN per hop.
 # Smart placement runs the Worker near Neon instead of near the user -> one long hop, not three.

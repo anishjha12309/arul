@@ -30,5 +30,5 @@ paths:
   only) until link-up or any resume; the pill stays live.
 - `sheetFirst`/`pickerAfterDismiss` stay BUILD consts — no `app_config.json` on first launch.
 
-Read [docs/auth.md](../../docs/auth.md) first; cold start
-[launch-surface.md](../../docs/launch-surface.md).
+Read [docs/auth.md](../../docs/auth.md) first, the wall's relaunch and copy rules in
+[sign-in-wall.md](../../docs/sign-in-wall.md), cold start in [launch-surface.md](../../docs/launch-surface.md).

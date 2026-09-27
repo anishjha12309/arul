@@ -3,10 +3,9 @@
 // Pins the two link shapes the ad team pastes (docs/deep-links.md).
 // Pins the validation that stops an outside string selecting a row it should not.
 
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:arul/core/deeplink/deep_link_parser.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 const _w = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
 const _r = '0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d';

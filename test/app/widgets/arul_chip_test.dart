@@ -1,10 +1,9 @@
 // A Semantics(excludeSemantics: true) ancestor drops its GestureDetector child's tap action from
 // the accessibility tree unless the same callback is also passed as Semantics(onTap:) — this is
 // the regression contract for every chip-shaped control (docs/edge-cases.md pattern).
+import 'package:arul/app/widgets/arul_chip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:arul/app/widgets/arul_chip.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),

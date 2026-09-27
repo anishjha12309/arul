@@ -10,21 +10,6 @@ import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
 
 /// Puts this phone in the campaign-push registry, and keeps its row current.
-///
-/// **A campaign can only reach a phone that has registered**, and there is no backfill — a Firebase
-/// Installation ID exists only once the app asks for one. So every build shipped before this one is
-/// simply unreachable, and a new build takes about a fortnight to reach most of the active base.
-/// That is the backwards-compatibility contract, not a defect to work around.
-///
-/// **Before sign-in too.** A signed-out phone posts to the unauthenticated `/push/device`, which never
-/// touches the row's user; a signed-in one posts to `/me/device`, which re-points it. That is what
-/// lets the CMS reach "joined in the last hour" and "never signed in". The permission prompt did not
-/// move (after sign-in, on the feed), so on Android 13+ such a phone is counted and shows nothing.
-///
-/// **Never on the critical path.** It is fired after `/me` has already answered, never awaited by a
-/// screen, and every failure is swallowed into [CrashReporter]: a phone with no Google Play services
-/// (some Huawei/Honor units) throws at `getId()`, and the right outcome there is an app that behaves
-/// exactly as it did before, silently unreachable.
 class PushRegistration {
   PushRegistration({
     required ApiClient apiClient,

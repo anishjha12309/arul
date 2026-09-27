@@ -1,7 +1,6 @@
+import 'package:arul/features/wallpapers/presentation/feed_card_geometry.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:arul/features/wallpapers/presentation/feed_card_geometry.dart';
 
 /// `FeedCardGeometry` is a pure function of the screen and the reel -> the cheapest place to catch a knob moving.
 /// The shape is a product decision, Shubh's tile numbers on Arul's reel -> see the class doc.

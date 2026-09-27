@@ -5,7 +5,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'upi_apps.g.dart';
 
 /// One installed, mandate-capable UPI app, from `UpiIntentChannel.kt`'s allowlist.
-/// PhonePe's docs name which apps can approve a mandate -> a generic upi:// resolver is never offered.
 class UpiApp {
   const UpiApp({required this.packageName, required this.label, this.icon});
 
@@ -34,10 +33,6 @@ String upiAppCode(String packageName) => switch (packageName) {
 };
 
 /// What the device probe found: the apps we offer, and the mandate handlers we refuse.
-///
-/// Two fields rather than one list because "this phone cannot pay" and "this phone has a UPI app we
-/// do not offer" are different facts and only the first one justifies a dead CTA. 13% of everyone
-/// who tapped Subscribe reached the SDK path -> that share is worth naming before it is designed for.
 class UpiScan {
   const UpiScan({required this.apps, required this.otherPackages});
 
@@ -54,7 +49,6 @@ class UpiApps {
   static const _channel = MethodChannel('com.hsrutility.arul/upi_intent');
 
   /// The device probe: offered mandate-capable apps plus the mandate handlers the allowlist drops.
-  /// Best-effort -> any failure returns an empty scan and the paywall shows the install prompt.
   static Future<UpiScan> scan() async {
     try {
       final raw = await _channel.invokeMapMethod<String, dynamic>(

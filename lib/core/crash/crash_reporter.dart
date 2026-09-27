@@ -1,8 +1,5 @@
 /// Single interface for crash + non-fatal error reporting (Firebase Crashlytics).
-///
 /// Kept SEPARATE from analytics: this answers "did it break, and where", analytics "what did they do".
-/// Widgets must NEVER touch `FirebaseCrashlytics` -> depend on `crashReporterProvider` instead.
-/// That provider picks the no-op when Firebase is not initialised.
 abstract interface class CrashReporter {
   /// Records a caught error, non-fatal by default — for catch sites that swallow real failures.
   /// NOT for hot loops.

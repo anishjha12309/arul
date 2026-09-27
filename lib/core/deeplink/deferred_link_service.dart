@@ -6,12 +6,6 @@ import 'deep_link_parser.dart';
 import 'deep_link_target.dart';
 
 /// Receives deferred deep links native Android fetched over the network — GA4F and the Meta SDK.
-///
-/// Feeds them into the app's existing durable target handoff.
-/// Native buffers every link until this channel attaches -> it then pushes each AND answers a pull.
-/// A link is not marked handled until [InstallReferrerService.queueRequest] has persisted it.
-/// So a process death cannot turn an ad click into a plain home-screen launch.
-/// Native checks only the host (ours, or Meta's scheme); Dart alone decides what the path and query MEAN.
 class DeferredLinkService {
   DeferredLinkService(this._targets, {MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
@@ -30,9 +24,6 @@ class DeferredLinkService {
   Future<void> start() async {
     _channel.setMethodCallHandler(_onNativeCall);
 
-    // Test seam: `--dart-define=DEBUG_DEFERRED_LINK=<url>` replays a delivery through the SAME path.
-    // So parse → persist → shell → screen → language is drivable over adb without an ad install.
-    // Const-gated on kDebugMode -> release builds compile it away.
     const debugLink = String.fromEnvironment('DEBUG_DEFERRED_LINK');
     if (kDebugMode && debugLink.isNotEmpty) {
       await _capture({
@@ -71,7 +62,6 @@ class DeferredLinkService {
     final raw = payload['url'];
     final rawToken = payload['token'];
     if (raw is! String || rawToken is! String || rawToken.isEmpty) return;
-    // Native pushes on capture AND answers the initial pull -> seeing one delivery twice is NORMAL.
     if (!_seenTokens.add(rawToken)) return;
     while (_seenTokens.length > _maxSeenTokens) {
       _seenTokens.remove(_seenTokens.first);
@@ -89,7 +79,6 @@ class DeferredLinkService {
       debugPrint('[DeferredLink] ignored (not an Arul link): $raw');
     }
 
-    // A rejected payload left pending retries forever on every Activity creation -> ACK malformed too.
     if (!ack) return;
     try {
       await _channel.invokeMethod<bool>('ackDeferredDeepLink', {

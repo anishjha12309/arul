@@ -13,9 +13,6 @@ const reviewSettleDelay = Duration(seconds: 2);
 
 /// Whether nothing sits above [context] in ANY navigator up to the root — no pushed route, sheet,
 /// dialog or local-history entry.
-///
-/// `canPop`, never `ModalRoute.of`: the latter subscribes the caller, and the feed would rebuild on
-/// every sheet open and close.
 bool reviewSurfaceIsTopmost(BuildContext context) {
   var nav = context.findAncestorStateOfType<NavigatorState>();
   while (nav != null) {

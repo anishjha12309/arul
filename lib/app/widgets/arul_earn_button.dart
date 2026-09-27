@@ -9,17 +9,12 @@ import '../theme/motion.dart';
 import 'arul_line_icons.dart';
 import 'arul_screen_header.dart';
 
-/// The Refer & Earn entry in a browse tab's header band — ONE control, shared by both tabs.
-///
 /// The tabs cross-fade -> two shapes for one affordance read as two unrelated buttons.
 /// So this is the single control and a tab supplies only the destination.
 /// **A port of Pakiza's `EarnChip`** — geometry, type and wiggle are its numbers verbatim.
 /// Rebuilding it by eye did not converge -> do not try again.
-/// The gold is [ArulTokens.gold], never Pakiza's: theming is the one thing the apps never share (§0).
 /// **The "shimmer" is the GRADIENT, not an animation** — a sheen plus a hairline lift, nothing moving.
 /// A travelling highlight over a video feed costs what the static gradient does not -> no glint.
-/// **The gift is PAINTED** ([ArulLineGlyph.gift]) in the label's ink: budget Android 8–10 ROMs drew the
-/// 🎁 emoji as tofu or a monochrome fallback.
 class ArulEarnButton extends StatefulWidget {
   const ArulEarnButton({super.key, required this.onTap});
 
@@ -37,11 +32,11 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   /// How often the reduced-motion branch re-reads the flag. Long on purpose — see [_schedule].
   static const Duration _reducedRecheckGap = Duration(minutes: 1);
 
-  /// Pill metrics — all Pakiza's.
   /// The gift glyph carries its own side-bearing -> an even 16/16 looks adrift -> padding is ASYMMETRIC.
   static const double _padLeft = 12;
   static const double _padRight = ArulTokens.contentGap;
   static const double _gap = 8;
+
   /// The emoji's drawn box at 17 sp — the painted gift takes the same room.
   static const double _giftSize = 19;
 
@@ -49,14 +44,9 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
   static const double _labelMaxWidth = 84;
 
   /// **Where the button sits — THE knob. Edit this and nothing else.**
-  ///
   /// Logical pixels: `dx` negative moves it LEFT of the screen edge, `dy` positive moves it DOWN.
-  ///
   /// The band's height is what the reel's card geometry is solved from -> never pad or grow the box.
   /// A TRANSLATE moves paint only and leaves it [ArulTokens.headerControlSize] tall -> nudge freely.
-  /// `dx` is 0 -> the button keeps the true [ArulTokens.screenPadding] gutter.
-  /// The button owns the real measurable edge -> the optical correction is on the TITLE instead
-  /// (`ArulScreenHeader._titleOpticalInset`).
   static const Offset _nudge = Offset(0, 2.5);
 
   late final AnimationController _c = AnimationController(
@@ -64,7 +54,6 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
     duration: _wiggleDuration,
   );
 
-  /// Pakiza's sequence — a wind-up, three swings, a settle; weighted 1·2·2·2·1 so the ends are quicker.
   late final Animation<double> _wiggle = TweenSequence<double>([
     TweenSequenceItem(tween: Tween(begin: 0.0, end: -0.22), weight: 1),
     TweenSequenceItem(tween: Tween(begin: -0.22, end: 0.22), weight: 2),
@@ -81,14 +70,10 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
     _schedule();
   }
 
-  /// Re-arms the attention wiggle for as long as this is mounted.
-  ///
   /// A [Timer], not Pakiza's chained `Future.delayed` -> [dispose] can cancel the pending one.
   void _schedule() {
     _timer = Timer(_wiggleGap, () {
       if (!mounted) return;
-      // Holds at angle 0 — the parcel simply sits there.
-      //
       // Re-armed on a LONG cadence, not the wiggle's own 3 s: the flag is re-read so battery saver
       // switched on mid-session still stops the next wiggle, but at 3 s this branch was a permanent
       // heartbeat that rebuilt the Transform every tick to redraw the same angle, on exactly the
@@ -132,8 +117,6 @@ class _ArulEarnButtonState extends State<ArulEarnButton>
           onTapDown: (_) => ArulHaptics.tap(),
           onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
-          // Tapped across the whole header band (48, Android's target); drawn at 34 inside the
-          // band's own insets, so the pill sits exactly where it did — see ArulScreenHeader.
           child: SizedBox(
             height: ArulScreenHeader.bandHeight,
             child: Padding(

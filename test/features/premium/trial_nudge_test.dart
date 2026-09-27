@@ -141,7 +141,7 @@ void main() {
       final c = await container();
       final nudge = c.read(trialNudgeProvider.notifier);
       // The status poll found the mandate approved while the reminder was still being scheduled.
-      notifications.onSchedule = () => nudge.resolve();
+      notifications.onSchedule = nudge.resolve;
 
       await nudge.remember('DKS_S_6', trialAttempt: true);
 

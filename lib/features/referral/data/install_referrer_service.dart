@@ -12,14 +12,6 @@ const String kPlayPackageId = 'com.hsrutility.arul';
 
 /// Captures the Play Install Referrer ONCE per install and hands its code to the first sign-in.
 /// Also the ONE durable home for every deferred deep-link target, whichever path delivered it.
-///
-///   1. the referrer shares [buildShareLink], or [buildWallpaperLink]/[buildRingtoneLink];
-///   2. the friend installs, and Android's Install Referrer API replays that payload;
-///   3. [captureOnce] parses ALL of it at startup and persists it;
-///   4. the next `/auth/login` sends the code as `referralCode` and the Worker links the accounts.
-///
-/// [clearPendingCode] runs after login.
-/// The target is consumed by the tab that shows it, the language by `DeepLinkLocaleSync`.
 /// Android-only, and a no-op without Play Services -> a missing referrer never affects launch.
 class InstallReferrerService {
   InstallReferrerService(
@@ -70,19 +62,8 @@ class InstallReferrerService {
   }
 
   /// The ONE link a wallpaper share or ad creative carries — an App Link on [kDeepLinkHost].
-  ///
   /// Optionally attributed to [code], and optionally asking for a UI language via [lang].
-  /// It resolves TWO ways from a single URL, which is why it is https on our own host:
-  ///   · INSTALLED — Android verified this host at install, intercepts before any browser;
-  ///   · NOT installed — the Worker's `/w/:id` redirects to Play carrying the referrer payload.
-  ///
-  /// Android replays that to [captureOnce] -> the WALLPAPER opens after the install, not just the app.
-  /// A custom scheme cannot do the first half — it is not a clickable URL in an ad or a messenger.
   /// [installLang] is the SHARE form of [lang]: the sharer's UI language, honoured on a fresh install.
-  /// It rides as `ilang=`, which [parseDeepLinkUri] deliberately does not read.
-  /// So a friend's Tamil share never re-languages an app the recipient already set to Hindi.
-  /// A brand-new install still opens in the language the caption is written in (owner's call).
-  /// Ads keep using [lang], which wins everywhere; the Worker folds `ilang` into the referrer's `lang=`.
   static String buildWallpaperLink(
     String wallpaperId, {
     String? code,
@@ -131,16 +112,8 @@ class InstallReferrerService {
     return 'https://$kDeepLinkHost/$segment/$id$suffix';
   }
 
-  /// Extract our referral code from a raw install-referrer string.
-  /// Handles both the "ref=CODE" query form we set and a bare code, and rejects junk.
   /// Where this install came from, read off the Play referrer ONCE and stamped on every sign-in
   /// event — the split PostHog could not make on its own ("is the Tamil Nadu gap the ad audience?").
-  ///
-  /// `install_channel`: `google_ads` (a `gclid`, or utm_source google / utm_medium cpc), `meta_ads`
-  /// (utm_source naming facebook/instagram/meta), `organic` (Play's own `google-play`/`organic`
-  /// pair), `share` (a friend's referral code), `link` (one of our /w or /r links with no ad tag),
-  /// `other` (some other utm_source) or `unknown` (a referrer with none of the above). No referrer at
-  /// all stamps nothing. `install_utm_source` / `install_utm_campaign` are the raw tags, clipped.
   @visibleForTesting
   static Map<String, String> parseAttribution(String raw) {
     Map<String, String> params;
@@ -221,10 +194,6 @@ class InstallReferrerService {
   }
 
   /// The persisted attribution as event properties; empty until the referrer has landed.
-  ///
-  /// An install that arrived on a wallpaper or ringtone link carries it as a suffix on the SAME
-  /// property — `google_ads+wallpaper`, `meta_ads+ringtone` — so no new parameter exists and the
-  /// part before `+` still reads as the channel. A link with no referrer answer yet is `unknown+…`.
   Map<String, Object> get attributionProps {
     final link = _nonEmpty(_prefs.getString(_kInstallLink));
     final channel =
@@ -281,18 +250,11 @@ class InstallReferrerService {
 
   /// Query the Install Referrer API once per install and persist any code, target and language.
   /// Safe on every launch — it self-guards.
-  ///
   /// The one-shot is spent ONLY when Play actually ANSWERS; a failed bind is routine and transient.
-  /// Google's guidance is that the connection can drop mid-update and must be restarted.
-  /// Marking the install checked on a throw burned the shot and lost the code for good.
   /// Retrying is free — the referrer stays available for 90 days and this runs off the startup path.
-  /// A device with no Play Store throws every launch and retries forever, having nothing to lose.
   Future<void> captureOnce() async {
     if (_prefs.getBool(_kChecked) ?? false) return;
 
-    // Test seam: `--dart-define=DEBUG_INSTALL_REFERRER=…` stands in for Play's replay.
-    // A real referrer needs a Play install of THIS build -> this drives it on a sideload.
-    // Const-gated on kDebugMode -> release builds compile it away.
     const debugReferrer = String.fromEnvironment('DEBUG_INSTALL_REFERRER');
     final useDebugReferrer = kDebugMode && debugReferrer.isNotEmpty;
 
@@ -356,9 +318,6 @@ class InstallReferrerService {
   }
 
   /// Durably queue a validated target and hand it to the live app.
-  ///
-  /// Shared by the Play referrer, GA4F and the Meta SDK bridges.
-  /// Persisting BEFORE the live request is load-bearing -> a process death is re-seeded at startup.
   /// Last write wins across kinds — a ringtone replaces a pending wallpaper, never both keys.
   /// A tab-only target is NOT persisted: losing that race just lands the user on the default tab.
   /// Only install-time deliveries reach here, so the kind is also kept for [attributionProps] — and,

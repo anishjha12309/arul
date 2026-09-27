@@ -37,12 +37,8 @@ describe("money routes are NOT authorized by CATALOG_BUILD_SECRET", () => {
 
   it("both reject when OPS_SECRET is unset (fail closed)", async () => {
     const env = makeEnv({ OPS_SECRET: "" });
-    expect(
-      (await handleRunRedemptions(makeCtx({ env, token: "", jsonBody: {} }))).status,
-    ).toBe(401);
-    expect(
-      (await handleRefund(makeCtx({ env, token: "anything", jsonBody: {} }))).status,
-    ).toBe(401);
+    expect((await handleRunRedemptions(makeCtx({ env, token: "", jsonBody: {} }))).status).toBe(401);
+    expect((await handleRefund(makeCtx({ env, token: "anything", jsonBody: {} }))).status).toBe(401);
   });
 
   it("refund refuses an amount above one month", async () => {
@@ -55,9 +51,7 @@ describe("money routes are NOT authorized by CATALOG_BUILD_SECRET", () => {
       }),
     );
     expect(res.status).toBe(400);
-    expect((await res.json() as { error: { code: string } }).error.code).toBe(
-      "amount_too_large",
-    );
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("amount_too_large");
   });
 });
 
@@ -135,7 +129,11 @@ describe("rate limiting", () => {
   });
 
   it("allows when the limiter throws (never take the app down)", async () => {
-    const broken = { limit: vi.fn(async () => { throw new Error("nope"); }) } as unknown as RateLimit;
+    const broken = {
+      limit: vi.fn(async () => {
+        throw new Error("nope");
+      }),
+    } as unknown as RateLimit;
     expect(await allowRequest(broken, "k")).toBe(true);
   });
 
@@ -155,7 +153,7 @@ describe("rate limiting", () => {
     const res = tooManyRequests();
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("60");
-    expect((await res.json() as { error: { code: string } }).error.code).toBe("rate_limited");
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("rate_limited");
   });
 });
 

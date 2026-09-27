@@ -1,91 +1,92 @@
-# Backend Architecture
+# Backend architecture
 
-Browse = CDN-only ($0 egress). Writes = Workers → Neon. At request time Neon serves per-user state
-only — content rows are build-time input for the catalog, and the app never touches the DB. API
-`https://arul-api.hsrutility.com` · CDN `https://arul-cdn.hsrutility.com` (R2
-`south-indian-wallpapers`) — custom domains on the `hsrutility.com` zone, plus `arul.hsrutility.com`
-for share landings and assetlinks ([deep-links.md](deep-links.md)). **The legacy `*.workers.dev` API
-host still answers for already-installed builds — never disable it.**
-
-Crons and what each trigger owns: [cron.md](cron.md).
+Browse = CDN only (zero egress). Writes = Workers → Neon. Neon serves per-user state only at request
+time — content rows are build-time input for the catalog. Hosts, routes, secrets and the CMS binding:
+[../workers/README.md](../workers/README.md). Crons: [cron.md](cron.md). Columns:
+[data-model.md](data-model.md).
 
 ## API
-JSON; errors `{error:{code,message}}`; gated routes `Authorization: Bearer <accessJWT>`. THE route
-table with auth and semantics is [../workers/README.md](../workers/README.md) — this file does not
-restate it. `GET /me` returns identity, the subscription row AND the server-computed `premium` flag
-in one LEFT JOIN, so a cold start costs one round-trip to a possibly-suspended Neon instead of two;
-`/me/subscription` exists only for builds shipped before that merge.
 
-## Entitlement — live read from Neon, never authoritative in the JWT
+JSON; errors `{error:{code,message}}`; gated routes carry `Authorization: Bearer <accessJWT>`. **`GET /me`
+returns identity, the subscription row AND the server-computed `premium` flag in one LEFT JOIN**, so a
+cold start costs one round trip; `/me/subscription` exists only for builds shipped before that merge.
+
+## Entitlement — a live read from Neon, never authoritative in the JWT
+
 `isPremium = (status ∈ {trialing,active,cancelled,pending} ∧ current_period_end > now()) ∨
 users.reward_premium_until > now()`, plus a **6 h debit grace** past `current_period_end` for
-`trialing`/`active` ONLY — the renewal debit rides the cron, so a strict cutoff closed the gate on
-every paying user at every period boundary. `cancelled` gets NO grace (no debit is coming; period end
-IS the end), and dunning's flip to `expired` ends grace instantly. `pending` counts, in the strict
-branch only, because a resubscribe claims the user's ONE row: paid days must survive the attempt, and
-a failed setup RESTORES to `cancelled` while the period lives, never `expired` (mechanics in
-[phonepe.md](phonepe.md)). Live read → purchase, refund and expiry apply instantly. No test bypass.
+`trialing`/`active` ONLY — the renewal debit rides the cron, so a strict cutoff closed the gate on every
+paying user at every period boundary. `cancelled` gets NO grace (no debit is coming), and dunning's flip
+to `expired` ends grace at once. `pending` counts, strict branch only, because a resubscribe claims the
+user's ONE row: paid days must survive the attempt, and a failed setup RESTORES rather than expiring
+([phonepe.md](phonepe.md)). Live read → purchase, refund and expiry apply on the next gated tap. No test
+bypass.
 
-**The rule's ONE home is `premiumPredicate` in `workers/src/lib/entitlement.ts`**; the app consumes
-the `premium` flag `GET /me` computes from it. A client-side copy drifted once — it missed
-`reward_premium_until`, so reward-only referrers were paywalled while `/media/signed-url` would have
-signed for them. Never re-create one. The access token's `prm` claim is a UI hint; never gate on it.
+**The rule's ONE home is `premiumPredicate` in `workers/src/lib/entitlement.ts`**; the app consumes the
+flag `GET /me` computes. A client-side copy drifted once — it missed `reward_premium_until`, so
+reward-only referrers were paywalled while `/media/signed-url` would have signed for them. Never
+re-create one. The access token's `prm` claim is a UI hint; never gate on it.
 
-**One trial per user:** `subscriptions.trial_end` is the consumed-marker — written once, kept
-forever. NULL → PENNY_DROP setup + trial; NOT NULL → TRANSACTION setup with a real ₹199 first debit →
-straight to `active`. Delete-account writes an HMAC tombstone so re-signup pre-seeds a consumed trial
-and trial farming is closed. Endpoint facts: [phonepe.md](phonepe.md).
+**The app's side of the gate:** `ensurePremium()` AWAITS `entitlementProvider.future` — a loading
+snapshot must never bounce a premium user. A blocked action tracks `${action}_blocked_premium` and routes
+STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial. **A cached file is never a licence:**
+re-applying or re-sharing bytes already on disk still calls `/media/signed-url`; offline with the bytes
+on disk is the one pass-through. The "Manage subscription" row shows only for premium with a
+`trialing`/`active`/`cancelled` row — the states `/premium` renders as a manage view; every other state
+is a sell.
+
+**One trial per user:** `trial_end` NULL → PENNY_DROP setup + trial; NOT NULL → a ₹199 TRANSACTION setup
+→ straight to `active`. Delete-account writes an HMAC tombstone so a re-signup pre-seeds a consumed
+trial. Delete order: revoke mandate(s) → tombstone → cascade → refresh-jti denylist.
 
 ## Uploads (submissions)
-The pick is OUR channel (`MediaPickChannel`), not a plugin: the Android Photo Picker for a wallpaper
-(androidx `PickVisualMedia` builds the intent and carries Google's own fallbacks), `ACTION_GET_CONTENT`
-on `audio/*` for a ringtone. Neither needs a permission — keep `READ_MEDIA_*` out of the manifest or
-Play's Photo and Video Permissions policy asks this app to justify it. The picked stream is copied to
-`cacheDir/upload_picks/`, swept whole at every pick, and Dart only ever sees the copy's path.
-upload-url presigns PUT to `user/<sub>/submissions/…` only. confirm-upload takes kind `wallpaper` or
-`ringtone` and byte-QCs against THAT kind's role — a fixed role rejects every ringtone; max 10
-pending per user; upserts on unique `file_key`, so retries are idempotent. Approval needs a category
-for both kinds, and the two draw from DIFFERENT sets ([ringtones.md](ringtones.md)). Orphans are
-reclaimed by sweep-submissions; pending rows expire after 30 d as a status flip, not a delete.
+
+The pick is OUR channel (`MediaPickChannel`), not a plugin: the Photo Picker for a wallpaper (androidx
+`PickVisualMedia`, which carries Google's own fallbacks), `ACTION_GET_CONTENT` on `audio/*` for a ringtone.
+Neither needs a permission — keep `READ_MEDIA_*` out of the manifest or Play's Photo and Video Permissions
+policy asks this app to justify it — and neither gets a `resolveActivity` pre-flight. The stream is copied
+to `cacheDir/upload_picks/`, swept whole at every pick; Dart only sees the copy. Guard the picker CALL, not
+the widget: the pick zone is a bare `GestureDetector`, and a double tap opened a second picker over the
+first.
+
+upload-url presigns PUT under `user/<sub>/submissions/…` only. confirm-upload takes kind `wallpaper` or
+`ringtone` and byte-QCs against THAT kind's role — a fixed role rejected every ringtone; ≤10 pending per
+user. **A category is required for both kinds, and the two draw from DIFFERENT sets** — the wrong set
+files a row under a chip that tab never renders ([ringtones.md](ringtones.md)); `ringtones.category` is
+NOT NULL, so the CMS vets it before copying. Moderation never ships a dimension-violating video: approve
+copies bytes verbatim ([media-conventions.md](media-conventions.md)).
 
 ## Catalog generation
-Source: `app_config.content_version` (Neon). Trigger: a CMS mutation, `POST /internal/build-catalog`,
-or the hourly cron (a no-op if the version is unchanged). Output per scope (`wallpapers`,
-`ringtones`): `catalog/<scope>/all_{page}.json` — ONE page set each, 200 rows/page, no per-category
-files — plus the shared `catalog/version.json` and `catalog/app_config.json`.
 
-**Row order is one SQL clause, numbered into the catalog's `feed_rank` field — see
-[browse.md](browse.md).** Order server-side because the catalog is the only channel that reaches
-installs that never update; chips stay client-side.
+Trigger: a CMS mutation, `POST /internal/build-catalog`, or the hourly cron (a no-op while
+`app_config.content_version` is unchanged). Output per scope (`wallpapers`, `ringtones`):
+`catalog/<scope>/all_<page>.json`, ONE page set each at 200 rows/page, no per-category files — plus the
+shared `catalog/version.json` (the pointer the app reads first, then `?v=<version>` on pages) and
+`catalog/app_config.json` (the public config subset).
 
-**A zero-row scope still writes a valid empty `all_1.json`** — a 404 there means the build FAILED,
-never "no content". Orphaned page files are deleted each rebuild. The backend is never conditional on
-the front end. Cache headers: [caching.md](caching.md).
+- **Row order is ONE SQL clause numbered into the catalog's `feed_rank` field** ([browse.md](browse.md)).
+  Order server-side, because the catalog is the only channel that reaches installs that never update;
+  chips stay client-side.
+- **A zero-row scope still writes a valid empty `all_1.json`** — a 404 there means the build FAILED,
+  never "no content". Orphaned page files are deleted each rebuild. Cache headers:
+  [caching.md](caching.md).
+- **The backend is never conditional on the front end:** both scopes build unconditionally; keep the
+  ringtone scope, `kind='ringtone'` and the `ringtones/` sweep prefix whatever the app ships.
+- A CMS mutation is bytes + row + version bump in ONE transaction; the rebuild fires async over the
+  `ARUL_API` binding and self-heals on the hourly cron.
+- Exposed media keys are public by design (soft gate): wallpaper `full_key`, ringtone `audio_key`. The
+  gate is the Worker's live entitlement read, never object privacy.
 
-Exposed keys are public by design (soft gate): wallpaper `full_key`, ringtone `audio_key` and
-`cover_key`. `catalog/catalog.json` in the bucket is the one-time import manifest and is not read by
-the app.
+## Schema
 
-CMS: **separate worker and repo** (`hsr-cms`, `c:\Anish\Unified CMS`) serving Arul and Pakiza from one
-login at `api.hsrutility.com/admin`. A mutation is bytes + row + version bump in ONE transaction; the
-rebuild fires async through the `ARUL_API` service binding → `/internal/build-catalog` and self-heals
-on the hourly cron if it fails. No purge step — `?v=` cache-busting does that job. **This worker
-exposes no `/admin` of its own.**
-
-## Schema (Neon) — [data-model.md](data-model.md), DDL in `db/schema/`
-users · subscriptions · wallpapers · ringtones · content_submissions · referrals · trial_tombstones ·
-app_config (singleton) · push_devices/campaigns/deliveries/opens ([push.md](push.md)). **No RLS** —
-the Worker scopes every parameterized query to the verified sub.
-
-## Campaign push — [push.md](push.md)
-The CMS writes `push_campaigns` and reads audience counts over `ARUL_API`; this Worker's
-`* * * * *` cron sends over FCM HTTP v1. The Firebase service-account key lives HERE and is never
-handed to the CMS, so a bug on that page can mis-address a campaign but cannot send one.
-`PUSH_SECRET` guards `/internal/push/*` — a THIRD secret, never `CATALOG_BUILD_SECRET`.
+Columns and their rules: [data-model.md](data-model.md); campaign-push tables: [push.md](push.md).
 
 ## Security
-JWT HS256: access 60 m, refresh 60 d rotating, jti denylisted in KV. idToken verified against Google
-JWKS, and the request nonce must match the token's ([auth.md](auth.md)). PhonePe v2 OAuth
-(`O-Bearer`); webhook `Authorization: SHA256(user:pass)`, deduped by (event, orderId) in KV — **the
-event MUST be in the key** ([phonepe.md](phonepe.md)). Secrets live in the Worker only; the app holds
-none.
+
+JWT HS256: access 60 m, refresh 60 d rotating, the old jti denylisted in KV. The access token carries
+only `sub` plus the `prm` hint. The idToken is verified against Google's JWKS with `aud` = the WEB
+client id, and the request nonce must match the token's ([auth.md](auth.md)). PhonePe: OAuth
+`O-Bearer`; webhook `Authorization: SHA256(user:pass)`, deduped by (event, orderId) in KV
+([phonepe-webhook.md](phonepe-webhook.md)). All SQL is parameterized and scoped to the verified sub;
+upload keys are forced under `user/<sub>/`; canonical media is writable only through the CMS or
+approval. Secrets live in the Worker only; the app holds none.
