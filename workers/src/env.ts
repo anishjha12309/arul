@@ -31,6 +31,20 @@ export interface Env {
   PHONEPE_ENV: string;
 
   /**
+   * The second merchant (HSRUTILITYONLINE). The unprefixed PHONEPE_* set stays the legacy merchant's for as long as
+   * any legacy mandate lives. Optional -> absent keys refuse hsr calls as transient (lib/phonepe.ts merchantKeys)
+   */
+  PHONEPE_HSR_MERCHANT_ID?: string;
+  PHONEPE_HSR_CLIENT_ID?: string;
+  PHONEPE_HSR_CLIENT_SECRET?: string;
+  PHONEPE_HSR_CLIENT_VERSION?: string;
+  PHONEPE_HSR_WEBHOOK_USERNAME?: string;
+  PHONEPE_HSR_WEBHOOK_PASSWORD?: string;
+
+  /** Where NEW mandate setups go -> wrangler.toml [vars], NOT a secret. Values: lib/phonepe.ts setupMerchant. */
+  PHONEPE_SETUP_MERCHANT?: string;
+
+  /**
    * LOCAL-DEV-ONLY override for the PhonePe PG base URL. Harness: .claude/skills/verify-payments/
    * getPgBase IGNORES it whenever PHONEPE_ENV resolves to PRODUCTION -> setting it on the deployed Worker is inert
    * Never set from wrangler.toml or a secret -> only workers/.dev.vars, git-ignored and read only by `wrangler dev`

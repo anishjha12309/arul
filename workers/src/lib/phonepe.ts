@@ -3,6 +3,84 @@
  */
 
 import type { Env } from "../env.js";
+import { timingSafeEqual } from "./timing-safe.js";
+
+/**
+ * AUTOGRAMAPPSONLINE ("legacy") bills every mandate made before the switch; HSRUTILITYONLINE ("hsr") takes new ones.
+ * A mandate lives under the merchant that created it -> the other merchant's keys cannot see, debit or cancel it
+ */
+export type Merchant = "legacy" | "hsr";
+
+/**
+ * The ONE home of the routing rule: an hsr id carries `H` right after `DKS_`, and an unmarked id is legacy forever.
+ * An id cannot drift from its merchant the way a column could -> five statements swap ids between two columns
+ */
+export function merchantOf(id: string): Merchant {
+  return id.startsWith("DKS_H") ? "hsr" : "legacy";
+}
+
+/** Every id of one PhonePe call must name the same merchant. A plain Error, so no caller parks a row over it. */
+function merchantOfIds(...ids: string[]): Merchant {
+  const merchant = merchantOf(ids[0]);
+  if (ids.some((id) => merchantOf(id) !== merchant)) {
+    throw new Error(`PhonePe ids name different merchants: ${ids.join(", ")}`);
+  }
+  return merchant;
+}
+
+interface MerchantKeys {
+  merchantId: string;
+  clientId: string;
+  clientSecret: string;
+  clientVersion: string;
+}
+
+/**
+ * Trimmed, like PHONEPE_ENV. Missing keys THROW a plain Error, never a PhonePeApiError -> every caller reads it as
+ * transient -> an hsr row on a Worker without hsr keys is retried, never parked cancelled
+ */
+export function merchantKeys(env: Env, merchant: Merchant): MerchantKeys {
+  const raw =
+    merchant === "hsr"
+      ? [
+          env.PHONEPE_HSR_MERCHANT_ID,
+          env.PHONEPE_HSR_CLIENT_ID,
+          env.PHONEPE_HSR_CLIENT_SECRET,
+          env.PHONEPE_HSR_CLIENT_VERSION,
+        ]
+      : [
+          env.PHONEPE_MERCHANT_ID,
+          env.PHONEPE_CLIENT_ID,
+          env.PHONEPE_CLIENT_SECRET,
+          env.PHONEPE_CLIENT_VERSION,
+        ];
+  const [merchantId, clientId, clientSecret, clientVersion] = raw.map((v) => (v ?? "").trim());
+  if (!merchantId || !clientId || !clientSecret || !clientVersion) {
+    throw new Error(`PhonePe ${merchant} merchant credentials are not configured`);
+  }
+  return { merchantId, clientId, clientSecret, clientVersion };
+}
+
+export function setupMerchantMode(env: Env): "legacy" | "hsr" | "hsr-internal" {
+  const mode = (env.PHONEPE_SETUP_MERCHANT ?? "").trim().toLowerCase();
+  return mode === "hsr" || mode === "hsr-internal" ? mode : "legacy";
+}
+
+/**
+ * Where NEW setups go -> `PHONEPE_SETUP_MERCHANT` in wrangler.toml [vars]: "hsr", "hsr-internal" (is_internal
+ * accounts only) or anything else = legacy. Unset hsr keys keep setups on legacy -> a bad flip never blocks a sale
+ */
+export function setupMerchant(env: Env, isInternal: boolean): Merchant {
+  const mode = setupMerchantMode(env);
+  if (mode !== "hsr" && !(mode === "hsr-internal" && isInternal)) return "legacy";
+  try {
+    merchantKeys(env, "hsr");
+    return "hsr";
+  } catch (err) {
+    console.error(`[phonepe] PHONEPE_SETUP_MERCHANT=${mode} but ${String(err)} — new setups stay on legacy`);
+    return "legacy";
+  }
+}
 
 /**
  * Is this the production gateway? TRIMMED, and any unrecognised value THROWS. Both halves matter.
@@ -59,6 +137,11 @@ function getOAuthUrl(env: Env): string {
 const OAUTH_KV_KEY = "phonepe:oauth";
 const OAUTH_REFRESH_BUFFER_SECONDS = 60;
 
+/** One token per merchant -> a shared key hands one merchant's token to the other's calls. Legacy keeps the old key. */
+function oauthKvKey(merchant: Merchant): string {
+  return merchant === "legacy" ? OAUTH_KV_KEY : `${OAUTH_KV_KEY}:${merchant}`;
+}
+
 interface CachedToken {
   access_token: string;
   expires_at: number; // Unix epoch seconds
@@ -67,8 +150,10 @@ interface CachedToken {
 /**
  * The KV TTL is (expires_at - now - buffer) -> the entry disappears BEFORE the token could go invalid
  */
-export async function getAccessToken(env: Env): Promise<string> {
-  const cached = (await env.KV.get(OAUTH_KV_KEY, "json")) as CachedToken | null;
+export async function getAccessToken(env: Env, merchant: Merchant): Promise<string> {
+  const keys = merchantKeys(env, merchant);
+  const kvKey = oauthKvKey(merchant);
+  const cached = (await env.KV.get(kvKey, "json")) as CachedToken | null;
   if (cached) {
     const nowSeconds = Math.floor(Date.now() / 1000);
     if (cached.expires_at - nowSeconds > OAUTH_REFRESH_BUFFER_SECONDS) {
@@ -77,9 +162,9 @@ export async function getAccessToken(env: Env): Promise<string> {
   }
 
   const body = new URLSearchParams({
-    client_id: env.PHONEPE_CLIENT_ID.trim(),
-    client_secret: env.PHONEPE_CLIENT_SECRET.trim(),
-    client_version: env.PHONEPE_CLIENT_VERSION.trim(),
+    client_id: keys.clientId,
+    client_secret: keys.clientSecret,
+    client_version: keys.clientVersion,
     grant_type: "client_credentials",
   });
 
@@ -110,13 +195,13 @@ export async function getAccessToken(env: Env): Promise<string> {
     access_token: data.access_token,
     expires_at: data.expires_at,
   };
-  await env.KV.put(OAUTH_KV_KEY, JSON.stringify(toCache), { expirationTtl: ttl });
+  await env.KV.put(kvKey, JSON.stringify(toCache), { expirationTtl: ttl });
 
   return data.access_token;
 }
 
-async function authHeaders(env: Env): Promise<Record<string, string>> {
-  const token = await getAccessToken(env);
+async function authHeaders(env: Env, merchant: Merchant): Promise<Record<string, string>> {
+  const token = await getAccessToken(env, merchant);
   return {
     Authorization: `O-Bearer ${token}`,
     "Content-Type": "application/json",
@@ -154,12 +239,22 @@ export interface SetupSubscriptionResult {
   expireAt: number | null;
 }
 
+/** 29 calendar years stays clear of a 30-year cap however PhonePe counts leap days. */
+function mandateExpiry(): number {
+  const d = new Date();
+  d.setUTCFullYear(d.getUTCFullYear() + 29);
+  return d.getTime();
+}
+
 export async function setupSubscription(
   env: Env,
   params: SetupSubscriptionParams,
 ): Promise<SetupSubscriptionResult> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(
+    env,
+    merchantOfIds(params.merchantSubscriptionId, params.merchantOrderId),
+  );
 
   const upfront = params.upfrontAmountPaise;
   const body = {
@@ -179,6 +274,8 @@ export async function setupSubscription(
         maxAmount: 19900,
         frequency: "MONTHLY",
         productType: "UPI_MANDATE",
+        // Omitted, the SDK page renders "auto-paid till NaNth Invalid Date"; the intent flow defaults to 30 years (the max)
+        expireAt: mandateExpiry(),
       },
     },
   };
@@ -244,7 +341,10 @@ export async function setupSubscriptionIntent(
   params: SetupIntentParams,
 ): Promise<SetupIntentResult> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(
+    env,
+    merchantOfIds(params.merchantSubscriptionId, params.merchantOrderId),
+  );
 
   const upfront = params.upfrontAmountPaise;
   const body = {
@@ -294,7 +394,7 @@ export async function setupSubscriptionIntent(
  */
 export async function cancelSubscription(env: Env, merchantSubscriptionId: string): Promise<void> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(env, merchantOf(merchantSubscriptionId));
   const enc = encodeURIComponent(merchantSubscriptionId);
 
   // Direct merchant -> send ONLY the O-Bearer auth -> X-MERCHANT-ID is for PARTNER integrations and flips auth mode
@@ -376,7 +476,10 @@ export async function notifyRedemption(
   params: NotifyRedemptionParams,
 ): Promise<NotifyRedemptionResult> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(
+    env,
+    merchantOfIds(params.merchantSubscriptionId, params.merchantOrderId),
+  );
 
   const body = {
     merchantOrderId: params.merchantOrderId,
@@ -427,7 +530,7 @@ export interface ExecuteRedemptionResult {
  */
 export async function executeRedemption(env: Env, merchantOrderId: string): Promise<ExecuteRedemptionResult> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(env, merchantOf(merchantOrderId));
 
   const body = { merchantOrderId };
 
@@ -469,7 +572,7 @@ export async function getSubscriptionStatus(
   merchantSubscriptionId: string,
 ): Promise<SubscriptionStatusResult> {
   const base = getPgBase(env);
-  const token = await getAccessToken(env);
+  const token = await getAccessToken(env, merchantOf(merchantSubscriptionId));
 
   const res = await fetch(
     `${base}/subscriptions/v2/${encodeURIComponent(merchantSubscriptionId)}/status?details=true`,
@@ -510,7 +613,7 @@ export interface OrderStatusResult {
 
 export async function getOrderStatus(env: Env, merchantOrderId: string): Promise<OrderStatusResult> {
   const base = getPgBase(env);
-  const token = await getAccessToken(env);
+  const token = await getAccessToken(env, merchantOf(merchantOrderId));
 
   const res = await fetch(
     `${base}/subscriptions/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`,
@@ -554,7 +657,7 @@ export async function initiateRefund(
   amountPaise: number,
 ): Promise<RefundResult> {
   const base = getPgBase(env);
-  const headers = await authHeaders(env);
+  const headers = await authHeaders(env, merchantOfIds(originalMerchantOrderId, merchantRefundId));
 
   const body = {
     merchantRefundId,
@@ -587,7 +690,7 @@ export async function verifyCallbackAuth(
   password: string,
 ): Promise<boolean> {
   const expected = await sha256Hex(`${username}:${password}`);
-  return authHeader === expected;
+  return timingSafeEqual(authHeader, expected);
 }
 
 /** @deprecated Use verifyCallbackAuth — same function, kept only so existing callers still compile. */
@@ -628,6 +731,9 @@ export interface PhonePeWebhookPayload {
     };
     errorCode?: string;
     detailedErrorCode?: string;
+    /** State-change events only, epoch ms; null outside a pause. */
+    pauseStartDate?: number | null;
+    pauseEndDate?: number | null;
     paymentDetails?: Array<{
       transactionId?: string;
       paymentMode?: string;
@@ -654,22 +760,30 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
-/**
- * DKS_S_<userId-first-8>_<epoch-ms-base36>. PhonePe caps these at 63 chars of [A-Za-z0-9_-].
- */
-export function buildMerchantSubscriptionId(userId: string): string {
-  const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  const ts = Date.now().toString(36).toUpperCase();
-  return `DKS_S_${shortId}_${ts}`;
+/** Legacy tags are S, R, REF and O -> none starts with H, so the marker can never read as a legacy tag. */
+function merchantMarker(merchant: Merchant): string {
+  return merchant === "hsr" ? "H" : "";
 }
 
-/** DKS_<tag>_<userId-first-8>_<epoch-ms-base36>_<4-random-hex> — the random tail separates two calls in one ms. */
-export function buildMerchantOrderId(userId: string, tag = "O"): string {
+/**
+ * DKS_S_<userId-first-8>_<epoch-ms-base36> (hsr: DKS_HS_…). PhonePe caps these at 63 chars of [A-Za-z0-9_-].
+ */
+export function buildMerchantSubscriptionId(userId: string, merchant: Merchant): string {
+  const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
+  const ts = Date.now().toString(36).toUpperCase();
+  return `DKS_${merchantMarker(merchant)}S_${shortId}_${ts}`;
+}
+
+/**
+ * DKS_<tag>_<userId-first-8>_<epoch-ms-base36>_<4-random-hex> — the random tail separates two calls in one ms.
+ * A redemption or refund id takes its mandate's (or original order's) merchant -> PhonePe finds it only there
+ */
+export function buildMerchantOrderId(userId: string, tag: string, merchant: Merchant): string {
   const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
   const ts = Date.now().toString(36).toUpperCase();
   const rnd = Math.floor(Math.random() * 0xffff)
     .toString(16)
     .toUpperCase()
     .padStart(4, "0");
-  return `DKS_${tag}_${shortId}_${ts}_${rnd}`;
+  return `DKS_${merchantMarker(merchant)}${tag}_${shortId}_${ts}_${rnd}`;
 }

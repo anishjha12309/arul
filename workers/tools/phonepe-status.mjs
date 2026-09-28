@@ -5,8 +5,9 @@
  *   node tools/phonepe-status.mjs --env-file /tmp/pp.env DKS_S_…,DKS_S_…_B338
  * Each argument is `merchantSubscriptionId` or `merchantSubscriptionId,merchantOrderId` — OUR ids,
  * not PhonePe's OMS…/OMO… ones. Exit 0 = every probe answered 2xx.
+ * Each id is read with its own merchant's keys: PP_* legacy, PP_HSR_* hsr (lib/phonepe-read.mjs).
  */
-import { loadCreds, getToken, orderStatus, subscriptionStatus } from "./lib/phonepe-read.mjs";
+import { loadCreds, credsFor, tokenCache, orderStatus, subscriptionStatus } from "./lib/phonepe-read.mjs";
 
 const argv = process.argv.slice(2);
 const fileIdx = argv.indexOf("--env-file");
@@ -20,21 +21,22 @@ if (targets.length === 0) {
 
 const creds = loadCreds({ envFile });
 console.log(`env=${creds.env} base=${creds.pg}`);
-
-const token = await getToken(creds);
-console.log(`OAuth OK (token len ${token.length})\n`);
+const tokenOf = tokenCache();
 
 let bad = 0;
 for (const t of targets) {
   const [subId, orderId] = t.split(",");
+  const merchantCreds = credsFor(creds, subId);
+  const token = await tokenOf(merchantCreds);
+  console.log(`merchant=${merchantCreds.merchant} (OAuth OK, token len ${token.length})`);
 
   if (orderId) {
-    const r = await orderStatus(creds, token, orderId);
+    const r = await orderStatus(merchantCreds, token, orderId);
     if (r.status >= 300) bad++;
     console.log(`ORDER ${orderId}\n  HTTP ${r.status} ${r.text.slice(0, 900)}`);
   }
 
-  const s = await subscriptionStatus(creds, token, subId);
+  const s = await subscriptionStatus(merchantCreds, token, subId);
   if (s.status >= 300) bad++;
   console.log(`SUB   ${subId}\n  HTTP ${s.status} ${s.text.slice(0, 900)}\n`);
 }

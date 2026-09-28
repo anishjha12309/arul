@@ -31,7 +31,8 @@ description: Deploy the Arul Cloudflare Worker (workers/) to production. Use aft
    route wrangler owns, and `arul-api.twilight-smoke-d495.workers.dev` still serves every
    already-installed build (`workers_dev = true` is load-bearing — dropping it silently kills those
    installs). A deploy that never landed is NOT rolled back — rollback only follows a landed deploy
-   that failed the probe, or it would undo the last good version.
+   that failed the probe, or it would undo the last good version. Once any `DKS_H…` mandate exists,
+   never roll back by hand past the dual-merchant version: older code parks those rows cancelled.
    Content-affecting change? Rebuild and read the pointer — with **GET, never `curl -I`**; HEAD
    reports `DYNAMIC` for assets that cache fine (docs/caching.md):
    ```bash

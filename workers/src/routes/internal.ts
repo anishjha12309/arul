@@ -12,12 +12,14 @@ import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 import type { PushCampaign } from "../lib/fcm.js";
 import { audienceQuery, parseAudience } from "../lib/push-audience.js";
+import { timingSafeEqual } from "../lib/timing-safe.js";
 import {
   notifyRedemption,
   executeRedemption,
   getSubscriptionStatus,
   initiateRefund,
   buildMerchantOrderId,
+  merchantOf,
 } from "../lib/phonepe.js";
 
 export async function handleBuildCatalog(c: Context<{ Bindings: Env }>): Promise<Response> {
@@ -169,7 +171,7 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
             continue;
           }
 
-          redemptionOrderId = buildMerchantOrderId(userId, "R");
+          redemptionOrderId = buildMerchantOrderId(userId, "R", merchantOf(merchantSubId));
           const notifyRes = await notifyRedemption(env, {
             merchantSubscriptionId: merchantSubId,
             merchantOrderId: redemptionOrderId,
@@ -307,7 +309,11 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
 
   try {
     // merchantRefundId must be UNIQUE -> reuse the order-id builder with a REF tag rather than inventing a scheme
-    const merchantRefundId = buildMerchantOrderId(originalMerchantOrderId, "REF").slice(0, 63);
+    const merchantRefundId = buildMerchantOrderId(
+      originalMerchantOrderId,
+      "REF",
+      merchantOf(originalMerchantOrderId),
+    ).slice(0, 63);
     const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, amountPaise);
     console.log(
       `[internal/refund] ${amountPaise} paise on ${originalMerchantOrderId} ` +
@@ -466,20 +472,6 @@ function authorizeOps(c: Context<{ Bindings: Env }>, env: Env): boolean {
   const token = (c.req.header("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return false;
   return timingSafeEqual(token, expected);
-}
-
-/** Length-independent constant-time compare -> an early exit on mismatch leaks the secret one byte at a time. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const enc = new TextEncoder();
-  const ab = enc.encode(a);
-  const bb = enc.encode(b);
-  // Fold length INTO the result rather than returning early -> a wrong-length guess must time like a wrong-value one
-  let diff = ab.length ^ bb.length;
-  const n = Math.max(ab.length, bb.length);
-  for (let i = 0; i < n; i++) {
-    diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0);
-  }
-  return diff === 0;
 }
 
 function addOneMonth(date: Date): Date {

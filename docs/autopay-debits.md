@@ -38,6 +38,16 @@ when reconcile reports `PENDING`, log a stray duplicate as INFO. That is log hyg
 `Execute failed` on a healthy debit trains everyone to ignore the line that will one day be real. A
 `null` state (the status read itself failed) tells us nothing, so the redeem still runs.
 
+## Pass A — a 4xx parks only a mandate never debited
+
+A permanent 4xx at status or notify parks the row `cancelled` (`rejected_by_phonepe`) ONLY when it was never
+debited (`debit_count = 0`) — `phonepe_subscription_id` is on ~every row, so it proves nothing, and trial parks
+feed the CMS and PostHog cancel counts. A debited mandate that is revoked reads `REVOKED`, not a 4xx, so a 4xx
+there is a misroute, a PhonePe bug or a config slip — one fault answers for every due row at once, and
+parked-cancelled stops billing for good. Those rows log `ALARM` and
+move `next_debit_at` past the notify window by 6 h (a bound in the WHERE, so they take no LIMIT slot); past the
+45-day wall they park as before.
+
 ## Pass B's slots are the scarce resource
 
 - **Skip any row notified under 24 h ago without a call** — PhonePe refuses inside its notify window,

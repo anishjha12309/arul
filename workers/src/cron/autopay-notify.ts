@@ -13,6 +13,7 @@ import {
   getSubscriptionStatus,
   getOrderStatus,
   buildMerchantOrderId,
+  merchantOf,
   PhonePeApiError,
 } from "../lib/phonepe.js";
 
@@ -63,6 +64,12 @@ const SETTLE_REPORTER_SUBREQUESTS = 3;
 const STALE_ORDER_MS = 48 * 60 * 60 * 1000;
 
 const MAX_PAUSED_RECHECK = 50;
+
+/**
+ * How long a proven mandate PhonePe rejects is left alone before Pass A asks again. Its next_debit_at moves past the
+ * notify window by this much -> the row leaves Pass A's WHERE instead of taking a LIMIT slot every tick
+ */
+const REJECTED_RECHECK_MS = 6 * 60 * 60 * 1000;
 
 function isTopOfHourTick(): boolean {
   return new Date().getUTCMinutes() < 15;
@@ -122,7 +129,9 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         id,
         user_id,
         merchant_subscription_id,
-        next_debit_at
+        next_debit_at,
+        debit_count,
+        current_period_end
       FROM subscriptions
       WHERE status IN ('trialing', 'active')
         AND next_debit_at <= ${notifyThreshold.toISOString()}
@@ -178,7 +187,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           continue;
         }
 
-        const redemptionOrderId = buildMerchantOrderId(userId, "R");
+        const redemptionOrderId = buildMerchantOrderId(userId, "R", merchantOf(merchantSubId));
         const notifyResult = await notifyRedemption(env, {
           merchantSubscriptionId: merchantSubId,
           merchantOrderId: redemptionOrderId,
@@ -206,7 +215,27 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         // A 4xx is PhonePe's FINAL answer -> SUBSCRIPTION_NOT_FOUND is the one seen in the wild
         // Retrying it costs two PhonePe calls and a Neon wake per row per tick, forever, and never converges -> park it
         // Everything else — 5xx, 429, a dropped connection — is transient -> leaving notified_at NULL is right there
-        if (err instanceof PhonePeApiError && err.isPermanent) {
+        // A mandate that has already been debited does not vanish: a revoke reads REVOKED, not a 4xx. So a 4xx there
+        // is a misroute, a PhonePe bug or a config slip, and one such fault answers for every due row at once ->
+        // alarm and re-ask later; park only past the dunning wall. Never-debited rows keep the old park
+        const periodEnd = toDate(row.current_period_end);
+        const proven = Number(row.debit_count ?? 0) > 0;
+        const pastWall = periodEnd !== null && Date.now() - periodEnd.getTime() > DUNNING_WINDOW_MS;
+        if (err instanceof PhonePeApiError && err.isPermanent && proven && !pastWall) {
+          const recheckAt = new Date(Date.now() + NOTIFY_WINDOW_HOURS * 60 * 60 * 1000 + REJECTED_RECHECK_MS);
+          await sql`
+            UPDATE subscriptions
+            SET next_debit_at = ${recheckAt.toISOString()},
+                updated_at    = now()
+            WHERE id = ${row.id as string}
+              AND status IN ('trialing', 'active')
+          `;
+          console.error(
+            `[autopay-notify] ALARM — PhonePe rejected mandate ${merchantSubId}, which it confirmed before, ` +
+              `with HTTP ${err.status}. NOT parked; re-asked after ${recheckAt.toISOString()}. ` +
+              `Many of these at once = routing or PhonePe fault, not users. Body: ${err.body}`,
+          );
+        } else if (err instanceof PhonePeApiError && err.isPermanent) {
           await parkMandate(env, sql, row.id as string, "cancelled", "rejected_by_phonepe");
           console.error(
             `[autopay-notify] Sub ${merchantSubId} rejected permanently by PhonePe ` +
@@ -611,6 +640,7 @@ async function applyDebitOutcome(
         amountPaise: 19900,
         occurredAt: settled[0]?.updated_at ?? null,
         targetApp: row.upiTargetApp ?? null,
+        merchantSubId: row.merchantSubId,
       });
     }
     return true;

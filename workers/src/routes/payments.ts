@@ -21,12 +21,35 @@ import {
   getOrderStatus,
   buildMerchantSubscriptionId,
   buildMerchantOrderId,
+  merchantKeys,
+  merchantOf,
+  setupMerchant,
+  setupMerchantMode,
+  type Merchant,
   type PhonePeWebhookPayload,
   merchantSubscriptionIdOf,
   phonePeSubscriptionIdOf,
 } from "../lib/phonepe.js";
 
 const KV_TXN_TTL = 30 * 24 * 60 * 60; // 30 days — covers PhonePe's retry window
+
+/** Mandate state changes carry no order id, only the mandate's ids, state and pause window (docs/phonepe-webhook.md). */
+const STATE_EVENTS = new Set([
+  "subscription.paused",
+  "subscription.unpaused",
+  "subscription.revoked",
+  "subscription.cancelled",
+]);
+
+/**
+ * Empty = never deduped. An unpause carries null pause dates, so any key would drop every later unpause of the
+ * same mandate inside the TTL -> it relies on the rearm's `status = 'paused'` scope instead
+ */
+function stateEventDedupeId(event: string, pp: PhonePeWebhookPayload["payload"]): string {
+  const merchantSubId = merchantSubscriptionIdOf(pp);
+  if (!merchantSubId || event === "subscription.unpaused") return "";
+  return `${merchantSubId}:${pp.state ?? ""}:${pp.pauseStartDate ?? ""}`;
+}
 
 /** Monthly price in paise -> must match maxAmount in phonepe.ts -> a mismatch makes the mandate refuse the debit. */
 const MONTHLY_PRICE_PAISE = 19900;
@@ -105,8 +128,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   try {
     // Build the ids up front -> the claim below writes them BEFORE PhonePe is called
     // That is what lets a concurrent request see a setup is already underway
-    const merchantSubscriptionId = buildMerchantSubscriptionId(sub);
-    const merchantOrderId = buildMerchantOrderId(sub, "S");
+    const merchant = await chooseSetupMerchant(env, sql, sub);
+    const merchantSubscriptionId = buildMerchantSubscriptionId(sub, merchant);
+    const merchantOrderId = buildMerchantOrderId(sub, "S", merchant);
 
     // The lock is on the USERS row, NOT subscriptions -> a first-time subscriber has no subscriptions row to lock
     // FOR UPDATE there would lock nothing and the exact race would slip through
@@ -254,7 +278,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         await attachPhonePeOrder(intent.orderId, recordedTargetApp);
         revokeSuperseded();
         console.log(
-          `[payments/initiate] env=${env.PHONEPE_ENV} flow=${qrMode ? "qr" : "intent"} ` +
+          `[payments/initiate] env=${env.PHONEPE_ENV} merchant=${merchant} flow=${qrMode ? "qr" : "intent"} ` +
             `target=${recordedTargetApp} orderId=${intent.orderId} state=${intent.state} ` +
             `trialEligible=${trialEligible}`,
         );
@@ -296,10 +320,12 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     }
 
     // They only blow up inside the SDK -> log their SHAPE, never their value, so the next failed tap names the culprit
+    // The SDK must init with the merchant that OWNS this order -> never the unprefixed PHONEPE_MERCHANT_ID by habit
+    const sdkMerchantId = merchantKeys(env, merchant).merchantId;
     console.log(
-      `[payments/initiate] env=${env.PHONEPE_ENV} ` +
-        `merchantIdLen=${env.PHONEPE_MERCHANT_ID?.length ?? 0} ` +
-        `merchantIdPrefix=${(env.PHONEPE_MERCHANT_ID ?? "").slice(0, 4)} ` +
+      `[payments/initiate] env=${env.PHONEPE_ENV} merchant=${merchant} ` +
+        `merchantIdLen=${sdkMerchantId.length} ` +
+        `merchantIdPrefix=${sdkMerchantId.slice(0, 4)} ` +
         `tokenLen=${ppResult.token?.length ?? 0} ` +
         `orderId=${ppResult.orderId} state=${ppResult.state} ` +
         `trialEligible=${trialEligible}`,
@@ -319,7 +345,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       // Trimmed: the SDK authenticates with this verbatim, and a trailing
       // newline here surfaces on-device as PR004 "Unauthorized" with a healthy
       // 200 from us — the hardest possible bug to trace.
-      merchantId: env.PHONEPE_MERCHANT_ID.trim(),
+      merchantId: sdkMerchantId,
       // Trimmed for the same reason. isProduction() trims before choosing the
       // host, so an untrimmed value here would route the Worker to the RIGHT
       // host while the app inits the SDK with "PRODUCTION\n" — the two would
@@ -340,12 +366,17 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   const env = c.env;
 
   const authHeader = c.req.header("Authorization") ?? "";
-  const webhookUsername = env.PHONEPE_WEBHOOK_USERNAME ?? "";
-  const webhookPassword = env.PHONEPE_WEBHOOK_PASSWORD ?? "";
+  // Each merchant's dashboard webhook carries its own SHA pair -> either one authenticates a delivery
+  const pairs = (
+    [
+      ["legacy", env.PHONEPE_WEBHOOK_USERNAME, env.PHONEPE_WEBHOOK_PASSWORD],
+      ["hsr", env.PHONEPE_HSR_WEBHOOK_USERNAME, env.PHONEPE_HSR_WEBHOOK_PASSWORD],
+    ] as const
+  ).filter(([, username, password]) => !!username && !!password);
 
-  if (!webhookUsername || !webhookPassword) {
+  if (pairs.length === 0) {
     // Missing secrets = misconfiguration; fail closed
-    console.error("[payments/webhook] PHONEPE_WEBHOOK_USERNAME/PASSWORD not set");
+    console.error("[payments/webhook] no PHONEPE_WEBHOOK_* or PHONEPE_HSR_WEBHOOK_* pair set");
     return new Response("ok", { status: 200 }); // ack to stop retries; alert on logs
   }
 
@@ -353,8 +384,11 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   // be described in the logs (see below). c.req.text() cannot be called twice.
   const rawBody = await c.req.text();
 
-  const authValid = await verifyCallbackAuth(authHeader, webhookUsername, webhookPassword);
-  if (!authValid) {
+  const authPairs: Merchant[] = [];
+  for (const [merchant, username, password] of pairs) {
+    if (await verifyCallbackAuth(authHeader, username ?? "", password ?? "")) authPairs.push(merchant);
+  }
+  if (authPairs.length === 0) {
     // LOUD on purpose -> a silent 401 made two very different situations look identical from outside
     // Log SHAPE, never content -> whether a header arrived, its length, whether it looks like 64-char lowercase hex
     // Never the header itself and never the configured credentials -> a log is not a place to leak either
@@ -370,8 +404,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       `[payments/webhook] REJECTED a delivery on auth. ` +
         `authHeader present=${authHeader.length > 0} len=${authHeader.length} ` +
         `sha256HexShaped=${looksLikeSha256Hex} event=${eventPeek}. ` +
-        `If this is PhonePe, the dashboard's webhook username/password do not match ` +
-        `PHONEPE_WEBHOOK_USERNAME/PHONEPE_WEBHOOK_PASSWORD on this Worker.`,
+        `If this is PhonePe, the dashboard's webhook username/password match neither ` +
+        `PHONEPE_WEBHOOK_* (legacy) nor PHONEPE_HSR_WEBHOOK_* (hsr) on this Worker.`,
     );
     return errorResponse(401, "invalid_signature", "Webhook authorization failed");
   }
@@ -390,14 +424,15 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   const pp = payload.payload ?? {};
 
   // 3. Idempotency — dedupe on (event, PhonePe orderId). The EVENT MUST be part of the key
-  const dedupeKey = pp.orderId ?? pp.merchantOrderId ?? "";
-  if (!dedupeKey) {
+  const stateEvent = STATE_EVENTS.has(event);
+  const dedupeKey = stateEvent ? stateEventDedupeId(event, pp) : (pp.orderId ?? pp.merchantOrderId ?? "");
+  if (!dedupeKey && !stateEvent) {
     console.error("[payments/webhook] Missing orderId/merchantOrderId, event:", event);
     return new Response("ok", { status: 200 });
   }
 
-  const kvKey = `txn:${event}:${dedupeKey}`;
-  const alreadyProcessed = await env.KV.get(kvKey);
+  const kvKey = dedupeKey ? `txn:${event}:${dedupeKey}` : null;
+  const alreadyProcessed = kvKey ? await env.KV.get(kvKey) : null;
   if (alreadyProcessed) {
     console.log(`[payments/webhook] Already processed ${dedupeKey}, event: ${event}`);
     return new Response("ok", { status: 200 });
@@ -423,6 +458,36 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         `misrouted by the dispatcher; not processing and not marking`,
     );
     return new Response("ok", { status: 200 });
+  }
+
+  // The id's marker names the merchant; an ORDER event also names it in payload.merchantId (state events do not)
+  // Only a PROVEN contradiction is refused -> an unfamiliar merchantId format must never drop a real grant
+  const idMerchant = merchantOf(merchantSubId);
+  const otherMerchant: Merchant = idMerchant === "hsr" ? "legacy" : "hsr";
+  const payloadMerchantId = typeof pp.merchantId === "string" ? pp.merchantId.trim() : "";
+  const orderMerchant = pp.merchantOrderId?.startsWith("DKS_") ? merchantOf(pp.merchantOrderId) : idMerchant;
+  if (
+    orderMerchant !== idMerchant ||
+    (payloadMerchantId !== "" && payloadMerchantId === configuredMerchantId(env, otherMerchant))
+  ) {
+    console.error(
+      `[payments/webhook] MERCHANT MISMATCH — ${event} for ${idMerchant} id ${merchantSubId} ` +
+        `(order ${pp.merchantOrderId ?? "?"}) names merchant ${payloadMerchantId || "?"}; ` +
+        `not processing and not marking`,
+    );
+    return new Response("ok", { status: 200 });
+  }
+  if (payloadMerchantId !== "" && payloadMerchantId !== configuredMerchantId(env, idMerchant)) {
+    console.warn(
+      `[payments/webhook] ${event} for ${idMerchant} id ${merchantSubId} carries an unrecognised ` +
+        `merchantId ${payloadMerchantId} — processed by the id`,
+    );
+  }
+  if (!authPairs.includes(idMerchant)) {
+    console.warn(
+      `[payments/webhook] ${event} for ${idMerchant} id ${merchantSubId} authenticated with the ` +
+        `${authPairs.join("/")} pair — processed by the id`,
+    );
   }
 
   const sql = getDb(env);
@@ -631,14 +696,18 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         // FIRST trial->paid only, judged on prior_status='trialing' -> renewals stay out
         // The order and transaction events for one debit both land here -> only the first sees 'trialing'
         // The per-transaction KV mark inside dedupes against the cron settling the same debit
+        // After the response -> an analytics round-trip must never hold PhonePe's acknowledgement back
         if (activated[0].prior_status === "trialing") {
-          await reportPostHogFirstConversion(env, {
-            userId: activated[0].user_id as string,
-            transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
-            amountPaise: typeof pp.amount === "number" ? pp.amount : null,
-            occurredAt: activated[0].updated_at ?? null,
-            targetApp: activated[0].upi_target_app ?? null,
-          });
+          c.executionCtx.waitUntil(
+            reportPostHogFirstConversion(env, {
+              userId: activated[0].user_id as string,
+              transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
+              amountPaise: typeof pp.amount === "number" ? pp.amount : null,
+              occurredAt: activated[0].updated_at ?? null,
+              targetApp: activated[0].upi_target_app ?? null,
+              merchantSubId,
+            }),
+          );
         }
       }
     } else if (
@@ -664,13 +733,15 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         updated_at?: Date | string | null;
       }[];
       if (parked[0]) {
-        await reportPostHogSubscriptionCancel(env, {
-          userId: parked[0].user_id,
-          merchantSubId,
-          reason: "webhook_revoked",
-          priorStatus: parked[0].prior_status,
-          occurredAt: parked[0].updated_at ?? null,
-        });
+        c.executionCtx.waitUntil(
+          reportPostHogSubscriptionCancel(env, {
+            userId: parked[0].user_id,
+            merchantSubId,
+            reason: "webhook_revoked",
+            priorStatus: parked[0].prior_status,
+            occurredAt: parked[0].updated_at ?? null,
+          }),
+        );
       } else {
         await sql`
           UPDATE subscriptions
@@ -704,7 +775,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       console.log(`[payments/webhook] Unhandled event: ${event}, sub: ${merchantSubId}`);
     }
 
-    await env.KV.put(kvKey, "1", { expirationTtl: KV_TXN_TTL });
+    if (kvKey) await env.KV.put(kvKey, "1", { expirationTtl: KV_TXN_TTL });
     return new Response("ok", { status: 200 });
   } catch (err) {
     console.error("[payments/webhook] DB error:", err);
@@ -964,6 +1035,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
               amountPaise: MONTHLY_PRICE_PAISE,
               occurredAt: healed[0].updated_at ?? null,
               targetApp: healed[0].upi_target_app ?? null,
+              merchantSubId: healed[0].merchant_subscription_id,
             });
           }
         }
@@ -1206,6 +1278,27 @@ async function releaseSupersededMandate(
   if (typeof stale === "string" && stale && stale !== merchantSubId) {
     revokeInBackground(c, stale, "payments/release");
   }
+}
+
+function configuredMerchantId(env: Env, merchant: Merchant): string | null {
+  try {
+    return merchantKeys(env, merchant).merchantId;
+  } catch {
+    return null;
+  }
+}
+
+/** `users.is_internal` is read only for the canary mode -> the default path spends no extra query. */
+async function chooseSetupMerchant(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+  userId: string,
+): Promise<Merchant> {
+  if (setupMerchantMode(env) !== "hsr-internal") return setupMerchant(env, false);
+  const rows = (await sql`SELECT is_internal FROM users WHERE id = ${userId}`) as unknown as {
+    is_internal?: boolean | null;
+  }[];
+  return setupMerchant(env, rows[0]?.is_internal === true);
 }
 
 /** Best-effort revoke OFF the response path -> a PhonePe hiccup must never fail the grant that triggered it. */

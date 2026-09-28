@@ -8,7 +8,7 @@
  */
 import { openBranch } from "./lib/neon-branch.mjs";
 import { classify } from "./lib/debit-phases.mjs";
-import { loadCreds, getToken, orderStatus, subscriptionStatus } from "./lib/phonepe-read.mjs";
+import { loadCreds, credsFor, tokenCache, orderStatus, subscriptionStatus } from "./lib/phonepe-read.mjs";
 
 const argv = process.argv.slice(2);
 const useDebug = argv.includes("--debug");
@@ -120,14 +120,23 @@ try {
   console.log("\nPOPULATION");
   console.log("  " + counts.map((r) => `${r.status} ${r.n}`).join(" · "));
 
+  // The merchant is the id's marker (src/lib/phonepe.ts merchantOf) -> legacy must keep billing after the switch
+  const byMerchant = await sql`
+    SELECT CASE WHEN left(merchant_subscription_id, 5) = 'DKS_H' THEN 'hsr' ELSE 'legacy' END AS merchant,
+           count(*) FILTER (WHERE status IN ('trialing', 'active', 'paused'))::int AS live,
+           count(*) FILTER (WHERE first_debit_at > now() - interval '24 hours')::int AS first_debits_24h
+    FROM subscriptions
+    WHERE merchant_subscription_id IS NOT NULL
+    GROUP BY 1 ORDER BY 1
+  `;
+  console.log("\nBY MERCHANT (live mandates · first debits 24h)");
+  for (const r of byMerchant) console.log(pad(r.merchant) + `${r.live} · ${r.first_debits_24h}`);
+
   if (ppEnvFile) {
     console.log("\nGATEWAY");
     const creds = loadCreds({ envFile: ppEnvFile });
     console.log(pad("environment") + creds.env);
     try {
-      const token = await getToken(creds);
-      console.log(pad("OAuth") + `OK (token len ${token.length})`);
-
       // Probe the most recently settled row: it is the one case where Neon claims money moved, so
       // PhonePe disagreeing is the finding. An older row proves less and less as time passes.
       const [sample] = await sql`
@@ -139,8 +148,11 @@ try {
       if (!sample) {
         notes.push("No settled row to cross-check against PhonePe yet.");
       } else {
-        const o = await orderStatus(creds, token, sample.merchant_order_id);
-        const s = await subscriptionStatus(creds, token, sample.merchant_subscription_id);
+        const sampleCreds = credsFor(creds, sample.merchant_subscription_id);
+        const token = await tokenCache()(sampleCreds);
+        console.log(pad("OAuth") + `OK, ${sampleCreds.merchant} (token len ${token.length})`);
+        const o = await orderStatus(sampleCreds, token, sample.merchant_order_id);
+        const s = await subscriptionStatus(sampleCreds, token, sample.merchant_subscription_id);
         console.log(pad("sample order") + `HTTP ${o.status} ${o.json?.state ?? "?"}`);
         console.log(pad("sample mandate") + `HTTP ${s.status} ${s.json?.state ?? "?"}`);
         console.log(`  (${sample.merchant_subscription_id})`);

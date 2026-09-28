@@ -25,8 +25,9 @@ or status vocabulary from memory.
   non-terminal.
 - The 409 `setup_in_progress` window and the app's initiate retry delays are paired by arithmetic —
   change either side only with the other.
-- Set secrets with `wrangler secret bulk`, never a shell pipe; delete the cached `phonepe:oauth` KV
-  key after any env or credential change.
+- **The mandate id picks the merchant** (`merchantOf`: `DKS_H…` = hsr), never `PHONEPE_SETUP_MERCHANT`;
+  never roll back past the dual-merchant Worker. `wrangler secret bulk`, never a pipe; delete
+  `phonepe:oauth` and `phonepe:oauth:hsr` after any env or credential change.
 - **Every paid-period grant stamps `first_debit_at` / `debit_count` / `paid_paise` on the same
   UPDATE** — the CMS subscriptions page reads nothing else.
 

@@ -114,7 +114,7 @@ describe("getAccessToken", () => {
       vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
     );
 
-    const token = await getAccessToken(env);
+    const token = await getAccessToken(env, "legacy");
     expect(token).toBe("test-access-token-xyz");
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     // It must call the SANDBOX OAuth URL -> the production host is a different path entirely
@@ -133,7 +133,7 @@ describe("getAccessToken", () => {
 
     vi.stubGlobal("fetch", vi.fn());
 
-    const token = await getAccessToken(env);
+    const token = await getAccessToken(env, "legacy");
     expect(token).toBe("cached-token");
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
@@ -151,7 +151,7 @@ describe("getAccessToken", () => {
       vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
     );
 
-    const token = await getAccessToken(env);
+    const token = await getAccessToken(env, "legacy");
     expect(token).toBe("fresh-token");
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
   });
@@ -165,7 +165,7 @@ describe("getAccessToken", () => {
       vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
     );
 
-    await getAccessToken(env);
+    await getAccessToken(env, "legacy");
     const calledUrl = vi.mocked(fetch).mock.calls[0][0] as string;
     expect(calledUrl).toBe("https://api.phonepe.com/apis/identity-manager/v1/oauth/token");
   });
@@ -179,7 +179,7 @@ describe("getAccessToken", () => {
       vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(oauthData), { status: 200 })),
     );
 
-    await getAccessToken(env);
+    await getAccessToken(env, "legacy");
     const call = vi.mocked(fetch).mock.calls[0];
     const init = call[1] as RequestInit;
     expect(init.method).toBe("POST");
@@ -193,7 +193,7 @@ describe("getAccessToken", () => {
   it("throws on non-OK OAuth response", async () => {
     const env = makeEnv();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("Unauthorized", { status: 401 })));
-    await expect(getAccessToken(env)).rejects.toThrow("PhonePe OAuth error 401");
+    await expect(getAccessToken(env, "legacy")).rejects.toThrow("PhonePe OAuth error 401");
   });
 });
 
@@ -251,6 +251,28 @@ describe("setupSubscription", () => {
     expect(details.maxAmount).toBe(19900); // ₹199 in paise
     expect(details.frequency).toBe("MONTHLY");
     expect(details.productType).toBe("UPI_MANDATE");
+  });
+
+  it("sends an explicit mandate expiry under PhonePe's 30-year max", async () => {
+    // Without one the SDK payment page renders "auto-paid till NaNth Invalid Date"
+    const env = makeEnv();
+    mockFetchWithOAuthThenSetup({ orderId: "PP_ORDER_EXP", state: "PENDING", token: "T" });
+
+    await setupSubscription(env, {
+      userId: "user-uuid-1",
+      merchantSubscriptionId: "DKS_S_EXP",
+      merchantOrderId: "DKS_S_EXP_1",
+      redirectUrl: "https://api.hsrutility.com/payments/callback",
+    });
+
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string) as {
+      paymentFlow: { subscriptionDetails: { expireAt?: unknown } };
+    };
+    const expireAt = body.paymentFlow.subscriptionDetails.expireAt;
+    expect(typeof expireAt).toBe("number");
+    const years = ((expireAt as number) - Date.now()) / (365 * 86_400_000);
+    expect(years).toBeGreaterThan(28);
+    expect(years).toBeLessThan(30);
   });
 
   it("sends TRANSACTION with the real first-debit amount when upfrontAmountPaise is set", async () => {
@@ -762,35 +784,35 @@ describe("verifyCallbackAuth", () => {
 
 describe("buildMerchantSubscriptionId", () => {
   it("produces a string ≤ 63 characters", () => {
-    const id = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000");
+    const id = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000", "legacy");
     expect(id.length).toBeLessThanOrEqual(63);
   });
 
   it("only contains [A-Za-z0-9_-]", () => {
-    const id = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000");
+    const id = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000", "legacy");
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   it("produces different values for different user IDs", () => {
-    const id1 = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000");
-    const id2 = buildMerchantSubscriptionId("660f9511-f3ac-52e5-b827-557766551111");
+    const id1 = buildMerchantSubscriptionId("550e8400-e29b-41d4-a716-446655440000", "legacy");
+    const id2 = buildMerchantSubscriptionId("660f9511-f3ac-52e5-b827-557766551111", "legacy");
     expect(id1).not.toBe(id2);
   });
 });
 
 describe("buildMerchantOrderId", () => {
   it("produces a string ≤ 63 characters", () => {
-    const id = buildMerchantOrderId("550e8400-e29b-41d4-a716-446655440000");
+    const id = buildMerchantOrderId("550e8400-e29b-41d4-a716-446655440000", "O", "legacy");
     expect(id.length).toBeLessThanOrEqual(63);
   });
 
   it("only contains [A-Za-z0-9_-]", () => {
-    const id = buildMerchantOrderId("550e8400-e29b-41d4-a716-446655440000");
+    const id = buildMerchantOrderId("550e8400-e29b-41d4-a716-446655440000", "O", "legacy");
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   it("uses the tag in the output", () => {
-    const id = buildMerchantOrderId("abc123", "R");
+    const id = buildMerchantOrderId("abc123", "R", "legacy");
     expect(id).toContain("_R_");
   });
 });

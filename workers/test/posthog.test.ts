@@ -255,3 +255,37 @@ describe("reportPostHogSubscriptionCancel", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("phonepe_merchant — the second merchant is one additive property, nothing else moves", () => {
+  const sent = () => JSON.parse((fetchMock.mock.calls.at(-1) as [string, RequestInit])[1].body as string);
+
+  it.each([
+    ["DKS_HS_BBBB2222_Y1", "hsr"],
+    ["DKS_S_AAAA1111_X1", "legacy"],
+    [null, "unknown"],
+  ])("subscription_active for mandate %s says %s, with the same uuid as before", async (msid, merchant) => {
+    await reportPostHogFirstConversion(makeEnv(), {
+      userId: "user-1",
+      transactionId: "DKS_R_TXN_1",
+      merchantSubId: msid,
+    });
+    const body = sent();
+    expect(body.properties.phonepe_merchant).toBe(merchant);
+    // The uuid is derived from the transaction only -> the new property cannot split one conversion into two
+    await reportPostHogFirstConversion(makeEnv(), { userId: "user-1", transactionId: "DKS_R_TXN_1" });
+    expect(sent().uuid).toBe(body.uuid);
+  });
+
+  it.each([
+    ["DKS_HS_BBBB2222_Y1", "hsr"],
+    ["DKS_S_AAAA1111_X1", "legacy"],
+  ])("subscription_cancel for mandate %s says %s", async (msid, merchant) => {
+    await reportPostHogSubscriptionCancel(makeEnv(), {
+      userId: "user-1",
+      merchantSubId: msid,
+      reason: "webhook_revoked",
+      priorStatus: "trialing",
+    });
+    expect(sent().properties).toMatchObject({ phonepe_merchant: merchant, merchant_subscription_id: msid });
+  });
+});

@@ -21,6 +21,22 @@ webhook: [phonepe-webhook.md](phonepe-webhook.md) · the app's picker, QR, resum
    credential set (`client_id`/`client_secret`/`client_version`); the token goes out as
    `Authorization: O-Bearer <token>`. There is no v2 token endpoint.
 
+## Two merchants — the mandate id picks the keys
+
+A mandate lives under the merchant that created it, and the other merchant's keys answer
+`SUBSCRIPTION_NOT_FOUND`: Pass A parks that row `cancelled`, `revokeMandateTolerant` calls a live
+mandate revoked. So every call routes by `merchantOf(id)` (`lib/phonepe.ts`): `DKS_H…` = HSRUTILITYONLINE
+(`PHONEPE_HSR_*`), anything else = AUTOGRAMAPPSONLINE (`PHONEPE_*`), forever. Not a column — five
+statements swap ids between `merchant_subscription_id` and `superseded_mandate_id`.
+
+- Redemption and refund ids inherit their mandate's (original order's) marker; a call whose ids name
+  two merchants throws before PhonePe is reached.
+- `PHONEPE_SETUP_MERCHANT` ([vars]: `legacy` | `hsr-internal` | `hsr`) steers NEW setups only; initiate
+  returns the owning merchant's `merchantId` for the SDK. Missing hsr keys keep setups on legacy and
+  make hsr calls a transient error — retried, never parked.
+- Legacy keys stay live while any legacy mandate does (active rows renew with no end). Once an hsr
+  mandate exists, never roll back past the dual-merchant Worker: the old code parks every `DKS_H` row.
+
 ## Mandate setup
 
 **Direct UPI intent:** `POST /subscriptions/v2/setup` with `paymentFlow.type: "SUBSCRIPTION_SETUP"`
@@ -32,6 +48,9 @@ cannot occur on this path.
 Initiate takes `targetApp` (opt-in, package-shape validated) and **MUST fall back to the SDK page inside
 the SAME request on any intent failure** — a second initiate bounces off its own claim window. The
 `targetApp == null` branch stays for fielded builds.
+
+`sdk/order` MUST send `subscriptionDetails.expireAt` (29 years; PhonePe caps it at 30): omitted, the SDK
+payment page reads "auto-paid till NaNth Invalid Date". The intent flow defaults to 30 years.
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — and a 1-day
 trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
@@ -112,8 +131,9 @@ initiate. Do not chase it — no PIN was entered and PhonePe expires it itself.
   production credentials to the SANDBOX host as a 401 indistinguishable from bad credentials.
   `isProduction()` trims and THROWS on anything but `PRODUCTION`/`SANDBOX`, and credentials and
   merchant id are trimmed; every other secret is not — set them with `wrangler secret bulk`.
-- **The cached OAuth token survives every switch** (KV `phonepe:oauth`, one key, no env component) —
-  env, credential, host, or a local stub. Delete the key after any of them, or the old token replays.
+- **The cached OAuth token survives every switch** (KV `phonepe:oauth` legacy, `phonepe:oauth:hsr`; no
+  env component) — env, credential, host, or a local stub. Delete both after any of them, or the old
+  token replays.
 - **Symptom map:** PR004/Unauthorized on device = a bad `merchantId` or a web token (the Worker only
   echoes them, so still 200). `OAuth 401` in the tail = the wrong host or a whitespace-polluted
   credential.

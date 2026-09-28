@@ -441,6 +441,130 @@ describe("handleWebhook — subscription.unpaused rearms the debit clock", () =>
   });
 });
 
+describe("handleWebhook — state events in PhonePe's DOCUMENTED shape (no order id)", () => {
+  // developer.phonepe.com -> Autopay -> Webhook -> "Response for State Change": ids and pause dates only
+  const stateEvent = (event: string, state: string, pauseStartDate: number | null = null) => ({
+    event,
+    payload: {
+      merchantSubscriptionId: "DKS_S_STATE",
+      subscriptionId: "OMS_STATE",
+      state,
+      authWorkflowType: "PENNY_DROP",
+      amountType: "FIXED",
+      maxAmount: 19900,
+      frequency: "MONTHLY",
+      expireAt: 1737278524000,
+      pauseStartDate,
+      pauseEndDate: pauseStartDate === null ? null : pauseStartDate + 86_400_000,
+    },
+  });
+
+  async function deliver(env: Env, body: unknown) {
+    const auth = await webhookAuthHeader("u", "p");
+    return handleWebhook(makeWebhookCtx(env, auth, body));
+  }
+
+  beforeEach(() => {
+    posthog.reportPostHogSubscriptionCancel.mockClear();
+  });
+
+  it("parks the row paused on subscription.paused", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
+
+    expect(res.status).toBe(200);
+    expect(texts.some((t) => t.includes("SET status     = 'paused'"))).toBe(true);
+  });
+
+  it.each([
+    ["subscription.revoked", "REVOKED"],
+    ["subscription.cancelled", "CANCELLED"],
+  ])("cancels the row on %s and reports the churn", async (event, state) => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await deliver(env, stateEvent(event, state));
+
+    expect(res.status).toBe(200);
+    expect(texts.some((t) => t.includes("SET status        = 'cancelled'"))).toBe(true);
+    expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ merchantSubId: "DKS_S_STATE", reason: "webhook_revoked" }),
+    );
+  });
+
+  it("rearms the row on subscription.unpaused", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await deliver(env, stateEvent("subscription.unpaused", "ACTIVE"));
+
+    expect(res.status).toBe(200);
+    expect(texts.some((t) => t.includes("COALESCE(next_debit_at, current_period_end)"))).toBe(true);
+  });
+
+  it("drops a redelivered pause but handles a later, different pause", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+    const pauses = () => texts.filter((t) => t.includes("SET status     = 'paused'")).length;
+
+    await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
+    await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
+    expect(pauses()).toBe(1);
+
+    await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_795_000_000_000));
+    expect(pauses()).toBe(2);
+  });
+
+  it("handles the second unpause of a pause -> unpause -> pause -> unpause cycle", async () => {
+    // An unpause carries null pause dates -> a key built from them alone drops every unpause after the first
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+    const rearms = () =>
+      texts.filter((t) => t.includes("COALESCE(next_debit_at, current_period_end)")).length;
+
+    await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
+    await deliver(env, stateEvent("subscription.unpaused", "ACTIVE"));
+    await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_795_000_000_000));
+    await deliver(env, stateEvent("subscription.unpaused", "ACTIVE"));
+
+    expect(rearms()).toBe(2);
+  });
+
+  it("drops a redelivered revoke", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    await deliver(env, stateEvent("subscription.revoked", "REVOKED"));
+    await deliver(env, stateEvent("subscription.revoked", "REVOKED"));
+
+    expect(texts.filter((t) => t.includes("SET status        = 'cancelled'")).length).toBe(1);
+  });
+
+  it("still acks an ORDER event with no order id without processing it", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const res = await deliver(env, {
+      event: "subscription.setup.order.completed",
+      payload: { state: "COMPLETED", paymentFlow: { merchantSubscriptionId: "DKS_S_NOORDER" } },
+    });
+
+    expect(res.status).toBe(200);
+    expect(texts.length).toBe(0);
+    expect(env.KV.put).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleStatus — FAILED setup reconcile", () => {
   it("flips a pending row to 'expired' when PhonePe reports the order FAILED", async () => {
     const env = makeEnv();
@@ -1225,5 +1349,67 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
     expect(res.status).toBe(200);
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_NEW");
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_OLD");
+  });
+});
+
+describe("handleWebhook — PostHog never delays PhonePe's acknowledgement", () => {
+  // Cloudflare's context docs: analytics goes to waitUntil, after the response. A slow capture held every 200 back
+  function ctxCollectingWaitUntil(env: Env, authHeader: string, payload: unknown) {
+    const background: Promise<unknown>[] = [];
+    const c = makeWebhookCtx(env, authHeader, payload) as unknown as {
+      executionCtx: { waitUntil: (p: Promise<unknown>) => void };
+    };
+    c.executionCtx = { waitUntil: (p) => background.push(p) };
+    return { c: c as unknown as Context<{ Bindings: Env }>, background };
+  }
+
+  const never = () => new Promise<void>(() => {});
+
+  it("acks a revoke while the subscription_cancel capture is still in flight", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+    posthog.reportPostHogSubscriptionCancel.mockImplementationOnce(never);
+
+    const { c, background } = ctxCollectingWaitUntil(env, await webhookAuthHeader("u", "p"), {
+      event: "subscription.revoked",
+      payload: { merchantSubscriptionId: "DKS_S_SLOWPH", state: "REVOKED" },
+    });
+    const res = await Promise.race([
+      handleWebhook(c),
+      new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 200)),
+    ]);
+
+    expect(res).not.toBe("timeout");
+    expect((res as Response).status).toBe(200);
+    expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalled();
+    expect(background.length).toBeGreaterThan(1);
+  });
+
+  it("acks a settled redemption while the subscription_active capture is still in flight", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([
+      [{ user_id: USER_ID, prior_status: "trialing", prior_mandate_id: "DKS_S_SLOWPH2" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+    posthog.reportPostHogFirstConversion.mockImplementationOnce(never);
+
+    const { c } = ctxCollectingWaitUntil(env, await webhookAuthHeader("u", "p"), {
+      event: "subscription.redemption.order.completed",
+      payload: {
+        merchantOrderId: "DKS_R_SLOWPH2_X_0001",
+        orderId: "OMO_SLOWPH2",
+        state: "COMPLETED",
+        amount: 19900,
+        paymentFlow: { type: "SUBSCRIPTION_REDEMPTION", merchantSubscriptionId: "DKS_S_SLOWPH2" },
+      },
+    });
+    const res = await Promise.race([
+      handleWebhook(c),
+      new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 200)),
+    ]);
+
+    expect(res).not.toBe("timeout");
+    expect(posthog.reportPostHogFirstConversion).toHaveBeenCalled();
   });
 });

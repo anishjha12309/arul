@@ -7,6 +7,7 @@
  */
 
 import type { Env } from "../env.js";
+import { merchantOf } from "./phonepe.js";
 
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
@@ -21,6 +22,8 @@ interface FirstConversion {
    * `phonepe_page` for the SDK/hosted page. Null/undefined = a row that predates the column.
    */
   targetApp?: string | null;
+  /** The mandate that was debited -> its marker names the PhonePe merchant that took the money. */
+  merchantSubId?: string | null;
 }
 
 const FALLBACK_AMOUNT_PAISE = 19900;
@@ -95,6 +98,7 @@ export async function reportPostHogFirstConversion(env: Env, purchase: FirstConv
           // Same key the app puts on `checkout_started` -> "which UPI app completes a mandate" and
           // "which app expires one" read off one axis. `unknown` = a row older than the column.
           target_app: purchase.targetApp ?? "unknown",
+          phonepe_merchant: purchase.merchantSubId ? merchantOf(purchase.merchantSubId) : "unknown",
           $lib: "arul-worker",
         },
       }),
@@ -191,6 +195,7 @@ export async function reportPostHogSubscriptionCancel(env: Env, cancel: Subscrip
           // true = they left before ever paying ₹199 (trial churn); false = a paying subscriber stopped
           during_trial: cancel.priorStatus === "trialing",
           merchant_subscription_id: cancel.merchantSubId,
+          phonepe_merchant: cancel.merchantSubId ? merchantOf(cancel.merchantSubId) : "unknown",
           $lib: "arul-worker",
         },
       }),

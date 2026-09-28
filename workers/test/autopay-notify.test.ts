@@ -32,8 +32,9 @@ const { FakePhonePeApiError } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../src/lib/phonepe.js", () => ({
+vi.mock("../src/lib/phonepe.js", async (importOriginal) => ({
   ...phonepe,
+  merchantOf: (await importOriginal<typeof import("../src/lib/phonepe.js")>()).merchantOf,
   PhonePeApiError: FakePhonePeApiError,
 }));
 
@@ -68,7 +69,7 @@ interface Executed {
  * A SQL mock that dispatches on the query TEXT -> this cron runs several different statements per pass.
  * A one-size mock cannot express "Pass A finds nothing, Pass B finds this row"
  */
-function makeSql(passBRows: unknown[], passDRows: unknown[] = []) {
+function makeSql(passBRows: unknown[], passDRows: unknown[] = [], passARows: unknown[] = []) {
   const executed: Executed[] = [];
 
   const fn = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
@@ -81,7 +82,7 @@ function makeSql(passBRows: unknown[], passDRows: unknown[] = []) {
       return Promise.resolve([{ soonest: null, in_flight: 0, paused_rechecks: passDRows.length }]);
     }
     // Pass A — notify candidates
-    if (text.includes("notified_at IS NULL")) return Promise.resolve([]);
+    if (text.includes("notified_at IS NULL")) return Promise.resolve(passARows);
     // Pass B — execute candidates
     if (text.includes("notified_at IS NOT NULL")) return Promise.resolve(passBRows);
     // Pass D — parked pauses to recheck
@@ -683,5 +684,110 @@ describe("Pass B — the 45-day dunning ladder", () => {
       ),
     ).toBe(false);
     expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+  });
+});
+
+describe("Pass A — a permanent rejection of a mandate PhonePe once confirmed alarms, never parks", () => {
+  // A misroute, a PhonePe-side bug or a config slip answers 4xx for EVERY due row at once -> parking them all
+  // cancelled stops billing for good. Only an unproven mandate is parked; a proven one is re-asked later
+  const dueForNotify = (extra: Record<string, unknown> = {}) => ({
+    id: "row-a",
+    user_id: "user-a",
+    merchant_subscription_id: SUB,
+    next_debit_at: new Date(Date.now() + 2 * HOUR).toISOString(),
+    current_period_end: new Date(Date.now() + 2 * HOUR).toISOString(),
+    phonepe_subscription_id: null,
+    debit_count: 0,
+    ...extra,
+  });
+  const notFound = () =>
+    new FakePhonePeApiError(
+      "PhonePe subscription status error 400",
+      400,
+      '{"code":"SUBSCRIPTION_NOT_FOUND"}',
+    );
+  const parked = (executed: Executed[]) =>
+    updates(executed).some((u) => u.text.includes("SET status = ?") && u.values.includes("cancelled"));
+  const backedOff = (executed: Executed[]) =>
+    updates(executed).find((u) => u.text.includes("SET next_debit_at = ?"));
+
+  it.each([
+    ["never debited", {}],
+    // phonepe_subscription_id is on ~every row in production, so it proves nothing -> trial parks stay as they were
+    ["never debited, even with PhonePe's subscription id on the row", { phonepe_subscription_id: "OMS123" }],
+  ])("still parks a mandate that was %s", async (_why, extra) => {
+    const { sql, executed } = makeSql([], [], [dueForNotify(extra)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockRejectedValue(notFound());
+
+    await runAutopayNotify(makeEnv());
+
+    expect(parked(executed)).toBe(true);
+  });
+
+  it.each([
+    ["the mandate has been debited once", { debit_count: 1 }],
+    ["the mandate has renewed", { debit_count: 3 }],
+  ])("does NOT park when %s — backs the row off and alarms", async (_why, extra) => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { sql, executed } = makeSql([], [], [dueForNotify(extra)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockRejectedValue(notFound());
+
+    await runAutopayNotify(makeEnv());
+
+    expect(parked(executed)).toBe(false);
+    expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
+    const backoff = backedOff(executed);
+    expect(backoff, "the row must leave Pass A's window, or it takes a slot every tick").toBeDefined();
+    // Pass A selects next_debit_at <= now + 24h -> the new value must sit past that window
+    expect(new Date(backoff!.values[0] as string).getTime()).toBeGreaterThan(Date.now() + 24 * HOUR);
+    expect(backoff!.text).toContain("status IN ('trialing', 'active')");
+    expect(errors.mock.calls.some((c) => String(c[0]).includes("ALARM"))).toBe(true);
+    errors.mockRestore();
+  });
+
+  it("does NOT park a proven mandate whose notify is rejected right after an ACTIVE status read", async () => {
+    const { sql, executed } = makeSql([], [], [dueForNotify({ debit_count: 1 })]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+    phonepe.notifyRedemption.mockRejectedValue(
+      new FakePhonePeApiError("PhonePe notify error 400", 400, "{}"),
+    );
+
+    await runAutopayNotify(makeEnv());
+
+    expect(parked(executed)).toBe(false);
+    expect(backedOff(executed)).toBeDefined();
+  });
+
+  it("parks a proven mandate once it is past the 45-day dunning wall", async () => {
+    const { sql, executed } = makeSql(
+      [],
+      [],
+      [
+        dueForNotify({
+          debit_count: 2,
+          current_period_end: new Date(Date.now() - 46 * 24 * HOUR).toISOString(),
+        }),
+      ],
+    );
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockRejectedValue(notFound());
+
+    await runAutopayNotify(makeEnv());
+
+    expect(parked(executed)).toBe(true);
+  });
+
+  it("selects the columns the proof needs", async () => {
+    const { sql, executed } = makeSql([]);
+    db.getDb.mockReturnValue(sql);
+
+    await runAutopayNotify(makeEnv());
+
+    const passA = executed.find((e) => e.text.includes("notified_at IS NULL"));
+    expect(passA?.text).toContain("debit_count");
+    expect(passA?.text).toContain("current_period_end");
   });
 });
