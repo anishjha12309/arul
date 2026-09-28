@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:arul/core/analytics/analytics_provider.dart';
+import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/auth/google_sign_in_init.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
@@ -59,6 +61,9 @@ class _FakeAuthService implements AuthService {
 
   @override
   void abandonPendingSignIn() => abandonCount++;
+
+  @override
+  Map<String, Object?> get attemptAnalytics => const {'attempt_n': 3};
 
   void settleLast(AuthResult result) => attempts.last.complete(result);
 
@@ -993,6 +998,34 @@ void main() {
       expect(await retry, isA<AuthSuccess>());
     });
 
+    test(
+      'the stall\'s login_failed carries the stalled attempt\'s context',
+      () async {
+        final analytics = _TrackRecorder();
+        final container = ProviderContainer(
+          overrides: [
+            authServiceProvider.overrideWithValue(auth),
+            analyticsServiceProvider.overrideWithValue(analytics),
+          ],
+        );
+        addTearDown(container.dispose);
+        final guarded = container.read(authControllerProvider.notifier)
+          ..stallLimit = const Duration(milliseconds: 120)
+          ..stallTick = const Duration(milliseconds: 10)
+          ..lifecycleProbe = (() => AppLifecycleState.resumed);
+
+        await guarded.signIn(AuthProvider.google);
+
+        final (event, properties) = analytics.events.single;
+        expect(event, 'login_failed');
+        expect(properties, {
+          'attempt_n': 3,
+          'provider': 'google',
+          'kind': 'stalled',
+        });
+      },
+    );
+
     test('a stall while NOT resumed (sheet up / backgrounded) extends '
         'instead of abandoning', () async {
       controller.lifecycleProbe = () => AppLifecycleState.paused;
@@ -1713,4 +1746,24 @@ void main() {
       expect(GoogleSignInInit.nonce, isNull);
     });
   });
+}
+
+class _TrackRecorder implements AnalyticsService {
+  final events = <(String, Map<String, Object?>?)>[];
+
+  @override
+  void track(String event, {Map<String, Object?>? properties}) =>
+      events.add((event, properties));
+
+  @override
+  void identify(String userId, {Map<String, Object?>? userProperties}) {}
+
+  @override
+  void screen(String name, {Map<String, Object?>? properties}) {}
+
+  @override
+  void reset() {}
+
+  @override
+  void register(String key, Object value) {}
 }

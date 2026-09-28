@@ -14,6 +14,7 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
@@ -225,6 +226,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     _dwellTimer = Timer(_dwellThreshold, () {
       if (!mounted) return;
       _engagedCount++;
+      JourneyStamps.noteCardEngaged();
       if (wallpaper.kind == WallpaperKind.live) _engagedLive++;
       if (index > _maxDepth) _maxDepth = index;
       _analytics.track(
@@ -375,6 +377,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           '${action.source}_blocked_premium',
           properties: {'wallpaper_id': w.id, 'category': w.category},
         );
+    JourneyStamps.noteGate(action.source, category: w.category, itemId: w.id);
     unawaited(context.push('/premium?source=${action.source}'));
   }
 
@@ -430,6 +433,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 'apply_blocked_premium',
                 properties: {'wallpaper_id': w.id, 'category': w.category},
               );
+          JourneyStamps.noteGate('apply', category: w.category, itemId: w.id);
           unawaited(context.push('/premium?source=apply'));
         } else {
           showArulToast(
@@ -466,6 +470,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
               'share_blocked_premium',
               properties: {'wallpaper_id': w.id, 'category': w.category},
             );
+        JourneyStamps.noteGate('share', category: w.category, itemId: w.id);
         unawaited(context.push('/premium?source=share'));
       } else {
         showArulToast(

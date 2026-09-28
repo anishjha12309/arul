@@ -1,13 +1,14 @@
 import 'dart:async';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter/foundation.dart';
 
 import 'analytics_events.dart';
 import 'analytics_service.dart';
 
 /// [AnalyticsService] backed by Firebase Analytics (Google Analytics 4).
 /// **NO `purchase` EVENT IS EMITTED ANYWHERE**, client or server (owner's call).
-/// The SDK needs snake_case names ≤40 chars and String/num values -> [_clean] coerces, never rejects.
+/// The SDK needs snake_case names ≤40 chars and String/num values -> [parametersFor] coerces, never rejects.
 class GoogleAnalyticsService implements AnalyticsService {
   GoogleAnalyticsService([FirebaseAnalytics? analytics])
     : _analytics = analytics ?? FirebaseAnalytics.instance;
@@ -18,7 +19,9 @@ class GoogleAnalyticsService implements AnalyticsService {
 
   @override
   void track(String event, {Map<String, Object?>? properties}) {
-    unawaited(_analytics.logEvent(name: event, parameters: _clean(properties)));
+    unawaited(
+      _analytics.logEvent(name: event, parameters: parametersFor(properties)),
+    );
 
     // Then the GA4 STANDARD event for ★ events -> only those can be marked as an Ads conversion.
     switch (event) {
@@ -58,6 +61,7 @@ class GoogleAnalyticsService implements AnalyticsService {
   /// as a user-scoped custom dimension. Names ≤24 chars, values ≤36 -> a language code fits both.
   @override
   void register(String key, Object value) {
+    if (kPostHogOnlyProperties.contains(key)) return;
     unawaited(_analytics.setUserProperty(name: key, value: value.toString()));
   }
 
@@ -68,11 +72,12 @@ class GoogleAnalyticsService implements AnalyticsService {
     return null;
   }
 
-  Map<String, Object>? _clean(Map<String, Object?>? props) {
+  @visibleForTesting
+  static Map<String, Object>? parametersFor(Map<String, Object?>? props) {
     if (props == null) return null;
     final out = <String, Object>{};
     props.forEach((key, value) {
-      if (value == null) return;
+      if (value == null || kPostHogOnlyProperties.contains(key)) return;
       out[key] = switch (value) {
         final bool b => b ? 1 : 0,
         String() || num() => value,

@@ -59,6 +59,9 @@ class _CountingAuthService implements AuthService {
   void abandonPendingSignIn() => abandonCalls++;
 
   @override
+  Map<String, Object?> get attemptAnalytics => const {};
+
+  @override
   Stream<AuthUserState> get authStateChanges => const Stream.empty();
 
   @override

@@ -49,6 +49,8 @@ class InstallReferrerService {
   static const _kInstallSource = 'install_utm_source';
   static const _kInstallCampaign = 'install_utm_campaign';
   static const _kInstallLink = 'install_link_kind';
+  static const _kClickToInstallS = 'click_to_install_s';
+  static const _kInstallToOpenS = 'install_to_open_s';
 
   /// The shareable Play Store link that embeds [code] for attribution.
   ///
@@ -203,7 +205,23 @@ class InstallReferrerService {
       _kInstallChannel: ?(link == null ? channel : '$channel+$link'),
       _kInstallSource: ?_nonEmpty(_prefs.getString(_kInstallSource)),
       _kInstallCampaign: ?_nonEmpty(_prefs.getString(_kInstallCampaign)),
+      _kClickToInstallS: ?_prefs.getInt(_kClickToInstallS),
+      _kInstallToOpenS: ?_prefs.getInt(_kInstallToOpenS),
     };
+  }
+
+  /// Play's own clocks: ad click to install start (0 = no click on record, so not stored), and
+  /// install start to this first open — a long gap is an install nobody meant to open yet.
+  Future<void> _storeInstallTimings({
+    required int clickS,
+    required int beginS,
+  }) async {
+    if (beginS <= 0) return;
+    if (clickS > 0 && beginS >= clickS) {
+      await _prefs.setInt(_kClickToInstallS, beginS - clickS);
+    }
+    final openS = DateTime.now().millisecondsSinceEpoch ~/ 1000 - beginS;
+    if (openS >= 0) await _prefs.setInt(_kInstallToOpenS, openS);
   }
 
   @visibleForTesting
@@ -267,8 +285,13 @@ class InstallReferrerService {
       answered = true;
     } else {
       try {
-        raw = (await PlayInstallReferrer.installReferrer).installReferrer;
+        final details = await PlayInstallReferrer.installReferrer;
+        raw = details.installReferrer;
         answered = true;
+        await _storeInstallTimings(
+          clickS: details.referrerClickTimestampSeconds,
+          beginS: details.installBeginTimestampSeconds,
+        );
       } catch (e) {
         // No Play Services, or not an install-from-Play — expected in dev; ignore.
         debugPrint('[InstallReferrer] unavailable (non-fatal): $e');

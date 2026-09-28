@@ -72,6 +72,12 @@ describe("POST /auth/login", () => {
         display_name: "Aisha",
         display_name_custom: false,
         referral_code: "ABCD2345",
+        is_internal: false,
+        account_age_d: 12,
+        sub_status: "expired",
+        trial_used: true,
+        paid_before: true,
+        referred: false,
       },
     ]);
 
@@ -81,12 +87,51 @@ describe("POST /auth/login", () => {
       accessToken: string;
       refreshToken: string;
       user: Record<string, unknown>;
+      analytics: Record<string, unknown>;
     };
     expect(typeof body.accessToken).toBe("string");
     expect(typeof body.refreshToken).toBe("string");
     expect(body.user.id).toBe(USER_ID);
     expect(body.user.email).toBe("aisha@example.com");
     expect(body.user.referralCode).toBe("ABCD2345");
+    // A returning account whose trial is spent -> the app stamps this on login_success
+    expect(body.analytics).toEqual({
+      new_user: false,
+      sub_status: "expired",
+      trial_used: true,
+      account_age_d: 12,
+      internal: false,
+      paid_before: true,
+      referred: false,
+    });
+  });
+
+  it("a returning account that never reached checkout reads sub_status none, trial not used", async () => {
+    vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+      sub: "google-sub-2",
+      email: "ravi@example.com",
+      email_verified: true,
+      name: "Ravi",
+      nonce: undefined,
+    });
+    const { env } = envWithSql([
+      {
+        id: USER_ID,
+        display_name: "Ravi",
+        referral_code: "WXYZ2345",
+        is_internal: true,
+        sub_status: null,
+        trial_used: null,
+      },
+    ]);
+    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+    const body = (await res.json()) as { analytics: Record<string, unknown> };
+    expect(body.analytics).toMatchObject({
+      new_user: false,
+      sub_status: "none",
+      trial_used: false,
+      internal: true,
+    });
   });
 
   // ── Trial-tombstone pre-seed on re-signup ──────────────────────────────────
@@ -151,6 +196,12 @@ describe("POST /auth/login", () => {
     // That row is what makes the next /payments/initiate a ₹199 TRANSACTION instead of a second free trial
     const preSeed = calls.find((c) => /INSERT INTO subscriptions/.test(c.text));
     expect(preSeed).toBeDefined();
+    // A re-signup after deleting the account is NEW but cannot trial -> it must not count as a trial miss
+    expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toMatchObject({
+      new_user: true,
+      sub_status: "expired",
+      trial_used: true,
+    });
     expect(preSeed!.text).toContain("'expired'");
     expect(preSeed!.values).toContain(USER_ID);
     expect(preSeed!.values).toContain(TRIAL_END);
@@ -178,6 +229,15 @@ describe("POST /auth/login", () => {
     const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
     expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
+    expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toEqual({
+      new_user: true,
+      sub_status: "none",
+      trial_used: false,
+      account_age_d: 0,
+      internal: false,
+      paid_before: false,
+      referred: false,
+    });
   });
 
   // ── Nonce ──────────────────────────────────────────────────────────────────

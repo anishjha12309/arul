@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/config/build_info.dart';
 import '../../../data/models/ringtone.dart';
@@ -433,6 +434,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
             'category': ringtone.category,
           },
         );
+    JourneyStamps.noteRingtonePreview();
 
     try {
       final url = ringtone.audioUrl(AppConfig.cdnBaseUrl);

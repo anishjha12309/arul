@@ -273,6 +273,9 @@ class _FakeAuth implements AuthService {
   void abandonPendingSignIn() {}
 
   @override
+  Map<String, Object?> get attemptAnalytics => const {};
+
+  @override
   Future<void> updateDisplayName(String name) async {}
 
   @override

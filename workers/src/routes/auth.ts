@@ -83,14 +83,29 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
                               ELSE COALESCE(${googleClaims.name ?? null}::text, display_name) END,
           email        = ${googleClaims.email}
       WHERE google_sub = ${googleClaims.sub}
-      RETURNING id, display_name, referral_code
+      RETURNING id, display_name, referral_code, is_internal,
+                floor(extract(epoch FROM now() - created_at) / 86400)::int AS account_age_d,
+                (SELECT s.status FROM subscriptions s WHERE s.user_id = users.id) AS sub_status,
+                (SELECT s.trial_end IS NOT NULL FROM subscriptions s WHERE s.user_id = users.id) AS trial_used,
+                (SELECT s.paid_paise > 0 FROM subscriptions s WHERE s.user_id = users.id) AS paid_before,
+                referred_by IS NOT NULL AS referred
     `;
 
+    let analytics: LoginAnalytics;
     if (updated.length > 0) {
       const row = updated[0];
       userId = row.id as string;
       displayName = row.display_name as string | null;
       referralCode = row.referral_code as string;
+      analytics = {
+        new_user: false,
+        sub_status: (row.sub_status as string | null) ?? "none",
+        trial_used: row.trial_used === true,
+        account_age_d: typeof row.account_age_d === "number" ? row.account_age_d : null,
+        internal: row.is_internal === true,
+        paid_before: row.paid_before === true,
+        referred: row.referred === true,
+      };
     } else {
       // New user -> generate a referral code and insert -> a unique-violation retries once with a fresh code
       const insertUser = async (): Promise<Array<Record<string, unknown>>> => {
@@ -147,11 +162,20 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
           ON CONFLICT (user_id) DO NOTHING
         `;
       }
+      analytics = {
+        new_user: true,
+        sub_status: tomb.length > 0 ? "expired" : "none",
+        trial_used: tomb.length > 0,
+        account_age_d: 0,
+        internal: false,
+        paid_before: false,
+        referred: false,
+      };
 
       // New user only -> attribute the install to a referrer -> best-effort, a bad code must never break sign-in
       if (incomingReferralCode) {
         try {
-          await captureReferral(sql, userId, incomingReferralCode);
+          analytics.referred = (await captureReferral(sql, userId, incomingReferralCode)) !== null;
         } catch (refErr) {
           console.error("[auth/login] referral capture failed (non-fatal):", refErr);
         }
@@ -170,6 +194,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         email: googleClaims.email ?? null,
         referralCode,
       },
+      analytics,
     });
   } catch (err) {
     console.error("[auth/login] DB error:", err);
@@ -275,6 +300,23 @@ export async function handleLogout(c: Context<{ Bindings: Env }>): Promise<Respo
   await denylistJti(env.KV, claims.jti, expEpoch);
 
   return c.json({ ok: true });
+}
+
+/**
+ * Spread verbatim onto the app's `login_success` -> the keys ARE PostHog property names.
+ * Analytics only: the premium gate stays `premiumPredicate`, never `sub_status`
+ * `trial_used` = this account can no longer start a trial -> the login→trial denominator excludes it
+ * `sub_status` is the row's status at sign-in, `none` = never reached checkout
+ */
+interface LoginAnalytics {
+  new_user: boolean;
+  sub_status: string;
+  trial_used: boolean;
+  account_age_d: number | null;
+  internal: boolean;
+  /** A debit has ever landed on this account -> a returning payer, not a prospect. */
+  paid_before: boolean;
+  referred: boolean;
 }
 
 function errorResponse(status: number, code: string, message: string): Response {

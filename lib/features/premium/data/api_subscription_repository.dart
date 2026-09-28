@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/api/api_client.dart';
 import '../../../data/models/subscription_model.dart';
 import '../domain/entitlement.dart';
@@ -25,6 +27,22 @@ class ApiSubscriptionRepository implements SubscriptionRepository {
       // degrade to free, never error.
       if (e.status == 404) return const Entitlement.none();
       rethrow;
+    }
+  }
+
+  @override
+  Future<void> notePaywallView(
+    String source,
+    Map<String, Object> context,
+  ) async {
+    try {
+      await _api.post(
+        '/me/paywall-view',
+        body: {'source': source, 'context': context},
+      );
+    } catch (e) {
+      // Analytics only -> a lost view is a missing row, never an error on the paywall.
+      debugPrint('[Paywall] view not recorded: $e');
     }
   }
 }

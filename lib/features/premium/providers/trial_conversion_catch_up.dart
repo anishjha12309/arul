@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
@@ -97,6 +98,7 @@ class TrialConversionCatchUp {
           'value': _monthlyPriceRupees(),
           // Separates recovered from in-session in every sink -> measurable without a second name.
           'late': true,
+          ...JourneyStamps.conversionProps(),
         },
       );
       markReported(orderId);

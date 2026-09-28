@@ -6,6 +6,7 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.content.ContentValues
 import android.content.Intent
 import android.content.SharedPreferences
@@ -16,8 +17,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.StatFs
+import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
@@ -28,6 +33,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.facebook.FacebookSdk
 import com.facebook.LoggingBehavior
 import com.facebook.applinks.AppLinkData
+import com.google.android.gms.common.GoogleApiAvailability
 import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
@@ -305,6 +311,8 @@ class MainActivity : FlutterFragmentActivity() {
                 // change with it, and nothing else in the payload says which phone this is.
                 "androidSdkInt" -> result.success(Build.VERSION.SDK_INT)
                 "dataSaverOn" -> result.success(dataSaverOn())
+                "analyticsFacts" -> result.success(analyticsFacts())
+                "networkFacts" -> result.success(networkFacts())
                 else -> result.notImplemented()
             }
         }
@@ -579,6 +587,77 @@ class MainActivity : FlutterFragmentActivity() {
             // Below 13 there is no runtime permission — the app-level switch is the only gate.
             !NotificationManagerCompat.from(this).areNotificationsEnabled()
         }
+
+    // Phone facts stamped onto the analytics events the app already sends (JourneyStamps). Each read
+    // fails soft to null -> a diagnostic column must never cost a launch.
+    // gmsVersion: Credential Manager's sign-in runs inside Play services, so an old or updating one
+    // is a sign-in suspect that no other property names.
+    // gmsStatus is Google's own availability verdict (0 = usable, 2 = update required …).
+    // bootAgeMin: minutes since the phone booted — a cold Play services times out its first
+    // credential queries. availMemMb/lowMemNow are the memory at this moment, not the phone's size.
+    private fun analyticsFacts(): Map<String, Any?> {
+        val availability = GoogleApiAvailability.getInstance()
+        val memory = ActivityManager.MemoryInfo()
+        val hasMemory = soft {
+            (getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memory)
+        } != null
+        val battery = soft { getSystemService(Context.BATTERY_SERVICE) as BatteryManager }
+        return mapOf(
+            "gmsVersion" to soft { availability.getApkVersion(this) }?.takeIf { it > 0 },
+            "gmsStatus" to soft { availability.isGooglePlayServicesAvailable(this) },
+            "playStoreVersion" to soft {
+                packageManager.getPackageInfo("com.android.vending", 0).let {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        it.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION")
+                        it.versionCode.toLong()
+                    }
+                }
+            },
+            "powerSaver" to soft {
+                (getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode
+            },
+            "bootAgeMin" to SystemClock.elapsedRealtime() / 60_000,
+            "availMemMb" to if (hasMemory) memory.availMem / (1L shl 20) else null,
+            "lowMemNow" to if (hasMemory) memory.lowMemory else null,
+            "freeStorageMb" to soft { StatFs(filesDir.absolutePath).availableBytes / (1L shl 20) },
+            "batteryPct" to soft {
+                battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            }?.takeIf { it in 0..100 },
+            "charging" to soft { battery?.isCharging },
+            "abi" to Build.SUPPORTED_ABIS.firstOrNull(),
+        )
+    }
+
+    private inline fun <T> soft(block: () -> T): T? = try {
+        block()
+    } catch (_: Throwable) {
+        null
+    }
+
+    // The link at this instant: the modem's downstream estimate (on cellular it is effectively the
+    // radio generation, readable without READ_PHONE_STATE) and whether Android has proven internet
+    // reachable over it. `connected` false = no active network at all.
+    private fun networkFacts(): Map<String, Any?> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return emptyMap()
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+                ?: return mapOf("connected" to false)
+            mapOf(
+                "connected" to true,
+                "downKbps" to caps.linkDownstreamBandwidthKbps,
+                "upKbps" to caps.linkUpstreamBandwidthKbps,
+                "validated" to caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+                "wifi" to caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+                "vpn" to caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
+                "metered" to !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+            )
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
 
     private fun dataSaverOn(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false

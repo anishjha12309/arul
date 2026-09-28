@@ -13,6 +13,68 @@ const kDeviceTierProperty = 'device_tier';
 /// The region `GET /geo` reported for this install, raw, or `none` -> how often the region default is right.
 const kGeoRegionProperty = 'geo_region';
 
+/// Diagnostics only PostHog reads (`JourneyStamps`, the Worker's login analytics). GA4 caps an event
+/// at 25 parameters and a project at 25 user properties, and shows neither until registered -> the
+/// GA4 sink drops these on events AND on `register`, so they never crowd out what its reports use.
+/// Keys GA4 already reports on (`upi_apps`, `paywall_source`, `low_ram`, `install_*`) stay off it.
+const kPostHogOnlyProperties = <String>{
+  'attempt_n',
+  'ms_since_launch',
+  'prev_outcome',
+  's_since_prev_outcome',
+  'left_since_prev',
+  'cancels_n',
+  'fails_n',
+  's_since_first_attempt',
+  's_since_install',
+  'app_paused_n',
+  'ms_since_resume',
+  'ms_credential',
+  'ms_exchange',
+  'net_kbps',
+  'net_up_kbps',
+  'net_validated',
+  'net_vpn',
+  'net_metered',
+  'new_user',
+  'sub_status',
+  'trial_used',
+  'account_age_d',
+  'internal',
+  'paid_before',
+  'referred',
+  'checkout_n',
+  'paywall_n',
+  'gate_kind',
+  'gate_category',
+  'gate_item',
+  'cards_n',
+  'previews_n',
+  's_since_login',
+  's_on_paywall',
+  's_tap_to_trial',
+  'click_to_install_s',
+  'install_to_open_s',
+  'launch_n',
+  'install_age_d',
+  'text_scale',
+  'sys_dark',
+  'first_frame_ms',
+  'ram_gb',
+  'soc',
+  'gms_version',
+  'gms_status',
+  'play_store_version',
+  'power_saver',
+  'boot_age_min',
+  'avail_mem_mb',
+  'low_mem_now',
+  'free_storage_mb',
+  'battery_pct',
+  'charging',
+  'abi',
+};
+
 /// Single interface for all analytics events.
 /// `analyticsServiceProvider` assembles PostHog, GA4 and Meta behind it -> call sites never change.
 abstract interface class AnalyticsService {

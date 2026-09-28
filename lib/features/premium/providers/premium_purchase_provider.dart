@@ -8,6 +8,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/crash/crash_reporter.dart';
@@ -188,6 +189,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'method': ?_checkoutMethod,
         'target_app': ?_checkoutTargetApp,
         'surface': ?_checkoutSurface,
+        ...JourneyStamps.conversionProps(),
       },
     );
     if (event == ArulEvents.trialStarted) {
@@ -210,6 +212,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'target_app': ?targetApp,
         'value': price,
         'surface': ?_checkoutSurface,
+        'checkout_n': ?JourneyStamps.nextCheckout(),
       },
     );
   }
@@ -369,6 +372,9 @@ class PremiumPurchase extends _$PremiumPurchase {
         'plan': 'monthly',
         'targetApp': ?targetApp,
         if (asQr) 'mode': 'qr',
+        // Stored beside the order -> a tap that is never approved still reaches PostHog through
+        // the Neon warehouse with its path, phone and link. Analytics only; the Worker drops junk.
+        'context': ?JourneyStamps.checkoutContext(),
       });
 
       final merchantOrderId = initResp['merchantOrderId'] as String? ?? '';

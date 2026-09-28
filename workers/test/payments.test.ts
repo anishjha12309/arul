@@ -977,6 +977,36 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
     expect(vi.mocked(revokeMandateTolerant)).not.toHaveBeenCalled();
   });
 
+  it("initiate stores the tap's analytics context, sanitised, and never refuses over it", async () => {
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[], [], []]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleInitiate(
+      makeInitiateCtx(env, token, {
+        plan: "monthly",
+        context: { paywall_source: "apply", checkout_n: 2, nested: { x: 1 }, "Bad Key": 1 },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(texts.find((t) => t.includes("INSERT INTO subscriptions"))).toContain(
+      "checkout_context         = EXCLUDED.checkout_context",
+    );
+    expect(texts.find((t) => t.includes("INSERT INTO subscriptions"))).toContain("::text::jsonb");
+    const upsertCall = (sql as unknown as { mock: { calls: unknown[][] } }).mock.calls.find(
+      (call) =>
+        Array.isArray(call[0]) && (call[0] as string[]).join("$").includes("INSERT INTO subscriptions"),
+    );
+    expect((upsertCall as unknown[]).slice(1)).toContain(
+      JSON.stringify({ paywall_source: "apply", checkout_n: 2 }),
+    );
+
+    const junk = await handleInitiate(makeInitiateCtx(env, token, { plan: "monthly", context: "nope" }));
+    expect(junk.status).toBe(200);
+  });
+
   it("initiate over an expired row (ladder exhausted) still revokes on the spot", async () => {
     const env = makeEnv();
     const { sql } = makeQueueSql([[], [lapsedTrial({ status: "expired" })], []]);

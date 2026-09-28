@@ -4,6 +4,7 @@
 
 import type { Context } from "hono";
 import type { Env } from "../env.js";
+import { sanitizeAnalyticsContext } from "../lib/analytics-context.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
@@ -73,7 +74,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string; targetApp?: string; mode?: string };
+  let body: { plan?: string; targetApp?: string; mode?: string; context?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -94,6 +95,8 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
 
   const qrMode = body.mode === "qr" && targetApp !== null;
   const recordedTargetApp = qrMode ? "qr" : (targetApp ?? "phonepe_page");
+  // Analytics only (PostHog's warehouse reads it) -> junk is dropped, never a reason to refuse a checkout
+  const checkoutContext = sanitizeAnalyticsContext(body.context);
 
   const sql = getDb(env);
   try {
@@ -152,11 +155,12 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       await tx`
         INSERT INTO subscriptions (
           user_id, status, plan, merchant_subscription_id, merchant_order_id, upi_target_app,
-          superseded_mandate_id
+          superseded_mandate_id, checkout_context
         )
         VALUES (
           ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
-          ${recordedTargetApp}, ${parkedMandateId}
+          ${recordedTargetApp}, ${parkedMandateId},
+          ${checkoutContext ? JSON.stringify(checkoutContext) : null}::text::jsonb
         )
         ON CONFLICT (user_id)
         DO UPDATE SET
@@ -166,6 +170,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           merchant_order_id        = EXCLUDED.merchant_order_id,
           upi_target_app           = EXCLUDED.upi_target_app,
           superseded_mandate_id    = EXCLUDED.superseded_mandate_id,
+          checkout_context         = EXCLUDED.checkout_context,
           phonepe_order_id         = NULL,
           updated_at               = now()
       `;

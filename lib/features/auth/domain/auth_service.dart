@@ -146,6 +146,10 @@ abstract interface class AuthService {
   /// Called by the stall guard before it frees the UI -> a revived zombie cannot race its replacement.
   void abandonPendingSignIn();
 
+  /// The current attempt's analytics context, for an outcome recorded outside the service (the
+  /// stall guard's `login_failed`) -> it reads the same as every outcome the service records.
+  Map<String, Object?> get attemptAnalytics;
+
   /// Update the display name — the trimmed [name] goes to the Worker, then out on [authStateChanges].
   /// Throws on failure so the caller can surface it.
   Future<void> updateDisplayName(String name);

@@ -3,6 +3,7 @@ package com.hsrutility.arul.payments
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -53,6 +54,13 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
         when (call.method) {
             "listUpiApps" -> result.success(scanUpiApps())
 
+            // The same offer set with no labels or icons -> cheap enough for the analytics stamp,
+            // which must never pay the PNG renders the picker needs.
+            "listUpiPackages" -> {
+                val pm = activity.packageManager
+                result.success(offeredPackages(pm, mandateHandlers(pm)).map { it.first })
+            }
+
             "launch" -> {
                 val url = call.argument<String>("url")
                 val pkg = call.argument<String>("package")
@@ -84,8 +92,19 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
     private fun offeredUpiApps(
         pm: PackageManager,
         handlers: Set<String>?,
-    ): List<Map<String, Any?>> {
-        val apps = mutableListOf<Map<String, Any?>>()
+    ): List<Map<String, Any?>> = offeredPackages(pm, handlers).map { (pkg, info) ->
+        mapOf(
+            "package" to pkg,
+            "label" to pm.getApplicationLabel(info).toString(),
+            "icon" to iconPng(pm, pkg),
+        )
+    }
+
+    private fun offeredPackages(
+        pm: PackageManager,
+        handlers: Set<String>?,
+    ): List<Pair<String, ApplicationInfo>> {
+        val apps = mutableListOf<Pair<String, ApplicationInfo>>()
         for (pkg in MANDATE_APPS) {
             if (handlers != null && pkg !in handlers) {
                 Log.i(TAG, "$pkg is installed but resolves no mandate -> not offered")
@@ -99,13 +118,7 @@ class UpiIntentChannel(private val activity: Activity) : MethodChannel.MethodCal
                 Log.w(TAG, "getApplicationInfo failed for $pkg", t)
                 continue
             }
-            apps.add(
-                mapOf(
-                    "package" to pkg,
-                    "label" to pm.getApplicationLabel(info).toString(),
-                    "icon" to iconPng(pm, pkg),
-                ),
-            )
+            apps.add(pkg to info)
         }
         return apps
     }

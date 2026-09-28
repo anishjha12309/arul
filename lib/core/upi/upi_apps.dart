@@ -80,6 +80,26 @@ class UpiApps {
     }
   }
 
+  /// The offered apps as [analyticsCodes] — the probe WITHOUT labels and icons, so the analytics
+  /// stamp never pays the picker's PNG renders. Null when the probe itself failed.
+  static Future<String?> codes() async {
+    try {
+      final packages = await _channel.invokeListMethod<String>(
+        'listUpiPackages',
+      );
+      return packages == null ? null : analyticsCodes(packages);
+    } catch (e) {
+      debugPrint('[UpiApps] listUpiPackages failed: $e');
+      return null;
+    }
+  }
+
+  /// Sorted codes joined by commas, `none` for an empty set -> one breakdown value per app mix.
+  static String analyticsCodes(Iterable<String> packages) {
+    final codes = [for (final p in packages) upiAppCode(p)]..sort();
+    return codes.isEmpty ? 'none' : codes.join(',');
+  }
+
   /// [apps] with [remembered] floated to the head, everything below it in channel order.
   ///
   /// Pure, and here rather than in the screen so it can be pinned: one personal row, then the

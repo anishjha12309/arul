@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/analytics/analytics_provider.dart';
 import '../core/analytics/analytics_service.dart';
+import '../core/analytics/journey_stamps.dart';
 import '../core/config/build_info.dart';
 import '../core/crash/crash_provider.dart';
 import '../core/deeplink/deep_link_locale_sync.dart';
@@ -102,9 +103,38 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     unawaited(
       DeviceQuality.tier.then((tier) {
         if (!mounted) return;
-        ref
-            .read(analyticsServiceProvider)
-            .register(kDeviceTierProperty, tier.name);
+        final analytics = ref.read(analyticsServiceProvider)
+          ..register(kDeviceTierProperty, tier.name)
+          ..register('low_ram', tier == DeviceTier.low);
+        if (DeviceQuality.facts['totalMem'] case final int bytes
+            when bytes > 0) {
+          analytics.register('ram_gb', (bytes / (1 << 30)).round());
+        }
+        if (DeviceQuality.facts['soc'] case final String soc
+            when soc.isNotEmpty) {
+          analytics.register('soc', soc);
+        }
+      }),
+    );
+    unawaited(
+      JourneyStamps.onDeviceFacts.then((facts) {
+        if (!mounted) return;
+        facts.forEach(ref.read(analyticsServiceProvider).register);
+      }),
+    );
+    // `main()` to the first frame, on every later event: a slow phone's wait before the wall even
+    // draws, which `ms_since_launch` on the sign-in events cannot separate from the sheet's.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(analyticsServiceProvider)
+          .register('first_frame_ms', JourneyStamps.msSinceLaunch);
+    });
+    // A signed-out launch starts the probe from the sign-in attempt, behind Google's surface; this
+    // is the fallback for a signed-in launch, late enough to stay off the first frames.
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        if (mounted) unawaited(JourneyStamps.probeDeviceFacts());
       }),
     );
   }

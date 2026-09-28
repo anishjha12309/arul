@@ -15,6 +15,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/data_saver.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -249,6 +250,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   void _trackPaywallShown(Map<String, Object?> properties) {
     final signature = '${properties['variant']}/${properties['upi_apps']}';
     if (_paywallShown == signature) return;
+    // Once per screen, not per signature: a changed app set is the same view, re-described.
+    final firstView = _paywallShown == null;
+    if (firstView) JourneyStamps.notePaywallView(widget.source);
     _paywallShown = signature;
     // Out of the build phase — `track` reaches a platform channel, which a widget must never do
     // while it is laying out.
@@ -257,6 +261,18 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       ref
           .read(analyticsServiceProvider)
           .track('paywall_shown', properties: properties);
+      // Null context = the stamps never started (a test) -> nothing real to record.
+      final context = JourneyStamps.checkoutContext();
+      if (!firstView || context == null) return;
+      unawaited(
+        ref
+            .read(subscriptionRepositoryProvider)
+            .notePaywallView(widget.source, {
+              for (final MapEntry(:key, :value) in properties.entries)
+                key: ?value,
+              ...context,
+            }),
+      );
     });
   }
 

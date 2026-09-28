@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -90,6 +91,12 @@ Future<bool> ensurePremium(
   ref
       .read(analyticsServiceProvider)
       .track('${source}_blocked_premium', properties: properties);
+  JourneyStamps.noteGate(
+    source,
+    category: properties?['category'] as String?,
+    itemId:
+        (properties?['wallpaper_id'] ?? properties?['ringtone_id']) as String?,
+  );
 
   if (context.mounted) {
     unawaited(context.push('/premium?source=$source'));

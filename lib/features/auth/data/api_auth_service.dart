@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_service.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/google_sign_in_init.dart';
 import '../../../core/config/build_info.dart';
@@ -282,15 +283,14 @@ class ApiAuthService implements AuthService {
     _analytics.track(
       'login_failed',
       properties: {
-        ..._installProps,
+        ...attemptAnalytics,
         'provider': 'google',
         'kind': kind.name,
         'error': ?_trimForAnalytics(error),
         'gis_code': ?gisCode,
-        'surface': ?_surface,
-        'ms_since_authenticate': ?_msSinceAuthenticate,
       },
     );
+    _noteOutcome('failed:${kind.name}');
     return AuthFailure(message: message, kind: kind);
   }
 
@@ -335,25 +335,61 @@ class ApiAuthService implements AuthService {
     msToSurface: _msToSurface,
   );
 
-  /// Where the install came from and whether the phone is on the poster rule — the two cuts
-  /// PostHog cannot make from its own properties, on every sign-in event rather than a new one.
-  Map<String, Object> get _installProps => {
+  /// The cuts PostHog cannot make from its own properties, on every sign-in event rather than a new
+  /// one: where the install came from, the poster rule, which try of the install this is, how long
+  /// the person had been in the app, and the link as it stood behind Google's surface.
+  Map<String, Object> get _attemptProps => {
     ...?_referral?.attributionProps,
     'low_ram': ?DeviceMemory.resolved,
+    if (_attemptN > 0) 'attempt_n': _attemptN,
+    'ms_since_launch': JourneyStamps.msSinceLaunch,
+    ..._history,
+    ...JourneyStamps.networkFacts,
+  };
+
+  /// 0 until this attempt's `login_attempt` fires -> a failure before it names no try.
+  int _attemptN = 0;
+
+  /// Frozen at `login_attempt` -> every event of the attempt reports what came BEFORE it.
+  Map<String, Object> _history = const {};
+
+  void _noteOutcome(String outcome) => JourneyStamps.noteSignInOutcome(outcome);
+
+  @override
+  Map<String, Object?> get attemptAnalytics => {
+    ..._attemptProps,
+    'surface': ?_surface,
+    'ms_since_authenticate': ?_msSinceAuthenticate,
+    'ms_to_surface': ?_msToSurface,
   };
 
   Map<String, Object?> _cancelProperties({
     String? description,
     SignInOutcome? outcome,
   }) => {
-    ..._installProps,
+    ...attemptAnalytics,
     'provider': 'google',
-    'surface': ?_surface,
-    'ms_since_authenticate': ?_msSinceAuthenticate,
-    'ms_to_surface': ?_msToSurface,
     'nudge': (outcome ?? _outcomeFor(description)).name,
     'description': ?_trimForAnalytics(description),
   };
+
+  /// The Worker's `analytics` object from `POST /auth/login`, spread onto `login_success` as-is:
+  /// scalar values only, strings capped for GA4, so a server change can never break the event.
+  @visibleForTesting
+  static Map<String, Object> loginAnalytics(Object? raw) {
+    if (raw is! Map) return const {};
+    final out = <String, Object>{};
+    for (final MapEntry(:key, :value) in raw.entries) {
+      if (key is! String || out.length >= 12) continue;
+      switch (value) {
+        case bool() || num():
+          out[key] = value as Object;
+        case final String s:
+          out[key] = _trimForAnalytics(s)!;
+      }
+    }
+    return out;
+  }
 
   static String? _trimForAnalytics(String? s) =>
       s == null || s.length <= 100 ? s : s.substring(0, 100);
@@ -485,6 +521,9 @@ class ApiAuthService implements AuthService {
     // surface, and a fresh attempt never inherits a stale pill subtitle.
     _authClock = null;
     _surface = null;
+    _attemptN = 0;
+    _history = const {};
+    JourneyStamps.forgetNetwork();
     // Drops any reading a previous attempt left behind -> a config-guard failure here can never
     // report the last attempt's wait for Google.
     _surfaceClock.endAttempt();
@@ -508,10 +547,12 @@ class ApiAuthService implements AuthService {
         afterOffline: afterOffline,
       );
       final buttonSurface = buttonSurfaceFor(reopened: reopened);
+      _history = JourneyStamps.signInHistory();
+      _attemptN = JourneyStamps.nextAttempt() ?? 0;
       _analytics.track(
         'login_attempt',
         properties: {
-          ..._installProps,
+          ..._attemptProps,
           'provider': 'google',
           'surface': useSheet ? sheetSurface : buttonSurface,
           'auto': auto,
@@ -532,7 +573,7 @@ class ApiAuthService implements AuthService {
           _analytics.track(
             'login_surface_shown',
             properties: {
-              ..._installProps,
+              ..._attemptProps,
               'provider': 'google',
               'surface': ?_surface,
               'auto': auto,
@@ -540,6 +581,10 @@ class ApiAuthService implements AuthService {
             },
           );
           SignInPhase.signals.add(SignInSignal.surfaceShown);
+          // Only now, with Google's request already out: a channel call queued BEFORE it would
+          // hold the credential request behind our own native work on the main thread.
+          unawaited(JourneyStamps.probeNetwork());
+          unawaited(JourneyStamps.probeDeviceFacts());
         },
       );
       final account = await resolveGoogleCredential<GoogleSignInAccount>(
@@ -566,6 +611,8 @@ class ApiAuthService implements AuthService {
         ),
       );
       BootTrace.mark('signIn: credential in hand (surface=$_surface)');
+      // Google's share of the attempt; `ms_exchange` below is ours -> the two never blur again.
+      final msCredential = _msSinceAuthenticate;
 
       if (attempt != _attemptSeq) return const AuthCancelled();
 
@@ -597,6 +644,7 @@ class ApiAuthService implements AuthService {
       // subtitle says so from here (see SignInPhase).
       SignInPhase.exchanging.value = true;
       var exchangeRetried = false;
+      final exchangeClock = Stopwatch()..start();
       final data = await postWithNetworkRetry(
         () => _api.post(
           '/auth/login',
@@ -613,6 +661,7 @@ class ApiAuthService implements AuthService {
         },
       );
       BootTrace.mark('signIn: POST /auth/login done');
+      final msExchange = exchangeClock.elapsedMilliseconds;
 
       final accessToken = data['accessToken'] as String?;
       final refreshToken = data['refreshToken'] as String?;
@@ -672,19 +721,33 @@ class ApiAuthService implements AuthService {
         email: email,
       );
 
+      final server = loginAnalytics(data['analytics']);
       _analytics.identify(
         userId,
         userProperties: {
           'display_name': displayName,
           'provider': 'google',
           'app_language': ?_appLanguage?.call(),
+          // Person properties ride the identify the app already sends: the server-side
+          // subscription events carry no channel or phone, and break down by these instead.
+          ...?_referral?.attributionProps,
+          'device_tier': ?(DeviceQuality.isResolved
+              ? DeviceQuality.resolved.name
+              : null),
+          ...JourneyStamps.deviceFacts,
+          'is_internal': ?server['internal'],
         },
       );
       _crash.setUserId(userId);
+      JourneyStamps.markLogin();
+      _noteOutcome('success');
       _analytics.track(
         ArulEvents.loginSuccess,
         properties: {
-          ..._installProps,
+          ..._attemptProps,
+          ...server,
+          'ms_credential': ?msCredential,
+          'ms_exchange': msExchange,
           'provider': 'google',
           // Which Google surface landed it, and how long the attempt took —
           // the pair that says whether sheet-first is working.
@@ -732,6 +795,7 @@ class ApiAuthService implements AuthService {
               outcome: outcome,
             ),
           );
+          _noteOutcome('cancelled:${outcome.name}');
         case AuthFailure(:final kind, :final message):
           _googleFailure(
             kind,
@@ -773,6 +837,7 @@ class ApiAuthService implements AuthService {
             outcome: outcome,
           ),
         );
+        _noteOutcome('cancelled:${outcome.name}');
         return AuthCancelled(outcome: outcome);
       }
       debugPrint('[ApiAuthService] unexpected error: $e');
@@ -843,6 +908,7 @@ class ApiAuthService implements AuthService {
         'login_cancelled',
         properties: _cancelProperties(description: e.message),
       );
+      _noteOutcome('cancelled:platform');
       return const AuthFailure(
         message: 'Sign-in was cancelled.',
         kind: AuthFailureKind.unknown,

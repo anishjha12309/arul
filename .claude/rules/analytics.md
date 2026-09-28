@@ -3,6 +3,7 @@ description: One conversion action has one data source; the PostHog allow-list i
 paths:
   - "lib/core/analytics/**"
   - "workers/src/lib/posthog.ts"
+  - "workers/src/lib/analytics-context.ts"
 ---
 
 - **Never call SDKs from widgets — always `AnalyticsService`.** The one deliberate exception is the
@@ -15,6 +16,8 @@ paths:
 - **The PostHog allow-list is default-deny and pinned as an exact set** by
   `test/core/analytics_gating_test.dart`. A new `track()` call site costs nothing until it is added.
   Re-adding an event is a decision, not a cleanup.
+- **The PostHog event count is fixed (owner): new signal is a property, super property or person
+  property (`JourneyStamps`), never a capture.** Native probes start only after Google's surface is up.
 - **Widening the cohort rate is safe; narrowing is not.** The stored value is the draw, not a
   boolean, so raising the rate only adds installs while lowering it drops every install whose draw
   exceeds the new rate and makes any spanning cohort discontinuous.
@@ -26,4 +29,5 @@ paths:
   invisible to every GA4 report until it is registered as a custom dimension.
 
 Read [docs/analytics-events.md](../../docs/analytics-events.md) for the event semantics and
-[docs/analytics-ops.md](../../docs/analytics-ops.md) for the consoles.
+[docs/analytics-ops.md](../../docs/analytics-ops.md) for the consoles; new signal:
+[docs/analytics-signal.md](../../docs/analytics-signal.md).

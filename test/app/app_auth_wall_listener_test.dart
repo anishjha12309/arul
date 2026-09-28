@@ -61,6 +61,9 @@ class _StreamAuthService implements AuthService {
   void abandonPendingSignIn() {}
 
   @override
+  Map<String, Object?> get attemptAnalytics => const {};
+
+  @override
   Future<void> signOut() async {}
 
   @override

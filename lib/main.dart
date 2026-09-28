@@ -18,6 +18,7 @@ import 'app/app.dart';
 import 'core/analytics/analytics_cohort.dart';
 import 'core/analytics/analytics_events.dart';
 import 'core/analytics/analytics_service.dart';
+import 'core/analytics/journey_stamps.dart';
 import 'core/analytics/posthog_analytics_service.dart';
 import 'core/api/api_client.dart';
 import 'core/auth/google_sign_in_init.dart';
@@ -172,6 +173,10 @@ Future<void> _startPostHog(
     kLanguageSourceProperty: origin.source.key,
     kGeoRegionProperty: origin.geoRegion,
     ...experiments.analyticsProperties,
+    ...JourneyStamps.launchProps,
+    // Persisted by an earlier launch's referrer read -> every event of a later launch carries the
+    // channel, the trial and the applies included. A first launch registers it when the read lands.
+    ...InstallReferrerService(prefs).attributionProps,
     // Only when the probe has ALREADY answered — priming an unresolved `mid` would stamp a guess
     // on the pre-login events. `app.dart` registers the real rung the moment it lands, and
     // `register` overwrites a primed key, so the two can never disagree.
@@ -245,6 +250,7 @@ Future<void> _startApp() async {
   BootTrace.mark('SharedPreferences start');
   final prefs = await SharedPreferences.getInstance();
   BootTrace.mark('SharedPreferences done');
+  JourneyStamps.start(prefs);
 
   await PlayInstall.resolved;
   debugPrint(
@@ -303,7 +309,13 @@ Future<void> _startApp() async {
   if (deferredTarget != null) ArulDeepLink.requestTarget(deferredTarget);
   final deferredLang = referrer.pendingLang;
   if (deferredLang != null) ArulDeepLink.requestLocale(deferredLang);
-  unawaited(referrer.captureOnce());
+  unawaited(
+    referrer.captureOnce().whenComplete(
+      () => referrer.attributionProps.forEach(
+        const PostHogAnalyticsService().register,
+      ),
+    ),
+  );
 
   // Ad installs Play's referrer cannot describe arrive over the network instead — Google App
   // Campaigns hand their App URL to Analytics for Firebase, Meta ads to the SDK's deferred App Link

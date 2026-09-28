@@ -86,7 +86,8 @@ outcome is a process that died under Google's surface — the only way that loss
 ## PostHog is the journey view — keep it that way
 
 **Cost sets the COHORT** (PostHog bills per event); **readability sets the LIST** — re-adding an event is
-a decision, not a cleanup.
+a decision, not a cleanup. **The event count is fixed (owner): new signal rides existing events** as a
+property, a `register()` super property or a person property — [analytics-signal.md](analytics-signal.md).
 
 - **`AnalyticsCohort` gates `Posthog().setup()` itself.** The stored value is the **draw, not a
   boolean**, so raising the rate only ever adds installs; lowering it drops every install whose draw

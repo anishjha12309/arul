@@ -12,6 +12,7 @@ import { premiumPredicate } from "../lib/entitlement.js";
 import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
+import { type AnalyticsContext, sanitizeAnalyticsContext } from "../lib/analytics-context.js";
 
 /**
  * The `user` shape is UNCHANGED -> old builds must keep parsing it -> never rename a key here
@@ -534,6 +535,51 @@ export async function handlePushOpened(c: Context<{ Bindings: Env }>): Promise<R
     c.executionCtx.waitUntil(sql.end());
   }
 }
+
+/**
+ * One paywall view -> `paywall_views`, per user per gate, which PostHog reads through its warehouse:
+ * the people who look and never tap stay visible without a PostHog event.
+ * Analytics only -> the app fires it off the paywall's first frame and ignores every answer.
+ */
+export async function handlePaywallView(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let source: string | null = null;
+  let context: AnalyticsContext | null = null;
+  try {
+    const body = (await c.req.json()) as { source?: unknown; context?: unknown };
+    if (typeof body.source === "string" && PAYWALL_SOURCE_RE.test(body.source)) source = body.source;
+    context = sanitizeAnalyticsContext(body.context);
+  } catch {
+    // fall through: no source
+  }
+  if (!source) return errorResponse(400, "invalid_body", "source is required");
+
+  const sql = getDb(env);
+  try {
+    // Bound as TEXT, then cast: postgres.js JSON-encodes a parameter it sees typed jsonb, so a
+    // pre-stringified value would land as a jsonb STRING (PGlite does not reproduce this)
+    await sql`
+      INSERT INTO paywall_views (user_id, source, context)
+      VALUES (${sub}, ${source}, ${context ? JSON.stringify(context) : null}::text::jsonb)
+      ON CONFLICT (user_id, source)
+      DO UPDATE SET views   = paywall_views.views + 1,
+                    last_at = now(),
+                    context = EXCLUDED.context
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/paywall-view] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+/** The app's `?source=` values (apply, share, ringtone_set, trial_nudge, settings, push, …). */
+const PAYWALL_SOURCE_RE = /^[a-z_]{1,40}$/;
 
 /** A campaign id is always a uuid -> anything else is a malformed payload, never a lookup. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

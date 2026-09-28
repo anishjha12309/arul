@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/analytics/analytics_cohort.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/providers/locale_provider.dart';
@@ -488,13 +489,17 @@ class AuthController extends _$AuthController {
 
   /// Discards the zombie's eventual result and counts the stall.
   void _abandonStalled({required String kind}) {
-    ref.read(authServiceProvider).abandonPendingSignIn();
+    final auth = ref.read(authServiceProvider);
+    // Read BEFORE abandoning: the context belongs to the attempt that stalled.
+    final context = auth.attemptAnalytics;
+    auth.abandonPendingSignIn();
     ref
         .read(analyticsServiceProvider)
         .track(
           'login_failed',
-          properties: {'provider': 'google', 'kind': kind},
+          properties: {...context, 'provider': 'google', 'kind': kind},
         );
+    JourneyStamps.noteSignInOutcome('failed:$kind');
   }
 
   /// A failure from the auto-launched attempt, held until a screen can show it.

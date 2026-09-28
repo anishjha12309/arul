@@ -114,8 +114,13 @@ const ROUTES = [
   { when: ["db/schema/**", "db/seed.sql"], docs: ["docs/data-model.md", "docs/architecture.md §Schema"] },
   { when: ["lib/features/notifications/**"], docs: ["docs/notifications.md"] },
   {
-    when: ["lib/core/analytics/**", "workers/src/lib/posthog.ts"],
-    docs: ["docs/analytics-events.md", "docs/analytics-ops.md", "docs/google-ads.md"],
+    when: ["lib/core/analytics/**", "workers/src/lib/posthog.ts", "workers/src/lib/analytics-context.ts"],
+    docs: [
+      "docs/analytics-events.md",
+      "docs/analytics-signal.md",
+      "docs/analytics-ops.md",
+      "docs/google-ads.md",
+    ],
   },
   {
     when: [

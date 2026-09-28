@@ -16,6 +16,7 @@ import '../../../app/widgets/arul_earn_button.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/haptics/arul_haptics.dart';
@@ -209,6 +210,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
             ref
                 .read(analyticsServiceProvider)
                 .track('ringtone_set_blocked_premium');
+            JourneyStamps.noteGate('ringtone_set');
             context.push('/premium?source=ringtone_set');
           } else {
             showArulToast(
