@@ -641,6 +641,37 @@ void main() {
       expect(controller.autoSignIn(AuthProvider.google), isNull);
       expect(auth.attempts, hasLength(1));
     });
+
+    test('a link that returned behind another app — data turned on in '
+        'Settings — fires on the return instead of being dropped', () async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(const AuthCancelled(outcome: SignInOutcome.reauthFailed));
+      await first;
+      controller.lifecycleProbe = () => AppLifecycleState.paused;
+      expect(reconnect(), isFalse);
+
+      controller.lifecycleProbe = () => AppLifecycleState.resumed;
+      expect(
+        controller.noteAppLifecycle(AppLifecycleState.resumed),
+        isTrue,
+        reason: 'the return picks up the deferred reconnect, however short',
+      );
+      expect(controller.autoSignIn(AuthProvider.google), isNotNull);
+      expect(auth.reconnectedFlags, [false, true]);
+      auth.settleLast(const AuthCancelled());
+    });
+
+    test('a deferred reconnect dies with the next offline reading', () async {
+      await coldStartFailed();
+      controller.lifecycleProbe = () => AppLifecycleState.paused;
+      expect(reconnect(), isFalse);
+      clock = t0.add(const Duration(seconds: 30));
+      expect(controller.noteConnectivity(online: false), isFalse);
+
+      controller.lifecycleProbe = () => AppLifecycleState.resumed;
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
+      expect(auth.attempts, hasLength(1));
+    });
   });
 
   // Offline, Google's sheet only draws to fail, so the launch is HELD until the link is up. Pinned:
@@ -780,6 +811,88 @@ void main() {
       unawaited(controller.autoSignIn(AuthProvider.google, offline: true));
       await controller.signOut();
       expect(controller.autoHeldOffline, isFalse);
+      expect(controller.heldForNetwork, isFalse);
+    });
+
+    Future<void> spentLaunch() async {
+      final first = controller.autoSignIn(AuthProvider.google)!;
+      auth.settleLast(const AuthCancelled(outcome: SignInOutcome.reauthFailed));
+      await first;
+    }
+
+    test('an offline pill tap is parked and opens nothing', () async {
+      await spentLaunch();
+      controller.holdTapForNetwork();
+      expect(controller.heldForNetwork, isTrue);
+      expect(controller.autoHeldOffline, isFalse);
+      // A resume while still offline keeps it parked.
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isTrue);
+      expect(controller.autoSignIn(AuthProvider.google, offline: true), isNull);
+      expect(controller.heldForNetwork, isTrue);
+      expect(auth.attempts, hasLength(1));
+    });
+
+    test('the link coming up releases a parked tap ONCE, as the PICKER, '
+        'stamped after_offline', () async {
+      await spentLaunch();
+      controller.holdTapForNetwork();
+
+      expect(controller.noteConnectivity(online: true), isTrue);
+      final tap = controller.autoSignIn(AuthProvider.google);
+      expect(tap, isNotNull);
+      expect(
+        auth.autoFlags,
+        [true, false],
+        reason: 'the tap asked for the picker — never redraw the sheet',
+      );
+      expect(auth.afterOfflineFlags, [false, true]);
+      expect(controller.heldForNetwork, isFalse);
+
+      auth.settleLast(const AuthCancelled());
+      await tap;
+      expect(controller.autoSignIn(AuthProvider.google), isNull);
+      expect(auth.attempts, hasLength(2));
+    });
+
+    test('a parked tap behind another app waits for the return', () async {
+      await spentLaunch();
+      controller.holdTapForNetwork();
+      lifecycle = AppLifecycleState.paused;
+      expect(controller.noteConnectivity(online: true), isFalse);
+
+      lifecycle = AppLifecycleState.resumed;
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isTrue);
+      expect(controller.autoSignIn(AuthProvider.google), isNotNull);
+      expect(auth.autoFlags, [true, false]);
+    });
+
+    test('a tap over a held LAUNCH keeps the launch: it releases as the '
+        'sheet, its first draw', () {
+      controller.autoSignIn(AuthProvider.google, offline: true);
+      controller.holdTapForNetwork();
+      expect(controller.noteConnectivity(online: true), isTrue);
+      expect(controller.autoSignIn(AuthProvider.google), isNotNull);
+      expect(auth.autoFlags, [true]);
+      expect(auth.afterOfflineFlags, [true]);
+    });
+
+    test('a tap that goes through ends the parked one', () async {
+      await spentLaunch();
+      controller.holdTapForNetwork();
+      final tap = controller.signIn(AuthProvider.google);
+      expect(controller.heldForNetwork, isFalse);
+      auth.settleLast(const AuthCancelled());
+      await tap;
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(auth.attempts, hasLength(2));
+    });
+
+    test('a signed-in user is never handed the parked picker', () async {
+      await spentLaunch();
+      controller.holdTapForNetwork();
+      auth.authed = true;
+      expect(controller.noteConnectivity(online: true), isFalse);
+      expect(controller.noteAppLifecycle(AppLifecycleState.resumed), isFalse);
     });
   });
 
@@ -904,6 +1017,10 @@ void main() {
     test('the picker reopened after add-account names itself, and an OS strip '
         'of it is still a strip', () {
       expect(ApiAuthService.buttonSurfaceFor(reopened: false), 'button');
+      expect(
+        ApiAuthService.buttonSurfaceFor(reopened: false, afterOffline: true),
+        'button_after_offline',
+      );
       expect(
         ApiAuthService.buttonSurfaceFor(reopened: true),
         'button_after_add_account',

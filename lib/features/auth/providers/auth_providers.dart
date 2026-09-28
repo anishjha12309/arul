@@ -171,8 +171,21 @@ class AuthController extends _$AuthController {
   /// ([noteAppLifecycle]); dropped when the person starts an attempt, since the pill is never blocked.
   bool _heldOffline = false;
 
+  /// A PILL TAP made while the phone had no network, parked instead of opening Google: offline the
+  /// picker fails in ~2 s with `[16] Account reauth failed`, and people tapped it again and again.
+  /// Released like [_heldOffline], but as the BUTTON flow the tap asked for, never the sheet.
+  bool _heldTap = false;
+
+  /// An online reading that met the reconnect rule while our UI was behind another app — Settings,
+  /// where the data toggle is. Kept for the return instead of dropped; cleared by the next offline
+  /// reading or settle.
+  bool _reconnectDeferred = false;
+
   /// True while the wall's automatic sheet is waiting for the network — the wall's wait line.
   bool get autoHeldOffline => _heldOffline;
+
+  /// True while ANY attempt waits for the network — the automatic launch or a parked tap.
+  bool get heldForNetwork => _heldOffline || _heldTap;
 
   /// One lifecycle transition, from the sign-in wall's observer. Returns true when the caller should
   /// fire the automatic attempt again — the SCREEN stays the single joiner, so the toast and route
@@ -191,7 +204,11 @@ class AuthController extends _$AuthController {
         // A held launch goes on ANY resume — pulling down the shade to turn data on is an
         // inactive->resumed that no away rule would count. [autoSignIn] re-reads the link and simply
         // holds again if it is still down, so a resume can never open a sheet offline.
-        if (_heldOffline) return _heldMayGo();
+        if (_heldOffline || _heldTap) return _heldMayGo();
+        if (_reconnectDeferred) {
+          _reconnectDeferred = false;
+          if (_reconnectMayGo()) return _armReconnect();
+        }
         final settled = _lastOutcomeAt;
         if (away == null || settled == null) return false;
         if (_inFlight != null) return false;
@@ -218,12 +235,13 @@ class AuthController extends _$AuthController {
     if (!online) {
       // The FIRST of a run of offline readings owns the stretch; the stream is already `distinct()`.
       _offlineSince ??= now();
+      _reconnectDeferred = false;
       return false;
     }
     final offline = _offlineSince;
     // Cleared whatever the verdict -> at most ONE re-arm per drop, never a second online reading's.
     _offlineSince = null;
-    if (_heldOffline) {
+    if (_heldOffline || _heldTap) {
       // No failure behind it and no offline reading needed first: a wall that mounted offline only
       // ever sees the link come UP. Behind another app it stays held for the return to release.
       final lifecycle = lifecycleProbe();
@@ -233,6 +251,22 @@ class AuthController extends _$AuthController {
       return _heldMayGo();
     }
     if (offline == null) return false;
+    if (!_reconnectMayGo()) return false;
+    // Null = no binding at all (a bare unit test) = nothing can have backgrounded us, exactly as
+    // the stall guard reads it.
+    final lifecycle = lifecycleProbe();
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      // Data is usually turned back on from Settings -> the link returns while we are paused, and
+      // dropping it here is how the reconnect reached 17 of 494 offline pickers. The return fires it.
+      _reconnectDeferred = true;
+      return false;
+    }
+    return _armReconnect();
+  }
+
+  /// The reconnect rule minus the transition and the foreground, shared by the live reading and the
+  /// return that picks up a deferred one.
+  bool _reconnectMayGo() {
     final settled = _lastOutcomeAt;
     if (settled == null) return false;
     if (!_lastOutcomeNetworkFailure) return false;
@@ -241,13 +275,10 @@ class AuthController extends _$AuthController {
     if (ref.read(authServiceProvider).currentState.isAuthenticated) {
       return false;
     }
-    if (!now().isAfter(settled)) return false;
-    // Null = no binding at all (a bare unit test) = nothing can have backgrounded us, exactly as
-    // the stall guard reads it.
-    final lifecycle = lifecycleProbe();
-    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
-      return false;
-    }
+    return now().isAfter(settled);
+  }
+
+  bool _armReconnect() {
     _reconnectSpent = true;
     _reconnectBudget--;
     _autoLaunched = false;
@@ -275,6 +306,7 @@ class AuthController extends _$AuthController {
     // An attempt of any kind ends the wait: a tap is the person taking over, and the held launch
     // itself arrives here from [autoSignIn].
     _heldOffline = false;
+    _heldTap = false;
     final raw = ref
         .read(authServiceProvider)
         .signInWith(
@@ -310,6 +342,7 @@ class AuthController extends _$AuthController {
           _lastOutcomeAt = now();
           // A fresh outcome, so the reconnect rule's one-per-failure allowance is fresh too.
           _reconnectSpent = false;
+          _reconnectDeferred = false;
           // Identity-checked -> an abandoned attempt's cleanup must not null out its replacement.
           if (identical(_inFlight, guarded)) _inFlight = null;
           releaseUpdateHold();
@@ -526,6 +559,11 @@ class AuthController extends _$AuthController {
     AuthProvider provider, {
     bool offline = false,
   }) {
+    if (_heldTap) {
+      if (offline) return null;
+      // The parked tap asked for the picker -> the picker, never a sheet the person dismissed.
+      return signIn(provider, afterOffline: true);
+    }
     if (_autoLaunched) return _inFlight;
     if (offline) {
       _heldOffline = true;
@@ -554,6 +592,14 @@ class AuthController extends _$AuthController {
     return attempt;
   }
 
+  /// Parks a pill tap made while the phone KNOWS it has no network; the link or a return releases
+  /// it through [autoSignIn]. A launch already held keeps its sheet: it is the stretch's first
+  /// attempt and was never drawn.
+  void holdTapForNetwork() {
+    if (_inFlight != null || _heldOffline) return;
+    _heldTap = true;
+  }
+
   Future<void> updateDisplayName(String name) =>
       ref.read(authServiceProvider).updateDisplayName(name);
 
@@ -561,6 +607,8 @@ class AuthController extends _$AuthController {
     await ref.read(authServiceProvider).signOut();
     _autoLaunched = false;
     _heldOffline = false;
+    _heldTap = false;
+    _reconnectDeferred = false;
     // A new signed-out stretch -> its own reconnect budget, like its own automatic launch.
     _reconnectBudget = _reconnectsPerStretch;
   }
@@ -570,6 +618,8 @@ class AuthController extends _$AuthController {
   void sessionEnded() {
     _autoLaunched = false;
     _heldOffline = false;
+    _heldTap = false;
+    _reconnectDeferred = false;
     _reconnectBudget = _reconnectsPerStretch;
   }
 
@@ -582,6 +632,8 @@ class AuthController extends _$AuthController {
     await ref.read(authServiceProvider).deleteAccount();
     _autoLaunched = false;
     _heldOffline = false;
+    _heldTap = false;
+    _reconnectDeferred = false;
     _reconnectBudget = _reconnectsPerStretch;
   }
 }

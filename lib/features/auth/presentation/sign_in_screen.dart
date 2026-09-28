@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,6 +86,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   /// The wall's connectivity feed, beside the lifecycle one and with the same contract: it reports
   /// readings, the controller owns the rule, and the screen joins whatever that re-arms.
   void _watchConnectivity() {
+    // listenManual reports CHANGES only -> a wall that mounts already offline must record that
+    // itself, or the link coming back is not a transition and the reconnect never fires.
+    if (_knownOffline) {
+      ref.read(authControllerProvider.notifier).noteConnectivity(online: false);
+    }
     ref.listenManual(isOnlineProvider, (_, next) {
       final online = next.value;
       if (online == null) return;
@@ -115,6 +121,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   Future<void> _signIn({bool auto = false}) async {
     if (_signingIn) return;
     final notifier = ref.read(authControllerProvider.notifier);
+    if (!auto && _knownOffline && !await _linkUpNow()) {
+      if (!mounted) return;
+      // Offline, Google's picker only fails (`[16] Account reauth failed`) -> park the tap; the link
+      // coming back opens the picker by itself.
+      notifier.holdTapForNetwork();
+      setState(() {});
+      return;
+    }
+    if (!mounted) return;
     final pending = auto
         ? notifier.autoSignIn(AuthProvider.google, offline: _knownOffline)
         : notifier.signIn(AuthProvider.google);
@@ -165,6 +180,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   /// provider seeds it: the sheet is held only when the phone certainly has no network.
   bool get _knownOffline => ref.read(isOnlineProvider).value == false;
 
+  /// A fresh transport read for a tap the stream calls offline -> a stale stream can never leave the
+  /// pill parked on a phone that has its network back. A failed read proves nothing: go.
+  Future<bool> _linkUpNow() async {
+    try {
+      final results = await ref.read(connectivityProvider).checkConnectivity();
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// A visible failure already toasted its own message; the screen shows the same retry line as any
   /// other outcome, so this only classifies for `login_cancelled` — `noPlayServices` is the one
   /// failure with no provider to ask, and the toast is where that is said.
@@ -189,7 +215,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
     final waiting =
         widget.debugWaitingForInternet ||
         (!_signingIn &&
-            ref.read(authControllerProvider.notifier).autoHeldOffline);
+            ref.read(authControllerProvider.notifier).heldForNetwork);
     final subtitle = _subtitleFor(l10n, _outcome, waiting: waiting);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.

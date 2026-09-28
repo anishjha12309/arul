@@ -54,7 +54,7 @@ outcome is a process that died under Google's surface — the only way that loss
   classified outcome) and `ms_to_surface`, which `login_success` carries too as the denominator. The
   message field names and how to read the buckets: [auth.md](auth.md) §Reading the failure buckets.
 - `surface`: `sheet`, `sheet_return`, `sheet_reconnect`, `sheet_after_offline` (a return outranks it,
-  it outranks a reconnect), `button`, `button_after_dismiss`, `button_after_add_account`. A re-armed
+  it outranks a reconnect), `button`, `button_after_dismiss`, `button_after_add_account`, `button_after_offline` (a parked tap). A re-armed
   attempt that escalates to the picker carries its sheet's name on its `login_attempt` only. The stall
   guard's abandons are `login_failed.kind`: `stalled`, `stalled_resumed`, `surface_stripped`.
   `sheet_unavailable` (GA4-only) fires when the sheet could not RUN.

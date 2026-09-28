@@ -22,7 +22,10 @@ fires at most as stated, and each files under its own `surface` so it can be pri
   online); a last outcome of `networkError` or `unknown`, or the picker's offline cancel
   `[16] Account reauth failed` (no other cancel, nor `noPlayServices`, `serverError`,
   `tokenExchangeFailed`); landing after that outcome settled; nothing in flight; signed out; our UI RESUMED.
-  ONE per failure, TWO per signed-out stretch, or a flapping link loops the sheet.
+  ONE per failure, TWO per signed-out stretch, or a flapping link loops the sheet. `listenManual` reports
+  changes only, so a wall that MOUNTS offline records the reading itself or the return of the link is no
+  transition. A link back while we are PAUSED (data turned on in Settings) is kept for the next resume,
+  and dropped by a new offline reading or settle — dropping it cost almost every offline reauth.
   `surface=sheet_reconnect`.
 - **A return from Google's add-account flow reopens the PICKER once** (`auto: false`, never the sheet;
   `surface=button_after_add_account`). Credential Manager reports ONE string,

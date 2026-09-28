@@ -317,7 +317,8 @@ class ApiAuthService implements AuthService {
   }) {
     if (surface != _surfaceButton &&
         surface != _surfaceButtonAfterDismiss &&
-        surface != _surfaceButtonAfterAddAccount) {
+        surface != _surfaceButtonAfterAddAccount &&
+        surface != _surfaceButtonAfterOffline) {
       return false;
     }
     final message = description?.trim();
@@ -453,9 +454,18 @@ class ApiAuthService implements AuthService {
 
   static const _surfaceButtonAfterAddAccount = 'button_after_add_account';
 
+  static const _surfaceButtonAfterOffline = 'button_after_offline';
+
+  /// [afterOffline] on the button flow is a pill tap parked while the phone had no network.
   @visibleForTesting
-  static String buttonSurfaceFor({required bool reopened}) =>
-      reopened ? _surfaceButtonAfterAddAccount : _surfaceButton;
+  static String buttonSurfaceFor({
+    required bool reopened,
+    bool afterOffline = false,
+  }) => reopened
+      ? _surfaceButtonAfterAddAccount
+      : afterOffline
+      ? _surfaceButtonAfterOffline
+      : _surfaceButton;
 
   static const _surfaceButtonAfterDismiss = 'button_after_dismiss';
 
@@ -547,7 +557,10 @@ class ApiAuthService implements AuthService {
         reconnected: reconnected,
         afterOffline: afterOffline,
       );
-      final buttonSurface = buttonSurfaceFor(reopened: reopened);
+      final buttonSurface = buttonSurfaceFor(
+        reopened: reopened,
+        afterOffline: afterOffline && !auto,
+      );
       _history = JourneyStamps.signInHistory();
       _attemptN = JourneyStamps.nextAttempt() ?? 0;
       _analytics.track(

@@ -27,7 +27,8 @@ paths:
 - **A RETURN re-arms the automatic sheet ONCE** (`noteAppLifecycle`; `inactive` is not away), and
   a RECONNECT (`noteConnectivity`): offline→online, network failure or GMS's `[16] reauth`
   cancel, RESUMED, 2/stretch, never a user cancel. No network at launch HOLDS it (a known `none`
-  only) until link-up or any resume; the pill stays live.
+  only) until link-up or any resume. A pill tap while KNOWN offline is parked and released as the
+  PICKER (`button_after_offline`); a link back while paused waits for the resume.
 - `sheetFirst`/`pickerAfterDismiss` stay BUILD consts — no `app_config.json` on first launch.
 
 Read [docs/auth.md](../../docs/auth.md) first, the wall's relaunch and copy rules in

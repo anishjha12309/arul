@@ -36,6 +36,7 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 - [ ] Failures classified by typed `code`, all through `_googleFailure`
 - [ ] The 30 s stall counts FOREGROUND time, read every 250 ms; an empty resume abandons after grace
 - [ ] A return re-arms the sheet once (`sheet_return`); a reconnect once per failure, twice per stretch
+- [ ] Offline: a tap parks (`button_after_offline`); a wall mounted offline and a link back while paused still reconnect
 - [ ] `POST /auth/login` retries connectivity failures only, inside the stall budget
 - [ ] The wall shows ONE retry line; the pill is its only tappable thing
 - [ ] Sign-out/delete clear Credential Manager state after the local clear and reset analytics identity first

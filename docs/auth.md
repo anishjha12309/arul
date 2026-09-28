@@ -85,7 +85,11 @@ through an old-shaped request. Never log, toast or track the value.
   offline the sheet draws only to fail. Hold on a KNOWN `none` reading only; loading or errored reads
   online, and the splash waits at most 150 ms. `LaunchLinkProbe` asks in `main()` and the splash LISTENS
   to `isOnlineProvider` — Riverpod 3 pauses an unlistened provider, so a bare read never answered. The
-  link coming up or ANY resume releases it once as `sheet_after_offline`; a pill tap ends the wait.
+  link coming up or ANY resume releases it once as `sheet_after_offline`.
+- **A pill tap on a KNOWN `none` reading is PARKED, not run** (`holdTapForNetwork`): offline the picker
+  fails in ~2 s as `[16] Account reauth failed` and people tapped it over and over. The screen re-reads
+  `checkConnectivity()` first so a stale stream never parks a live phone. Link-up or a resume releases it
+  as the PICKER (`button_after_offline`), never the sheet; over a held launch the launch wins.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s cap, 1.5 s
   backoff, inside the 30 s stall budget. A server RESPONSE is never retried; GMS survives blackouts
   this POST does not, and a lost exchange must never cost a picker.
