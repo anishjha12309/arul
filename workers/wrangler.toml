@@ -35,7 +35,7 @@ PUSH_ENABLED = "true"
 GEO_LANG_ENABLED = "true"
 # Where NEW PhonePe mandates are set up (docs/phonepe.md): "legacy", "hsr-internal" (is_internal accounts only)
 # or "hsr". Existing mandates always bill at the merchant their id names, whatever this says.
-PHONEPE_SETUP_MERCHANT = "legacy"
+PHONEPE_SETUP_MERCHANT = "hsr-internal"
 
 # Create: cd workers && npx wrangler kv namespace create KV  (+ --preview)
 [[kv_namespaces]]
