@@ -73,6 +73,22 @@ const kPostHogOnlyProperties = <String>{
   'battery_pct',
   'charging',
   'abi',
+  'slow_frames',
+  'worst_frame_ms',
+  'wall_clip',
+  'thermal',
+  'ms_before_main',
+  'launch_source',
+  'data_saver',
+  'isp',
+  'rtt_ms',
+  'colo',
+  'region_code',
+  'asn',
+  'http',
+  'tls',
+  'picker_opens',
+  'picked_app',
 };
 
 /// Single interface for all analytics events.

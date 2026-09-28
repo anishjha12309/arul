@@ -174,6 +174,7 @@ Future<void> _startPostHog(
     kGeoRegionProperty: origin.geoRegion,
     ...experiments.analyticsProperties,
     ...JourneyStamps.launchProps,
+    ...JourneyStamps.lastDeviceFacts,
     // Persisted by an earlier launch's referrer read -> every event of a later launch carries the
     // channel, the trial and the applies included. A first launch registers it when the read lands.
     ...InstallReferrerService(prefs).attributionProps,

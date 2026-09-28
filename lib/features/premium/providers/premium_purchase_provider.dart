@@ -233,6 +233,38 @@ class PremiumPurchase extends _$PremiumPurchase {
         'surface': ?_checkoutSurface,
       },
     );
+    unawaited(
+      _reportCheckoutEvent('failed:$reason', {
+        'cancelled': cancelled,
+        'method': ?_checkoutMethod,
+        'target_app': ?_checkoutTargetApp,
+        'surface': ?_checkoutSurface,
+        's_since_tap': ?JourneyStamps.secondsSinceCheckout(),
+      }),
+    );
+  }
+
+  /// The same failure in Neon (`checkout_events`), which PostHog reads through its warehouse ->
+  /// every failed checkout, not only GA4's copy, joins the person with its reason and context.
+  Future<void> _reportCheckoutEvent(
+    String kind,
+    Map<String, Object> extra,
+  ) async {
+    final context = JourneyStamps.checkoutContext();
+    // Null = the stamps never started (a test) -> nothing real to record.
+    if (context == null) return;
+    try {
+      await _api.post(
+        '/me/checkout-event',
+        body: {
+          'kind': kind,
+          'merchant_order_id': ?_intentOrderId,
+          'context': {...context, ...extra},
+        },
+      );
+    } catch (e) {
+      debugPrint('[PremiumPurchase] checkout event not recorded: $e');
+    }
   }
 
   /// Terminal failure — set the error state AND report it, in that order, counted exactly once.

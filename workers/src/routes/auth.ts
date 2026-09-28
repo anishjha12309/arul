@@ -19,6 +19,7 @@ import { getDb } from "../lib/db.js";
 import { generateReferralCode, captureReferral } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
+import { requestSignal } from "../lib/request-signal.js";
 
 export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -194,7 +195,8 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         email: googleClaims.email ?? null,
         referralCode,
       },
-      analytics,
+      // The connection rides AFTER the account facts: build 87 keeps only the first 12 keys it is sent
+      analytics: { ...analytics, ...requestSignal(c.req.raw) },
     });
   } catch (err) {
     console.error("[auth/login] DB error:", err);

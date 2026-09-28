@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../connectivity/data_saver.dart';
 import '../upi/upi_apps.dart';
 
 /// Install-lifetime counters, the process clock and a few phone facts, stamped onto events that
@@ -30,6 +34,7 @@ abstract final class JourneyStamps {
   static const _kGateItem = 'journey_gate_item';
   static const _kCards = 'journey_cards_engaged';
   static const _kPreviews = 'journey_ringtone_previews';
+  static const _kLastFacts = 'journey_last_device_facts';
 
   static const _buildInfo = MethodChannel('com.hsrutility.arul/build_info');
 
@@ -64,7 +69,43 @@ abstract final class JourneyStamps {
       onPause: () => _pausedN++,
       onResume: () => _resumedAtMs = _clock.elapsedMilliseconds,
     );
+    if (!_timingsHooked) {
+      SchedulerBinding.instance.addTimingsCallback(_onTimings);
+      _timingsHooked = true;
+    }
   }
+
+  /// How the app rendered up to the event: frames over two vsyncs, the worst frame, and the state of
+  /// the wall's launch clip — perf on old phones is the one lever that ever moved sign-in.
+  static Map<String, Object> get renderProps => {
+    'slow_frames': _slowFrames,
+    'worst_frame_ms': _worstFrameMs,
+    'wall_clip': ?_wallClip,
+  };
+
+  static var _timingsHooked = false;
+  static var _slowFrames = 0;
+  static var _worstFrameMs = 0;
+  static String? _wallClip;
+
+  static void _onTimings(List<FrameTiming> timings) {
+    for (final t in timings) {
+      final ms = t.totalSpan.inMilliseconds;
+      if (ms > 33) _slowFrames++;
+      _worstFrameMs = math.max(_worstFrameMs, ms);
+    }
+  }
+
+  /// `downloading`, `on_disk`, `failed` or `playing` — what the wall showed behind Google's sheet.
+  static void noteWallClip(String state) => _wallClip = state;
+
+  /// The paywall's UPI picker this process: times opened, the app picked, the app it defaulted to.
+  static void notePickerOpened() => _pickerOpens++;
+  static void notePickedApp(String code) => _pickedApp = code;
+  static void noteDefaultApp(String code) => _defaultApp = code;
+  static var _pickerOpens = 0;
+  static String? _pickedApp;
+  static String? _defaultApp;
 
   /// Registered on every event of the process: which cold start of this install it is, how many
   /// days since its first, and how the phone renders text — a low-literacy audience runs large fonts.
@@ -137,9 +178,33 @@ abstract final class JourneyStamps {
 
   /// Counts a paywall view and keeps which gate opened it (`paywall_source`), for the trial it leads to.
   static void notePaywallView(String source, {DateTime? now}) {
+    _paywallPausedAt = _pausedN;
     _bump(_kPaywallViews);
     unawaited(_prefs?.setString(_kPaywallSource, source));
     unawaited(_prefs?.setInt(_kPaywallMs, _ms(now)));
+  }
+
+  static int? _paywallPausedAt;
+
+  /// How the latest paywall view ended: `cta` (a checkout was tapped on it), `left_app` (the app went
+  /// to the background at least once first), else `back`; and how long it lasted.
+  static Map<String, Object>? paywallExit({DateTime? now}) {
+    final at = _prefs?.getInt(_kPaywallMs);
+    if (at == null) return null;
+    final checkoutMs = _prefs?.getInt(_kCheckoutMs);
+    final pausedAt = _paywallPausedAt;
+    return {
+      'exit': checkoutMs != null && checkoutMs >= at
+          ? 'cta'
+          : (pausedAt != null && _pausedN > pausedAt ? 'left_app' : 'back'),
+      'dwell_s': math.max(0, (_ms(now) - at) ~/ 1000),
+    };
+  }
+
+  /// Since the latest checkout tap — on a failure, roughly the time spent in the UPI app.
+  static int? secondsSinceCheckout({DateTime? now}) {
+    final at = _prefs?.getInt(_kCheckoutMs);
+    return at == null ? null : math.max(0, (_ms(now) - at) ~/ 1000);
   }
 
   /// The content behind the latest premium gate: `apply`/`share`/`ringtone_set`, its category and id.
@@ -172,6 +237,9 @@ abstract final class JourneyStamps {
       'gate_item': ?prefs.getString(_kGateItem),
       'cards_n': prefs.getInt(_kCards) ?? 0,
       'previews_n': prefs.getInt(_kPreviews) ?? 0,
+      'default_app': ?_defaultApp,
+      if (_pickerOpens > 0) 'picker_opens': _pickerOpens,
+      'picked_app': ?_pickedApp,
       's_since_login': ?secondsSinceLogin(now: now),
       if (paywallMs != null && checkoutMs != null && checkoutMs >= paywallMs)
         's_on_paywall': (checkoutMs - paywallMs) ~/ 1000,
@@ -230,6 +298,30 @@ abstract final class JourneyStamps {
     return n;
   }
 
+  /// The facts a phone keeps between launches, as the LAST process read them -> primed before
+  /// `setup()` so a relaunch's first `login_attempt` carries them; the probe overwrites them.
+  static Map<String, Object> get lastDeviceFacts {
+    final raw = _prefs?.getString(_kLastFacts);
+    if (raw == null) return const {};
+    try {
+      return {
+        for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map).entries)
+          if (key is String && (value is num || value is bool || value is String))
+            key: value as Object,
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static const _stableFacts = [
+    'gms_version',
+    'gms_status',
+    'play_store_version',
+    'abi',
+    'upi_apps',
+  ];
+
   /// The phone at the moment of the probe, empty until [probeDeviceFacts] has landed.
   static Map<String, Object> get deviceFacts => _deviceFacts;
   static Map<String, Object> _deviceFacts = const {};
@@ -258,26 +350,42 @@ abstract final class JourneyStamps {
     'batteryPct': 'battery_pct',
     'charging': 'charging',
     'abi': 'abi',
+    'thermal': 'thermal',
+    'launchSource': 'launch_source',
   };
 
   static Future<Map<String, Object>> _askDevice() async {
     final out = <String, Object>{};
+    var answered = false;
     try {
       final raw = await _buildInfo.invokeMapMethod<String, Object?>(
         'analyticsFacts',
       );
+      answered = raw != null;
       for (final MapEntry(:key, :value) in _deviceKeys.entries) {
         if (raw?[key] case final Object v
             when v is num || v is bool || v is String) {
           out[value] = v;
         }
       }
+      // The process's age minus our own clock = the engine's share before `main()` ran.
+      if (raw?['procAgeMs'] case final int age when age >= msSinceLaunch) {
+        out['ms_before_main'] = age - msSinceLaunch;
+      }
     } catch (_) {
       // No channel (`flutter test`) or an OEM refusal -> the columns stay absent, never guessed.
     }
+    // Same channel: when it did not answer, Data Saver's own fallback `false` would be a guess.
+    if (answered) out['data_saver'] = await DataSaver.refresh();
     final upi = await UpiApps.codes();
     if (upi != null) out['upi_apps'] = upi;
     _deviceFacts = Map.unmodifiable(out);
+    unawaited(
+      _prefs?.setString(_kLastFacts, jsonEncode({
+        for (final key in _stableFacts)
+          if (out[key] case final Object v) key: v,
+      })),
+    );
     debugPrint('[JourneyStamps] device facts: $_deviceFacts');
     if (!_deviceLanded.isCompleted) _deviceLanded.complete(_deviceFacts);
     return _deviceFacts;
@@ -327,6 +435,12 @@ abstract final class JourneyStamps {
   @visibleForTesting
   static void debugReset() {
     _prefs = null;
+    _slowFrames = 0;
+    _worstFrameMs = 0;
+    _wallClip = null;
+    _pickerOpens = 0;
+    _pickedApp = null;
+    _defaultApp = null;
     _launchN = 0;
     _installAgeD = 0;
     _pausedN = 0;

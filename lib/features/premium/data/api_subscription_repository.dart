@@ -45,4 +45,16 @@ class ApiSubscriptionRepository implements SubscriptionRepository {
       debugPrint('[Paywall] view not recorded: $e');
     }
   }
+
+  @override
+  Future<void> notePaywallExit(String source, String exit, int dwellS) async {
+    try {
+      await _api.post(
+        '/me/paywall-view',
+        body: {'source': source, 'exit': exit, 'dwell_s': dwellS},
+      );
+    } catch (e) {
+      debugPrint('[Paywall] exit not recorded: $e');
+    }
+  }
 }

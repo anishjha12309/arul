@@ -29,6 +29,7 @@ import {
   handleRegisterAnonDevice,
   handlePushOpened,
   handlePaywallView,
+  handleCheckoutEvent,
 } from "./routes/me.js";
 import {
   handleBuildCatalog,
@@ -107,6 +108,7 @@ app.get("/me/referrals", handleMeReferrals);
 app.post("/me/device", handleRegisterDevice);
 app.post("/me/push-opened", handlePushOpened);
 app.post("/me/paywall-view", handlePaywallView);
+app.post("/me/checkout-event", handleCheckoutEvent);
 app.post("/push/device", handleRegisterAnonDevice); // PUBLIC — a signed-out phone; never writes user_id
 
 app.post("/internal/build-catalog", handleBuildCatalog);

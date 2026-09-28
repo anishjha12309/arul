@@ -13,6 +13,7 @@ import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
 import { type AnalyticsContext, sanitizeAnalyticsContext } from "../lib/analytics-context.js";
+import { requestSignal } from "../lib/request-signal.js";
 
 /**
  * The `user` shape is UNCHANGED -> old builds must keep parsing it -> never rename a key here
@@ -548,10 +549,21 @@ export async function handlePaywallView(c: Context<{ Bindings: Env }>): Promise<
 
   let source: string | null = null;
   let context: AnalyticsContext | null = null;
+  let exit: string | null = null;
+  let dwellS: number | null = null;
   try {
-    const body = (await c.req.json()) as { source?: unknown; context?: unknown };
+    const body = (await c.req.json()) as {
+      source?: unknown;
+      context?: unknown;
+      exit?: unknown;
+      dwell_s?: unknown;
+    };
     if (typeof body.source === "string" && PAYWALL_SOURCE_RE.test(body.source)) source = body.source;
     context = sanitizeAnalyticsContext(body.context);
+    if (typeof body.exit === "string" && PAYWALL_SOURCE_RE.test(body.exit)) exit = body.exit;
+    if (typeof body.dwell_s === "number" && Number.isFinite(body.dwell_s) && body.dwell_s >= 0) {
+      dwellS = Math.min(Math.round(body.dwell_s), 86_400);
+    }
   } catch {
     // fall through: no source
   }
@@ -559,15 +571,27 @@ export async function handlePaywallView(c: Context<{ Bindings: Env }>): Promise<
 
   const sql = getDb(env);
   try {
+    if (exit) {
+      // How the latest view of this gate ended -> the look-and-leave half the view count cannot show
+      await sql`
+        UPDATE paywall_views
+        SET last_exit = ${exit}, last_dwell_s = ${dwellS}
+        WHERE user_id = ${sub} AND source = ${source}
+      `;
+      return c.json({ ok: true });
+    }
+    const stored = { ...(context ?? {}), ...requestSignal(c.req.raw) };
     // Bound as TEXT, then cast: postgres.js JSON-encodes a parameter it sees typed jsonb, so a
     // pre-stringified value would land as a jsonb STRING (PGlite does not reproduce this)
     await sql`
       INSERT INTO paywall_views (user_id, source, context)
-      VALUES (${sub}, ${source}, ${context ? JSON.stringify(context) : null}::text::jsonb)
+      VALUES (${sub}, ${source}, ${Object.keys(stored).length ? JSON.stringify(stored) : null}::text::jsonb)
       ON CONFLICT (user_id, source)
-      DO UPDATE SET views   = paywall_views.views + 1,
-                    last_at = now(),
-                    context = EXCLUDED.context
+      DO UPDATE SET views        = paywall_views.views + 1,
+                    last_at      = now(),
+                    context      = EXCLUDED.context,
+                    last_exit    = NULL,
+                    last_dwell_s = NULL
     `;
     return c.json({ ok: true });
   } catch (err) {
@@ -577,6 +601,53 @@ export async function handlePaywallView(c: Context<{ Bindings: Env }>): Promise<
     c.executionCtx.waitUntil(sql.end());
   }
 }
+
+/**
+ * One checkout outcome the app saw (a failure with its reason, time in the UPI app, the link) ->
+ * `checkout_events`, append-only, read by PostHog's warehouse. Never the subscriptions row: its
+ * trigger bumps `updated_at`, which also bounds the in-flight checkout window.
+ */
+export async function handleCheckoutEvent(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const env = c.env;
+  const sub = await requireAuth(c);
+  if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
+
+  let kind: string | null = null;
+  let orderId: string | null = null;
+  let context: AnalyticsContext | null = null;
+  try {
+    const body = (await c.req.json()) as { kind?: unknown; merchant_order_id?: unknown; context?: unknown };
+    if (typeof body.kind === "string" && CHECKOUT_KIND_RE.test(body.kind)) kind = body.kind;
+    if (typeof body.merchant_order_id === "string" && ORDER_ID_RE.test(body.merchant_order_id)) {
+      orderId = body.merchant_order_id;
+    }
+    context = sanitizeAnalyticsContext(body.context);
+  } catch {
+    // fall through: no kind
+  }
+  if (!kind) return errorResponse(400, "invalid_body", "kind is required");
+
+  const stored = { ...(context ?? {}), ...requestSignal(c.req.raw) };
+  const sql = getDb(env);
+  try {
+    await sql`
+      INSERT INTO checkout_events (user_id, merchant_order_id, kind, context)
+      VALUES (${sub}, ${orderId}, ${kind},
+              ${Object.keys(stored).length ? JSON.stringify(stored) : null}::text::jsonb)
+    `;
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("[me/checkout-event] DB error:", err);
+    return errorResponse(500, "server_error", "Internal server error");
+  } finally {
+    c.executionCtx.waitUntil(sql.end());
+  }
+}
+
+const CHECKOUT_KIND_RE = /^[a-z0-9_:]{1,60}$/;
+
+/** `DKS_<tag>_<8 hex>_<base36>_<4 hex>` from `buildMerchantOrderId` -> shape only, never a lookup. */
+const ORDER_ID_RE = /^[A-Za-z0-9_-]{1,63}$/;
 
 /** The app's `?source=` values (apply, share, ringtone_set, trial_nudge, settings, push, …). */
 const PAYWALL_SOURCE_RE = /^[a-z_]{1,40}$/;

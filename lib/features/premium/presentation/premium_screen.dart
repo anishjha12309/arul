@@ -33,6 +33,7 @@ import '../../wallpapers/data/feed_video_player.dart';
 import '../data/return_clip_cache.dart';
 import '../domain/entitlement.dart';
 import '../domain/onboarding_video.dart';
+import '../domain/subscription_repository.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
 import 'member_view.dart';
@@ -243,6 +244,21 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   String? _paywallShown;
 
+  /// Captured while the ref is alive: the exit report is sent from `dispose`, where it is not.
+  late final SubscriptionRepository _subscriptions;
+
+  void _reportPaywallExit() {
+    final exit = JourneyStamps.paywallExit();
+    if (_paywallShown == null || exit == null) return;
+    unawaited(
+      _subscriptions.notePaywallExit(
+        widget.source,
+        exit['exit']! as String,
+        exit['dwell_s']! as int,
+      ),
+    );
+  }
+
   /// Reports `paywall_shown` ONCE per state of the sell — GA4 only, deliberately off the PostHog
   /// allow-list ([docs/analytics-events.md]).
   /// The signature is the variant and the INSTALLED APPS, never the whole payload: picking another
@@ -253,6 +269,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // Once per screen, not per signature: a changed app set is the same view, re-described.
     final firstView = _paywallShown == null;
     if (firstView) JourneyStamps.notePaywallView(widget.source);
+    if (properties['default_app'] case final String app) {
+      JourneyStamps.noteDefaultApp(app);
+    }
     _paywallShown = signature;
     // Out of the build phase — `track` reaches a platform channel, which a widget must never do
     // while it is laying out.
@@ -279,6 +298,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   @override
   void initState() {
     super.initState();
+    _subscriptions = ref.read(subscriptionRepositoryProvider);
     _releaseUpdateHold = UpdateHolds.hold();
     WidgetsBinding.instance.addObserver(this);
     // Synchronous by construction — `sharedPreferencesProvider` is overridden in main() after its await.
@@ -294,6 +314,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   @override
   void dispose() {
+    _reportPaywallExit();
     _releaseUpdateHold();
     WidgetsBinding.instance.removeObserver(this);
     // Releases the native player, its surface and its audio focus.
@@ -710,6 +731,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     required bool trialEligible,
   }) async {
     ArulHaptics.tap();
+    JourneyStamps.notePickerOpened();
     final picked = await showArulSheet<String>(
       context,
       // The paywall's own ground — the generic sheet white read as a system dialog on cream.
@@ -721,6 +743,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       ),
     );
     if (picked == null || !mounted) return;
+    JourneyStamps.notePickedApp(
+      picked == kUpiPickQr ? 'qr' : upiAppCode(picked),
+    );
 
     if (picked == kUpiPickQr) {
       // An order already open at an app is abandoned first, exactly as switching apps does: two

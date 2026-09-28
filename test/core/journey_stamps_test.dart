@@ -146,8 +146,12 @@ void main() {
     () async {
       messenger
         ..setMockMethodCallHandler(buildInfo, (call) async {
+          if (call.method == 'dataSaverOn') return true;
           expect(call.method, 'analyticsFacts');
           return {
+            'thermal': 1,
+            'launchSource': 'push',
+            'procAgeMs': 5000000,
             'gmsVersion': 253832035,
             'gmsStatus': 0,
             'playStoreVersion': 84251800,
@@ -168,9 +172,15 @@ void main() {
           return ['com.phonepe.app', 'com.google.android.apps.nbu.paisa.user'];
         });
 
+      final prefs = await started();
       final landed = JourneyStamps.onDeviceFacts;
       final facts = await JourneyStamps.probeDeviceFacts();
+      expect(facts['ms_before_main'], inInclusiveRange(4990000, 5000000));
       expect(facts, {
+        'ms_before_main': facts['ms_before_main'],
+        'thermal': 1,
+        'launch_source': 'push',
+        'data_saver': true,
         'gms_version': 253832035,
         'gms_status': 0,
         'play_store_version': 84251800,
@@ -186,8 +196,49 @@ void main() {
       });
       expect(await landed, same(facts));
       expect(JourneyStamps.deviceFacts, facts);
+
+      // The next launch's first attempt carries only what a phone keeps between launches.
+      JourneyStamps.debugReset();
+      JourneyStamps.start(prefs);
+      expect(JourneyStamps.lastDeviceFacts, {
+        'gms_version': 253832035,
+        'gms_status': 0,
+        'play_store_version': 84251800,
+        'abi': 'arm64-v8a',
+        'upi_apps': 'gpay,phonepe',
+      });
     },
   );
+
+  test('render props: slow frames, the worst frame and the wall clip', () async {
+    await started();
+    expect(JourneyStamps.renderProps, {'slow_frames': 0, 'worst_frame_ms': 0});
+    JourneyStamps.noteWallClip('playing');
+    expect(JourneyStamps.renderProps['wall_clip'], 'playing');
+  });
+
+  test('the picker and the default app ride the path to a trial', () async {
+    await started();
+    JourneyStamps.noteDefaultApp('phonepe');
+    JourneyStamps.notePickerOpened();
+    JourneyStamps.notePickerOpened();
+    JourneyStamps.notePickedApp('gpay');
+    final props = JourneyStamps.conversionProps();
+    expect(props['default_app'], 'phonepe');
+    expect(props['picker_opens'], 2);
+    expect(props['picked_app'], 'gpay');
+  });
+
+  test('a paywall exit reads cta after a tap, back otherwise, with the dwell', () async {
+    await started();
+    expect(JourneyStamps.paywallExit(), isNull);
+    final opened = DateTime.now().subtract(const Duration(seconds: 30));
+    JourneyStamps.notePaywallView('apply', now: opened);
+    expect(JourneyStamps.paywallExit(), {'exit': 'back', 'dwell_s': 30});
+    JourneyStamps.nextCheckout(now: opened.add(const Duration(seconds: 10)));
+    expect(JourneyStamps.paywallExit()?['exit'], 'cta');
+    expect(JourneyStamps.secondsSinceCheckout(), inInclusiveRange(19, 21));
+  });
 
   test(
     'failed device probes leave the columns absent, never guessed',

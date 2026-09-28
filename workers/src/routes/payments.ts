@@ -5,6 +5,7 @@
 import type { Context } from "hono";
 import type { Env } from "../env.js";
 import { sanitizeAnalyticsContext } from "../lib/analytics-context.js";
+import { requestSignal } from "../lib/request-signal.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
@@ -96,7 +97,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   const qrMode = body.mode === "qr" && targetApp !== null;
   const recordedTargetApp = qrMode ? "qr" : (targetApp ?? "phonepe_page");
   // Analytics only (PostHog's warehouse reads it) -> junk is dropped, never a reason to refuse a checkout
-  const checkoutContext = sanitizeAnalyticsContext(body.context);
+  const sent = sanitizeAnalyticsContext(body.context);
+  const signal = requestSignal(c.req.raw);
+  const checkoutContext = sent || Object.keys(signal).length ? { ...(sent ?? {}), ...signal } : null;
 
   const sql = getDb(env);
   try {

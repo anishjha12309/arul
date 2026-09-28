@@ -345,6 +345,7 @@ class ApiAuthService implements AuthService {
     'ms_since_launch': JourneyStamps.msSinceLaunch,
     ..._history,
     ...JourneyStamps.networkFacts,
+    ...JourneyStamps.renderProps,
   };
 
   /// 0 until this attempt's `login_attempt` fires -> a failure before it names no try.
@@ -380,7 +381,7 @@ class ApiAuthService implements AuthService {
     if (raw is! Map) return const {};
     final out = <String, Object>{};
     for (final MapEntry(:key, :value) in raw.entries) {
-      if (key is! String || out.length >= 12) continue;
+      if (key is! String || out.length >= 24) continue;
       switch (value) {
         case bool() || num():
           out[key] = value as Object;

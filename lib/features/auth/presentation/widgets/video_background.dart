@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/theme/motion.dart';
 import '../../../../app/theme/tokens.dart';
+import '../../../../core/analytics/journey_stamps.dart';
 import '../../../../core/config/build_info.dart';
 import '../../../../core/perf/boot_trace.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
@@ -179,6 +180,7 @@ class _LaunchClipLayerState extends State<LaunchClipLayer>
   void _show() {
     if (_shown || !mounted) return;
     BootTrace.mark('launch clip: first frame, crossfading');
+    JourneyStamps.noteWallClip('playing');
     setState(() => _shown = true);
   }
 

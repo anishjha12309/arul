@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/build_info.dart';
 import '../../../core/connectivity/data_saver.dart';
 import '../../../core/experiments/experiments.dart';
@@ -60,8 +61,10 @@ class LaunchClip extends _$LaunchClip {
       if (await DataSaver.refresh()) return;
       if (ref.read(authServiceProvider).currentState.isAuthenticated) return;
       BootTrace.mark('launch clip: download start');
+      JourneyStamps.noteWallClip('downloading');
       final path = await prefetch.ensureCached(prefetch.urlFor(clip));
       BootTrace.mark('launch clip: ${path == null ? 'failed' : 'on disk'}');
+      JourneyStamps.noteWallClip(path == null ? 'failed' : 'on_disk');
       if (path != null && ref.mounted) state = path;
     } catch (_) {
       // A slow catalog, a failed transfer: the poster simply stays.

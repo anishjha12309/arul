@@ -21,6 +21,7 @@ import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.Process
 import android.os.StatFs
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -627,7 +628,25 @@ class MainActivity : FlutterFragmentActivity() {
             }?.takeIf { it in 0..100 },
             "charging" to soft { battery?.isCharging },
             "abi" to Build.SUPPORTED_ABIS.firstOrNull(),
+            // 0 none … 4 severe: a throttled phone runs Google's sheet and our wall slower.
+            "thermal" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                soft { (getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus }
+            } else {
+                null
+            },
+            // Process age at this call; Dart subtracts its own clock to get the time before main().
+            "procAgeMs" to soft { SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime() },
+            "launchSource" to launchSource(intent),
         )
+    }
+
+    // What opened this activity: the icon, a link, or a notification tap (FCM stamps its message id).
+    private fun launchSource(intent: Intent?): String = when {
+        intent == null -> "other"
+        intent.extras?.keySet()?.any { it.startsWith("google.message_id") || it.startsWith("gcm.") } == true -> "push"
+        intent.action == Intent.ACTION_VIEW && intent.data != null -> "link"
+        intent.action == Intent.ACTION_MAIN -> "launcher"
+        else -> "other"
     }
 
     private inline fun <T> soft(block: () -> T): T? = try {

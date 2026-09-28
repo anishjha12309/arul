@@ -106,6 +106,30 @@ describe("POST /auth/login", () => {
     });
   });
 
+  it("the login analytics carry the edge's view of the connection after the account facts", async () => {
+    vi.mocked(verifyGoogleIdToken).mockResolvedValue({
+      sub: "google-sub-3",
+      email: "jio@example.com",
+      email_verified: true,
+      name: "Jio",
+      nonce: undefined,
+    });
+    const { env } = envWithSql([
+      { id: USER_ID, display_name: "Jio", referral_code: "JIOX2345", is_internal: false },
+    ]);
+    const res = await handleLogin(
+      makeCtx({
+        env,
+        jsonBody: { idToken: "valid" },
+        cf: { asOrganization: "Reliance Jio", clientTcpRtt: 61, colo: "BOM" },
+      }),
+    );
+    const body = (await res.json()) as { analytics: Record<string, unknown> };
+    const keys = Object.keys(body.analytics);
+    expect(body.analytics).toMatchObject({ isp: "Reliance Jio", rtt_ms: 61, colo: "BOM" });
+    expect(keys.indexOf("isp")).toBeGreaterThan(keys.indexOf("referred"));
+  });
+
   it("a returning account that never reached checkout reads sub_status none, trial not used", async () => {
     vi.mocked(verifyGoogleIdToken).mockResolvedValue({
       sub: "google-sub-2",

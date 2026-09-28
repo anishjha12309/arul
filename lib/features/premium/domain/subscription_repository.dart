@@ -8,4 +8,7 @@ abstract interface class SubscriptionRepository {
   /// Records a paywall view in Neon (`paywall_views`), which PostHog reads through its warehouse ->
   /// the people who look and never tap become visible without a PostHog event. Never throws.
   Future<void> notePaywallView(String source, Map<String, Object> context);
+
+  /// How that view ended (`cta`, `back`, `left_app`) and how long it lasted. Never throws.
+  Future<void> notePaywallExit(String source, String exit, int dwellS);
 }

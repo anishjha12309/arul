@@ -5,7 +5,8 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { sanitizeAnalyticsContext } from "../src/lib/analytics-context.js";
-import { handlePaywallView } from "../src/routes/me.js";
+import { handleCheckoutEvent, handlePaywallView } from "../src/routes/me.js";
+import { requestSignal } from "../src/lib/request-signal.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 import { makeEnv, makeCtx, makeMockSql } from "./_ctx.js";
 
@@ -70,7 +71,7 @@ describe("POST /me/paywall-view", () => {
     const text = strings.join("?");
     expect(text).toContain("INSERT INTO paywall_views");
     expect(text).toContain("ON CONFLICT (user_id, source)");
-    expect(text).toContain("views   = paywall_views.views + 1");
+    expect(text).toContain("views        = paywall_views.views + 1");
     // jsonb bound as text: postgres.js would JSON-encode a jsonb-typed parameter a second time
     expect(text).toContain("::text::jsonb");
     expect(values).toEqual([USER_ID, "trial_nudge", JSON.stringify({ variant: "trial", paywall_n: 3 })]);
@@ -81,6 +82,106 @@ describe("POST /me/paywall-view", () => {
     const { sql, capturedArgs } = makeMockSql([]);
     for (const body of [{}, { source: "" }, { source: "Apply Now" }, { source: 7 }]) {
       const res = await handlePaywallView(
+        makeCtx({ env: makeEnv({ JWT_SECRET, _testSql: sql }), token, jsonBody: body }),
+      );
+      expect(res.status).toBe(400);
+    }
+    expect(capturedArgs).toHaveLength(0);
+  });
+});
+
+const CF = {
+  asOrganization: "Reliance Jio Infocomm Limited",
+  asn: 55836,
+  clientTcpRtt: 48,
+  colo: "MAA",
+  regionCode: "TN",
+  city: "Chennai",
+  latitude: "13.08",
+  httpProtocol: "HTTP/2",
+  tlsVersion: "TLSv1.3",
+};
+
+describe("requestSignal", () => {
+  it("reads carrier and link quality, never city or coordinates", () => {
+    expect(requestSignal({ cf: CF } as unknown as Request)).toEqual({
+      isp: "Reliance Jio Infocomm Limited",
+      rtt_ms: 48,
+      colo: "MAA",
+      region_code: "TN",
+      asn: 55836,
+      http: "HTTP/2",
+      tls: "TLSv1.3",
+    });
+  });
+
+  it("is empty off the edge, where request.cf does not exist", () => {
+    expect(requestSignal({} as Request)).toEqual({});
+  });
+});
+
+describe("paywall exits and checkout events", () => {
+  it("an exit report updates the view it ends, never counts a new one", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql, capturedArgs } = makeMockSql([]);
+    const res = await handlePaywallView(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: sql }),
+        token,
+        jsonBody: { source: "apply", exit: "back", dwell_s: 12.4 },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const [strings, ...values] = capturedArgs[0] as [string[], ...unknown[]];
+    expect(strings.join("?")).toContain("UPDATE paywall_views");
+    expect(strings.join("?")).not.toContain("views + 1");
+    expect(values).toEqual(["back", 12, USER_ID, "apply"]);
+  });
+
+  it("a view stores the edge's connection beside the app's context", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql, capturedArgs } = makeMockSql([]);
+    await handlePaywallView(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: sql }),
+        token,
+        cf: CF,
+        jsonBody: { source: "apply", context: { paywall_n: 1 } },
+      }),
+    );
+    const stored = JSON.parse((capturedArgs[0] as unknown[])[3] as string);
+    expect(stored).toMatchObject({ paywall_n: 1, isp: "Reliance Jio Infocomm Limited", rtt_ms: 48 });
+    expect(stored.city).toBeUndefined();
+  });
+
+  it("a checkout event is appended with its reason, order and the connection", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql, capturedArgs } = makeMockSql([]);
+    const res = await handleCheckoutEvent(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: sql }),
+        token,
+        cf: CF,
+        jsonBody: {
+          kind: "failed:user_cancelled",
+          merchant_order_id: "DKS_S_ABCD1234_MUK292U1_62CC",
+          context: { s_in_upi_app: 41 },
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const [strings, ...values] = capturedArgs[0] as [string[], ...unknown[]];
+    expect(strings.join("?")).toContain("INSERT INTO checkout_events");
+    expect(strings.join("?")).toContain("::text::jsonb");
+    expect(values.slice(0, 3)).toEqual([USER_ID, "DKS_S_ABCD1234_MUK292U1_62CC", "failed:user_cancelled"]);
+    expect(JSON.parse(values[3] as string)).toMatchObject({ s_in_upi_app: 41, colo: "MAA" });
+  });
+
+  it("a checkout event without a valid kind is refused and writes nothing", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const { sql, capturedArgs } = makeMockSql([]);
+    for (const body of [{}, { kind: "" }, { kind: "Failed Reason" }]) {
+      const res = await handleCheckoutEvent(
         makeCtx({ env: makeEnv({ JWT_SECRET, _testSql: sql }), token, jsonBody: body }),
       );
       expect(res.status).toBe(400);

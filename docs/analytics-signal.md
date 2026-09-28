@@ -21,6 +21,10 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   `sub_status`, `trial_used`, `account_age_d`, `internal`, `paid_before`, `referred`): a new key is a
   Worker deploy, not a release. Analytics only — the gate stays `premiumPredicate`. Divide login→trial
   by `trial_used = false`: a spent trial can only buy at ₹199.
+- Every sign-in event also carries how the app RENDERED up to it (`slow_frames`, `worst_frame_ms`,
+  `wall_clip`); the device probe adds `thermal`, `launch_source`, `ms_before_main` and `data_saver`,
+  and the stable facts persist so a relaunch's first attempt carries them. `data_saver` is sent only
+  when the facts channel answered: Data Saver's own fallback `false` would otherwise read as a fact.
 - `trial_started` carries the path to it (`checkout_n`, `paywall_n`, `paywall_source`, `gate_*`,
   `cards_n`, `previews_n`, `s_on_paywall`, `s_tap_to_trial`), all persisted, so the late catch-up copy
   carries them too.
@@ -46,6 +50,14 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
 - **Bind JSON as `${JSON.stringify(x)}::text::jsonb`, never `::jsonb`.** postgres.js JSON-encodes a
   parameter it sees typed jsonb, so a pre-stringified value lands as a jsonb STRING and every `->>`
   reads NULL. PGlite does not reproduce it; only the real driver (`jsonb_typeof`) proves the shape.
+- The Worker stamps Cloudflare's view of the connection (`isp`, `rtt_ms`, `colo`, `region_code`, `asn`,
+  `http`, `tls` — never city) onto the login analytics, paywall views, taps and checkout events
+  (`lib/request-signal.ts`). The login keys ride AFTER the account facts: build 87 keeps only the
+  first 12 keys it is sent.
+- A paywall view's END (`last_exit` = `cta`/`back`/`left_app`, `last_dwell_s`) is a second POST to
+  the same route; NULL `last_exit` = the app left from the paywall and never came back to close it.
+  Checkout failures append to `checkout_events` (`POST /me/checkout-event`), never the subscriptions
+  row: its trigger bumps `updated_at`, which also bounds the in-flight checkout window.
 - Join `toString(s.user_id) = distinct_id`. A LEFT JOIN miss is NULL on the warehouse side but `''` on
   an events-side column — test `IS NULL` / `!= ''` accordingly, or every sign-in counts as a checkout.
 - The subscriptions row appears at the first CTA tap and every later tap OVERWRITES it: the latest
