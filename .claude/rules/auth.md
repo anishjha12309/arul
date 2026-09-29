@@ -15,7 +15,8 @@ paths:
 - **Every ID token carries the per-process nonce; the Worker checks the PAIR** (both absent accepted
   for fielded builds). Never log, toast or track it.
 - **ONE retry line for every failure; no fix line, no help link. The pill is the wall's ONLY
-  tappable thing**. Region picks the language, Settings changes it.
+  tappable thing**, and the box is GONE while Google's surface is up (`SignInPhase.surfaceUp`,
+  cleared on abandon). Region picks the language, Settings changes it.
   Fixed type; the LAYOUT absorbs copy.
 - Classify by typed `code` only; `login_cancelled` is MIXED. **Every failure return goes through
   `_googleFailure`.**

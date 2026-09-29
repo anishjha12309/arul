@@ -49,6 +49,9 @@ enum AuthFailureKind {
 abstract final class SignInPhase {
   static final ValueNotifier<bool> exchanging = ValueNotifier<bool>(false);
 
+  /// Google's sheet or picker is over the wall, from its first appearance to the attempt's settle.
+  static final ValueNotifier<bool> surfaceUp = ValueNotifier<bool>(false);
+
   /// Google's surface came up ([SignInSignal.surfaceShown]) or an attempt ended any way at all
   /// ([SignInSignal.settled]) -> the come-back reminder's arm and disarm, fed without a new member
   /// on [AuthService].

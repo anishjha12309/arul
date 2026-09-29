@@ -272,6 +272,8 @@ class ApiAuthService implements AuthService {
   @override
   void abandonPendingSignIn() {
     _attemptSeq++;
+    // The zombie's own finally is identity-checked and will never clear it -> the wall comes back here.
+    SignInPhase.surfaceUp.value = false;
   }
 
   AuthFailure _googleFailure(
@@ -539,6 +541,7 @@ class ApiAuthService implements AuthService {
     // report the last attempt's wait for Google.
     _surfaceClock.endAttempt();
     SignInPhase.exchanging.value = false;
+    SignInPhase.surfaceUp.value = false;
     try {
       await GoogleSignInInit.ready;
 
@@ -594,6 +597,8 @@ class ApiAuthService implements AuthService {
               'ms_to_surface': ms,
             },
           );
+          // An abandoned attempt's late surface must not hide the wall its replacement stands on.
+          if (attempt == _attemptSeq) SignInPhase.surfaceUp.value = true;
           SignInPhase.signals.add(SignInSignal.surfaceShown);
           // Only now, with Google's request already out: a channel call queued BEFORE it would
           // hold the credential request behind our own native work on the main thread.
@@ -866,6 +871,7 @@ class ApiAuthService implements AuthService {
       // attempt that replaced it.
       if (attempt == _attemptSeq) {
         SignInPhase.exchanging.value = false;
+        SignInPhase.surfaceUp.value = false;
         _surfaceClock.endAttempt();
       }
       SignInPhase.signals.add(SignInSignal.settled);

@@ -59,19 +59,40 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   /// A cancel stays TOAST-less — half of "cancels" are GMS-side aborts the user never chose.
   SignInOutcome? _outcome;
 
+  /// The service clears `exchanging` in its finally, a frame BEFORE this screen hears the result ->
+  /// without this latch a success flashed the retry line on its way to the feed.
+  bool _exchangeSeen = false;
+
+  /// A Google surface has shown during the attempt in flight. The guard chains the picker after a
+  /// dismissed sheet, the add-account reopen and the stall relaunch into ONE attempt, and the box
+  /// flashed in each gap between them.
+  bool _googleSeen = false;
+
   @override
   void initState() {
     super.initState();
     _outcome = widget.debugOutcome;
+    _googleSeen = SignInPhase.surfaceUp.value;
     WidgetsBinding.instance.addObserver(this);
+    SignInPhase.exchanging.addListener(_onPhase);
+    SignInPhase.surfaceUp.addListener(_onPhase);
     _watchConnectivity();
     _initAutoLaunch();
   }
 
   @override
   void dispose() {
+    SignInPhase.exchanging.removeListener(_onPhase);
+    SignInPhase.surfaceUp.removeListener(_onPhase);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onPhase() {
+    setState(() {
+      if (_signingIn && SignInPhase.exchanging.value) _exchangeSeen = true;
+      if (SignInPhase.surfaceUp.value) _googleSeen = true;
+    });
   }
 
   /// The wall's lifecycle feed. The DECISION is the controller's — this only supplies transitions
@@ -152,12 +173,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       return;
     }
 
-    setState(() => _signingIn = true);
+    setState(() {
+      _signingIn = true;
+      // A splash-started attempt may already be under Google's sheet when the wall joins it.
+      _googleSeen = SignInPhase.surfaceUp.value;
+    });
+    var succeeded = false;
     try {
       final result = await pending;
       if (!mounted) return;
       switch (result) {
         case AuthSuccess():
+          succeeded = true;
           context.go('/browse');
         case AuthCancelled(:final outcome):
           _outcome = outcome;
@@ -172,7 +199,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       // Handled live here -> drop the recorded copy, or a later mount replays a seen failure.
       notifier.takePendingAutoFailure();
     } finally {
-      if (mounted) setState(() => _signingIn = false);
+      // A success keeps the wait on screen while the route leaves -> never the retry line on the way out.
+      if (mounted && !succeeded) {
+        setState(() {
+          _signingIn = false;
+          _exchangeSeen = false;
+          _googleSeen = false;
+        });
+      }
     }
   }
 
@@ -253,38 +287,46 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
 
             // Everything readable or tappable sits on the panel -> legibility ignores the frame behind.
             // The artwork above and below stays uncovered — the whole point of a video back there.
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _SilkPanel(
-                  key: kSignInPanelKey,
-                  children: [
-                    // Warmth, not instruction and not a feature list — the eyebrow and the pill
-                    // already do those jobs, and a caption restating either read as three lines
-                    // saying one thing. It says nothing about the trial on purpose: a billing
-                    // detail, stated on `/premium`.
-                    Text(
-                      l10n.signInCaption,
-                      textAlign: TextAlign.center,
-                      style: ArulTokens.body.copyWith(
-                        fontSize: _kCaptionSize,
-                        color: ArulTokens.ivory.withValues(alpha: 0.8),
+            _HiddenUnderGoogle(
+              covered: wallBoxCovered(
+                surfaceUp: SignInPhase.surfaceUp.value,
+                ourWait: SignInPhase.exchanging.value || _exchangeSeen,
+                inFlight: _signingIn,
+                googleSeen: _googleSeen,
+              ),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _SilkPanel(
+                    key: kSignInPanelKey,
+                    children: [
+                      // Warmth, not instruction and not a feature list — the eyebrow and the pill
+                      // already do those jobs, and a caption restating either read as three lines
+                      // saying one thing. It says nothing about the trial on purpose: a billing
+                      // detail, stated on `/premium`.
+                      Text(
+                        l10n.signInCaption,
+                        textAlign: TextAlign.center,
+                        style: ArulTokens.body.copyWith(
+                          fontSize: _kCaptionSize,
+                          color: ArulTokens.ivory.withValues(alpha: 0.8),
+                        ),
                       ),
-                    ),
-                    // The only place the app narrates the wait -> it may claim only a wait it OWNS.
-                    // Everything up to the credential happens under Google's surface.
-                    ValueListenableBuilder<bool>(
-                      valueListenable: SignInPhase.exchanging,
-                      builder: (context, exchanging, _) => _SignInPill(
-                        title: l10n.signInGoogle,
-                        subtitle: exchanging
-                            ? l10n.signInSubtitleExchanging
-                            : subtitle,
-                        onTap: _signingIn ? () {} : _onPillTap,
-                        busy: _signingIn,
+                      // The only place the app narrates the wait -> it may claim only a wait it OWNS.
+                      // Everything up to the credential happens under Google's surface.
+                      ValueListenableBuilder<bool>(
+                        valueListenable: SignInPhase.exchanging,
+                        builder: (context, exchanging, _) => _SignInPill(
+                          title: l10n.signInGoogle,
+                          subtitle: exchanging || _exchangeSeen
+                              ? l10n.signInSubtitleExchanging
+                              : subtitle,
+                          onTap: _signingIn ? () {} : _onPillTap,
+                          busy: _signingIn,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -293,6 +335,66 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       ),
     );
   }
+}
+
+/// Whether Google's own UI owns the screen, so the wall's box stays out of its way.
+///
+/// Google's sheet lands ON the wall, and a tap aimed at the pill hit the sheet's backdrop and
+/// closed it (sign-in-wall.md). From the first Google surface of an attempt to its settle the box is
+/// gone, the gaps between the guard's chained surfaces included; our own exchange always shows it.
+@visibleForTesting
+bool wallBoxCovered({
+  required bool surfaceUp,
+  required bool ourWait,
+  required bool inFlight,
+  required bool googleSeen,
+}) => !ourWait && (surfaceUp || (inFlight && googleSeen));
+
+class _HiddenUnderGoogle extends StatefulWidget {
+  const _HiddenUnderGoogle({required this.covered, required this.child});
+
+  final bool covered;
+  final Widget child;
+
+  @override
+  State<_HiddenUnderGoogle> createState() => _HiddenUnderGoogleState();
+}
+
+class _HiddenUnderGoogleState extends State<_HiddenUnderGoogle>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    // A wall that mounts under a sheet the splash already opened starts hidden, not faded out.
+    value: widget.covered ? 0 : 1,
+    duration: const Duration(milliseconds: 220),
+    reverseDuration: const Duration(milliseconds: 120),
+  );
+
+  @override
+  void didUpdateWidget(_HiddenUnderGoogle old) {
+    super.didUpdateWidget(old);
+    if (widget.covered == old.covered) return;
+    if (widget.covered) {
+      _fade.reverse();
+    } else {
+      _fade.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: widget.covered,
+    child: ExcludeSemantics(
+      excluding: widget.covered,
+      child: FadeTransition(opacity: _fade, child: widget.child),
+    ),
+  );
 }
 
 const TextStyle kSignInTitleStyle = TextStyle(

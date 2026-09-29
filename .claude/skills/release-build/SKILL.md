@@ -32,8 +32,15 @@ disable-model-invocation: true
 1. **ABI rule — the bundle stays whole, every APK is split. No exceptions.**
    - **AAB (the Play artifact): all three ABIs in ONE bundle**, which is the default —
      ```bash
-     flutter build appbundle --release --dart-define-from-file=env/prod.json
+     V=$(grep '^version:' pubspec.yaml | cut -d' ' -f2)
+     flutter build appbundle --release --split-debug-info=symbols/$V --dart-define-from-file=env/prod.json
+     APP_ID=$(node -e "console.log(require('./android/app/google-services.json').client.find(c=>c.client_info.android_client_info.package_name==='com.hsrutility.arul').client_info.mobilesdk_app_id)")
+     firebase crashlytics:symbols:upload --app=$APP_ID symbols/$V
      ```
+     `--split-debug-info` keeps Dart debug info out of `libapp.so` (−1.2 MB per device). Crashlytics
+     shows readable Dart frames only after that upload, so it runs before the build goes to Play. Keep
+     `symbols/` (git-ignored, outside `build/` so `flutter clean` spares it). Never add `--obfuscate`:
+     `app_exception.dart` formats `$runtimeType` into analytics.
      NEVER pass `--split-per-abi` or `--target-platform` here. Play generates the per-device
      split itself from the bundle; stripping an architecture out of the upload means every device
      on that ABI simply cannot install, and it is invisible until a real user hits it.

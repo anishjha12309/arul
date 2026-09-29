@@ -89,11 +89,15 @@ void main() {
     auth = _CountingAuthService();
     routes = [];
     SignInPhase.exchanging.value = false;
+    SignInPhase.surfaceUp.value = false;
     SharedPreferences.setMockInitialValues(<String, Object>{});
     prefs = await SharedPreferences.getInstance();
   });
 
-  tearDown(() => SignInPhase.exchanging.value = false);
+  tearDown(() {
+    SignInPhase.exchanging.value = false;
+    SignInPhase.surfaceUp.value = false;
+  });
 
   Future<AppLocalizations> pump(
     WidgetTester tester, {
@@ -226,6 +230,160 @@ void main() {
           reason: '${outcome.name} must offer no links at all',
         );
       }
+    });
+  });
+
+  // Google's sheet lands ON the wall, and a tap aimed at the pill closes it (45% of re-taps came
+  // within 2 s). So the whole box leaves while Google's surface is up and returns for our own wait
+  // and the settle. A box that stays gone after the settle is a wall with nothing to tap.
+  // The guard chains the picker after a dismissed sheet, the add-account reopen and the stall
+  // relaunch into ONE attempt; on the device the box flashed in each gap between them.
+  group('when the box counts as covered', () {
+    test('the idle wall shows it', () {
+      expect(
+        wallBoxCovered(
+          surfaceUp: false,
+          ourWait: false,
+          inFlight: false,
+          googleSeen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('Google\'s surface covers it', () {
+      expect(
+        wallBoxCovered(
+          surfaceUp: true,
+          ourWait: false,
+          inFlight: true,
+          googleSeen: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('the gap between chained Google surfaces keeps it covered', () {
+      expect(
+        wallBoxCovered(
+          surfaceUp: false,
+          ourWait: false,
+          inFlight: true,
+          googleSeen: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('before any Google surface, the in-flight wait shows it', () {
+      expect(
+        wallBoxCovered(
+          surfaceUp: false,
+          ourWait: false,
+          inFlight: true,
+          googleSeen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('our own exchange always shows it', () {
+      for (final surfaceUp in [false, true]) {
+        expect(
+          wallBoxCovered(
+            surfaceUp: surfaceUp,
+            ourWait: true,
+            inFlight: true,
+            googleSeen: true,
+          ),
+          isFalse,
+        );
+      }
+    });
+
+    test('an attempt this wall never joined cannot keep it covered', () {
+      expect(
+        wallBoxCovered(
+          surfaceUp: false,
+          ourWait: false,
+          inFlight: false,
+          googleSeen: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('the box steps aside for Google', () {
+    FadeTransition boxFade(WidgetTester tester) =>
+        tester.widget<FadeTransition>(
+          find
+              .ancestor(
+                of: find.byKey(kSignInPanelKey),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        );
+
+    // One frame starts the ticker, the next lands after the fade -> a single long pump reads 1.
+    Future<void> settleFade(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('gone and untappable while Google\'s surface is up', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      final l10n = await pump(tester);
+
+      SignInPhase.surfaceUp.value = true;
+      await settleFade(tester);
+
+      expect(boxFade(tester).opacity.value, 0);
+      // TalkBack must not land on a pill nobody can see.
+      expect(find.semantics.byAction(SemanticsAction.tap), findsNothing);
+      await tester.tap(find.text(l10n.signInGoogle), warnIfMissed: false);
+      await tester.pump();
+      expect(routes, isEmpty, reason: 'a hidden pill must not start anything');
+      semantics.dispose();
+    });
+
+    testWidgets('comes back for our own wait', (tester) async {
+      final l10n = await pump(tester);
+      SignInPhase.surfaceUp.value = true;
+      await settleFade(tester);
+
+      SignInPhase.exchanging.value = true;
+      await settleFade(tester);
+
+      expect(boxFade(tester).opacity.value, 1);
+      expect(find.text(l10n.signInSubtitleExchanging), findsOneWidget);
+    });
+
+    testWidgets('comes back, tappable, when the attempt settles', (
+      tester,
+    ) async {
+      final l10n = await pump(tester);
+      SignInPhase.surfaceUp.value = true;
+      await settleFade(tester);
+
+      SignInPhase.surfaceUp.value = false;
+      await settleFade(tester);
+
+      expect(boxFade(tester).opacity.value, 1);
+      await tester.tap(find.text(l10n.signInGoogle));
+      await tester.pump();
+      expect(routes, ['/browse']);
+    });
+
+    testWidgets('a wall that opens under a sheet already up starts hidden', (
+      tester,
+    ) async {
+      SignInPhase.surfaceUp.value = true;
+      await pump(tester);
+
+      expect(boxFade(tester).opacity.value, 0);
     });
   });
 

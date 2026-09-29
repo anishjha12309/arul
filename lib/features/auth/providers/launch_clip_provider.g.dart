@@ -52,7 +52,7 @@ final class LaunchClipProvider extends $NotifierProvider<LaunchClip, String?> {
   }
 }
 
-String _$launchClipHash() => r'bf2ad075cd9be4a1ac7b0c6c7b921d36b76f7a3d';
+String _$launchClipHash() => r'de7d23ffa2f4dde03aa7d9df141777150d7e6aa2';
 
 /// The regional poster's own live clip as a local file, once it may play over the poster; null
 /// keeps the poster, which is also every failure's answer (launch-surface.md).

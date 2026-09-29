@@ -96,14 +96,14 @@ where nothing observable changes.
 A missed `tap` prints what IS on screen, so one failure self-corrects.
 
 **Throttled and offline runs.** A flow that only ever ran on your Wi-Fi is untested: real installs
-sit on Airtel/Jio 4G, and every pre-login timeout fires there first. Throttle the EMULATOR's
-cellular link — `adb emu network speed edge` (or `gprs`) plus `adb emu network delay gsm|edge` —
-and `adb shell svc wifi disable` on it FIRST or nothing is throttled, because Wi-Fi is exempt.
-Verify the throttle took by watching the app's own `/geo` and `version.json` timings, not a
-download: toybox `nc` hangs through the emulator NAT. Windows Mobile Hotspot + `New-NetQosPolicy`
-fails unelevated, and a phone on Jio cannot be forced down to 2G/3G. For plain offline, turn mobile
-data off at the moment of the tap — `svc data enable` leaves `mobile_data=1` while the radio is
-still down, so assert the state you think you set.
+sit on Airtel/Jio 4G, and every pre-login timeout fires there first. Throttle the PHONE (Android 13+
+"Network download rate limit"): `adb shell settings put global ingress_rate_limit_bytes_per_second
+32000` (256 kbps; `8000` ≈ 2G), and `-1` to clear it — ALWAYS clear it after. It caps downloads on
+Wi-Fi and cellular alike (uploads and latency untouched) and needs kernel support: the A001 held
+30 KB/s on a 32000 cap. On another phone, time a known download first (the launch clip's `download
+start` → `on disk`). Offline = `svc wifi disable` where mobile data carries no internet, else data
+off too; assert `dumpsys connectivity` reads `Active default network: none`. Fallback without the
+setting: the emulator's `adb emu network speed edge`, Wi-Fi off first (Wi-Fi is exempt there).
 
 **Return page, no real mandate:** `DEBUG_RETURN_PAGE=on` (debug) opens it from any paywall; its button
 toasts. Uncut clips: `DEBUG_RETURN_CLIP_DIR=/data/user/0/com.hsrutility.arul/files/return`, filled via
