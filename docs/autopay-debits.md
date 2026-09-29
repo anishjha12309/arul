@@ -62,6 +62,9 @@ move `next_debit_at` past the notify window by 6 h (a bound in the WHERE, so the
   nothing, so oldest-due-first re-picked the same 200 in-flight orders every tick and no newer debit
   was ever redeemed; a PENDING check now bumps `updated_at` (guarded by the order id), the Pass D
   rotation.
+- **Pass B runs 4 lanes over one list** (800 rows, 2,400 calls a run). Workers queue a 7th connection
+  still waiting for headers, so more lanes only queue. The PhonePe token is fetched once before the lanes
+  start, and no budget check straddles an await, so the lanes cannot race either.
 - **Starvation symptom:** a growing WAITING list while `retry_count` stays 0 and no `Execute … state=`
   lines appear for the youngest due rows.
 

@@ -12,6 +12,7 @@ const phonepe = vi.hoisted(() => ({
   getOrderStatus: vi.fn(),
   getSubscriptionStatus: vi.fn(),
   notifyRedemption: vi.fn(),
+  getAccessToken: vi.fn(async () => "token"),
   buildMerchantOrderId: vi.fn(() => "DKS_R_NEW"),
 }));
 
@@ -632,11 +633,34 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
     }
   });
 
+  it("charges 4 rows at once and never a 5th", async () => {
+    const passB = Array.from({ length: 10 }, (_, i) => ({ ...dueRow(10 * 60 * 1000), id: `row-${i}` }));
+    const { sql } = makeSql(passB);
+    db.getDb.mockReturnValue(sql);
+
+    let inFlight = 0;
+    let peak = 0;
+    phonepe.executeRedemption.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return { state: "PENDING", transactionId: "T" };
+    });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(phonepe.executeRedemption).toHaveBeenCalledTimes(10);
+    expect(peak).toBe(4);
+    // One token per merchant before the lanes start -> no refresh race between them
+    expect(phonepe.getAccessToken).toHaveBeenCalledTimes(1);
+  });
+
   it("never spends a call Pass B needed — the run's budget is shared", async () => {
     atTick(0);
     try {
-      // A full Pass B of settling rows: 1 reconcile call + 3 reporter subrequests each -> the 600 budget is gone
-      const passB = Array.from({ length: 200 }, () => dueRow(3 * HOUR, "active"));
+      // A full Pass B of settling rows: 1 reconcile call + 3 reporter subrequests each -> the 2400 budget is gone
+      const passB = Array.from({ length: 800 }, () => dueRow(3 * HOUR, "active"));
       const { sql, executed } = makeSql(passB, [pausedRow()]);
       db.getDb.mockReturnValue(sql);
       phonepe.getOrderStatus.mockResolvedValue({

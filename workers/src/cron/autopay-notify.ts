@@ -12,6 +12,7 @@ import {
   executeRedemption,
   getSubscriptionStatus,
   getOrderStatus,
+  getAccessToken,
   buildMerchantOrderId,
   merchantOf,
   PhonePeApiError,
@@ -48,10 +49,19 @@ const NOTIFY_WINDOW_HOURS = 24;
  */
 const MAX_ROWS_PER_PASS = 200;
 
+/** Pass B runs EXECUTE_CONCURRENCY lanes, so it takes that many times Pass A's rows in the same wall time. */
+const MAX_EXECUTE_ROWS_PER_PASS = 800;
+
 /**
- * Raise it only after a real tick logs the warning, and add concurrency first (4 max; Workers allow 6 connections)
+ * Workers queue a 7th connection still waiting for headers, so 4 PhonePe calls in flight plus the DB stay clear
+ * of it; each lane still runs its own row strictly in order
  */
-const MAX_PHONEPE_CALLS_PER_RUN = 600;
+const EXECUTE_CONCURRENCY = 4;
+
+/**
+ * Each call is ~2 subrequests (the token's KV read + the fetch), well inside the paid plan's 10,000 per invocation
+ */
+const MAX_PHONEPE_CALLS_PER_RUN = 2400;
 
 const EXECUTE_AFTER_NOTIFY_MS = 24 * 60 * 60 * 1000;
 
@@ -271,7 +281,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       -- oldest-due-first re-picked the same 200 in-flight orders every run and nothing newer was ever redeemed
       ORDER BY (next_debit_at < ${new Date(now.getTime() - RECONCILE_STUCK_AFTER_MS).toISOString()}) ASC,
                updated_at ASC
-      LIMIT ${MAX_ROWS_PER_PASS}
+      LIMIT ${MAX_EXECUTE_ROWS_PER_PASS}
     `;
 
     // The scope is named because the COUNT alone is ambiguous -> a quarter tick and an hourly tick
@@ -280,19 +290,30 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       `[autopay-notify] Pass B — ${toExecute.length} subscriptions due for execute ` +
         `(${topOfHour ? "all orders, incl. past PhonePe's retry window" : "fresh orders only, stale deferred to the hourly tick"})`,
     );
-    if (toExecute.length === MAX_ROWS_PER_PASS) {
+    if (toExecute.length === MAX_EXECUTE_ROWS_PER_PASS) {
       console.warn(
-        `[autopay-notify] Pass B hit the ${MAX_ROWS_PER_PASS}-row cap — backlog continues next run`,
+        `[autopay-notify] Pass B hit the ${MAX_EXECUTE_ROWS_PER_PASS}-row cap — backlog continues next run`,
       );
     }
 
-    for (const row of toExecute) {
+    // A token refresh racing across the lanes would issue several at once -> fetch each merchant's once first
+    await Promise.all(
+      [...new Set(toExecute.map((r) => merchantOf(r.merchant_subscription_id as string)))].map((m) =>
+        getAccessToken(env, m).catch((err) =>
+          console.warn(`[autopay-notify] token warm-up failed (${m}):`, err),
+        ),
+      ),
+    );
+
+    // The budget check and its increment never straddle an await -> the lanes cannot overspend it between them
+    let stopped = false;
+    const executeRow = async (row: (typeof toExecute)[number]): Promise<void> => {
       const merchantSubId = row.merchant_subscription_id as string;
       const redemptionOrderId = row.redemption_order_id as string | null;
 
       if (!redemptionOrderId) {
         console.error(`[autopay-notify] No redemption_order_id for sub ${merchantSubId} — skipping execute`);
-        continue;
+        return;
       }
 
       // Belt to the SELECT's braces -> the 24h notify->execute window is re-checked -> no row can reach PhonePe early
@@ -302,7 +323,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Sub ${merchantSubId} notified ${Math.round((Date.now() - notifiedAt.getTime()) / 3_600_000)}h ago ` +
             `— inside PhonePe's 24h notify window, not executing yet`,
         );
-        continue;
+        return;
       }
 
       if (notifiedAt !== null && Date.now() - notifiedAt.getTime() > STALE_ORDER_MS && !topOfHour) {
@@ -310,7 +331,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Sub ${merchantSubId} order is ${Math.round((Date.now() - notifiedAt.getTime()) / 3_600_000)}h old ` +
             `— past PhonePe's retry window, reconciled on the hourly tick only`,
         );
-        continue;
+        return;
       }
 
       if (!budgetLeft(1)) {
@@ -318,7 +339,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
             `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
         );
-        break;
+        stopped = true;
+        return;
       }
 
       const outcomeRow = {
@@ -364,14 +386,14 @@ export async function runAutopayNotify(env: Env): Promise<void> {
                 (Date.now() - outcomeRow.periodEnd.getTime()) / 86_400_000,
               )}d past period end — dunning window exhausted, expired`,
             );
-            continue;
+            return;
           }
           await recycleRedemption(sql, outcomeRow.id);
           console.warn(
             `[autopay-notify] Order ${redemptionOrderId} for sub ${merchantSubId} ` +
               `expired unsettled — cleared for re-notify, debit still owed`,
           );
-          continue;
+          return;
         }
 
         if (r.state === "PENDING") {
@@ -380,18 +402,19 @@ export async function runAutopayNotify(env: Env): Promise<void> {
             `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
               `(order PENDING) — PhonePe owns the retry, not re-redeeming`,
           );
-          continue;
+          return;
         }
       }
 
-      if (settled) continue;
+      if (settled) return;
 
       if (!budgetLeft(1)) {
         console.warn(
           `[autopay-notify] Pass B stopping early — PhonePe call budget ` +
             `(${MAX_PHONEPE_CALLS_PER_RUN}) exhausted; rest retry next run`,
         );
-        break;
+        stopped = true;
+        return;
       }
 
       try {
@@ -460,7 +483,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           }
         }
       }
-    }
+    };
+
+    let nextRow = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(EXECUTE_CONCURRENCY, toExecute.length) }, async () => {
+        while (!stopped && nextRow < toExecute.length) {
+          await executeRow(toExecute[nextRow++]);
+        }
+      }),
+    );
 
     if (topOfHour && budgetLeft(1)) {
       const parkedPauses = await sql`
