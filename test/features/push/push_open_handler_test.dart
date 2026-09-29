@@ -209,6 +209,8 @@ class _RecordingApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     posts.add('$path ${body?['campaign_id']}');
     return {'ok': true};

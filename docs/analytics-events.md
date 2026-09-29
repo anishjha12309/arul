@@ -60,8 +60,9 @@ outcome is a process that died under Google's surface — the only way that loss
   `sheet_unavailable` (GA4-only) fires when the sheet could not RUN.
 - **`flushAt = 1`** — PostHog's default 20-event/30 s batch lost the install and sign-in outcome of
   everyone who left inside that window.
-- Every sign-in event carries **`install_channel`** (`google_ads` / `meta_ads` / `organic` / `share` /
-  `link` / `other` / `unknown`, off the Play referrer, with `install_utm_source`/`_campaign` beside it).
+- Sign-in events carry **`install_channel`** (`google_ads` / `meta_ads` / `organic` / `share` /
+  `link` / `other` / `unknown`, off the Play referrer, with `install_utm_source`/`_campaign` beside it)
+  — bar a fresh install's first `login_attempt`, which fires before Play answers; sign-in never waits.
   Play carries only same-session clicks, so an `organic`/`unknown`/`other` install is relabelled
   `meta_ads` when Meta's Install Referrer (`MetaInstallReferrer.kt`) holds a view-through or
   later-session touch. A wallpaper or ringtone link adds `+wallpaper`/`+ringtone` to the SAME value —

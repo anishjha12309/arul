@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:arul/app/l10n/app_localizations.dart';
+import 'package:arul/app/widgets/arul_hairline_loader.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
@@ -39,6 +40,9 @@ class _CountingAuthService implements AuthService {
   /// behind it, and nothing else on this screen cares which quiet outcome it gets.
   AuthResult next = const AuthCancelled();
 
+  /// When set, attempts wait on it instead of settling at once -> an attempt the wall can see RUN.
+  Completer<AuthResult>? hold;
+
   @override
   Future<AuthResult> signInWith(
     AuthProvider provider, {
@@ -47,12 +51,13 @@ class _CountingAuthService implements AuthService {
     bool reconnected = false,
     bool afterOffline = false,
     bool reopened = false,
+    bool afterTimeout = false,
   }) {
     signInCalls++;
     returnedFlags.add(returned);
     reconnectedFlags.add(reconnected);
     afterOfflineFlags.add(afterOffline);
-    return Future.value(next);
+    return hold?.future ?? Future.value(next);
   }
 
   @override
@@ -89,15 +94,11 @@ void main() {
     auth = _CountingAuthService();
     routes = [];
     SignInPhase.exchanging.value = false;
-    SignInPhase.surfaceUp.value = false;
     SharedPreferences.setMockInitialValues(<String, Object>{});
     prefs = await SharedPreferences.getInstance();
   });
 
-  tearDown(() {
-    SignInPhase.exchanging.value = false;
-    SignInPhase.surfaceUp.value = false;
-  });
+  tearDown(() => SignInPhase.exchanging.value = false);
 
   Future<AppLocalizations> pump(
     WidgetTester tester, {
@@ -192,19 +193,6 @@ void main() {
       expect(find.text(l10n.signInNudgeRetry), findsNothing);
     });
 
-    testWidgets('the exchange is the ONE wait the app claims', (tester) async {
-      final l10n = await pump(tester, outcome: SignInOutcome.backedOutQuick);
-      SignInPhase.exchanging.value = true;
-      await tester.pump();
-
-      expect(find.text(l10n.signInSubtitleExchanging), findsOneWidget);
-      expect(
-        find.text(l10n.signInNudgeRetry),
-        findsNothing,
-        reason: 'an attempt in flight has not failed yet',
-      );
-    });
-
     testWidgets('every failure shows the same retry line and nothing else', (
       tester,
     ) async {
@@ -233,97 +221,28 @@ void main() {
     });
   });
 
-  // Google's sheet lands ON the wall, and a tap aimed at the pill closes it (45% of re-taps came
-  // within 2 s). So the whole box leaves while Google's surface is up and returns for our own wait
-  // and the settle. A box that stays gone after the settle is a wall with nothing to tap.
-  // The guard chains the picker after a dismissed sheet, the add-account reopen and the stall
-  // relaunch into ONE attempt; on the device the box flashed in each gap between them.
-  group('when the box counts as covered', () {
-    test('the idle wall shows it', () {
-      expect(
-        wallBoxCovered(
-          surfaceUp: false,
-          ourWait: false,
-          inFlight: false,
-          googleSeen: false,
-        ),
-        isFalse,
-      );
-    });
+  // Google's sheet lands ON the wall, and a tap aimed at the pill closed it (45% of re-taps came
+  // within 2 s). So nothing of the box shows while an attempt runs: the splash's hairline carries
+  // every wait instead, under Google's own screens too, or the gaps between them read as dead.
+  group('what the wall shows while an attempt runs', () {
+    test(
+      'the box shows only once the first frame decided and nothing runs',
+      () {
+        expect(wallShowsBox(decided: false, inFlight: false), isFalse);
+        expect(wallShowsBox(decided: true, inFlight: false), isTrue);
+        expect(wallShowsBox(decided: true, inFlight: true), isFalse);
+        expect(wallShowsBox(decided: false, inFlight: true), isFalse);
+      },
+    );
 
-    test('Google\'s surface covers it', () {
-      expect(
-        wallBoxCovered(
-          surfaceUp: true,
-          ourWait: false,
-          inFlight: true,
-          googleSeen: true,
-        ),
-        isTrue,
-      );
-    });
-
-    test('the gap between chained Google surfaces keeps it covered', () {
-      expect(
-        wallBoxCovered(
-          surfaceUp: false,
-          ourWait: false,
-          inFlight: true,
-          googleSeen: true,
-        ),
-        isTrue,
-      );
-    });
-
-    test('before any Google surface, the in-flight wait shows it', () {
-      expect(
-        wallBoxCovered(
-          surfaceUp: false,
-          ourWait: false,
-          inFlight: true,
-          googleSeen: false,
-        ),
-        isFalse,
-      );
-    });
-
-    test('our own exchange always shows it', () {
-      for (final surfaceUp in [false, true]) {
-        expect(
-          wallBoxCovered(
-            surfaceUp: surfaceUp,
-            ourWait: true,
-            inFlight: true,
-            googleSeen: true,
-          ),
-          isFalse,
-        );
-      }
-    });
-
-    test('an attempt this wall never joined cannot keep it covered', () {
-      expect(
-        wallBoxCovered(
-          surfaceUp: false,
-          ourWait: false,
-          inFlight: false,
-          googleSeen: true,
-        ),
-        isFalse,
-      );
-    });
-  });
-
-  group('the box steps aside for Google', () {
-    FadeTransition boxFade(WidgetTester tester) =>
-        tester.widget<FadeTransition>(
+    double fadeOf(WidgetTester tester, Finder target) => tester
+        .widget<FadeTransition>(
           find
-              .ancestor(
-                of: find.byKey(kSignInPanelKey),
-                matching: find.byType(FadeTransition),
-              )
+              .ancestor(of: target, matching: find.byType(FadeTransition))
               .first,
-        );
+        )
+        .opacity
+        .value;
 
     // One frame starts the ticker, the next lands after the fade -> a single long pump reads 1.
     Future<void> settleFade(WidgetTester tester) async {
@@ -331,59 +250,79 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    testWidgets('gone and untappable while Google\'s surface is up', (
-      tester,
-    ) async {
+    testWidgets('an attempt swaps the box for the hairline, and its settle '
+        'swaps them back', (tester) async {
       final semantics = tester.ensureSemantics();
-      final l10n = await pump(tester);
+      final link = StreamController<bool>();
+      addTearDown(link.close);
+      auth.next = const AuthFailure(
+        message: "Sign-in didn't complete. Check your internet connection…",
+        kind: AuthFailureKind.unknown,
+      );
+      final l10n = await pump(tester, online: link.stream);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(SignInScreen)),
+        listen: false,
+      );
+      final t0 = DateTime(2026, 9, 15, 10);
+      var clock = t0;
+      final controller = container.read(authControllerProvider.notifier)
+        ..now = (() => clock)
+        ..stallTick = const Duration(milliseconds: 10)
+        ..lifecycleProbe = (() => AppLifecycleState.resumed);
 
-      SignInPhase.surfaceUp.value = true;
+      // A network failure, then the link returning: the one re-arm this define-less build can run
+      // through the wall's own `_signIn`, which is what marks an attempt as in flight.
+      unawaited(controller.autoSignIn(AuthProvider.google)!);
+      await tester.pump();
+      final hold = Completer<AuthResult>();
+      auth.hold = hold;
+      clock = t0.add(const Duration(seconds: 10));
+      link.add(false);
+      await tester.pump();
+      clock = t0.add(const Duration(seconds: 20));
+      link.add(true);
       await settleFade(tester);
 
-      expect(boxFade(tester).opacity.value, 0);
-      // TalkBack must not land on a pill nobody can see.
-      expect(find.semantics.byAction(SemanticsAction.tap), findsNothing);
+      expect(auth.signInCalls, 2);
+      expect(fadeOf(tester, find.byKey(kSignInPanelKey)), 0);
+      expect(fadeOf(tester, find.byType(ArulHairlineLoader)), 1);
+      expect(
+        find.semantics.byAction(SemanticsAction.tap),
+        findsNothing,
+        reason: 'TalkBack must not land on a pill nobody can see',
+      );
       await tester.tap(find.text(l10n.signInGoogle), warnIfMissed: false);
       await tester.pump();
       expect(routes, isEmpty, reason: 'a hidden pill must not start anything');
+
+      // Google's sheet or picker on top of the wall.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await settleFade(tester);
+      expect(fadeOf(tester, find.byKey(kSignInPanelKey)), 0);
+      expect(
+        fadeOf(tester, find.byType(ArulHairlineLoader)),
+        1,
+        reason: 'the hairline runs under Google too, or its gaps read as dead',
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      hold.complete(const AuthCancelled());
+      await settleFade(tester);
+
+      expect(fadeOf(tester, find.byKey(kSignInPanelKey)), 1);
+      expect(fadeOf(tester, find.byType(ArulHairlineLoader)), 0);
+      expect(find.text(l10n.signInNudgeRetry), findsOneWidget);
       semantics.dispose();
     });
 
-    testWidgets('comes back for our own wait', (tester) async {
-      final l10n = await pump(tester);
-      SignInPhase.surfaceUp.value = true;
-      await settleFade(tester);
-
-      SignInPhase.exchanging.value = true;
-      await settleFade(tester);
-
-      expect(boxFade(tester).opacity.value, 1);
-      expect(find.text(l10n.signInSubtitleExchanging), findsOneWidget);
-    });
-
-    testWidgets('comes back, tappable, when the attempt settles', (
-      tester,
-    ) async {
-      final l10n = await pump(tester);
-      SignInPhase.surfaceUp.value = true;
-      await settleFade(tester);
-
-      SignInPhase.surfaceUp.value = false;
-      await settleFade(tester);
-
-      expect(boxFade(tester).opacity.value, 1);
-      await tester.tap(find.text(l10n.signInGoogle));
-      await tester.pump();
-      expect(routes, ['/browse']);
-    });
-
-    testWidgets('a wall that opens under a sheet already up starts hidden', (
-      tester,
-    ) async {
-      SignInPhase.surfaceUp.value = true;
+    testWidgets('an idle wall shows the box and no hairline', (tester) async {
       await pump(tester);
+      await settleFade(tester);
 
-      expect(boxFade(tester).opacity.value, 0);
+      expect(fadeOf(tester, find.byKey(kSignInPanelKey)), 1);
+      expect(fadeOf(tester, find.byType(ArulHairlineLoader)), 0);
     });
   });
 

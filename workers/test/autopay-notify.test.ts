@@ -69,7 +69,12 @@ interface Executed {
  * A SQL mock that dispatches on the query TEXT -> this cron runs several different statements per pass.
  * A one-size mock cannot express "Pass A finds nothing, Pass B finds this row"
  */
-function makeSql(passBRows: unknown[], passDRows: unknown[] = [], passARows: unknown[] = []) {
+function makeSql(
+  passBRows: unknown[],
+  passDRows: unknown[] = [],
+  passARows: unknown[] = [],
+  opts: { settledElsewhere?: boolean } = {},
+) {
   const executed: Executed[] = [];
 
   const fn = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
@@ -89,6 +94,10 @@ function makeSql(passBRows: unknown[], passDRows: unknown[] = [], passARows: unk
     if (text.includes("FROM subscriptions WHERE status = 'paused'")) {
       return Promise.resolve(passDRows);
     }
+    // The settle claims the order -> a row back means this run settled it, none means the webhook did
+    if (text.includes("status = 'active'")) {
+      return Promise.resolve(opts.settledElsewhere ? [] : [{ updated_at: new Date().toISOString() }]);
+    }
     return Promise.resolve([]);
   });
 
@@ -99,6 +108,11 @@ function makeSql(passBRows: unknown[], passDRows: unknown[] = [], passARows: unk
 /** Every UPDATE the run issued -> the row's final state is asserted from these, not from a return value. */
 function updates(executed: Executed[]): Executed[] {
   return executed.filter((e) => /^UPDATE subscriptions/i.test(e.text));
+}
+
+/** UPDATEs that change the row — the queue rotation only moves updated_at. */
+function stateWrites(executed: Executed[]): Executed[] {
+  return updates(executed).filter((e) => !e.text.startsWith("UPDATE subscriptions SET updated_at = now()"));
 }
 
 function dueRow(overdueMs: number, status = "trialing", notifiedAgoMs = 25 * HOUR, retryCount = 0) {
@@ -174,6 +188,22 @@ describe("Pass B — a settled debit is always recorded", () => {
     expect(posthog.reportPostHogFirstConversion).toHaveBeenCalledTimes(1);
   });
 
+  it("counts nothing twice when the webhook settled the order first", async () => {
+    // The webhook clears redemption_order_id -> the cron's claim matches no row -> no second ₹199, reward or report
+    const { sql, executed } = makeSql([dueRow(10 * 60 * 1000)], [], [], { settledElsewhere: true });
+    db.getDb.mockReturnValue(sql);
+
+    phonepe.executeRedemption.mockResolvedValue({ state: "COMPLETED", transactionId: "T9" });
+
+    await runAutopayNotify(makeEnv());
+
+    const settle = updates(executed).find((u) => u.text.includes("status = 'active'"));
+    expect(settle!.text).toContain("AND redemption_order_id = ?");
+    expect(settle!.values).toContain(ORDER);
+    expect(referral.grantReferralReward).not.toHaveBeenCalled();
+    expect(posthog.reportPostHogFirstConversion).not.toHaveBeenCalled();
+  });
+
   it("reports a RENEWAL (prior status 'active') to nothing — never PostHog", async () => {
     const { sql, executed } = makeSql([dueRow(3 * HOUR, "active")]);
     db.getDb.mockReturnValue(sql);
@@ -230,7 +260,7 @@ describe("Pass B — a settled debit is always recorded", () => {
 
     await runAutopayNotify(makeEnv());
 
-    expect(updates(executed)).toHaveLength(0);
+    expect(stateWrites(executed)).toHaveLength(0);
     expect(posthog.reportPostHogFirstConversion).not.toHaveBeenCalled();
   });
 });
@@ -265,6 +295,26 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
     await runAutopayNotify(makeEnv());
 
     expect(phonepe.executeRedemption).not.toHaveBeenCalled();
+  });
+
+  it("sends a still-PENDING order to the back of the queue, fresh debits first", async () => {
+    // Oldest-due-first with a 200 cap re-picked the same in-flight orders every run -> no newer debit was redeemed
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+
+    phonepe.getOrderStatus.mockResolvedValue({
+      state: "PENDING",
+      expireAt: Date.now() + 24 * HOUR,
+    });
+
+    await runAutopayNotify(makeEnv());
+
+    const select = executed.find((e) => e.text.includes("notified_at IS NOT NULL"));
+    expect(select!.text).toContain("ORDER BY (next_debit_at < ?) ASC, updated_at ASC");
+    const touch = updates(executed).find((u) => u.text.includes("SET updated_at = now()"));
+    expect(touch, "a PENDING check must rotate the row").toBeDefined();
+    expect(touch!.text).toContain("AND redemption_order_id = ?");
+    expect(touch!.values).toEqual(["row-1", ORDER]);
   });
 
   it("makes NO call for an order older than 48h off the top of the hour", async () => {
@@ -413,7 +463,7 @@ describe("Pass B — no pointless redeem against a PhonePe-controlled retry", ()
     // A duplicate PROVES the mandate works -> asking after its state burns a call to learn nothing
     expect(phonepe.getSubscriptionStatus).not.toHaveBeenCalled();
     // And it must never be mistaken for a dead subscription -> parking a working mandate stops all future billing
-    expect(updates(executed)).toHaveLength(0);
+    expect(stateWrites(executed)).toHaveLength(0);
   });
 });
 

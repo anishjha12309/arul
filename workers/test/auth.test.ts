@@ -19,18 +19,21 @@ vi.mock("../src/lib/db.js", () => ({
 }));
 
 // verifyGoogleIdToken is controlled per test -> each case sets the claims it needs
-vi.mock("../src/lib/google.js", () => ({
+// The error class stays REAL -> handleLogin tells a key outage from a bad token with instanceof
+vi.mock("../src/lib/google.js", async (importOriginal) => ({
+  GoogleKeysUnavailableError: (await importOriginal<typeof import("../src/lib/google.js")>())
+    .GoogleKeysUnavailableError,
   verifyGoogleIdToken: vi.fn(),
 }));
 
 import { handleLogin, handleRefresh, handleLogout } from "../src/routes/auth.js";
-import { verifyGoogleIdToken } from "../src/lib/google.js";
+import { verifyGoogleIdToken, GoogleKeysUnavailableError } from "../src/lib/google.js";
 
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 
 function envWithSql(rows: unknown[]) {
-  const env = makeEnv({ JWT_SECRET });
+  const env = makeEnv({ JWT_SECRET, TRIAL_TOMBSTONE_SECRET: "test-tombstone-secret" });
   const { sql, capturedArgs } = makeMockSql(rows);
   (env as unknown as { _testSql: unknown })._testSql = sql;
   return { env, capturedArgs };
@@ -39,7 +42,10 @@ function envWithSql(rows: unknown[]) {
 // ── POST /auth/login ──────────────────────────────────────────────────────────
 
 describe("POST /auth/login", () => {
-  beforeEach(() => vi.mocked(verifyGoogleIdToken).mockReset());
+  // A block body, never an arrow expression -> vitest runs a function returned from beforeEach as teardown
+  beforeEach(() => {
+    vi.mocked(verifyGoogleIdToken).mockReset();
+  });
 
   it("400 on invalid JSON body", async () => {
     const { env } = envWithSql([]);
@@ -53,10 +59,26 @@ describe("POST /auth/login", () => {
     expect(res.status).toBe(400);
   });
 
-  // The "verifyGoogleIdToken throws -> 401" path is deliberately NOT automated here
-  // vitest's vi.fn wrapper turns the mock's throw into a rejected promise its detector flags as a failure
-  // handleLogin catches it correctly and returns 401 -> the test would fail on the harness, not the code
-  // The success path below exercises the same verifyGoogleIdToken wiring
+  it("401 invalid_token when Google rejects the token itself", async () => {
+    vi.mocked(verifyGoogleIdToken).mockRejectedValue(new Error('"exp" claim timestamp check failed'));
+    const { env, capturedArgs } = envWithSql([]);
+    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "expired" } }));
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("invalid_token");
+    expect(capturedArgs).toHaveLength(0);
+  });
+
+  // A key outage never judged the token -> 401 would tell the app the ACCOUNT is bad
+  it("503 google_keys_unavailable when Google's signing keys cannot be fetched", async () => {
+    vi.mocked(verifyGoogleIdToken).mockRejectedValue(
+      new GoogleKeysUnavailableError("Google JWKS fetch timed out"),
+    );
+    const { env, capturedArgs } = envWithSql([]);
+    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("google_keys_unavailable");
+    expect(capturedArgs).toHaveLength(0);
+  });
 
   it("returns our JWT pair + user envelope for an existing user", async () => {
     vi.mocked(verifyGoogleIdToken).mockResolvedValue({
@@ -158,18 +180,18 @@ describe("POST /auth/login", () => {
     });
   });
 
-  // ── Trial-tombstone pre-seed on re-signup ──────────────────────────────────
+  // ── The one-statement upsert and the trial-tombstone pre-seed ─────────────
   // The one part of the delete-then-re-signup chain the verify-payments harness CANNOT reach -> it needs a real idToken
   // The harness proves the tombstone lands with the exact HMAC this branch recomputes -> these prove the branch acts on it
-  // A ROUTED mock is required -> the flow is several distinct queries, the users UPDATE missing and the lookup hitting
-  // A same-rows-for-everything mock cannot express that split
-  function routedSql(routes: Array<{ match: RegExp; rows: unknown[] }>) {
+  // A ROUTED mock records each statement's text and values -> the upsert, the referral capture and a retry are told apart
+  function routedSql(routes: Array<{ match: RegExp; rows: unknown[] | (() => Promise<unknown[]>) }>) {
     const calls: Array<{ text: string; values: unknown[] }> = [];
     const fn = vi.fn((...args: unknown[]) => {
       const text = Array.isArray(args[0]) ? (args[0] as string[]).join("¤") : String(args[0]);
       calls.push({ text, values: args.slice(1) });
       const r = routes.find((rt) => rt.match.test(text));
-      return Promise.resolve(r ? r.rows : []);
+      if (!r) return Promise.resolve([]);
+      return typeof r.rows === "function" ? r.rows() : Promise.resolve(r.rows);
     });
     const sql = Object.assign(fn, { end: vi.fn().mockResolvedValue(undefined) });
     return { sql, calls };
@@ -177,28 +199,42 @@ describe("POST /auth/login", () => {
 
   const TOMB_SECRET = "test-tombstone-secret";
   const TRIAL_END = new Date("2026-08-01T00:00:00.000Z");
+  const UPSERT = /INSERT INTO users[\s\S]*ON CONFLICT \(google_sub\) DO UPDATE/;
 
-  it("new user WITH a tombstone → pre-seeds a consumed-trial 'expired' row", async () => {
+  function claimsFor(sub: string) {
     vi.mocked(verifyGoogleIdToken).mockResolvedValue({
-      sub: "google-sub-returning",
-      email: "back@example.com",
+      sub,
+      email: `${sub}@example.com`,
       email_verified: true,
-      name: "Back Again",
+      name: "Name",
       nonce: undefined,
     });
-    const { sql, calls } = routedSql([
-      { match: /UPDATE users[\s\S]*google_sub/, rows: [] }, // no account
-      {
-        match: /INSERT INTO users/,
-        rows: [{ id: USER_ID, display_name: "Back Again", referral_code: "NEWCODE1" }],
-      },
-      { match: /trial_tombstones/, rows: [{ trial_end: TRIAL_END }] },
-      { match: /INSERT INTO subscriptions/, rows: [] },
-    ]);
+  }
+
+  function envFor(sql: unknown) {
     const env = makeEnv({ TRIAL_TOMBSTONE_SECRET: TOMB_SECRET });
     (env as unknown as { _testSql: unknown })._testSql = sql;
+    return env;
+  }
 
-    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+  it("new user WITH a tombstone → the SAME statement looks it up and pre-seeds a consumed-trial row", async () => {
+    claimsFor("google-sub-returning");
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: [
+          {
+            id: USER_ID,
+            display_name: "Back Again",
+            referral_code: "NEWCODE1",
+            inserted: true,
+            tomb_trial_end: TRIAL_END,
+          },
+        ],
+      },
+    ]);
+
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
 
     // The lookup must use the SAME HMAC DELETE /me wrote -> recompute it INDEPENDENTLY here, not via the lib
@@ -213,47 +249,49 @@ describe("POST /auth/login", () => {
     const sig = await crypto.subtle.sign("HMAC", key, enc.encode("google-sub-returning"));
     const expectedHash = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-    const tombLookup = calls.find((c) => /trial_tombstones/.test(c.text));
-    expect(tombLookup?.values).toContain(expectedHash);
-
-    // The pre-seed itself -> 'expired' is in the SQL text; the user id and trial_end ride as parameters
+    // ONE round trip: lookup, upsert and pre-seed are one statement -> a failure anywhere fails the login
+    expect(calls).toHaveLength(1);
+    const stmt = calls[0]!;
+    expect(stmt.text).toMatch(/trial_tombstones/);
+    expect(stmt.values).toContain(expectedHash);
     // That row is what makes the next /payments/initiate a ₹199 TRANSACTION instead of a second free trial
-    const preSeed = calls.find((c) => /INSERT INTO subscriptions/.test(c.text));
-    expect(preSeed).toBeDefined();
+    expect(stmt.text).toMatch(/INSERT INTO subscriptions[\s\S]*'expired'[\s\S]*WHERE up\.inserted/);
     // A re-signup after deleting the account is NEW but cannot trial -> it must not count as a trial miss
     expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toMatchObject({
       new_user: true,
       sub_status: "expired",
       trial_used: true,
     });
-    expect(preSeed!.text).toContain("'expired'");
-    expect(preSeed!.values).toContain(USER_ID);
-    expect(preSeed!.values).toContain(TRIAL_END);
   });
 
-  it("new user WITHOUT a tombstone → no subscriptions pre-seed at all", async () => {
-    vi.mocked(verifyGoogleIdToken).mockResolvedValue({
-      sub: "google-sub-fresh",
-      email: "fresh@example.com",
-      email_verified: true,
-      name: "Fresh",
-      nonce: undefined,
-    });
+  it("new user WITHOUT a tombstone → new_user analytics, trial still open", async () => {
+    claimsFor("google-sub-fresh");
     const { sql, calls } = routedSql([
-      { match: /UPDATE users[\s\S]*google_sub/, rows: [] },
       {
-        match: /INSERT INTO users/,
-        rows: [{ id: USER_ID, display_name: "Fresh", referral_code: "NEWCODE2" }],
+        match: UPSERT,
+        rows: [
+          {
+            id: USER_ID,
+            display_name: "Fresh",
+            referral_code: "NEWCODE2",
+            inserted: true,
+            tomb_trial_end: null,
+          },
+        ],
       },
-      { match: /trial_tombstones/, rows: [] }, // never trialed before deleting
     ]);
-    const env = makeEnv({ TRIAL_TOMBSTONE_SECRET: TOMB_SECRET });
-    (env as unknown as { _testSql: unknown })._testSql = sql;
 
-    const res = await handleLogin(makeCtx({ env, jsonBody: { idToken: "valid" } }));
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
-    expect(calls.some((c) => /INSERT INTO subscriptions/.test(c.text))).toBe(false);
-    expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toEqual({
+    expect(calls).toHaveLength(1);
+    const body = (await res.json()) as { user: Record<string, unknown>; analytics: Record<string, unknown> };
+    expect(body.user).toEqual({
+      id: USER_ID,
+      displayName: "Fresh",
+      email: "google-sub-fresh@example.com",
+      referralCode: "NEWCODE2",
+    });
+    expect(body.analytics).toEqual({
       new_user: true,
       sub_status: "none",
       trial_used: false,
@@ -261,6 +299,126 @@ describe("POST /auth/login", () => {
       internal: false,
       paid_before: false,
       referred: false,
+    });
+  });
+
+  it("the upsert keeps a custom display name and syncs email through EXCLUDED", async () => {
+    claimsFor("google-sub-sync");
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: [{ id: USER_ID, display_name: "Mine", referral_code: "OLDCODE1", inserted: false }],
+      },
+    ]);
+    await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
+    const text = calls[0]!.text;
+    expect(text).toMatch(/CASE WHEN users\.display_name_custom\s+THEN users\.display_name/);
+    expect(text).toMatch(/COALESCE\(EXCLUDED\.display_name, users\.display_name\)/);
+    expect(text).toMatch(/email\s+= EXCLUDED\.email/);
+    expect(text).toMatch(/\(xmax = 0\) AS inserted/);
+  });
+
+  it("a referral-code collision retries the upsert ONCE with a fresh code", async () => {
+    claimsFor("google-sub-collide");
+    let attempt = 0;
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: () => {
+          attempt++;
+          if (attempt === 1) {
+            return Promise.reject(
+              Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" }),
+            );
+          }
+          return Promise.resolve([
+            {
+              id: USER_ID,
+              display_name: "C",
+              referral_code: "RETRIED1",
+              inserted: true,
+              tomb_trial_end: null,
+            },
+          ]);
+        },
+      },
+    ]);
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(2);
+    // The referral code is the INSERT's fifth bound value -> the retry must not resend the colliding one
+    const codeOf = (i: number) => calls[i]!.values[4];
+    expect(typeof codeOf(0)).toBe("string");
+    expect(codeOf(0)).not.toBe(codeOf(1));
+  });
+
+  it("a second collision fails the login instead of looping", async () => {
+    claimsFor("google-sub-collide-twice");
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: () => Promise.reject(Object.assign(new Error("duplicate key"), { code: "23505" })),
+      },
+    ]);
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(500);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("a failed tombstone lookup FAILS the login (fail-closed)", async () => {
+    claimsFor("google-sub-dbfail");
+    const { sql } = routedSql([{ match: UPSERT, rows: () => Promise.reject(new Error("connection lost")) }]);
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
+    expect(res.status).toBe(500);
+  });
+
+  it("a new user with a referral code captures it after the upsert", async () => {
+    claimsFor("google-sub-referred");
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: [
+          { id: USER_ID, display_name: "R", referral_code: "NEWCODE3", inserted: true, tomb_trial_end: null },
+        ],
+      },
+    ]);
+    await handleLogin(
+      makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid", referralCode: "FRIEND23" } }),
+    );
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls.slice(1).some((c) => c.values.includes("FRIEND23"))).toBe(true);
+  });
+
+  // A hedged second POST for a brand-new account lands here too -> the first one owns the pre-seed and the referral
+  it("a returning user (inserted = false) gets no referral capture and no second statement", async () => {
+    claimsFor("google-sub-back");
+    const { sql, calls } = routedSql([
+      {
+        match: UPSERT,
+        rows: [
+          {
+            id: USER_ID,
+            display_name: "B",
+            referral_code: "OLDCODE2",
+            inserted: false,
+            tomb_trial_end: TRIAL_END,
+            sub_status: "trialing",
+            trial_used: true,
+            account_age_d: 3,
+          },
+        ],
+      },
+    ]);
+    const res = await handleLogin(
+      makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid", referralCode: "FRIEND23" } }),
+    );
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toMatchObject({
+      new_user: false,
+      sub_status: "trialing",
+      trial_used: true,
+      account_age_d: 3,
     });
   });
 

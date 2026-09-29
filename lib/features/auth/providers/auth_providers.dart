@@ -397,6 +397,9 @@ class AuthController extends _$AuthController {
 
     // The add-account reopen is ONE-SHOT per attempt, like [relaunched].
     var reopened = false;
+    // So is the re-ask after a cold Play services timed the picker out: the next query answers
+    // in ~0.1 s once it is warm, where the person otherwise read "couldn't sign in".
+    var requeried = false;
 
     // A result lands in onActivityResult, a beat before our own surface is resumed again.
     Future<bool> foregroundWithinGrace() async {
@@ -414,6 +417,17 @@ class AuthController extends _$AuthController {
           result.kind == AuthFailureKind.noPlayServices) {
         unawaited(playServices.ensureAvailable());
         return null;
+      }
+      if (!requeried && result is AuthFailure && result.providerTimedOut) {
+        requeried = true;
+        if (!await foregroundWithinGrace()) return null;
+        sinceForeground = DateTime.now();
+        wasMidFlow = false;
+        return (
+          next: ref
+              .read(authServiceProvider)
+              .signInWith(provider, afterTimeout: true),
+        );
       }
       if (!reopened &&
           result is AuthCancelled &&

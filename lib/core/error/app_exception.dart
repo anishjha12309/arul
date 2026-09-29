@@ -44,9 +44,12 @@ final class NotFoundException extends AppException {
 /// True when [error] is connectivity-class — offline, unreachable host, timed-out socket.
 /// Decides whether to surface a "check your internet" message plus retry.
 /// A non-2xx HTTP *response* is NOT a network error — it means the server was reached.
+/// A TLS failure is one: `http`'s IOClient wraps only Socket/HttpException, so a handshake cut on a
+/// flaky link (or a captive portal's certificate) reached callers raw and failed a picked sign-in.
 bool isNetworkError(Object error) =>
     error is NetworkException ||
     error is SocketException ||
+    error is TlsException ||
     error is TimeoutException ||
     error is HttpException ||
     error is http.ClientException;

@@ -1,5 +1,7 @@
 // mapException() is the data-layer boundary -> raw errors become typed AppExceptions there -> this pins that mapping.
 
+import 'dart:io';
+
 import 'package:arul/core/error/app_exception.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,6 +54,26 @@ void main() {
 
     test('falls back to ServerException for anything else', () {
       expect(mapException(Exception('teapot')), isA<ServerException>());
+    });
+  });
+
+  group('isNetworkError', () {
+    test(
+      'a TLS failure is connectivity-class, so a picked sign-in retries it',
+      () {
+        expect(
+          isNetworkError(
+            const HandshakeException('terminated during handshake'),
+          ),
+          isTrue,
+        );
+        expect(isNetworkError(const TlsException('bad record')), isTrue);
+      },
+    );
+
+    test('a server response is not', () {
+      expect(isNetworkError(const ServerException()), isFalse);
+      expect(isNetworkError(StateError('x')), isFalse);
     });
   });
 }

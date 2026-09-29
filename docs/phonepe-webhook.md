@@ -35,6 +35,10 @@ invisible until a debit fails. Never let the webhook become the only path to a c
 - **Order events nest the ids under `payload.paymentFlow`**; state-change events keep them top-level.
   Read through `merchantSubscriptionIdOf()` — the flat read acked every real redemption webhook as
   "Missing merchantSubscriptionId".
+- **One debit settles once.** PhonePe sends an order AND a transaction event per redemption and the
+  cron settles it too; the KV key differs per event, so each writer added another ₹199 to
+  `debit_count`/`paid_paise`. Every settle claims the order in its WHERE (`redemption_order_id =`)
+  and clears it; a writer that matches no row grants, rewards and reports nothing.
 - Intent-flow setups emit `subscription.setup.order.completed/failed`; the Worker aliases the
   `checkout.order.*` names onto the same branches.
 - PostHog captures run in `waitUntil`, after the 200 — an analytics round-trip never holds PhonePe's

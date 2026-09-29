@@ -654,6 +654,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       // Every SET and WHERE column is qualified -> both aliases expose the same column names
       const nextEnd = addOneMonth(new Date());
       const phonepeSubId = phonePeSubscriptionIdOf(pp);
+      const settledOrderId = pp.merchantOrderId ?? null;
 
       const activated = await sql<
         {
@@ -672,6 +673,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             current_period_end      = ${nextEnd.toISOString()},
             next_debit_at           = ${nextEnd.toISOString()},
             notified_at             = NULL,
+            redemption_order_id     = NULL,
             retry_count             = 0,
             first_debit_at          = COALESCE(s.first_debit_at, now()),
             debit_count             = s.debit_count + 1,
@@ -680,11 +682,20 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         FROM subscriptions AS prior
         WHERE (s.merchant_subscription_id = ${merchantSubId} OR s.superseded_mandate_id = ${merchantSubId})
           AND prior.id = s.id
+          -- One settle per order: the cron's settle clears redemption_order_id and moves next_debit_at a month out,
+          -- so this matches only an order still in flight, or a debit still owed whose order was recycled
+          AND (s.redemption_order_id = ${settledOrderId}
+               OR (s.redemption_order_id IS NULL
+                   AND (s.next_debit_at IS NULL OR s.next_debit_at <= now() + interval '1 day')))
         RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.upi_target_app,
                   prior.merchant_subscription_id AS prior_mandate_id
       `;
 
-      console.log(`[payments/webhook] Active for sub ${merchantSubId}, period_end=${nextEnd.toISOString()}`);
+      console.log(
+        activated.length > 0
+          ? `[payments/webhook] Active for sub ${merchantSubId}, period_end=${nextEnd.toISOString()}`
+          : `[payments/webhook] Order ${settledOrderId ?? "?"} for sub ${merchantSubId} already settled — no second grant`,
+      );
 
       // Referral reward -> this user just made a paid debit -> only the FIRST ever grants, via the status<>'rewarded' guard
       if (activated.length > 0) {

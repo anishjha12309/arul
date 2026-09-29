@@ -90,3 +90,17 @@ client id, and the request nonce must match the token's ([auth.md](auth.md)). Ph
 ([phonepe-webhook.md](phonepe-webhook.md)). All SQL is parameterized and scoped to the verified sub;
 upload keys are forced under `user/<sub>/`; canonical media is writable only through the CMS or
 approval. Secrets live in the Worker only; the app holds none.
+
+Google's JWKS is cached in memory and the colo's Cache API (Google's max-age, ≤ 6 h; jose's own set
+ignores Cache-Control). A failed key fetch answers 503 `google_keys_unavailable`, never 401, which the
+app would read as a bad account. The session is mirrored into Google's Block Store on every token
+write and deleted with the tokens: it survives an uninstall (Backup on) and a device restore, so a
+fresh install seeds it and the first 401 refreshes or ends it. Every fresh install's sheet waits on
+the read (~0.3 s), so MainActivity starts it at engine setup on a first launch (the shared_preferences
+cohort marker absent) and Dart collects it (~0.1 s left), capped at 600 ms. Block Store also survives `pm clear`: timing builds pass
+`--dart-define=SESSION_RESTORE=false` or every run after the first skips the sheet.
+
+The API client is dart:io with a 120 s idle socket and a warm-up when Google's surface shows — the
+default 15 s idle dropped the splash's socket before a person picked an account. **cronet_http is a
+dead end on this Gradle**: Play's Cronet pulls `cronet-api` and `cronet-shared`, both namespace
+`org.chromium.net`, and the manifest merger fails (dart-lang/http#1932).

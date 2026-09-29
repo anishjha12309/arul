@@ -82,7 +82,9 @@ class PostHogAnalyticsService implements AnalyticsService {
   }
 
   static Future<void> _applyRegistered() async {
-    for (final e in _registered.entries) {
+    // A copy: [register] adds keys while these awaits run, and a map changed mid-loop throws — that
+    // killed startup before `Application Installed` on most fresh installs. [register] sends those itself.
+    for (final e in [..._registered.entries]) {
       await Posthog().register(e.key, e.value);
     }
   }

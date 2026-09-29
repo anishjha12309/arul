@@ -45,7 +45,7 @@ export function toPgTextArray(items: string[]): string {
 export function getDb(env: Env): postgres.Sql {
   const connectionString = env.HYPERDRIVE.connectionString;
   // The verify-payments harness serves Postgres from PGlite -> exactly ONE client connection is accepted
-  // A concurrent route (`/auth/login` Promise.alls two queries) opens a second -> PGlite drops the first
+  // A concurrent route (one that Promise.alls two queries) opens a second -> PGlite drops the first
   // That surfaces as `Network connection lost` and a 500 that reads like an app bug -> pin the pool to 1
   // A Hyperdrive connection string never points at 127.0.0.1:5433 -> loopback-only -> production keeps the real pool
   const isLocalHarness = connectionString.includes("127.0.0.1:5433");

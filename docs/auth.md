@@ -92,7 +92,14 @@ through an old-shaped request. Never log, toast or track the value.
   as the PICKER (`button_after_offline`), never the sheet; over a held launch the launch wins.
 - **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s cap, 1.5 s
   backoff, inside the 30 s stall budget. A server RESPONSE is never retried; GMS survives blackouts
-  this POST does not, and a lost exchange must never cost a picker.
+  this POST does not, and a lost exchange must never cost a picker. A TLS failure is connectivity
+  (`http`'s IOClient passes it through raw). An attempt pending 8 s gets ONE sibling beside it, never
+  instead: on 2G the first is nearly through. The Worker's 503 `google_keys_unavailable` is retried —
+  the token was never judged. The upsert makes a hedged pair land on one user id.
+- **The picker coming back `unknownError` "No credential available" is Play services missing
+  Credential Manager's 3 s deadline** (cold GMS), never an empty phone — with no account the button
+  flow opens add-account. The guard re-asks the PICKER once (`button_after_timeout`); the next query
+  answers in ~0.1 s. Matched on that text, never on a clock.
 - **`providerConfigurationError` on Android ≤13 is Play services under Credential Manager's floor**:
   androidx.credentials checks `isGooglePlayServicesAvailable(context, MIN_GMS_APK_VERSION)`. Check THAT
   number (`PlayServicesChannel`) — play-services-base's default calls a broken phone healthy — then show

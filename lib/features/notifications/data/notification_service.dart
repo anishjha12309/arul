@@ -75,17 +75,17 @@ class NotificationService {
   Future<void> initialize() => _initFuture ??= _doInitialize();
 
   Future<void> _doInitialize() async {
-    // The IANA tz parse is synchronous UI-isolate work -> deferred here, it never gates first frame.
-    // Zone resolution and plugin init are independent -> overlap them, never await in series.
-    tzdata.initializeTimeZones();
-    final tzFuture = _applyLocalTimezone();
-
+    // The IANA tz parse is synchronous UI-isolate work. Push registration calls this the instant the
+    // auth seed settles, ahead of the splash's own continuation -> parse only after the plugin's
+    // Binder hop has yielded, so a signed-out launch asks Google for the sheet first.
     await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings(_icon),
       ),
       onDidReceiveNotificationResponse: _onTap,
     );
+    tzdata.initializeTimeZones();
+    final tzFuture = _applyLocalTimezone();
 
     final android = _android;
     // Channel creates and legacy deletes are independent Binder round-trips -> fire them together.

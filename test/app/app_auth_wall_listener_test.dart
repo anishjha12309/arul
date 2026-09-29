@@ -55,6 +55,7 @@ class _StreamAuthService implements AuthService {
     bool reconnected = false,
     bool afterOffline = false,
     bool reopened = false,
+    bool afterTimeout = false,
   }) async => const AuthCancelled();
 
   @override

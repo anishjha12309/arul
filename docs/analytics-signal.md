@@ -25,6 +25,16 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   `wall_clip`); the device probe adds `thermal`, `launch_source`, `ms_before_main` and `data_saver`,
   and the stable facts persist so a relaunch's first attempt carries them. `data_saver` is sent only
   when the facts channel answered: Data Saver's own fallback `false` would otherwise read as a fact.
+- `wall_clip` is never absent — a null lumped three walls together. Before the clip path speaks it is
+  `poster` (the poster rule, either arm), `not_in_arm` (the control arm's lotus) or `not_started`;
+  the regional path adds `no_cdn`, `no_clip`, `data_saver`, `slow_link`, `error` beside the original
+  `downloading`/`on_disk`/`failed`/`playing`, which keep their meaning.
+- `login_attempt` carries `wall_reason`, set where the auth state goes signed-out (`ApiAuthService`):
+  `fresh_install`, `no_session`, `storage_error` (keystore read threw), `session_expired` (refresh
+  proved it dead), `restored_expired` (the same for a Block Store restore), `session_rejected` (`/me`
+  401 after a good refresh), `signed_out`, `account_deleted`; `signed_in` = a wall over a live session.
+- `attempt_n` repeats per PERSON only across installs: a reinstall starts at 1 under a new
+  `distinct_id` that `identify` merges into the same person. Split by `distinct_id`, never person.
 - `trial_started` carries the path to it (`checkout_n`, `paywall_n`, `paywall_source`, `gate_*`,
   `cards_n`, `previews_n`, `s_on_paywall`, `s_tap_to_trial`), all persisted, so the late catch-up copy
   carries them too.

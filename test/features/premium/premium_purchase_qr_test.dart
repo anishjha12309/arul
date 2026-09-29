@@ -72,6 +72,8 @@ class _FakeApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     switch (path) {
       case '/payments/initiate':

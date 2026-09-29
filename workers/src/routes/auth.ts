@@ -4,7 +4,7 @@
 
 import type { Context } from "hono";
 import type { Env } from "../env.js";
-import { verifyGoogleIdToken } from "../lib/google.js";
+import { verifyGoogleIdToken, GoogleKeysUnavailableError } from "../lib/google.js";
 import {
   signAccessToken,
   signRefreshToken,
@@ -45,6 +45,11 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   try {
     googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
   } catch (err) {
+    // Google's keys were unreachable -> the token was never judged -> a 401 would read as a bad account
+    if (err instanceof GoogleKeysUnavailableError) {
+      console.error("[auth/login] Google signing keys unavailable:", err);
+      return errorResponse(503, "google_keys_unavailable", "Google sign-in keys are temporarily unavailable");
+    }
     console.error("[auth/login] Google idToken verification failed:", err);
     return errorResponse(401, "invalid_token", "Google idToken is invalid or expired");
   }
@@ -68,36 +73,61 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   const sql = getDb(env);
 
   try {
-    let userId: string;
-    let displayName: string | null;
-    let referralCode: string;
-
-    // The returning user is the common case -> ONE statement, never SELECT-then-UPDATE
-    // This round trip sits between the account picker and the feed -> every sequential query is visible latency
+    // ONE statement for every sign-in -> this round trip sits between the account picker and the feed
+    // The tombstone lookup and pre-seed ride the SAME statement -> fail-closed, and no new row lands without its seed
+    // ON CONFLICT (google_sub) serialises a hedged second POST -> it waits, updates, gets the same id, inserted = false
+    const tombHash = await hashGoogleSub(googleClaims.sub, env.TRIAL_TOMBSTONE_SECRET);
     // email always syncs from Google; display_name only syncs until the user edits it in-app
     // After that display_name_custom = true and their name wins permanently
     // A Google token with no `name` claim keeps the stored value -> it must never blank the row
-    const updated = await sql`
-      UPDATE users
-      SET display_name = CASE WHEN display_name_custom
-                              THEN display_name
-                              ELSE COALESCE(${googleClaims.name ?? null}::text, display_name) END,
-          email        = ${googleClaims.email}
-      WHERE google_sub = ${googleClaims.sub}
-      RETURNING id, display_name, referral_code, is_internal,
-                floor(extract(epoch FROM now() - created_at) / 86400)::int AS account_age_d,
-                (SELECT s.status FROM subscriptions s WHERE s.user_id = users.id) AS sub_status,
-                (SELECT s.trial_end IS NOT NULL FROM subscriptions s WHERE s.user_id = users.id) AS trial_used,
-                (SELECT s.paid_paise > 0 FROM subscriptions s WHERE s.user_id = users.id) AS paid_before,
-                referred_by IS NOT NULL AS referred
+    const upsertUser = (code: string) => sql`
+      WITH tomb AS (
+        SELECT trial_end FROM trial_tombstones
+        WHERE google_sub_hash = ${tombHash}
+        LIMIT 1
+      ),
+      up AS (
+        INSERT INTO users (google_sub, email, display_name, referral_code)
+        VALUES (${googleClaims.sub}, ${googleClaims.email}, ${googleClaims.name ?? null}, ${code})
+        ON CONFLICT (google_sub) DO UPDATE
+        SET display_name = CASE WHEN users.display_name_custom
+                                THEN users.display_name
+                                ELSE COALESCE(EXCLUDED.display_name, users.display_name) END,
+            email        = EXCLUDED.email
+        RETURNING id, display_name, referral_code, is_internal,
+                  floor(extract(epoch FROM now() - created_at) / 86400)::int AS account_age_d,
+                  (SELECT s.status FROM subscriptions s WHERE s.user_id = users.id) AS sub_status,
+                  (SELECT s.trial_end IS NOT NULL FROM subscriptions s WHERE s.user_id = users.id) AS trial_used,
+                  (SELECT s.paid_paise > 0 FROM subscriptions s WHERE s.user_id = users.id) AS paid_before,
+                  referred_by IS NOT NULL AS referred,
+                  (xmax = 0) AS inserted
+      ),
+      seed AS (
+        INSERT INTO subscriptions (user_id, status, trial_end)
+        SELECT up.id, 'expired', tomb.trial_end FROM up, tomb
+        WHERE up.inserted
+        ON CONFLICT (user_id) DO NOTHING
+      )
+      SELECT up.*, (SELECT trial_end FROM tomb) AS tomb_trial_end FROM up
     `;
 
+    let rows;
+    try {
+      rows = await upsertUser(generateReferralCode());
+    } catch (upsertErr: unknown) {
+      // A new user's referral code collided -> google_sub never raises here, ON CONFLICT owns it -> retry once
+      if (!isUniqueViolation(upsertErr)) throw upsertErr;
+      rows = await upsertUser(generateReferralCode());
+    }
+
+    const row = rows[0];
+    const userId = row.id as string;
+    const displayName = row.display_name as string | null;
+    const referralCode = row.referral_code as string;
+    const isNewUser = row.inserted === true;
+
     let analytics: LoginAnalytics;
-    if (updated.length > 0) {
-      const row = updated[0];
-      userId = row.id as string;
-      displayName = row.display_name as string | null;
-      referralCode = row.referral_code as string;
+    if (!isNewUser) {
       analytics = {
         new_user: false,
         sub_status: (row.sub_status as string | null) ?? "none",
@@ -108,65 +138,11 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         referred: row.referred === true,
       };
     } else {
-      // New user -> generate a referral code and insert -> a unique-violation retries once with a fresh code
-      const insertUser = async (): Promise<Array<Record<string, unknown>>> => {
-        referralCode = generateReferralCode();
-        try {
-          return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code)
-            VALUES (
-              ${googleClaims.sub},
-              ${googleClaims.email},
-              ${googleClaims.name ?? null},
-              ${referralCode}
-            )
-            RETURNING id, display_name, referral_code
-          `;
-        } catch (insertErr: unknown) {
-          if (!isUniqueViolation(insertErr)) throw insertErr;
-          referralCode = generateReferralCode();
-          return await sql`
-            INSERT INTO users (google_sub, email, display_name, referral_code)
-            VALUES (
-              ${googleClaims.sub},
-              ${googleClaims.email},
-              ${googleClaims.name ?? null},
-              ${referralCode}
-            )
-            RETURNING id, display_name, referral_code
-          `;
-        }
-      };
-
-      // Deliberately NOT best-effort -> a failure here must FAIL the login, or the guard can be raced
-      // The lookup keys on google_sub alone -> it runs CONCURRENTLY with the insert, not after it
-      // Promise.all keeps the fail-closed property -> either query failing still fails the login
-      const lookupTombstone = async (): Promise<Array<Record<string, unknown>>> => {
-        const tombHash = await hashGoogleSub(googleClaims.sub, env.TRIAL_TOMBSTONE_SECRET);
-        return await sql`
-          SELECT trial_end FROM trial_tombstones
-          WHERE google_sub_hash = ${tombHash}
-          LIMIT 1
-        `;
-      };
-
-      const [inserted, tomb] = await Promise.all([insertUser(), lookupTombstone()]);
-
-      const row = inserted[0];
-      userId = row.id as string;
-      displayName = row.display_name as string | null;
-      referralCode = row.referral_code as string;
-      if (tomb.length > 0) {
-        await sql`
-          INSERT INTO subscriptions (user_id, status, trial_end)
-          VALUES (${userId}, 'expired', ${tomb[0].trial_end as Date})
-          ON CONFLICT (user_id) DO NOTHING
-        `;
-      }
+      const tombstoned = row.tomb_trial_end != null;
       analytics = {
         new_user: true,
-        sub_status: tomb.length > 0 ? "expired" : "none",
-        trial_used: tomb.length > 0,
+        sub_status: tombstoned ? "expired" : "none",
+        trial_used: tombstoned,
         account_age_d: 0,
         internal: false,
         paid_before: false,

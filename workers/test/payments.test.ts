@@ -70,6 +70,7 @@ import {
   getOrderStatus,
 } from "../src/lib/phonepe.js";
 import { grantReferralReward } from "../src/lib/referral.js";
+import { reportPostHogFirstConversion } from "../src/lib/posthog.js";
 
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
@@ -754,6 +755,38 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
       "1",
       expect.anything(),
     );
+  });
+
+  it("settles one debit once: the order's claim is in the WHERE, and a second event grants nothing", async () => {
+    // PhonePe sends an order AND a transaction event per debit, and the cron settles it too -> each one used to
+    // add another ₹199 to debit_count/paid_paise. The first settle clears redemption_order_id; the rest match no row.
+    vi.mocked(grantReferralReward).mockClear();
+    vi.mocked(reportPostHogFirstConversion).mockClear();
+    const env = makeEnv();
+    const { sql, texts } = makeQueueSql([[]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const auth = await webhookAuthHeader("u", "p");
+    const res = await handleWebhook(
+      makeWebhookCtx(env, auth, {
+        event: "subscription.redemption.transaction.completed",
+        payload: {
+          merchantId: "M",
+          merchantOrderId: "DKS_R_TWICE_1",
+          orderId: "OMO_TWICE_1",
+          state: "COMPLETED",
+          amount: 19900,
+          paymentFlow: { type: "SUBSCRIPTION_REDEMPTION", merchantSubscriptionId: "DKS_S_TWICE" },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const update = (texts.find((t) => t.includes("UPDATE subscriptions AS s")) ?? "").replace(/\s+/g, " ");
+    expect(update).toContain("redemption_order_id = NULL");
+    expect(update).toContain("AND (s.redemption_order_id = $");
+    expect(vi.mocked(grantReferralReward)).not.toHaveBeenCalled();
+    expect(vi.mocked(reportPostHogFirstConversion)).not.toHaveBeenCalled();
   });
 
   it("grants the trial from a setup.order.completed with ids nested under paymentFlow", async () => {

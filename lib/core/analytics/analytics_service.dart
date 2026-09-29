@@ -76,6 +76,7 @@ const kPostHogOnlyProperties = <String>{
   'slow_frames',
   'worst_frame_ms',
   'wall_clip',
+  'wall_reason',
   'thermal',
   'ms_before_main',
   'launch_source',

@@ -169,12 +169,31 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Tracks a ★ conversion event with the monthly price and order id.
   /// A `trial_started` is then MARKED reported — AFTER the track, so nothing precedes the event.
   /// And BEFORE every caller's invalidate -> the refresh cannot fire [TrialConversionCatchUp]'s copy.
-  void _trackConversion(String event, String merchantOrderId) {
-    // A poll that outlived the paywall can settle after the catch-up already fired the late copy.
-    // The marker is the one record that this order's `trial_started` went out -> consult it first.
-    if (event == ArulEvents.trialStarted &&
-        _catchUp.isReported(merchantOrderId)) {
-      return;
+  ///
+  /// `/payments/status` answers for the user's ONE row, not for [pollOrderId]: a poll that outlived
+  /// its paywall hears a LATER tap's grant, so the conversion takes the row's order id.
+  void _trackConversion(
+    String event,
+    String pollOrderId,
+    Map<String, dynamic> statusResp,
+  ) {
+    final row = statusResp['subscription'];
+    final rowOrderId = row is Map ? row['merchant_order_id'] : null;
+    final merchantOrderId = rowOrderId is String && rowOrderId.isNotEmpty
+        ? rowOrderId
+        : pollOrderId;
+    if (event == ArulEvents.trialStarted) {
+      // A poll that outlived the paywall can settle after the catch-up already fired the late copy.
+      // The marker is the one record that this order's `trial_started` went out -> consult it first.
+      if (_catchUp.isReported(merchantOrderId)) return;
+      final trialEnd = row is Map ? row['trial_end'] : null;
+      if (!isRunningTrial(
+        trialEnd is String ? DateTime.tryParse(trialEnd) : null,
+        _now(),
+      )) {
+        _catchUp.markReported(merchantOrderId);
+        return;
+      }
     }
     final price = _monthlyPriceRupees();
     _analytics.track(
@@ -783,6 +802,7 @@ class PremiumPurchase extends _$PremiumPurchase {
               ? ArulEvents.trialStarted
               : ArulEvents.subscriptionActive,
           orderId,
+          statusResp,
         );
         _refreshEntitlement();
         _setState(const PurchaseSuccess());
@@ -1049,6 +1069,7 @@ class PremiumPurchase extends _$PremiumPurchase {
                 ? ArulEvents.trialStarted
                 : ArulEvents.subscriptionActive,
             merchantOrderId,
+            statusResp,
           );
           _refreshEntitlement();
           _setState(const PurchaseSuccess());

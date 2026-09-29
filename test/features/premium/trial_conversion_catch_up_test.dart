@@ -33,7 +33,11 @@ class _RecordingAnalytics implements AnalyticsService {
   void register(String key, Object value) {}
 }
 
-Entitlement _row(SubscriptionStatus status, {String? orderId = 'DKS_ORDER_1'}) {
+Entitlement _row(
+  SubscriptionStatus status, {
+  String? orderId = 'DKS_ORDER_1',
+  DateTime? trialEnd,
+}) {
   return Entitlement(
     isPremium: status == SubscriptionStatus.trialing,
     subscription: SubscriptionModel(
@@ -41,6 +45,7 @@ Entitlement _row(SubscriptionStatus status, {String? orderId = 'DKS_ORDER_1'}) {
       userId: 'user-1',
       status: status,
       merchantOrderId: orderId,
+      trialEnd: trialEnd,
     ),
   );
 }
@@ -162,6 +167,34 @@ void main() {
 
     // Marker now open (''), so the trial is owed, not found.
     expect(catchUp.reconcile(_row(SubscriptionStatus.trialing)), isTrue);
+  });
+
+  test('a trialing row whose trial already ended is a handed-back mandate, '
+      'recorded and never fired', () async {
+    final now = DateTime(2026, 9, 29, 5, 20);
+    final catchUp = await build(stored: {TrialConversionCatchUp.prefsKey: ''});
+    expect(
+      catchUp.reconcile(
+        _row(SubscriptionStatus.trialing, trialEnd: DateTime(2026, 9, 5)),
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(analytics.events, isEmpty);
+    expect(catchUp.isReported('DKS_ORDER_1'), isTrue);
+
+    // A trial still running is the app-closed grant the catch-up exists for.
+    expect(
+      catchUp.reconcile(
+        _row(
+          SubscriptionStatus.trialing,
+          orderId: 'DKS_ORDER_2',
+          trialEnd: now.add(const Duration(hours: 23)),
+        ),
+        now: now,
+      ),
+      isTrue,
+    );
   });
 
   test('the marker survives in prefs under the arul_ key', () async {

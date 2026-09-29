@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/build_info.dart';
 import '../connectivity/data_saver.dart';
 import '../upi/upi_apps.dart';
 
@@ -80,13 +81,25 @@ abstract final class JourneyStamps {
   static Map<String, Object> get renderProps => {
     'slow_frames': _slowFrames,
     'worst_frame_ms': _worstFrameMs,
-    'wall_clip': ?_wallClip,
+    'wall_clip': _wallClipNow,
   };
 
   static var _timingsHooked = false;
   static var _slowFrames = 0;
   static var _worstFrameMs = 0;
   static String? _wallClip;
+  static bool? _clipArm;
+
+  /// Never absent: before the clip path says anything, the reason there is no clip yet — the poster
+  /// rule (either arm), the control arm's lotus, or the regional clip not started.
+  static String get _wallClipNow =>
+      _wallClip ??
+      switch ((DeviceMemory.resolved, _clipArm)) {
+        (true, _) => 'poster',
+        (_, false) => 'not_in_arm',
+        (false, true) => 'not_started',
+        _ => 'unknown',
+      };
 
   static void _onTimings(List<FrameTiming> timings) {
     for (final t in timings) {
@@ -96,8 +109,12 @@ abstract final class JourneyStamps {
     }
   }
 
-  /// `downloading`, `on_disk`, `failed` or `playing` — what the wall showed behind Google's sheet.
+  /// What the wall showed behind Google's sheet: `downloading`, `on_disk`, `failed`, `playing`, or why
+  /// the regional clip stopped (`slow_link`, `poster`, `no_cdn`, `no_clip`, `data_saver`, `error`).
   static void noteWallClip(String state) => _wallClip = state;
+
+  /// Whether this install is in the regional arm, the only one with a launch clip.
+  static void noteClipArm({required bool active}) => _clipArm = active;
 
   /// The paywall's UPI picker this process: times opened, the app picked, the app it defaulted to.
   static void notePickerOpened() => _pickerOpens++;
@@ -306,7 +323,8 @@ abstract final class JourneyStamps {
     try {
       return {
         for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map).entries)
-          if (key is String && (value is num || value is bool || value is String))
+          if (key is String &&
+              (value is num || value is bool || value is String))
             key: value as Object,
       };
     } catch (_) {
@@ -381,10 +399,13 @@ abstract final class JourneyStamps {
     if (upi != null) out['upi_apps'] = upi;
     _deviceFacts = Map.unmodifiable(out);
     unawaited(
-      _prefs?.setString(_kLastFacts, jsonEncode({
-        for (final key in _stableFacts)
-          if (out[key] case final Object v) key: v,
-      })),
+      _prefs?.setString(
+        _kLastFacts,
+        jsonEncode({
+          for (final key in _stableFacts)
+            if (out[key] case final Object v) key: v,
+        }),
+      ),
     );
     debugPrint('[JourneyStamps] device facts: $_deviceFacts');
     if (!_deviceLanded.isCompleted) _deviceLanded.complete(_deviceFacts);
@@ -438,6 +459,7 @@ abstract final class JourneyStamps {
     _slowFrames = 0;
     _worstFrameMs = 0;
     _wallClip = null;
+    _clipArm = null;
     _pickerOpens = 0;
     _pickedApp = null;
     _defaultApp = null;

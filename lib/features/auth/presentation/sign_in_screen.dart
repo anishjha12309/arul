@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_hairline_loader.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/config/app_config.dart';
@@ -59,40 +60,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   /// A cancel stays TOAST-less — half of "cancels" are GMS-side aborts the user never chose.
   SignInOutcome? _outcome;
 
-  /// The service clears `exchanging` in its finally, a frame BEFORE this screen hears the result ->
-  /// without this latch a success flashed the retry line on its way to the feed.
-  bool _exchangeSeen = false;
-
-  /// A Google surface has shown during the attempt in flight. The guard chains the picker after a
-  /// dismissed sheet, the add-account reopen and the stall relaunch into ONE attempt, and the box
-  /// flashed in each gap between them.
-  bool _googleSeen = false;
+  /// The first frame's own `_signIn` has answered: joined an attempt, or found none to run. Until
+  /// then the wall shows nothing, or a splash-started attempt flashed the box before hiding it.
+  late bool _decided;
 
   @override
   void initState() {
     super.initState();
     _outcome = widget.debugOutcome;
-    _googleSeen = SignInPhase.surfaceUp.value;
+    _decided = !(AppConfig.hasBackend && AppConfig.googleAuthConfigured);
     WidgetsBinding.instance.addObserver(this);
-    SignInPhase.exchanging.addListener(_onPhase);
-    SignInPhase.surfaceUp.addListener(_onPhase);
     _watchConnectivity();
     _initAutoLaunch();
   }
 
   @override
   void dispose() {
-    SignInPhase.exchanging.removeListener(_onPhase);
-    SignInPhase.surfaceUp.removeListener(_onPhase);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  void _onPhase() {
-    setState(() {
-      if (_signingIn && SignInPhase.exchanging.value) _exchangeSeen = true;
-      if (SignInPhase.surfaceUp.value) _googleSeen = true;
-    });
   }
 
   /// The wall's lifecycle feed. The DECISION is the controller's — this only supplies transitions
@@ -147,7 +132,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       // Offline, Google's picker only fails (`[16] Account reauth failed`) -> park the tap; the link
       // coming back opens the picker by itself.
       notifier.holdTapForNetwork();
-      setState(() {});
+      setState(() => _decided = true);
       return;
     }
     if (!mounted) return;
@@ -169,14 +154,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
         _outcome = _outcomeForFailure(missed.kind);
       }
       // A held launch swaps the subtitle for the wait line; the rebuild picks it up.
-      setState(() {});
+      setState(() => _decided = true);
       return;
     }
 
     setState(() {
       _signingIn = true;
-      // A splash-started attempt may already be under Google's sheet when the wall joins it.
-      _googleSeen = SignInPhase.surfaceUp.value;
+      _decided = true;
     });
     var succeeded = false;
     try {
@@ -199,14 +183,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
       // Handled live here -> drop the recorded copy, or a later mount replays a seen failure.
       notifier.takePendingAutoFailure();
     } finally {
-      // A success keeps the wait on screen while the route leaves -> never the retry line on the way out.
-      if (mounted && !succeeded) {
-        setState(() {
-          _signingIn = false;
-          _exchangeSeen = false;
-          _googleSeen = false;
-        });
-      }
+      // A success keeps the hairline running while the route leaves -> the box never returns on the way out.
+      if (mounted && !succeeded) setState(() => _signingIn = false);
     }
   }
 
@@ -287,13 +265,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
 
             // Everything readable or tappable sits on the panel -> legibility ignores the frame behind.
             // The artwork above and below stays uncovered — the whole point of a video back there.
-            _HiddenUnderGoogle(
-              covered: wallBoxCovered(
-                surfaceUp: SignInPhase.surfaceUp.value,
-                ourWait: SignInPhase.exchanging.value || _exchangeSeen,
-                inFlight: _signingIn,
-                googleSeen: _googleSeen,
-              ),
+            _FadeGate(
+              shown: wallShowsBox(decided: _decided, inFlight: _signingIn),
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -312,22 +285,27 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
                           color: ArulTokens.ivory.withValues(alpha: 0.8),
                         ),
                       ),
-                      // The only place the app narrates the wait -> it may claim only a wait it OWNS.
-                      // Everything up to the credential happens under Google's surface.
-                      ValueListenableBuilder<bool>(
-                        valueListenable: SignInPhase.exchanging,
-                        builder: (context, exchanging, _) => _SignInPill(
-                          title: l10n.signInGoogle,
-                          subtitle: exchanging || _exchangeSeen
-                              ? l10n.signInSubtitleExchanging
-                              : subtitle,
-                          onTap: _signingIn ? () {} : _onPillTap,
-                          busy: _signingIn,
-                        ),
+                      _SignInPill(
+                        title: l10n.signInGoogle,
+                        subtitle: subtitle,
+                        onTap: _signingIn ? () {} : _onPillTap,
+                        busy: _signingIn,
                       ),
                     ],
                   ),
                 ),
+              ),
+            ),
+
+            // The splash's hairline, on the splash's spot, for the WHOLE attempt: under Google's
+            // screens too, so the gaps between them never read as a dead wall.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 64,
+              child: _FadeGate(
+                shown: _signingIn,
+                child: const Center(child: ArulHairlineLoader()),
               ),
             ),
           ],
@@ -337,47 +315,39 @@ class _SignInScreenState extends ConsumerState<SignInScreen>
   }
 }
 
-/// Whether Google's own UI owns the screen, so the wall's box stays out of its way.
-///
-/// Google's sheet lands ON the wall, and a tap aimed at the pill hit the sheet's backdrop and
-/// closed it (sign-in-wall.md). From the first Google surface of an attempt to its settle the box is
-/// gone, the gaps between the guard's chained surfaces included; our own exchange always shows it.
+/// The box shows only while no attempt runs: a pill aimed at through Google's sheet closed the
+/// sheet (sign-in-wall.md), and the waits between Google's screens read as the splash's hairline.
 @visibleForTesting
-bool wallBoxCovered({
-  required bool surfaceUp,
-  required bool ourWait,
-  required bool inFlight,
-  required bool googleSeen,
-}) => !ourWait && (surfaceUp || (inFlight && googleSeen));
+bool wallShowsBox({required bool decided, required bool inFlight}) =>
+    decided && !inFlight;
 
-class _HiddenUnderGoogle extends StatefulWidget {
-  const _HiddenUnderGoogle({required this.covered, required this.child});
+class _FadeGate extends StatefulWidget {
+  const _FadeGate({required this.shown, required this.child});
 
-  final bool covered;
+  final bool shown;
   final Widget child;
 
   @override
-  State<_HiddenUnderGoogle> createState() => _HiddenUnderGoogleState();
+  State<_FadeGate> createState() => _FadeGateState();
 }
 
-class _HiddenUnderGoogleState extends State<_HiddenUnderGoogle>
+class _FadeGateState extends State<_FadeGate>
     with SingleTickerProviderStateMixin {
   late final AnimationController _fade = AnimationController(
     vsync: this,
-    // A wall that mounts under a sheet the splash already opened starts hidden, not faded out.
-    value: widget.covered ? 0 : 1,
+    value: widget.shown ? 1 : 0,
     duration: const Duration(milliseconds: 220),
     reverseDuration: const Duration(milliseconds: 120),
   );
 
   @override
-  void didUpdateWidget(_HiddenUnderGoogle old) {
+  void didUpdateWidget(_FadeGate old) {
     super.didUpdateWidget(old);
-    if (widget.covered == old.covered) return;
-    if (widget.covered) {
-      _fade.reverse();
-    } else {
+    if (widget.shown == old.shown) return;
+    if (widget.shown) {
       _fade.forward();
+    } else {
+      _fade.reverse();
     }
   }
 
@@ -387,12 +357,16 @@ class _HiddenUnderGoogleState extends State<_HiddenUnderGoogle>
     super.dispose();
   }
 
+  // TickerMode stops a hidden hairline's loop; it resumes the moment the gate opens.
   @override
   Widget build(BuildContext context) => IgnorePointer(
-    ignoring: widget.covered,
+    ignoring: !widget.shown,
     child: ExcludeSemantics(
-      excluding: widget.covered,
-      child: FadeTransition(opacity: _fade, child: widget.child),
+      excluding: !widget.shown,
+      child: TickerMode(
+        enabled: widget.shown,
+        child: FadeTransition(opacity: _fade, child: widget.child),
+      ),
     ),
   );
 }

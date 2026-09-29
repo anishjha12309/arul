@@ -36,6 +36,7 @@ import com.facebook.LoggingBehavior
 import com.facebook.applinks.AppLinkData
 import com.google.android.gms.common.GoogleApiAvailability
 import com.hsrutility.arul.auth.PlayServicesChannel
+import com.hsrutility.arul.auth.SessionBackupChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.referral.MetaInstallReferrer
@@ -335,6 +336,13 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             PlayServicesChannel.CHANNEL,
         ).setMethodCallHandler(PlayServicesChannel(this))
+
+        val sessionBackup = SessionBackupChannel(this)
+        sessionBackup.prefetchIfFirstLaunch()
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SessionBackupChannel.CHANNEL,
+        ).setMethodCallHandler(sessionBackup)
 
         val mediaPick = MediaPickChannel(this)
         mediaPickChannel = mediaPick

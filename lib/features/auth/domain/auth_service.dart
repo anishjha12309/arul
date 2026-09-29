@@ -27,9 +27,17 @@ final class AuthCancelled extends AuthResult {
 }
 
 final class AuthFailure extends AuthResult {
-  const AuthFailure({required this.message, required this.kind});
+  const AuthFailure({
+    required this.message,
+    required this.kind,
+    this.providerTimedOut = false,
+  });
   final String message;
   final AuthFailureKind kind;
+
+  /// The picker came back empty because Play services missed Credential Manager's deadline, never
+  /// because the phone has no account (docs/auth.md §Failure handling).
+  final bool providerTimedOut;
 }
 
 enum AuthFailureKind {
@@ -48,9 +56,6 @@ enum AuthFailureKind {
 /// UI-only state that gates nothing -> a plain notifier, not a member every test fake must grow.
 abstract final class SignInPhase {
   static final ValueNotifier<bool> exchanging = ValueNotifier<bool>(false);
-
-  /// Google's sheet or picker is over the wall, from its first appearance to the attempt's settle.
-  static final ValueNotifier<bool> surfaceUp = ValueNotifier<bool>(false);
 
   /// Google's surface came up ([SignInSignal.surfaceShown]) or an attempt ended any way at all
   /// ([SignInSignal.settled]) -> the come-back reminder's arm and disarm, fed without a new member
@@ -142,6 +147,7 @@ abstract interface class AuthService {
     bool reconnected = false,
     bool afterOffline = false,
     bool reopened = false,
+    bool afterTimeout = false,
   });
 
   /// Declares every sign-in attempt started so far ABANDONED.

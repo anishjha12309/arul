@@ -49,9 +49,12 @@ class _RecordingAnalytics implements AnalyticsService {
 
 /// Answers the three purchase endpoints in memory -> `/payments/status` walks [statuses] and repeats the last.
 class _FakeApi extends ApiClient {
-  _FakeApi(this.statuses, {this.throwOnStatus = false});
+  _FakeApi(this.statuses, {this.throwOnStatus = false, this.row});
 
   final List<String> statuses;
+
+  /// The `subscription` object beside the status: the user's ONE row, whichever order it holds.
+  final Map<String, Object?>? row;
 
   /// Every `/payments/status` dies before reaching the server -> the poll riding a dead radio behind the UPI app.
   final bool throwOnStatus;
@@ -63,6 +66,8 @@ class _FakeApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     switch (path) {
       case '/payments/initiate':
@@ -75,6 +80,7 @@ class _FakeApi extends ApiClient {
         if (throwOnStatus) throw const SocketException('Failed host lookup');
         return {
           'status': statuses[i < statuses.length ? i : statuses.length - 1],
+          'subscription': ?row,
         };
       case '/payments/abandon':
         abandons++;
@@ -204,6 +210,60 @@ void main() {
 
     expect(api.statusCalls, 1);
     expect(eventsNamed('trial_started'), isEmpty);
+  });
+
+  // A poll that outlived its paywall hears the grant of a LATER tap: the status is the row's, not
+  // the order's. Two orders were reported for one trial before the row's order id was used.
+  testWidgets('a grant that belongs to a later tap is counted once, under '
+      "the row's order", (tester) async {
+    final trialEnd = DateTime.now().add(const Duration(days: 1));
+    final api = _FakeApi(
+      ['trialing'],
+      row: {
+        'merchant_order_id': 'DKS_ORDER_2',
+        'trial_end': trialEnd.toIso8601String(),
+      },
+    );
+    final container = await build(
+      tester,
+      api,
+      stored: {TrialConversionCatchUp.prefsKey: 'DKS_ORDER_2'},
+    );
+    await startThenLeave(tester, container);
+    await tester.pump(const Duration(seconds: 30));
+    expect(eventsNamed('trial_started'), isEmpty);
+
+    final fresh = _FakeApi(
+      ['trialing'],
+      row: {
+        'merchant_order_id': 'DKS_ORDER_2',
+        'trial_end': trialEnd.toIso8601String(),
+      },
+    );
+    final second = await build(tester, fresh);
+    await startThenLeave(tester, second);
+    await tester.pump(const Duration(seconds: 30));
+    expect(eventsNamed('trial_started').single?['order_id'], 'DKS_ORDER_2');
+    expect(prefs.getString(TrialConversionCatchUp.prefsKey), 'DKS_ORDER_2');
+  });
+
+  // A failed re-setup hands the row back to its parked mandate: `trialing`, but a trial that ended
+  // long ago, under the failed order's id. Counting it credited an ad with a trial that never began.
+  testWidgets('a lapsed trial handed back after a failed setup is never a '
+      'conversion, and the catch-up will not fire it either', (tester) async {
+    final api = _FakeApi(
+      ['pending', 'trialing'],
+      row: {
+        'merchant_order_id': 'DKS_ORDER_1',
+        'trial_end': '2026-09-05T14:54:58.316Z',
+      },
+    );
+    final container = await build(tester, api);
+    await startThenLeave(tester, container);
+    await tester.pump(const Duration(seconds: 30));
+
+    expect(eventsNamed('trial_started'), isEmpty);
+    expect(prefs.getString(TrialConversionCatchUp.prefsKey), 'DKS_ORDER_1');
   });
 
   testWidgets('a failure after the paywall is gone still counts payment_failed', (

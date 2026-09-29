@@ -91,6 +91,16 @@ on `!isPlayInstall()`.
   seed failed `initialized`, the splash's await threw before its `context.go`, and the app sat on the
   splash forever. Never let the seed future complete with an error — nothing catches it.
 
+- **SharedPreferences, the Play-install probe and `GoogleSignInInit.start` begin BEFORE
+  `Firebase.initializeApp`** (`_startEarlyHops`) and are awaited where they were: in series they sat
+  ~250 ms between `main()` and the sheet request.
+- **The tz database parse runs after the notification plugin's first Binder hop.** Push registration
+  calls `initialize()` the instant the auth seed settles, ahead of the splash's own continuation, so a
+  synchronous parse there ran before the sheet was requested.
+- **The launch clip skips a slow link** — the splash warm-up over 1.5 s, or a metered link whose modem
+  estimate is under 2 Mbps (`wall_clip=slow_link`): its MBs land while Google mints the token and our
+  POST is in flight. The dev-options download cap slows neither reading much; real 2G slows both.
+
 ## Dead ends — do not re-attempt
 
 - **Un-awaiting `GoogleSignIn.instance.initialize()` buys nothing** — with `google-services.json` the

@@ -59,6 +59,8 @@ class _FlakyApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     switch (path) {
       case '/payments/initiate':
@@ -91,6 +93,8 @@ class _SlowDeadApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     if (path != '/payments/initiate') return {'settled': false};
     final n = ++initiates;
@@ -373,6 +377,8 @@ class _CancelApi extends ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     if (path == '/payments/cancel' && failure != null) throw failure!;
     return {};

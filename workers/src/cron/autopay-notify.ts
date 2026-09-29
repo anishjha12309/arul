@@ -267,7 +267,10 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         AND notified_at >= ${staleFloor.toISOString()}
         AND next_debit_at <= ${now.toISOString()}
         AND status IN ('trialing', 'active')
-      ORDER BY next_debit_at ASC
+      -- Fresh debits first, then stuck ones least-recently-checked first: a PENDING check writes nothing, so
+      -- oldest-due-first re-picked the same 200 in-flight orders every run and nothing newer was ever redeemed
+      ORDER BY (next_debit_at < ${new Date(now.getTime() - RECONCILE_STUCK_AFTER_MS).toISOString()}) ASC,
+               updated_at ASC
       LIMIT ${MAX_ROWS_PER_PASS}
     `;
 
@@ -372,6 +375,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         }
 
         if (r.state === "PENDING") {
+          await touchInFlightRow(sql, outcomeRow.id, redemptionOrderId);
           console.log(
             `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
               `(order PENDING) — PhonePe owns the retry, not re-redeeming`,
@@ -412,6 +416,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         const inFlight = err instanceof PhonePeApiError && err.body.includes("DUPLICATE_TXN_REQUEST");
 
         if (inFlight) {
+          await touchInFlightRow(sql, outcomeRow.id, redemptionOrderId);
           console.log(
             `[autopay-notify] Redemption already in flight for sub ${merchantSubId} ` +
               `— PhonePe owns the retry`,
@@ -580,6 +585,20 @@ async function recycleRedemption(sql: ReturnType<typeof getDb>, subscriptionId: 
   `;
 }
 
+/** Sends a still-PENDING order to the back of Pass B's queue; the order guard skips a row settled meanwhile. */
+async function touchInFlightRow(
+  sql: ReturnType<typeof getDb>,
+  subscriptionId: string,
+  redemptionOrderId: string,
+): Promise<void> {
+  await sql`
+    UPDATE subscriptions
+    SET updated_at = now()
+    WHERE id = ${subscriptionId}
+      AND redemption_order_id = ${redemptionOrderId}
+  `;
+}
+
 /**
  * The updated_at trigger would do this by itself, but say it explicitly: this statement exists ONLY for it
  */
@@ -627,8 +646,17 @@ async function applyDebitOutcome(
           paid_paise         = paid_paise + 19900,
           updated_at         = now()
       WHERE id = ${row.id}
+        AND redemption_order_id = ${row.redemptionOrderId}
       RETURNING updated_at
     `) as unknown as { updated_at?: Date | string | null }[];
+    // No row -> the webhook settled this order first (it clears redemption_order_id) and already counted the
+    // ₹199, granted the reward and reported -> a second write double-counted debit_count and paid_paise
+    if (settled.length === 0) {
+      console.log(
+        `[autopay-notify] Order ${row.redemptionOrderId} for sub ${row.merchantSubId} already settled by the webhook`,
+      );
+      return true;
+    }
     // Referral reward on the referred user's FIRST paid debit -> the status<>'rewarded' guard makes a renewal a no-op
     await grantReferralReward(sql, row.userId);
     // FIRST trial->paid only ('trialing' at settle) -> a renewal ends no journey funnel

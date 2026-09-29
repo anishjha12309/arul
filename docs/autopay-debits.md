@@ -58,6 +58,10 @@ move `next_debit_at` past the notify window by 6 h (a bound in the WHERE, so the
   ruled-out row still spent a slot, starving fresh debits behind an old head. `isTopOfHourTick()` is
   read ONCE per run and shared by the bound and the skip, so a run crossing a 15-minute boundary never
   fetches a row under one rule and drops it under the other.
+- **Fresh debits first, then stuck ones least-recently-checked first.** A PENDING reconcile writes
+  nothing, so oldest-due-first re-picked the same 200 in-flight orders every tick and no newer debit
+  was ever redeemed; a PENDING check now bumps `updated_at` (guarded by the order id), the Pass D
+  rotation.
 - **Starvation symptom:** a growing WAITING list while `retry_count` stays 0 and no `Execute … state=`
   lines appear for the youngest due rows.
 

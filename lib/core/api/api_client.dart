@@ -7,8 +7,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../auth/session_backup.dart';
 import '../config/app_config.dart';
 import '../perf/boot_trace.dart';
+import 'api_transport.dart';
 
 class ApiException implements Exception {
   const ApiException({
@@ -57,7 +59,7 @@ class ApiClient {
     this._plainStore,
     this._onKeystoreRefused,
   }) : _storage = storage ?? const FlutterSecureStorage(),
-       _http = httpClient ?? http.Client();
+       _http = httpClient ?? ApiTransport.socket();
 
   final FlutterSecureStorage _storage;
   final http.Client _http;
@@ -175,14 +177,25 @@ class ApiClient {
   /// A 404 or a 503 warms the path as well as a 200 -> it must never delay or fail anything.
   Future<void> warmUp() async {
     if (!AppConfig.hasBackend) return;
+    final clock = Stopwatch()..start();
     try {
       await _http.get(_uri(_warmPath)).timeout(_warmTimeout);
     } catch (_) {
       // Pure upside: a failed warm just means login pays what it used to.
     }
+    firstWarmUpMs ??= clock.elapsedMilliseconds;
   }
 
+  /// How long this process's first [warmUp] took, failures included: DNS, TCP and a TLS certificate
+  /// chain, so the only link reading taken before any of our media moves.
+  int? firstWarmUpMs;
+
   static const Duration _warmTimeout = Duration(seconds: 5);
+
+  /// Called when Google's surface covers the app: re-opens the connection the login POST will use —
+  /// the splash's warm-up is 15+ s old by the time a person picks an account, and a mobile link can
+  /// drop an idle socket long before that.
+  Future<void> prepareForExchange() => warmUp();
 
   Future<String?> readAccessToken() => _read(_kAccessTokenKey);
   Future<String?> readRefreshToken() => _read(_kRefreshTokenKey);
@@ -195,10 +208,33 @@ class ApiClient {
       _write(_kAccessTokenKey, accessToken),
       _write(_kRefreshTokenKey, refreshToken),
     ]);
+    // Every rotation is mirrored: a restored copy one rotation old is a dead session, not a sign-in.
+    _backedTokens = (accessToken, refreshToken);
+    _mirrorSession();
+  }
+
+  (String, String)? _backedTokens;
+  Map<String, String> _backedProfile = const {};
+
+  void _mirrorSession() {
+    final tokens = _backedTokens;
+    if (tokens == null) return;
+    unawaited(
+      SessionBackup.save(
+        accessToken: tokens.$1,
+        refreshToken: tokens.$2,
+        profile: _backedProfile,
+      ),
+    );
   }
 
   Future<void> clearTokens() async {
     invalidateMe();
+    // A sign-in's profile write is not awaited by the sign-in -> it must land before this delete.
+    await _profileWrite;
+    _backedTokens = null;
+    _backedProfile = const {};
+    unawaited(SessionBackup.clear());
     await Future.wait([
       _delete(_kAccessTokenKey),
       _delete(_kRefreshTokenKey),
@@ -220,8 +256,14 @@ class ApiClient {
       'email': ?email,
     };
     if (map.isEmpty) return;
-    await _write(_kProfileKey, jsonEncode(map));
+    _backedProfile = map;
+    _mirrorSession();
+    final write = _write(_kProfileKey, jsonEncode(map));
+    _profileWrite = write.then<void>((_) {}, onError: (Object _) {});
+    await write;
   }
+
+  Future<void>? _profileWrite;
 
   Future<Map<String, dynamic>?> readCachedProfile() async {
     final raw = await _read(_kProfileKey);
@@ -240,8 +282,10 @@ class ApiClient {
 
   Uri _uri(String path) => Uri.parse('${AppConfig.apiBaseUrl}$path');
 
-  Future<Map<String, String>> _authHeaders() async {
-    final token = await readAccessToken();
+  Future<Map<String, String>> _authHeaders({bool withToken = true}) async {
+    // A token-less request (login) skips the keystore read: nothing waits on it, and a storage error
+    // there failed a sign-in whose account was already picked.
+    final token = withToken ? await readAccessToken() : null;
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -253,7 +297,16 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
-  }) => _requestWithRetry('POST', path, body: body, requiresAuth: requiresAuth);
+    bool withToken = true,
+    Duration? timeout,
+  }) => _requestWithRetry(
+    'POST',
+    path,
+    body: body,
+    requiresAuth: requiresAuth,
+    withToken: withToken,
+    timeout: timeout,
+  );
 
   /// GETs [path]; refreshes the token + retries once on 401.
   Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) {
@@ -315,13 +368,21 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
     bool isRetry = false,
+    bool withToken = true,
+    Duration? timeout,
   }) async {
     // Any non-GET can change what `/me` would answer -> drop the remembered snapshot UP FRONT.
     // So a caller reading entitlement straight after mutating it is never served the old answer.
     if (method != 'GET') invalidateMe();
 
-    final headers = await _authHeaders();
-    final response = await _execute(method, path, headers: headers, body: body);
+    final headers = await _authHeaders(withToken: withToken);
+    final response = await _execute(
+      method,
+      path,
+      headers: headers,
+      body: body,
+      timeout: timeout,
+    );
 
     if (response.statusCode == 401 && requiresAuth && !isRetry) {
       if (_refreshCompleter != null) {
@@ -360,8 +421,10 @@ class ApiClient {
     String path, {
     required Map<String, String> headers,
     Map<String, dynamic>? body,
+    Duration? timeout,
   }) {
     final uri = _uri(path);
+    final limit = timeout ?? _requestTimeout;
     final encodedBody = body != null ? jsonEncode(body) : null;
 
     final request = switch (method) {
@@ -371,9 +434,9 @@ class ApiClient {
       _ => throw ArgumentError('Unsupported method: $method'),
     };
     return request.timeout(
-      _requestTimeout,
+      limit,
       onTimeout: () => throw http.ClientException(
-        'Request timed out after ${_requestTimeout.inSeconds}s',
+        'Request timed out after ${limit.inSeconds}s',
         uri,
       ),
     );

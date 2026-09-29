@@ -71,6 +71,12 @@ nobody watching. Never reached the server → say confirmation is late, never th
 OUTLIVES the paywall, so every state and ref write sits behind a mounted check, and the zombie poll and
 the late catch-up share ONE marker so an order is never counted twice.
 
+- `/payments/status` answers for the user's ONE row, never the polled order: a zombie poll hears a
+  LATER tap's grant, so the conversion takes the row's `merchant_order_id`, never the poll's own.
+- A failed re-setup hands the row back to its parked mandate — `trialing`, a trial that ended days
+  ago, under the FAILED order's id. Both emitters count `trial_started` only while `trial_end` is
+  ahead (`isRunningTrial`); a handed-back row is marked reported, never fired.
+
 ## The unfinished-trial marker
 
 A TRIAL setup (never a spent-trial ₹199 one) is marked AT THE UPI HANDOFF, not at a failure — a large

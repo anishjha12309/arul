@@ -54,6 +54,7 @@ Future<void> main() async {
     WidgetsFlutterBinding.ensureInitialized();
     unawaited(ApiClient.warmSecureStorage());
     LaunchLinkProbe.start();
+    _startEarlyHops();
     await _startApp();
     return;
   }
@@ -71,6 +72,8 @@ Future<void> main() async {
       unawaited(ApiClient.warmSecureStorage());
       // Whether there is a network at all, known before the splash decides to hold the sign-in sheet.
       LaunchLinkProbe.start();
+      // Platform hops _startApp awaits later, started while Firebase initializes instead of after it.
+      _startEarlyHops();
       await Firebase.initializeApp();
       BootTrace.mark('firebase core initialized');
       // The three collection toggles are re-affirmations: Crashlytics, Performance and Analytics all
@@ -112,6 +115,39 @@ Future<void> main() async {
       fatal: !isNonCrashError(error),
     ),
   );
+}
+
+/// Platform hops [_startApp] awaits later, started at the top of main so they overlap Firebase.
+Future<SharedPreferences>? _earlyPrefs;
+
+void _startEarlyHops() {
+  _earlyPrefs = SharedPreferences.getInstance();
+  unawaited(PlayInstall.resolved);
+  // google_sign_in v7: initialize the singleton once at startup. Both env files
+  // carry a real client id, so this runs in every real build; the guard only
+  // matters for define-less / test runs, where sign-in degrades to a graceful
+  // failure instead of a crash-loop against Google's servers with a bogus
+  // audience.
+  // NOT awaited: the wait is MOVED, not removed. `GoogleSignInInit.ready` is
+  // awaited in the sign-in path right before `supportsAuthenticate()`, so the
+  // v7 contract (initialize → authenticate) still holds — but an
+  // already-signed-in launch, which never calls `authenticate()`, no longer
+  // pays Credential Manager / Play Services init before the first frame.
+  // `google_sign_in`'s own example does not await it either. Failure is
+  // swallowed inside the holder (see its doc comment) so the unawaited future
+  // can never reach the zone handler as a FATAL.
+  //
+  // The nonce is generated HERE, once per process, and handed to
+  // `initialize()` — the only place the plugin accepts one. Every ID token
+  // this process gets (sheet or button) then carries it, and the Worker
+  // rejects a login whose request nonce and token claim disagree.
+  if (AppConfig.googleAuthConfigured) {
+    BootTrace.mark('GoogleSignIn.initialize started (not awaited)');
+    GoogleSignInInit.start(
+      serverClientId: AppConfig.googleWebClientId,
+      nonce: GoogleSignInInit.generateNonce(),
+    );
+  }
 }
 
 /// Routes every `debugPrint` — this app's and every package's — into a no-op in release.
@@ -249,7 +285,7 @@ Future<void> _startApp() async {
   // Wallpaper-apply persists its restore flags on the path to a native call that can recreate the
   // Activity, with no room there to await a handle -> resolve prefs before `runApp`.
   BootTrace.mark('SharedPreferences start');
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await (_earlyPrefs ?? SharedPreferences.getInstance());
   BootTrace.mark('SharedPreferences done');
   JourneyStamps.start(prefs);
 
@@ -326,31 +362,6 @@ Future<void> _startApp() async {
   final deferredLinks = DeferredLinkService(referrer);
   unawaited(deferredLinks.start());
 
-  // google_sign_in v7: initialize the singleton once at startup. Both env files
-  // carry a real client id, so this runs in every real build; the guard only
-  // matters for define-less / test runs, where sign-in degrades to a graceful
-  // failure instead of a crash-loop against Google's servers with a bogus
-  // audience.
-  // NOT awaited: the wait is MOVED, not removed. `GoogleSignInInit.ready` is
-  // awaited in the sign-in path right before `supportsAuthenticate()`, so the
-  // v7 contract (initialize → authenticate) still holds — but an
-  // already-signed-in launch, which never calls `authenticate()`, no longer
-  // pays Credential Manager / Play Services init before the first frame.
-  // `google_sign_in`'s own example does not await it either. Failure is
-  // swallowed inside the holder (see its doc comment) so the unawaited future
-  // can never reach the zone handler as a FATAL.
-  //
-  // The nonce is generated HERE, once per process, and handed to
-  // `initialize()` — the only place the plugin accepts one. Every ID token
-  // this process gets (sheet or button) then carries it, and the Worker
-  // rejects a login whose request nonce and token claim disagree.
-  if (AppConfig.googleAuthConfigured) {
-    BootTrace.mark('GoogleSignIn.initialize started (not awaited)');
-    GoogleSignInInit.start(
-      serverClientId: AppConfig.googleWebClientId,
-      nonce: GoogleSignInInit.generateNonce(),
-    );
-  }
 
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED
   // the app has a live plugin to replay into, but `initialize()` is deliberately

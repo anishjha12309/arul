@@ -25,6 +25,12 @@ double monthlyPriceRupees(AppConfigModel? config) {
   return 199;
 }
 
+/// Whether a `trialing` row is a trial still running, not one handed back: a failed re-setup
+/// restores the parked mandate's row — `trialing`, a trial that ended days ago — under the FAILED
+/// order's id, and both emitters read that as a new trial. No `trial_end` = an older Worker: counted.
+bool isRunningTrial(DateTime? trialEnd, DateTime now) =>
+    trialEnd == null || trialEnd.isAfter(now);
+
 /// Fires `trial_started` LATE for a trial that was granted with the app closed.
 class TrialConversionCatchUp {
   TrialConversionCatchUp({
@@ -65,7 +71,7 @@ class TrialConversionCatchUp {
 
   /// Fires the late `trial_started` when [entitlement] carries an unreported trialing row.
   /// NEVER throws — it runs inside the entitlement read, which must not fail for analytics.
-  bool reconcile(Entitlement entitlement) {
+  bool reconcile(Entitlement entitlement, {DateTime? now}) {
     try {
       final reported = _prefs.getString(prefsKey);
       final sub = entitlement.subscription;
@@ -89,6 +95,11 @@ class TrialConversionCatchUp {
       }
 
       if (reported == orderId) return false;
+
+      if (!isRunningTrial(sub.trialEnd, now ?? DateTime.now())) {
+        markReported(orderId);
+        return false;
+      }
 
       _analytics.track(
         ArulEvents.trialStarted,

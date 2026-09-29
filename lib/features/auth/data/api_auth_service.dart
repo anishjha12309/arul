@@ -9,6 +9,7 @@ import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/google_sign_in_init.dart';
+import '../../../core/auth/session_backup.dart';
 import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
 import '../../../core/error/app_exception.dart';
@@ -37,7 +38,9 @@ class ApiAuthService implements AuthService {
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
     // `_initialized`, which completes when this seed does.
     _initialized = _seedInitialState();
-    _api.sessionEnded.listen((_) => _endSession());
+    _api.sessionEnded.listen(
+      (_) => _endSession(_restored ? 'restored_expired' : 'session_expired'),
+    );
   }
 
   late final Future<void> _initialized;
@@ -77,8 +80,9 @@ class ApiAuthService implements AuthService {
   /// `/me` round-trip -> cold starts stay snappy and the Android 12+ wallpaper-apply activity
   /// recreation is a splash FLASH, not a multi-second splash-then-network wait.
   Future<void> _seedInitialState() async {
-    if (_freshInstall) {
+    if (_freshInstall && !await _restoreBackedSession()) {
       BootTrace.mark('authSeed: fresh install → unauthenticated');
+      _wallReason = 'fresh_install';
       _emit(AuthUserState.unauthenticated());
       return;
     }
@@ -90,9 +94,11 @@ class ApiAuthService implements AuthService {
     } catch (e, stack) {
       _crash.recordError(e, stack, reason: 'auth seed: secure storage read');
       hasToken = false;
+      _wallReason = 'storage_error';
     }
     BootTrace.mark('authSeed: hasTokens read done');
     if (!hasToken) {
+      if (_wallReason == _reasonUnknown) _wallReason = 'no_session';
       _emit(AuthUserState.unauthenticated());
       return;
     }
@@ -133,7 +139,7 @@ class ApiAuthService implements AuthService {
     } on ApiException catch (e) {
       if (e.status == 401) {
         await _api.clearTokens();
-        _endSession();
+        _endSession('session_rejected');
       }
     } catch (_) {
       // Network error: keep the optimistic authenticated state.
@@ -143,11 +149,26 @@ class ApiAuthService implements AuthService {
   /// A session that died on its own — no sign-out, so Google's credential state is left alone and
   /// a one-account phone can be signed straight back in. Idempotent: a refresh failure and the
   /// seed's own 401 can both land for one death.
-  void _endSession() {
+  void _endSession(String reason) {
     if (!_current.isAuthenticated) return;
+    _wallReason = reason;
     _crash.setUserId(null);
     _emit(AuthUserState.unauthenticated());
   }
+
+  /// Why the wall is up, frozen on each `login_attempt`: the seed's verdict, a session that died
+  /// (a dead refresh, or a `/me` 401 after a good one), or the person's own sign-out or deletion.
+  String _wallReason = _reasonUnknown;
+  static const _reasonUnknown = 'unknown';
+
+  /// `signed_in` = a wall showing over a live session, which no path should ever do.
+  @visibleForTesting
+  String get wallReason =>
+      _current.isAuthenticated ? 'signed_in' : _wallReason;
+
+  /// The seed put a Block Store session back this process -> its death is a reinstall's, not a
+  /// session that lived here.
+  bool _restored = false;
 
   void _emit(AuthUserState state) {
     _current = state;
@@ -168,6 +189,7 @@ class ApiAuthService implements AuthService {
     bool reconnected = false,
     bool afterOffline = false,
     bool reopened = false,
+    bool afterTimeout = false,
   }) {
     switch (provider) {
       case AuthProvider.google:
@@ -177,6 +199,7 @@ class ApiAuthService implements AuthService {
           reconnected: reconnected,
           afterOffline: afterOffline,
           reopened: reopened,
+          afterTimeout: afterTimeout,
         );
     }
   }
@@ -220,6 +243,7 @@ class ApiAuthService implements AuthService {
     _crash.setUserId(null);
     // BEFORE the emit: the wall it raises fires sign-in events that must land on a fresh identity.
     _analytics.reset();
+    _wallReason = 'signed_out';
     _emit(AuthUserState.unauthenticated());
     // Timing mark, readable in profile (and in a DIAG release): the baseline
     // harness reads logout duration — denylist round-trip + token clear — from
@@ -259,6 +283,7 @@ class ApiAuthService implements AuthService {
     await _clearGoogleCredentialState();
     _crash.setUserId(null);
     _analytics.reset();
+    _wallReason = 'account_deleted';
     _emit(AuthUserState.unauthenticated());
   }
 
@@ -272,8 +297,6 @@ class ApiAuthService implements AuthService {
   @override
   void abandonPendingSignIn() {
     _attemptSeq++;
-    // The zombie's own finally is identity-checked and will never clear it -> the wall comes back here.
-    SignInPhase.surfaceUp.value = false;
   }
 
   AuthFailure _googleFailure(
@@ -402,6 +425,9 @@ class ApiAuthService implements AuthService {
   /// until [maxAttempts] are spent or [elapsedCap] has passed since the first
   /// attempt started. A server RESPONSE (any [ApiException], even a 5xx) is
   /// never retried — the server spoke; retrying is the caller's decision.
+  /// An attempt still pending after [hedgeAfter] gets a second one BESIDE it,
+  /// never instead of it: on a 2G link the first is usually almost through,
+  /// and whichever answers first wins. The login upsert is idempotent.
   /// Pure and static so tests pin the policy without a platform channel.
   @visibleForTesting
   static Future<Map<String, dynamic>> postWithNetworkRetry(
@@ -409,22 +435,103 @@ class ApiAuthService implements AuthService {
     int maxAttempts = 3,
     Duration elapsedCap = const Duration(seconds: 15),
     Duration backoff = const Duration(milliseconds: 1500),
+    Duration hedgeAfter = const Duration(seconds: 8),
     void Function()? onRetry,
-  }) async {
+  }) {
+    final done = Completer<Map<String, dynamic>>();
     final clock = Stopwatch()..start();
-    var attempt = 0;
-    while (true) {
-      attempt++;
-      try {
-        return await post();
-      } catch (e) {
-        if (!isNetworkError(e)) rethrow;
-        if (attempt >= maxAttempts || clock.elapsed >= elapsedCap) rethrow;
-        onRetry?.call();
-        await Future<void>.delayed(backoff);
-      }
+    var attempts = 0;
+    var pending = 0;
+    Object? serverError;
+    StackTrace? serverStack;
+    Timer? hedge;
+
+    bool mayStartAnother() =>
+        !done.isCompleted &&
+        serverError == null &&
+        attempts < maxAttempts &&
+        clock.elapsed < elapsedCap;
+
+    late void Function() launch;
+    void settleIfIdle(Object e, StackTrace s) {
+      if (pending > 0 || done.isCompleted) return;
+      hedge?.cancel();
+      // A server answer outranks a network error from a sibling attempt.
+      done.completeError(serverError ?? e, serverStack ?? s);
+    }
+
+    launch = () {
+      attempts++;
+      pending++;
+      hedge?.cancel();
+      hedge = Timer(hedgeAfter, () {
+        if (pending == 1 && mayStartAnother()) {
+          onRetry?.call();
+          launch();
+        }
+      });
+      post().then(
+        (data) {
+          pending--;
+          if (done.isCompleted) return;
+          hedge?.cancel();
+          done.complete(data);
+        },
+        onError: (Object e, StackTrace s) {
+          pending--;
+          if (done.isCompleted) return;
+          if (!isNetworkError(e) && !_keysUnavailable(e)) {
+            serverError ??= e;
+            serverStack ??= s;
+            settleIfIdle(e, s);
+            return;
+          }
+          if (pending == 0 && mayStartAnother()) {
+            onRetry?.call();
+            hedge?.cancel();
+            Timer(backoff, () {
+              if (!done.isCompleted) launch();
+            });
+            return;
+          }
+          settleIfIdle(e, s);
+        },
+      );
+    };
+    launch();
+    return done.future;
+  }
+
+  /// The Worker could not fetch Google's signing keys: the token was never judged, so a second try
+  /// is safe, where every other server answer is final.
+  static bool _keysUnavailable(Object e) =>
+      e is ApiException && e.code == 'google_keys_unavailable';
+
+  /// A reinstall (or a restored phone) whose session Block Store kept: the tokens go back into
+  /// storage and the seed continues as a stored session, whose first 401 refreshes it or, if it is
+  /// dead, ends it back on the wall. Capped, because every fresh install's sheet waits on the read.
+  Future<bool> _restoreBackedSession() async {
+    final backed = await SessionBackup.read(cap: _restoreCap);
+    final access = backed?['a'];
+    final refresh = backed?['r'];
+    if (backed == null || access == null || refresh == null) return false;
+    try {
+      await _api.setTokens(accessToken: access, refreshToken: refresh);
+      await _api.cacheProfile(
+        userId: backed['userId'],
+        displayName: backed['displayName'],
+        email: backed['email'],
+      );
+      BootTrace.mark('authSeed: session restored from Block Store');
+      _restored = true;
+      return true;
+    } catch (e, stack) {
+      _crash.recordError(e, stack, reason: 'auth seed: session restore');
+      return false;
     }
   }
+
+  static const _restoreCap = Duration(milliseconds: 600);
 
   /// Which Google surface the CURRENT attempt is on. Analytics data only —
   /// never a branch condition. Null until a surface is actually opened, so a
@@ -463,11 +570,27 @@ class ApiAuthService implements AuthService {
   static String buttonSurfaceFor({
     required bool reopened,
     bool afterOffline = false,
+    bool afterTimeout = false,
   }) => reopened
       ? _surfaceButtonAfterAddAccount
       : afterOffline
       ? _surfaceButtonAfterOffline
+      : afterTimeout
+      ? _surfaceButtonAfterTimeout
       : _surfaceButton;
+
+  static const _surfaceButtonAfterTimeout = 'button_after_timeout';
+
+  /// The picker's "no credential" is Play services timing out, not an empty phone: with no Google
+  /// account the button flow opens add-account instead. Matched on the plugin's own prefix.
+  @visibleForTesting
+  static bool isProviderTimeout({
+    required String? surface,
+    required GoogleSignInException e,
+  }) =>
+      (surface?.startsWith(_surfaceButton) ?? false) &&
+      e.code == GoogleSignInExceptionCode.unknownError &&
+      (e.description?.startsWith('No credential available') ?? false);
 
   static const _surfaceButtonAfterDismiss = 'button_after_dismiss';
 
@@ -527,6 +650,7 @@ class ApiAuthService implements AuthService {
     required bool reconnected,
     required bool afterOffline,
     required bool reopened,
+    bool afterTimeout = false,
   }) async {
     final attempt = ++_attemptSeq;
     // Clear first: a failure BEFORE any surface opened (unsupported device,
@@ -541,7 +665,6 @@ class ApiAuthService implements AuthService {
     // report the last attempt's wait for Google.
     _surfaceClock.endAttempt();
     SignInPhase.exchanging.value = false;
-    SignInPhase.surfaceUp.value = false;
     try {
       await GoogleSignInInit.ready;
 
@@ -563,6 +686,7 @@ class ApiAuthService implements AuthService {
       final buttonSurface = buttonSurfaceFor(
         reopened: reopened,
         afterOffline: afterOffline && !auto,
+        afterTimeout: afterTimeout,
       );
       _history = JourneyStamps.signInHistory();
       _attemptN = JourneyStamps.nextAttempt() ?? 0;
@@ -573,6 +697,7 @@ class ApiAuthService implements AuthService {
           'provider': 'google',
           'surface': useSheet ? sheetSurface : buttonSurface,
           'auto': auto,
+          'wall_reason': wallReason,
         },
       );
 
@@ -597,9 +722,8 @@ class ApiAuthService implements AuthService {
               'ms_to_surface': ms,
             },
           );
-          // An abandoned attempt's late surface must not hide the wall its replacement stands on.
-          if (attempt == _attemptSeq) SignInPhase.surfaceUp.value = true;
           SignInPhase.signals.add(SignInSignal.surfaceShown);
+          unawaited(_api.prepareForExchange());
           // Only now, with Google's request already out: a channel call queued BEFORE it would
           // hold the credential request behind our own native work on the main thread.
           unawaited(JourneyStamps.probeNetwork());
@@ -673,6 +797,8 @@ class ApiAuthService implements AuthService {
             'referralCode': ?referralCode,
           },
           requiresAuth: false,
+          withToken: false,
+          timeout: const Duration(seconds: 15),
         ),
         onRetry: () {
           exchangeRetried = true;
@@ -718,6 +844,7 @@ class ApiAuthService implements AuthService {
         accessToken: accessToken,
         refreshToken: refreshToken,
       );
+      _restored = false;
 
       // Consumed — never re-attribute a later account on this device.
       if (referralCode != null) {
@@ -734,10 +861,11 @@ class ApiAuthService implements AuthService {
           email: email,
         ),
       );
-      await _api.cacheProfile(
-        userId: userId,
-        displayName: displayName,
-        email: email,
+      // Not awaited: a keystore write stood between the exchange and the feed. clearTokens waits for it.
+      unawaited(
+        _api
+            .cacheProfile(userId: userId, displayName: displayName, email: email)
+            .catchError((Object _) {}),
       );
 
       final server = loginAnalytics(data['analytics']);
@@ -822,6 +950,13 @@ class ApiAuthService implements AuthService {
             gisCode: e.code.name,
             error: e.description,
           );
+          if (isProviderTimeout(surface: _surface, e: e)) {
+            result = AuthFailure(
+              message: message,
+              kind: kind,
+              providerTimedOut: true,
+            );
+          }
         case AuthSuccess():
           break; // unreachable: the mapper never returns success
       }
@@ -871,7 +1006,6 @@ class ApiAuthService implements AuthService {
       // attempt that replaced it.
       if (attempt == _attemptSeq) {
         SignInPhase.exchanging.value = false;
-        SignInPhase.surfaceUp.value = false;
         _surfaceClock.endAttempt();
       }
       SignInPhase.signals.add(SignInSignal.settled);

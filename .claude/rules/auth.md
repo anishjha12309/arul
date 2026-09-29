@@ -15,15 +15,16 @@ paths:
 - **Every ID token carries the per-process nonce; the Worker checks the PAIR** (both absent accepted
   for fielded builds). Never log, toast or track it.
 - **ONE retry line for every failure; no fix line, no help link. The pill is the wall's ONLY
-  tappable thing**, and the box is GONE while Google's surface is up (`SignInPhase.surfaceUp`,
-  cleared on abandon). Region picks the language, Settings changes it.
+  tappable thing**, and the box is GONE while an attempt runs — the splash's hairline carries
+  every wait. Region picks the language, Settings changes it.
   Fixed type; the LAYOUT absorbs copy.
 - Classify by typed `code` only; `login_cancelled` is MIXED. **Every failure return goes through
   `_googleFailure`.**
 - The stall guard counts FOREGROUND time and reads the lifecycle every 250 ms. On RESUME,
   `exchanging` restarts the clock, else `stallResumeGrace` then `stalled_resumed`. A LOST callback
   relaunches ONCE, a dismissal never — bar `selectorStripped` and `addAccountAbandoned` (the
-  PICKER once, never the sheet). `POST /auth/login` retries connectivity failures only.
+  PICKER once, never the sheet), and a picker Play services timed out (`providerTimedOut`, once).
+  `POST /auth/login` retries connectivity failures and a keys-unavailable 503, hedged at 8 s.
 - `noPlayServices` shows GOOGLE'S update dialog (`PlayServicesChannel`), never our copy.
 - **A RETURN re-arms the automatic sheet ONCE** (`noteAppLifecycle`; `inactive` is not away), and
   a RECONNECT (`noteConnectivity`): offline→online, network failure or GMS's `[16] reauth`

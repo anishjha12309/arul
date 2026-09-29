@@ -87,6 +87,7 @@ void main() {
 
       expect(analytics.calls.where((c) => c == 'reset'), hasLength(1));
       expect(resetsWhenSignedOut, 1);
+      expect(auth.wallReason, 'signed_out');
       await sub.cancel();
     },
   );
@@ -99,5 +100,10 @@ void main() {
       containsAllInOrder(['track:account_deleted', 'reset']),
     );
     expect(auth.currentState.isAuthenticated, isFalse);
+    expect(auth.wallReason, 'account_deleted');
+  });
+
+  test('a wall over a live session says so', () {
+    expect(auth.wallReason, 'signed_in');
   });
 }

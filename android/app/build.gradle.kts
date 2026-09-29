@@ -159,6 +159,13 @@ dependencies {
     implementation("androidx.activity:activity:1.9.0")
 
     implementation("com.google.android.play:app-update:2.1.0")
+
+    // auth/SessionBackupChannel: the session survives a reinstall and moves on a device restore.
+    implementation("com.google.android.gms:play-services-auth-blockstore:16.4.0")
+
+    // Compiles the startup code named in src/main/baseline-prof.txt at install, so a first launch
+    // does not interpret the Kotlin/Java half (Flutter's Dart is AOT already).
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 }
 
 flutter {

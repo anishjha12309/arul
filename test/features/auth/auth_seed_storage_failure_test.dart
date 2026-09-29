@@ -66,5 +66,6 @@ void main() {
     await expectLater(auth.initialized, completes);
     expect(auth.currentState.isAuthenticated, isFalse);
     expect(crash.reasons, ['auth seed: secure storage read']);
+    expect(auth.wallReason, 'storage_error');
   });
 }

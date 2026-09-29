@@ -88,6 +88,7 @@ void main() {
 
     expect(auth.currentState.isAuthenticated, isFalse);
     expect(states.where((s) => !s.isAuthenticated), hasLength(1));
+    expect(auth.wallReason, 'session_expired');
 
     // A second gated call on the dead session changes nothing more.
     await expectLater(
@@ -98,4 +99,47 @@ void main() {
     expect(states.where((s) => !s.isAuthenticated), hasLength(1));
     await sub.cancel();
   });
+
+  test('a /me 401 AFTER a good refresh is a rejected session, not an '
+      'expired one', () async {
+    final api = ApiClient(
+      httpClient: MockClient((req) async {
+        if (req.url.path == '/auth/refresh') {
+          return _json({'accessToken': 'a2', 'refreshToken': 'r2'}, 200);
+        }
+        return _json({
+          'error': {'code': 'unauthorized', 'message': 'x'},
+        }, 401);
+      }),
+    );
+    final auth = ApiAuthService(
+      apiClient: api,
+      analytics: _SilentAnalytics(),
+      crash: const NoOpCrashReporter(),
+      freshInstall: false,
+    );
+    await auth.initialized;
+    for (var i = 0; i < 20 && auth.currentState.isAuthenticated; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(auth.currentState.isAuthenticated, isFalse);
+    expect(auth.wallReason, 'session_rejected');
+  });
+
+  for (final (fresh, reason) in [(false, 'no_session'), (true, 'fresh_install')]) {
+    test('no stored session on a ${fresh ? 'first' : 'later'} launch reads as '
+        '$reason', () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final auth = ApiAuthService(
+        apiClient: ApiClient(
+          httpClient: MockClient((_) async => _json({}, 500)),
+        ),
+        analytics: _SilentAnalytics(),
+        crash: const NoOpCrashReporter(),
+        freshInstall: fresh,
+      );
+      await auth.initialized;
+      expect(auth.wallReason, reason);
+    });
+  }
 }

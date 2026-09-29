@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_hairline_loader.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/experiments/experiments.dart';
@@ -36,10 +36,7 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
-
+class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// How many leading feed thumbnails to warm once the catalog lands.
   /// Mirrors the prefetch service's window at index 0 (items 0..15) — the same soon-to-be-seen set.
   /// Thumbs past the in-memory LRU still land on DISK -> a later scroll re-decodes, never re-downloads.
@@ -64,16 +61,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   bool _mediaWarmed = false;
 
-  late final AnimationController _hairlineController;
-
   @override
   void initState() {
     super.initState();
-    _hairlineController = AnimationController(
-      vsync: this,
-      duration: ArulTokens.hairlineLoop,
-    );
-
     // Open the API connection now -> POST /auth/login, moments away, pays no DNS, TLS or cold start.
     // Never awaited, never retried, never able to fail anything (ApiClient.warmUp).
     BootTrace.mark('splash: API warm-up fired');
@@ -249,12 +239,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   @override
-  void dispose() {
-    _hairlineController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final awaitingRegion = ref.watch(launchArtProvider) is AwaitingRegionArt;
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -301,68 +285,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _buildHairlineLoader(),
+                  const ArulHairlineLoader(),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// Armed here rather than at construction: `reduceMotion` needs an InheritedWidget lookup, and
-  /// the splash is the FIRST screen a low-tier phone builds — the one place a loop must not start
-  /// before the tier is known.
-  bool _motionStarted = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_motionStarted) return;
-    _motionStarted = true;
-    if (context.reduceMotion) {
-      // Parked at the centre: the gold bar sits fully visible under the wordmark. The splash's only
-      // "working" signal must stay legible when it stops moving.
-      _hairlineController.value = 0.5;
-    } else {
-      _hairlineController.repeat();
-    }
-  }
-
-  /// 120×2px gold hairline with a sliding gradient, 1.6s linear loop. No spinner — the spec is firm.
-  Widget _buildHairlineLoader() {
-    return SizedBox(
-      width: ArulTokens.hairlineWidth,
-      height: ArulTokens.hairlineHeight,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(1),
-        child: AnimatedBuilder(
-          animation: _hairlineController,
-          builder: (context, _) {
-            // CSS `background-size: 200% 100%` sliding one tile per loop -> a double-wide bar moved.
-            final dx =
-                -ArulTokens.hairlineWidth +
-                _hairlineController.value * (ArulTokens.hairlineWidth * 2);
-            return Transform.translate(
-              offset: Offset(dx, 0),
-              child: Container(
-                width: ArulTokens.hairlineWidth * 2,
-                height: ArulTokens.hairlineHeight,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      _transparentGold,
-                      ArulTokens.gold,
-                      ArulTokens.gold,
-                      _transparentGold,
-                    ],
-                    stops: [0.0, 0.4, 0.6, 1.0],
-                  ),
-                ),
-              ),
-            );
-          },
         ),
       ),
     );

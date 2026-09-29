@@ -5,6 +5,7 @@
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/analytics/google_analytics_service.dart';
 import 'package:arul/core/analytics/journey_stamps.dart';
+import 'package:arul/core/config/build_info.dart';
 import 'package:arul/core/upi/upi_apps.dart';
 import 'package:arul/features/auth/data/api_auth_service.dart';
 import 'package:arul/features/referral/data/install_referrer_service.dart';
@@ -212,9 +213,46 @@ void main() {
 
   test('render props: slow frames, the worst frame and the wall clip', () async {
     await started();
-    expect(JourneyStamps.renderProps, {'slow_frames': 0, 'worst_frame_ms': 0});
+    expect(JourneyStamps.renderProps, {
+      'slow_frames': 0,
+      'worst_frame_ms': 0,
+      'wall_clip': 'unknown',
+    });
     JourneyStamps.noteWallClip('playing');
     expect(JourneyStamps.renderProps['wall_clip'], 'playing');
+  });
+
+  test('wall_clip is never absent: it names why there is no clip yet', () async {
+    addTearDown(DeviceQuality.resetForTesting);
+    await started();
+    String clip() => JourneyStamps.renderProps['wall_clip']! as String;
+
+    DeviceQuality.debugSetTier(DeviceTier.mid);
+    JourneyStamps.noteClipArm(active: false);
+    expect(clip(), 'not_in_arm');
+    JourneyStamps.noteClipArm(active: true);
+    expect(clip(), 'not_started');
+
+    // The poster rule outranks the arm: neither arm plays anything on these phones.
+    DeviceQuality.debugSetTier(DeviceTier.low);
+    expect(clip(), 'poster');
+    JourneyStamps.noteClipArm(active: false);
+    expect(clip(), 'poster');
+
+    // Once the clip path speaks, its value wins, unchanged.
+    JourneyStamps.noteWallClip('downloading');
+    expect(clip(), 'downloading');
+  });
+
+  test('back-to-back attempts never share an attempt_n', () async {
+    final prefs = await started();
+    expect([
+      JourneyStamps.nextAttempt(),
+      JourneyStamps.nextAttempt(),
+      JourneyStamps.nextAttempt(),
+    ], [1, 2, 3]);
+    // The count reaches the store without waiting on the disk write.
+    expect(prefs.getInt('journey_signin_attempts'), 3);
   });
 
   test('the picker and the default app ride the path to a trial', () async {

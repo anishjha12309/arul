@@ -61,13 +61,13 @@ line is the one other subtitle — a state, never a failure. The classified outc
   Settings is the one place language changes ([deep-links.md](deep-links.md) §Language precedence).
   The Terms · Privacy footer stays gone —
   Play's in-app policy requirement is met by Settings.
-- **The whole box leaves while Google's sheet or picker is up** (owner). The pill showed above the
-  sheet: a tap aimed at it hit the sheet's backdrop and closed it, and 45% of pill taps after a cancel
-  came within 2 s. `wallBoxCovered`: covered from the attempt's first Google surface to its settle,
-  so the gaps the guard chains (picker after a dismissed sheet, add-account reopen, stall relaunch)
-  never flash the box; our exchange always shows it, latched, or a success flashed the retry line on
-  its way to the feed. `SignInPhase.surfaceUp` clears at attempt start, at the identity-checked settle
-  and in `abandonPendingSignIn` — the zombie's finally never clears it, and a flag left set is a wall
-  with nothing to tap.
+- **No box while an attempt runs; the splash's gold hairline carries every wait** (owner). The pill
+  showed above Google's sheet: a tap aimed at it hit the sheet's backdrop and closed it, and 45% of
+  pill taps after a cancel came within 2 s. So from the first frame's `_signIn` to the attempt's
+  settle the box is gone, and the hairline (bottom 64, as on the splash) runs the WHOLE attempt,
+  dimmed under Google's picker and covered by its sheet (owner, over a resumed-only hairline).
+  Android never resumes us between the sheet and the picker, so a resumed-only one left ~1 s of dead
+  wall there. The box waits for the first frame's answer (`_decided`) or a splash-started attempt
+  flashed it; a success keeps the hairline running while the route leaves.
 - The wordmark stays English and is the wall's only mark. **Icon glyphs take NO `shadows`:** Impeller
   paints a second mark beside a shadowed icon FONT; text shadows are fine.
