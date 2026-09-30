@@ -21,8 +21,8 @@ export async function rearmUnpausedSubscription(
   return (await sql`
     UPDATE subscriptions
     SET status        = CASE
-                          WHEN trial_end IS NOT NULL AND trial_end > now()
-                          THEN 'trialing' ELSE 'active'
+                          WHEN trial_end IS NOT NULL AND current_period_end > trial_end
+                          THEN 'active' ELSE 'trialing'
                         END,
         next_debit_at = COALESCE(next_debit_at, current_period_end),
         notified_at   = NULL,

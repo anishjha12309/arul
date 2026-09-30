@@ -221,6 +221,8 @@ export interface SetupSubscriptionParams {
    * Docs: for TRANSACTION, `amount` = the first debit amount (≥100 paise).
    */
   upfrontAmountPaise?: number | undefined;
+  /** The mandate's FIXED monthly debit -> the row's `price_paise`; a notify for any other amount is refused. */
+  maxAmountPaise: number;
 }
 
 export interface SetupSubscriptionResult {
@@ -271,7 +273,7 @@ export async function setupSubscription(
         merchantSubscriptionId: params.merchantSubscriptionId,
         authWorkflowType: upfront ? "TRANSACTION" : "PENNY_DROP",
         amountType: "FIXED",
-        maxAmount: 19900,
+        maxAmount: params.maxAmountPaise,
         frequency: "MONTHLY",
         productType: "UPI_MANDATE",
         // Omitted, the SDK page renders "auto-paid till NaNth Invalid Date"; the intent flow defaults to 30 years (the max)
@@ -324,6 +326,8 @@ export interface SetupIntentParams {
   targetApp: string;
   /** Present = trial consumed -> TRANSACTION with this real first debit. Absent = PENNY_DROP (₹2, auto-reversed). */
   upfrontAmountPaise?: number | undefined;
+  /** The mandate's FIXED monthly debit -> the row's `price_paise`. */
+  maxAmountPaise: number;
 }
 
 export interface SetupIntentResult {
@@ -355,7 +359,7 @@ export async function setupSubscriptionIntent(
       merchantSubscriptionId: params.merchantSubscriptionId,
       authWorkflowType: upfront ? "TRANSACTION" : "PENNY_DROP",
       amountType: "FIXED",
-      maxAmount: 19900, // ₹199 in paise — must match setupSubscription
+      maxAmount: params.maxAmountPaise,
       frequency: "MONTHLY",
       paymentMode: { type: "UPI_INTENT", targetApp: params.targetApp },
     },
@@ -609,6 +613,8 @@ export interface OrderStatusResult {
     merchantSubscriptionId?: string;
     subscriptionId?: string;
   };
+  /** `details=true` only; a COMPLETED order's COMPLETED entry carries when the money moved (epoch ms). */
+  paymentDetails?: Array<{ state?: string; timestamp?: number }>;
 }
 
 export async function getOrderStatus(env: Env, merchantOrderId: string): Promise<OrderStatusResult> {
@@ -772,6 +778,14 @@ export function buildMerchantSubscriptionId(userId: string, merchant: Merchant):
   const shortId = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
   const ts = Date.now().toString(36).toUpperCase();
   return `DKS_${merchantMarker(merchant)}S_${shortId}_${ts}`;
+}
+
+/** When a DKS_ mandate id was minted, read back from its base-36 tail; null for an id of any other shape. */
+export function mandateCreatedAt(merchantSubscriptionId: string): Date | null {
+  const m = /^DKS_H?S_[A-Z0-9]{8}_([A-Z0-9]+)$/.exec(merchantSubscriptionId);
+  if (!m) return null;
+  const ms = Number.parseInt(m[1], 36);
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms) : null;
 }
 
 /**

@@ -42,6 +42,12 @@ abstract class SubscriptionModel with _$SubscriptionModel {
     DateTime? trialEnd,
     DateTime? currentPeriodEnd,
     DateTime? updatedAt,
+
+    /// What the mandate charges a month, in paise. A Worker that predates the field sold ₹199 only.
+    @Default(19900) int pricePaise,
+
+    /// Whether cancelling first offers the ₹99 switch — the Worker's once-per-person verdict.
+    @Default(false) bool cancelOfferEligible,
   }) = _SubscriptionModel;
 
   factory SubscriptionModel.fromJson(Map<String, dynamic> json) =>

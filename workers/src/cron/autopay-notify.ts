@@ -1,12 +1,11 @@
 import type { Env } from "../env.js";
 import { getDb, toDate } from "../lib/db.js";
-import {
-  reportPostHogFirstConversion,
-  reportPostHogSubscriptionCancel,
-  type SubscriptionCancelReason,
-} from "../lib/posthog.js";
+import { reportPostHogFirstConversion, type SubscriptionCancelReason } from "../lib/posthog.js";
+import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { grantReferralReward } from "../lib/referral.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
+import { parkSubscription } from "../lib/subscription-state.js";
+import { runHourlySweeps } from "./autopay-sweeps.js";
 import {
   notifyRedemption,
   executeRedemption,
@@ -76,6 +75,12 @@ const STALE_ORDER_MS = 48 * 60 * 60 * 1000;
 const MAX_PAUSED_RECHECK = 50;
 
 /**
+ * The hourly sweeps start no row past this point of the run -> they come after the debits and must leave the
+ * 15-minute wall clock to them
+ */
+const SWEEP_WALL_MS = 10 * 60 * 1000;
+
+/**
  * How long a proven mandate PhonePe rejects is left alone before Pass A asks again. Its next_debit_at moves past the
  * notify window by this much -> the row leaves Pass A's WHERE instead of taking a LIMIT slot every tick
  */
@@ -116,6 +121,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
   }
 
   const sql = getDb(env);
+  const runStartedAt = Date.now();
   let phonePeCalls = 0;
   const budgetLeft = (needed: number) => phonePeCalls + needed <= MAX_PHONEPE_CALLS_PER_RUN;
 
@@ -141,7 +147,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         merchant_subscription_id,
         next_debit_at,
         debit_count,
-        current_period_end
+        current_period_end,
+        price_paise
       FROM subscriptions
       WHERE status IN ('trialing', 'active')
         AND next_debit_at <= ${notifyThreshold.toISOString()}
@@ -198,10 +205,11 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         }
 
         const redemptionOrderId = buildMerchantOrderId(userId, "R", merchantOf(merchantSubId));
+        // The mandate is FIXED at the row's price -> any other amount is refused, and PhonePe's pre-debit notice says it
         const notifyResult = await notifyRedemption(env, {
           merchantSubscriptionId: merchantSubId,
           merchantOrderId: redemptionOrderId,
-          amountPaise: 19900,
+          amountPaise: Number(row.price_paise ?? STANDARD_PRICE_PAISE),
         });
 
         console.log(
@@ -270,7 +278,8 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         next_debit_at,
         notified_at,
         current_period_end,
-        upi_target_app
+        upi_target_app,
+        price_paise
       FROM subscriptions
       WHERE notified_at IS NOT NULL
         AND notified_at <= ${new Date(now.getTime() - EXECUTE_AFTER_NOTIFY_MS).toISOString()}
@@ -356,6 +365,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         upiTargetApp: (row.upi_target_app as string | null | undefined) ?? null,
         // The dunning ladder's anchor -> NULL falls back to the due date -> an anchorless row still moves forward
         periodEnd: toDate(row.current_period_end) ?? toDate(row.next_debit_at),
+        pricePaise: Number(row.price_paise ?? STANDARD_PRICE_PAISE),
       };
       const dueAt = toDate(row.next_debit_at);
       const overdueMs = dueAt === null ? 0 : Date.now() - dueAt.getTime();
@@ -560,6 +570,16 @@ export async function runAutopayNotify(env: Env): Promise<void> {
       );
     }
 
+    if (topOfHour) {
+      await runHourlySweeps(env, sql, {
+        take: (calls) => {
+          if (!budgetLeft(calls) || Date.now() - runStartedAt > SWEEP_WALL_MS) return false;
+          phonePeCalls += calls;
+          return true;
+        },
+      });
+    }
+
     await refreshIdleMarker(env, sql);
   } finally {
     await sql.end().catch(() => {});
@@ -584,6 +604,7 @@ async function reconcileFromOrder(
     priorStatus: string;
     upiTargetApp?: string | null;
     periodEnd: Date | null;
+    pricePaise: number;
   },
   overdueMs: number,
 ): Promise<{ settled: boolean; dead: boolean; state: string | null }> {
@@ -661,6 +682,7 @@ async function applyDebitOutcome(
     priorStatus: string;
     upiTargetApp?: string | null;
     periodEnd: Date | null;
+    pricePaise: number;
   },
 ): Promise<boolean> {
   if (state === "COMPLETED") {
@@ -675,7 +697,7 @@ async function applyDebitOutcome(
           retry_count        = 0,
           first_debit_at     = COALESCE(first_debit_at, now()),
           debit_count        = debit_count + 1,
-          paid_paise         = paid_paise + 19900,
+          paid_paise         = paid_paise + price_paise,
           updated_at         = now()
       WHERE id = ${row.id}
         AND redemption_order_id = ${row.redemptionOrderId}
@@ -697,7 +719,7 @@ async function applyDebitOutcome(
       await reportPostHogFirstConversion(env, {
         userId: row.userId,
         transactionId: row.redemptionOrderId,
-        amountPaise: 19900,
+        amountPaise: row.pricePaise,
         occurredAt: settled[0]?.updated_at ?? null,
         targetApp: row.upiTargetApp ?? null,
         merchantSubId: row.merchantSubId,
@@ -754,16 +776,12 @@ async function refreshIdleMarker(env: Env, sql: ReturnType<typeof getDb>): Promi
         ) AS soonest,
         count(*) FILTER (
           WHERE status IN ('trialing', 'active') AND notified_at IS NOT NULL
-        ) AS in_flight,
-        count(*) FILTER (
-          WHERE status = 'paused' AND merchant_subscription_id IS NOT NULL
-        ) AS paused_rechecks
+        ) AS in_flight
       FROM subscriptions
-    `) as unknown as { soonest: unknown; in_flight: unknown; paused_rechecks: unknown }[];
+    `) as unknown as { soonest: unknown; in_flight: unknown }[];
 
     const inFlight = Number(rows[0]?.in_flight ?? 0);
     const soonestRaw = rows[0]?.soonest ?? null;
-    const pausedRechecks = Number(rows[0]?.paused_rechecks ?? 0);
     if (inFlight > 0 || soonestRaw === null) {
       await env.KV.delete(NEXT_WORK_KEY);
       return;
@@ -775,10 +793,8 @@ async function refreshIdleMarker(env: Env, sql: ReturnType<typeof getDb>): Promi
       return;
     }
     // Work starts one notify-window BEFORE the debit itself -> the marker must be the earlier instant, not the due date
-    const nextWorkMs = Math.min(
-      soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000,
-      pausedRechecks > 0 ? nextTopOfHourMs() : Infinity,
-    );
+    // Pass D and the hourly sweeps always have a book to read -> never skip a top-of-hour tick
+    const nextWorkMs = Math.min(soonest - NOTIFY_WINDOW_HOURS * 60 * 60 * 1000, nextTopOfHourMs());
     if (nextWorkMs <= Date.now()) {
       await env.KV.delete(NEXT_WORK_KEY);
       return;
@@ -794,11 +810,7 @@ async function refreshIdleMarker(env: Env, sql: ReturnType<typeof getDb>): Promi
   }
 }
 
-/**
- * Take a subscription out of the autopay rotation WITHOUT touching entitlement.
- * `next_debit_at = NULL` plus a status outside ('trialing','active') removes the row from BOTH passes' queries
- * That pair is what actually stops the loop -> changing only the status leaves it selectable
- */
+/** The ONE park statement lives in lib/subscription-state.ts -> the status route and the webhooks write it too. */
 async function parkMandate(
   env: Env,
   sql: ReturnType<typeof getDb>,
@@ -806,33 +818,7 @@ async function parkMandate(
   status: "cancelled" | "paused",
   reason: SubscriptionCancelReason = "revoked_at_phonepe",
 ): Promise<void> {
-  // Self-join so the PRIOR status rides back with the write -> `prior` is the pre-update row under Postgres SET semantics
-  // The same shape the webhook's completed branch uses for its first-conversion gate -> keep the two identical
-  const rows = (await sql`
-    UPDATE subscriptions AS s
-    SET status        = ${status},
-        next_debit_at = NULL,
-        notified_at   = NULL,
-        updated_at    = now()
-    FROM subscriptions AS prior
-    WHERE s.id = ${subscriptionId} AND prior.id = s.id
-    RETURNING s.user_id, s.merchant_subscription_id, prior.status AS prior_status,
-              s.updated_at
-  `) as unknown as {
-    user_id: string;
-    merchant_subscription_id: string | null;
-    prior_status: string | null;
-    updated_at?: Date | string | null;
-  }[];
-  if (status === "cancelled" && rows[0]) {
-    await reportPostHogSubscriptionCancel(env, {
-      userId: rows[0].user_id,
-      merchantSubId: rows[0].merchant_subscription_id,
-      reason,
-      priorStatus: rows[0].prior_status,
-      occurredAt: rows[0].updated_at ?? null,
-    });
-  }
+  await parkSubscription(env, sql, sql`s.id = ${subscriptionId}`, status, reason);
 }
 
 function addOneMonth(date: Date): Date {

@@ -33,6 +33,21 @@ const ROUTES = [
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
     docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
   },
+  // The offer's shared transitions and the hourly sweeps outrank the cron, premium and lib catch-all rows.
+  {
+    when: [
+      "workers/src/lib/subscription-state.ts",
+      "workers/src/lib/pricing.ts",
+      "workers/src/cron/autopay-sweeps.ts",
+      "lib/features/premium/presentation/cancel_offer_sheet.dart",
+      "lib/features/premium/domain/cancel_offer.dart",
+    ],
+    docs: [
+      "docs/cancel-offer.md",
+      "docs/autopay-debits.md §The hourly sweeps",
+      "docs/edge-cases.md §Premium / payments",
+    ],
+  },
   // Push is a cron too, so it must outrank the generic cron row.
   {
     when: [

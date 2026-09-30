@@ -11,6 +11,7 @@ import { pushEnabled, runPushDispatch, runPushTest } from "../cron/push-dispatch
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 import type { PushCampaign } from "../lib/fcm.js";
+import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { audienceQuery, parseAudience } from "../lib/push-audience.js";
 import { timingSafeEqual } from "../lib/timing-safe.js";
 import {
@@ -131,7 +132,8 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
     let rows;
     if (targetMerchantSubId) {
       rows = await sql`
-        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at
+        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at,
+               price_paise
         FROM subscriptions
         WHERE merchant_subscription_id = ${targetMerchantSubId}
           AND status IN ('trialing', 'active')
@@ -139,7 +141,8 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
       `;
     } else if (force) {
       rows = await sql`
-        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at
+        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at,
+               price_paise
         FROM subscriptions
         WHERE status IN ('trialing', 'active')
         LIMIT 50
@@ -147,7 +150,8 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
     } else {
       const notifyThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       rows = await sql`
-        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at
+        SELECT id, user_id, merchant_subscription_id, redemption_order_id, retry_count, notified_at, next_debit_at,
+               price_paise
         FROM subscriptions
         WHERE status IN ('trialing', 'active')
           AND next_debit_at <= ${notifyThreshold.toISOString()}
@@ -175,7 +179,7 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
           const notifyRes = await notifyRedemption(env, {
             merchantSubscriptionId: merchantSubId,
             merchantOrderId: redemptionOrderId,
-            amountPaise: 19900,
+            amountPaise: Number(row.price_paise ?? STANDARD_PRICE_PAISE),
           });
           result.notify = notifyRes.state;
 
@@ -205,7 +209,7 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
                 retry_count         = 0,
                 first_debit_at      = COALESCE(first_debit_at, now()),
                 debit_count         = debit_count + 1,
-                paid_paise          = paid_paise + 19900,
+                paid_paise          = paid_paise + price_paise,
                 updated_at          = now()
             WHERE id = ${row.id as string}
           `;
@@ -239,7 +243,7 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
   }
 
   let originalMerchantOrderId: string | null = null;
-  let amountPaise = 19900;
+  let amountPaise: number | null = null;
   try {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (typeof body?.originalMerchantOrderId === "string") {
@@ -261,12 +265,12 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
 
   // Never refund more than one month -> a fat-fingered amountPaise reached PhonePe unchecked
   // The only ceiling was PhonePe's own "<= original transaction amount" -> that is not our business rule
-  if (amountPaise > MONTHLY_PRICE_PAISE) {
+  if (amountPaise !== null && amountPaise > MAX_MONTHLY_PRICE_PAISE) {
     return Response.json(
       {
         error: {
           code: "amount_too_large",
-          message: `amountPaise must be <= ${MONTHLY_PRICE_PAISE} (one month)`,
+          message: `amountPaise must be <= ${MAX_MONTHLY_PRICE_PAISE} (one month)`,
         },
       },
       { status: 400 },
@@ -278,13 +282,14 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
   // Setup orders live in merchant_order_id, redemption orders in redemption_order_id -> check both columns
   const sql = getDb(env);
   let ownerUserId: string;
+  let refundPaise: number;
   try {
     const rows = (await sql`
-      SELECT user_id FROM subscriptions
+      SELECT user_id, price_paise FROM subscriptions
       WHERE merchant_order_id = ${originalMerchantOrderId}
          OR redemption_order_id = ${originalMerchantOrderId}
       LIMIT 1
-    `) as unknown as { user_id: string }[];
+    `) as unknown as { user_id: string; price_paise: number | string | null }[];
     if (rows.length === 0) {
       return Response.json(
         {
@@ -297,6 +302,8 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
       );
     }
     ownerUserId = rows[0].user_id;
+    // No amount = one month at the row's own price -> a ₹99 subscriber's month is 9900
+    refundPaise = amountPaise ?? Number(rows[0].price_paise ?? STANDARD_PRICE_PAISE);
   } catch (err) {
     console.error("[internal/refund] order lookup failed:", err);
     return Response.json(
@@ -314,9 +321,9 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
       "REF",
       merchantOf(originalMerchantOrderId),
     ).slice(0, 63);
-    const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, amountPaise);
+    const result = await initiateRefund(env, originalMerchantOrderId, merchantRefundId, refundPaise);
     console.log(
-      `[internal/refund] ${amountPaise} paise on ${originalMerchantOrderId} ` +
+      `[internal/refund] ${refundPaise} paise on ${originalMerchantOrderId} ` +
         `(user ${ownerUserId}) -> ${result.state} refundId=${result.refundId}`,
     );
     return c.json({ ok: true, merchantRefundId, ...result });
@@ -456,8 +463,8 @@ function authorizePush(c: Context<{ Bindings: Env }>, env: Env): boolean {
   return timingSafeEqual(token, expected);
 }
 
-/** Monthly price in paise, and the refund ceiling -> mirrored in payments.ts -> change both together. */
-const MONTHLY_PRICE_PAISE = 19900;
+/** The refund ceiling: one month at the highest price any mandate carries. */
+const MAX_MONTHLY_PRICE_PAISE = STANDARD_PRICE_PAISE;
 
 /**
  * Authorize an operator route that MOVES MONEY. OPS_SECRET and nothing else.

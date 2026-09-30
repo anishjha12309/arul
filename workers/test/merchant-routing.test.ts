@@ -252,11 +252,13 @@ describe("lib/phonepe.ts — each call uses the keys of the merchant its id name
       merchantSubscriptionId: ids.sub,
       merchantOrderId: ids.setup,
       redirectUrl: "https://arul-api.hsrutility.com/payments/callback",
+      maxAmountPaise: 19900,
     });
     await setupSubscriptionIntent(env, {
       merchantSubscriptionId: ids.sub,
       merchantOrderId: ids.setup,
       targetApp: "com.phonepe.app",
+      maxAmountPaise: 19900,
     });
     await cancelSubscription(env, ids.sub);
     await revokeMandateTolerant(env, ids.sub);
@@ -344,7 +346,7 @@ describe("POST /payments/initiate — the setup merchant", () => {
   async function initiate(env: Env, body: Record<string, unknown>, prior: unknown[] = [], internal = false) {
     const { sql } = routedSql((t) => {
       if (t.startsWith("SELECT is_internal")) return [{ is_internal: internal }];
-      if (t.startsWith("SELECT trial_end")) return prior;
+      if (t.startsWith("SELECT s.trial_end")) return prior;
       return undefined;
     });
     (env as unknown as { _testSql: unknown })._testSql = sql;
@@ -424,10 +426,9 @@ describe("POST /payments/webhook — two SHA pairs, one merchant per id", () => 
     return { res, texts };
   }
 
+  // The ordinary grant (the offer switch runs first and matches nothing for these setups)
   const grants = (t: string) =>
-    t.includes("AND status = 'pending' RETURNING user_id, status")
-      ? [{ user_id: USER_ID, status: "trialing" }]
-      : undefined;
+    t.includes("AND NOT s.offer_switch") ? [{ user_id: USER_ID, status: "trialing" }] : undefined;
 
   it.each([
     ["legacy", "u", "p"],
@@ -441,7 +442,7 @@ describe("POST /payments/webhook — two SHA pairs, one merchant per id", () => 
       grants,
     );
     expect(res.status).toBe(200);
-    expect(texts.some((t) => t.includes("AND status = 'pending'"))).toBe(true);
+    expect(texts.some((t) => t.includes("AND s.status = 'pending'"))).toBe(true);
   });
 
   it("rejects a delivery that matches neither pair", async () => {
@@ -487,7 +488,7 @@ describe("POST /payments/webhook — two SHA pairs, one merchant per id", () => 
       setupEvent("DKS_HS_BBBB2222_Y1", "DKS_HS_BBBB2222_Y1_0001", "SOMEOTHERMID"),
       grants,
     );
-    expect(texts.some((t) => t.includes("AND status = 'pending'"))).toBe(true);
+    expect(texts.some((t) => t.includes("AND s.status = 'pending'"))).toBe(true);
   });
 
   it("an hsr grant revokes the parked LEGACY mandate at legacy", async () => {
@@ -497,9 +498,9 @@ describe("POST /payments/webhook — two SHA pairs, one merchant per id", () => 
       await sha("hsruser", "hsrpass"),
       setupEvent("DKS_HS_BBBB2222_Y1", "DKS_HS_BBBB2222_Y1_0001", "HSRUTILITYONLINE"),
       (t) =>
-        t.includes("SET superseded_mandate_id = NULL FROM subscriptions AS prior")
-          ? [{ stale_mandate_id: "DKS_S_AAAA1111_X1" }]
-          : grants(t),
+        t.includes("AND NOT s.offer_switch")
+          ? [{ user_id: USER_ID, status: "trialing", stale_mandate_id: "DKS_S_AAAA1111_X1" }]
+          : undefined,
     );
     expect(calls.map((c) => [c.merchant, c.path])).toEqual([
       ["legacy", "/apis/pg-sandbox/subscriptions/v2/DKS_S_AAAA1111_X1/cancel"],
@@ -620,7 +621,7 @@ describe("status, cancel, abandon — reads and revokes by the id they hold", ()
         if (t.startsWith("SELECT status, merchant_subscription_id")) {
           return [{ status: "pending", merchant_subscription_id: "DKS_HS_BBBB2222_Y1" }];
         }
-        if (t.includes("RETURNING id")) return [{ id: "row" }];
+        if (t.includes("AS released_mandate_id")) return [{ released_mandate_id: "DKS_HS_BBBB2222_Y1" }];
         return undefined;
       },
       { merchantOrderId: "DKS_HS_BBBB2222_Y1_0001" },
@@ -796,7 +797,9 @@ describe("/internal — money-moving operator routes inherit the merchant", () =
     const { calls } = fakePhonePe();
     const env = dualEnv();
     const { sql } = routedSql((t) =>
-      t.startsWith("SELECT user_id FROM subscriptions") ? [{ user_id: USER_ID }] : undefined,
+      t.startsWith("SELECT user_id, price_paise FROM subscriptions")
+        ? [{ user_id: USER_ID, price_paise: 19900 }]
+        : undefined,
     );
     (env as unknown as { _testSql: unknown })._testSql = sql;
 

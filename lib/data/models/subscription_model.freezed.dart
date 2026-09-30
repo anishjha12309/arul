@@ -21,7 +21,9 @@ mixin _$SubscriptionModel {
 /// `TrialConversionCatchUp` keys on it -> a trial granted with the app closed still fires
 /// `trial_started`, exactly once per order.
 /// Null on Workers that predate the field -> the catch-up reads that as nothing to reconcile.
- String? get merchantOrderId; DateTime? get trialEnd; DateTime? get currentPeriodEnd; DateTime? get updatedAt;
+ String? get merchantOrderId; DateTime? get trialEnd; DateTime? get currentPeriodEnd; DateTime? get updatedAt;/// What the mandate charges a month, in paise. A Worker that predates the field sold ₹199 only.
+ int get pricePaise;/// Whether cancelling first offers the ₹99 switch — the Worker's once-per-person verdict.
+ bool get cancelOfferEligible;
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -34,16 +36,16 @@ $SubscriptionModelCopyWith<SubscriptionModel> get copyWith => _$SubscriptionMode
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SubscriptionModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.status, status) || other.status == status)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.phonepeSubscriptionId, phonepeSubscriptionId) || other.phonepeSubscriptionId == phonepeSubscriptionId)&&(identical(other.merchantSubscriptionId, merchantSubscriptionId) || other.merchantSubscriptionId == merchantSubscriptionId)&&(identical(other.merchantOrderId, merchantOrderId) || other.merchantOrderId == merchantOrderId)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is SubscriptionModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.status, status) || other.status == status)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.phonepeSubscriptionId, phonepeSubscriptionId) || other.phonepeSubscriptionId == phonepeSubscriptionId)&&(identical(other.merchantSubscriptionId, merchantSubscriptionId) || other.merchantSubscriptionId == merchantSubscriptionId)&&(identical(other.merchantOrderId, merchantOrderId) || other.merchantOrderId == merchantOrderId)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pricePaise, pricePaise) || other.pricePaise == pricePaise)&&(identical(other.cancelOfferEligible, cancelOfferEligible) || other.cancelOfferEligible == cancelOfferEligible));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,status,plan,phonepeSubscriptionId,merchantSubscriptionId,merchantOrderId,trialEnd,currentPeriodEnd,updatedAt);
+int get hashCode => Object.hash(runtimeType,id,userId,status,plan,phonepeSubscriptionId,merchantSubscriptionId,merchantOrderId,trialEnd,currentPeriodEnd,updatedAt,pricePaise,cancelOfferEligible);
 
 @override
 String toString() {
-  return 'SubscriptionModel(id: $id, userId: $userId, status: $status, plan: $plan, phonepeSubscriptionId: $phonepeSubscriptionId, merchantSubscriptionId: $merchantSubscriptionId, merchantOrderId: $merchantOrderId, trialEnd: $trialEnd, currentPeriodEnd: $currentPeriodEnd, updatedAt: $updatedAt)';
+  return 'SubscriptionModel(id: $id, userId: $userId, status: $status, plan: $plan, phonepeSubscriptionId: $phonepeSubscriptionId, merchantSubscriptionId: $merchantSubscriptionId, merchantOrderId: $merchantOrderId, trialEnd: $trialEnd, currentPeriodEnd: $currentPeriodEnd, updatedAt: $updatedAt, pricePaise: $pricePaise, cancelOfferEligible: $cancelOfferEligible)';
 }
 
 
@@ -54,7 +56,7 @@ abstract mixin class $SubscriptionModelCopyWith<$Res>  {
   factory $SubscriptionModelCopyWith(SubscriptionModel value, $Res Function(SubscriptionModel) _then) = _$SubscriptionModelCopyWithImpl;
 @useResult
 $Res call({
- String id, String userId, SubscriptionStatus status, String? plan, String? phonepeSubscriptionId, String? merchantSubscriptionId, String? merchantOrderId, DateTime? trialEnd, DateTime? currentPeriodEnd, DateTime? updatedAt
+ String id, String userId, SubscriptionStatus status, String? plan, String? phonepeSubscriptionId, String? merchantSubscriptionId, String? merchantOrderId, DateTime? trialEnd, DateTime? currentPeriodEnd, DateTime? updatedAt, int pricePaise, bool cancelOfferEligible
 });
 
 
@@ -71,7 +73,7 @@ class _$SubscriptionModelCopyWithImpl<$Res>
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? status = null,Object? plan = freezed,Object? phonepeSubscriptionId = freezed,Object? merchantSubscriptionId = freezed,Object? merchantOrderId = freezed,Object? trialEnd = freezed,Object? currentPeriodEnd = freezed,Object? updatedAt = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? userId = null,Object? status = null,Object? plan = freezed,Object? phonepeSubscriptionId = freezed,Object? merchantSubscriptionId = freezed,Object? merchantOrderId = freezed,Object? trialEnd = freezed,Object? currentPeriodEnd = freezed,Object? updatedAt = freezed,Object? pricePaise = null,Object? cancelOfferEligible = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
@@ -83,7 +85,9 @@ as String?,merchantOrderId: freezed == merchantOrderId ? _self.merchantOrderId :
 as String?,trialEnd: freezed == trialEnd ? _self.trialEnd : trialEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,currentPeriodEnd: freezed == currentPeriodEnd ? _self.currentPeriodEnd : currentPeriodEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,updatedAt: freezed == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,pricePaise: null == pricePaise ? _self.pricePaise : pricePaise // ignore: cast_nullable_to_non_nullable
+as int,cancelOfferEligible: null == cancelOfferEligible ? _self.cancelOfferEligible : cancelOfferEligible // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -168,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt,  int pricePaise,  bool cancelOfferEligible)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _SubscriptionModel() when $default != null:
-return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt,_that.pricePaise,_that.cancelOfferEligible);case _:
   return orElse();
 
 }
@@ -189,10 +193,10 @@ return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubsc
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt,  int pricePaise,  bool cancelOfferEligible)  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionModel():
-return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt,_that.pricePaise,_that.cancelOfferEligible);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -209,10 +213,10 @@ return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubsc
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String userId,  SubscriptionStatus status,  String? plan,  String? phonepeSubscriptionId,  String? merchantSubscriptionId,  String? merchantOrderId,  DateTime? trialEnd,  DateTime? currentPeriodEnd,  DateTime? updatedAt,  int pricePaise,  bool cancelOfferEligible)?  $default,) {final _that = this;
 switch (_that) {
 case _SubscriptionModel() when $default != null:
-return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt);case _:
+return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubscriptionId,_that.merchantSubscriptionId,_that.merchantOrderId,_that.trialEnd,_that.currentPeriodEnd,_that.updatedAt,_that.pricePaise,_that.cancelOfferEligible);case _:
   return null;
 
 }
@@ -224,7 +228,7 @@ return $default(_that.id,_that.userId,_that.status,_that.plan,_that.phonepeSubsc
 
 @JsonSerializable(fieldRename: FieldRename.snake)
 class _SubscriptionModel implements SubscriptionModel {
-  const _SubscriptionModel({required this.id, required this.userId, required this.status, this.plan, this.phonepeSubscriptionId, this.merchantSubscriptionId, this.merchantOrderId, this.trialEnd, this.currentPeriodEnd, this.updatedAt});
+  const _SubscriptionModel({required this.id, required this.userId, required this.status, this.plan, this.phonepeSubscriptionId, this.merchantSubscriptionId, this.merchantOrderId, this.trialEnd, this.currentPeriodEnd, this.updatedAt, this.pricePaise = 19900, this.cancelOfferEligible = false});
   factory _SubscriptionModel.fromJson(Map<String, dynamic> json) => _$SubscriptionModelFromJson(json);
 
 @override final  String id;
@@ -243,6 +247,10 @@ class _SubscriptionModel implements SubscriptionModel {
 @override final  DateTime? trialEnd;
 @override final  DateTime? currentPeriodEnd;
 @override final  DateTime? updatedAt;
+/// What the mandate charges a month, in paise. A Worker that predates the field sold ₹199 only.
+@override@JsonKey() final  int pricePaise;
+/// Whether cancelling first offers the ₹99 switch — the Worker's once-per-person verdict.
+@override@JsonKey() final  bool cancelOfferEligible;
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
@@ -257,16 +265,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SubscriptionModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.status, status) || other.status == status)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.phonepeSubscriptionId, phonepeSubscriptionId) || other.phonepeSubscriptionId == phonepeSubscriptionId)&&(identical(other.merchantSubscriptionId, merchantSubscriptionId) || other.merchantSubscriptionId == merchantSubscriptionId)&&(identical(other.merchantOrderId, merchantOrderId) || other.merchantOrderId == merchantOrderId)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _SubscriptionModel&&(identical(other.id, id) || other.id == id)&&(identical(other.userId, userId) || other.userId == userId)&&(identical(other.status, status) || other.status == status)&&(identical(other.plan, plan) || other.plan == plan)&&(identical(other.phonepeSubscriptionId, phonepeSubscriptionId) || other.phonepeSubscriptionId == phonepeSubscriptionId)&&(identical(other.merchantSubscriptionId, merchantSubscriptionId) || other.merchantSubscriptionId == merchantSubscriptionId)&&(identical(other.merchantOrderId, merchantOrderId) || other.merchantOrderId == merchantOrderId)&&(identical(other.trialEnd, trialEnd) || other.trialEnd == trialEnd)&&(identical(other.currentPeriodEnd, currentPeriodEnd) || other.currentPeriodEnd == currentPeriodEnd)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pricePaise, pricePaise) || other.pricePaise == pricePaise)&&(identical(other.cancelOfferEligible, cancelOfferEligible) || other.cancelOfferEligible == cancelOfferEligible));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,userId,status,plan,phonepeSubscriptionId,merchantSubscriptionId,merchantOrderId,trialEnd,currentPeriodEnd,updatedAt);
+int get hashCode => Object.hash(runtimeType,id,userId,status,plan,phonepeSubscriptionId,merchantSubscriptionId,merchantOrderId,trialEnd,currentPeriodEnd,updatedAt,pricePaise,cancelOfferEligible);
 
 @override
 String toString() {
-  return 'SubscriptionModel(id: $id, userId: $userId, status: $status, plan: $plan, phonepeSubscriptionId: $phonepeSubscriptionId, merchantSubscriptionId: $merchantSubscriptionId, merchantOrderId: $merchantOrderId, trialEnd: $trialEnd, currentPeriodEnd: $currentPeriodEnd, updatedAt: $updatedAt)';
+  return 'SubscriptionModel(id: $id, userId: $userId, status: $status, plan: $plan, phonepeSubscriptionId: $phonepeSubscriptionId, merchantSubscriptionId: $merchantSubscriptionId, merchantOrderId: $merchantOrderId, trialEnd: $trialEnd, currentPeriodEnd: $currentPeriodEnd, updatedAt: $updatedAt, pricePaise: $pricePaise, cancelOfferEligible: $cancelOfferEligible)';
 }
 
 
@@ -277,7 +285,7 @@ abstract mixin class _$SubscriptionModelCopyWith<$Res> implements $SubscriptionM
   factory _$SubscriptionModelCopyWith(_SubscriptionModel value, $Res Function(_SubscriptionModel) _then) = __$SubscriptionModelCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String userId, SubscriptionStatus status, String? plan, String? phonepeSubscriptionId, String? merchantSubscriptionId, String? merchantOrderId, DateTime? trialEnd, DateTime? currentPeriodEnd, DateTime? updatedAt
+ String id, String userId, SubscriptionStatus status, String? plan, String? phonepeSubscriptionId, String? merchantSubscriptionId, String? merchantOrderId, DateTime? trialEnd, DateTime? currentPeriodEnd, DateTime? updatedAt, int pricePaise, bool cancelOfferEligible
 });
 
 
@@ -294,7 +302,7 @@ class __$SubscriptionModelCopyWithImpl<$Res>
 
 /// Create a copy of SubscriptionModel
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? status = null,Object? plan = freezed,Object? phonepeSubscriptionId = freezed,Object? merchantSubscriptionId = freezed,Object? merchantOrderId = freezed,Object? trialEnd = freezed,Object? currentPeriodEnd = freezed,Object? updatedAt = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? userId = null,Object? status = null,Object? plan = freezed,Object? phonepeSubscriptionId = freezed,Object? merchantSubscriptionId = freezed,Object? merchantOrderId = freezed,Object? trialEnd = freezed,Object? currentPeriodEnd = freezed,Object? updatedAt = freezed,Object? pricePaise = null,Object? cancelOfferEligible = null,}) {
   return _then(_SubscriptionModel(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,userId: null == userId ? _self.userId : userId // ignore: cast_nullable_to_non_nullable
@@ -306,7 +314,9 @@ as String?,merchantOrderId: freezed == merchantOrderId ? _self.merchantOrderId :
 as String?,trialEnd: freezed == trialEnd ? _self.trialEnd : trialEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,currentPeriodEnd: freezed == currentPeriodEnd ? _self.currentPeriodEnd : currentPeriodEnd // ignore: cast_nullable_to_non_nullable
 as DateTime?,updatedAt: freezed == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
-as DateTime?,
+as DateTime?,pricePaise: null == pricePaise ? _self.pricePaise : pricePaise // ignore: cast_nullable_to_non_nullable
+as int,cancelOfferEligible: null == cancelOfferEligible ? _self.cancelOfferEligible : cancelOfferEligible // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

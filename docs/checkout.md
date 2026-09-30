@@ -84,6 +84,17 @@ share of CTA taps die with no terminal event (the process killed behind the UPI 
 while resumable). It drives one dismissible feed row and one reminder
 ([notifications.md](notifications.md)); any premium read or settled purchase clears both.
 
+## The cancel offer ([cancel-offer.md](cancel-offer.md))
+
+- An offer attempt (`offer: 'cancel_99'` on initiate) is a switch, never a sale: no `trial_started`, no
+  trial marker, no return page, and `TrialConversionCatchUp` treats a 9900 row as already reported.
+- **Never resumable.** An open order on return is abandoned (the ₹199 comes back at once) and the retry
+  sheet shows: a user who said "cancel" must not silently stay on ₹199, and a failed attempt must not
+  cancel anything without a tap. Its back and scrim change nothing.
+- The outcome is `/payments/status`'s `price_paise`: trialing/active at 9900 = switched, at 19900 = released.
+  A poll that never reached the server toasts instead of the retry sheet — the switch may still land, and a
+  retry would start a second one. Never the refund line: nothing was debited but the ₹2 check.
+
 ## Events (GA4-only; the rest: [analytics-events.md](analytics-events.md))
 
 - `paywall_shown` reports the sell ONCE the installed-app probe has ANSWERED — the first build would

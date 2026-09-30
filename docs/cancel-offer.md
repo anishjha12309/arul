@@ -1,0 +1,78 @@
+# The ₹99 cancel offer — a second mandate, never a cheaper notify
+
+Read before touching `workers/src/lib/subscription-state.ts`, the offer path of `routes/payments.ts`, or
+`features/premium/presentation/cancel_offer_sheet.dart`. Setup and cancel: [phonepe.md](phonepe.md) · the hourly
+sweeps: [autopay-debits.md](autopay-debits.md) · the app's picker and poll: [checkout.md](checkout.md).
+
+## A new ₹99 mandate, never a ₹99 notify on the ₹199 one
+
+PhonePe has no mandate-modify API and its docs say nothing on a FIXED mandate taking a lower notify, so the switch
+sets up a NEW mandate (`PENNY_DROP` ₹2, `maxAmount` 9900) and revokes the ₹199 once it is approved. UAT accepted a
+19900 notify on a FIXED 9900 mandate: the sandbox enforces nothing at notify, so the amount is right only because
+every notify, settle and `paid_paise` stamp reads the row's `price_paise`, never a literal.
+
+## Eligibility is ONE fragment
+
+`cancelOfferEligible` (GET /me and initiate, re-checked under the users-row lock): trialing/active with a live
+period, a live mandate, `next_debit_at` more than an hour out, nothing parked, `price_paise = 19900`,
+`users.cancel_offer_at` NULL. NOT `notified_at IS NULL`: Pass A notifies a 1-day trial minutes after it starts, and
+with `autoDebit:false` a notified order moves no money until Pass B redeems it at `next_debit_at`.
+
+Initiate also reads the live mandate first: anything but ACTIVE syncs the row with the status route's own writes and
+answers 409 `offer_unavailable` — distinct from `setup_in_progress`, and never `already_subscribed`, which the app
+reads as success.
+
+## Claim, switch, release
+
+- The claim parks the ₹199 with `superseded_price_paise`, writes `price_paise = 9900` and `offer_switch = true`, and
+  touches NO ladder column, so a release hands `next_debit_at`, `notified_at` and the order back exactly.
+- `grantCompletedSetup` runs the switch FIRST on every grant surface (setup webhook, status reconcile, claim sweep).
+  The ₹2 check is not a paid month: the release CASE picks the status, no debit stamps, no referral, no
+  `subscription_active`. `next_debit_at` becomes `GREATEST(next_debit_at, now() + 25 h)` and the period — and a
+  trial's `trial_end`, so it still reads unconverted — moves with it: PhonePe refuses a debit inside 24 h of its
+  notice, and premium must never lapse over our switch. `users.cancel_offer_at` is stamped in the same statement.
+- The switch clears `redemption_order_id`: a legacy order left on an hsr row names two merchants and throws.
+- The replaced ₹199 is revoked at ITS merchant after the response; one PhonePe keeps live goes to
+  `revoke_retry_mandate_id` (hourly retry, ALARM 72 h after the switch). Never notified, so it cannot debit — this is
+  about what the user sees in their UPI app.
+- Every release (abandon, failed-setup webhook, status FAILED/EXPIRED, the claim sweep, a revoked/cancelled webhook
+  for the claim's own id while a mandate is parked) restores the parked id AND its price and keeps the ₹99 id in
+  `offer_mandate_id`. A failed or abandoned accept never spends the offer.
+- A failed offer initiate releases its claim at once: left `pending`, the user's "Try again" reads as ineligible.
+- The in-flight guard runs BEFORE eligibility, so a double tap answers `setup_in_progress`, never
+  `offer_unavailable`; an older claim of their own switch is released first, so a retry is judged on the ₹199.
+- Cancel and account deletion mid-switch MUST revoke the parked ₹199 but revoke the unapproved ₹99 best effort:
+  an in-progress setup refuses a merchant cancel, and waiting on it blocked both until the claim sweep.
+
+## Late approval
+
+The payer can approve in the UPI app after the app gave up. `honourLateOfferApproval` (the hsr webhook, and the
+hourly watch of `offer_mandate_id`) switches a row still trialing/active on its ₹199 and not due within the hour —
+they approved ₹99, so charging ₹199 after that is the worst outcome. Anywhere else the ₹99 is revoked; an in-progress
+one older than 24 h (its id's own timestamp) too.
+
+Never the resurrect grant: it excludes `offer_switch` rows, and a cancel mid-switch puts the ₹199 id back on the row
+with the ₹99 in `offer_mandate_id`, so a late approval there can only be revoked — never a month off a ₹2 check.
+
+## Once per person
+
+Spent by the sheet's explicit decline (`POST /payments/cancel {offer_declined:true}`, the same statement as the
+cancel), the retry sheet's cancel, or a switch. Fielded builds cancel with no body and keep their offer. `DELETE /me`
+writes the stamp onto the trial tombstone (a spent offer always has one: it needs a trial) and `/auth/login`
+pre-seeds it the way it seeds `trial_end`. A ₹99 subscriber whose mandate dies re-subscribes at ₹199: every claim
+writes `price_paise`.
+
+## Two merchants
+
+New setups follow `chooseSetupMerchant`, never the parked id, so the usual switch is legacy ₹199 → hsr ₹99 and every
+later call routes by `merchantOf` of the id it touches. The legacy keys stay live while any legacy mandate does,
+parked ones included. The payer's UPI app shows the ₹99 payee as `hsrutilityonline@ybl`, not the ₹199's merchant.
+
+## Contracts
+
+- [ ] Eligible → offer sheet after Cancel it; Not now, back and scrim cancel with the flag; no drag dismiss
+- [ ] A failed or abandoned accept restores the ₹199 exactly (id, price, ladder); the retry sheet's back changes nothing
+- [ ] Premium never lapses across a switch; the first ₹99 is notified fresh, ≥ 24 h out
+- [ ] A late ₹99 approval switches only a row still on its ₹199; on a cancelled row it is revoked
+- [ ] An offer attempt never fires `trial_started`, never arms the trial marker, is never resumable
+- [ ] No PhonePe call names ids of two merchants

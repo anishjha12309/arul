@@ -253,5 +253,16 @@
   "premiumCancelConfirm": "అవును, రద్దు చేయండి",
   "premiumCancelledToast": "సబ్‌స్క్రిప్షన్ రద్దయింది. వ్యవధి ముగిసే వరకు ప్రీమియం ఉంటుంది.",
   "premiumCancelledToastDate": "సబ్‌స్క్రిప్షన్ రద్దయింది. {date} వరకు ప్రీమియం ఉంటుంది.",
-  "premiumCancelKeep": "ప్రీమియం కొనసాగించండి"
+  "premiumCancelKeep": "ప్రీమియం కొనసాగించండి",
+  "cancelOfferEyebrow": "50% తగ్గింపు",
+  "cancelOfferForever": "ఎప్పటికీ ఇదే ధర. ఇప్పటిలాగే ఎప్పుడైనా రద్దు చేయవచ్చు.",
+  "cancelOfferApprove": "మీ UPI యాప్ నెలకు {offerPrice} ఆమోదించమని అడుగుతుంది. మీరు ఆమోదించిన వెంటనే మీ {price} ఆటోపేను ఆపేస్తాము.",
+  "cancelOfferDeclineNote": "'ఇప్పుడు కాదు' నొక్కితే మీ సబ్‌స్క్రిప్షన్ రద్దవుతుంది.",
+  "cancelOfferDeclineNoteDate": "'ఇప్పుడు కాదు' నొక్కితే మీ సబ్‌స్క్రిప్షన్ రద్దవుతుంది. {date} వరకు ప్రీమియం ఉంటుంది.",
+  "cancelOfferAccept": "తగ్గింపు పొందండి",
+  "cancelOfferRetryTitle": "పూర్తి కాలేదు",
+  "cancelOfferTryAgain": "మళ్లీ ప్రయత్నించండి",
+  "cancelOfferNothingChanged": "ఏమీ మారలేదు. మీరు ఇప్పటికీ నెలకు {price} ప్లాన్‌లోనే ఉన్నారు.",
+  "cancelOfferSwitchedToast": "ఇకపై మీకు నెలకు {price} మాత్రమే.",
+  "cancelOfferUnavailable": "ఈ ఆఫర్ ఇప్పుడు అందుబాటులో లేదు."
 }

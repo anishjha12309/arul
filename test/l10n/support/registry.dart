@@ -22,6 +22,8 @@ import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/features/auth/domain/sign_in_outcome.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
+import 'package:arul/features/premium/presentation/cancel_offer_sheet.dart';
+import 'package:arul/features/premium/presentation/premium_confirm_dialog.dart';
 import 'package:arul/features/premium/presentation/trial_nudge_row.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/trial_nudge_provider.dart';
@@ -396,6 +398,50 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
           confirmLabel: l10n.settingsDeleteAccount,
         );
       },
+    ),
+  ),
+
+  // The two cancel-offer sheets open over /premium's member view. The offer carries the dated
+  // footnote (its longer form); the retry sheet the longest reason a failed switch can give.
+  ScreenEntry(
+    id: 'premium.cancel_offer_sheet',
+    build: () => SheetHost(
+      open: (context) => showCancelOfferSheet(
+        context,
+        price: '₹199',
+        offerPrice: '₹99',
+        accessUntil: AppLocalizations.of(
+          context,
+        ).premiumPlanDate(DateTime(2026, 10, 13)),
+        onAccept: () async => false,
+        untilHandedOff: () async {},
+      ),
+    ),
+  ),
+  ScreenEntry(
+    id: 'premium.cancel_confirm_dialog',
+    build: () => SheetHost(
+      open: (context) async {
+        final l10n = AppLocalizations.of(context);
+        await showPremiumConfirmDialog(
+          context,
+          title: l10n.premiumCancelDialogTitle,
+          message: l10n.premiumCancelDialogBodyDate(DateTime(2026, 10, 13)),
+          confirmLabel: l10n.premiumCancelConfirm,
+          cancelLabel: l10n.premiumCancelKeep,
+        );
+      },
+    ),
+  ),
+  ScreenEntry(
+    id: 'premium.cancel_offer_retry_sheet',
+    build: () => SheetHost(
+      open: (context) => showCancelOfferRetrySheet(
+        context,
+        reason: AppLocalizations.of(context).purchaseInProgress,
+        onRetry: () async => false,
+        untilHandedOff: () async {},
+      ),
     ),
   ),
 

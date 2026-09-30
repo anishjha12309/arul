@@ -182,7 +182,8 @@ describe("Pass B — a settled debit is always recorded", () => {
     // COALESCE is what keeps first_debit_at at the FIRST settle when this row renews next month
     expect(activated!.text).toContain("first_debit_at = COALESCE(first_debit_at, now())");
     expect(activated!.text).toContain("debit_count = debit_count + 1");
-    expect(activated!.text).toContain("paid_paise = paid_paise + 19900");
+    // The row's own price -> a ₹99 switch books 9900 per month, never a literal ₹199
+    expect(activated!.text).toContain("paid_paise = paid_paise + price_paise");
     expect(referral.grantReferralReward).toHaveBeenCalledTimes(1);
     // 'trialing' at settle is the FIRST trial->paid conversion -> PostHog ONLY
     // GA4 `purchase` and Meta `Subscribe` are gone from this path -> one conversion, one data source
@@ -566,7 +567,8 @@ describe("Pass D — a paused mandate the webhook never told us about", () => {
       );
       expect(rearm, "an ACTIVE mandate must put the row back in the rotation").toBeDefined();
       // Status AND clock, on one statement -> restoring only the status is the zombie-row bug
-      expect(rearm!.text).toContain("THEN 'trialing' ELSE 'active'");
+      // Converted = the period ran past the trial -> an unpaused never-converted trial stays 'trialing'
+      expect(rearm!.text).toContain("current_period_end > trial_end THEN 'active' ELSE 'trialing'");
       // The guard the webhook carries -> a restore must never resurrect a cancelled or expired row
       expect(rearm!.text).toContain("AND status = 'paused'");
       expect(rearm!.values).toContain("paused-1");

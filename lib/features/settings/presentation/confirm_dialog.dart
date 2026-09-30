@@ -13,17 +13,26 @@ Future<bool?> showArulConfirmDialog(
   required String confirmLabel,
   String? cancelLabel,
 }) {
+  // The route is built on the ROOT navigator, under the app's theme; unlike `showDialog`,
+  // `showGeneralDialog` carries none of the caller's. /premium pins light at its route, so without
+  // the capture a dark phone got a dark card over the light paywall.
+  final themes = InheritedTheme.capture(
+    from: context,
+    to: Navigator.of(context, rootNavigator: true).context,
+  );
   return showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
     barrierLabel: title,
     barrierColor: ArulTokens.dialogOverlay,
     transitionDuration: ArulTokens.dialogEnter,
-    pageBuilder: (context, _, _) => _ConfirmDialog(
-      title: title,
-      message: message,
-      confirmLabel: confirmLabel,
-      cancelLabel: cancelLabel,
+    pageBuilder: (context, _, _) => themes.wrap(
+      _ConfirmDialog(
+        title: title,
+        message: message,
+        confirmLabel: confirmLabel,
+        cancelLabel: cancelLabel,
+      ),
     ),
     transitionBuilder: (context, anim, _, child) {
       final t = CurvedAnimation(parent: anim, curve: ArulTokens.sheetCurve);

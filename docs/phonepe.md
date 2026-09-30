@@ -4,7 +4,7 @@ Read before touching `workers/src/lib/phonepe.ts` or `workers/src/routes/payment
 from a real failure and several PhonePe doc pages are wrong, so never re-derive from the docs. The
 Worker runs on **PRODUCTION** credentials. Recurring debits: [autopay-debits.md](autopay-debits.md) ·
 webhook: [phonepe-webhook.md](phonepe-webhook.md) · the app's picker, QR, resume and poll:
-[checkout.md](checkout.md).
+[checkout.md](checkout.md) · the ₹99 switch: [cancel-offer.md](cancel-offer.md).
 
 ## Endpoints
 
@@ -54,7 +54,7 @@ payment page reads "auto-paid till NaNth Invalid Date". The intent flow defaults
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — and a 1-day
 trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
-straight to `active`. `maxAmount: 19900`, `amountType: FIXED`, `frequency: MONTHLY`.
+straight to `active`. `maxAmount` = the claim's `price_paise`, `amountType: FIXED`, `frequency: MONTHLY`.
 
 **409 `setup_in_progress` stays distinct from 409 `already_subscribed`** — the app treats
 `already_subscribed` as success and must never do that for an in-flight setup. Initiate is serialized
@@ -67,7 +67,7 @@ paired with that window ([checkout.md](checkout.md)) — change either side only
 A lapsed trial whose ₹199 is failing (Z9) still has a live mandate climbing the dunning ladder, and its
 owner is exactly who re-taps Subscribe. Revoking it at initiate killed mandates that would have paid on a
 later rung while the replacement setups mostly went unapproved. So initiate over a
-`trialing`/`active`/`paused` row writes the old id to `superseded_mandate_id` and touches nothing at
+`trialing`/`active`/`paused` row writes the old id (and its price) to `superseded_*` and touches nothing at
 PhonePe; only a `pending` or `expired` row's mandate (never approved, or ladder exhausted) is revoked on
 the spot. Two mandates on one user is safe: only `merchant_subscription_id` is ever notified or redeemed.
 
@@ -81,8 +81,9 @@ clears the column.
 
 A resubscribe claims the user's ONE row, so the claim rides over whatever entitlement it carried —
 expiring every failed setup stripped a cancelled-but-live trial when the user backed out at the UPI app.
-All three failure paths (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook)
-write the SAME CASE: a parked `superseded_mandate_id` wins and becomes `merchant_subscription_id` again,
+Every failure path (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook, the claim
+sweep, a revoke of the claim's own id while one is parked) runs ONE `releaseClaim`: a parked
+`superseded_mandate_id` wins and becomes `merchant_subscription_id` again at its own price,
 `active` when `current_period_end > trial_end` else `trialing` (the claim never touches ladder columns,
 so the cron resumes where it stood); otherwise `current_period_end > now()` → `cancelled`, else
 `expired`. The setup-completed resurrect matches `('expired','cancelled')` so a paid approval racing the
@@ -91,22 +92,21 @@ the sheet is open.
 
 ## Healing what the webhook never reported
 
-The webhook has never been delivered in production, so every heal below must stay a PULL.
+Only the hsr merchant's webhook delivers; the legacy one never has, so every heal below stays a PULL.
 
 - **`POST /payments/status` reconciles the row against PhonePe** — a lost SDK callback never loses the
   payment. A device run ended with PhonePe's webview stuck on "confirming" while the mandate was
   COMPLETED; status-reconcile saved it.
-- **A settled debit the row never learned about is healed by status, not the cron.** The cron reads
-  `trialing`/`active` rows only; a row that left that set with `redemption_order_id` still open can see
-  that order COMPLETE later — money taken, no premium. For a `pending`/`cancelled`/`expired`/`paused`
-  row that NEVER converted (`current_period_end <= trial_end`), status reads that order and grants the
-  month on COMPLETED; the never-converted gate stops a period being granted twice. The redemption
-  webhook grants only when the ROOT `payload.state` is COMPLETED — the transaction-level event carries
-  a PENDING order.
+- **A settled debit on a row outside the cron's reach** is healed by ONE `healSettledDebit` — status, the
+  hourly sweep, and initiate before it claims ([autopay-debits.md](autopay-debits.md) §The hourly sweeps).
+  The redemption webhook grants only when the ROOT `payload.state` is COMPLETED — the transaction-level
+  event carries a PENDING order.
 - **Unpause must REARM the debit clock.** The cron's park nulls `next_debit_at`, so a status-only unpause
   left a row neither pass could select: "Active" forever, never billed. The rearm writes
   `next_debit_at = COALESCE(next_debit_at, current_period_end)`, clears `notified_at`, scoped
-  `AND status='paused'` so a stray event cannot resurrect a cancelled or expired row. ONE home,
+  `AND status='paused'` so a stray event cannot resurrect a cancelled or expired row. It restores `trialing`
+  unless converted (`current_period_end > trial_end`), like every other writer: a date rule relabelled
+  never-converted trials `active`, and their first ₹199 skipped the first-conversion report. ONE home,
   `lib/subscription-rearm.ts`, shared by the webhook, the cron's Pass D ([cron.md](cron.md)) and status
   (mandate PAUSED on a live row → park; mandate ACTIVE on a paused row → restore and rearm).
 - Abandon reads the live order first and answers `settled:true` on COMPLETED rather than expiring a paid

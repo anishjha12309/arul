@@ -8,6 +8,7 @@
 
 import type { Env } from "../env.js";
 import { merchantOf } from "./phonepe.js";
+import { offerOfPrice } from "./pricing.js";
 
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
@@ -41,6 +42,12 @@ function eventTimestamp(occurredAt: Date | string | null | undefined): string {
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
   return new Date().toISOString();
+}
+
+/** `offer: "cancel_99"` on an event about a ₹99 mandate, nothing otherwise -> absent reads as the standard price. */
+function offerProperty(pricePaise: number): { offer?: string } {
+  const offer = offerOfPrice(pricePaise);
+  return offer ? { offer } : {};
 }
 
 /** UUID-shaped and derived from (event, seed) -> a KV eventual-consistency double-send carries the SAME uuid. */
@@ -99,6 +106,8 @@ export async function reportPostHogFirstConversion(env: Env, purchase: FirstConv
           // "which app expires one" read off one axis. `unknown` = a row older than the column.
           target_app: purchase.targetApp ?? "unknown",
           phonepe_merchant: purchase.merchantSubId ? merchantOf(purchase.merchantSubId) : "unknown",
+          price_paise: amountPaise,
+          ...offerProperty(amountPaise),
           $lib: "arul-worker",
         },
       }),
@@ -146,6 +155,8 @@ interface SubscriptionCancel {
   /** The cancel write's own RETURNED `updated_at` — see FirstConversion.occurredAt.
    * Optional because account deletion leaves no row to return one. */
   occurredAt?: Date | string | null;
+  /** The ended mandate's monthly debit (`subscriptions.price_paise`); null when the row was not read. */
+  pricePaise?: number | null;
 }
 
 /** A cancel is a real loss only from these -> an already-cancelled/expired/pending row cancelling again is not an event. */
@@ -196,6 +207,13 @@ export async function reportPostHogSubscriptionCancel(env: Env, cancel: Subscrip
           during_trial: cancel.priorStatus === "trialing",
           merchant_subscription_id: cancel.merchantSubId,
           phonepe_merchant: cancel.merchantSubId ? merchantOf(cancel.merchantSubId) : "unknown",
+          ...(typeof cancel.pricePaise === "number" && cancel.pricePaise > 0
+            ? {
+                price_paise: cancel.pricePaise,
+                value: cancel.pricePaise / 100,
+                ...offerProperty(cancel.pricePaise),
+              }
+            : {}),
           $lib: "arul-worker",
         },
       }),

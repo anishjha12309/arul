@@ -78,6 +78,9 @@ outcome is a process that died under Google's surface — the only way that loss
   `subscription_active` and `payment_failed`; `checkout_started` fires once per decision, never on a
   resume.
 - `paywall_shown`, `payment_failed` and their value rules: [checkout.md](checkout.md) §Events.
+- The ₹99 offer's `cancel_offer_shown`/`_accepted`/`_declined`/`_retry_shown` are GA4-only, pinned off
+  PostHog. An offer attempt's events carry `offer: cancel_99` + `price_paise`; its `checkout_started` is
+  never `begin_checkout`/InitiateCheckout (a switch is no conversion). Server events add `price_paise`.
 - The return page adds `trial_return_shown` and `return_video_start`/`return_video_muted`; a tap from
   it stamps `surface: return` on the checkout events (absent = the trial screen). The sign-in events use
   `surface` for their own values — filter by event before splitting.

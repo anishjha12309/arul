@@ -10,8 +10,21 @@ import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
 import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../lib/posthog.js";
+import { CANCEL_OFFER, OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
+import {
+  addOneMonth,
+  cancelOfferEligible,
+  grantCompletedSetup,
+  healSettledDebit,
+  honourLateOfferApproval,
+  noteRevokeRetry,
+  parkSubscription,
+  releaseClaim,
+  type SetupGrant,
+  TRIAL_MS,
+} from "../lib/subscription-state.js";
 import {
   setupSubscription,
   setupSubscriptionIntent,
@@ -51,17 +64,6 @@ function stateEventDedupeId(event: string, pp: PhonePeWebhookPayload["payload"])
   return `${merchantSubId}:${pp.state ?? ""}:${pp.pauseStartDate ?? ""}`;
 }
 
-/** Monthly price in paise -> must match maxAmount in phonepe.ts -> a mismatch makes the mandate refuse the debit. */
-const MONTHLY_PRICE_PAISE = 19900;
-
-/**
- * Free-trial length. The ₹2 PENNY_DROP only AUTHORIZES the mandate — the trial itself is ours.
- * Both the webhook and the /payments/status reconcile grant it -> they MUST agree -> one constant, never two literals
- * It is also the debit clock -> next_debit_at = now + this -> the paywall copy must say the same number
- */
-const TRIAL_DAYS = 1;
-const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
-
 /**
  * PAIRED with the client's silent retries -> their delays SUM to this window
  * Change either side and re-check that sum(retry delays) >= this window
@@ -73,18 +75,34 @@ interface PriorSubscription {
   status: string;
   merchant_subscription_id: string | null;
   superseded_mandate_id: string | null;
+  superseded_price_paise: number | string | null;
+  price_paise: number | string;
+  offer_mandate_id: string | null;
+  offer_switch?: boolean | null;
+  redemption_order_id: string | null;
   current_period_end: unknown;
   updated_at: unknown;
+  offer_eligible: boolean | null;
 }
 
 /**
- * Why a claim was refused. The two reasons MUST stay distinguishable all the way out to the client.
+ * Why a claim was refused. The reasons MUST stay distinguishable all the way out to the client.
  */
-type ClaimConflict = "active_subscription" | "setup_in_flight";
+type ClaimConflict = "active_subscription" | "setup_in_flight" | "offer_unavailable";
 
 type ClaimResult =
-  | { conflict: ClaimConflict; supersededMandateId?: undefined; trialEligible?: undefined }
-  | { conflict: false; supersededMandateId: string | null; trialEligible: boolean };
+  | {
+      conflict: ClaimConflict;
+      supersededMandateId?: undefined;
+      trialEligible?: undefined;
+      staleOfferMandateId?: undefined;
+    }
+  | {
+      conflict: false;
+      supersededMandateId: string | null;
+      trialEligible: boolean;
+      staleOfferMandateId: string | null;
+    };
 
 export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -98,7 +116,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     return tooManyRequests("Too many subscription attempts — please wait a minute");
   }
 
-  let body: { plan?: string; targetApp?: string; mode?: string; context?: unknown };
+  let body: { plan?: string; targetApp?: string; mode?: string; context?: unknown; offer?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -110,6 +128,12 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   if (plan !== "monthly" && plan !== "yearly") {
     return errorResponse(400, "invalid_plan", "plan must be 'monthly' or 'yearly'");
   }
+  // One offer exists -> an unknown value is refused, never read as a plain checkout at the full price
+  if (body.offer !== undefined && body.offer !== null && body.offer !== CANCEL_OFFER) {
+    return errorResponse(400, "invalid_offer", `offer must be '${CANCEL_OFFER}'`);
+  }
+  const offer = body.offer === CANCEL_OFFER;
+  const pricePaise = offer ? OFFER_PRICE_PAISE : STANDARD_PRICE_PAISE;
 
   // Shape check only -> PhonePe validates the package itself -> do not maintain an allow-list here
   const targetApp =
@@ -125,7 +149,32 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   const checkoutContext = sent || Object.keys(signal).length ? { ...(sent ?? {}), ...signal } : null;
 
   const sql = getDb(env);
+  const tails: Promise<unknown>[] = [];
   try {
+    // PhonePe reads cannot sit under the row lock -> this unlocked read only decides whether to ask PhonePe first;
+    // the claim below re-reads and re-decides under the lock
+    let seen = await readClaimRow(sql, sub);
+
+    if (offer) {
+      if (claimInFlight(seen)) return setupInProgress();
+      // Their own earlier switch attempt never reported back (app left inside the UPI app) -> hand the ₹199 back
+      // first, so a second try is judged on the plan they still have, not refused as ineligible
+      if (seen?.status === "pending" && seen.offer_switch === true) {
+        await releaseClaim(sql, sql`s.user_id = ${sub} AND s.offer_switch`);
+        seen = await readClaimRow(sql, sub);
+      }
+      if (seen?.offer_eligible !== true) return offerUnavailable();
+      const gate = await offerMandateGate(env, sql, sub, seen.merchant_subscription_id as string);
+      if (gate === "error") return errorResponse(502, "phonepe_error", "PhonePe gateway error");
+      if (gate === "unavailable") return offerUnavailable();
+    } else if (seen?.redemption_order_id && !hasLiveSubscription(seen)) {
+      // A debit that settled while the row was out of the cron's reach looks like "no premium" -> the user taps
+      // Subscribe again, and a claim would move the row to 'pending' past every heal -> heal it and answer instead
+      if (await healBeforeClaim(c, sql, sub, seen, tails)) {
+        return errorResponse(409, "already_subscribed", "You already have an active subscription");
+      }
+    }
+
     // Build the ids up front -> the claim below writes them BEFORE PhonePe is called
     // That is what lets a concurrent request see a setup is already underway
     const merchant = await chooseSetupMerchant(env, sql, sub);
@@ -139,29 +188,23 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     const claim = (await sql.begin(async (tx) => {
       await tx`SELECT 1 FROM users WHERE id = ${sub} FOR UPDATE`;
 
-      const prior = await tx<PriorSubscription[]>`
-        SELECT trial_end, status, merchant_subscription_id, superseded_mandate_id,
-               current_period_end, updated_at
-        FROM subscriptions WHERE user_id = ${sub} LIMIT 1
-      `;
-      const existing = prior[0] ?? null;
+      const existing = await readClaimRow(tx as unknown as ReturnType<typeof getDb>, sub);
 
       const priorPeriodEnd = toDate(existing?.current_period_end);
       const hasLivePeriod = priorPeriodEnd !== null && priorPeriodEnd.getTime() > Date.now();
-      if (existing && (existing.status === "trialing" || existing.status === "active") && hasLivePeriod) {
-        return { conflict: "active_subscription" } as ClaimResult;
-      }
-
       // A pending row touched moments ago means another request is MID-SETUP -> refuse, never authorize a second mandate
       // The caller retries and gets the settled state -> refusing costs a retry, authorizing costs a stranded mandate
-      const claimedAt = toDate(existing?.updated_at);
-      if (
+      if (claimInFlight(existing)) return { conflict: "setup_in_flight" } as ClaimResult;
+
+      if (offer) {
+        // Decision 5 re-checked under the lock -> neither the client nor the unlocked read is trusted
+        if (existing?.offer_eligible !== true) return { conflict: "offer_unavailable" } as ClaimResult;
+      } else if (
         existing &&
-        existing.status === "pending" &&
-        claimedAt !== null &&
-        Date.now() - claimedAt.getTime() < SETUP_CLAIM_WINDOW_MS
+        (existing.status === "trialing" || existing.status === "active") &&
+        hasLivePeriod
       ) {
-        return { conflict: "setup_in_flight" } as ClaimResult;
+        return { conflict: "active_subscription" } as ClaimResult;
       }
 
       // Whatever mandate this row pointed at is about to become unreachable -> capture it UNDER the lock
@@ -174,19 +217,26 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       const parkedMandateId = keepAlive
         ? existing.merchant_subscription_id
         : (existing?.superseded_mandate_id ?? null);
+      const parkedPricePaise =
+        parkedMandateId === null
+          ? null
+          : keepAlive
+            ? Number(existing.price_paise)
+            : Number(existing?.superseded_price_paise ?? STANDARD_PRICE_PAISE);
       const superseded =
         existing?.merchant_subscription_id && (existing.status === "pending" || existing.status === "expired")
           ? existing.merchant_subscription_id
           : null;
 
+      // price_paise is written on EVERY claim -> a lapsed ₹99 subscriber who re-subscribes is back on ₹199
       await tx`
         INSERT INTO subscriptions (
           user_id, status, plan, merchant_subscription_id, merchant_order_id, upi_target_app,
-          superseded_mandate_id, checkout_context
+          superseded_mandate_id, superseded_price_paise, price_paise, offer_switch, checkout_context
         )
         VALUES (
           ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
-          ${recordedTargetApp}, ${parkedMandateId},
+          ${recordedTargetApp}, ${parkedMandateId}, ${parkedPricePaise}, ${pricePaise}, ${offer},
           ${checkoutContext ? JSON.stringify(checkoutContext) : null}::text::jsonb
         )
         ON CONFLICT (user_id)
@@ -197,6 +247,10 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           merchant_order_id        = EXCLUDED.merchant_order_id,
           upi_target_app           = EXCLUDED.upi_target_app,
           superseded_mandate_id    = EXCLUDED.superseded_mandate_id,
+          superseded_price_paise   = EXCLUDED.superseded_price_paise,
+          price_paise              = EXCLUDED.price_paise,
+          offer_switch             = EXCLUDED.offer_switch,
+          offer_mandate_id         = NULL,
           checkout_context         = EXCLUDED.checkout_context,
           phonepe_order_id         = NULL,
           updated_at               = now()
@@ -204,29 +258,33 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       if (keepAlive) {
         console.log(
           `[payments/initiate] parked live mandate ${existing.merchant_subscription_id} for user ${sub} — ` +
-            `revoked only once the new setup is approved`,
+            `revoked only once the new setup is approved${offer ? " (cancel_99 switch)" : ""}`,
         );
       }
 
       return {
         conflict: false,
         supersededMandateId: superseded,
-        trialEligible: existing === null || existing.trial_end === null,
+        // The switch is a ₹2 PENNY_DROP whatever trial_end says -> it never starts a trial
+        trialEligible: !offer && (existing === null || existing.trial_end === null),
+        staleOfferMandateId: existing?.offer_mandate_id ?? null,
       } as ClaimResult;
     })) as unknown as ClaimResult;
 
-    if (claim.conflict === "setup_in_flight") {
-      return errorResponse(
-        409,
-        "setup_in_progress",
-        "A payment setup is already in progress. Please wait a few seconds and try again.",
-      );
-    }
+    if (claim.conflict === "setup_in_flight") return setupInProgress();
+    if (claim.conflict === "offer_unavailable") return offerUnavailable();
     if (claim.conflict) {
       return errorResponse(409, "already_subscribed", "You already have an active subscription");
     }
 
-    const { supersededMandateId, trialEligible } = claim;
+    const { supersededMandateId, trialEligible, staleOfferMandateId } = claim;
+    // A released switch's ₹99 was still watched for a late approval -> this fresh attempt replaces it
+    if (staleOfferMandateId && staleOfferMandateId !== merchantSubscriptionId) {
+      revokeInBackground(c, staleOfferMandateId, "payments/initiate");
+    }
+    const upfrontAmountPaise = trialEligible || offer ? undefined : STANDARD_PRICE_PAISE;
+    const setupAmountPaise = upfrontAmountPaise ?? 200;
+    const offerFields = offer ? { offer: CANCEL_OFFER, pricePaise } : {};
 
     // Attach PhonePe's order id to the row already claimed above, SCOPED to the claimed merchant_order_id
     // A later initiate may have superseded this claim while PhonePe answered -> this must not stamp the newer mandate
@@ -273,14 +331,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           merchantOrderId,
           merchantSubscriptionId,
           targetApp,
-          upfrontAmountPaise: trialEligible ? undefined : MONTHLY_PRICE_PAISE,
+          upfrontAmountPaise,
+          maxAmountPaise: pricePaise,
         });
         await attachPhonePeOrder(intent.orderId, recordedTargetApp);
         revokeSuperseded();
         console.log(
           `[payments/initiate] env=${env.PHONEPE_ENV} merchant=${merchant} flow=${qrMode ? "qr" : "intent"} ` +
             `target=${recordedTargetApp} orderId=${intent.orderId} state=${intent.state} ` +
-            `trialEligible=${trialEligible}`,
+            `trialEligible=${trialEligible} price=${pricePaise}`,
         );
         return c.json({
           flow: qrMode ? "qr" : "intent",
@@ -290,7 +349,8 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
           state: intent.state,
           intentUrl: intent.intentUrl,
           trialEligible,
-          amountPaise: trialEligible ? 200 : MONTHLY_PRICE_PAISE,
+          amountPaise: setupAmountPaise,
+          ...offerFields,
         });
       } catch (intentErr) {
         console.warn(
@@ -312,10 +372,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         merchantSubscriptionId,
         merchantOrderId,
         redirectUrl,
-        upfrontAmountPaise: trialEligible ? undefined : MONTHLY_PRICE_PAISE,
+        upfrontAmountPaise,
+        maxAmountPaise: pricePaise,
       });
     } catch (ppErr) {
       console.error("[payments/initiate] PhonePe error:", ppErr);
+      // No order reached the user -> an offer claim left pending would read as ineligible to their "Try again"
+      if (offer) {
+        await releaseClaim(sql, sql`s.user_id = ${sub} AND s.merchant_order_id = ${merchantOrderId}`);
+      }
       return errorResponse(502, "phonepe_error", "PhonePe gateway error");
     }
 
@@ -328,7 +393,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         `merchantIdPrefix=${sdkMerchantId.slice(0, 4)} ` +
         `tokenLen=${ppResult.token?.length ?? 0} ` +
         `orderId=${ppResult.orderId} state=${ppResult.state} ` +
-        `trialEligible=${trialEligible}`,
+        `trialEligible=${trialEligible} price=${pricePaise}`,
     );
 
     await attachPhonePeOrder(ppResult.orderId, "phonepe_page");
@@ -352,14 +417,122 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       // silently disagree. The client rejects an empty/missing value outright.
       environment: env.PHONEPE_ENV.trim(),
       trialEligible,
-      amountPaise: trialEligible ? 200 : MONTHLY_PRICE_PAISE,
+      amountPaise: setupAmountPaise,
+      ...offerFields,
     });
   } catch (err) {
     console.error("[payments/initiate] error:", err);
     return errorResponse(500, "server_error", "Internal server error");
   } finally {
-    c.executionCtx.waitUntil(sql.end());
+    c.executionCtx.waitUntil(Promise.allSettled(tails).then(() => sql.end()));
   }
+}
+
+/** The claim's view of the user's ONE row, with decision 5's eligibility evaluated in the same read. */
+async function readClaimRow(sql: ReturnType<typeof getDb>, sub: string): Promise<PriorSubscription | null> {
+  const rows = (await sql`
+    SELECT s.trial_end, s.status, s.merchant_subscription_id, s.superseded_mandate_id, s.superseded_price_paise,
+           s.price_paise, s.offer_mandate_id, s.offer_switch, s.redemption_order_id, s.current_period_end, s.updated_at,
+           ${cancelOfferEligible(sql)} AS offer_eligible
+    FROM subscriptions AS s
+    JOIN users AS u ON u.id = s.user_id
+    WHERE s.user_id = ${sub}
+    LIMIT 1
+  `) as unknown as PriorSubscription[];
+  return rows[0] ?? null;
+}
+
+function claimInFlight(row: PriorSubscription | null): boolean {
+  const claimedAt = toDate(row?.updated_at);
+  return (
+    row?.status === "pending" &&
+    claimedAt !== null &&
+    Date.now() - claimedAt.getTime() < SETUP_CLAIM_WINDOW_MS
+  );
+}
+
+function setupInProgress(): Response {
+  return errorResponse(
+    409,
+    "setup_in_progress",
+    "A payment setup is already in progress. Please wait a few seconds and try again.",
+  );
+}
+
+function hasLiveSubscription(row: PriorSubscription): boolean {
+  const periodEnd = toDate(row.current_period_end);
+  return (
+    (row.status === "trialing" || row.status === "active") &&
+    periodEnd !== null &&
+    periodEnd.getTime() > Date.now()
+  );
+}
+
+/**
+ * True = the row's open redemption order already took the money, so the tap must not claim. The heal grants a
+ * never-converted row; a trialing/active one is left to the cron's own settle, which still selects it
+ */
+async function healBeforeClaim(
+  c: Context<{ Bindings: Env }>,
+  sql: ReturnType<typeof getDb>,
+  sub: string,
+  row: PriorSubscription,
+  tails: Promise<unknown>[],
+): Promise<boolean> {
+  const orderId = row.redemption_order_id as string;
+  try {
+    const order = await getOrderStatus(c.env, orderId);
+    if (order.state !== "COMPLETED") return false;
+    const healed = await healSettledDebit(c.env, sql, sql`s.user_id = ${sub}`, orderId);
+    if (healed?.prior_mandate_id && healed.prior_mandate_id !== healed.merchant_subscription_id) {
+      tails.push(revokeTolerantly(c.env, healed.prior_mandate_id, "payments/initiate"));
+    }
+    return healed !== null || row.status === "trialing" || row.status === "active";
+  } catch (err) {
+    // We cannot see PhonePe -> claim as before; the hourly heal still finds a settled order
+    console.warn(`[payments/initiate] order ${orderId} status before claim failed:`, err);
+    return false;
+  }
+}
+
+/**
+ * The offer only ever switches AWAY from a mandate PhonePe still bills. Anything but ACTIVE syncs the row with the
+ * status route's own writes and refuses; a failed read changes nothing and the user can retry
+ */
+async function offerMandateGate(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+  sub: string,
+  mandateId: string,
+): Promise<"ok" | "unavailable" | "error"> {
+  let state: string;
+  try {
+    state = (await getSubscriptionStatus(env, mandateId)).state;
+  } catch (err) {
+    console.warn(`[payments/initiate] offer: mandate ${mandateId} status failed:`, err);
+    return "error";
+  }
+  if (state === "ACTIVE") return "ok";
+  if (state === "CANCELLED" || state === "REVOKED") {
+    await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "cancelled", "revoked_at_phonepe");
+  } else if (state === "PAUSED") {
+    await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "paused");
+  }
+  console.log(`[payments/initiate] offer refused for user ${sub}: live mandate ${mandateId} is ${state}`);
+  return "unavailable";
+}
+
+/** The release CASE in JS: the status a pending switch's parked mandate had before the claim. */
+function switchParkedStatus(row: { trial_end?: unknown; current_period_end?: unknown }): string {
+  const trialEnd = toDate(row.trial_end);
+  const periodEnd = toDate(row.current_period_end);
+  return trialEnd !== null && periodEnd !== null && periodEnd.getTime() > trialEnd.getTime()
+    ? "active"
+    : "trialing";
+}
+
+function offerUnavailable(): Response {
+  return errorResponse(409, "offer_unavailable", "This offer is not available");
 }
 
 export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Response> {
@@ -491,128 +664,110 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
   }
 
   const sql = getDb(env);
+  const tails: Promise<unknown>[] = [];
   try {
     if (
       event === "checkout.order.completed" ||
       event === "checkout.setup.order.completed" ||
       event === "subscription.setup.order.completed"
     ) {
-      // The CASE expressions read the row's OLD trial_end under Postgres SET semantics -> decide and write in ONE statement
-      // The ELSE branch is itself a ₹199 debit -> the three debit-tracking columns move on it and ONLY on it
-      const trialEnd = new Date(Date.now() + TRIAL_MS);
-      const paidEnd = addOneMonth(new Date());
-      const phonepeSubId = phonePeSubscriptionIdOf(pp);
-
-      // `AND status = 'pending'` is LOAD-BEARING -> never drop it
-      // The trial/paid decision reads the row's OWN trial_end, and the app's status poll runs the identical reconcile
-      // Whichever lands first writes trial_end -> the second then re-reads it and concludes "repeat subscriber"
-      // It would hand out 'active', a FULL MONTH of premium and a referral reward off a ₹2 PENNY_DROP
-      // KV dedupe cannot cover it -> the two writers are the webhook and the app poll, which share no key
       // COALESCE on phonepe_subscription_id -> a payload that omits subscriptionId must never blank an id we hold
-      const updated = await sql<{ user_id: string; status: string }[]>`
-        UPDATE subscriptions
-        SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
-            phonepe_subscription_id  = COALESCE(${phonepeSubId}, phonepe_subscription_id),
-            trial_end                = COALESCE(trial_end, ${trialEnd.toISOString()}),
-            current_period_end       = CASE WHEN trial_end IS NULL
-                                            THEN ${trialEnd.toISOString()}::timestamptz
-                                            ELSE ${paidEnd.toISOString()}::timestamptz END,
-            next_debit_at            = CASE WHEN trial_end IS NULL
-                                            THEN ${trialEnd.toISOString()}::timestamptz
-                                            ELSE ${paidEnd.toISOString()}::timestamptz END,
-            notified_at              = NULL,
-            retry_count              = 0,
-            first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
-                                            ELSE COALESCE(first_debit_at, now()) END,
-            debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
-            paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
-            updated_at               = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-          AND status = 'pending'
-        RETURNING user_id, status
-      `;
+      const phonepeSubId = phonePeSubscriptionIdOf(pp);
+      const granted = await grantCompletedSetup(
+        sql,
+        sql`s.merchant_subscription_id = ${merchantSubId}`,
+        phonepeSubId,
+      );
 
-      let row = updated[0];
-
-      if (!row) {
+      if (granted) {
+        console.log(
+          `[payments/webhook] Setup completed for sub ${merchantSubId} → ${granted.status}` +
+            `${granted.kind === "switch" ? " (cancel_99 switch)" : ""}, amount=${pp.amount ?? "?"}`,
+        );
+        tails.push(retireStaleMandate(env, sql, granted, "payments/webhook"));
+        if (granted.kind === "grant" && granted.status === "active") {
+          // A repeat subscriber paid ₹199 at setup -> that IS a paid debit -> the referral reward applies here too
+          await grantReferralReward(sql, granted.user_id);
+          // Audit -> a repeat subscriber's setup order must carry the REAL charge
+          // amount=200 here means a stale PENNY_DROP order completed for a trial-consumed user
+          if (typeof pp.amount === "number" && pp.amount < Number(granted.price_paise)) {
+            console.warn(
+              `[payments/webhook] Trial-consumed user activated via setup order of only ${pp.amount} paise (sub ${merchantSubId})`,
+            );
+          }
+        }
+      } else if (await settleLateOffer(env, sql, merchantSubId, phonepeSubId, tails)) {
+        // A released or cancelled switch's ₹99 -> honoured or revoked, never resurrected into a paid month
+      } else {
         // The user PAID -> a ₹199 TRANSACTION, or an authorized trial mandate -> refusing the grant eats real money
         // So resurrect, scoped to the EXACT ids of THIS event and only those two post-abandon statuses
         // An OLD dunning-expired or user-cancelled subscription can never match -> fresh setups carry fresh ids
-        const resurrected = await sql<{ user_id: string; status: string }[]>`
-          UPDATE subscriptions
-          SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
-              phonepe_subscription_id  = COALESCE(${phonepeSubId}, phonepe_subscription_id),
-              trial_end                = COALESCE(trial_end, ${trialEnd.toISOString()}),
-              current_period_end       = CASE WHEN trial_end IS NULL
+        const trialEnd = new Date(Date.now() + TRIAL_MS);
+        const paidEnd = addOneMonth(new Date());
+        const resurrected = await sql<{ user_id: string; status: string; stale_mandate_id: string | null }[]>`
+          UPDATE subscriptions AS s
+          SET status                   = CASE WHEN s.trial_end IS NULL THEN 'trialing' ELSE 'active' END,
+              phonepe_subscription_id  = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
+              trial_end                = COALESCE(s.trial_end, ${trialEnd.toISOString()}),
+              current_period_end       = CASE WHEN s.trial_end IS NULL
                                               THEN ${trialEnd.toISOString()}::timestamptz
                                               ELSE ${paidEnd.toISOString()}::timestamptz END,
-              next_debit_at            = CASE WHEN trial_end IS NULL
+              next_debit_at            = CASE WHEN s.trial_end IS NULL
                                               THEN ${trialEnd.toISOString()}::timestamptz
                                               ELSE ${paidEnd.toISOString()}::timestamptz END,
               notified_at              = NULL,
               retry_count              = 0,
-              first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
-                                              ELSE COALESCE(first_debit_at, now()) END,
-              debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
-              paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
+              first_debit_at           = CASE WHEN s.trial_end IS NULL THEN s.first_debit_at
+                                              ELSE COALESCE(s.first_debit_at, now()) END,
+              debit_count              = CASE WHEN s.trial_end IS NULL THEN s.debit_count ELSE s.debit_count + 1 END,
+              paid_paise               = CASE WHEN s.trial_end IS NULL THEN s.paid_paise
+                                              ELSE s.paid_paise + s.price_paise END,
+              superseded_mandate_id    = NULL,
+              superseded_price_paise   = NULL,
               updated_at               = now()
-          WHERE merchant_subscription_id = ${merchantSubId}
-            AND merchant_order_id = ${pp.merchantOrderId ?? ""}
-            AND status IN ('expired', 'cancelled')
-          RETURNING user_id, status
+          FROM subscriptions AS prior
+          WHERE s.merchant_subscription_id = ${merchantSubId}
+            AND s.merchant_order_id = ${pp.merchantOrderId ?? ""}
+            AND s.status IN ('expired', 'cancelled')
+            AND NOT s.offer_switch
+            AND prior.id = s.id
+          RETURNING s.user_id, s.status, prior.superseded_mandate_id AS stale_mandate_id
         `;
-        if (resurrected[0]) {
-          row = resurrected[0];
+        const row = resurrected[0];
+        if (row) {
           console.log(
             `[payments/webhook] Setup completed for sub ${merchantSubId} — ` +
               `RESURRECTED an abandon-expired claim (approval raced the auto-cancel); grant applied`,
           );
-        }
-      }
-
-      if (!row) {
-        // Both are state no-ops but they are NOT the same operationally -> the log must say which
-        // The ::text casts are LOAD-BEARING -> `fetch_types:false` gives Postgres no type context for a bare parameter
-        // A parameter appearing only inside `${x} IS NOT NULL` then fails the whole statement on type inference
-        const diag = await sql<{ status: string; had_sub_id: boolean }[]>`
-          UPDATE subscriptions
-          SET phonepe_subscription_id = COALESCE(phonepe_subscription_id, ${phonepeSubId}::text),
-              updated_at              = CASE
-                                          WHEN phonepe_subscription_id IS NULL AND ${phonepeSubId}::text IS NOT NULL
-                                          THEN now() ELSE updated_at
-                                        END
-          WHERE merchant_subscription_id = ${merchantSubId}
-          RETURNING status, (phonepe_subscription_id IS NOT NULL) AS had_sub_id
-        `;
-        if (diag.length === 0) {
-          console.error(`[payments/webhook] Setup completed for UNKNOWN sub ${merchantSubId} — no such row`);
+          if (row.stale_mandate_id && row.stale_mandate_id !== merchantSubId) {
+            tails.push(revokeTolerantly(env, row.stale_mandate_id, "payments/release"));
+          }
+          if (row.status === "active") await grantReferralReward(sql, row.user_id);
         } else {
-          console.log(
-            `[payments/webhook] Setup completed for sub ${merchantSubId} but row is ` +
-              `'${diag[0].status}', not 'pending' — already reconciled by the status poll; ` +
-              `no state change (phonepe_subscription_id present=${diag[0].had_sub_id})`,
-          );
-        }
-      } else {
-        console.log(
-          `[payments/webhook] Setup completed for sub ${merchantSubId} → ` +
-            `${row.status}, amount=${pp.amount ?? "?"}`,
-        );
-      }
-
-      if (row) {
-        await releaseSupersededMandate(c, sql, merchantSubId);
-      }
-
-      if (row?.status === "active") {
-        // A repeat subscriber paid ₹199 at setup -> that IS a paid debit -> the referral reward applies here too
-        await grantReferralReward(sql, row.user_id);
-        // Audit -> a repeat subscriber's setup order must carry the REAL charge
-        // amount=200 here means a stale PENNY_DROP order completed for a trial-consumed user
-        if (typeof pp.amount === "number" && pp.amount < MONTHLY_PRICE_PAISE) {
-          console.warn(
-            `[payments/webhook] Trial-consumed user activated via setup order of only ${pp.amount} paise (sub ${merchantSubId})`,
-          );
+          // Both are state no-ops but they are NOT the same operationally -> the log must say which
+          // The ::text casts are LOAD-BEARING -> `fetch_types:false` gives Postgres no type context for a bare parameter
+          // A parameter appearing only inside `${x} IS NOT NULL` then fails the whole statement on type inference
+          const diag = await sql<{ status: string; had_sub_id: boolean }[]>`
+            UPDATE subscriptions
+            SET phonepe_subscription_id = COALESCE(phonepe_subscription_id, ${phonepeSubId}::text),
+                updated_at              = CASE
+                                            WHEN phonepe_subscription_id IS NULL AND ${phonepeSubId}::text IS NOT NULL
+                                            THEN now() ELSE updated_at
+                                          END
+            WHERE merchant_subscription_id = ${merchantSubId}
+            RETURNING status, (phonepe_subscription_id IS NOT NULL) AS had_sub_id
+          `;
+          if (diag.length === 0) {
+            console.error(
+              `[payments/webhook] Setup completed for UNKNOWN sub ${merchantSubId} — no such row`,
+            );
+          } else {
+            console.log(
+              `[payments/webhook] Setup completed for sub ${merchantSubId} but row is ` +
+                `'${diag[0].status}', not 'pending' — already reconciled by the status poll; ` +
+                `no state change (phonepe_subscription_id present=${diag[0].had_sub_id})`,
+            );
+          }
         }
       }
     } else if (
@@ -620,22 +775,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
       event === "checkout.setup.order.failed" ||
       event === "subscription.setup.order.failed"
     ) {
-      await sql`
-        UPDATE subscriptions
-        SET status                   = CASE
-                                           -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
-                                           WHEN superseded_mandate_id IS NOT NULL
-                                           THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
-                                                     THEN 'active' ELSE 'trialing' END
-                                           ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                                                     THEN 'cancelled' ELSE 'expired' END
-                                           END,
-            merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
-            superseded_mandate_id    = NULL,
-            updated_at               = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-          AND status = 'pending'
-      `;
+      await releaseClaim(sql, sql`s.merchant_subscription_id = ${merchantSubId}`);
     } else if (
       (event === "subscription.redemption.order.completed" ||
         event === "subscription.redemption.transaction.completed") &&
@@ -663,12 +803,18 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
           updated_at?: Date | string | null;
           upi_target_app?: string | null;
           prior_mandate_id?: string | null;
+          price_paise: number | string;
         }[]
       >`
         UPDATE subscriptions AS s
         SET status                  = 'active',
             merchant_subscription_id = ${merchantSubId},
+            -- The debited mandate's own price: a parked one made live again brings its price back with it
+            price_paise             = CASE WHEN s.merchant_subscription_id = ${merchantSubId} THEN s.price_paise
+                                           ELSE COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE}) END,
             superseded_mandate_id   = NULL,
+            superseded_price_paise  = NULL,
+            offer_switch            = false,
             phonepe_subscription_id = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
             current_period_end      = ${nextEnd.toISOString()},
             next_debit_at           = ${nextEnd.toISOString()},
@@ -677,7 +823,9 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             retry_count             = 0,
             first_debit_at          = COALESCE(s.first_debit_at, now()),
             debit_count             = s.debit_count + 1,
-            paid_paise              = s.paid_paise + 19900,
+            paid_paise              = s.paid_paise + CASE WHEN s.merchant_subscription_id = ${merchantSubId}
+                                                          THEN s.price_paise
+                                                          ELSE COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE}) END,
             updated_at              = now()
         FROM subscriptions AS prior
         WHERE (s.merchant_subscription_id = ${merchantSubId} OR s.superseded_mandate_id = ${merchantSubId})
@@ -688,7 +836,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                OR (s.redemption_order_id IS NULL
                    AND (s.next_debit_at IS NULL OR s.next_debit_at <= now() + interval '1 day')))
         RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.upi_target_app,
-                  prior.merchant_subscription_id AS prior_mandate_id
+                  prior.merchant_subscription_id AS prior_mandate_id, s.price_paise
       `;
 
       console.log(
@@ -713,7 +861,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             reportPostHogFirstConversion(env, {
               userId: activated[0].user_id as string,
               transactionId: (pp.merchantOrderId ?? pp.orderId) as string,
-              amountPaise: typeof pp.amount === "number" ? pp.amount : null,
+              amountPaise: typeof pp.amount === "number" ? pp.amount : Number(activated[0].price_paise),
               occurredAt: activated[0].updated_at ?? null,
               targetApp: activated[0].upi_target_app ?? null,
               merchantSubId,
@@ -729,21 +877,34 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         `[payments/webhook] Redemption failed for sub ${merchantSubId}, event: ${event} — cron owns dunning`,
       );
     } else if (event === "subscription.revoked" || event === "subscription.cancelled") {
-      const parked = (await sql`
-        UPDATE subscriptions AS s
-        SET status        = 'cancelled',
-            next_debit_at  = NULL,
-            notified_at    = NULL,
-            updated_at     = now()
-        FROM subscriptions AS prior
-        WHERE s.merchant_subscription_id = ${merchantSubId} AND prior.id = s.id
-        RETURNING s.user_id, prior.status AS prior_status, s.updated_at
-      `) as unknown as {
-        user_id: string;
-        prior_status: string | null;
-        updated_at?: Date | string | null;
-      }[];
-      if (parked[0]) {
+      // A pending claim's UNAPPROVED id dying (PhonePe expiring the setup, or our own revoke racing the release) is a
+      // failed setup, not a cancel: cancelling it would strand the parked mandate, never billed nor revoked again
+      const released = await releaseClaim(
+        sql,
+        sql`s.merchant_subscription_id = ${merchantSubId} AND s.superseded_mandate_id IS NOT NULL`,
+      );
+      const parked = released.length
+        ? []
+        : ((await sql`
+            UPDATE subscriptions AS s
+            SET status        = 'cancelled',
+                next_debit_at  = NULL,
+                notified_at    = NULL,
+                updated_at     = now()
+            FROM subscriptions AS prior
+            WHERE s.merchant_subscription_id = ${merchantSubId} AND prior.id = s.id
+            RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.price_paise
+          `) as unknown as {
+            user_id: string;
+            prior_status: string | null;
+            updated_at?: Date | string | null;
+            price_paise?: number | string | null;
+          }[]);
+      if (released[0]) {
+        console.log(
+          `[payments/webhook] ${event} for the pending claim's ${merchantSubId} — released to ${released[0].merchant_subscription_id}`,
+        );
+      } else if (parked[0]) {
         c.executionCtx.waitUntil(
           reportPostHogSubscriptionCancel(env, {
             userId: parked[0].user_id,
@@ -751,23 +912,29 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
             reason: "webhook_revoked",
             priorStatus: parked[0].prior_status,
             occurredAt: parked[0].updated_at ?? null,
+            pricePaise: parked[0].price_paise == null ? null : Number(parked[0].price_paise),
           }),
         );
       } else {
         await sql`
           UPDATE subscriptions
-          SET superseded_mandate_id = NULL,
-              updated_at            = now()
+          SET superseded_mandate_id  = CASE WHEN superseded_mandate_id = ${merchantSubId}
+                                            THEN NULL ELSE superseded_mandate_id END,
+              superseded_price_paise = CASE WHEN superseded_mandate_id = ${merchantSubId}
+                                            THEN NULL ELSE superseded_price_paise END,
+              offer_mandate_id        = CASE WHEN offer_mandate_id = ${merchantSubId}
+                                             THEN NULL ELSE offer_mandate_id END,
+              revoke_retry_mandate_id = CASE WHEN revoke_retry_mandate_id = ${merchantSubId}
+                                             THEN NULL ELSE revoke_retry_mandate_id END,
+              updated_at              = now()
           WHERE superseded_mandate_id = ${merchantSubId}
+             OR offer_mandate_id = ${merchantSubId}
+             OR revoke_retry_mandate_id = ${merchantSubId}
         `;
       }
     } else if (event === "subscription.paused") {
-      await sql`
-        UPDATE subscriptions
-        SET status     = 'paused',
-            updated_at = now()
-        WHERE merchant_subscription_id = ${merchantSubId}
-      `;
+      // The mirror of the cron's park -> a status-only pause kept a debit clock no pass would ever serve
+      await parkSubscription(env, sql, sql`s.merchant_subscription_id = ${merchantSubId}`, "paused");
     } else if (event === "subscription.unpaused") {
       await rearmUnpausedSubscription(sql, { merchantSubscriptionId: merchantSubId });
     } else if (
@@ -794,7 +961,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
     // Retrying is safe precisely because the idempotency mark is written ONLY on the success path
     return errorResponse(500, "server_error", "Temporary failure — please retry");
   } finally {
-    c.executionCtx.waitUntil(sql.end());
+    c.executionCtx.waitUntil(Promise.allSettled(tails).then(() => sql.end()));
   }
 }
 
@@ -805,28 +972,15 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
 
   const sql = getDb(env);
+  const tails: Promise<unknown>[] = [];
   try {
-    const rows = await sql`
-      SELECT
-        id, user_id, status, plan,
-        merchant_subscription_id, merchant_order_id, phonepe_order_id,
-        phonepe_subscription_id, current_period_end, trial_end,
-        next_debit_at, notified_at, retry_count, updated_at,
-        redemption_order_id, superseded_mandate_id
-      FROM subscriptions
-      WHERE user_id = ${sub}
-      LIMIT 1
-    `;
-
-    if (rows.length === 0) {
+    const row = await readStatusRow(sql, sub);
+    if (!row) {
       return c.json({ subscription: null, phonepe: null });
     }
 
-    const row = rows[0];
-
     let phonePeStatus: { state: string; orderId?: string } | null = null;
     const merchantOrderId = row.merchant_order_id as string | null;
-    const merchantSubId = row.merchant_subscription_id as string | null;
 
     // Scoped to 'pending' -> both reconcile branches below are no-ops for any other status
     // Calling PhonePe for a lapsed row spent a real API request that could never change an outcome
@@ -836,82 +990,31 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         const orderStatus = await getOrderStatus(env, merchantOrderId);
         phonePeStatus = { state: orderStatus.state, orderId: orderStatus.orderId };
 
-        // PhonePe says COMPLETED while we still say pending -> reconcile -> this MIRRORS the webhook's grant branch
-        // The two paths must stay identical -> whichever lands first decides, and they cannot disagree
-        if (orderStatus.state === "COMPLETED" && (row.status as string) === "pending") {
-          const trialEnd = new Date(Date.now() + TRIAL_MS);
-          const paidEnd = addOneMonth(new Date());
-          const phonepeSubId = orderStatus.paymentFlow?.subscriptionId ?? null;
-          const updated = await sql<
-            {
-              user_id: string;
-              status: string;
-              trial_end: unknown;
-              current_period_end: unknown;
-              next_debit_at: unknown;
-            }[]
-          >`
-            UPDATE subscriptions
-            SET status                   = CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END,
-                phonepe_subscription_id  = COALESCE(${phonepeSubId}, phonepe_subscription_id),
-                trial_end                = COALESCE(trial_end, ${trialEnd.toISOString()}),
-                current_period_end       = CASE WHEN trial_end IS NULL
-                                                THEN ${trialEnd.toISOString()}::timestamptz
-                                                ELSE ${paidEnd.toISOString()}::timestamptz END,
-                next_debit_at            = CASE WHEN trial_end IS NULL
-                                                THEN ${trialEnd.toISOString()}::timestamptz
-                                                ELSE ${paidEnd.toISOString()}::timestamptz END,
-                notified_at              = NULL,
-                retry_count              = 0,
-                first_debit_at           = CASE WHEN trial_end IS NULL THEN first_debit_at
-                                                ELSE COALESCE(first_debit_at, now()) END,
-                debit_count              = CASE WHEN trial_end IS NULL THEN debit_count ELSE debit_count + 1 END,
-                paid_paise               = CASE WHEN trial_end IS NULL THEN paid_paise  ELSE paid_paise + 19900 END,
-                updated_at               = now()
-            WHERE user_id = ${sub}
-              AND status  = 'pending'
-            RETURNING user_id, status, trial_end, current_period_end, next_debit_at
-          `;
-          if (updated[0]) {
-            // Copy the FRESH values back onto `row` -> the response is built from the SELECT taken BEFORE this UPDATE
-            // Without it the app was told 'trialing' while trial_end and the period were still pre-reconcile nulls
-            // That is the one response that confirms a purchase -> it carried no period at all
-            row.status = updated[0].status;
-            row.trial_end = updated[0].trial_end;
-            row.current_period_end = updated[0].current_period_end;
-            row.next_debit_at = updated[0].next_debit_at;
-            if (updated[0].status === "active") {
+        // PhonePe says COMPLETED while we still say pending -> the webhook's grant, through the SAME function
+        if (orderStatus.state === "COMPLETED") {
+          const granted = await grantCompletedSetup(
+            sql,
+            sql`s.user_id = ${sub}`,
+            orderStatus.paymentFlow?.subscriptionId ?? null,
+          );
+          if (granted) {
+            tails.push(retireStaleMandate(env, sql, granted, "payments/status"));
+            if (granted.kind === "grant" && granted.status === "active") {
               // The same paid-debit semantics as the webhook path -> idempotent, so both landing is harmless
-              await grantReferralReward(sql, updated[0].user_id);
+              await grantReferralReward(sql, granted.user_id);
             }
-            if (merchantSubId) {
-              await releaseSupersededMandate(c, sql, merchantSubId);
-            }
+            // The response is built from the SELECT taken BEFORE the grant -> re-read the one row it confirms
+            Object.assign(row, await readStatusRow(sql, sub));
           }
-        } else if (
-          (orderStatus.state === "FAILED" || orderStatus.state === "EXPIRED") &&
-          (row.status as string) === "pending"
-        ) {
+        } else if (orderStatus.state === "FAILED" || orderStatus.state === "EXPIRED") {
           // Setup died at the UPI app -> the direct-intent flow's user-cancel lands HERE, with no SDK callback
           // Without this branch a cancelled intent setup polled its whole budget against a row nothing would flip
-          const failed = await sql<{ status: string }[]>`
-            UPDATE subscriptions
-            SET status                   = CASE
-                                               -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
-                                               WHEN superseded_mandate_id IS NOT NULL
-                                               THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
-                                                         THEN 'active' ELSE 'trialing' END
-                                               ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                                                         THEN 'cancelled' ELSE 'expired' END
-                                               END,
-                merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
-                superseded_mandate_id    = NULL,
-                updated_at               = now()
-            WHERE user_id = ${sub}
-              AND status  = 'pending'
-            RETURNING status
-          `;
-          row.status = failed[0]?.status ?? "expired";
+          const released = await releaseClaim(sql, sql`s.user_id = ${sub}`);
+          if (released[0]) {
+            Object.assign(row, await readStatusRow(sql, sub));
+          } else {
+            row.status = "expired";
+          }
         }
       } catch (ppErr) {
         // The PhonePe call failed -> non-fatal -> answer from DB state alone rather than failing the poll
@@ -921,28 +1024,13 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
 
     // Reconcile the live mandate for revoke/cancel AND pause/unpause -> a user acting in their UPI app fires no webhook
     // Scoped to these statuses -> the pending-setup poll above is not charged a second call, and free users cost nothing
-    if (merchantSubId && ["trialing", "active", "paused"].includes(row.status as string)) {
+    const liveMandateId = row.merchant_subscription_id as string | null;
+    if (liveMandateId && ["trialing", "active", "paused"].includes(row.status as string)) {
       try {
-        const subStatus = await getSubscriptionStatus(env, merchantSubId);
+        const subStatus = await getSubscriptionStatus(env, liveMandateId);
         phonePeStatus = phonePeStatus ?? { state: subStatus.state };
         if (subStatus.state === "CANCELLED" || subStatus.state === "REVOKED") {
-          const revoked = (await sql`
-            UPDATE subscriptions
-            SET status        = 'cancelled',
-                next_debit_at = NULL,
-                notified_at   = NULL,
-                updated_at    = now()
-            WHERE user_id = ${sub}
-              AND status IN ('trialing', 'active', 'paused')
-            RETURNING updated_at
-          `) as unknown as { updated_at?: Date | string | null }[];
-          await reportPostHogSubscriptionCancel(env, {
-            userId: sub,
-            merchantSubId,
-            reason: "revoked_at_phonepe",
-            priorStatus: row.status as string,
-            occurredAt: revoked[0]?.updated_at ?? null,
-          });
+          await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "cancelled", "revoked_at_phonepe");
           row.status = "cancelled";
           // Mirror the write onto the response row -> otherwise it claims a debit is still coming on a revoked mandate
           row.next_debit_at = null;
@@ -950,16 +1038,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
           subStatus.state === "PAUSED" &&
           ((row.status as string) === "trialing" || (row.status as string) === "active")
         ) {
-          // Lost-pause heal -> the mirror of the cron's parkMandate -> keep the two writes identical
-          await sql`
-            UPDATE subscriptions
-            SET status        = 'paused',
-                next_debit_at = NULL,
-                notified_at   = NULL,
-                updated_at    = now()
-            WHERE user_id = ${sub}
-              AND status IN ('trialing', 'active')
-          `;
+          await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "paused");
           row.status = "paused";
           row.next_debit_at = null;
         } else if (subStatus.state === "ACTIVE" && (row.status as string) === "paused") {
@@ -989,65 +1068,12 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
       try {
         const order = await getOrderStatus(env, redemptionOrderId);
         if (order.state === "COMPLETED") {
-          const nextEnd = addOneMonth(new Date());
-          // The mandate that was debited is the live one -> a parked id wins over an unapproved replacement
-          const healed = await sql<
-            {
-              status: string;
-              current_period_end: unknown;
-              next_debit_at: unknown;
-              updated_at?: Date | string | null;
-              upi_target_app?: string | null;
-              merchant_subscription_id: string | null;
-              prior_mandate_id: string | null;
-            }[]
-          >`
-            UPDATE subscriptions AS s
-            SET status                   = 'active',
-                merchant_subscription_id = COALESCE(s.superseded_mandate_id, s.merchant_subscription_id),
-                superseded_mandate_id    = NULL,
-                current_period_end       = ${nextEnd.toISOString()},
-                next_debit_at            = ${nextEnd.toISOString()},
-                notified_at              = NULL,
-                retry_count              = 0,
-                redemption_order_id      = NULL,
-                first_debit_at           = COALESCE(s.first_debit_at, now()),
-                debit_count              = s.debit_count + 1,
-                paid_paise               = s.paid_paise + 19900,
-                updated_at               = now()
-            FROM subscriptions AS prior
-            WHERE s.user_id = ${sub}
-              AND prior.id = s.id
-              AND s.redemption_order_id = ${redemptionOrderId}
-              AND s.trial_end IS NOT NULL
-              AND (s.current_period_end IS NULL OR s.current_period_end <= s.trial_end)
-            RETURNING s.status, s.current_period_end, s.next_debit_at, s.updated_at, s.upi_target_app,
-                      s.merchant_subscription_id, prior.merchant_subscription_id AS prior_mandate_id
-          `;
-          if (healed[0]) {
-            console.warn(
-              `[payments/status] order ${redemptionOrderId} COMPLETED at PhonePe while row was '${row.status}' — ` +
-                `granted the paid month for user ${sub}`,
-            );
-            row.status = healed[0].status;
-            row.current_period_end = healed[0].current_period_end;
-            row.next_debit_at = healed[0].next_debit_at;
-            row.merchant_subscription_id = healed[0].merchant_subscription_id;
-            if (
-              healed[0].prior_mandate_id &&
-              healed[0].prior_mandate_id !== healed[0].merchant_subscription_id
-            ) {
-              revokeInBackground(c, healed[0].prior_mandate_id, "payments/status");
+          const healed = await healSettledDebit(env, sql, sql`s.user_id = ${sub}`, redemptionOrderId);
+          if (healed) {
+            if (healed.prior_mandate_id && healed.prior_mandate_id !== healed.merchant_subscription_id) {
+              revokeInBackground(c, healed.prior_mandate_id, "payments/status");
             }
-            await grantReferralReward(sql, sub);
-            await reportPostHogFirstConversion(env, {
-              userId: sub,
-              transactionId: redemptionOrderId,
-              amountPaise: MONTHLY_PRICE_PAISE,
-              occurredAt: healed[0].updated_at ?? null,
-              targetApp: healed[0].upi_target_app ?? null,
-              merchantSubId: healed[0].merchant_subscription_id,
-            });
+            Object.assign(row, await readStatusRow(sql, sub));
           }
         }
       } catch (ppErr) {
@@ -1071,6 +1097,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         trial_end: row.trial_end,
         next_debit_at: row.next_debit_at,
         updated_at: row.updated_at,
+        price_paise: Number(row.price_paise ?? STANDARD_PRICE_PAISE),
       },
       phonepe: phonePeStatus,
     });
@@ -1078,8 +1105,27 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
     console.error("[payments/status] error:", err);
     return errorResponse(500, "server_error", "Internal server error");
   } finally {
-    c.executionCtx.waitUntil(sql.end());
+    c.executionCtx.waitUntil(Promise.allSettled(tails).then(() => sql.end()));
   }
+}
+
+/** The status route's one row -> re-read after a transition so the response never reports pre-write values. */
+async function readStatusRow(
+  sql: ReturnType<typeof getDb>,
+  sub: string,
+): Promise<Record<string, unknown> | null> {
+  const rows = (await sql`
+    SELECT
+      id, user_id, status, plan,
+      merchant_subscription_id, merchant_order_id, phonepe_order_id,
+      phonepe_subscription_id, current_period_end, trial_end,
+      next_debit_at, notified_at, retry_count, updated_at,
+      redemption_order_id, superseded_mandate_id, price_paise
+    FROM subscriptions
+    WHERE user_id = ${sub}
+    LIMIT 1
+  `) as unknown as Record<string, unknown>[];
+  return rows[0] ?? null;
 }
 
 export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Response> {
@@ -1088,10 +1134,20 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
 
+  // Optional -> fielded builds send no body and keep their offer; only the offer sheet's explicit decline spends it
+  let offerDeclined = false;
+  try {
+    const body = (await c.req.json()) as { offer_declined?: unknown } | null;
+    offerDeclined = body?.offer_declined === true;
+  } catch {
+    // No body is the fielded builds' cancel
+  }
+
   const sql = getDb(env);
   try {
     const rows = await sql`
-      SELECT merchant_subscription_id, superseded_mandate_id, status
+      SELECT merchant_subscription_id, superseded_mandate_id, offer_mandate_id, revoke_retry_mandate_id,
+             status, offer_switch, trial_end, current_period_end
       FROM subscriptions
       WHERE user_id = ${sub}
       LIMIT 1
@@ -1103,7 +1159,10 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
 
     const merchantSubId = rows[0].merchant_subscription_id as string | null;
     const parkedMandateId = (rows[0].superseded_mandate_id as string | null | undefined) ?? null;
+    const offerMandateId = (rows[0].offer_mandate_id as string | null | undefined) ?? null;
+    const retryMandateId = (rows[0].revoke_retry_mandate_id as string | null | undefined) ?? null;
     const status = rows[0].status as string;
+    const pendingSwitch = status === "pending" && rows[0].offer_switch === true;
 
     if (status === "cancelled" || status === "expired") {
       // Already terminal -> answer success -> cancelling a cancelled subscription is not an error
@@ -1116,32 +1175,65 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
 
     // Tolerates the already-inactive case -> a user who revoked in their UPI app is already at the desired end state
     // Only a mandate PhonePe still reports LIVE is a genuine failure worth asking the user to retry
-    const revoked =
-      (await revokeMandateTolerant(env, merchantSubId)) &&
-      (parkedMandateId === null ||
-        parkedMandateId === merchantSubId ||
-        (await revokeMandateTolerant(env, parkedMandateId)));
-    if (!revoked) {
-      return errorResponse(502, "phonepe_error", "Could not cancel with PhonePe. Please try again.");
+    // A pending switch's ₹99 was never approved -> the parked ₹199 is what bills, and the ₹99 is watched, not waited on
+    const required = [
+      ...new Set(pendingSwitch ? [parkedMandateId] : [merchantSubId, parkedMandateId]),
+    ].filter((id): id is string => id !== null);
+    for (const id of required) {
+      if (!(await revokeMandateTolerant(env, id))) {
+        return errorResponse(502, "phonepe_error", "Could not cancel with PhonePe. Please try again.");
+      }
     }
+    // Never notified, so none of these can debit -> best effort, and a failed one stays on the row for the hourly sweep
+    if (pendingSwitch) await revokeMandateTolerant(env, merchantSubId);
+    const offerRevoked = offerMandateId === null || (await revokeMandateTolerant(env, offerMandateId));
+    const retryRevoked = retryMandateId === null || (await revokeMandateTolerant(env, retryMandateId));
 
+    // A pending switch goes back to the ₹199 it parked and keeps its unapproved ₹99 in offer_mandate_id, so a late
+    // approval is revoked by the sweep, never resurrected into a month off a ₹2 check
     const cancelled = (await sql`
-      UPDATE subscriptions
-      SET status                = 'cancelled',
-          superseded_mandate_id = NULL,
-          next_debit_at         = NULL,
-          notified_at           = NULL,
-          updated_at            = now()
-      WHERE user_id = ${sub}
-      RETURNING updated_at
-    `) as unknown as { updated_at?: Date | string | null }[];
+      WITH c AS (
+        UPDATE subscriptions AS s
+        SET status                   = 'cancelled',
+            merchant_subscription_id = CASE WHEN s.offer_switch
+                                            THEN COALESCE(s.superseded_mandate_id, s.merchant_subscription_id)
+                                            ELSE s.merchant_subscription_id END,
+            price_paise              = CASE WHEN s.offer_switch AND s.superseded_mandate_id IS NOT NULL
+                                            THEN COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE})
+                                            ELSE s.price_paise END,
+            offer_mandate_id         = CASE WHEN s.offer_switch THEN s.merchant_subscription_id
+                                            WHEN ${offerRevoked}::boolean THEN NULL
+                                            ELSE s.offer_mandate_id END,
+            revoke_retry_mandate_id  = CASE WHEN ${retryRevoked}::boolean THEN NULL
+                                            ELSE s.revoke_retry_mandate_id END,
+            offer_switch             = false,
+            superseded_mandate_id    = NULL,
+            superseded_price_paise   = NULL,
+            next_debit_at            = NULL,
+            notified_at              = NULL,
+            updated_at               = now()
+        WHERE s.user_id = ${sub}
+        RETURNING s.updated_at, s.price_paise, s.merchant_subscription_id
+      ),
+      stamp AS (
+        UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now())
+        WHERE users.id = ${sub} AND ${offerDeclined}::boolean AND EXISTS (SELECT 1 FROM c)
+      )
+      SELECT * FROM c
+    `) as unknown as {
+      updated_at?: Date | string | null;
+      price_paise?: number | string | null;
+      merchant_subscription_id?: string | null;
+    }[];
 
     await reportPostHogSubscriptionCancel(env, {
       userId: sub,
-      merchantSubId,
+      merchantSubId: cancelled[0]?.merchant_subscription_id ?? merchantSubId,
       reason: "user_cancel",
-      priorStatus: status,
+      // A pending switch ends the parked ₹199, which was live -> report the status it had, or the churn is dropped
+      priorStatus: pendingSwitch ? switchParkedStatus(rows[0]) : status,
       occurredAt: cancelled[0]?.updated_at ?? null,
+      pricePaise: cancelled[0]?.price_paise == null ? null : Number(cancelled[0].price_paise),
     });
 
     return c.json({ status: "cancelled", cancelled: true });
@@ -1213,34 +1305,20 @@ export async function handleAbandon(c: Context<{ Bindings: Env }>): Promise<Resp
       return c.json({ abandoned: false, settled: false });
     }
 
-    const released = await sql<{ id: string }[]>`
-      UPDATE subscriptions
-      SET status                   = CASE
-                                         -- A parked mandate is still billing -> hand the row back to it, the ladder resumes where it stood
-                                         WHEN superseded_mandate_id IS NOT NULL
-                                         THEN CASE WHEN trial_end IS NOT NULL AND current_period_end > trial_end
-                                                   THEN 'active' ELSE 'trialing' END
-                                         ELSE CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()
-                                                   THEN 'cancelled' ELSE 'expired' END
-                                         END,
-          merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id),
-          superseded_mandate_id    = NULL,
-          updated_at               = now()
-      WHERE user_id = ${sub}
-        AND merchant_order_id = ${merchantOrderId}
-        AND status = 'pending'
-      RETURNING id
-    `;
+    const released = await releaseClaim(
+      sql,
+      sql`s.user_id = ${sub} AND s.merchant_order_id = ${merchantOrderId}`,
+    );
 
-    // GUARDED ON THE UPDATE ACTUALLY FIRING -> zero rows means the row stopped being 'pending' mid-abandon
+    // GUARDED ON THE RELEASE ACTUALLY FIRING -> zero rows means the row stopped being 'pending' mid-abandon
     // That is the grant landing between the read above and this write -> revoking there tears down a LIVE, paid mandate
     // The user would keep entitlement we can no longer bill -> the read-time checks cannot close this
     // The whole point is that the state changes underneath them
-    const merchantSubId = rows[0].merchant_subscription_id as string | null;
-    if (released.length > 0 && merchantSubId) {
+    const releasedMandateId = released[0]?.released_mandate_id ?? null;
+    if (releasedMandateId) {
       c.executionCtx.waitUntil(
-        revokeMandateTolerant(env, merchantSubId).catch((err: unknown) => {
-          console.warn(`[payments/abandon] revoke of ${merchantSubId} threw:`, err);
+        revokeMandateTolerant(env, releasedMandateId).catch((err: unknown) => {
+          console.warn(`[payments/abandon] revoke of ${releasedMandateId} threw:`, err);
         }),
       );
     }
@@ -1268,29 +1346,6 @@ export function handleCallback(c: Context<{ Bindings: Env }>): Response {
   return c.html(html);
 }
 
-/**
- * Self-join so the PRIOR value rides back -> RETURNING alone would hand back the NULL just written.
- */
-async function releaseSupersededMandate(
-  c: Context<{ Bindings: Env }>,
-  sql: ReturnType<typeof getDb>,
-  merchantSubId: string,
-): Promise<void> {
-  const rows = (await sql`
-    UPDATE subscriptions AS s
-    SET superseded_mandate_id = NULL
-    FROM subscriptions AS prior
-    WHERE s.merchant_subscription_id = ${merchantSubId}
-      AND prior.id = s.id
-      AND prior.superseded_mandate_id IS NOT NULL
-    RETURNING prior.superseded_mandate_id AS stale_mandate_id
-  `) as unknown as { stale_mandate_id?: string | null }[];
-  const stale = rows[0]?.stale_mandate_id;
-  if (typeof stale === "string" && stale && stale !== merchantSubId) {
-    revokeInBackground(c, stale, "payments/release");
-  }
-}
-
 function configuredMerchantId(env: Env, merchant: Merchant): string | null {
   try {
     return merchantKeys(env, merchant).merchantId;
@@ -1314,25 +1369,73 @@ async function chooseSetupMerchant(
 
 /** Best-effort revoke OFF the response path -> a PhonePe hiccup must never fail the grant that triggered it. */
 function revokeInBackground(c: Context<{ Bindings: Env }>, merchantSubId: string, tag: string): void {
-  c.executionCtx.waitUntil(
-    revokeMandateTolerant(c.env, merchantSubId)
-      .then((revoked) => {
-        if (!revoked) {
-          console.error(
-            `[${tag}] mandate ${merchantSubId} may STILL BE LIVE at PhonePe — manual revoke required`,
-          );
-        }
-      })
-      .catch((err: unknown) => {
-        console.error(`[${tag}] revoke of ${merchantSubId} threw:`, err);
-      }),
-  );
+  c.executionCtx.waitUntil(revokeTolerantly(c.env, merchantSubId, tag));
 }
 
-function addOneMonth(date: Date): Date {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + 1);
-  return d;
+/** Never rejects -> it rides a request's tail, which must always reach sql.end(). */
+function revokeTolerantly(env: Env, merchantSubId: string, tag: string): Promise<boolean> {
+  return revokeMandateTolerant(env, merchantSubId)
+    .then((revoked) => {
+      if (!revoked) {
+        console.error(
+          `[${tag}] mandate ${merchantSubId} may STILL BE LIVE at PhonePe — manual revoke required`,
+        );
+      }
+      return revoked;
+    })
+    .catch((err: unknown) => {
+      console.error(`[${tag}] revoke of ${merchantSubId} threw:`, err);
+      return false;
+    });
+}
+
+/** The grant's replaced mandate, revoked after the response; one PhonePe keeps live is left for the hourly retry. */
+function retireStaleMandate(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+  grant: SetupGrant,
+  tag: string,
+): Promise<unknown> {
+  const stale = grant.stale_mandate_id;
+  if (!stale) return Promise.resolve();
+  return revokeTolerantly(env, stale, tag)
+    .then((revoked) =>
+      revoked || grant.kind !== "switch" ? undefined : noteRevokeRetry(sql, grant.user_id, stale),
+    )
+    .catch((err: unknown) => console.error(`[${tag}] could not note ${stale} for a revoke retry:`, err));
+}
+
+/**
+ * A completed setup for a ₹99 id the row no longer points at (released, or cancelled mid-switch) -> honour it while
+ * the row is still on its ₹199 (decision 14), else revoke it. False = no row watches this id
+ */
+async function settleLateOffer(
+  env: Env,
+  sql: ReturnType<typeof getDb>,
+  mandateId: string,
+  phonepeSubId: string | null,
+  tails: Promise<unknown>[],
+): Promise<boolean> {
+  const watched = await sql`SELECT 1 FROM subscriptions WHERE offer_mandate_id = ${mandateId} LIMIT 1`;
+  if (watched.length === 0) return false;
+  const honoured = await honourLateOfferApproval(sql, mandateId, phonepeSubId);
+  if (honoured) {
+    console.log(
+      `[payments/webhook] late approval of ${mandateId} honoured — user ${honoured.user_id} is on ₹99`,
+    );
+    tails.push(retireStaleMandate(env, sql, honoured, "payments/webhook"));
+  } else {
+    console.warn(
+      `[payments/webhook] late approval of ${mandateId} on a row no longer on its ₹199 — revoking it`,
+    );
+    tails.push(
+      revokeTolerantly(env, mandateId, "payments/webhook").then(async (revoked) => {
+        if (revoked)
+          await sql`UPDATE subscriptions SET offer_mandate_id = NULL WHERE offer_mandate_id = ${mandateId}`;
+      }),
+    );
+  }
+  return true;
 }
 
 async function requireAuth(c: Context<{ Bindings: Env }>): Promise<string | null> {

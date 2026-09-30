@@ -22,7 +22,8 @@ class MetaAnalyticsService implements AnalyticsService {
             registrationMethod: properties?['provider'] as String?,
           ),
         );
-      case 'checkout_started':
+      case 'checkout_started'
+          when properties?.containsKey(kCheckoutOfferProperty) != true:
         unawaited(
           _facebook.logInitiatedCheckout(
             // valueToSum + currency TOGETHER are what make this eligible for ROAS optimisation.

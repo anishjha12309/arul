@@ -77,6 +77,33 @@ beforeEach(() => {
 });
 
 describe("DELETE /me", () => {
+  it("mid-switch: an unapproved ₹99 that refuses the revoke does not block the delete; the parked ₹199 must go", async () => {
+    // An in-progress setup refuses a merchant cancel -> waiting on it held the delete up to the claim sweep
+    revoke.mockImplementation(async (_env, id) => id !== "DKS_HS_NEW99");
+    const { res, calls } = await run({
+      ...trialing,
+      status: "pending",
+      offer_switch: true,
+      merchant_subscription_id: "DKS_HS_NEW99",
+      superseded_mandate_id: "DKS_S_OLD199",
+    });
+    expect(res.status).toBe(200);
+    expect(revoke.mock.calls.map((c) => c[1])).toEqual(["DKS_HS_NEW99", "DKS_S_OLD199"]);
+    expect(calls.some((c) => c.text.includes("DELETE FROM users"))).toBe(true);
+  });
+
+  it("mid-switch: a parked ₹199 PhonePe still reports live blocks the delete", async () => {
+    revoke.mockImplementation(async (_env, id) => id !== "DKS_S_OLD199");
+    const { res } = await run({
+      ...trialing,
+      status: "pending",
+      offer_switch: true,
+      merchant_subscription_id: "DKS_HS_NEW99",
+      superseded_mandate_id: "DKS_S_OLD199",
+    });
+    expect(res.status).toBe(502);
+  });
+
   it("revokes, tombstones and cascades in one transaction, then denylists the refresh jti", async () => {
     const { res, calls, env, jti } = await run(trialing);
     expect(res.status).toBe(200);
@@ -86,7 +113,10 @@ describe("DELETE /me", () => {
     const tx = calls.filter((c) => c.inTx);
     expect(tx).toHaveLength(2);
     expect(tx[0].text).toContain("INSERT INTO trial_tombstones");
-    expect(tx[0].text).toContain("ON CONFLICT (google_sub_hash) DO NOTHING");
+    // The EARLIEST tombstone wins -> a later deletion only fills a cancel-offer stamp it lacked
+    expect(tx[0].text).toContain("ON CONFLICT (google_sub_hash) DO UPDATE");
+    expect(tx[0].text).toContain("COALESCE(trial_tombstones.trial_end, EXCLUDED.trial_end)");
+    expect(tx[0].text).toContain("COALESCE(trial_tombstones.cancel_offer_at, EXCLUDED.cancel_offer_at)");
     expect(tx[0].values[0]).not.toBe("google-123");
     expect(tx[0].values[1]).toEqual(trialing.trial_end);
     expect(tx[1].text).toContain("DELETE FROM users");

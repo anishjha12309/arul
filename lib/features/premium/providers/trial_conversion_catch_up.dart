@@ -12,6 +12,7 @@ import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../domain/cancel_offer.dart';
 import '../domain/entitlement.dart';
 
 /// Monthly price in rupees from the remote app_config (`amount` is paise), else ₹199.
@@ -96,7 +97,10 @@ class TrialConversionCatchUp {
 
       if (reported == orderId) return false;
 
-      if (!isRunningTrial(sub.trialEnd, now ?? DateTime.now())) {
+      // A cancel-offer switch re-files a trialing row under the offer's order: a price change on a
+      // subscriber, never a trial, and never a conversion to report.
+      if (sub.pricePaise == kCancelOfferPricePaise ||
+          !isRunningTrial(sub.trialEnd, now ?? DateTime.now())) {
         markReported(orderId);
         return false;
       }

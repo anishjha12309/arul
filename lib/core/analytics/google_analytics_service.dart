@@ -29,7 +29,8 @@ class GoogleAnalyticsService implements AnalyticsService {
         unawaited(
           _analytics.logLogin(loginMethod: properties?['provider'] as String?),
         );
-      case 'checkout_started':
+      case 'checkout_started'
+          when properties?.containsKey(kCheckoutOfferProperty) != true:
         // `begin_checkout` throws only on a value WITHOUT a currency -> pass INR unconditionally.
         unawaited(
           _analytics.logBeginCheckout(

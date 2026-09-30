@@ -76,8 +76,23 @@ the paywall. So on the top-of-hour tick Pass D re-asks PhonePe about up to `MAX_
 oldest `updated_at` first: ACTIVE restores and rearms through `lib/subscription-rearm.ts` (one copy with
 the webhook, or one forgets the clock), a terminal state parks it `cancelled`, anything else only moves
 `updated_at` so a backlog rotates. It spends the same per-run call budget, checked per row, so a debit
-always outranks it. While any paused row exists the KV idle marker (`autopay:next_work_at`) may never
-reach past the next top of the hour, or a quiet population would skip every `:00` tick.
+always outranks it. Pass D and the sweeps below always have a book to read, so the KV idle marker
+(`autopay:next_work_at`) never reaches past the next top of the hour.
+
+## The hourly sweeps (`autopay-sweeps.ts`)
+
+No legacy webhook exists and an app killed in the UPI app never reports back, so these PULL.
+Top-of-hour only, after Pass D, 4 lanes on the leftover budget, no row started past 10 min. A pass must move each row out of its own selection, or that row heads it every hour.
+
+- **Settled debits:** a never-converted non-live row with an order: COMPLETED → `healSettledDebit` (a
+  revoked mandate keeps the month `cancelled`); FAILED, expired or never created → drop the order id.
+  Claims under 30 min wait: the user may be approving right now.
+- **Stranded claims** (`pending` > 30 min): COMPLETED → grant, but a ₹2 setup done > 24 h ago is revoked
+  and released (a trial now = a surprise ₹199 tomorrow); a ₹199 TRANSACTION always grants. FAILED,
+  EXPIRED, never created → release; open > 2 h → revoke + release; a read error changes nothing.
+- **Legacy mandates:** ~120/h, least-recently-checked: REVOKED/CANCELLED → `cancelled`, PAUSED → park,
+  else only `updated_at` moves.
+- ₹99 watch, revoke retries: [cancel-offer.md](cancel-offer.md).
 
 ## Order states
 
@@ -122,8 +137,8 @@ A push that is lost is lost forever; the cron is a PULL and can always re-ask, w
 billing self-healing. Never let a webhook-shaped optimisation become the only path to a correct row —
 no webhook has ever arrived ([phonepe-webhook.md](phonepe-webhook.md)).
 
-Every paid grant stamps `first_debit_at`/`debit_count`/`paid_paise` on the SAME statement as the
-`active` flip — the columns and the `addOneMonth` trap: [data-model.md](data-model.md).
+Every paid grant stamps `first_debit_at`/`debit_count`/`paid_paise` (+ the row's `price_paise`) on the
+SAME statement as the `active` flip — the columns and the `addOneMonth` trap: [data-model.md](data-model.md).
 
 ## Testing
 

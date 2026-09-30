@@ -31,12 +31,23 @@ parameterized query to the verified `sub`; the app never reaches the DB.
 - `subscriptions.upi_target_app` names the flow that RAN (re-stamped when an intent setup falls back to
   `phonepe_page`); NULL predates the column and reports `unknown`.
 - `subscriptions.superseded_mandate_id` is the still-billing mandate a re-subscribe parked
-  ([phonepe.md](phonepe.md)); NULL = nothing parked.
+  ([phonepe.md](phonepe.md)); NULL = nothing parked. `superseded_price_paise` is its price, set, restored
+  and NULLed with it.
+- `subscriptions.price_paise` is the FIXED monthly debit of THIS row's mandate (9900 only after a cancel_99
+  switch); every notify, settle and `paid_paise` stamp reads it, and every claim rewrites it.
+- `offer_switch` is TRUE only while a cancel_99 setup is pending — the grant and the releases branch on it,
+  never on amounts. `offer_mandate_id` is a released switch's ₹99, watched for a late approval;
+  `revoke_retry_mandate_id` a replaced ₹199 PhonePe would not revoke ([cancel-offer.md](cancel-offer.md)).
+- `users.cancel_offer_at` NULL = the one cancel offer is still theirs; `trial_tombstones.cancel_offer_at`
+  carries it across account deletion.
+- **`subscriptions.updated_at` moves on EVERY update** (trigger), and the hourly sweeps touch every legacy
+  live row daily: never read it as a tap or checkout time.
 
 ## Debit tracking — `first_debit_at` · `debit_count` · `paid_paise`
 
 Written by EVERY statement that grants a paid period — both settles, `run-redemptions`, the webhook's
-redemption branch and the repeat-subscriber ₹199 setup — on the same statement as the `active` flip,
+redemption branch, the settled-debit heal and the repeat-subscriber ₹199 setup — on the same statement as
+the `active` flip, `paid_paise` adding the debited mandate's `price_paise`,
 and read only by the CMS subscriptions page. `first_debit_at` is COALESCEd, so a renewal never moves it.
 Rows debited before the columns existed were backfilled once (`23_debit_backfill.sql`).
 

@@ -13,6 +13,9 @@ const kDeviceTierProperty = 'device_tier';
 /// The region `GET /geo` reported for this install, raw, or `none` -> how often the region default is right.
 const kGeoRegionProperty = 'geo_region';
 
+/// Marks a cancel-offer checkout (`cancel_99`): a subscriber's switch, never an ad conversion.
+const kCheckoutOfferProperty = 'offer';
+
 /// Diagnostics only PostHog reads (`JourneyStamps`, the Worker's login analytics). GA4 caps an event
 /// at 25 parameters and a project at 25 user properties, and shows neither until registered -> the
 /// GA4 sink drops these on events AND on `register`, so they never crowd out what its reports use.

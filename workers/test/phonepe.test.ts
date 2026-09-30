@@ -228,6 +228,7 @@ describe("setupSubscription", () => {
       merchantSubscriptionId: "DKS_S_ABC_123",
       merchantOrderId: "DKS_O_ABC_123",
       redirectUrl: "https://api.hsrutility.com/payments/callback",
+      maxAmountPaise: 19900,
     });
 
     const setupCall = vi.mocked(fetch).mock.calls[1];
@@ -253,6 +254,27 @@ describe("setupSubscription", () => {
     expect(details.productType).toBe("UPI_MANDATE");
   });
 
+  it("sends the caller's price as maxAmount -> a ₹99 mandate is FIXED at 9900", async () => {
+    const env = makeEnv();
+    mockFetchWithOAuthThenSetup({ orderId: "PP_ORDER_99", state: "PENDING", token: "T" });
+
+    await setupSubscription(env, {
+      userId: "user-uuid-1",
+      merchantSubscriptionId: "DKS_S_OFFER",
+      merchantOrderId: "DKS_S_OFFER_1",
+      redirectUrl: "https://api.hsrutility.com/payments/callback",
+      maxAmountPaise: 9900,
+    });
+
+    const body = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string) as {
+      amount: number;
+      paymentFlow: { subscriptionDetails: { maxAmount: number; authWorkflowType: string } };
+    };
+    expect(body.amount).toBe(200);
+    expect(body.paymentFlow.subscriptionDetails.authWorkflowType).toBe("PENNY_DROP");
+    expect(body.paymentFlow.subscriptionDetails.maxAmount).toBe(9900);
+  });
+
   it("sends an explicit mandate expiry under PhonePe's 30-year max", async () => {
     // Without one the SDK payment page renders "auto-paid till NaNth Invalid Date"
     const env = makeEnv();
@@ -263,6 +285,7 @@ describe("setupSubscription", () => {
       merchantSubscriptionId: "DKS_S_EXP",
       merchantOrderId: "DKS_S_EXP_1",
       redirectUrl: "https://api.hsrutility.com/payments/callback",
+      maxAmountPaise: 19900,
     });
 
     const body = JSON.parse((vi.mocked(fetch).mock.calls[1][1] as RequestInit).body as string) as {
@@ -286,6 +309,7 @@ describe("setupSubscription", () => {
       merchantOrderId: "DKS_O_ABC_123",
       redirectUrl: "https://api.hsrutility.com/payments/callback",
       upfrontAmountPaise: 19900,
+      maxAmountPaise: 19900,
     });
 
     const setupCall = vi.mocked(fetch).mock.calls[1];
@@ -309,6 +333,7 @@ describe("setupSubscription", () => {
       merchantSubscriptionId: "S1",
       merchantOrderId: "O1",
       redirectUrl: "https://example.com/cb",
+      maxAmountPaise: 19900,
     });
 
     const setupCall = vi.mocked(fetch).mock.calls[1];
@@ -324,6 +349,7 @@ describe("setupSubscription", () => {
       merchantSubscriptionId: "S1",
       merchantOrderId: "O1",
       redirectUrl: "https://example.com/cb",
+      maxAmountPaise: 19900,
     });
 
     const setupCall = vi.mocked(fetch).mock.calls[1];
@@ -347,6 +373,7 @@ describe("setupSubscription", () => {
       merchantSubscriptionId: "S1",
       merchantOrderId: "O1",
       redirectUrl: "https://example.com/cb",
+      maxAmountPaise: 19900,
     });
 
     expect(result.orderId).toBe("PP_ORDER_999");
@@ -371,6 +398,7 @@ describe("setupSubscription", () => {
         merchantSubscriptionId: "S1",
         merchantOrderId: "O1",
         redirectUrl: "https://example.com/cb",
+        maxAmountPaise: 19900,
       }),
     ).rejects.toThrow(/no SDK token/i);
   });
@@ -384,6 +412,7 @@ describe("setupSubscription", () => {
         merchantSubscriptionId: "S1",
         merchantOrderId: "O1",
         redirectUrl: "https://example.com/cb",
+        maxAmountPaise: 19900,
       }),
     ).rejects.toThrow(/no SDK token/i);
   });
@@ -403,6 +432,7 @@ describe("setupSubscription", () => {
         merchantSubscriptionId: "s",
         merchantOrderId: "o",
         redirectUrl: "r",
+        maxAmountPaise: 19900,
       }),
     ).rejects.toThrow("PhonePe setup error 400");
   });

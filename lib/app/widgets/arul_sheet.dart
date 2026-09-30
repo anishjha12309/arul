@@ -17,6 +17,7 @@ Future<T?> showArulSheet<T>(
   required WidgetBuilder builder,
   bool gradient = false,
   bool isDismissible = true,
+  bool enableDrag = true,
   bool topHairline = true,
   Brightness? brightness,
   Color? surfaceColor,
@@ -25,6 +26,7 @@ Future<T?> showArulSheet<T>(
     context: context,
     isScrollControlled: true,
     isDismissible: isDismissible,
+    enableDrag: enableDrag,
     // On the branch navigator the dock paints OVER the sheet's bottom edge — worst on light,
     // where dock and sheet are both near-white.
     // So present ABOVE the shell -> the barrier scrim and sheet cover the floating dock.
@@ -38,6 +40,8 @@ Future<T?> showArulSheet<T>(
         gradient: gradient,
         topHairline: topHairline,
         surfaceColor: surfaceColor,
+        // A handle promises the drag; a sheet that cannot be dragged away draws none.
+        grabber: enableDrag,
         child: Builder(builder: builder),
       );
       if (brightness == null) return sheet;
@@ -58,9 +62,12 @@ class ArulSheet extends StatefulWidget {
     this.gradient = false,
     this.topHairline = true,
     this.surfaceColor,
+    this.grabber = true,
   });
 
   final Widget child;
+
+  final bool grabber;
 
   final bool gradient;
 
@@ -125,7 +132,7 @@ class _ArulSheetState extends State<ArulSheet>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _Grabber(),
+          if (widget.grabber) const _Grabber(),
           Flexible(child: widget.child),
         ],
       ),

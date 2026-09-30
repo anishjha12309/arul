@@ -16,6 +16,7 @@ import '../../../core/error/app_exception.dart';
 import '../../../core/upi/upi_apps.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../features/auth/providers/auth_providers.dart';
+import '../domain/cancel_offer.dart';
 import 'entitlement_provider.dart';
 import 'trial_conversion_catch_up.dart';
 import 'trial_nudge_provider.dart';
@@ -67,6 +68,7 @@ final class PurchaseScannable extends PurchaseState {
     required this.intentUrl,
     required this.merchantOrderId,
     required this.expiresAt,
+    this.offer = false,
   });
 
   final String intentUrl;
@@ -75,10 +77,16 @@ final class PurchaseScannable extends PurchaseState {
   /// When the link dies at PhonePe — see [PremiumPurchase.intentExpiry]. Production links expire
   /// 5 minutes after creation, so the countdown this drives is short and must be honest.
   final DateTime expiresAt;
+
+  /// A cancel-offer attempt — its code can never be a trial.
+  final bool offer;
 }
 
 final class PurchaseSuccess extends PurchaseState {
-  const PurchaseSuccess();
+  const PurchaseSuccess({this.offer = false});
+
+  /// The ₹99 switch landed — a plan change on the member view, not a new subscriber to celebrate.
+  final bool offer;
 }
 
 /// What a failed checkout has to SAY, as opposed to the finer `reason` code analytics gets.
@@ -103,12 +111,18 @@ enum PurchaseErrorKind {
   intentFailed,
   activateFailed,
   confirmationLate,
+
+  /// 409 `offer_unavailable`: the Worker no longer offers this person the ₹99 switch.
+  offerUnavailable,
 }
 
 final class PurchaseError extends PurchaseState {
-  const PurchaseError(this.kind);
+  const PurchaseError(this.kind, {this.offer = false});
 
   final PurchaseErrorKind kind;
+
+  /// A cancel-offer attempt that did not switch — the screen answers with the retry sheet.
+  final bool offer;
 
   bool get cancelled => kind == PurchaseErrorKind.cancelled;
 }
@@ -149,6 +163,20 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Captured at [startTrial], not read at the failure: the nudge line says "free trial", and a
   /// user who has spent theirs is abandoning a ₹199 charge, which that line would misdescribe.
   bool _trialAttempt = false;
+
+  // Captured at [startTrial] like [_trialAttempt]: the attempt's events and outcome all hang off it.
+  String? _offer;
+
+  // Rides every journey event of an offer attempt, so GA4 reads the ₹99 switch apart from a sale.
+  Map<String, Object> get _offerProps {
+    final offer = _offer;
+    if (offer == null) return const {};
+    return {
+      kCheckoutOfferProperty: offer,
+      'price_paise': '$kCancelOfferPricePaise',
+      'paywall_source': 'cancel_offer',
+    };
+  }
 
   /// Writes [next] only while the paywall still owns this notifier.
   /// After the pop the state has no reader and the setter throws -> the write is dropped.
@@ -222,7 +250,9 @@ class PremiumPurchase extends _$PremiumPurchase {
   void _trackCheckoutStarted(String method, String? targetApp) {
     _checkoutMethod = method;
     _checkoutTargetApp = targetApp;
-    final price = _monthlyPriceRupees();
+    final price = _offer != null
+        ? kCancelOfferPricePaise / 100
+        : _monthlyPriceRupees();
     _analytics.track(
       'checkout_started',
       properties: {
@@ -232,6 +262,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'value': price,
         'surface': ?_checkoutSurface,
         'checkout_n': ?JourneyStamps.nextCheckout(),
+        ..._offerProps,
       },
     );
   }
@@ -250,6 +281,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         // Null only if a failure somehow precedes the tap.
         'method': ?_checkoutMethod,
         'surface': ?_checkoutSurface,
+        ..._offerProps,
       },
     );
     unawaited(
@@ -259,6 +291,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'target_app': ?_checkoutTargetApp,
         'surface': ?_checkoutSurface,
         's_since_tap': ?JourneyStamps.secondsSinceCheckout(),
+        ..._offerProps,
       }),
     );
   }
@@ -289,9 +322,22 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Terminal failure — set the error state AND report it, in that order, counted exactly once.
   /// Always prefer this over assigning [PurchaseError] directly.
   void _fail(String reason, PurchaseError error) {
-    _setState(error);
+    _setState(
+      _offer == null
+          ? error
+          : PurchaseError(_offerFailureKind(error.kind), offer: true),
+    );
     _trackPaymentFailed(reason, cancelled: error.cancelled);
   }
+
+  // An offer that did not switch left the ₹199 plan exactly as it was: the refund hedge and the
+  // "contact support" line describe a checkout that took money or broke, and this one did neither.
+  static PurchaseErrorKind _offerFailureKind(PurchaseErrorKind kind) =>
+      switch (kind) {
+        PurchaseErrorKind.intentFailed ||
+        PurchaseErrorKind.activateFailed => PurchaseErrorKind.notCompleted,
+        _ => kind,
+      };
 
   /// Ends the flow WITHOUT a confirmed answer — the mandate may well be live.
   /// Identical to [_fail] plus an entitlement re-read.
@@ -387,11 +433,14 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// phone with nothing that can take a mandate. It still names a [targetApp] because PhonePe makes
   /// `paymentMode.targetApp` mandatory on UPI_INTENT — the package is a formality their API
   /// requires, the QR is the actual handoff, and the Worker records the difference.
+  ///
+  /// [offer] ([kCancelOffer]) is a subscriber's ₹99 switch: no trial, no conversion, never resumable.
   Future<void> startTrial({
     String? targetApp,
     bool trialEligible = false,
     bool asQr = false,
     String? surface,
+    String? offer,
   }) async {
     // A resumable attempt owns the screen: its own order is still live at PhonePe, and a second
     // initiate would revoke it. Resume, [switchApp], or the deadline — nothing else moves from
@@ -406,7 +455,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
 
-    _trialAttempt = trialEligible;
+    _offer = offer;
+    _trialAttempt = trialEligible && offer == null;
     _clearIntentAttempt();
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
@@ -416,16 +466,20 @@ class PremiumPurchase extends _$PremiumPurchase {
       asQr ? null : targetApp,
     );
     // Whatever trial this checkout starts is THIS install's to report, even if only the catch-up hears.
-    _catchUp.noteCheckout();
+    // An offer starts none, and opening the marker here would let a reinstall's own trial read as new.
+    if (offer == null) _catchUp.noteCheckout();
 
     try {
+      final checkoutContext = JourneyStamps.checkoutContext();
       final initResp = await _initiateWithRetry({
         'plan': 'monthly',
         'targetApp': ?targetApp,
         if (asQr) 'mode': 'qr',
+        'offer': ?offer,
         // Stored beside the order -> a tap that is never approved still reaches PostHog through
         // the Neon warehouse with its path, phone and link. Analytics only; the Worker drops junk.
-        'context': ?JourneyStamps.checkoutContext(),
+        if (checkoutContext != null)
+          'context': {...checkoutContext, ..._offerProps},
       });
 
       final merchantOrderId = initResp['merchantOrderId'] as String? ?? '';
@@ -552,7 +606,7 @@ class PremiumPurchase extends _$PremiumPurchase {
 
       await _confirmWithServer(merchantOrderId);
     } on ApiException catch (e) {
-      if (e.code == 'already_subscribed') {
+      if (e.code == 'already_subscribed' && _offer == null) {
         // The narrowed entitlementProvider DERIVES from the detail one.
         // Invalidating only the narrow one re-reads the stale detail -> the UI never flips.
         _refreshEntitlement();
@@ -565,6 +619,13 @@ class PremiumPurchase extends _$PremiumPurchase {
         _fail(
           'setup_in_progress',
           const PurchaseError(PurchaseErrorKind.inProgress),
+        );
+        return;
+      }
+      if (e.code == 'offer_unavailable') {
+        _fail(
+          'offer_unavailable',
+          const PurchaseError(PurchaseErrorKind.offerUnavailable),
         );
         return;
       }
@@ -647,6 +708,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         intentUrl: intentUrl,
         merchantOrderId: merchantOrderId,
         expiresAt: expiresAt,
+        offer: _offer != null,
       ),
     );
     unawaited(_rememberHandoff(merchantOrderId));
@@ -797,21 +859,13 @@ class PremiumPurchase extends _$PremiumPurchase {
 
       if (serverStatus == 'trialing' || serverStatus == 'active') {
         _pollGeneration++;
-        _trackConversion(
-          serverStatus == 'trialing'
-              ? ArulEvents.trialStarted
-              : ArulEvents.subscriptionActive,
-          orderId,
-          statusResp,
-        );
-        _refreshEntitlement();
-        _setState(const PurchaseSuccess());
-        await _forgetUnfinished();
+        await _settleGranted(serverStatus, orderId, statusResp);
         return true;
       }
       if (serverStatus == 'expired') {
         _pollGeneration++;
-        if (_resumableState != null || _scannableState != null) {
+        if ((_resumableState != null || _scannableState != null) &&
+            _offer == null) {
           _trackPaymentFailed('expired', cancelled: false);
           _setState(const PurchaseIdle());
         } else {
@@ -825,6 +879,40 @@ class PremiumPurchase extends _$PremiumPurchase {
       debugPrint('[PremiumPurchase] resume status check failed: $e');
       return false;
     }
+  }
+
+  // For an offer the row's price is the verdict: ₹99 is the switch, anything else is the ₹199 plan
+  // handed back by an attempt the Worker released.
+  Future<void> _settleGranted(
+    String serverStatus,
+    String orderId,
+    Map<String, dynamic> statusResp,
+  ) async {
+    if (_offer != null) {
+      final row = statusResp['subscription'];
+      final price = row is Map ? row['price_paise'] : null;
+      _refreshEntitlement();
+      if (price is! num || price.toInt() != kCancelOfferPricePaise) {
+        _fail(
+          'offer_released',
+          const PurchaseError(PurchaseErrorKind.notCompleted),
+        );
+        return;
+      }
+      // A switch books no paid month: no `subscription_active`, no `trial_started` (docs/cancel-offer.md).
+      _setState(const PurchaseSuccess(offer: true));
+      return;
+    }
+    _trackConversion(
+      serverStatus == 'trialing'
+          ? ArulEvents.trialStarted
+          : ArulEvents.subscriptionActive,
+      orderId,
+      statusResp,
+    );
+    _refreshEntitlement();
+    _setState(const PurchaseSuccess());
+    await _forgetUnfinished();
   }
 
   /// Declares the intent payment failed for the user — silence the poll, release the claim, show it.
@@ -842,7 +930,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       await _confirmWithServer(orderId);
       return;
     }
-    if (silent) {
+    // An offer never ends silently: its failure is what brings back the choice it interrupted.
+    if (silent && _offer == null) {
       _trackPaymentFailed(reason, cancelled: false);
       _setState(const PurchaseIdle());
     } else {
@@ -857,6 +946,12 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// approval that lands while they look at the screen still settles by itself.
   /// With no link to re-fire, or nobody left to press it, this is the old terminal path instead.
   Future<void> _enterResumable(String orderId) async {
+    // An offer is never resumable: the member view has no button to finish it, and the row sits at
+    // `pending` for as long as the order stays open — release it, and the retry sheet asks again.
+    if (_offer != null) {
+      await _autoResolveIntent(orderId, reason: 'offer_abandoned');
+      return;
+    }
     final url = _intentUrl;
     final app = _intentTargetApp;
     if (url == null || app == null || !ref.mounted) {
@@ -1064,16 +1159,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         if (generation != _pollGeneration) return;
 
         if (serverStatus == 'trialing' || serverStatus == 'active') {
-          _trackConversion(
-            serverStatus == 'trialing'
-                ? ArulEvents.trialStarted
-                : ArulEvents.subscriptionActive,
-            merchantOrderId,
-            statusResp,
-          );
-          _refreshEntitlement();
-          _setState(const PurchaseSuccess());
-          await _forgetUnfinished();
+          await _settleGranted(serverStatus, merchantOrderId, statusResp);
           return;
         }
 
@@ -1234,9 +1320,13 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// The user keeps premium until the current period ends.
   /// Returns null on success, or the kind of failure — the caller shows [purchaseErrorText] for it.
   /// Kept OFF the [PurchaseState] machine — the caller drives its own confirm dialog and snackbar.
-  Future<PurchaseErrorKind?> cancel() async {
+  /// [offerDeclined] spends the person's one cancel offer; without it the Worker keeps it for later.
+  Future<PurchaseErrorKind?> cancel({bool offerDeclined = false}) async {
     try {
-      await _api.post('/payments/cancel');
+      await _api.post(
+        '/payments/cancel',
+        body: offerDeclined ? const {'offer_declined': true} : null,
+      );
       _refreshEntitlement();
       return null;
     } catch (e, stack) {

@@ -15,6 +15,7 @@ import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/data_saver.dart';
@@ -28,17 +29,19 @@ import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../referral/presentation/share_moment_sheet.dart';
-import '../../settings/presentation/confirm_dialog.dart';
 import '../../wallpapers/data/feed_video_player.dart';
 import '../data/return_clip_cache.dart';
+import '../domain/cancel_offer.dart';
 import '../domain/entitlement.dart';
 import '../domain/onboarding_video.dart';
 import '../domain/subscription_repository.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
+import 'cancel_offer_sheet.dart';
 import 'member_view.dart';
 import 'onboarding_video_card.dart';
 import 'paywall_view.dart';
+import 'premium_confirm_dialog.dart';
 import 'resubscribe_view.dart';
 import 'trial_return_page.dart';
 import 'upi_option_rows.dart';
@@ -48,9 +51,7 @@ export 'upi_option_rows.dart' show kUpiPickQr;
 String _monthlyPrice(Map<String, dynamic>? prices) {
   final monthly = prices?['monthly'];
   if (monthly is Map && monthly['amount'] is num) {
-    final rupees = (monthly['amount'] as num) / 100;
-    final asInt = rupees.truncateToDouble() == rupees;
-    return '₹${asInt ? rupees.toInt() : rupees.toStringAsFixed(2)}';
+    return rupeesFromPaise(monthly['amount'] as num);
   }
   return '₹199';
 }
@@ -73,6 +74,7 @@ String purchaseErrorText(AppLocalizations l10n, PurchaseErrorKind kind) =>
       PurchaseErrorKind.intentFailed => l10n.purchaseIntentFailed,
       PurchaseErrorKind.activateFailed => l10n.purchaseActivateFailed,
       PurchaseErrorKind.confirmationLate => l10n.purchaseConfirmationLate,
+      PurchaseErrorKind.offerUnavailable => l10n.cancelOfferUnavailable,
     };
 
 /// The `paywall_shown` payload — pure, so its shape is pinned by a test, not by a screen.
@@ -218,6 +220,14 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   /// Cancel-subscription in flight, kept OFF the purchase state machine — the dialog owns feedback.
   bool _cancelBusy = false;
+
+  // The row the offer was made against: the retry sheet's cancel and "still on ₹199" describe THAT
+  // plan, whatever the entitlement re-reads meanwhile.
+  SubscriptionModel? _offerSub;
+
+  // Whatever the switch's outcome opens next waits for the offer or retry sheet to go: a route
+  // pushed first would be the one its closing pop takes.
+  Future<CancelOfferChoice?>? _offerSheet;
 
   /// Whether the sell on screen is the TRIAL variant. Only that one gets the return page — its clip
   /// pitches the ₹2 trial, which a spent-trial ₹199 sell cannot offer. Written by the build that
@@ -457,17 +467,37 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     final l10n = AppLocalizations.of(context);
     final end = sub.currentPeriodEnd?.toLocal();
 
-    final ok = await showArulConfirmDialog(
+    final date = end == null ? null : l10n.premiumPlanDate(end);
+    final ok = await showPremiumConfirmDialog(
       context,
       title: l10n.premiumCancelDialogTitle,
-      message: end == null
+      message: date == null
           ? l10n.premiumCancelDialogBody
-          : l10n.premiumCancelDialogBodyDate(end),
+          // The same "d MMM y" as the plan rows, held on one line like the offer sheet's.
+          : l10n
+                .premiumCancelDialogBodyDate(end!)
+                .replaceFirst(date, date.replaceAll(' ', ' ')),
       confirmLabel: l10n.premiumCancelConfirm,
       cancelLabel: l10n.premiumCancelKeep,
     );
     if (ok != true || !mounted) return;
 
+    if (sub.cancelOfferEligible) {
+      final choice = await _offerBeforeCancel(sub);
+      // Only a DECLINE cancels: a sheet torn down by navigation (a push tap) answers null, and
+      // ending a paid plan is never something the app does on the person's behalf.
+      if (choice != CancelOfferChoice.decline || !mounted) return;
+      _trackOffer('cancel_offer_declined', sub, sheet: 'offer');
+    }
+    await _cancelSubscription(end, offerDeclined: sub.cancelOfferEligible);
+  }
+
+  Future<void> _cancelSubscription(
+    DateTime? end, {
+    required bool offerDeclined,
+  }) async {
+    if (_cancelBusy || !mounted) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _cancelBusy = true);
     final notifier = ref.read(premiumPurchaseProvider.notifier);
 
@@ -476,7 +506,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // _cancelBusy is always cleared, so the button cannot get stuck spinning.
     PurchaseErrorKind? error;
     try {
-      error = await notifier.cancel();
+      error = await notifier.cancel(offerDeclined: offerDeclined);
     } catch (_) {
       error = PurchaseErrorKind.generic;
     }
@@ -495,6 +525,186 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
               : l10n.premiumCancelledToastDate(end)),
       kind: error != null ? ToastKind.error : ToastKind.success,
     );
+  }
+
+  // `accept` = a switch is under way and the purchase listener owns what follows.
+  Future<CancelOfferChoice?> _offerBeforeCancel(SubscriptionModel sub) {
+    final l10n = AppLocalizations.of(context);
+    _offerSub = sub;
+    _trackOffer('cancel_offer_shown', sub);
+    return _holdOfferSheet(
+      showCancelOfferSheet(
+        context,
+        price: rupeesFromPaise(sub.pricePaise),
+        offerPrice: rupeesFromPaise(kCancelOfferPricePaise),
+        accessUntil: _formatDate(l10n, sub.currentPeriodEnd),
+        onAccept: () {
+          _trackOffer('cancel_offer_accepted', sub, sheet: 'offer');
+          return _startOffer();
+        },
+        untilHandedOff: _untilOfferHandedOff,
+      ),
+    );
+  }
+
+  Future<CancelOfferChoice?> _holdOfferSheet(Future<CancelOfferChoice?> sheet) {
+    _offerSheet = sheet;
+    return sheet.whenComplete(() {
+      if (identical(_offerSheet, sheet)) _offerSheet = null;
+    });
+  }
+
+  // GA4-only, off the PostHog list exactly as `paywall_shown` is.
+  void _trackOffer(
+    String event,
+    SubscriptionModel? sub, {
+    String? sheet,
+    Map<String, Object> extra = const {},
+  }) {
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          event,
+          properties: {
+            kCheckoutOfferProperty: kCancelOffer,
+            'plan_status': ?sub?.status.name,
+            'sheet': ?sheet,
+            ...extra,
+          },
+        );
+  }
+
+  // False when the picker closed without a pick, which leaves the sheet up and idle.
+  Future<bool> _startOffer() async {
+    UpiScan? scan;
+    try {
+      scan = await ref.read(installedUpiAppsProvider.future);
+    } catch (_) {
+      // Unknown is not empty: the SDK page, as the paywall's CTA falls back, never a QR by guess.
+    }
+    if (!mounted) return false;
+    if (scan == null) return _beginOffer(null);
+    final apps = _orderedUpiApps(scan.apps);
+    if (apps.isEmpty) return _beginOffer(_kQrFormalityPackage, asQr: true);
+
+    JourneyStamps.notePickerOpened();
+    final picked = await showArulSheet<String>(
+      context,
+      surfaceColor: ArulTokens.paywallCream,
+      builder: (_) => _UpiPickerSheet(
+        apps: apps,
+        selectedPackage: _resolvedUpiPackage(apps) ?? apps.first.packageName,
+        rememberedPackage: _selectedUpiPackage,
+      ),
+    );
+    if (picked == null || !mounted) return false;
+    JourneyStamps.notePickedApp(
+      picked == kUpiPickQr ? 'qr' : upiAppCode(picked),
+    );
+    if (picked == kUpiPickQr) {
+      return _beginOffer(_kQrFormalityPackage, asQr: true);
+    }
+    await _rememberUpiApp(picked);
+    if (!mounted) return false;
+    return _beginOffer(picked);
+  }
+
+  // No `AppConfig.hasBackend` guard, unlike [_startPurchase]: the member view this starts from only
+  // exists once a Worker has answered `GET /me`.
+  bool _beginOffer(String? targetApp, {bool asQr = false}) {
+    unawaited(
+      ref
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(
+            targetApp: targetApp,
+            asQr: asQr,
+            offer: kCancelOffer,
+            surface: 'cancel_offer',
+          ),
+    );
+    // `startTrial` enters loading synchronously — or refuses, because another attempt owns the screen.
+    return ref.read(premiumPurchaseProvider) is PurchaseLoading;
+  }
+
+  // Exactly the span the sheet's spinner covers: until the switch's initiate has answered.
+  Future<void> _untilOfferHandedOff() {
+    final done = Completer<void>();
+    final sub = ref.listenManual<PurchaseState>(premiumPurchaseProvider, (
+      _,
+      next,
+    ) {
+      if (next is! PurchaseLoading && !done.isCompleted) done.complete();
+    }, fireImmediately: true);
+    return done.future.whenComplete(sub.close);
+  }
+
+  Future<void> _openOfferQr() async {
+    await _offerSheet;
+    if (!mounted || ref.read(premiumPurchaseProvider) is! PurchaseScannable) {
+      return;
+    }
+    unawaited(_openQrSheet(trialEligible: false));
+  }
+
+  Future<void> _offerSwitched(AppLocalizations l10n) async {
+    await _offerSheet;
+    await _qrSheet;
+    if (!mounted) return;
+    showArulToast(
+      context,
+      l10n.cancelOfferSwitchedToast(rupeesFromPaise(kCancelOfferPricePaise)),
+      kind: ToastKind.success,
+    );
+  }
+
+  Future<void> _offerFailed(
+    AppLocalizations l10n,
+    PurchaseErrorKind kind,
+  ) async {
+    await _offerSheet;
+    await _qrSheet;
+    if (!mounted) return;
+    // Nothing to retry: the Worker withdrew the offer, or the switch may still land and a retry
+    // would start a second one over it.
+    if (kind == PurchaseErrorKind.offerUnavailable ||
+        kind == PurchaseErrorKind.confirmationLate) {
+      showArulToast(
+        context,
+        purchaseErrorText(l10n, kind),
+        kind: kind == PurchaseErrorKind.offerUnavailable
+            ? ToastKind.info
+            : ToastKind.error,
+      );
+      return;
+    }
+    final sub = _offerSub;
+    _trackOffer('cancel_offer_retry_shown', sub, extra: {'kind': kind.name});
+    final choice = await _holdOfferSheet(
+      showCancelOfferRetrySheet(
+        context,
+        reason: purchaseErrorText(l10n, kind),
+        onRetry: _startOffer,
+        untilHandedOff: _untilOfferHandedOff,
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case CancelOfferChoice.accept:
+        return;
+      case CancelOfferChoice.decline:
+        _trackOffer('cancel_offer_declined', sub, sheet: 'retry');
+        await _cancelSubscription(
+          sub?.currentPeriodEnd?.toLocal(),
+          offerDeclined: true,
+        );
+      case null:
+        showArulToast(
+          context,
+          l10n.cancelOfferNothingChanged(
+            rupeesFromPaise(sub?.pricePaise ?? 19900),
+          ),
+        );
+    }
   }
 
   void _startPurchase(
@@ -586,6 +796,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // On success the invalidation flips this screen to the member view under the celebration sheet.
     ref.listen<PurchaseState>(premiumPurchaseProvider, (prev, next) {
       switch (next) {
+        case PurchaseSuccess(offer: true):
+          ref.read(premiumPurchaseProvider.notifier).reset();
+          unawaited(_offerSwitched(l10n));
         case PurchaseSuccess():
           // The warmest moment to ask for a share — they have just decided Arul is worth paying for.
           unawaited(_celebrateAfterQr(l10n));
@@ -603,6 +816,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
               ),
             ):
           unawaited(_openReturnPage(next));
+        case PurchaseScannable(offer: true):
+          unawaited(_openOfferQr());
         case PurchaseScannable():
           // Trial eligibility is read from the live entitlement rather than carried in the state:
           // the notifier's job is the order, and the sheet's title is a copy decision this screen
@@ -619,6 +834,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                   null,
             ),
           );
+        case PurchaseError(:final kind, offer: true):
+          ref.read(premiumPurchaseProvider.notifier).reset();
+          unawaited(_offerFailed(l10n, kind));
         case PurchaseError(:final kind, :final cancelled):
           // A self-cancelled payment is neutral info, not a red failure — nothing broke.
           showArulToast(
@@ -1128,10 +1346,10 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     return ArulMemberView(
       trialing: trialing,
       renewalDate: _formatDate(AppLocalizations.of(context), renewalDate),
-      monthlyPrice: _monthlyPrice(
-        ref.watch(appConfigProvider).asData?.value?.prices,
-      ),
-      cancelBusy: _cancelBusy,
+      // The row's own price, not the sell's: a member switched to the ₹99 offer pays ₹99.
+      monthlyPrice: rupeesFromPaise(sub.pricePaise),
+      // An offer switch in flight holds the button: a second cancel would race the first answer.
+      cancelBusy: _cancelBusy || purchaseBusy,
       onBack: _leave,
       onCancel: () => _confirmAndCancel(sub),
     );

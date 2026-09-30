@@ -253,5 +253,16 @@
   "premiumCancelConfirm": "हाँ, रद्द करें",
   "premiumCancelledToast": "सब्सक्रिप्शन रद्द हो गया। अवधि ख़त्म होने तक प्रीमियम चालू रहेगा।",
   "premiumCancelledToastDate": "सब्सक्रिप्शन रद्द हो गया। {date} तक प्रीमियम चालू रहेगा।",
-  "premiumCancelKeep": "प्रीमियम जारी रखें"
+  "premiumCancelKeep": "प्रीमियम जारी रखें",
+  "cancelOfferEyebrow": "50% छूट",
+  "cancelOfferForever": "हमेशा के लिए यही दाम। अभी की तरह कभी भी रद्द करें।",
+  "cancelOfferApprove": "आपका UPI ऐप {offerPrice}/माह को मंज़ूरी देने के लिए कहेगा। जैसे ही आप मंज़ूरी देंगे, हम आपका {price} वाला ऑटोपे बंद कर देंगे।",
+  "cancelOfferDeclineNote": "'अभी नहीं' चुनने पर आपका सब्सक्रिप्शन रद्द हो जाएगा।",
+  "cancelOfferDeclineNoteDate": "'अभी नहीं' चुनने पर आपका सब्सक्रिप्शन रद्द हो जाएगा। {date} तक प्रीमियम चालू रहेगा।",
+  "cancelOfferAccept": "छूट पाएँ",
+  "cancelOfferRetryTitle": "पूरा नहीं हुआ",
+  "cancelOfferTryAgain": "फिर से कोशिश करें",
+  "cancelOfferNothingChanged": "कुछ नहीं बदला। आप अभी भी {price}/माह वाले प्लान पर हैं।",
+  "cancelOfferSwitchedToast": "अब आपका प्लान {price}/माह है।",
+  "cancelOfferUnavailable": "यह ऑफ़र अब उपलब्ध नहीं है।"
 }

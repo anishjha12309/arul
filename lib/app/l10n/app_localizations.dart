@@ -1635,6 +1635,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keep premium'**
   String get premiumCancelKeep;
+
+  /// Cancel-offer sheet eyebrow over the price. Uppercase in English; a plain phrase in other scripts.
+  ///
+  /// In en, this message translates to:
+  /// **'50% OFF'**
+  String get cancelOfferEyebrow;
+
+  /// Cancel-offer sheet, under the ₹99 price: the discount never ends, and cancelling stays as easy as today.
+  ///
+  /// In en, this message translates to:
+  /// **'Forever. Cancel anytime, same as now.'**
+  String get cancelOfferForever;
+
+  /// Cancel-offer sheet: what happens after Get discount. A commercial statement — it must NOT promise any refund.
+  ///
+  /// In en, this message translates to:
+  /// **'Your UPI app will ask you to approve {offerPrice}/month. We stop your {price} autopay as soon as you do.'**
+  String cancelOfferApprove(String offerPrice, String price);
+
+  /// Cancel-offer sheet footnote when the period end is unknown. 'Not now' names the button (referNotNow) — quote its translation.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now cancels your subscription.'**
+  String get cancelOfferDeclineNote;
+
+  /// Cancel-offer sheet footnote with the period end. 'Not now' names the button (referNotNow) — quote its translation.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now cancels your subscription. You keep premium until {date}.'**
+  String cancelOfferDeclineNoteDate(String date);
+
+  /// Cancel-offer sheet primary button: switch to ₹99/month through the UPI app.
+  ///
+  /// In en, this message translates to:
+  /// **'Get discount'**
+  String get cancelOfferAccept;
+
+  /// Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app.
+  ///
+  /// In en, this message translates to:
+  /// **'Didn\'t go through'**
+  String get cancelOfferRetryTitle;
+
+  /// Retry sheet primary button: try the ₹99 switch again.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get cancelOfferTryAgain;
+
+  /// Toast when the retry sheet is dismissed: the plan is untouched.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing changed. You\'re still on {price}/month.'**
+  String cancelOfferNothingChanged(String price);
+
+  /// Toast when the ₹99 switch was approved.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on {price}/month.'**
+  String cancelOfferSwitchedToast(String price);
+
+  /// Toast when the server no longer offers the ₹99 switch (409 offer_unavailable). The subscription is unchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'This offer isn\'t available any more.'**
+  String get cancelOfferUnavailable;
 }
 
 class _AppLocalizationsDelegate

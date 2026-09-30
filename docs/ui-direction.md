@@ -48,7 +48,10 @@ at the same size and tracking. Never add a second header style to "fix" it; watc
 Gelasio**, so every paywall Lora style names Gelasio in `fontFamilyFallback`, or a bare ₹ drops to Roboto
 mid-sentence. Gelasio sets OLD-STYLE figures, so an amount's ink centre MOVES with its digits — centring
 the ₹ is a per-price calculation off the glyph table (`PriceLockup`, pixel-asserted), never `Row` +
-`center`, which centres BOXES.
+`center`, which centres BOXES. /premium is forced LIGHT, but a dialog or sheet it opens draws on the ROOT
+navigator, which carries the app theme: it must take the calling screen's theme, or a dark-mode phone gets a
+near-black card over the cream page (`showArulConfirmDialog` does). /premium's own dialogs and sheets wear the
+member-view card, crest and `ShrineCta`, never a stock Material card.
 
 ## Drawn art is ARTWORK, not chrome
 

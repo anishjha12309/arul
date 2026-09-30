@@ -874,4 +874,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get premiumCancelKeep => 'Keep premium';
+
+  @override
+  String get cancelOfferEyebrow => '50% OFF';
+
+  @override
+  String get cancelOfferForever => 'Forever. Cancel anytime, same as now.';
+
+  @override
+  String cancelOfferApprove(String offerPrice, String price) {
+    return 'Your UPI app will ask you to approve $offerPrice/month. We stop your $price autopay as soon as you do.';
+  }
+
+  @override
+  String get cancelOfferDeclineNote => 'Not now cancels your subscription.';
+
+  @override
+  String cancelOfferDeclineNoteDate(String date) {
+    return 'Not now cancels your subscription. You keep premium until $date.';
+  }
+
+  @override
+  String get cancelOfferAccept => 'Get discount';
+
+  @override
+  String get cancelOfferRetryTitle => 'Didn\'t go through';
+
+  @override
+  String get cancelOfferTryAgain => 'Try again';
+
+  @override
+  String cancelOfferNothingChanged(String price) {
+    return 'Nothing changed. You\'re still on $price/month.';
+  }
+
+  @override
+  String cancelOfferSwitchedToast(String price) {
+    return 'You\'re on $price/month.';
+  }
+
+  @override
+  String get cancelOfferUnavailable => 'This offer isn\'t available any more.';
 }

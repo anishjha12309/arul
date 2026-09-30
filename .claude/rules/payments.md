@@ -28,8 +28,8 @@ or status vocabulary from memory.
 - **The mandate id picks the merchant** (`merchantOf`: `DKS_H…` = hsr), never `PHONEPE_SETUP_MERCHANT`;
   never roll back past the dual-merchant Worker. `wrangler secret bulk`, never a pipe; delete
   `phonepe:oauth` and `phonepe:oauth:hsr` after any env or credential change.
-- **Every paid-period grant stamps `first_debit_at` / `debit_count` / `paid_paise` on the same
-  UPDATE** — the CMS subscriptions page reads nothing else.
+- **Every paid-period grant stamps `first_debit_at` / `debit_count` / `paid_paise` (+ the row's
+  `price_paise`, never a literal) on the same UPDATE** — the CMS subscriptions page reads nothing else.
 
 Read [docs/phonepe.md](../../docs/phonepe.md) before changing setup or cancel,
 [docs/phonepe-webhook.md](../../docs/phonepe-webhook.md) before the webhook, and

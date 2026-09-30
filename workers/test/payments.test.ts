@@ -45,6 +45,7 @@ vi.mock("../src/lib/phonepe.js", async (importOriginal) => {
       expireAt: 1234567890,
     }),
     revokeMandateTolerant: vi.fn().mockResolvedValue(true),
+    getSubscriptionStatus: vi.fn().mockResolvedValue({ state: "ACTIVE" }),
     // handleAbandon asks PhonePe for the order's live state before expiring a claim -> default to not-completed
     getOrderStatus: vi.fn().mockResolvedValue({ state: "PENDING", orderId: "PP_ORDER_1" }),
     // Direct UPI-intent setup (subscriptions/v2/setup).
@@ -75,15 +76,40 @@ import { reportPostHogFirstConversion } from "../src/lib/posthog.js";
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 
-/** Pops one result set per query, in order; the LAST set repeats if more queries arrive. Captures the raw SQL text. */
+/**
+ * Pops one result set per EXECUTED query, in order; the LAST set repeats if more queries arrive. Lazy like postgres.js:
+ * a query runs only when awaited, so a fragment interpolated into another is never executed — its text is inlined
+ * into the parent's captured SQL instead
+ */
 function makeQueueSql(results: unknown[][]) {
   const texts: string[] = [];
+  const executed: { text: string; values: unknown[] }[] = [];
   let i = 0;
-  const fn = vi.fn((strings: TemplateStringsArray | string[], ..._vals: unknown[]) => {
-    texts.push(Array.isArray(strings) ? strings.join("$") : String(strings));
-    const res = results[Math.min(i, results.length - 1)] ?? [];
-    i += 1;
-    return Promise.resolve(res);
+  const fn = vi.fn((strings: TemplateStringsArray | string[], ...vals: unknown[]) => {
+    const text = Array.isArray(strings)
+      ? strings.reduce((acc, part, k) => {
+          const v = vals[k - 1] as { sqlText?: string } | undefined;
+          return acc + (typeof v?.sqlText === "string" ? v.sqlText : "$") + part;
+        })
+      : String(strings);
+    const values = vals.flatMap((v) => ((v as { sqlValues?: unknown[] })?.sqlValues ?? [v]) as unknown[]);
+    let run: Promise<unknown> | null = null;
+    const exec = () => {
+      if (!run) {
+        texts.push(text);
+        executed.push({ text, values });
+        run = Promise.resolve(results[Math.min(i, results.length - 1)] ?? []);
+        i += 1;
+      }
+      return run;
+    };
+    return {
+      sqlText: text,
+      sqlValues: values,
+      // biome-ignore lint/suspicious/noThenProperty: postgres.js queries are lazy thenables; the mock must be one too
+      then: (ok?: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => exec().then(ok, bad),
+      catch: (bad: (e: unknown) => unknown) => exec().catch(bad),
+    };
   });
   const sql = Object.assign(fn, {
     end: vi.fn().mockResolvedValue(undefined),
@@ -91,7 +117,7 @@ function makeQueueSql(results: unknown[][]) {
     // The mock runs that callback against the same tagged-template fn -> statements inside still land in `texts`
     begin: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(fn)),
   });
-  return { sql, texts };
+  return { sql, texts, executed };
 }
 
 function makeInitiateCtx(
@@ -180,6 +206,7 @@ describe("handleInitiate — one trial per user", () => {
   it("trial already consumed (trial_end set) → TRANSACTION ₹199 upfront, trialEligible=false", async () => {
     const env = makeEnv();
     const { sql } = makeQueueSql([
+      [{ trial_end: "2026-01-01T00:00:00.000Z" }], // unlocked pre-read
       [], // SELECT 1 FROM users … FOR UPDATE
       [{ trial_end: "2026-01-01T00:00:00.000Z" }], // trial consumed long ago
       [],
@@ -207,18 +234,18 @@ describe("handleInitiate — in-flight claim guard", () => {
 
   it("refuses a second setup while one is still in flight, without calling PhonePe", async () => {
     const env = makeEnv();
+    const inflight = {
+      trial_end: null,
+      status: "pending",
+      merchant_subscription_id: "DKS_S_INFLIGHT",
+      current_period_end: null,
+      // Claimed moments ago by a request still waiting on PhonePe -> inside SETUP_CLAIM_WINDOW_MS
+      updated_at: new Date().toISOString(),
+    };
     const { sql } = makeQueueSql([
+      [inflight], // unlocked pre-read
       [], // SELECT 1 FROM users … FOR UPDATE
-      [
-        {
-          trial_end: null,
-          status: "pending",
-          merchant_subscription_id: "DKS_S_INFLIGHT",
-          current_period_end: null,
-          // Claimed moments ago by a request still waiting on PhonePe -> inside SETUP_CLAIM_WINDOW_MS
-          updated_at: new Date().toISOString(),
-        },
-      ],
+      [inflight],
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
@@ -238,21 +265,49 @@ describe("handleInitiate — in-flight claim guard", () => {
     expect(body.error.code).toBe("setup_in_progress");
   });
 
+  it("an offer double tap is refused as setup_in_progress, never offer_unavailable", async () => {
+    // The app retries setup_in_progress silently; offer_unavailable would tell a double-tapper the offer is gone
+    vi.mocked(setupSubscriptionIntent).mockClear();
+    const env = makeEnv();
+    const claimed = {
+      trial_end: new Date(Date.now() - 86_400_000).toISOString(),
+      status: "pending",
+      offer_switch: true,
+      merchant_subscription_id: "DKS_HS_FIRST99",
+      superseded_mandate_id: "DKS_S_OLD199",
+      current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
+      updated_at: new Date().toISOString(),
+      offer_eligible: false,
+    };
+    const { sql } = makeQueueSql([[claimed]]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleInitiate(
+      makeInitiateCtx(env, token, { plan: "monthly", offer: "cancel_99", targetApp: "com.phonepe.app" }),
+    );
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("setup_in_progress");
+    expect(vi.mocked(setupSubscriptionIntent)).not.toHaveBeenCalled();
+    expect(vi.mocked(setupSubscription)).not.toHaveBeenCalled();
+  });
+
   it("lets a stale abandoned setup be retried once the claim window lapses", async () => {
     const env = makeEnv();
+    const abandoned = {
+      trial_end: null,
+      status: "pending",
+      merchant_subscription_id: "DKS_S_ABANDONED",
+      current_period_end: null,
+      // Older than SETUP_CLAIM_WINDOW_MS -> the user killed the app at the PhonePe sheet and came back
+      // They must not be locked out -> a claim nobody can release is worse than a second attempt
+      updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
     const { sql } = makeQueueSql([
+      [abandoned], // unlocked pre-read
       [], // SELECT 1 FROM users … FOR UPDATE
-      [
-        {
-          trial_end: null,
-          status: "pending",
-          merchant_subscription_id: "DKS_S_ABANDONED",
-          current_period_end: null,
-          // Older than SETUP_CLAIM_WINDOW_MS -> the user killed the app at the PhonePe sheet and came back
-          // They must not be locked out -> a claim nobody can release is worse than a second attempt
-          updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-        },
-      ],
+      [abandoned],
       [], // claim INSERT (+ later queries repeat the last set)
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
@@ -349,7 +404,7 @@ describe("handleInitiate — direct UPI-intent flow", () => {
 describe("handleWebhook — subscription.setup.order.completed (intent flow)", () => {
   it("routes the intent-flow setup event to the same grant as checkout.order.completed", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, status: "trialing" }]]);
+    const { sql, texts } = makeQueueSql([[], [{ user_id: USER_ID, status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const auth = await webhookAuthHeader("u", "p");
@@ -369,10 +424,12 @@ describe("handleWebhook — subscription.setup.order.completed (intent flow)", (
     );
 
     expect(res.status).toBe(200);
-    const update = texts.find((t) => t.includes("UPDATE subscriptions"));
+    // The switch runs first on every grant surface -> it must be scoped to offer rows only
+    expect(texts[0]).toContain("AND s.offer_switch");
+    const update = texts.find((t) => t.includes("AND NOT s.offer_switch"));
     expect(update).toBeDefined();
-    expect(update).toContain("AND status = 'pending'");
-    expect(update).toContain("CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END");
+    expect(update).toContain("AND s.status = 'pending'");
+    expect(update).toContain("CASE WHEN s.trial_end IS NULL THEN 'trialing' ELSE 'active' END");
   });
 });
 
@@ -380,7 +437,9 @@ describe("handleWebhook — approval racing an auto-cancelled claim", () => {
   it("resurrects an abandon-expired row scoped to this event's exact ids", async () => {
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([
+      [], // the offer switch → not an offer row
       [], // UPDATE scoped AND status='pending' → no row (abandon already expired it)
+      [], // no row watches this id as a released ₹99
       [{ user_id: USER_ID, status: "active" }], // resurrect UPDATE
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
@@ -406,9 +465,11 @@ describe("handleWebhook — approval racing an auto-cancelled claim", () => {
     // 'cancelled' is in the list because of the restore rule -> a released claim over a still-paid period lands there
     // The exact-id scope is what keeps a dunning-expired or genuinely-cancelled OLD subscription from riding in
     expect(res.status).toBe(200);
-    const resurrect = texts.find((t) => t.includes("AND status IN ('expired', 'cancelled')"));
+    const resurrect = texts.find((t) => t.includes("AND s.status IN ('expired', 'cancelled')"));
     expect(resurrect).toBeDefined();
     expect(resurrect).toContain("merchant_order_id");
+    // A cancel_99 row is never resurrected -> a ₹2 check is not a paid month
+    expect(resurrect).toContain("AND NOT s.offer_switch");
     // An 'active' resurrect means a real ₹199 debit -> the referral reward applies exactly as on any paid setup
     expect(vi.mocked(grantReferralReward)).toHaveBeenCalled();
   });
@@ -435,9 +496,11 @@ describe("handleWebhook — subscription.unpaused rearms the debit clock", () =>
     // The cron's park NULLs next_debit_at -> a status-only restore leaves a row neither pass can select again
     // That row reads "Active" forever, is never billed, and its premium dies silently at period end
     // The rearm is the fix -> and the paused-only scope stops a stray unpause resurrecting a cancelled row
-    const unpause = texts.find((t) => t.includes("'trialing' ELSE 'active'"));
+    const unpause = texts.find((t) => t.includes("COALESCE(next_debit_at, current_period_end)"));
     expect(unpause).toBeDefined();
-    expect(unpause).toContain("COALESCE(next_debit_at, current_period_end)");
+    // Converted = the period ran past the trial -> an unpaused never-converted trial stays 'trialing'
+    expect(unpause).toContain("WHEN trial_end IS NOT NULL AND current_period_end > trial_end");
+    expect(unpause).toContain("THEN 'active' ELSE 'trialing'");
     expect(unpause).toContain("AND status = 'paused'");
   });
 });
@@ -469,15 +532,23 @@ describe("handleWebhook — state events in PhonePe's DOCUMENTED shape (no order
     posthog.reportPostHogSubscriptionCancel.mockClear();
   });
 
+  // The shared park binds its status -> a pause is the park statement carrying 'paused'
+  const pauseParks = (executed: { text: string; values: unknown[] }[]) =>
+    executed.filter((q) => q.text.includes("next_debit_at = NULL") && q.values.includes("paused"));
+
   it("parks the row paused on subscription.paused", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[]]);
+    const { sql, executed } = makeQueueSql([[]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const res = await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
 
     expect(res.status).toBe(200);
-    expect(texts.some((t) => t.includes("SET status     = 'paused'"))).toBe(true);
+    const park = pauseParks(executed)[0];
+    expect(park).toBeDefined();
+    // The same write as the cron's park -> a status-only pause kept a debit clock no pass would serve
+    expect(park.text).toContain("notified_at   = NULL");
+    expect(park.text).toContain("s.status IN ('trialing', 'active')");
   });
 
   it.each([
@@ -485,7 +556,7 @@ describe("handleWebhook — state events in PhonePe's DOCUMENTED shape (no order
     ["subscription.cancelled", "CANCELLED"],
   ])("cancels the row on %s and reports the churn", async (event, state) => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    const { sql, texts } = makeQueueSql([[], [{ user_id: USER_ID, prior_status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const res = await deliver(env, stateEvent(event, state));
@@ -511,9 +582,9 @@ describe("handleWebhook — state events in PhonePe's DOCUMENTED shape (no order
 
   it("drops a redelivered pause but handles a later, different pause", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[]]);
+    const { sql, executed } = makeQueueSql([[]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
-    const pauses = () => texts.filter((t) => t.includes("SET status     = 'paused'")).length;
+    const pauses = () => pauseParks(executed).length;
 
     await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
     await deliver(env, stateEvent("subscription.paused", "PAUSED", 1_790_000_000_000));
@@ -541,7 +612,7 @@ describe("handleWebhook — state events in PhonePe's DOCUMENTED shape (no order
 
   it("drops a redelivered revoke", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    const { sql, texts } = makeQueueSql([[], [{ user_id: USER_ID, prior_status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     await deliver(env, stateEvent("subscription.revoked", "REVOKED"));
@@ -606,7 +677,7 @@ describe("handleStatus — FAILED setup reconcile", () => {
     expect(body.status).toBe("expired");
     const update = texts.find((t) => t.includes("'expired'"));
     expect(update).toBeDefined();
-    expect(update).toContain("AND status  = 'pending'");
+    expect(update).toContain("AND s.status = 'pending'");
   });
 });
 
@@ -633,7 +704,7 @@ describe("handleAbandon — releasing a claimed setup", () => {
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([
       [{ status: "pending", merchant_subscription_id: "DKS_S_DEAD" }],
-      [{ id: "sub-dead" }], // UPDATE → expired, RETURNING the row it released
+      [{ status: "expired", released_mandate_id: "DKS_S_DEAD" }], // the release, RETURNING the id it let go
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
@@ -650,7 +721,8 @@ describe("handleAbandon — releasing a claimed setup", () => {
     const update = texts.find((t) => t.includes("UPDATE subscriptions"));
     expect(update).toBeDefined();
     expect(update).toContain("'expired'");
-    expect(update).toContain("AND status = 'pending'");
+    expect(update).toContain("s.user_id = $ AND s.merchant_order_id = $");
+    expect(update).toContain("AND s.status = 'pending'");
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_DEAD");
   });
 
@@ -749,7 +821,8 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
     // The settle stamps the debit-tracking columns off the row's OLD values -> alias-qualified because of the FROM join
     expect(update).toContain("COALESCE(s.first_debit_at, now())");
     expect(update).toContain("s.debit_count + 1");
-    expect(update).toContain("s.paid_paise + 19900");
+    // The debited mandate's own price -> a parked one made live again brings its price with it
+    expect(update).toContain("s.paid_paise + CASE WHEN s.merchant_subscription_id = $");
     expect(env.KV.put).toHaveBeenCalledWith(
       "txn:subscription.redemption.order.completed:OMO_NEST_1",
       "1",
@@ -791,7 +864,7 @@ describe("handleWebhook — PhonePe's DOCUMENTED order-event shape (ids under pa
 
   it("grants the trial from a setup.order.completed with ids nested under paymentFlow", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, status: "trialing" }]]);
+    const { sql, texts } = makeQueueSql([[], [{ user_id: USER_ID, status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const auth = await webhookAuthHeader("u", "p");
@@ -873,25 +946,25 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
 
   it("branches trialing/active on the row's own trial_end and preserves it via COALESCE", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[{ user_id: USER_ID, status: "trialing" }]]);
+    const { sql, texts } = makeQueueSql([[], [{ user_id: USER_ID, status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const auth = await webhookAuthHeader("u", "p");
     const res = await handleWebhook(makeWebhookCtx(env, auth, payload));
     expect(res.status).toBe(200);
 
-    const update = texts.find((t) => t.includes("UPDATE subscriptions"));
-    expect(update).toBeDefined();
-    expect(update).toContain("CASE WHEN trial_end IS NULL THEN 'trialing' ELSE 'active' END");
-    expect(update).toContain("COALESCE(trial_end,");
+    const update = (texts.find((t) => t.includes("AND NOT s.offer_switch")) ?? "").replace(/\s+/g, " ");
+    expect(update).not.toBe("");
+    expect(update).toContain("CASE WHEN s.trial_end IS NULL THEN 'trialing' ELSE 'active' END");
+    expect(update).toContain("COALESCE(s.trial_end,");
     // A repeat subscriber's setup is a real ₹199 -> the debit-tracking columns move on the ELSE branch and ONLY there
-    expect(update).toContain("ELSE COALESCE(first_debit_at, now()) END");
-    expect(update).toContain("ELSE debit_count + 1 END");
-    expect(update).toContain("ELSE paid_paise + 19900 END");
+    expect(update).toContain("ELSE COALESCE(s.first_debit_at, now()) END");
+    expect(update).toContain("ELSE s.debit_count + 1 END");
+    expect(update).toContain("ELSE s.paid_paise + s.price_paise END");
     // A LOAD-BEARING guard -> without it the webhook/status-poll race hands out a full month off a ₹2 PENNY_DROP
     // And a referral reward with it -> the second writer re-reads the trial_end the first just wrote
-    expect(update).toContain("AND status = 'pending'");
-    expect(update).toContain("RETURNING user_id, status");
+    expect(update).toContain("AND s.status = 'pending'");
+    expect(update).toContain("RETURNING s.user_id, s.status");
   });
 
   it("first setup (DB grants 'trialing') → no referral reward", async () => {
@@ -907,7 +980,7 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
 
   it("repeat setup (DB returns 'active' — ₹199 paid upfront) → referral reward granted", async () => {
     const env = makeEnv();
-    const { sql } = makeQueueSql([[{ user_id: USER_ID, status: "active" }]]);
+    const { sql } = makeQueueSql([[], [{ user_id: USER_ID, status: "active", price_paise: 19900 }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const auth = await webhookAuthHeader("u", "p");
@@ -926,7 +999,8 @@ describe("handleWebhook checkout.order.completed — one trial per user", () => 
 // They passed throughout the incident -> the NEGATIVE assertion is the load-bearing one
 function expectRestoreRule(update: string | undefined, path: string): void {
   expect(update, `${path}: no release UPDATE was captured`).toBeDefined();
-  const sql = (update as string).replace(/\s+/g, " ");
+  // The one shared release qualifies every column with its alias -> compare the rule, not the alias
+  const sql = (update as string).replace(/\s+/g, " ").replace(/\bs\./g, "");
   expect(sql, `${path}: must gate on a live period`).toContain(
     "CASE WHEN current_period_end IS NOT NULL AND current_period_end > now()",
   );
@@ -1050,7 +1124,7 @@ describe("handleCancel — subscription_cancel reporting", () => {
     const cancelledAt = new Date("2026-08-26T12:00:00.000Z");
     const { sql, texts } = makeQueueSql([
       [{ merchant_subscription_id: "DKS_S_CANCEL", status: "trialing" }],
-      [{ updated_at: cancelledAt }], // UPDATE → cancelled RETURNING updated_at
+      [{ updated_at: cancelledAt, price_paise: 19900, merchant_subscription_id: "DKS_S_CANCEL" }],
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
@@ -1068,7 +1142,35 @@ describe("handleCancel — subscription_cancel reporting", () => {
       reason: "user_cancel",
       priorStatus: "trialing",
       occurredAt: cancelledAt,
+      pricePaise: 19900,
     });
+  });
+
+  it("a cancel mid-switch reports the churn of the parked ₹199 with the status it had, never 'pending'", async () => {
+    const env = makeEnv();
+    const { sql } = makeQueueSql([
+      [
+        {
+          merchant_subscription_id: "DKS_HS_NEW99",
+          superseded_mandate_id: "DKS_S_OLD199",
+          status: "pending",
+          offer_switch: true,
+          trial_end: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+          current_period_end: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+        },
+      ],
+      [{ updated_at: new Date(), price_paise: 19900, merchant_subscription_id: "DKS_S_OLD199" }],
+    ]);
+    (env as unknown as { _testSql: unknown })._testSql = sql;
+
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const res = await handleCancel(makeInitiateCtx(env, token, {}));
+
+    expect(res.status).toBe(200);
+    expect(posthog.reportPostHogSubscriptionCancel).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ merchantSubId: "DKS_S_OLD199", priorStatus: "active", pricePaise: 19900 }),
+    );
   });
 
   it("does not report when the row was already cancelled (no state change)", async () => {
@@ -1116,7 +1218,7 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
 
   it("initiate over a lapsed trialing row parks its mandate and does NOT revoke it", async () => {
     const env = makeEnv();
-    const { sql, texts } = makeQueueSql([[], [lapsedTrial()], []]);
+    const { sql, texts } = makeQueueSql([[lapsedTrial()], [], [lapsedTrial()], []]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const token = await signAccessToken(USER_ID, JWT_SECRET);
@@ -1166,7 +1268,12 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
 
   it("initiate over an expired row (ladder exhausted) still revokes on the spot", async () => {
     const env = makeEnv();
-    const { sql } = makeQueueSql([[], [lapsedTrial({ status: "expired" })], []]);
+    const { sql } = makeQueueSql([
+      [lapsedTrial({ status: "expired" })],
+      [],
+      [lapsedTrial({ status: "expired" })],
+      [],
+    ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
     const token = await signAccessToken(USER_ID, JWT_SECRET);
@@ -1180,7 +1287,7 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([
       [{ status: "pending", merchant_subscription_id: "DKS_S_NEW" }],
-      [{ id: "sub-1" }],
+      [{ status: "trialing", released_mandate_id: "DKS_S_NEW" }],
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
 
@@ -1189,11 +1296,13 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
 
     expect(res.status).toBe(200);
     const update = (texts.find((t) => t.includes("UPDATE subscriptions")) ?? "").replace(/\s+/g, " ");
-    expect(update).toContain("WHEN superseded_mandate_id IS NOT NULL");
+    expect(update).toContain("WHEN s.superseded_mandate_id IS NOT NULL");
     expect(update).toContain("THEN 'active' ELSE 'trialing' END");
     expect(update).toContain(
-      "merchant_subscription_id = COALESCE(superseded_mandate_id, merchant_subscription_id)",
+      "merchant_subscription_id = COALESCE(s.superseded_mandate_id, s.merchant_subscription_id)",
     );
+    // The parked mandate comes back at ITS price -> a ₹99 parked under a ₹199 attempt stays ₹99
+    expect(update).toContain("price_paise = CASE WHEN s.superseded_mandate_id IS NOT NULL");
     expect(update).toContain("superseded_mandate_id = NULL");
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_NEW");
@@ -1202,8 +1311,9 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
   it("setup completed webhook revokes the parked mandate AFTER the grant, once", async () => {
     const env = makeEnv();
     const { sql, texts } = makeQueueSql([
-      [{ user_id: USER_ID, status: "active" }], // the grant
-      [{ stale_mandate_id: "DKS_S_OLD" }], // the release, self-joined PRIOR value
+      [], // the offer switch → not an offer row
+      // The grant, self-joined so the PRIOR parked id rides back
+      [{ user_id: USER_ID, status: "active", price_paise: 19900, stale_mandate_id: "DKS_S_OLD" }],
       [],
     ]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
@@ -1225,9 +1335,11 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
     );
 
     expect(res.status).toBe(200);
-    const release = texts.find((t) => t.includes("prior.superseded_mandate_id AS stale_mandate_id"));
-    expect(release).toBeDefined();
-    expect(release).toContain("SET superseded_mandate_id = NULL");
+    const release = (
+      texts.find((t) => t.includes("AND NOT s.offer_switch") && t.includes("AS stale_mandate_id")) ?? ""
+    ).replace(/\s+/g, " ");
+    expect(release).toContain("AND NOT s.offer_switch");
+    expect(release).toContain("superseded_mandate_id = NULL");
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(revokeMandateTolerant)).toHaveBeenCalledWith(expect.anything(), "DKS_S_OLD");
   });
@@ -1330,8 +1442,11 @@ describe("re-subscribe parks the live mandate (superseded_mandate_id)", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { status: string }).status).toBe("active");
     expect(vi.mocked(getOrderStatus)).toHaveBeenCalledWith(expect.anything(), "DKS_R_HEAL_1");
-    const heal = (texts.find((t) => t.includes("s.redemption_order_id = $")) ?? "").replace(/\s+/g, " ");
-    expect(heal).toContain("s.paid_paise + 19900");
+    const heal = (
+      texts.find((t) => t.includes("UPDATE subscriptions AS s") && t.includes("s.redemption_order_id = $")) ??
+      ""
+    ).replace(/\s+/g, " ");
+    expect(heal).toContain("s.paid_paise + CASE WHEN s.superseded_mandate_id IS NOT NULL");
     expect(heal).toContain("(s.current_period_end IS NULL OR s.current_period_end <= s.trial_end)");
     expect(vi.mocked(revokeMandateTolerant)).not.toHaveBeenCalled();
     expect(posthog.reportPostHogFirstConversion).toHaveBeenCalledWith(
@@ -1400,7 +1515,7 @@ describe("handleWebhook — PostHog never delays PhonePe's acknowledgement", () 
 
   it("acks a revoke while the subscription_cancel capture is still in flight", async () => {
     const env = makeEnv();
-    const { sql } = makeQueueSql([[{ user_id: USER_ID, prior_status: "trialing" }]]);
+    const { sql } = makeQueueSql([[], [{ user_id: USER_ID, prior_status: "trialing" }]]);
     (env as unknown as { _testSql: unknown })._testSql = sql;
     posthog.reportPostHogSubscriptionCancel.mockImplementationOnce(never);
 

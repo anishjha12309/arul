@@ -253,5 +253,16 @@
   "premiumCancelConfirm": "അതെ, റദ്ദാക്കുക",
   "premiumCancelledToast": "സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാക്കി. കാലാവധി തീരും വരെ പ്രീമിയം ഉണ്ടാകും.",
   "premiumCancelledToastDate": "സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാക്കി. {date} വരെ പ്രീമിയം ഉണ്ടാകും.",
-  "premiumCancelKeep": "പ്രീമിയം തുടരട്ടെ"
+  "premiumCancelKeep": "പ്രീമിയം തുടരട്ടെ",
+  "cancelOfferEyebrow": "50% കിഴിവ്",
+  "cancelOfferForever": "എന്നും ഇതേ വില. ഇപ്പോഴത്തെപ്പോലെ എപ്പോൾ വേണമെങ്കിലും റദ്ദാക്കാം.",
+  "cancelOfferApprove": "നിങ്ങളുടെ UPI ആപ്പ് പ്രതിമാസം {offerPrice} അംഗീകരിക്കാൻ ആവശ്യപ്പെടും. നിങ്ങൾ അംഗീകരിച്ചാലുടൻ നിങ്ങളുടെ {price} ഓട്ടോപേ ഞങ്ങൾ നിർത്തും.",
+  "cancelOfferDeclineNote": "'ഇപ്പോൾ വേണ്ട' അമർത്തിയാൽ നിങ്ങളുടെ സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാകും.",
+  "cancelOfferDeclineNoteDate": "'ഇപ്പോൾ വേണ്ട' അമർത്തിയാൽ നിങ്ങളുടെ സബ്‌സ്‌ക്രിപ്ഷൻ റദ്ദാകും. {date} വരെ പ്രീമിയം ഉണ്ടാകും.",
+  "cancelOfferAccept": "കിഴിവ് നേടൂ",
+  "cancelOfferRetryTitle": "പൂർത്തിയായില്ല",
+  "cancelOfferTryAgain": "വീണ്ടും ശ്രമിക്കൂ",
+  "cancelOfferNothingChanged": "ഒന്നും മാറിയിട്ടില്ല. നിങ്ങൾ ഇപ്പോഴും പ്രതിമാസം {price} പ്ലാനിൽ തന്നെയാണ്.",
+  "cancelOfferSwitchedToast": "ഇനി നിങ്ങൾക്ക് പ്രതിമാസം {price} മാത്രം.",
+  "cancelOfferUnavailable": "ഈ ഓഫർ ഇപ്പോൾ ലഭ്യമല്ല."
 }

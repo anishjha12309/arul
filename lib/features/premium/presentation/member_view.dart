@@ -68,7 +68,7 @@ class ArulMemberView extends StatelessWidget {
                   rows: [
                     PremiumPlanBillingRowData(
                       label: l10n.premiumPlanLabel,
-                      value: l10n.premiumPlanMonthly,
+                      value: '$monthlyPrice ${l10n.premiumPerMonth}',
                     ),
                     PremiumPlanBillingRowData(
                       label: l10n.premiumPaymentLabel,
@@ -84,7 +84,7 @@ class ArulMemberView extends StatelessWidget {
                 const SizedBox(height: ArulTokens.premiumMemberReminderTop),
                 const _RenewalReminder(),
                 const SizedBox(height: ArulTokens.premiumMemberCancelTop),
-                _MemberCancelButton(busy: cancelBusy, onTap: onCancel),
+                PremiumPlanCancelButton(busy: cancelBusy, onTap: onCancel),
                 const SizedBox(height: ArulTokens.premiumMemberFootnoteTop),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -430,22 +430,30 @@ class _RenewalReminder extends StatelessWidget {
   }
 }
 
-class _MemberCancelButton extends StatefulWidget {
-  const _MemberCancelButton({required this.busy, required this.onTap});
+/// The maroon "Cancel subscription" pill; null [onTap] draws it disabled without the spinner.
+class PremiumPlanCancelButton extends StatefulWidget {
+  const PremiumPlanCancelButton({
+    super.key,
+    required this.busy,
+    required this.onTap,
+    this.tapKey = 'member-cancel-button',
+  });
 
   final bool busy;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String tapKey;
 
   @override
-  State<_MemberCancelButton> createState() => _MemberCancelButtonState();
+  State<PremiumPlanCancelButton> createState() =>
+      _PremiumPlanCancelButtonState();
 }
 
-class _MemberCancelButtonState extends State<_MemberCancelButton> {
+class _PremiumPlanCancelButtonState extends State<PremiumPlanCancelButton> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = widget.busy;
+    final disabled = widget.busy || widget.onTap == null;
     final fillAlpha = _pressed
         ? ArulTokens.premiumMemberCancelPressedAlpha
         : ArulTokens.premiumMemberCancelFillAlpha;
@@ -456,7 +464,7 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
       child: Opacity(
         opacity: disabled ? ArulTokens.premiumMemberDisabledAlpha : 1,
         child: GestureDetector(
-          key: const ValueKey('member-cancel-button'),
+          key: ValueKey(widget.tapKey),
           behavior: HitTestBehavior.opaque,
           onTapDown: disabled
               ? null
@@ -499,7 +507,9 @@ class _MemberCancelButtonState extends State<_MemberCancelButton> {
                               ArulTokens.premiumMemberCancelFloretInset * 3,
                         ),
                         child: Text(
-                          AppLocalizations.of(context).premiumCancelSubscription,
+                          AppLocalizations.of(
+                            context,
+                          ).premiumCancelSubscription,
                           textAlign: TextAlign.center,
                           style: ArulTokens.premiumMemberCancelLabel,
                         ),

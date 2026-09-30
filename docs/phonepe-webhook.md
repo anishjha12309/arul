@@ -5,8 +5,9 @@ merchants and the heal paths: [phonepe.md](phonepe.md) · recurring debits: [aut
 
 **No AUTOGRAMAPPSONLINE (legacy) webhook has ever been processed in production** — the KV `txn:` prefix
 held no key for any event while the server's own `ph:` marks under the same TTL sat in the hundreds. The
-cron is the only channel that has ever worked there, so a revoked or paused legacy mandate stays
-invisible until a debit fails. Never let the webhook become the only path to a correct row.
+cron is the only channel that has ever worked there, so a revoked or paused legacy mandate reaches Neon
+only through the hourly legacy reconcile ([autopay-debits.md](autopay-debits.md) §The hourly sweeps) or a
+failed debit. Never let the webhook become the only path to a correct row.
 
 ## Two webhooks, one handler
 
@@ -31,7 +32,11 @@ invisible until a debit fails. Never let the webhook become the only path to a c
   mandate ids, `state` and the pause window. Keyed on the order id, every revoke was acked as "Missing
   orderId" and dropped, and UPI-app revokes are most trial cancels. They key on (event, mandate id,
   state, `pauseStartDate`); an unpause has null pause dates, so it is never deduped — its rearm is
-  scoped to `paused` rows.
+  scoped to `paused` rows. A pause runs the cron's own park (`next_debit_at`/`notified_at` NULL).
+- **A revoke or cancel naming a `pending` claim's OWN id while a mandate is parked is a failed setup**
+  (PhonePe expiring it, or our revoke racing the release): it runs the release. Cancelling it stranded the
+  parked mandate — never billed, never revoked again. The same event for a parked, watched ₹99 or
+  retry-revoke id only clears that column.
 - **Order events nest the ids under `payload.paymentFlow`**; state-change events keep them top-level.
   Read through `merchantSubscriptionIdOf()` — the flat read acked every real redemption webhook as
   "Missing merchantSubscriptionId".

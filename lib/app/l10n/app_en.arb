@@ -624,5 +624,77 @@
   "premiumCancelKeep": "Keep premium",
   "@premiumCancelKeep": {
     "description": "Cancel-subscription dialog: the way OUT (keeps the plan). Must not say 'cancel' — the other button does."
+  },
+  "cancelOfferEyebrow": "50% OFF",
+  "@cancelOfferEyebrow": {
+    "description": "Cancel-offer sheet eyebrow over the price. Uppercase in English; a plain phrase in other scripts."
+  },
+  "cancelOfferForever": "Forever. Cancel anytime, same as now.",
+  "@cancelOfferForever": {
+    "description": "Cancel-offer sheet, under the ₹99 price: the discount never ends, and cancelling stays as easy as today."
+  },
+  "cancelOfferApprove": "Your UPI app will ask you to approve {offerPrice}/month. We stop your {price} autopay as soon as you do.",
+  "@cancelOfferApprove": {
+    "description": "Cancel-offer sheet: what happens after Get discount. A commercial statement — it must NOT promise any refund.",
+    "placeholders": {
+      "offerPrice": {
+        "type": "String",
+        "example": "₹99"
+      },
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "cancelOfferDeclineNote": "Not now cancels your subscription.",
+  "@cancelOfferDeclineNote": {
+    "description": "Cancel-offer sheet footnote when the period end is unknown. 'Not now' names the button (referNotNow) — quote its translation."
+  },
+  "cancelOfferDeclineNoteDate": "Not now cancels your subscription. You keep premium until {date}.",
+  "@cancelOfferDeclineNoteDate": {
+    "description": "Cancel-offer sheet footnote with the period end. 'Not now' names the button (referNotNow) — quote its translation.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "13 Oct 2026"
+      }
+    }
+  },
+  "cancelOfferAccept": "Get discount",
+  "@cancelOfferAccept": {
+    "description": "Cancel-offer sheet primary button: switch to ₹99/month through the UPI app."
+  },
+  "cancelOfferRetryTitle": "Didn't go through",
+  "@cancelOfferRetryTitle": {
+    "description": "Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app."
+  },
+  "cancelOfferTryAgain": "Try again",
+  "@cancelOfferTryAgain": {
+    "description": "Retry sheet primary button: try the ₹99 switch again."
+  },
+  "cancelOfferNothingChanged": "Nothing changed. You're still on {price}/month.",
+  "@cancelOfferNothingChanged": {
+    "description": "Toast when the retry sheet is dismissed: the plan is untouched.",
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹199"
+      }
+    }
+  },
+  "cancelOfferSwitchedToast": "You're on {price}/month.",
+  "@cancelOfferSwitchedToast": {
+    "description": "Toast when the ₹99 switch was approved.",
+    "placeholders": {
+      "price": {
+        "type": "String",
+        "example": "₹99"
+      }
+    }
+  },
+  "cancelOfferUnavailable": "This offer isn't available any more.",
+  "@cancelOfferUnavailable": {
+    "description": "Toast when the server no longer offers the ₹99 switch (409 offer_unavailable). The subscription is unchanged."
   }
 }

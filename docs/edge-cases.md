@@ -51,6 +51,7 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 - [ ] `/payments/status` heals a missed COMPLETED redemption and a lost pause/unpause
 - [ ] Unpause REARMS `next_debit_at`, scoped to `paused` rows
 - [ ] One trial ever: `trial_end` marker + delete-account HMAC tombstone (secret NEVER rotates)
+- [ ] ₹99 offer: [cancel-offer.md](cancel-offer.md) §Contracts; stranded claims and settles heal hourly
 - [ ] 409 `setup_in_progress` ≠ `already_subscribed`; the client retry delays sum to the claim window
 - [ ] Picker = `MANDATE_APPS` resolving a mandate-shaped probe; no app → the CTA sells the QR
 - [ ] An OPEN order on return is RESUMABLE; only another app or the deadline abandons, silently

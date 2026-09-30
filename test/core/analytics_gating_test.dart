@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:arul/core/analytics/allowlisted_analytics_service.dart';
@@ -5,7 +6,20 @@ import 'package:arul/core/analytics/analytics_cohort.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/analytics/composite_analytics_service.dart';
+import 'package:arul/core/analytics/google_analytics_service.dart';
+import 'package:arul/core/analytics/meta_analytics_service.dart';
+import 'package:arul/core/api/api_client.dart';
+import 'package:arul/core/providers/shared_preferences_provider.dart';
+import 'package:arul/data/models/app_config_model.dart';
+import 'package:arul/data/repositories/repository_providers.dart';
+import 'package:arul/features/auth/providers/auth_providers.dart';
+import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
+import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
 import 'package:arul/features/wallpapers/presentation/premium_gate_action.dart';
+import 'package:facebook_app_events/facebook_app_events.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,6 +49,57 @@ class _RecordingAnalyticsService implements AnalyticsService {
 
   @override
   void register(String key, Object value) => registered[key] = value;
+}
+
+/// Records which SDK methods GA4's sink called; every call answers at once.
+class _RecordingFirebaseAnalytics implements FirebaseAnalytics {
+  final calls = <Symbol>[];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    calls.add(invocation.memberName);
+    return Future<void>.value();
+  }
+}
+
+/// The same for Meta's sink.
+class _RecordingFacebookAppEvents implements FacebookAppEvents {
+  final calls = <Symbol>[];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    calls.add(invocation.memberName);
+    return Future<void>.value();
+  }
+}
+
+/// A cancel-offer switch that lands on a trialing ₹99 row at the first status read.
+class _SwitchingApi extends ApiClient {
+  @override
+  Future<Map<String, dynamic>> post(
+    String path, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = true,
+    bool withToken = true,
+    Duration? timeout,
+  }) async => switch (path) {
+    '/payments/initiate' => {
+      'merchantOrderId': 'DKS_OFFER_1',
+      'intentUrl': 'upi://mandate?tr=DKS_OFFER_1&am=2',
+      'offer': 'cancel_99',
+    },
+    '/payments/status' => {
+      'status': 'trialing',
+      'subscription': {
+        'merchant_order_id': 'DKS_OFFER_1',
+        'price_paise': 9900,
+        'trial_end': DateTime.now()
+            .add(const Duration(hours: 20))
+            .toIso8601String(),
+      },
+    },
+    _ => <String, dynamic>{},
+  };
 }
 
 /// Returns a fixed draw so cohort membership is deterministic in tests.
@@ -255,6 +320,11 @@ void main() {
         // `paywall_shown` fires on every open of the sell -> volume, and GA4 answers the question
         // it exists for (which UPI apps was this user offered) without spending the PostHog budget.
         'paywall_shown',
+        // The ₹99 cancel-save offer: a subscriber's plan change, read in GA4 beside `paywall_shown`.
+        'cancel_offer_shown',
+        'cancel_offer_accepted',
+        'cancel_offer_declined',
+        'cancel_offer_retry_shown',
         'feed_session_ended',
         'subscription_active',
         'referral_shared',
@@ -325,5 +395,110 @@ void main() {
       expect(posthog.resets, 1);
       expect(ga4.resets, 1);
     });
+  });
+
+  group('cancel offer', () {
+    // A subscriber switching to ₹99 is keeping a plan, not an acquisition: nothing it emits may reach
+    // an ad platform as a conversion, and PostHog's fixed event count gains nothing from it.
+    const offerCheckout = <String, Object?>{
+      'plan': 'monthly',
+      'method': 'upi_app',
+      'value': 99,
+      kCheckoutOfferProperty: 'cancel_99',
+      'price_paise': '9900',
+    };
+
+    test(
+      'its checkout is no begin_checkout in GA4 and no InitiateCheckout in Meta',
+      () {
+        final firebase = _RecordingFirebaseAnalytics();
+        final facebook = _RecordingFacebookAppEvents();
+        GoogleAnalyticsService(
+          firebase,
+        ).track('checkout_started', properties: offerCheckout);
+        MetaAnalyticsService(
+          facebook,
+        ).track('checkout_started', properties: offerCheckout);
+
+        expect(firebase.calls, [#logEvent]);
+        expect(facebook.calls, isEmpty);
+      },
+    );
+
+    test('a plain checkout still maps to both standard events', () {
+      final firebase = _RecordingFirebaseAnalytics();
+      final facebook = _RecordingFacebookAppEvents();
+      final plain = {...offerCheckout}
+        ..remove(kCheckoutOfferProperty)
+        ..remove('price_paise');
+      GoogleAnalyticsService(
+        firebase,
+      ).track('checkout_started', properties: plain);
+      MetaAnalyticsService(
+        facebook,
+      ).track('checkout_started', properties: plain);
+
+      expect(firebase.calls, [#logEvent, #logBeginCheckout]);
+      expect(facebook.calls, [#logInitiatedCheckout]);
+    });
+
+    testWidgets(
+      'an offer purchase emits no trial_started and nothing to PostHog',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final posthog = _RecordingAnalyticsService();
+        final ga4 = _RecordingAnalyticsService();
+        final composite = CompositeAnalyticsService([
+          AllowlistedAnalyticsService(posthog, allowed: postHogAllowedEvents),
+          ga4,
+        ]);
+        const upi = MethodChannel('com.hsrutility.arul/upi_intent');
+        final messenger = tester.binding.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(upi, (_) async => true);
+        addTearDown(() => messenger.setMockMethodCallHandler(upi, null));
+
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            apiClientProvider.overrideWith((ref) => _SwitchingApi()),
+            analyticsServiceProvider.overrideWith((ref) => composite),
+            appConfigProvider.overrideWithBuild(
+              (ref, _) async => const AppConfigModel(
+                prices: {
+                  'monthly': {'amount': 19900},
+                },
+                policyUrls: <String, dynamic>{},
+                featureFlags: <String, dynamic>{},
+              ),
+            ),
+            trialConversionCatchUpProvider.overrideWithValue(
+              TrialConversionCatchUp(
+                prefs: prefs,
+                analytics: composite,
+                monthlyPriceRupees: () => 199,
+              ),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final sub = container.listen(premiumPurchaseProvider, (_, _) {});
+        addTearDown(sub.close);
+        await container.read(appConfigProvider.future);
+
+        unawaited(
+          container
+              .read(premiumPurchaseProvider.notifier)
+              .startTrial(targetApp: 'com.phonepe.app', offer: 'cancel_99'),
+        );
+        await tester.pump(const Duration(seconds: 5));
+
+        expect(container.read(premiumPurchaseProvider), isA<PurchaseSuccess>());
+        expect(ga4.tracked, contains('checkout_started'));
+        expect(ga4.tracked, isNot(contains('trial_started')));
+        expect(ga4.tracked, isNot(contains('subscription_active')));
+        expect(posthog.tracked, isEmpty);
+      },
+    );
   });
 }
