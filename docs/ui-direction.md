@@ -56,7 +56,8 @@ The ringtone tile's grounds and gold ink live in `ringtone_tile.dart` and **must
 tokens describe chrome, not pictures; the same holds for every CustomPainter motif. Bundled deity art is
 lossless WebP, inked a shade paler than the tile because it sits ON a ground. A glyph the icon set lacks
 is PAINTED (`arul_line_icons.dart`), never an emoji — budget Android 8–10 ROMs draw one as tofu. The
-red/gold static splash art was REJECTED by the owner — splash and sign-in keep the lotus video.
+red/gold static splash art was REJECTED by the owner. The lotus video is retired too (owner): the splash
+and the wall show the region's deity, Murugan by default.
 
 ## Dock
 
@@ -105,6 +106,5 @@ red/gold static splash art was REJECTED by the owner — splash and sign-in keep
 ## Launcher icon
 
 Masters are raster files OUTSIDE the repo. Regenerate the adaptive set with
-`node assets/brand/icon_from_png.mjs <icon.png> <splash.png>` — it ALSO writes
-`assets/images/splash_bg.jpg`, which must be DELETED after every run: that art was rejected, and
-anything left in `assets/images/` ships in the APK.
+`node tools/icon_from_png.mjs <icon.png>`. Anything left in `assets/images/` ships in the APK, so
+never write a generator's output there.

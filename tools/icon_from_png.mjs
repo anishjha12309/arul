@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Regenerate the Android launcher PNGs + splash art from RASTER masters
+ * Regenerate the Android launcher PNGs from a RASTER master
  * (the 2026-08 red/gold gopuram icon is AI-generated art — there is no SVG).
  * Masters live OUTSIDE the repo (docs/ui-direction.md §Launcher icon).
  *
- *   node assets/brand/icon_from_png.mjs <icon_1024.png> <splash_portrait.png>
+ *   node tools/icon_from_png.mjs <icon_1024.png>
  *
  * Rasterises with headless Chrome (no npm install).
  *
@@ -15,42 +15,41 @@
  *   mipmap-*\/ic_launcher_monochrome.png  same geometry, white silhouette
  *   mipmap-*\/ic_launcher_background.png  radial red field sampled from master
  *   mipmap-*\/ic_launcher.png             48dp legacy, central 90% crop
- * and assets/images/splash_bg.jpg         portrait splash art, JPEG q92
  * Prints the sampled hexes to keep colors.xml / pubspec / ArulTokens in sync.
  */
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { fileURLToPath } from 'url';
-import { execFileSync } from 'child_process';
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { fileURLToPath } from "url";
+import { execFileSync } from "child_process";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RES = path.resolve(HERE, '../../android/app/src/main/res');
-const IMAGES = path.resolve(HERE, '../images');
+const RES = path.resolve(HERE, "../android/app/src/main/res");
 
-const [iconPath, splashPath] = process.argv.slice(2);
-if (!iconPath || !splashPath) {
-  console.error('usage: node icon_from_png.mjs <icon.png> <splash.png>');
+const [iconPath] = process.argv.slice(2);
+if (!iconPath) {
+  console.error("usage: node tools/icon_from_png.mjs <icon.png>");
   process.exit(1);
 }
 
 function findChrome() {
   if (process.env.CHROME) return process.env.CHROME;
   const c = [
-    'C:/Program Files/Google/Chrome/Application/chrome.exe',
-    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
     `${os.homedir()}/AppData/Local/Google/Chrome/Application/chrome.exe`,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
   ];
   const hit = c.find((p) => fs.existsSync(p));
-  if (!hit) throw new Error('Chrome not found — set CHROME=/path/to/chrome');
+  if (!hit) throw new Error("Chrome not found — set CHROME=/path/to/chrome");
   return hit;
 }
 
-const b64 = (p) => fs.readFileSync(p).toString('base64');
+const b64 = (p) => fs.readFileSync(p).toString("base64");
 const ICON = `data:image/png;base64,${b64(iconPath)}`;
-const SPLASH = `data:image/png;base64,${b64(splashPath)}`;
 
 // All pixel work happens in-page; results come back as data URLs via dump-dom.
 const SCRIPT = `
@@ -145,19 +144,8 @@ function avg(d, w, x0, y0, x1, y1) {
     files['mipmap-' + dpi + '/ic_launcher.png'] = c.toDataURL('image/png');
   }
 
-  // Splash art → JPEG q92 (opaque gradient art; PNG master is 10x the bytes).
-  const splash = await load('${SPLASH}');
-  const sc = document.createElement('canvas');
-  sc.width = splash.naturalWidth; sc.height = splash.naturalHeight;
-  sc.getContext('2d').drawImage(splash, 0, 0);
-  files['SPLASH:splash_bg.jpg'] = sc.toDataURL('image/jpeg', 0.92);
-  const [spc, spd] = draw(splash);
-  const w = spc.width, h = spc.height;
   const samples = {
     iconInner: hex(sInner), iconMid: hex(sMid), iconEdge: hex(sEdge),
-    splashCenter: hex(avg(spd, w, Math.round(w*0.3), Math.round(h*0.35), Math.round(w*0.7), Math.round(h*0.65))),
-    splashTop: hex(avg(spd, w, 0, 0, w, Math.round(h*0.06))),
-    splashBottom: hex(avg(spd, w, 0, Math.round(h*0.94), w, h)),
     markBbox: [bx0, by0, bw, bh], master: [W, H],
   };
   document.body.textContent =
@@ -165,26 +153,31 @@ function avg(d, w, x0, y0, x1, y1) {
 })();
 `;
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'arul-brand-'));
-const html = path.join(TMP, 'gen.html');
-fs.writeFileSync(html, `<body><script>${SCRIPT}<\/script></body>`);
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "arul-brand-"));
+const html = path.join(TMP, "gen.html");
+fs.writeFileSync(html, `<body><script>${SCRIPT}</script></body>`);
 
-const out = execFileSync(findChrome(), [
-  '--headless=new', '--disable-gpu', '--hide-scrollbars',
-  '--virtual-time-budget=20000', '--dump-dom',
-  `file:///${html.replace(/\\/g, '/')}`,
-], { maxBuffer: 512 * 1024 * 1024 }).toString();
+const out = execFileSync(
+  findChrome(),
+  [
+    "--headless=new",
+    "--disable-gpu",
+    "--hide-scrollbars",
+    "--virtual-time-budget=20000",
+    "--dump-dom",
+    `file:///${html.replace(/\\/g, "/")}`,
+  ],
+  { maxBuffer: 512 * 1024 * 1024 },
+).toString();
 fs.rmSync(TMP, { recursive: true, force: true });
 
 const m = out.match(/@@BEGIN@@([\s\S]*?)@@END@@/);
-if (!m) throw new Error('page did not finish — raise --virtual-time-budget');
+if (!m) throw new Error("page did not finish — raise --virtual-time-budget");
 const { files, samples } = JSON.parse(m[1]);
 
 for (const [rel, dataUrl] of Object.entries(files)) {
-  const bytes = Buffer.from(dataUrl.split(',')[1], 'base64');
-  const dest = rel.startsWith('SPLASH:')
-    ? path.join(IMAGES, rel.slice('SPLASH:'.length))
-    : path.join(RES, rel);
+  const bytes = Buffer.from(dataUrl.split(",")[1], "base64");
+  const dest = path.join(RES, rel);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, bytes);
   console.log(`${rel}  ${(bytes.length / 1024).toFixed(0)} KB`);

@@ -34,6 +34,8 @@ metadata rewrite. It also caches 404s for its full TTL (below).
   stacked that into a multi-second first open.
 - Media uploaded by `tools/content-import/import.mjs` — `public, max-age=31536000, immutable` (keys are
   content UUIDs).
+- **Never request a media key before its object exists.** The edge caches the 404 (`cf-cache-status:
+  HIT` on a 404 after the upload landed); purging needs zone access, so the cheap way out is a new key.
 
 **The zone rewrites `max-age` downstream (Browser Cache TTL 4 h), so a header read off the CDN is not
 always what the Worker wrote.** It acts as a floor: `version.json`'s `max-age=30` comes back `14400`

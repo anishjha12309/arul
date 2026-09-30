@@ -1,6 +1,6 @@
 # Launch surface — what the user sees before the feed
 
-Read before touching `values/styles.xml`, `MainActivity.onCreate`, `VideoBackground`, the splash, or the
+Read before touching `values/styles.xml`, `MainActivity.onCreate`, `LaunchBackdrop`, the splash, or the
 `flutter_native_splash` config. Two independent surfaces cover a cold start, and each was a separate
 bare-screen bug. Measuring any of it: [perf-measurement.md](perf-measurement.md).
 
@@ -22,13 +22,13 @@ bare-screen bug. Measuring any of it: [perf-measurement.md](perf-measurement.md)
 above, silently returning older Android to the flat rectangle. Re-apply the `LaunchTheme` block in BOTH
 files after any regen (the warning sits beside the generator config in `pubspec.yaml`).
 
-## 2. The Flutter shutter — `VideoBackground` holds artwork, not a colour
+## 2. The Flutter shutter — the poster holds artwork, not a colour
 
 Once the OS splash hands off, the decoder has not produced a frame yet, and a flat colour there was a
-second gap. `VideoBackground` holds `assets/images/splash_poster.webp` — **frame 0 of `splash.mp4`** —
-under the raw `Texture`, the way Media3's `PlayerView` holds artwork behind its shutter. Because it is
-that exact frame, the handoff needs no crossfade. It stays MOUNTED under the texture so a dropped decoder
-never re-exposes bare colour. **Both fixes are required; neither is sufficient alone.**
+second gap. `LaunchBackdrop` paints the region's poster — **frame 0 of that deity's catalog clip** — under the
+clip's `Texture`, the way Media3's `PlayerView` holds artwork behind its shutter, and it stays MOUNTED
+there so a dropped decoder never re-exposes bare colour. **Both fixes are required; neither is sufficient
+alone.** A re-cut clip means a re-cut poster from its new frame 0.
 
 ## The splash's own decisions
 
@@ -45,30 +45,32 @@ never re-exposes bare colour. **Both fixes are required; neither is sufficient a
   gain was on a pathologically slow link. Never re-add a gate.
 - **`GET /geo` never reads the keystore (`withToken: false`).** The secure-storage plugin runs every
   call in order on ONE thread, so a token read queued `/geo` behind `main()`'s first keystore read
-  (~3 s on a vivo 1916) and only 5–12% of the regional arm got its region inside the cap.
+  (~3 s on a vivo 1916) and only 5–12% of fresh installs got their region inside the cap.
 - **On a fresh install `/geo` IS the warm-up** (`GeoRegionService.willAsk`): a second handshake to the
   same host beside it slows both on a slow link. Its time feeds `firstWarmUpMs`, which the launch
   clip's slow-link check reads.
 - **`GET /geo`'s timeout is 12 s, not 5** — there is no second ask in that launch. The budget is for a
   slow LINK, never a slow Worker.
-- **Only the `exp_regional` arm waits for `/geo`**, at most `regionCap` (from the ask, fresh install,
-  first launch, signed out) and only AFTER `autoSignIn` fired, so Google's sheet is never held. Set the
+- **The splash waits for `/geo` only on a fresh install**, at most `regionCap` (from the ask, first launch,
+  signed out) and only AFTER `autoSignIn` fired, so Google's sheet is never held. Set the
   cap from the field `geo_ms` p90; `[boot]` marks `geo: answered in` / `splash: region wait ended`.
-- **The regional wall paints its final poster on its FIRST frame — never flip.** A miss settles on
-  Murugan; `LaunchArtNotifier.settle()` fixes the poster once and a late answer only serves the next
+- **Every install gets the regional wall** (the A/B ended; the lotus is retired). The kill switch
+  `feature_flags.exp_regional = false` skips the region and its wait and shows Murugan with no clip.
+- **The wall paints its final poster on its FIRST frame — never flip.** A miss settles on Murugan; `LaunchArtNotifier.settle()` fixes the poster once and a late answer only serves the next
   launch. The region never changes the language ([deep-links.md](deep-links.md)).
 - **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face** —
   `RegionalPoster.zoom` about `pivot` does; the framing is the owner's, judged by eye.
   `regional_wall_matrix_test.dart` gates type and clip-on-poster.
-- **The poster's own live clip is a bonus, never the base.** It downloads (catalog row by `wallpaperId`,
-  feed cache, never a bundled key) only after the wall painted AND Google's surface showed or settled —
-  never signed in, on Data Saver or a poster-rule phone. It swaps onto the ONE shared auth player (never
-  a second decoder) paused, fades in on frame 0 = the poster's pixels, then loops; a launch clip stays
-  one deity for its whole loop. Any failure keeps the poster.
+- **The poster's own live clip is a bonus, never the base.** Every deity's downloads (its
+  `launchClipKey` cut, else the catalog row by `wallpaperId`; feed cache) only after the wall painted AND Google's surface showed
+  or settled — never signed in, on Data Saver, a poster-rule phone or a slow link — so neither bytes nor
+  a decode compete with the sheet's launch. It swaps onto the ONE shared auth player (never a second
+  decoder) paused, fades in on frame 0 = the poster's pixels, then loops; a launch clip stays one deity
+  for its whole loop. Any failure keeps the poster.
 
 ## The poster rule — who gets no auth video
 
-`VideoBackground` asks `DeviceMemory.isLow` BEFORE acquiring the shared player, so no MediaCodec is ever
+`LaunchClip` asks `DeviceMemory.isLow` BEFORE any clip reaches the shared player, so no MediaCodec is ever
 created for the splash or the wall on: the Android Go flag, under 4.5 GiB total RAM (every 4 GB phone
 reports ~3.6, no 6 GB phone qualifies), or Android 12L (API 32) and older. **Never add the OS's `lowMemory`
 pressure flag**: it is set at random on the cold start right after a Play install, so capable phones got

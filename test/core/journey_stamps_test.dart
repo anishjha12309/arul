@@ -253,11 +253,11 @@ void main() {
 
     DeviceQuality.debugSetTier(DeviceTier.mid);
     JourneyStamps.noteClipArm(active: false);
-    expect(clip(), 'not_in_arm');
+    expect(clip(), 'switched_off');
     JourneyStamps.noteClipArm(active: true);
     expect(clip(), 'not_started');
 
-    // The poster rule outranks the arm: neither arm plays anything on these phones.
+    // The poster rule outranks the kill switch: nothing plays on these phones.
     DeviceQuality.debugSetTier(DeviceTier.low);
     expect(clip(), 'poster');
     JourneyStamps.noteClipArm(active: false);

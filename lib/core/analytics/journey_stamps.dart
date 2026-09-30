@@ -91,12 +91,12 @@ abstract final class JourneyStamps {
   static bool? _clipArm;
 
   /// Never absent: before the clip path says anything, the reason there is no clip yet — the poster
-  /// rule (either arm), the control arm's lotus, or the regional clip not started.
+  /// rule, the kill switch, or the clip not started.
   static String get _wallClipNow =>
       _wallClip ??
       switch ((DeviceMemory.resolved, _clipArm)) {
         (true, _) => 'poster',
-        (_, false) => 'not_in_arm',
+        (_, false) => 'switched_off',
         (false, true) => 'not_started',
         _ => 'unknown',
       };
@@ -109,11 +109,12 @@ abstract final class JourneyStamps {
     }
   }
 
-  /// What the wall showed behind Google's sheet: `downloading`, `on_disk`, `failed`, `playing`, or why
-  /// the regional clip stopped (`slow_link`, `poster`, `no_cdn`, `no_clip`, `data_saver`, `error`).
+  /// What the wall showed behind Google's sheet: `downloading`, `on_disk`, `failed`,
+  /// `playing`, or why the clip stopped (`slow_link`, `poster`, `no_cdn`, `no_clip`, `data_saver`,
+  /// `error`).
   static void noteWallClip(String state) => _wallClip = state;
 
-  /// Whether this install is in the regional arm, the only one with a launch clip.
+  /// Whether the launch clip may play at all: false only under the kill switch.
   static void noteClipArm({required bool active}) => _clipArm = active;
 
   /// A fresh install's `GET /geo`: `pending`, `answered` or `failed`, with its time once settled.

@@ -7,14 +7,17 @@ import '../domain/regional_art.dart';
 
 part 'launch_art_provider.g.dart';
 
-/// The launch art for this process. The regional arm with `/geo` still unanswered starts AWAITING
+/// The launch art for this process. A fresh install with `/geo` still unanswered starts AWAITING
 /// and the splash [LaunchArtNotifier.settle]s it once, when the answer lands or the cap passes —
 /// the art never changes after that, so a late answer can never swap the poster under the wall.
 @Riverpod(keepAlive: true)
 class LaunchArtNotifier extends _$LaunchArtNotifier {
   @override
   LaunchArt build() {
-    if (!ref.read(experimentsProvider).regionalActive) return const LotusArt();
+    // The kill switch skips the region and its wait -> the default deity at once.
+    if (!ref.read(experimentsProvider).regionalActive) {
+      return const PosterArt(RegionalPoster.murugan);
+    }
     final prefs = ref.read(sharedPreferencesProvider);
     if (prefs.getBool(geoPendingPrefsKey) ?? false) {
       return const AwaitingRegionArt();

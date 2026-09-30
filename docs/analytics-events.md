@@ -123,6 +123,7 @@ property, a `register()` super property or a person property — [analytics-sign
 - `language_source` (`pick`·`link`·`geo`·`phone`·`default`; `geo` = an older build's region language)
   and `geo_region` (Cloudflare's region or `none`, `none` until `GET /geo` answers). GA4 hides both
   until registered as user-scoped custom dimensions.
-- **`exp_regional` (`control`|`regional`)** is the only sign-in coin: dealt once per fresh install in
-  `main()`, registered like `app_language`, carrying the ASSIGNMENT, not the kill state;
-  `feature_flags.exp_regional = false` turns the arm off from the next cold start.
+- **`exp_regional` (`control`|`regional`)** is the ENDED regional A/B: no new install is dealt an arm;
+  installs dealt one keep stamping it (registered like `app_language`, the ASSIGNMENT, not the kill
+  state). `feature_flags.exp_regional = false` still switches the regional wall off from the next cold
+  start.

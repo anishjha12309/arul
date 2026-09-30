@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,11 +8,10 @@ import '../providers/shared_preferences_provider.dart';
 
 part 'experiments.g.dart';
 
-/// The regional wall's arm. `control` is today's app.
+/// The arm an install was dealt while the regional A/B ran. The test is over: no new install is
+/// dealt one, and a stored arm is kept only for analytics and the legacy language gate.
 enum RegionalArm { control, regional }
 
-/// A fresh install's coin flip, drawn once in `main()` and read back on every launch.
-/// An install that predates the draw holds no arm and keeps today's app (analytics-events.md).
 final class Experiments {
   const Experiments({this.regional, this.regionalOff = false});
 
@@ -30,40 +28,19 @@ final class Experiments {
 
   static const regionalFlag = 'exp_regional';
 
-  bool get regionalActive => regional == RegionalArm.regional && !regionalOff;
+  /// Every install gets the regional wall unless the kill switch is on.
+  bool get regionalActive => !regionalOff;
 
   /// Whether a region language an older build stored still applies: only the installs that could
   /// have taken one (the regional arm, and installs that predate the draw) -> nobody's language flips.
-  bool get geoLanguageApplies => regional == null || regionalActive;
+  /// Keyed on the ARM, not [regionalActive]: a control install can hold a hint it never applied.
+  bool get geoLanguageApplies =>
+      regional == null || (regional == RegionalArm.regional && !regionalOff);
 
   /// The assignment, never the kill state: the arm a person was dealt is what the read splits on.
   Map<String, Object> get analyticsProperties => {
     regionalProperty: ?regional?.name,
   };
-
-  /// Once per install, only in the process that created the cohort draw. Never re-drawn: a stored
-  /// arm is read back as it is, so an update can never move a person between arms.
-  ///
-  /// [qaArms] (`QA_EXP_ARMS=regional` on a sideload only) deals the named arm instead of the coin,
-  /// so each arm is walkable on a test phone with one `pm clear` per run.
-  static void drawIfFreshInstall(
-    SharedPreferences prefs, {
-    required bool freshInstall,
-    Random? random,
-    String qaArms = '',
-  }) {
-    if (!freshInstall || prefs.getString(regionalKey) != null) return;
-    final rng = random ?? Random();
-    final forced = qaArms.split(',').map((a) => a.trim()).toSet();
-    final regional = forced.contains(RegionalArm.regional.name)
-        ? RegionalArm.regional
-        : qaArms.isNotEmpty
-        ? RegionalArm.control
-        : RegionalArm.values[rng.nextInt(2)];
-    // Prefs caches synchronously -> `read` sees the arm at once; a failed disk write re-draws next
-    // launch, which is only ever the same fresh install and still a fair coin.
-    unawaited(prefs.setString(regionalKey, regional.name));
-  }
 
   static Experiments read(SharedPreferences prefs) => Experiments(
     regional: _arm(RegionalArm.values, prefs.getString(regionalKey)),

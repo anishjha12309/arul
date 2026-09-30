@@ -149,13 +149,15 @@ flutter:
     # itself is NOT bundled (Play cannot language-split flutter_assets, so all
     # six cuts would ship to every install and one would ever play).
     - assets/images/onboarding/
-    # The regional arm's launch posters (exp_regional): frame 0 of each region's most-applied live
-    # wallpaper, 540x960 lossy WebP. Placement per poster lives in regional_art.dart.
+    # The launch posters: frame 0 of each region's most-applied live wallpaper,
+    # 1024x1824 lossy WebP q80 (the clip's own size, so the crossfade lands
+    # pixel-for-pixel), under 256 KB each. Placement per poster lives in
+    # regional_art.dart.
     - assets/images/regional/
     - assets/premium/
     # Ringtone row art: one transparent gold figure per deity, composited over
     # the hashed jewel-tone ground the app still draws. Bundled, not streamed —
-    # 17 files / ~1.0 MB total (lossless WebP — pixel-identical to the PNG
+    # 15 files / ~0.9 MB total (lossless WebP — pixel-identical to the PNG
     # masters, ~35% smaller), and the list would otherwise fire 130+ tiny
     # image requests on a tab that must feel instant. Authored at 1254² and
     # stored at 384²: the figures are fine line art, so they need well above the
@@ -163,13 +165,6 @@ flutter:
     # app release; a deity with no asset falls back to its category's image,
     # so a catalog-only addition degrades instead of breaking (deity_art.dart).
     - assets/ringtones/
-    # The splash / sign-in background clip. Bundled, not streamed: the first
-    # screen must never wait on the network, and it is the same lotus clip the
-    # entire brand palette was extracted from — 4.3 MB, 1024x1824 (w%128==0,
-    # h%32==0, per the decoder constraint in docs/media-conventions.md).
-    # Full-quality source swapped in 2026-07-14; the old 640x1152/1.1Mbps
-    # encode read visibly soft full-bleed on 1080-wide screens.
-    - assets/video/
   fonts:
     # Display serif — ONLY the Latin "Arul" wordmark, screen titles, and the
     # display numerals/headings the design README names. All other UI text

@@ -26,11 +26,11 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   and the stable facts persist so a relaunch's first attempt carries them. `data_saver` is sent only
   when the facts channel answered: Data Saver's own fallback `false` would otherwise read as a fact.
 - `wall_clip` is never absent — a null lumped three walls together. Before the clip path speaks it is
-  `poster` (the poster rule, either arm), `not_in_arm` (the control arm's lotus) or `not_started`;
-  the regional path adds `no_cdn`, `no_clip`, `data_saver`, `slow_link`, `error` beside the original
-  `downloading`/`on_disk`/`failed`/`playing`, which keep their meaning.
+  `poster` (the poster rule), `switched_off` (the kill switch; `not_in_arm` on older builds = the
+  lotus) or `not_started`; the download adds `no_cdn`, `no_clip`, `data_saver`, `slow_link`, `error`
+  beside the original `downloading`/`on_disk`/`failed`/`playing`, which keep their meaning.
 - A fresh install's sign-in events carry `geo_outcome` (`pending`·`answered`·`failed`), `geo_ms`,
-  `warm_ms` (the first socket's DNS+TLS) and, in the regional arm, `region_wait` (`settled`·`cap`).
+  `warm_ms` (the first socket's DNS+TLS) and `region_wait` (`settled`·`cap`).
   `login_attempt` usually fires before `/geo` settles: read them on `login_surface_shown` and later.
 - `login_attempt` carries `wall_reason`, set where the auth state goes signed-out (`ApiAuthService`):
   `fresh_install`, `no_session`, `storage_error` (keystore read threw), `session_expired` (refresh

@@ -1,6 +1,6 @@
-// The regional wall's live clip: fetched only after the wall is up AND Google's surface has shown,
-// found in the catalog by the poster's wallpaper id, and never on Data Saver, a poster-rule phone,
-// a signed-in session or a failed transfer — every one of those keeps the poster.
+// The wall's live clip, every deity's fetched by the poster's wallpaper id: only after the wall is
+// up AND Google's surface has shown, and never on a poster-rule phone, a signed-in session, Data
+// Saver, under the kill switch or after a failed transfer — every one of those keeps the poster.
 
 import 'package:arul/core/config/build_info.dart';
 import 'package:arul/core/connectivity/data_saver.dart';
@@ -80,14 +80,14 @@ void main() {
     DataSaver.debugSet(null);
   });
 
-  Future<ProviderContainer> boot({String arm = 'regional'}) async {
-    SharedPreferences.setMockInitialValues({Experiments.regionalKey: arm});
-    final prefs = await SharedPreferences.getInstance();
+  Future<ProviderContainer> boot({Map<String, Object> prefs = const {}}) async {
+    SharedPreferences.setMockInitialValues(prefs);
+    final stored = await SharedPreferences.getInstance();
     prefetch = _FakePrefetch();
     auth = _Auth();
     final c = ProviderContainer(
       overrides: [
-        sharedPreferencesProvider.overrideWithValue(prefs),
+        sharedPreferencesProvider.overrideWithValue(stored),
         wallpaperPrefetchServiceProvider.overrideWithValue(prefetch),
         catalogProvider.overrideWith(_Catalog.new),
         authServiceProvider.overrideWithValue(auth),
@@ -187,9 +187,42 @@ void main() {
     expect(prefetch.asked, isEmpty);
   });
 
-  test('the control arm never fetches a clip', () async {
-    final c = await boot(arm: 'control');
-    await expectPoster(c);
+  test('a control install gets its clip too: the test is over', () async {
+    final c = await boot(prefs: {Experiments.regionalKey: 'control'});
+    c.read(launchClipProvider.notifier).wallUp(RegionalPoster.sivan);
+    SignInPhase.signals.add(SignInSignal.surfaceShown);
+    await settle();
+    await settle();
+    expect(c.read(launchClipProvider), '/cache/clip.mp4');
+  });
+
+  test('the kill switch never plays a clip', () async {
+    final c = await boot(prefs: {Experiments.regionalOffKey: true});
+    await expectPoster(c, poster: RegionalPoster.murugan);
+    expect(prefetch.asked, isEmpty);
+  });
+
+  // No catalog row for Murugan in this fake: its wall cut is fetched by CDN key, never by the feed's
+  // 9.5 MB file.
+  test('Murugan downloads its launch cut after the surface', () async {
+    final c = await boot();
+    c.read(launchClipProvider.notifier).wallUp(RegionalPoster.murugan);
+    await settle();
+    expect(prefetch.asked, isEmpty, reason: 'the sign-in path stays small');
+
+    SignInPhase.signals.add(SignInSignal.surfaceShown);
+    await settle();
+    await settle();
+    expect(prefetch.asked, [
+      'https://cdn.test/${RegionalPoster.murugan.launchClipKey}',
+    ]);
+    expect(c.read(launchClipProvider), '/cache/clip.mp4');
+  });
+
+  test('Data Saver keeps Murugan on the poster too', () async {
+    final c = await boot();
+    DataSaver.debugSet(true);
+    await expectPoster(c, poster: RegionalPoster.murugan);
     expect(prefetch.asked, isEmpty);
   });
 

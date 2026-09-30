@@ -303,14 +303,6 @@ Future<void> _startApp() async {
   // Play installs always ran it and are unaffected; what this restores is that a SIDELOAD — the only
   // build we can ever put on a test phone — measures the same startup path real users get.
   final inCohort = AnalyticsCohort.resolve(prefs);
-  // The sign-in factorial's two coins, dealt once off the same first-launch marker.
-  Experiments.drawIfFreshInstall(
-    prefs,
-    freshInstall: AnalyticsCohort.isFreshInstall,
-    qaArms: PlayInstall.isPlay
-        ? ''
-        : const String.fromEnvironment('QA_EXP_ARMS'),
-  );
   // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
   GeoRegionService.markIfFreshInstall(
     prefs,

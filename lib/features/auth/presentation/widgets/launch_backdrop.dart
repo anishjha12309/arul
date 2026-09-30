@@ -6,21 +6,20 @@ import '../../../../theme/arul_tokens.dart';
 import '../../domain/regional_art.dart';
 import '../../providers/launch_art_provider.dart';
 import '../../providers/launch_clip_provider.dart';
-import 'video_background.dart';
+import 'launch_clip_layer.dart';
 
 /// The poster and its clip share this box, so the texture lands exactly on the poster's pixels.
 @visibleForTesting
 const Key kLaunchArtFrameKey = Key('launch.art.frame');
 
-/// The splash's and the wall's backdrop: the lotus video, or the regional arm's poster, which its
-/// own live clip replaces once that is on disk (launch-surface.md).
+/// The splash's and the wall's backdrop: the region's poster, which its own live clip replaces once
+/// that is ready (launch-surface.md).
 class LaunchBackdrop extends ConsumerWidget {
   const LaunchBackdrop({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return switch (ref.watch(launchArtProvider)) {
-      LotusArt() => const VideoBackground(overlayOpacity: 0),
       AwaitingRegionArt() => const ColoredBox(color: ArulTokens.darkSurface),
       PosterArt(:final poster) => _PosterBackdrop(poster),
     };

@@ -3,131 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/motion.dart';
-import '../../../../app/theme/tokens.dart';
 import '../../../../core/analytics/journey_stamps.dart';
-import '../../../../core/config/build_info.dart';
 import '../../../../core/perf/boot_trace.dart';
 import '../../../wallpapers/data/feed_video_player.dart';
 
-/// Full-screen looping video background, playing `splash.mp4`.
-/// Shows a solid dark colour until the first frame renders -> no blank-white flash on first paint.
-/// Backed by the same Media3 texture pool as the feed's live previews -> ONE video stack in the app.
-class VideoBackground extends StatefulWidget {
-  const VideoBackground({super.key, this.overlayOpacity = 0.42});
-
-  final double overlayOpacity;
-
-  @override
-  State<VideoBackground> createState() => _VideoBackgroundState();
-}
-
-class _VideoBackgroundState extends State<VideoBackground>
-    with WidgetsBindingObserver {
-  /// The video's own darkest region — if the two disagreed the reveal would pop.
-  /// Still painted as the base layer -> any edge the poster's cover-fit leaves is never bare.
-  static const _fallbackColor = ArulColors.ink;
-
-  static const _posterAsset = 'assets/images/splash_poster.webp';
-
-  static const _source = 'asset:///flutter_assets/assets/video/splash.mp4';
-
-  _SharedAuthVideoPlayer? _shared;
-  FeedVideoPlayer? _player;
-  bool _ready = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _init();
-  }
-
-  /// Stop decoding while the app is off-screen.
-  /// This PAUSES and deliberately does NOT tear the decoder down.
-  /// Teardown would free ~110MB of graphics memory, but a 20-run harness showed ZERO LMK kills.
-  /// The cost is certain either way: the fallback colour flashes on every return from the picker.
-  /// A Media3 pause keeps the decoder and the decoded frame -> resume is instant.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-        _shared?.pauseForBackground();
-      case AppLifecycleState.resumed:
-        _shared?.resumeFromBackground();
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.detached:
-        // `inactive` also fires for transient overlays -> pausing churns playback the user sees past.
-        // `detached` is teardown.
-        break;
-    }
-  }
-
-  Future<void> _init() async {
-    if (await DeviceMemory.isLow || !mounted) return;
-    final shared = _SharedAuthVideoPlayer.acquire(_source);
-    _shared = shared;
-    final player = await shared.player;
-    // A null player means the platform is unavailable -> keep the fallback colour, never block.
-    if (player == null || !mounted) return;
-    _player = player;
-
-    if (player.firstFrame.value) {
-      // Shared-player handoff — the frame is already decoded -> paint at once, no fallback flash.
-      setState(() => _ready = true);
-    } else {
-      // Reveal on the native first frame -> the solid fallback covers any decode delay.
-      player.firstFrame.addListener(_onFirstFrame);
-    }
-  }
-
-  void _onFirstFrame() {
-    final player = _player;
-    if (player != null && player.firstFrame.value && !_ready && mounted) {
-      setState(() => _ready = true);
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // Detach BEFORE release -> the last release lets the holder dispose the player and its notifiers.
-    _player?.firstFrame.removeListener(_onFirstFrame);
-    _player = null;
-    _shared?.release();
-    _shared = null;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final player = _player;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const ColoredBox(color: _fallbackColor),
-
-        const Image(
-          image: AssetImage(_posterAsset),
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.low,
-        ),
-
-        if (_ready && player != null) _CoverTexture(player),
-
-        ColoredBox(
-          color: Color.fromRGBO(0, 0, 0, widget.overlayOpacity.clamp(0, 1)),
-        ),
-      ],
-    );
-  }
-}
-
-/// The regional poster's own clip, laid over the poster in the same frame.
+/// The poster's own clip, laid over the poster in the same frame.
 class LaunchClipLayer extends StatefulWidget {
   const LaunchClipLayer({super.key, required this.source});
 
@@ -257,7 +137,7 @@ class _CoverTexture extends StatelessWidget {
   }
 }
 
-/// Ref-counted owner of the ONE background player every auth mount shares, lotus or regional clip.
+/// Ref-counted owner of the ONE background player every auth mount shares.
 class _SharedAuthVideoPlayer {
   _SharedAuthVideoPlayer._(this._source, this._started);
 
@@ -327,7 +207,6 @@ class _SharedAuthVideoPlayer {
         _pool = null;
         return null;
       }
-      // Media3 DefaultDataSource plays a Flutter asset via `asset:///`, and the regional clip's file.
       // Looped and muted — the pool creates muted, so no audio focus is taken.
       await player.open(_source, playWhenReady: _started, looping: true);
       return player;
@@ -338,7 +217,7 @@ class _SharedAuthVideoPlayer {
   }
 
   /// Stop decode while off-screen. Keeps the decoder and frame -> [resumeFromBackground] is instant.
-  /// Idempotent — every mounted [VideoBackground] calls it.
+  /// Idempotent — every mounted [LaunchClipLayer] calls it.
   void pauseForBackground() {
     final player = _player;
     if (player == null || _dead) return;

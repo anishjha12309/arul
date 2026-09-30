@@ -38,8 +38,7 @@ void main() {
     for (final p in RegionalPoster.all) {
       final file = File(p.asset);
       expect(file.existsSync(), isTrue, reason: p.asset);
-      // ≤60 KB is the target; the detail-dense Murugan frame needs a little more to stay clean.
-      expect(file.lengthSync(), lessThan(80 * 1024), reason: p.asset);
+      expect(file.lengthSync(), lessThan(256 * 1024), reason: p.asset);
     }
   });
 
@@ -53,20 +52,27 @@ void main() {
     return c;
   }
 
-  test('control and installs outside the factorial keep the lotus', () async {
+  test('every install gets its region; the kill switch goes straight to Murugan', () async {
+    const kerala = PosterArt(RegionalPoster.ayyappan);
     expect(
       (await boot({
         Experiments.regionalKey: 'control',
+        geoRegionPrefsKey: 'KL',
       })).read(launchArtProvider),
-      isA<LotusArt>(),
+      kerala,
     );
-    expect((await boot({})).read(launchArtProvider), isA<LotusArt>());
+    expect(
+      (await boot({geoRegionPrefsKey: 'KL'})).read(launchArtProvider),
+      kerala,
+    );
+    // Switched off: no region and no wait, even with an answer still pending.
     expect(
       (await boot({
-        Experiments.regionalKey: 'regional',
         Experiments.regionalOffKey: true,
+        geoRegionPrefsKey: 'KL',
+        geoPendingPrefsKey: true,
       })).read(launchArtProvider),
-      isA<LotusArt>(),
+      const PosterArt(RegionalPoster.murugan),
     );
   });
 

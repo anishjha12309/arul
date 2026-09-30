@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-/// One bundled launch poster: frame 0 of the region's most-applied live wallpaper, [wallpaperId].
+/// One bundled launch poster: frame 0 of the clip the wall plays for that region.
 final class RegionalPoster {
   const RegionalPoster(
     this.asset, {
@@ -8,9 +8,14 @@ final class RegionalPoster {
     required this.zoom,
     required this.pivot,
     required this.faceY,
+    this.launchClipKey,
   });
 
   final String asset;
+
+  /// A CDN key for a wall-only cut of the clip, played instead of the catalog row's file: lighter,
+  /// and crossfaded so its loop has no cut. Versioned, because the edge caches media for a year.
+  final String? launchClipKey;
 
   /// The catalog row the poster was cut from. Its clip is found by id at run time, never by a
   /// bundled key: a CMS replace moves `full_key`, never the id.
@@ -35,6 +40,7 @@ final class RegionalPoster {
     zoom: 1.2,
     pivot: Alignment.bottomCenter,
     faceY: 0.43,
+    launchClipKey: 'launch/murugan_v2.mp4',
   );
 
   /// Face at 0.25 -> zoomed about the top edge to drop it below the wordmark on 18:9 phones.
@@ -93,12 +99,7 @@ sealed class LaunchArt {
   const LaunchArt();
 }
 
-/// Today's lotus video over its poster: the control arm and every install outside the factorial.
-final class LotusArt extends LaunchArt {
-  const LotusArt();
-}
-
-/// The regional arm while the splash waits for `/geo`: dark ground and the wordmark, nothing else.
+/// A fresh install while the splash waits for `/geo`: dark ground and the wordmark, nothing else.
 final class AwaitingRegionArt extends LaunchArt {
   const AwaitingRegionArt();
 }

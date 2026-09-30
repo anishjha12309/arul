@@ -49,7 +49,7 @@ class LaunchClip extends _$LaunchClip {
 
   Future<void> _fetch(RegionalPoster poster) async {
     try {
-      // The lotus's own poster rule: no auth player on these phones, so no clip bytes either.
+      // The poster rule: no auth player on these phones, so no clip bytes either.
       final prefetch = ref.read(wallpaperPrefetchServiceProvider);
       if (await DeviceMemory.isLow) {
         JourneyStamps.noteWallClip('poster');
@@ -60,16 +60,23 @@ class LaunchClip extends _$LaunchClip {
         return;
       }
       await _surfaced.future;
-      final items = await ref
-          .read(catalogProvider.future)
-          .timeout(const Duration(seconds: 30));
-      final clip = items
-          .where(
-            (w) => w.id == poster.wallpaperId && w.kind == WallpaperKind.live,
-          )
-          .firstOrNull;
+      final key = poster.launchClipKey;
+      final String? url;
+      if (key != null) {
+        url = '${prefetch.cdnBaseUrl}/$key';
+      } else {
+        final items = await ref
+            .read(catalogProvider.future)
+            .timeout(const Duration(seconds: 30));
+        final clip = items
+            .where(
+              (w) => w.id == poster.wallpaperId && w.kind == WallpaperKind.live,
+            )
+            .firstOrNull;
+        url = clip == null ? null : prefetch.urlFor(clip);
+      }
       if (!ref.mounted) return;
-      if (clip == null) {
+      if (url == null) {
         JourneyStamps.noteWallClip('no_clip');
         return;
       }
@@ -87,7 +94,7 @@ class LaunchClip extends _$LaunchClip {
       }
       BootTrace.mark('launch clip: download start');
       JourneyStamps.noteWallClip('downloading');
-      final path = await prefetch.ensureCached(prefetch.urlFor(clip));
+      final path = await prefetch.ensureCached(url);
       BootTrace.mark('launch clip: ${path == null ? 'failed' : 'on disk'}');
       JourneyStamps.noteWallClip(path == null ? 'failed' : 'on_disk');
       if (path != null && ref.mounted) state = path;

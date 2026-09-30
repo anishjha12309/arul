@@ -8,19 +8,19 @@ part of 'launch_art_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
-/// The launch art for this process. The regional arm with `/geo` still unanswered starts AWAITING
+/// The launch art for this process. A fresh install with `/geo` still unanswered starts AWAITING
 /// and the splash [LaunchArtNotifier.settle]s it once, when the answer lands or the cap passes —
 /// the art never changes after that, so a late answer can never swap the poster under the wall.
 
 @ProviderFor(LaunchArtNotifier)
 final launchArtProvider = LaunchArtNotifierProvider._();
 
-/// The launch art for this process. The regional arm with `/geo` still unanswered starts AWAITING
+/// The launch art for this process. A fresh install with `/geo` still unanswered starts AWAITING
 /// and the splash [LaunchArtNotifier.settle]s it once, when the answer lands or the cap passes —
 /// the art never changes after that, so a late answer can never swap the poster under the wall.
 final class LaunchArtNotifierProvider
     extends $NotifierProvider<LaunchArtNotifier, LaunchArt> {
-  /// The launch art for this process. The regional arm with `/geo` still unanswered starts AWAITING
+  /// The launch art for this process. A fresh install with `/geo` still unanswered starts AWAITING
   /// and the splash [LaunchArtNotifier.settle]s it once, when the answer lands or the cap passes —
   /// the art never changes after that, so a late answer can never swap the poster under the wall.
   LaunchArtNotifierProvider._()
@@ -50,9 +50,9 @@ final class LaunchArtNotifierProvider
   }
 }
 
-String _$launchArtNotifierHash() => r'9b3cf8f0ce5ad6f3d538e2bfec6a5d469c80aa19';
+String _$launchArtNotifierHash() => r'a0fa9f6e00465b4d799553c69d15f9638b1ec35a';
 
-/// The launch art for this process. The regional arm with `/geo` still unanswered starts AWAITING
+/// The launch art for this process. A fresh install with `/geo` still unanswered starts AWAITING
 /// and the splash [LaunchArtNotifier.settle]s it once, when the answer lands or the cap passes —
 /// the art never changes after that, so a late answer can never swap the poster under the wall.
 

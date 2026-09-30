@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// The Arul gopuram (temple-tower) logo mark.
-/// The launcher icon is separate raster art (`assets/brand/icon_from_png.mjs`), never this widget.
+/// The launcher icon is separate raster art (`tools/icon_from_png.mjs`), never this widget.
 /// [size] is the WIDTH in logical px -> height is `size * 40 / 44`, preserving the aspect ratio.
 class GopuramMark extends StatelessWidget {
   const GopuramMark({super.key, required this.size, required this.color});

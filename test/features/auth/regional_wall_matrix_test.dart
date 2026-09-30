@@ -1,5 +1,5 @@
 // The sign-in wall's artwork on the phones people hold: every regional poster, before and after its
-// live clip takes over, and the lotus as the baseline, at the common resolution × density pairs,
+// live clip takes over, at the common resolution × density pairs,
 // three OS font sizes and all six languages. What it pins:
 //
 //   * **the deity's crown and face stay clear** of the wordmark, the silk panel (and so the pill),
@@ -19,7 +19,7 @@ import 'dart:ui' as ui;
 import 'package:arul/features/auth/domain/regional_art.dart';
 import 'package:arul/features/auth/presentation/sign_in_screen.dart';
 import 'package:arul/features/auth/presentation/widgets/launch_backdrop.dart';
-import 'package:arul/features/auth/presentation/widgets/video_background.dart';
+import 'package:arul/features/auth/presentation/widgets/launch_clip_layer.dart';
 import 'package:arul/features/auth/providers/launch_art_provider.dart';
 import 'package:arul/features/auth/providers/launch_clip_provider.dart';
 import 'package:flutter/material.dart';
@@ -90,7 +90,6 @@ void main() {
   tearDown(() => LaunchClipLayer.debugStandIn = null);
 
   final arts = <(String, LaunchArt)>[
-    ('lotus', const LotusArt()),
     for (final p in RegionalPoster.all) (_name(p), PosterArt(p)),
   ];
 
@@ -374,10 +373,6 @@ Future<void> _dump(WidgetTester tester, LaunchArt art, String path) async {
     if (art is PosterArt) {
       await precacheImage(AssetImage(art.poster.asset), context);
     }
-    await precacheImage(
-      const AssetImage('assets/images/splash_poster.webp'),
-      context,
-    );
     for (final e in find.byType(Image).evaluate()) {
       final image = (e.widget as Image).image;
       await precacheImage(

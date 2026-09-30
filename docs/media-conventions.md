@@ -85,6 +85,23 @@ ffmpeg -i in.mp4 -map 0:v:0 -map 0:a:0 -sn -map_metadata -1   -vf "fps=25,scale=
 Dubs ship with a `mov_text` subtitle track — `-sn` drops it. A new cut or re-cut is an upload plus a
 `feature_flags.<onboarding|return>_video` edit (`langs`, `version` → `?v=`), never a release.
 
+**No launch clip is bundled (owner).** 2 MB read visibly soft on the wall's zoomed crop. Every wall clip
+downloads after Google's surface: the catalog row's file, or a wall-only cut at `launch/<deity>_vN.mp4`
+(`RegionalPoster.launchClipKey`) when the row is heavy. Murugan's row is 9.5 MB (12.6 Mbps), so its
+cut is ~3 MB: 1024×1824, the source's last 15 frames crossfaded into its start (0.625 s) so the loop
+has no cut, two-pass `-b:v 4400k -maxrate 6600k -bufsize 8800k`, H.264 High@4.0, faststart. Upload with
+`node node_modules/wrangler/bin/wrangler.js r2 object put south-indian-wallpapers/launch/<name> --file …
+--content-type video/mp4 --cache-control "public, max-age=31536000, immutable" --remote` from `workers/`;
+a re-cut is a new `_vN` key plus a release. No sweep judges `launch/`.
+
+A launch poster is frame 0 of the clip the wall plays, at 1024×1824 lossy WebP q80, ≤256 KB
+(`launch_art_test.dart`) — the clip's own frame, so the crossfade lands pixel-for-pixel. Encode with Pillow, not ffmpeg's `libwebp` (its YUV path scored
+lower SSIM at a larger file):
+```bash
+ffmpeg -i <clip>.mp4 -frames:v 1 -pix_fmt rgb24 f0.png
+python -c "from PIL import Image; Image.open('f0.png').convert('RGB').save('assets/images/regional/<deity>.webp', 'WEBP', quality=80, method=6)"
+```
+
 **Ringtone audio:**
 ```bash
 ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3

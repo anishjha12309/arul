@@ -1,8 +1,6 @@
-// The regional wall's plumbing: one coin dealt once per fresh install, read back unchanged on every
-// launch, stamped on analytics as the ASSIGNMENT, and switched off only by an explicit
-// `feature_flags` false that takes effect from the next cold start.
-
-import 'dart:math';
+// The regional wall's plumbing after the A/B: every install gets it, a stored arm is read back
+// unchanged and stamped as the ASSIGNMENT, and only an explicit `feature_flags` false switches the
+// wall off, from the next cold start.
 
 import 'package:arul/core/experiments/experiments.dart';
 import 'package:arul/core/providers/locale_provider.dart';
@@ -20,68 +18,24 @@ void main() {
     return SharedPreferences.getInstance();
   }
 
-  group('the draw', () {
-    test('a fresh install gets an arm, an update gets none', () async {
-      final fresh = await prefsWith({});
-      Experiments.drawIfFreshInstall(fresh, freshInstall: true);
-      final dealt = Experiments.read(fresh);
-      expect(dealt.regional, isNotNull);
-      expect(fresh.getString('arul_exp_reminder_v1'), isNull);
-
-      final update = await prefsWith({});
-      Experiments.drawIfFreshInstall(update, freshInstall: false);
-      final none = Experiments.read(update);
+  group('after the test', () {
+    test('an install without an arm gets the regional wall and stamps no arm', () async {
+      final none = Experiments.read(await prefsWith({}));
       expect(none.regional, isNull);
       expect(none.analyticsProperties, isEmpty);
-      // An install outside the factorial keeps today's app: the region may pick the language.
+      expect(none.regionalActive, isTrue);
       expect(none.geoLanguageApplies, isTrue);
-      expect(none.regionalActive, isFalse);
     });
 
-    test('a stored arm is never re-dealt', () async {
-      final prefs = await prefsWith({Experiments.regionalKey: 'regional'});
-      for (var seed = 0; seed < 20; seed++) {
-        Experiments.drawIfFreshInstall(
-          prefs,
-          freshInstall: true,
-          random: Random(seed),
-        );
-        final e = Experiments.read(prefs);
-        expect(e.regional, RegionalArm.regional);
-      }
-    });
-
-    test('the coin is fair', () async {
-      final counts = <String, int>{};
-      final rng = Random(7);
-      for (var i = 0; i < 4000; i++) {
-        final prefs = await prefsWith({});
-        Experiments.drawIfFreshInstall(prefs, freshInstall: true, random: rng);
-        final cell = Experiments.read(prefs).regional!.name;
-        counts[cell] = (counts[cell] ?? 0) + 1;
-      }
-      expect(counts.keys, hasLength(2));
-      for (final n in counts.values) {
-        expect(n, inInclusiveRange(1880, 2120));
-      }
-    });
-
-    test('the QA seam deals the named arm, anything else is control', () async {
-      final named = await prefsWith({});
-      Experiments.drawIfFreshInstall(
-        named,
-        freshInstall: true,
-        qaArms: 'regional',
+    test('a control install gets the regional wall too, and keeps its arm', () async {
+      final control = Experiments.read(
+        await prefsWith({Experiments.regionalKey: 'control'}),
       );
-      expect(Experiments.read(named).regional, RegionalArm.regional);
-
-      final other = await prefsWith({});
-      Experiments.drawIfFreshInstall(
-        other,
-        freshInstall: true,
-        qaArms: 'reminder',
-      );
-      expect(Experiments.read(other).regional, RegionalArm.control);
+      expect(control.regional, RegionalArm.control);
+      expect(control.analyticsProperties, {'exp_regional': 'control'});
+      expect(control.regionalActive, isTrue);
+      // A hint a control install stored was never applied -> applying it now would flip its language.
+      expect(control.geoLanguageApplies, isFalse);
     });
   });
 

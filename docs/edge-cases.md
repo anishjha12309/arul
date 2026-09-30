@@ -41,7 +41,7 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 - [ ] The wall shows ONE retry line; the pill is its only tappable thing; no box while an attempt runs
 - [ ] Sign-out/delete clear Credential Manager state after the local clear and reset analytics identity first
 - [ ] A dead refresh signs the UI out; a Keystore refusal moves tokens to app-private storage
-- [ ] The regional clip loads only after the poster AND Google's surface; never on Data Saver or a poster phone
+- [ ] A launch clip downloads only after the poster AND Google's surface; never on Data Saver or a poster phone
 
 ## Premium / payments — [architecture.md](architecture.md), [phonepe.md](phonepe.md), [checkout.md](checkout.md)
 - [ ] `ensurePremium()` AWAITS `entitlementProvider.future`; the app reads `premium` from `GET /me`

@@ -23,8 +23,6 @@ const Set<String> kDeityArtSlugs = {
   'meenakshi',
   'parvati',
   'devi',
-  'ganesha',
-  'hanuman',
 };
 
 /// A category's stand-in when the row's own deity resolves to nothing.

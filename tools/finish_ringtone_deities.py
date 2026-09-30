@@ -7,7 +7,7 @@ OUT_DIR = ROOT / "output" / "ringtone-deities"
 NAMES = [
     "murugan", "ayyappan", "sivan", "venkateswara", "krishna", "rama",
     "narasimha", "vishnu", "lakshmi", "mariamman", "durga", "meenakshi",
-    "parvati", "devi", "ganesha", "hanuman", "fallback",
+    "parvati", "devi", "fallback",
 ]
 GOLD = (235, 214, 163)
 TARGET_EXTENT = {
@@ -18,7 +18,6 @@ TARGET_EXTENT = {
     "narasimha": 300,
     "lakshmi": 320,
     "durga": 315,
-    "ganesha": 330,
     "fallback": 340,
 }
 

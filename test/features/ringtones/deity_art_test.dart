@@ -7,12 +7,24 @@ void main() {
   group('deityAsset resolution chain', () {
     test('a known deity gets its own art', () {
       expect(
-        deityAsset(deity: 'ganesha', category: 'others'),
-        'assets/ringtones/ganesha.webp',
+        deityAsset(deity: 'krishna', category: 'perumal'),
+        'assets/ringtones/krishna.webp',
       );
       expect(
         deityAsset(deity: 'venkateswara', category: 'perumal'),
         'assets/ringtones/venkateswara.webp',
+      );
+    });
+
+    // No catalog row uses either today, so their art is not bundled -> the gopuram, never another god.
+    test('ganesha and hanuman take the fallback', () {
+      expect(
+        deityAsset(deity: 'ganesha', category: 'others'),
+        kFallbackDeityAsset,
+      );
+      expect(
+        deityAsset(deity: 'hanuman', category: 'others'),
+        kFallbackDeityAsset,
       );
     });
 
@@ -67,12 +79,12 @@ void main() {
     test('slugs are matched case- and whitespace-insensitively', () {
       // Both fields are free text off the catalog -> a `Murugan` typed into the CMS must not drop the row to the gopuram.
       expect(
-        deityAsset(deity: 'Ganesha', category: 'others'),
-        'assets/ringtones/ganesha.webp',
+        deityAsset(deity: 'Krishna', category: 'perumal'),
+        'assets/ringtones/krishna.webp',
       );
       expect(
-        deityAsset(deity: '  hanuman  ', category: 'others'),
-        'assets/ringtones/hanuman.webp',
+        deityAsset(deity: '  rama  ', category: 'perumal'),
+        'assets/ringtones/rama.webp',
       );
       expect(
         deityAsset(deity: null, category: ' PERUMAL '),
