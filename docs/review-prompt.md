@@ -29,9 +29,14 @@ while Play answers.
   set. The arm is stamped with a per-process id; a resume never builds a new process, so it never
   qualifies. Failure, premium refusal and a trip to the write-settings grant arm nothing.
 - **Boolean, not a count.** Ten sets in one launch buy one ask; each ask needs a fresh success.
+- **Engagement gate: 2 successes in total, any mix of wallpaper and ringtone, the first 3+ days
+  old.** Rating libraries default to 7–10 days and 10 launches; most installs here leave within days,
+  so 2 uses over 3+ days asks the ones who came back. Asking first-day users spent asks that Play
+  mostly never showed. `tooEarly` keeps the arm.
 - **Once per process.** The first evaluation decides; a skip leaves the arm for the next cold open.
-- **Cap: 1 ask per rolling 30 days**, counted on our side. Play's quota may silently drop any second
-  call inside a month, yet that call still spends the arm and fires `review_prompt_requested`.
+- **Cap: 1 ask per rolling 120 days** (Apple's three-a-year ceiling), counted on our side. A 7-per-30
+  cap shipped once and asked people twice in days: Play's quota drops a second call silently, yet it
+  still spends the arm and fires `review_prompt_requested`.
 - Arming must never fail a set that already succeeded: it is fire-and-forget behind a try.
 
 ## Where it asks — the guard
@@ -55,7 +60,7 @@ the guard sees it. Every one of these skips this cold open:
 ## Analytics
 
 `review_prompt_requested` (`trigger`: `wallpaper_static`|`wallpaper_live`|`ringtone`,
-`requests_30d` as a string) is **GA4-only** — off the PostHog allow-list, which is journey-only. It
+`requests_120d` and `successes` as strings) is **GA4-only** — off the PostHog allow-list, which is journey-only. It
 means "we asked Play", never "the user saw it" or "rated". Skips emit nothing.
 
 ## Seeing the real sheet

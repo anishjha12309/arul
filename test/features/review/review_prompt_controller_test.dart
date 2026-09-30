@@ -1,5 +1,6 @@
-// Play's review sheet: asked on a LATER cold open than the success that armed it, once per process,
-// at most once in any rolling 30 days, and never at the cost of an exception reaching the UI.
+// Play's review sheet: asked on a LATER cold open than the success that armed it, only once the
+// person has 2 successes (any mix) with the first one 3+ days old, once per process, at most once
+// in any rolling 120 days, and never at the cost of an exception reaching the UI.
 // Play never says whether the sheet showed, so a completed call is what consumes the arm.
 
 import 'package:arul/core/crash/crash_reporter.dart';
@@ -18,16 +19,29 @@ void main() {
   late RecordingAnalytics analytics;
   late DateTime now;
 
-  setUp(() async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
+  // Engaged by default (3 earlier successes, the first a month back) so each test isolates one gate;
+  // the engagement gate has its own group, which starts from nothing.
+  Future<void> seed(Map<String, Object> values) async {
+    SharedPreferences.setMockInitialValues(values);
     prefs = await SharedPreferences.getInstance();
+  }
+
+  setUp(() async {
+    now = DateTime(2030, 1, 1, 9);
+    await seed(<String, Object>{
+      ReviewLedger.successesKey: 3,
+      ReviewLedger.firstSuccessKey: DateTime(
+        2029,
+        12,
+        1,
+      ).millisecondsSinceEpoch,
+    });
     launcher = FakeReviewLauncher();
     analytics = RecordingAnalytics();
-    now = DateTime(2030, 1, 1, 9);
   });
 
   ReviewLedger ledgerFor(String launch) =>
-      ReviewLedger(prefs, launchId: launch);
+      ReviewLedger(prefs, launchId: launch, clock: () => now);
 
   /// A fresh process: new launch id, new controller.
   ReviewPromptController coldOpen(String launch, {CrashReporter? crash}) =>
@@ -52,7 +66,50 @@ void main() {
     expect(ledgerFor('B').isArmed, isFalse, reason: 'the ask consumes it');
     expect(analytics.props['review_prompt_requested'], {
       'trigger': 'wallpaper_static',
-      'requests_30d': '1',
+      'requests_120d': '1',
+      'successes': '4',
+    });
+  });
+
+  group('engagement gate: 2 successes, the first 3+ days old', () {
+    setUp(() => seed(<String, Object>{}));
+
+    test('a first-day user is never asked, and the arm waits', () async {
+      await ledgerFor('A').arm(ReviewTrigger.wallpaperStatic);
+      await ledgerFor('A').arm(ReviewTrigger.ringtone);
+      expect(ledgerFor('B').successes, 2);
+
+      now = now.add(const Duration(days: 2, hours: 23));
+      expect(await coldOpen('B').maybeAsk(clear), ReviewAskOutcome.tooEarly);
+      expect(launcher.availabilityChecks, 0);
+      expect(ledgerFor('C').armedBeforeThisLaunch, isTrue);
+
+      now = now.add(const Duration(hours: 1));
+      expect(await coldOpen('C').maybeAsk(clear), ReviewAskOutcome.requested);
+    });
+
+    test('days of use but one success -> still waits', () async {
+      await ledgerFor('A').arm(ReviewTrigger.wallpaperLive);
+      now = now.add(const Duration(days: 5));
+      expect(await coldOpen('B').maybeAsk(clear), ReviewAskOutcome.tooEarly);
+    });
+
+    test('any mix counts: one wallpaper and one ringtone qualify', () async {
+      await ledgerFor('A').arm(ReviewTrigger.wallpaperStatic);
+      now = now.add(const Duration(days: 3));
+      await ledgerFor('B').arm(ReviewTrigger.ringtone);
+      expect(await coldOpen('C').maybeAsk(clear), ReviewAskOutcome.requested);
+    });
+
+    test('the first success is stamped once, never moved later', () async {
+      final start = now;
+      await ledgerFor('A').arm(ReviewTrigger.ringtone);
+      now = start.add(const Duration(days: 10));
+      await ledgerFor('B').arm(ReviewTrigger.ringtone);
+      expect(
+        prefs.getInt(ReviewLedger.firstSuccessKey),
+        start.millisecondsSinceEpoch,
+      );
     });
   });
 
@@ -130,7 +187,7 @@ void main() {
   });
 
   test(
-    'one ask in any rolling 30 days, then capped until it ages out',
+    'one ask in any rolling 120 days, then capped until it ages out',
     () async {
       final start = now;
       await ledgerFor('arm0').arm(ReviewTrigger.wallpaperStatic);
@@ -146,13 +203,15 @@ void main() {
       expect(await coldOpen('open1').maybeAsk(clear), ReviewAskOutcome.capped);
       expect(ledgerFor('x').isArmed, isTrue);
 
-      // Day 29 still inside the first ask's window.
-      now = start.add(const Duration(days: 29, hours: 23));
+      // Day 30 — the old cap would have asked here; day 119 is still inside the window.
+      now = start.add(const Duration(days: 30));
       expect(await coldOpen('open2').maybeAsk(clear), ReviewAskOutcome.capped);
+      now = start.add(const Duration(days: 119, hours: 23));
+      expect(await coldOpen('open2b').maybeAsk(clear), ReviewAskOutcome.capped);
       expect(launcher.requests, 1);
 
-      // Day 30: the first ask has aged out -> the held success is asked.
-      now = start.add(const Duration(days: 30));
+      // Day 120: the first ask has aged out -> the held success is asked.
+      now = start.add(const Duration(days: 120));
       expect(
         await coldOpen('open3').maybeAsk(clear),
         ReviewAskOutcome.requested,
@@ -161,11 +220,12 @@ void main() {
       expect(ledgerFor('x').requestsWithin(now), 1);
       expect(analytics.props['review_prompt_requested'], {
         'trigger': 'ringtone',
-        'requests_30d': '1',
+        'requests_120d': '1',
+        'successes': '5',
       });
 
-      // Day 31: that ask opens a fresh window -> capped again.
-      now = start.add(const Duration(days: 31));
+      // Day 121: that ask opens a fresh window -> capped again.
+      now = start.add(const Duration(days: 121));
       await ledgerFor('arm2').arm(ReviewTrigger.wallpaperLive);
       expect(await coldOpen('open4').maybeAsk(clear), ReviewAskOutcome.capped);
       expect(launcher.requests, 2);

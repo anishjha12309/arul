@@ -25,34 +25,61 @@ enum ReviewTrigger {
 final String currentLaunchId =
     '${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
-/// The persisted half of the review prompt: one pending success and the recent request times.
+/// The persisted half of the review prompt: one pending success, the success history that decides
+/// whether someone has used the app enough to rate it, and the recent request times.
 class ReviewLedger {
-  ReviewLedger(this._prefs, {String? launchId})
-    : _launchId = launchId ?? currentLaunchId;
+  ReviewLedger(this._prefs, {String? launchId, DateTime Function()? clock})
+    : _launchId = launchId ?? currentLaunchId,
+      _clock = clock ?? DateTime.now;
 
   static const armedLaunchKey = 'arul_review_armed_launch';
   static const armedTriggerKey = 'arul_review_armed_trigger';
   static const requestsKey = 'arul_review_requests';
+  static const successesKey = 'arul_review_successes';
+  static const firstSuccessKey = 'arul_review_first_success';
 
-  /// Play's quota may silently drop any second ask inside a month, so one per rolling [window].
+  /// One ask per rolling [window] — Apple's three-a-year ceiling, which Play's unpublished quota
+  /// sits under; a second ask sooner is dropped silently yet still spends the arm.
   static const maxRequests = 1;
-  static const window = Duration(days: 30);
+  static const window = Duration(days: 120);
+
+  /// Rating-prompt libraries default to 7–10 days and 10 launches; most installs here are gone
+  /// within days, so this asks those who came back after a few real uses.
+  static const minSuccesses = 2;
+  static const minEngagement = Duration(days: 3);
 
   final SharedPreferences _prefs;
   final String _launchId;
+  final DateTime Function() _clock;
 
   String? get _armedLaunch => _prefs.getString(armedLaunchKey);
 
-  /// A boolean arm, not a count: many sets in one launch still buy one ask.
+  /// A boolean arm, not a count: many sets in one launch still buy one ask. Every success also
+  /// counts toward [engaged].
   Future<void> arm(ReviewTrigger trigger) async {
-    // Both land in the in-memory cache before either await -> a reader never sees half an arm.
+    final successes = (_prefs.getInt(successesKey) ?? 0) + 1;
+    final first = _prefs.getInt(firstSuccessKey);
+    // All land in the in-memory cache before any await -> a reader never sees half an arm.
     await Future.wait([
       _prefs.setString(armedLaunchKey, _launchId),
       _prefs.setString(armedTriggerKey, trigger.key),
+      _prefs.setInt(successesKey, successes),
+      if (first == null)
+        _prefs.setInt(firstSuccessKey, _clock().millisecondsSinceEpoch),
     ]);
   }
 
   bool get isArmed => _armedLaunch != null;
+
+  int get successes => _prefs.getInt(successesKey) ?? 0;
+
+  /// Enough successes, and the first one at least [minEngagement] ago — they came back.
+  bool engaged(DateTime now) {
+    final first = _prefs.getInt(firstSuccessKey);
+    if (first == null || successes < minSuccesses) return false;
+    return now.difference(DateTime.fromMillisecondsSinceEpoch(first)) >=
+        minEngagement;
+  }
 
   bool get armedBeforeThisLaunch {
     final armed = _armedLaunch;

@@ -115,7 +115,8 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 
 ## Review prompt — [review-prompt.md](review-prompt.md)
 - [ ] Play's sheet only on a LATER cold open than the success that armed it, with nothing above the
-      feed; a skip keeps the arm; ≤1 ask per rolling 30 days; no pre-prompt
+      feed; never before 2 successes with the first 3+ days old; a skip keeps the arm; ≤1 ask per
+      rolling 120 days; no pre-prompt
 
 ## In-app update — [app-update.md](app-update.md)
 - [ ] Never over the splash, the wall, a sign-in attempt, `/premium` or a loading apply/share/set;

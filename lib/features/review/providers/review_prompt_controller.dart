@@ -15,6 +15,7 @@ import '../domain/review_ledger.dart';
 enum ReviewAskOutcome {
   alreadyEvaluated,
   notArmed,
+  tooEarly,
   capped,
   blocked,
   unavailable,
@@ -47,6 +48,7 @@ class ReviewPromptController {
     _evaluated = true;
     try {
       if (!_ledger.armedBeforeThisLaunch) return ReviewAskOutcome.notArmed;
+      if (!_ledger.engaged(_clock())) return ReviewAskOutcome.tooEarly;
       if (_ledger.capReached(_clock())) return ReviewAskOutcome.capped;
       if (!surfaceClear()) return ReviewAskOutcome.blocked;
       if (!await _launcher.isAvailable()) return ReviewAskOutcome.unavailable;
@@ -68,7 +70,8 @@ class ReviewPromptController {
         'review_prompt_requested',
         properties: {
           'trigger': trigger?.key ?? 'unknown',
-          'requests_30d': _ledger.requestsWithin(now).toString(),
+          'requests_120d': _ledger.requestsWithin(now).toString(),
+          'successes': _ledger.successes.toString(),
         },
       );
       return ReviewAskOutcome.requested;
@@ -89,7 +92,10 @@ final reviewLauncherProvider = Provider<ReviewLauncher>(
 );
 
 final reviewLedgerProvider = Provider<ReviewLedger>(
-  (ref) => ReviewLedger(ref.watch(sharedPreferencesProvider)),
+  (ref) => ReviewLedger(
+    ref.watch(sharedPreferencesProvider),
+    clock: ref.watch(reviewClockProvider),
+  ),
 );
 
 final reviewPromptControllerProvider = Provider<ReviewPromptController>(

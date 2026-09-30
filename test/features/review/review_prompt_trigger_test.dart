@@ -52,9 +52,11 @@ void main() {
   setUp(() async {
     ArulDeepLink.reset();
     SharedPreferences.setMockInitialValues(<String, Object>{
-      // Armed by an EARLIER process.
+      // Armed by an EARLIER process, from someone past the engagement gate.
       ReviewLedger.armedLaunchKey: 'earlier',
       ReviewLedger.armedTriggerKey: 'ringtone',
+      ReviewLedger.successesKey: 3,
+      ReviewLedger.firstSuccessKey: DateTime(2020).millisecondsSinceEpoch,
     });
     prefs = await SharedPreferences.getInstance();
     launcher = FakeReviewLauncher();
