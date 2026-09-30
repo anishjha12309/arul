@@ -71,12 +71,6 @@ export interface Env {
   PUSH_ENABLED?: string;
 
   /**
-   * Region-language kill switch for GET /geo, `"true"` or anything else -> wrangler.toml [vars], NOT a secret.
-   * `country` and `region` keep flowing either way -> the accuracy measurement never goes dark with the default
-   */
-  GEO_LANG_ENABLED?: string;
-
-  /**
    * PostHog project API key (phc_…) — write-only and already shipped in the APK, yet kept out of the repo.
    * Absent -> capture is skipped, never thrown -> analytics must not fail a payment (fail-open)
    */

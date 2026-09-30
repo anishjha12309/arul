@@ -43,27 +43,22 @@ fires on every landing and is GA4-only.
 
 ## Language precedence
 
-**An explicit pick > the link > the REGION (fresh installs, once) > the phone > English.** A link's
-language always wins over an earlier pick (owner) because it goes through `LocaleNotifier.setLocale`,
+**An explicit pick or link (latest wins) > the phone > English.** The region NEVER picks the language
+(owner): a regional default did not move sign-in and switched some people's language mid-journey. A
+link's language always wins over an earlier pick because it goes through `LocaleNotifier.setLocale`,
 which PERSISTS — it is an explicit pick from then on, and Settings shows it.
 
-- **The region is read ONCE per install.** Only a fresh install's first process sets
-  `arul_geo_pending`; the splash asks `GET /geo` beside the warm-up, again each cold start until an
-  answer lands, then never — an update never asks, so no existing install is re-languaged. The answer
-  lives in `arul_geo_lang`, BESIDE `arul_locale`, never in it: Settings never shows a guess as a choice.
-- Only India maps (`routes/geo.ts`), and `regionCode` is scoped to its country — `US`+`TN` is Tennessee.
-  Delhi, Maharashtra and Gujarat stay unmapped by decision: Delhi's language switchers pick South Indian
-  languages more often than Hindi.
-- `GEO_LANG_ENABLED` (`[vars]`) is the brake — anything but `"true"` answers `lang: null` while `region`
-  keeps flowing. A bare `/geo` also gets `lang: null`; only `?v=2` earns one, so fielded builds that
-  apply `lang` unconditionally never leak it into the factorial's cohorts. The app applies `lang` only
-  in the `exp_regional` arm; the control arm stores the region and keeps the phone
-  ([launch-surface.md](launch-surface.md)).
+- **`arul_geo_lang` is read-only legacy.** Older builds stored a region language there; installs that
+  hold one (regional arm or pre-draw, `Experiments.geoLanguageApplies`) keep it, reported as
+  `language_source=geo`, so no install flips on update. Nothing writes it any more. Never promote it to
+  `arul_locale`: Settings would show a guess as a choice.
+- `GET /geo` answers `{country, region, lang: null}` for every query shape. `lang` stays in the body
+  because builds up to 91 apply a non-null one — never answer a language there again.
 - **Cloudflare's state accuracy on Indian carriers is unmeasured** — its database is not PostHog's
   MaxMind — and **the network path changes the answer**: on Jio the app read Delhi over IPv4 while a
   browser on the same phone that minute read Haryana over IPv6. Judge the app by its own reading
   (`npx wrangler tail arul-api --format json`, `cf.regionCode` on `/geo`), never a browser.
-- No region answer → the phone's locale list, first supported LANGUAGE (`ta-MY` is Tamil). **That
+- No pick → the phone's locale list, first supported LANGUAGE (`ta-MY` is Tamil). **That
   fallback is never written to `arul_locale`**: persisting it would freeze the app to the first launch's
   phone language and show a choice nobody made. Every screen that names the current language reads the
   resolved value, never the stored one.

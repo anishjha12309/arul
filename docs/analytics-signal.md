@@ -29,6 +29,9 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   `poster` (the poster rule, either arm), `not_in_arm` (the control arm's lotus) or `not_started`;
   the regional path adds `no_cdn`, `no_clip`, `data_saver`, `slow_link`, `error` beside the original
   `downloading`/`on_disk`/`failed`/`playing`, which keep their meaning.
+- A fresh install's sign-in events carry `geo_outcome` (`pending`·`answered`·`failed`), `geo_ms`,
+  `warm_ms` (the first socket's DNS+TLS) and, in the regional arm, `region_wait` (`settled`·`cap`).
+  `login_attempt` usually fires before `/geo` settles: read them on `login_surface_shown` and later.
 - `login_attempt` carries `wall_reason`, set where the auth state goes signed-out (`ApiAuthService`):
   `fresh_install`, `no_session`, `storage_error` (keystore read threw), `session_expired` (refresh
   proved it dead), `restored_expired` (the same for a Block Store restore), `session_rejected` (`/me`

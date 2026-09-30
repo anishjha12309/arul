@@ -32,7 +32,6 @@ ANDROID_CERT_SHA256 = "AB:38:0E:C8:A3:BC:92:AC:50:63:18:08:4A:AE:6D:33:6F:BA:2A:
 # or none, means the minute cron and /internal/push/dispatch claim NOTHING.
 # Flipping it to "true" is the OWNER's call, not an agent's.
 PUSH_ENABLED = "true"
-GEO_LANG_ENABLED = "true"
 # Where NEW PhonePe mandates are set up (docs/phonepe.md): "legacy", "hsr-internal" (is_internal accounts only)
 # or "hsr". Existing mandates always bill at the merchant their id names, whatever this says.
 PHONEPE_SETUP_MERCHANT = "hsr"

@@ -32,8 +32,8 @@ final class Experiments {
 
   bool get regionalActive => regional == RegionalArm.regional && !regionalOff;
 
-  /// Whether `/geo`'s language may choose the app's language: the regional arm, and installs that
-  /// predate the draw (today's app). The control arm stores the region, never its language.
+  /// Whether a region language an older build stored still applies: only the installs that could
+  /// have taken one (the regional arm, and installs that predate the draw) -> nobody's language flips.
   bool get geoLanguageApplies => regional == null || regionalActive;
 
   /// The assignment, never the kill state: the arm a person was dealt is what the read splits on.

@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/config/build_info.dart';
-import '../../../core/providers/geo_language_service.dart';
+import '../../../core/providers/geo_region_service.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../auth/domain/auth_service.dart';
@@ -65,7 +65,7 @@ class ComeBackReminder {
     final epoch = _epoch;
     final sdk = await _sdkInt();
     if (sdk == null || sdk > maxSdk) return;
-    // The picture first: it waits for the region, and the regional arm's language settles with it.
+    // The picture first: it waits for the region.
     final picture = await _picture();
     final due = _now().add(delay);
     final copy = _copy();
@@ -116,7 +116,7 @@ ComeBackReminder comeBackReminder(Ref ref) {
     // The first surface lands before `/geo` answers -> wait for it, bounded like the ask itself.
     picture: () async {
       await ref
-          .read(geoLanguageServiceProvider)
+          .read(geoRegionServiceProvider)
           .settled
           .timeout(const Duration(seconds: 15), onTimeout: () {});
       return _posterFile(regionalPosterFor(prefs.getString(geoRegionPrefsKey)));

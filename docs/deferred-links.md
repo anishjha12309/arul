@@ -104,7 +104,7 @@ deep link put in the ad set's creative; the call is
 ```bash
 # seam.json: {"DEBUG_INSTALL_REFERRER": "r=<uuid>&lang=ta"}   — stands in for Play's replay
 #        or: {"DEBUG_DEFERRED_LINK": "fb<id>://open?wallpaper_id=<uuid>&lang=hi"} — for GA4F / Meta
-#        or: {"DEBUG_GEO_LANG": "ta"} — stands in for GET /geo; "none" walks an unmapped state
+#        or: {"DEBUG_GEO_REGION": "KL"} — stands in for GET /geo; picks the regional poster
 flutter build apk --debug --split-per-abi --dart-define-from-file=env/dev.json --dart-define-from-file=seam.json
 adb shell pm clear com.hsrutility.arul   # between runs: both seams are once-per-install like the real thing
 ```

@@ -66,7 +66,7 @@ const appLocaleSourcePrefsKey = 'arul_locale_source';
 /// Set on a FRESH install's first process, cleared when `GET /geo` answers -> an update never sets it.
 const geoPendingPrefsKey = 'arul_geo_pending';
 
-/// The region's language as `GET /geo` answered it: a shipped code or [geoNone]. A hint, never a pick.
+/// A region language an older build stored: read so those installs keep it, never written again.
 const geoLangPrefsKey = 'arul_geo_lang';
 
 /// The region Cloudflare reported, raw, or [geoNone] -> `geo_region` on every event.
@@ -90,8 +90,8 @@ enum LanguageSource {
 
 /// [LocaleNotifier]'s resolution, callable before Riverpod exists — `main()` stamps it on
 /// `Application Installed`, which fires ahead of the first frame.
-/// An explicit pick or link -> the REGION (fresh installs, once) -> the phone -> English.
-/// [useGeo] false skips the region rung ([Experiments.geoLanguageApplies]).
+/// An explicit pick or link -> an older build's stored region language -> the phone -> English.
+/// [useGeo] false skips the stored region language ([Experiments.geoLanguageApplies]).
 Locale resolveAppLocale(
   String? storedCode,
   String? geoCode,
@@ -170,7 +170,8 @@ String geoRegionValue(String? stored) {
 @Riverpod(keepAlive: true)
 List<Locale> platformLocales(Ref ref) => ui.PlatformDispatcher.instance.locales;
 
-/// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
+/// The app locale. Persisted pick first, then an older build's region language, then the PHONE,
+/// then English.
 ///
 /// A Tamil phone that opened Arul in English had to be told, in English, where the language picker
 /// was — the one screen that matters (sign-in) is the one screen it was hardest on. So an unset
@@ -180,8 +181,8 @@ List<Locale> platformLocales(Ref ref) => ui.PlatformDispatcher.instance.locales;
 /// said on first launch, so changing the phone's language later would stop moving the app; and
 /// Settings would show a language the user never picked as if they had. Only an explicit pick
 /// writes — Settings, the sign-in trigger, or a `lang=` deep link (which persists deliberately, so
-/// the link's language wins over a later phone change too). The region answer is stored beside
-/// the pick, never as one, for the same reason.
+/// the link's language wins over a later phone change too). An older build's region language sits
+/// beside the pick, never as one, for the same reason.
 @Riverpod(keepAlive: true)
 class LocaleNotifier extends _$LocaleNotifier {
   static const _key = 'arul_locale';
@@ -216,40 +217,10 @@ class LocaleNotifier extends _$LocaleNotifier {
     ref.invalidate(languageOriginProvider);
     await Future.wait(writes);
   }
-
-  /// A fresh install's `GET /geo` answer -> stored once, pending cleared, applied live unless a
-  /// pick or a link already exists. Never written to [_key]: the region is a hint like the phone.
-  /// [applyLive] false stores it for the next launch only: the regional arm's answer after its cap.
-  Future<void> setGeoHint({
-    String? lang,
-    String? region,
-    bool applyLive = true,
-  }) async {
-    final prefs = ref.read(sharedPreferencesProvider);
-    // Only a SHIPPED code is kept -> a code a later build adds cannot re-language this install then.
-    final geo = _shipped(lang);
-    final writes = [
-      prefs.setString(geoLangPrefsKey, geo?.languageCode ?? geoNone),
-      prefs.setString(
-        geoRegionPrefsKey,
-        region == null || region.isEmpty ? geoNone : region,
-      ),
-      prefs.remove(geoPendingPrefsKey),
-    ];
-    if (geo != null &&
-        applyLive &&
-        ref.read(experimentsProvider).geoLanguageApplies &&
-        prefs.getString(_key) == null) {
-      state = geo;
-    }
-    // A stored-only answer leaves this session's language as it was -> so does its reported origin.
-    if (applyLive) ref.invalidate(languageOriginProvider);
-    await Future.wait(writes);
-  }
 }
 
 /// Where the language came from, re-read from prefs -> [LocaleNotifier] invalidates it on every write.
-/// Never derived from [localeProvider]: a Tamil phone answered `ta` by its region changes the SOURCE
+/// Never derived from [localeProvider]: a pick equal to the phone's language changes the SOURCE
 /// only, and an equal locale never notifies.
 @Riverpod(keepAlive: true)
 LanguageOrigin languageOrigin(Ref ref) => resolveLanguageOrigin(

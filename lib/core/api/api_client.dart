@@ -183,12 +183,15 @@ class ApiClient {
     } catch (_) {
       // Pure upside: a failed warm just means login pays what it used to.
     }
-    firstWarmUpMs ??= clock.elapsedMilliseconds;
+    noteWarmUp(clock.elapsedMilliseconds);
   }
 
   /// How long this process's first [warmUp] took, failures included: DNS, TCP and a TLS certificate
   /// chain, so the only link reading taken before any of our media moves.
   int? firstWarmUpMs;
+
+  /// A fresh install's `GET /geo` opens the socket instead of [warmUp] and reports its time here.
+  void noteWarmUp(int ms) => firstWarmUpMs ??= ms;
 
   static const Duration _warmTimeout = Duration(seconds: 5);
 
@@ -309,9 +312,18 @@ class ApiClient {
   );
 
   /// GETs [path]; refreshes the token + retries once on 401.
-  Future<Map<String, dynamic>> get(String path, {bool requiresAuth = true}) {
+  Future<Map<String, dynamic>> get(
+    String path, {
+    bool requiresAuth = true,
+    bool withToken = true,
+  }) {
     if (!_replayableGets.contains(path)) {
-      return _requestWithRetry('GET', path, requiresAuth: requiresAuth);
+      return _requestWithRetry(
+        'GET',
+        path,
+        requiresAuth: requiresAuth,
+        withToken: withToken,
+      );
     }
     final inFlight = _meInFlight[path];
     if (inFlight != null) return inFlight;
@@ -327,8 +339,13 @@ class ApiClient {
     // Remove only if still ours -> invalidateMe() plus a NEWER request must not lose its coalescing.
     final epoch = _meEpoch;
     late final Future<Map<String, dynamic>> future;
-    future = _requestWithRetry('GET', path, requiresAuth: requiresAuth)
-        .whenComplete(() {
+    future =
+        _requestWithRetry(
+          'GET',
+          path,
+          requiresAuth: requiresAuth,
+          withToken: withToken,
+        ).whenComplete(() {
           if (identical(_meInFlight[path], future)) _meInFlight.remove(path);
         });
     _meInFlight[path] = future;

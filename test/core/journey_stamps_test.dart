@@ -34,6 +34,30 @@ void main() {
     return prefs;
   }
 
+  test('the /geo stamps are absent until asked, then carry the outcome', () {
+    expect(JourneyStamps.geoProps, isEmpty);
+
+    JourneyStamps.noteGeo('pending');
+    expect(JourneyStamps.geoProps, {'geo_outcome': 'pending'});
+
+    JourneyStamps.noteGeo('answered', ms: 640);
+    JourneyStamps.noteRegionWait('settled');
+    expect(JourneyStamps.geoProps, {
+      'geo_outcome': 'answered',
+      'geo_ms': 640,
+      'region_wait': 'settled',
+    });
+
+    JourneyStamps.debugReset();
+    expect(JourneyStamps.geoProps, isEmpty);
+  });
+
+  test('the /geo stamps never reach GA4', () {
+    for (final key in ['geo_outcome', 'geo_ms', 'region_wait', 'warm_ms']) {
+      expect(kPostHogOnlyProperties, contains(key));
+    }
+  });
+
   test(
     'launches count up across processes and age is days since the first',
     () async {
@@ -142,85 +166,85 @@ void main() {
     expect(JourneyStamps.secondsSinceLogin(), isNull);
   });
 
+  test('device facts: every native reading mapped, the UPI mix joined', () async {
+    messenger
+      ..setMockMethodCallHandler(buildInfo, (call) async {
+        if (call.method == 'dataSaverOn') return true;
+        expect(call.method, 'analyticsFacts');
+        return {
+          'thermal': 1,
+          'launchSource': 'push',
+          'procAgeMs': 5000000,
+          'gmsVersion': 253832035,
+          'gmsStatus': 0,
+          'playStoreVersion': 84251800,
+          'powerSaver': true,
+          'bootAgeMin': 12,
+          'availMemMb': 812,
+          'lowMemNow': false,
+          'freeStorageMb': 2048,
+          'batteryPct': 41,
+          'charging': false,
+          'abi': 'arm64-v8a',
+          'unknownKey': 1,
+          'batteryPctNull': null,
+        };
+      })
+      ..setMockMethodCallHandler(upi, (call) async {
+        expect(call.method, 'listUpiPackages');
+        return ['com.phonepe.app', 'com.google.android.apps.nbu.paisa.user'];
+      });
+
+    final prefs = await started();
+    final landed = JourneyStamps.onDeviceFacts;
+    final facts = await JourneyStamps.probeDeviceFacts();
+    expect(facts['ms_before_main'], inInclusiveRange(4990000, 5000000));
+    expect(facts, {
+      'ms_before_main': facts['ms_before_main'],
+      'thermal': 1,
+      'launch_source': 'push',
+      'data_saver': true,
+      'gms_version': 253832035,
+      'gms_status': 0,
+      'play_store_version': 84251800,
+      'power_saver': true,
+      'boot_age_min': 12,
+      'avail_mem_mb': 812,
+      'low_mem_now': false,
+      'free_storage_mb': 2048,
+      'battery_pct': 41,
+      'charging': false,
+      'abi': 'arm64-v8a',
+      'upi_apps': 'gpay,phonepe',
+    });
+    expect(await landed, same(facts));
+    expect(JourneyStamps.deviceFacts, facts);
+
+    // The next launch's first attempt carries only what a phone keeps between launches.
+    JourneyStamps.debugReset();
+    JourneyStamps.start(prefs);
+    expect(JourneyStamps.lastDeviceFacts, {
+      'gms_version': 253832035,
+      'gms_status': 0,
+      'play_store_version': 84251800,
+      'abi': 'arm64-v8a',
+      'upi_apps': 'gpay,phonepe',
+    });
+  });
+
   test(
-    'device facts: every native reading mapped, the UPI mix joined',
+    'render props: slow frames, the worst frame and the wall clip',
     () async {
-      messenger
-        ..setMockMethodCallHandler(buildInfo, (call) async {
-          if (call.method == 'dataSaverOn') return true;
-          expect(call.method, 'analyticsFacts');
-          return {
-            'thermal': 1,
-            'launchSource': 'push',
-            'procAgeMs': 5000000,
-            'gmsVersion': 253832035,
-            'gmsStatus': 0,
-            'playStoreVersion': 84251800,
-            'powerSaver': true,
-            'bootAgeMin': 12,
-            'availMemMb': 812,
-            'lowMemNow': false,
-            'freeStorageMb': 2048,
-            'batteryPct': 41,
-            'charging': false,
-            'abi': 'arm64-v8a',
-            'unknownKey': 1,
-            'batteryPctNull': null,
-          };
-        })
-        ..setMockMethodCallHandler(upi, (call) async {
-          expect(call.method, 'listUpiPackages');
-          return ['com.phonepe.app', 'com.google.android.apps.nbu.paisa.user'];
-        });
-
-      final prefs = await started();
-      final landed = JourneyStamps.onDeviceFacts;
-      final facts = await JourneyStamps.probeDeviceFacts();
-      expect(facts['ms_before_main'], inInclusiveRange(4990000, 5000000));
-      expect(facts, {
-        'ms_before_main': facts['ms_before_main'],
-        'thermal': 1,
-        'launch_source': 'push',
-        'data_saver': true,
-        'gms_version': 253832035,
-        'gms_status': 0,
-        'play_store_version': 84251800,
-        'power_saver': true,
-        'boot_age_min': 12,
-        'avail_mem_mb': 812,
-        'low_mem_now': false,
-        'free_storage_mb': 2048,
-        'battery_pct': 41,
-        'charging': false,
-        'abi': 'arm64-v8a',
-        'upi_apps': 'gpay,phonepe',
+      await started();
+      expect(JourneyStamps.renderProps, {
+        'slow_frames': 0,
+        'worst_frame_ms': 0,
+        'wall_clip': 'unknown',
       });
-      expect(await landed, same(facts));
-      expect(JourneyStamps.deviceFacts, facts);
-
-      // The next launch's first attempt carries only what a phone keeps between launches.
-      JourneyStamps.debugReset();
-      JourneyStamps.start(prefs);
-      expect(JourneyStamps.lastDeviceFacts, {
-        'gms_version': 253832035,
-        'gms_status': 0,
-        'play_store_version': 84251800,
-        'abi': 'arm64-v8a',
-        'upi_apps': 'gpay,phonepe',
-      });
+      JourneyStamps.noteWallClip('playing');
+      expect(JourneyStamps.renderProps['wall_clip'], 'playing');
     },
   );
-
-  test('render props: slow frames, the worst frame and the wall clip', () async {
-    await started();
-    expect(JourneyStamps.renderProps, {
-      'slow_frames': 0,
-      'worst_frame_ms': 0,
-      'wall_clip': 'unknown',
-    });
-    JourneyStamps.noteWallClip('playing');
-    expect(JourneyStamps.renderProps['wall_clip'], 'playing');
-  });
 
   test('wall_clip is never absent: it names why there is no clip yet', () async {
     addTearDown(DeviceQuality.resetForTesting);
@@ -246,11 +270,14 @@ void main() {
 
   test('back-to-back attempts never share an attempt_n', () async {
     final prefs = await started();
-    expect([
-      JourneyStamps.nextAttempt(),
-      JourneyStamps.nextAttempt(),
-      JourneyStamps.nextAttempt(),
-    ], [1, 2, 3]);
+    expect(
+      [
+        JourneyStamps.nextAttempt(),
+        JourneyStamps.nextAttempt(),
+        JourneyStamps.nextAttempt(),
+      ],
+      [1, 2, 3],
+    );
     // The count reaches the store without waiting on the disk write.
     expect(prefs.getInt('journey_signin_attempts'), 3);
   });
@@ -267,16 +294,19 @@ void main() {
     expect(props['picked_app'], 'gpay');
   });
 
-  test('a paywall exit reads cta after a tap, back otherwise, with the dwell', () async {
-    await started();
-    expect(JourneyStamps.paywallExit(), isNull);
-    final opened = DateTime.now().subtract(const Duration(seconds: 30));
-    JourneyStamps.notePaywallView('apply', now: opened);
-    expect(JourneyStamps.paywallExit(), {'exit': 'back', 'dwell_s': 30});
-    JourneyStamps.nextCheckout(now: opened.add(const Duration(seconds: 10)));
-    expect(JourneyStamps.paywallExit()?['exit'], 'cta');
-    expect(JourneyStamps.secondsSinceCheckout(), inInclusiveRange(19, 21));
-  });
+  test(
+    'a paywall exit reads cta after a tap, back otherwise, with the dwell',
+    () async {
+      await started();
+      expect(JourneyStamps.paywallExit(), isNull);
+      final opened = DateTime.now().subtract(const Duration(seconds: 30));
+      JourneyStamps.notePaywallView('apply', now: opened);
+      expect(JourneyStamps.paywallExit(), {'exit': 'back', 'dwell_s': 30});
+      JourneyStamps.nextCheckout(now: opened.add(const Duration(seconds: 10)));
+      expect(JourneyStamps.paywallExit()?['exit'], 'cta');
+      expect(JourneyStamps.secondsSinceCheckout(), inInclusiveRange(19, 21));
+    },
+  );
 
   test(
     'failed device probes leave the columns absent, never guessed',
@@ -396,7 +426,12 @@ void main() {
       }),
       {'provider': 'google', 'low_ram': 1, 'upi_apps': 'phonepe'},
     );
-    for (final kept in ['upi_apps', 'paywall_source', 'low_ram', 'device_tier']) {
+    for (final kept in [
+      'upi_apps',
+      'paywall_source',
+      'low_ram',
+      'device_tier',
+    ]) {
       expect(kPostHogOnlyProperties, isNot(contains(kept)));
     }
   });

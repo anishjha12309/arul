@@ -163,8 +163,7 @@ class ApiAuthService implements AuthService {
 
   /// `signed_in` = a wall showing over a live session, which no path should ever do.
   @visibleForTesting
-  String get wallReason =>
-      _current.isAuthenticated ? 'signed_in' : _wallReason;
+  String get wallReason => _current.isAuthenticated ? 'signed_in' : _wallReason;
 
   /// The seed put a Block Store session back this process -> its death is a reinstall's, not a
   /// session that lived here.
@@ -372,6 +371,8 @@ class ApiAuthService implements AuthService {
     ..._history,
     ...JourneyStamps.networkFacts,
     ...JourneyStamps.renderProps,
+    ...JourneyStamps.geoProps,
+    'warm_ms': ?_api.firstWarmUpMs,
   };
 
   /// 0 until this attempt's `login_attempt` fires -> a failure before it names no try.
@@ -864,7 +865,11 @@ class ApiAuthService implements AuthService {
       // Not awaited: a keystore write stood between the exchange and the feed. clearTokens waits for it.
       unawaited(
         _api
-            .cacheProfile(userId: userId, displayName: displayName, email: email)
+            .cacheProfile(
+              userId: userId,
+              displayName: displayName,
+              email: email,
+            )
             .catchError((Object _) {}),
       );
 

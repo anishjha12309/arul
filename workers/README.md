@@ -33,7 +33,7 @@ catalog build: [docs/architecture.md](../docs/architecture.md) · crons:
 | POST | /payments/initiate · status · cancel · abandon | Bearer | Mandate lifecycle; 409 `setup_in_progress` ≠ `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback, deduped on (event, orderId) |
 | GET | /payments/callback | — | Post-mandate browser redirect |
-| GET | /geo | — | `{country, region, lang}` from `request.cf` alone, `no-store`; `lang` only on `?v=2` while `GEO_LANG_ENABLED` is exactly `"true"` |
+| GET | /geo | — | `{country, region, lang: null}` from `request.cf` alone, `no-store`; `lang` stays in the body, always null, for builds ≤91 |
 | POST | /push/device | — | Signed-out FCM registration; 2 KB cap; never writes `user_id` |
 | POST | /me/device · /me/push-opened | Bearer | Signed-in registration (re-points the row) · campaign open |
 | GET | /w/:id · /r/:id (and id-less) · / · /.well-known/assetlinks.json | — | Landing bounce pages and App Link proof ([docs/deferred-links.md](../docs/deferred-links.md)) |

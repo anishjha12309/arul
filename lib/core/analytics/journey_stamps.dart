@@ -116,6 +116,26 @@ abstract final class JourneyStamps {
   /// Whether this install is in the regional arm, the only one with a launch clip.
   static void noteClipArm({required bool active}) => _clipArm = active;
 
+  /// A fresh install's `GET /geo`: `pending`, `answered` or `failed`, with its time once settled.
+  static void noteGeo(String outcome, {int? ms}) {
+    _geoOutcome = outcome;
+    _geoMs = ms;
+  }
+
+  /// The regional arm's splash wait: `settled` inside the cap, or `cap`.
+  static void noteRegionWait(String outcome) => _regionWait = outcome;
+
+  /// Absent on a launch that never asked `/geo` -> only fresh installs carry them.
+  static Map<String, Object> get geoProps => {
+    'geo_outcome': ?_geoOutcome,
+    'geo_ms': ?_geoMs,
+    'region_wait': ?_regionWait,
+  };
+
+  static String? _geoOutcome;
+  static int? _geoMs;
+  static String? _regionWait;
+
   /// The paywall's UPI picker this process: times opened, the app picked, the app it defaulted to.
   static void notePickerOpened() => _pickerOpens++;
   static void notePickedApp(String code) => _pickedApp = code;
@@ -460,6 +480,9 @@ abstract final class JourneyStamps {
     _worstFrameMs = 0;
     _wallClip = null;
     _clipArm = null;
+    _geoOutcome = null;
+    _geoMs = null;
+    _regionWait = null;
     _pickerOpens = 0;
     _pickedApp = null;
     _defaultApp = null;

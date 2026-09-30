@@ -41,7 +41,7 @@ final class PremiumPurchaseProvider
   }
 }
 
-String _$premiumPurchaseHash() => r'1dabb77e7657cb6d56044dd2a6a46956163b2be4';
+String _$premiumPurchaseHash() => r'2beb4ed710c2e827bebefb077ca96dc8d6cf39bd';
 
 abstract class _$PremiumPurchase extends $Notifier<PurchaseState> {
   PurchaseState build();

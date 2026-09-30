@@ -16,7 +16,7 @@ paths:
   for fielded builds). Never log, toast or track it.
 - **ONE retry line for every failure; no fix line, no help link. The pill is the wall's ONLY
   tappable thing**, and the box is GONE while an attempt runs — the splash's hairline carries
-  every wait. Region picks the language, Settings changes it.
+  every wait. Region never picks language; Settings or a link does.
   Fixed type; the LAYOUT absorbs copy.
 - Classify by typed `code` only; `login_cancelled` is MIXED. **Every failure return goes through
   `_googleFailure`.**

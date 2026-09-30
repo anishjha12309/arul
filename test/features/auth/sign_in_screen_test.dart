@@ -504,7 +504,6 @@ void main() {
     });
   });
 
-  // The region still decides what the WALL is written in — only the way to change it moved out.
   group('the wall speaks the resolved language', () {
     testWidgets('follows the phone when nothing is persisted', (tester) async {
       final l10n = await pump(tester, phoneLocales: const [Locale('ml')]);
@@ -512,35 +511,13 @@ void main() {
       expect(l10n.localeName, 'ml');
     });
 
-    testWidgets('follows the REGION over the phone', (tester) async {
+    testWidgets("keeps an older build's region language over the phone", (
+      tester,
+    ) async {
       await prefs.setString('arul_geo_lang', 'ta');
       final l10n = await pump(tester);
 
       expect(l10n.localeName, 'ta');
-    });
-
-    testWidgets('a region answer landing on the open wall re-renders it', (
-      tester,
-    ) async {
-      final l10n = await pump(tester);
-      expect(l10n.localeName, 'en');
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(SignInScreen)),
-        listen: false,
-      );
-
-      await container
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'ta', region: 'TN');
-      await tester.pump();
-
-      expect(
-        AppLocalizations.of(
-          tester.element(find.byType(SignInScreen).first),
-        ).localeName,
-        'ta',
-      );
-      expect(prefs.getString('arul_locale'), isNull, reason: 'a hint only');
     });
   });
 

@@ -39,9 +39,7 @@ void main() {
     });
 
     test('a stored arm is never re-dealt', () async {
-      final prefs = await prefsWith({
-        Experiments.regionalKey: 'regional',
-      });
+      final prefs = await prefsWith({Experiments.regionalKey: 'regional'});
       for (var seed = 0; seed < 20; seed++) {
         Experiments.drawIfFreshInstall(
           prefs,
@@ -101,7 +99,7 @@ void main() {
     });
 
     test(
-      'only the regional arm (active) lets the region choose the language',
+      'only the arm that could have taken a region language keeps it',
       () async {
         Future<bool> applies(Map<String, Object> v) async =>
             Experiments.read(await prefsWith(v)).geoLanguageApplies;
@@ -148,19 +146,6 @@ void main() {
       return c;
     }
 
-    test('control stores the region but keeps the phone language', () async {
-      final c = await boot({
-        Experiments.regionalKey: 'control',
-        geoPendingPrefsKey: true,
-      });
-      await c
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'ta', region: 'TN');
-      expect(c.read(localeProvider), const Locale('en'));
-      expect(c.read(languageOriginProvider).source, LanguageSource.phone);
-      expect(c.read(languageOriginProvider).geoRegion, 'TN');
-    });
-
     test(
       'control ignores a stored region language on the next launch too',
       () async {
@@ -174,7 +159,7 @@ void main() {
     );
 
     test(
-      'the regional arm applies a stored region language from the first frame',
+      'a regional install keeps the region language an older build stored',
       () async {
         final c = await boot({
           Experiments.regionalKey: 'regional',
@@ -183,27 +168,6 @@ void main() {
         });
         expect(c.read(localeProvider), const Locale('ml'));
         expect(c.read(languageOriginProvider).source, LanguageSource.geo);
-      },
-    );
-
-    test(
-      'an answer after the cap is stored for the next launch, never applied now',
-      () async {
-        final c = await boot({
-          Experiments.regionalKey: 'regional',
-          geoPendingPrefsKey: true,
-        });
-        // The root listener has read the origin long before the answer lands.
-      expect(c.read(languageOriginProvider).source, LanguageSource.phone);
-      await c
-            .read(localeProvider.notifier)
-            .setGeoHint(lang: 'ta', region: 'TN', applyLive: false);
-        expect(c.read(localeProvider), const Locale('en'));
-        expect(c.read(languageOriginProvider).source, LanguageSource.phone);
-
-        final prefs = c.read(sharedPreferencesProvider);
-        expect(prefs.getString(geoLangPrefsKey), 'ta');
-        expect(prefs.getBool(geoPendingPrefsKey), isNull);
       },
     );
   });

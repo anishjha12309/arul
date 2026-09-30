@@ -5,17 +5,18 @@
 // never written down. Persisting it would freeze the app to whatever the phone said on first
 // launch, and would show Settings a language the user never chose as if they had.
 //
-// A fresh install's REGION outranks the phone (Tamil Nadu phones run English locales), read once
-// from `GET /geo` and stored beside the pick, never AS one: a pick or a `lang=` link still wins.
+// The REGION never picks the language: `GET /geo` stores only the region, for the launch poster. A
+// region language an older build stored is still honoured, so no install flips on update.
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:arul/core/analytics/analytics_cohort.dart';
+import 'package:arul/core/analytics/journey_stamps.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/deeplink/deep_link_locale_sync.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
-import 'package:arul/core/providers/geo_language_service.dart';
+import 'package:arul/core/providers/geo_region_service.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -159,14 +160,14 @@ void main() {
     });
   });
 
-  group('the REGION outranks the phone, never a pick', () {
-    test('geo beats the phone', () async {
+  group("an older build's region language is kept, never a pick", () {
+    test('a stored region language beats the phone', () async {
+      // The install already opened in it -> dropping it on update would flip its language.
       final (container, _) = await boot(geo: 'ta', phone: const [Locale('en')]);
       expect(container.read(localeProvider), const Locale('ta'));
     });
 
-    test('geo beats a SUPPORTED phone language too', () async {
-      // Decision 3: region > phone. A Kannada phone read in Uttar Pradesh opens in Hindi.
+    test('a stored region language beats a SUPPORTED phone language', () async {
       final (container, _) = await boot(geo: 'hi', phone: const [Locale('kn')]);
       expect(container.read(localeProvider), const Locale('hi'));
     });
@@ -185,74 +186,6 @@ void main() {
 
       final (neither, _) = await boot(geo: 'none', phone: const [Locale('fr')]);
       expect(neither.read(localeProvider), const Locale('en'));
-    });
-
-    test('an answer applies live, is stored, clears pending and is NEVER '
-        'written to arul_locale', () async {
-      final (container, prefs) = await boot(pending: true);
-      expect(container.read(localeProvider), const Locale('en'));
-
-      await container
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'ta', region: 'TN');
-
-      expect(container.read(localeProvider), const Locale('ta'));
-      expect(prefs.getString('arul_geo_lang'), 'ta');
-      expect(prefs.getString('arul_geo_region'), 'TN');
-      expect(prefs.getBool('arul_geo_pending'), isNull);
-      expect(
-        prefs.getString('arul_locale'),
-        isNull,
-        reason:
-            'the region is a hint like the phone; only a pick or a link '
-            'is a pick',
-      );
-    });
-
-    test(
-      'a region with no language stores `none` and changes nothing',
-      () async {
-        final (container, prefs) = await boot(pending: true);
-
-        await container
-            .read(localeProvider.notifier)
-            .setGeoHint(lang: null, region: 'DL');
-
-        expect(container.read(localeProvider), const Locale('en'));
-        expect(prefs.getString('arul_geo_lang'), 'none');
-        expect(prefs.getString('arul_geo_region'), 'DL');
-        expect(prefs.getBool('arul_geo_pending'), isNull);
-
-        final (unknown, unknownPrefs) = await boot(pending: true);
-        await unknown
-            .read(localeProvider.notifier)
-            .setGeoHint(lang: null, region: null);
-        expect(unknownPrefs.getString('arul_geo_region'), 'none');
-      },
-    );
-
-    test('a language the app does not ship is stored as `none`', () async {
-      // Stored raw, a code a LATER build ships would re-language this install on that update.
-      final (container, prefs) = await boot(pending: true);
-
-      await container
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'mr', region: 'MH');
-
-      expect(container.read(localeProvider), const Locale('en'));
-      expect(prefs.getString('arul_geo_lang'), 'none');
-    });
-
-    test('an answer never overrides a pick made before it landed', () async {
-      final (container, prefs) = await boot(persisted: 'hi', pending: true);
-
-      await container
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'ta', region: 'TN');
-
-      expect(container.read(localeProvider), const Locale('hi'));
-      expect(prefs.getString('arul_locale'), 'hi');
-      expect(prefs.getString('arul_geo_lang'), 'ta', reason: 'still recorded');
     });
 
     testWidgets('a `lang=` link after geo wins and persists', (tester) async {
@@ -317,11 +250,14 @@ void main() {
       );
     });
 
-    test('follows a SAME-language geo answer the locale cannot see', () async {
-      // A Tamil phone in Tamil Nadu: the locale stays `ta`, so it never notifies -> the source must.
+    test('a region answer re-stamps geo_region, never the source', () async {
       final (container, _) = await boot(
         pending: true,
         phone: const [Locale('ta')],
+        network: MockClient(
+          (_) async =>
+              geoAnswer({'country': 'IN', 'region': 'TN', 'lang': null}),
+        ),
       );
       final seen = <LanguageOrigin>[];
       container.listen(
@@ -331,13 +267,10 @@ void main() {
       );
       expect(seen.single, (source: LanguageSource.phone, geoRegion: 'none'));
 
-      await container
-          .read(localeProvider.notifier)
-          .setGeoHint(lang: 'ta', region: 'TN');
+      await container.read(geoRegionServiceProvider).fetchOnce();
       await container.pump();
 
-      expect(container.read(localeProvider), const Locale('ta'));
-      expect(seen.last, (source: LanguageSource.geo, geoRegion: 'TN'));
+      expect(seen.last, (source: LanguageSource.phone, geoRegion: 'TN'));
     });
 
     test(
@@ -369,7 +302,9 @@ void main() {
     });
   });
 
-  group('GET /geo — once per FRESH install', () {
+  group('GET /geo — once per FRESH install, region only', () {
+    setUp(JourneyStamps.debugReset);
+
     test('a fresh install arms the fetch; an upgrade never does', () async {
       // An upgrade already holds a cohort draw -> isFreshInstall is false -> no pending, no fetch.
       addTearDown(AnalyticsCohort.debugReset);
@@ -378,7 +313,7 @@ void main() {
       });
       final upgrade = await SharedPreferences.getInstance();
       AnalyticsCohort.resolve(upgrade);
-      GeoLanguageService.markIfFreshInstall(
+      GeoRegionService.markIfFreshInstall(
         upgrade,
         freshInstall: AnalyticsCohort.isFreshInstall,
       );
@@ -387,49 +322,79 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final fresh = await SharedPreferences.getInstance();
       AnalyticsCohort.resolve(fresh);
-      GeoLanguageService.markIfFreshInstall(
+      GeoRegionService.markIfFreshInstall(
         fresh,
         freshInstall: AnalyticsCohort.isFreshInstall,
       );
       expect(fresh.getBool('arul_geo_pending'), isTrue);
     });
 
-    test('an upgrade never calls the Worker', () async {
+    test('an upgrade never calls the Worker and stamps nothing', () async {
       var calls = 0;
       final (container, _) = await boot(
         network: MockClient((_) async {
           calls++;
-          return geoAnswer({'country': 'IN', 'region': 'TN', 'lang': 'ta'});
+          return geoAnswer({'country': 'IN', 'region': 'TN', 'lang': null});
         }),
       );
 
-      await container.read(geoLanguageServiceProvider).fetchOnce();
+      expect(container.read(geoRegionServiceProvider).willAsk, isFalse);
+      await container.read(geoRegionServiceProvider).fetchOnce();
 
       expect(calls, 0);
-      expect(container.read(localeProvider), const Locale('en'));
+      expect(JourneyStamps.geoProps, isEmpty);
     });
 
-    test('a fresh install asks ONCE and the wall flips live', () async {
-      final requests = <http.BaseRequest>[];
+    test(
+      'a fresh install asks ONCE, stores the region and keeps the language',
+      () async {
+        final requests = <http.BaseRequest>[];
+        final (container, prefs) = await boot(
+          pending: true,
+          network: MockClient((request) async {
+            requests.add(request);
+            // An older Worker still answering a language must change nothing.
+            return geoAnswer({'country': 'IN', 'region': 'TN', 'lang': 'ta'});
+          }),
+        );
+        final geo = container.read(geoRegionServiceProvider);
+        expect(geo.willAsk, isTrue);
+
+        await geo.fetchOnce();
+        await geo.fetchOnce();
+
+        expect(geo.willAsk, isFalse);
+        expect(requests, hasLength(1));
+        expect(requests.single.method, 'GET');
+        expect(requests.single.url.path, '/geo');
+        expect(requests.single.headers.containsKey('Authorization'), isFalse);
+        expect(container.read(localeProvider), const Locale('en'));
+        expect(prefs.getBool('arul_geo_pending'), isNull);
+        expect(prefs.getString('arul_geo_region'), 'TN');
+        expect(prefs.getString('arul_geo_lang'), isNull);
+        expect(prefs.getString('arul_locale'), isNull);
+        expect(JourneyStamps.geoProps['geo_outcome'], 'answered');
+        expect(JourneyStamps.geoProps['geo_ms'], isA<int>());
+        expect(
+          container.read(apiClientProvider).firstWarmUpMs,
+          isNotNull,
+          reason: '/geo opened the socket -> the launch clip reads its time',
+        );
+      },
+    );
+
+    test('a region the Worker cannot place is stored as `none`', () async {
       final (container, prefs) = await boot(
         pending: true,
-        network: MockClient((request) async {
-          requests.add(request);
-          return geoAnswer({'country': 'IN', 'region': 'TN', 'lang': 'ta'});
-        }),
+        network: MockClient(
+          (_) async => geoAnswer({'country': null, 'region': null, 'lang': null}),
+        ),
       );
 
-      await container.read(geoLanguageServiceProvider).fetchOnce();
-      await container.read(geoLanguageServiceProvider).fetchOnce();
+      await container.read(geoRegionServiceProvider).fetchOnce();
 
-      expect(requests, hasLength(1));
-      expect(requests.single.method, 'GET');
-      expect(requests.single.url.path, '/geo');
-      expect(requests.single.url.queryParameters['v'], '2');
-      expect(container.read(localeProvider), const Locale('ta'));
+      expect(prefs.getString('arul_geo_region'), 'none');
       expect(prefs.getBool('arul_geo_pending'), isNull);
-      expect(prefs.getString('arul_geo_region'), 'TN');
-      expect(prefs.getString('arul_locale'), isNull);
     });
 
     test(
@@ -442,12 +407,11 @@ void main() {
           ),
         );
 
-        await container.read(geoLanguageServiceProvider).fetchOnce();
+        await container.read(geoRegionServiceProvider).fetchOnce();
 
         expect(prefs.getBool('arul_geo_pending'), isTrue);
-        expect(prefs.getString('arul_geo_lang'), isNull);
         expect(prefs.getString('arul_geo_region'), isNull);
-        expect(container.read(localeProvider), const Locale('en'));
+        expect(JourneyStamps.geoProps['geo_outcome'], 'failed');
 
         // The next process: same prefs, the network back.
         final next = ProviderContainer(
@@ -468,9 +432,10 @@ void main() {
           ],
         );
         addTearDown(next.dispose);
-        await next.read(geoLanguageServiceProvider).fetchOnce();
+        await next.read(geoRegionServiceProvider).fetchOnce();
 
-        expect(next.read(localeProvider), const Locale('ml'));
+        expect(next.read(localeProvider), const Locale('en'));
+        expect(prefs.getString('arul_geo_region'), 'KL');
         expect(prefs.getBool('arul_geo_pending'), isNull);
       },
     );
@@ -485,10 +450,10 @@ void main() {
         ),
       );
 
-      await container.read(geoLanguageServiceProvider).fetchOnce();
+      await container.read(geoRegionServiceProvider).fetchOnce();
 
       expect(prefs.getBool('arul_geo_pending'), isTrue);
-      expect(prefs.getString('arul_geo_lang'), isNull);
+      expect(prefs.getString('arul_geo_region'), isNull);
     });
 
     test(
@@ -502,10 +467,10 @@ void main() {
             return Completer<http.Response>().future;
           }),
         );
-        final service = GeoLanguageService(
+        final service = GeoRegionService(
           api: container.read(apiClientProvider),
           prefs: prefs,
-          onAnswer: container.read(localeProvider.notifier).setGeoHint,
+          onRegion: () {},
           timeout: const Duration(milliseconds: 20),
         );
 
@@ -514,7 +479,7 @@ void main() {
 
         expect(calls, 1, reason: 'at most one call per cold start');
         expect(prefs.getBool('arul_geo_pending'), isTrue);
-        expect(container.read(localeProvider), const Locale('en'));
+        expect(JourneyStamps.geoProps['geo_outcome'], 'failed');
       },
     );
 
@@ -525,10 +490,10 @@ void main() {
           pending: true,
           network: MockClient((_) => Completer<http.Response>().future),
         );
-        final failing = GeoLanguageService(
+        final failing = GeoRegionService(
           api: container.read(apiClientProvider),
           prefs: prefs,
-          onAnswer: container.read(localeProvider.notifier).setGeoHint,
+          onRegion: () {},
           timeout: const Duration(milliseconds: 20),
         );
         var settled = false;
@@ -538,10 +503,10 @@ void main() {
         expect(settled, isTrue);
 
         await prefs.remove('arul_geo_pending');
-        final idle = GeoLanguageService(
+        final idle = GeoRegionService(
           api: container.read(apiClientProvider),
           prefs: prefs,
-          onAnswer: container.read(localeProvider.notifier).setGeoHint,
+          onRegion: () {},
         );
         await idle.fetchOnce();
         await idle.settled;

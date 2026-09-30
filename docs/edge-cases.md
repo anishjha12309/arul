@@ -104,7 +104,7 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 - [ ] ONE level of encoding on `referrer`; the Worker's language normalisation matches the app's
 - [ ] Native checks a deferred link's HOST only; Dart decides path and query
 - [ ] The link's `lang` beats a Settings pick, the region and the phone
-- [ ] The region is asked once per FRESH install and stored beside `arul_locale`, never in it
+- [ ] The region is asked once per FRESH install and never picks the language; a stored older-build region language is kept
 - [ ] Typed takes: `consumeWallpaper()` never eats a pending ringtone, or the reverse
 
 ## Catalog / storage — [cron.md](cron.md), [caching.md](caching.md)

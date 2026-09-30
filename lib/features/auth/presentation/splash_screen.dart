@@ -9,11 +9,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_hairline_loader.dart';
+import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/experiments/experiments.dart';
 import '../../../core/perf/boot_trace.dart';
-import '../../../core/providers/geo_language_service.dart';
+import '../../../core/providers/geo_region_service.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../notifications/providers/come_back_reminder.dart';
@@ -45,9 +46,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   /// The signed-out slice — ONE poster, so the post-login feed's first card shows real art.
   static const _preAuthThumbWarmCount = 1;
 
-  /// The regional arm's longest wait for `/geo` before the wall paints in the phone's language.
-  /// It runs inside the ~1.5 s Google's sheet takes to draw anyway; lower it, never raise it, if
-  /// the measured LTE p90 says so (launch-surface.md).
+  /// The regional arm's longest wait for `/geo` before the wall settles on Murugan.
+  /// It runs inside the ~1.5 s Google's sheet takes to draw anyway (launch-surface.md).
   static const regionCap = Duration(milliseconds: 1200);
 
   /// The most the sheet waits on a transport reading that has not answered by the time the seed
@@ -64,19 +64,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    final geo = ref.read(geoRegionServiceProvider);
     // Open the API connection now -> POST /auth/login, moments away, pays no DNS, TLS or cold start.
     // Never awaited, never retried, never able to fail anything (ApiClient.warmUp).
-    BootTrace.mark('splash: API warm-up fired');
-    unawaited(
-      ref
-          .read(apiClientProvider)
-          .warmUp()
-          .then((_) => BootTrace.mark('splash: API warm-up settled')),
-    );
-    // A fresh install's region hint, asked once. Only the regional arm waits for it, in
+    // A fresh install's `/geo` opens it instead: a second handshake beside it slows both on 2G.
+    if (geo.willAsk) {
+      BootTrace.mark('splash: /geo is the API warm-up');
+    } else {
+      BootTrace.mark('splash: API warm-up fired');
+      unawaited(
+        ref
+            .read(apiClientProvider)
+            .warmUp()
+            .then((_) => BootTrace.mark('splash: API warm-up settled')),
+      );
+    }
+    // A fresh install's region, asked once. Only the regional arm waits for it, in
     // [_awaitRegion]; every other launch routes the moment the seed settles.
     _geoClock.start();
-    _geoAsk = ref.read(geoLanguageServiceProvider).fetchOnce().whenComplete(() {
+    _geoAsk = geo.fetchOnce().whenComplete(() {
       _geoDone = true;
     });
     unawaited(_geoAsk);
@@ -216,12 +222,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   /// The regional arm on a launch `/geo` has not answered yet: hold the dark ground until the region
-  /// lands or [regionCap] passes, so the wall's first frame is already in its final language.
+  /// lands or [regionCap] passes, so the wall's first frame already has its final poster.
   Future<void> _awaitRegion() async {
     final answered =
         _geoDone ||
         await awaitRegionAnswer(_geoAsk, regionCap - _geoClock.elapsed);
-    if (!answered) ref.read(geoLanguageServiceProvider).closeLiveWindow();
+    JourneyStamps.noteRegionWait(answered ? 'settled' : 'cap');
     BootTrace.mark(
       'splash: region wait ended at ${_geoClock.elapsedMilliseconds}ms '
       '(${answered ? 'settled' : 'cap'})',
@@ -240,7 +246,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final awaitingRegion = ref.watch(launchArtProvider) is AwaitingRegionArt;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // Always-dark surface: status/nav icons stay light in both themes.
       value: SystemUiOverlayStyle.light.copyWith(
@@ -269,18 +274,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 children: [
                   const Text('Arul', style: ArulTokens.wordmarkSplash),
                   const SizedBox(height: 10),
-                  // Shrinks, never wraps — see the twin in sign_in_screen.dart. Held back while the
-                  // regional arm waits: the language is not known yet, and a line that changes
-                  // script under the reader is the flip this arm exists to remove.
-                  Visibility.maintain(
-                    visible: !awaitingRegion,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: _Tagline(
-                          AppLocalizations.of(context).splashTagline,
-                        ),
+                  // Shrinks, never wraps — see the twin in sign_in_screen.dart.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: _Tagline(
+                        AppLocalizations.of(context).splashTagline,
                       ),
                     ),
                   ),

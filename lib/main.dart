@@ -31,7 +31,7 @@ import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
 import 'core/experiments/experiments.dart';
 import 'core/perf/boot_trace.dart';
-import 'core/providers/geo_language_service.dart';
+import 'core/providers/geo_region_service.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
@@ -312,7 +312,7 @@ Future<void> _startApp() async {
         : const String.fromEnvironment('QA_EXP_ARMS'),
   );
   // A fresh install's first process arms the one `GET /geo` the splash fires -> an update never does.
-  GeoLanguageService.markIfFreshInstall(
+  GeoRegionService.markIfFreshInstall(
     prefs,
     freshInstall: AnalyticsCohort.isFreshInstall,
   );
@@ -361,7 +361,6 @@ Future<void> _startApp() async {
   // Fire-and-forget -> a network-delivered ad target can never delay the first frame.
   final deferredLinks = DeferredLinkService(referrer);
   unawaited(deferredLinks.start());
-
 
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED
   // the app has a live plugin to replay into, but `initialize()` is deliberately

@@ -120,9 +120,9 @@ property, a `register()` super property or a person property — [analytics-sign
   prefs before `setup()` — the first `login_attempt` lands before `register`. `reset()` runs on sign-out
   and deletion before the wall shows. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`**,
   which mints a new app instance id and cuts the Ads attribution of a re-login.
-- `language_source` (`pick`·`link`·`geo`·`phone`·`default`) and `geo_region` (Cloudflare's region or
-  `none`): a fresh install's first events fire before `GET /geo` answers, so they carry `phone`. GA4
-  hides both until registered as user-scoped custom dimensions.
+- `language_source` (`pick`·`link`·`geo`·`phone`·`default`; `geo` = an older build's region language)
+  and `geo_region` (Cloudflare's region or `none`, `none` until `GET /geo` answers). GA4 hides both
+  until registered as user-scoped custom dimensions.
 - **`exp_regional` (`control`|`regional`)** is the only sign-in coin: dealt once per fresh install in
   `main()`, registered like `app_language`, carrying the ASSIGNMENT, not the kill state;
   `feature_flags.exp_regional = false` turns the arm off from the next cold start.

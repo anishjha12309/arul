@@ -64,7 +64,8 @@ final class PlatformLocalesProvider
 
 String _$platformLocalesHash() => r'9a4174189f347f402d51d167124602ee154ab761';
 
-/// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
+/// The app locale. Persisted pick first, then an older build's region language, then the PHONE,
+/// then English.
 ///
 /// A Tamil phone that opened Arul in English had to be told, in English, where the language picker
 /// was — the one screen that matters (sign-in) is the one screen it was hardest on. So an unset
@@ -74,13 +75,14 @@ String _$platformLocalesHash() => r'9a4174189f347f402d51d167124602ee154ab761';
 /// said on first launch, so changing the phone's language later would stop moving the app; and
 /// Settings would show a language the user never picked as if they had. Only an explicit pick
 /// writes — Settings, the sign-in trigger, or a `lang=` deep link (which persists deliberately, so
-/// the link's language wins over a later phone change too). The region answer is stored beside
-/// the pick, never as one, for the same reason.
+/// the link's language wins over a later phone change too). An older build's region language sits
+/// beside the pick, never as one, for the same reason.
 
 @ProviderFor(LocaleNotifier)
 final localeProvider = LocaleNotifierProvider._();
 
-/// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
+/// The app locale. Persisted pick first, then an older build's region language, then the PHONE,
+/// then English.
 ///
 /// A Tamil phone that opened Arul in English had to be told, in English, where the language picker
 /// was — the one screen that matters (sign-in) is the one screen it was hardest on. So an unset
@@ -90,11 +92,12 @@ final localeProvider = LocaleNotifierProvider._();
 /// said on first launch, so changing the phone's language later would stop moving the app; and
 /// Settings would show a language the user never picked as if they had. Only an explicit pick
 /// writes — Settings, the sign-in trigger, or a `lang=` deep link (which persists deliberately, so
-/// the link's language wins over a later phone change too). The region answer is stored beside
-/// the pick, never as one, for the same reason.
+/// the link's language wins over a later phone change too). An older build's region language sits
+/// beside the pick, never as one, for the same reason.
 final class LocaleNotifierProvider
     extends $NotifierProvider<LocaleNotifier, ui.Locale> {
-  /// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
+  /// The app locale. Persisted pick first, then an older build's region language, then the PHONE,
+  /// then English.
   ///
   /// A Tamil phone that opened Arul in English had to be told, in English, where the language picker
   /// was — the one screen that matters (sign-in) is the one screen it was hardest on. So an unset
@@ -104,8 +107,8 @@ final class LocaleNotifierProvider
   /// said on first launch, so changing the phone's language later would stop moving the app; and
   /// Settings would show a language the user never picked as if they had. Only an explicit pick
   /// writes — Settings, the sign-in trigger, or a `lang=` deep link (which persists deliberately, so
-  /// the link's language wins over a later phone change too). The region answer is stored beside
-  /// the pick, never as one, for the same reason.
+  /// the link's language wins over a later phone change too). An older build's region language sits
+  /// beside the pick, never as one, for the same reason.
   LocaleNotifierProvider._()
     : super(
         from: null,
@@ -133,9 +136,10 @@ final class LocaleNotifierProvider
   }
 }
 
-String _$localeNotifierHash() => r'ee299c6cde9198e1d41454524256ae14d553f27a';
+String _$localeNotifierHash() => r'e3300afd0aa454dda29223ed64be35637eec5371';
 
-/// The app locale. Persisted pick first, then the REGION, then the PHONE, then English.
+/// The app locale. Persisted pick first, then an older build's region language, then the PHONE,
+/// then English.
 ///
 /// A Tamil phone that opened Arul in English had to be told, in English, where the language picker
 /// was — the one screen that matters (sign-in) is the one screen it was hardest on. So an unset
@@ -145,8 +149,8 @@ String _$localeNotifierHash() => r'ee299c6cde9198e1d41454524256ae14d553f27a';
 /// said on first launch, so changing the phone's language later would stop moving the app; and
 /// Settings would show a language the user never picked as if they had. Only an explicit pick
 /// writes — Settings, the sign-in trigger, or a `lang=` deep link (which persists deliberately, so
-/// the link's language wins over a later phone change too). The region answer is stored beside
-/// the pick, never as one, for the same reason.
+/// the link's language wins over a later phone change too). An older build's region language sits
+/// beside the pick, never as one, for the same reason.
 
 abstract class _$LocaleNotifier extends $Notifier<ui.Locale> {
   ui.Locale build();
@@ -167,21 +171,21 @@ abstract class _$LocaleNotifier extends $Notifier<ui.Locale> {
 }
 
 /// Where the language came from, re-read from prefs -> [LocaleNotifier] invalidates it on every write.
-/// Never derived from [localeProvider]: a Tamil phone answered `ta` by its region changes the SOURCE
+/// Never derived from [localeProvider]: a pick equal to the phone's language changes the SOURCE
 /// only, and an equal locale never notifies.
 
 @ProviderFor(languageOrigin)
 final languageOriginProvider = LanguageOriginProvider._();
 
 /// Where the language came from, re-read from prefs -> [LocaleNotifier] invalidates it on every write.
-/// Never derived from [localeProvider]: a Tamil phone answered `ta` by its region changes the SOURCE
+/// Never derived from [localeProvider]: a pick equal to the phone's language changes the SOURCE
 /// only, and an equal locale never notifies.
 
 final class LanguageOriginProvider
     extends $FunctionalProvider<LanguageOrigin, LanguageOrigin, LanguageOrigin>
     with $Provider<LanguageOrigin> {
   /// Where the language came from, re-read from prefs -> [LocaleNotifier] invalidates it on every write.
-  /// Never derived from [localeProvider]: a Tamil phone answered `ta` by its region changes the SOURCE
+  /// Never derived from [localeProvider]: a pick equal to the phone's language changes the SOURCE
   /// only, and an equal locale never notifies.
   LanguageOriginProvider._()
     : super(

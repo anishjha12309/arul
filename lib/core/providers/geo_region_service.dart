@@ -5,45 +5,41 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/providers/auth_providers.dart';
+import '../analytics/journey_stamps.dart';
 import '../api/api_client.dart';
 import '../config/build_info.dart';
 import '../perf/boot_trace.dart';
 import 'locale_provider.dart';
 import 'shared_preferences_provider.dart';
 
-part 'geo_language_service.g.dart';
+part 'geo_region_service.g.dart';
 
-typedef GeoAnswerHandler =
-    Future<void> Function({String? lang, String? region, bool applyLive});
-
-/// A FRESH install's region hint, asked ONCE -> the Worker answers from Cloudflare's `request.cf`.
+/// A FRESH install's region, asked ONCE -> the Worker answers from Cloudflare's `request.cf`.
+/// The region picks the launch poster and the come-back picture, never the language.
 /// At most ONE request per process whatever happens -> no retry loop can ever come from here.
-class GeoLanguageService {
-  GeoLanguageService({
+class GeoRegionService {
+  GeoRegionService({
     required this._api,
     required this._prefs,
-    required this._onAnswer,
+    required this._onRegion,
     this._timeout = const Duration(seconds: 12),
   });
 
   final ApiClient _api;
   final SharedPreferences _prefs;
-  final GeoAnswerHandler _onAnswer;
+  final void Function() _onRegion;
   final Duration _timeout;
   bool _asked = false;
-  bool _live = true;
   final _settled = Completer<void>();
 
   /// Completes once this process's ask has an answer or a failure, or at once when there is none to
   /// make -> a reader that needs the region waits here instead of reading prefs too early.
   Future<void> get settled => _settled.future;
 
-  /// The regional arm's cap has passed -> a later answer is stored for the NEXT launch, never applied
-  /// to this one: a wall that painted in one language must not flip to another.
-  void closeLiveWindow() => _live = false;
+  /// Whether [fetchOnce] will reach the Worker -> the splash lets it stand in for the warm-up.
+  bool get willAsk => !_asked && (_prefs.getBool(geoPendingPrefsKey) ?? false);
 
   /// `main()`, once per process, before any UI -> only a fresh install's first process arms the ask.
-  /// An update already holds a cohort draw -> never fresh -> an existing install is never re-languaged.
   static void markIfFreshInstall(
     SharedPreferences prefs, {
     required bool freshInstall,
@@ -58,21 +54,30 @@ class GeoLanguageService {
       _settled.complete();
       return;
     }
+    JourneyStamps.noteGeo('pending');
     final clock = Stopwatch()..start();
     try {
       final answer = await _ask();
-      BootTrace.mark('geo: answered in ${clock.elapsedMilliseconds}ms');
+      final ms = clock.elapsedMilliseconds;
+      BootTrace.mark('geo: answered in ${ms}ms');
       debugPrint('[Geo] /geo answered $answer');
-      final lang = answer['lang'];
+      _api.noteWarmUp(ms);
+      JourneyStamps.noteGeo('answered', ms: ms);
       final region = answer['region'];
-      await _onAnswer(
-        lang: lang is String ? lang : null,
-        region: region is String ? region : null,
-        applyLive: _live,
-      );
+      await Future.wait([
+        _prefs.setString(
+          geoRegionPrefsKey,
+          region is String && region.isNotEmpty ? region : geoNone,
+        ),
+        _prefs.remove(geoPendingPrefsKey),
+      ]);
+      _onRegion();
     } catch (error) {
-      BootTrace.mark('geo: no answer after ${clock.elapsedMilliseconds}ms');
+      final ms = clock.elapsedMilliseconds;
+      BootTrace.mark('geo: no answer after ${ms}ms');
       debugPrint('[Geo] no answer, asking again next cold start: $error');
+      _api.noteWarmUp(ms);
+      JourneyStamps.noteGeo('failed', ms: ms);
     } finally {
       _settled.complete();
     }
@@ -80,17 +85,15 @@ class GeoLanguageService {
 
   Future<Map<String, dynamic>> _ask() {
     // Const-gated on the define -> a build without it compiles the seam away; a sideload release
-    // may carry it (never a Play install), so the regional wall is walkable at release speed.
-    // `DEBUG_GEO_REGION=KL` picks the regional arm's art the same way.
-    const debugLang = String.fromEnvironment('DEBUG_GEO_LANG');
-    const debugRegion = String.fromEnvironment(
-      'DEBUG_GEO_REGION',
-      defaultValue: 'SEAM',
-    );
-    if (debugLang.isNotEmpty && (kDebugMode || !PlayInstall.isPlay)) {
-      return Future.value({'lang': debugLang, 'region': debugRegion});
+    // may carry it (never a Play install), so each regional poster is walkable at release speed.
+    const debugRegion = String.fromEnvironment('DEBUG_GEO_REGION');
+    if (debugRegion.isNotEmpty && (kDebugMode || !PlayInstall.isPlay)) {
+      return Future.value({'region': debugRegion});
     }
-    return _api.get('/geo?v=2', requiresAuth: false).timeout(_timeout);
+    // No token: the keystore's single worker thread is still busy with main()'s first read.
+    return _api
+        .get('/geo', requiresAuth: false, withToken: false)
+        .timeout(_timeout);
   }
 }
 
@@ -106,10 +109,8 @@ Future<bool> awaitRegionAnswer(Future<void> ask, Duration remaining) async {
 }
 
 @Riverpod(keepAlive: true)
-GeoLanguageService geoLanguageService(Ref ref) => GeoLanguageService(
+GeoRegionService geoRegionService(Ref ref) => GeoRegionService(
   api: ref.read(apiClientProvider),
   prefs: ref.read(sharedPreferencesProvider),
-  onAnswer: ({lang, region, applyLive = true}) => ref
-      .read(localeProvider.notifier)
-      .setGeoHint(lang: lang, region: region, applyLive: applyLive),
+  onRegion: () => ref.invalidate(languageOriginProvider),
 );

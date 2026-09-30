@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:arul/core/experiments/experiments.dart';
-import 'package:arul/core/providers/geo_language_service.dart';
+import 'package:arul/core/providers/geo_region_service.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/features/auth/domain/regional_art.dart';

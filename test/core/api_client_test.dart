@@ -349,6 +349,34 @@ void main() {
       expect(captured!.headers.containsKey('Authorization'), isFalse);
     });
 
+    // The keystore plugin serialises every call on one thread -> a fresh install's `/geo` queued
+    // behind main()'s first secure-storage read and missed the regional wall's cap.
+    test('a token-less GET never touches the keystore', () async {
+      final storage = _KeystoreStorage(refuse: false);
+      http.Request? captured;
+      final c = ApiClient(
+        storage: storage,
+        httpClient: MockClient((req) async {
+          captured = req;
+          return _json({'region': 'TN'}, 200);
+        }),
+      );
+
+      await c.get('/geo', requiresAuth: false, withToken: false);
+
+      expect(storage.calls, 0);
+      expect(captured!.headers.containsKey('Authorization'), isFalse);
+    });
+  });
+
+  group('warm-up timing', () {
+    test('the first reading wins, whoever took it', () {
+      final c = makeClient(MockClient((_) async => _json({}, 200)))
+        ..noteWarmUp(900)
+        ..noteWarmUp(40);
+      expect(c.firstWarmUpMs, 900);
+    });
+
     test(
       'non-2xx throws ApiException with code/message/status from envelope',
       () async {

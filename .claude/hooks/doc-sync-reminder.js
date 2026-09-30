@@ -90,11 +90,11 @@ const ROUTES = [
     ],
     docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
   },
-  // The region rung of the language precedence, ahead of the generic routes row.
+  // The language precedence and the region ask, ahead of the generic routes row.
   {
     when: [
       "lib/core/providers/locale_provider.dart",
-      "lib/core/providers/geo_language_service.dart",
+      "lib/core/providers/geo_region_service.dart",
       "workers/src/routes/geo.ts",
     ],
     docs: ["docs/deep-links.md §Language precedence", "workers/README.md §Routes"],

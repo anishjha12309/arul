@@ -43,16 +43,20 @@ never re-exposes bare colour. **Both fixes are required; neither is sufficient a
   fetch all start at launch.** Holding them behind the credential was built and measured: Google's step
   and `/geo` moved within noise, push registration landed 9 s later and the feed's art later; the only
   gain was on a pathologically slow link. Never re-add a gate.
-- **`GET /geo`'s timeout is 12 s, not 5** — there is no second ask in that launch, and a miss costs the
-  first launch its language. The budget is for a slow LINK, never a slow Worker.
-- **Only the `exp_regional` arm waits for `/geo`**, at most `regionCap` (1,200 ms from the ask, fresh
-  install, first launch, signed out) and only AFTER `autoSignIn` fired, so Google's sheet is never held.
-  Measure with the `[boot]` marks `geo: answered in` / `splash: region wait ended`; if the LTE p90
-  passes the cap, LOWER the cap, never raise it.
-- **The regional wall paints its final language and poster on its FIRST frame — never flip.** While
-  waiting the splash shows ground + wordmark only (the tagline's language is unknown). At the cap
-  `closeLiveWindow()` makes a late answer store-only (next launch), and `LaunchArtNotifier.settle()`
-  fixes the poster once.
+- **`GET /geo` never reads the keystore (`withToken: false`).** The secure-storage plugin runs every
+  call in order on ONE thread, so a token read queued `/geo` behind `main()`'s first keystore read
+  (~3 s on a vivo 1916) and only 5–12% of the regional arm got its region inside the cap.
+- **On a fresh install `/geo` IS the warm-up** (`GeoRegionService.willAsk`): a second handshake to the
+  same host beside it slows both on a slow link. Its time feeds `firstWarmUpMs`, which the launch
+  clip's slow-link check reads.
+- **`GET /geo`'s timeout is 12 s, not 5** — there is no second ask in that launch. The budget is for a
+  slow LINK, never a slow Worker.
+- **Only the `exp_regional` arm waits for `/geo`**, at most `regionCap` (from the ask, fresh install,
+  first launch, signed out) and only AFTER `autoSignIn` fired, so Google's sheet is never held. Set the
+  cap from the field `geo_ms` p90; `[boot]` marks `geo: answered in` / `splash: region wait ended`.
+- **The regional wall paints its final poster on its FIRST frame — never flip.** A miss settles on
+  Murugan; `LaunchArtNotifier.settle()` fixes the poster once and a late answer only serves the next
+  launch. The region never changes the language ([deep-links.md](deep-links.md)).
 - **A 9:16 poster on a 9:20 phone crops only its sides, so alignment cannot lift a face** —
   `RegionalPoster.zoom` about `pivot` does; the framing is the owner's, judged by eye.
   `regional_wall_matrix_test.dart` gates type and clip-on-poster.
