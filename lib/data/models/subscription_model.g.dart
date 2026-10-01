@@ -26,6 +26,8 @@ _SubscriptionModel _$SubscriptionModelFromJson(Map<String, dynamic> json) =>
           : DateTime.parse(json['updated_at'] as String),
       pricePaise: (json['price_paise'] as num?)?.toInt() ?? 19900,
       cancelOfferEligible: json['cancel_offer_eligible'] as bool? ?? false,
+      winbackOfferEligible: json['winback_offer_eligible'] as bool? ?? false,
+      offerSwitch: json['offer_switch'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
@@ -42,6 +44,8 @@ Map<String, dynamic> _$SubscriptionModelToJson(_SubscriptionModel instance) =>
       'updated_at': instance.updatedAt?.toIso8601String(),
       'price_paise': instance.pricePaise,
       'cancel_offer_eligible': instance.cancelOfferEligible,
+      'winback_offer_eligible': instance.winbackOfferEligible,
+      'offer_switch': instance.offerSwitch,
     };
 
 const _$SubscriptionStatusEnumMap = {

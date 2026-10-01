@@ -625,45 +625,53 @@
   "@premiumCancelKeep": {
     "description": "Cancel-subscription dialog: the way OUT (keeps the plan). Must not say 'cancel' — the other button does."
   },
-  "cancelOfferEyebrow": "50% OFF",
-  "@cancelOfferEyebrow": {
-    "description": "Cancel-offer sheet eyebrow over the price. Uppercase in English; a plain phrase in other scripts."
+  "cancelOfferTitle": "Special offer",
+  "@cancelOfferTitle": {
+    "description": "Cancel-offer sheet title, the first thing a Cancel subscription tap opens."
   },
-  "cancelOfferForever": "Forever. Cancel anytime, same as now.",
-  "@cancelOfferForever": {
-    "description": "Cancel-offer sheet, under the ₹99 price: the discount never ends, and cancelling stays as easy as today."
+  "cancelOfferSubtitle": "Limited time pricing",
+  "@cancelOfferSubtitle": {
+    "description": "Cancel-offer sheet subtitle under the title."
   },
-  "cancelOfferApprove": "Your UPI app will ask you to approve {offerPrice}/month. We stop your {price} autopay as soon as you do.",
-  "@cancelOfferApprove": {
-    "description": "Cancel-offer sheet: what happens after Get discount. A commercial statement — it must NOT promise any refund.",
+  "cancelOfferDiscount": "50% off",
+  "@cancelOfferDiscount": {
+    "description": "Cancel-offer sheet: the large discount line. 50% = ₹99 against ₹199."
+  },
+  "cancelOfferPrice": "{price}/month",
+  "@cancelOfferPrice": {
+    "description": "Cancel-offer sheet: the offer price per month under the discount.",
     "placeholders": {
-      "offerPrice": {
-        "type": "String",
-        "example": "₹99"
-      },
       "price": {
         "type": "String",
-        "example": "₹199"
+        "example": "₹99"
       }
     }
   },
-  "cancelOfferDeclineNote": "Not now cancels your subscription.",
-  "@cancelOfferDeclineNote": {
-    "description": "Cancel-offer sheet footnote when the period end is unknown. 'Not now' names the button (referNotNow) — quote its translation."
+  "cancelOfferBilling": "Monthly payment, same price forever",
+  "@cancelOfferBilling": {
+    "description": "Cancel-offer sheet, under the offer price: how the offer bills (every month, via the new autopay) and that the price never goes up. Names the NEW price's terms only, never the old price."
   },
-  "cancelOfferDeclineNoteDate": "Not now cancels your subscription. You keep premium until {date}.",
-  "@cancelOfferDeclineNoteDate": {
-    "description": "Cancel-offer sheet footnote with the period end. 'Not now' names the button (referNotNow) — quote its translation.",
+  "cancelOfferEndsIn": "Offer ends in {time}",
+  "@cancelOfferEndsIn": {
+    "description": "Cancel-offer sheet timer pill. {time} counts down mm:ss from 10:00 (a real hold per sheet).",
     "placeholders": {
-      "date": {
+      "time": {
         "type": "String",
-        "example": "13 Oct 2026"
+        "example": "09:59"
       }
     }
   },
-  "cancelOfferAccept": "Get discount",
+  "cancelOfferEnded": "Offer ended",
+  "@cancelOfferEnded": {
+    "description": "Cancel-offer sheet timer pill once the 10-minute hold ran out; the discount button is disabled."
+  },
+  "cancelOfferAccept": "Get 50% discount",
   "@cancelOfferAccept": {
     "description": "Cancel-offer sheet primary button: switch to ₹99/month through the UPI app."
+  },
+  "cancelOfferDecline": "I don't want the offer",
+  "@cancelOfferDecline": {
+    "description": "Cancel-offer sheet underlined link under the button: turns the offer down. It opens the cancel confirmation, it does not cancel by itself."
   },
   "cancelOfferRetryTitle": "Didn't go through",
   "@cancelOfferRetryTitle": {

@@ -28,7 +28,7 @@ export const TRIAL_MS = 24 * 60 * 60 * 1000;
 const SWITCH_NOTICE_SLIDE = "25 hours";
 
 /**
- * Decision 5's eligibility over aliases `s` (subscriptions) and `u` (users), shared by GET /me and initiate.
+ * Decision 5's eligibility over alias `s`, no per-person limit: `price_paise` alone keeps a ₹99 row off ₹99 again.
  * NOT `notified_at IS NULL`: Pass A notifies a 1-day trial minutes after it starts, and autoDebit:false means a
  * notified order moves no money until Pass B redeems it at next_debit_at -> "not due within the hour" is the guard
  */
@@ -40,7 +40,18 @@ export function cancelOfferEligible(sql: Sql): Fragment {
     AND s.next_debit_at > now() + interval '1 hour'
     AND s.superseded_mandate_id IS NULL
     AND s.price_paise = ${STANDARD_PRICE_PAISE}
-    AND u.cancel_offer_at IS NULL
+  )`;
+}
+
+/**
+ * The winback over alias `s`, shared by GET /me and initiate: a returning user (trial_end set) with no live plan. A
+ * parked mandate IS a live plan still billing -> a pending claim over one is excluded; the in-flight guard runs first
+ */
+export function winbackOfferEligible(sql: Sql): Fragment {
+  return sql`(
+    s.status IN ('cancelled', 'expired', 'pending')
+    AND s.trial_end IS NOT NULL
+    AND s.superseded_mandate_id IS NULL
   )`;
 }
 
@@ -70,6 +81,8 @@ export async function releaseClaim(sql: Sql, where: Fragment): Promise<ReleasedC
                                                  THEN 'cancelled' ELSE 'expired' END
                                        END,
         merchant_subscription_id = COALESCE(s.superseded_mandate_id, s.merchant_subscription_id),
+        -- Nothing parked: the row still names the claim's mandate (a released winback's ₹99), and a late approval
+        -- resurrects a paid month on it -> it keeps that mandate's price
         price_paise              = CASE WHEN s.superseded_mandate_id IS NOT NULL
                                         THEN COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE})
                                         ELSE s.price_paise END,
@@ -120,43 +133,36 @@ async function grantOfferSwitch(
   phonepeSubId: string | null,
 ): Promise<SetupGrant | null> {
   const rows = (await sql`
-    WITH g AS (
-      UPDATE subscriptions AS s
-      SET status                  = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
-                                         THEN 'active' ELSE 'trialing' END,
-          phonepe_subscription_id = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
-          next_debit_at           = GREATEST(s.next_debit_at, now() + ${SWITCH_NOTICE_SLIDE}::interval),
-          current_period_end      = GREATEST(s.current_period_end, s.next_debit_at,
-                                             now() + ${SWITCH_NOTICE_SLIDE}::interval),
-          trial_end               = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
-                                         THEN s.trial_end
-                                         ELSE GREATEST(s.current_period_end, s.next_debit_at,
-                                                       now() + ${SWITCH_NOTICE_SLIDE}::interval) END,
-          notified_at             = NULL,
-          -- The parked mandate's order goes with it: a legacy order left on an hsr row names two merchants
-          redemption_order_id     = NULL,
-          offer_switch            = false,
-          offer_mandate_id        = NULL,
-          superseded_mandate_id   = NULL,
-          superseded_price_paise  = NULL,
-          updated_at              = now()
-      FROM subscriptions AS prior
-      WHERE ${where}
-        AND prior.id = s.id
-        AND s.status = 'pending'
-        AND s.offer_switch
-      RETURNING s.user_id, s.status, s.price_paise, prior.superseded_mandate_id AS stale_mandate_id
-    ),
-    stamp AS (
-      UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now())
-      FROM g WHERE users.id = g.user_id
-    )
-    SELECT * FROM g
+    UPDATE subscriptions AS s
+    SET status                  = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
+                                       THEN 'active' ELSE 'trialing' END,
+        phonepe_subscription_id = COALESCE(${phonepeSubId}, s.phonepe_subscription_id),
+        next_debit_at           = GREATEST(s.next_debit_at, now() + ${SWITCH_NOTICE_SLIDE}::interval),
+        current_period_end      = GREATEST(s.current_period_end, s.next_debit_at,
+                                           now() + ${SWITCH_NOTICE_SLIDE}::interval),
+        trial_end               = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
+                                       THEN s.trial_end
+                                       ELSE GREATEST(s.current_period_end, s.next_debit_at,
+                                                     now() + ${SWITCH_NOTICE_SLIDE}::interval) END,
+        notified_at             = NULL,
+        -- The parked mandate's order goes with it: a legacy order left on an hsr row names two merchants
+        redemption_order_id     = NULL,
+        offer_switch            = false,
+        offer_mandate_id        = NULL,
+        superseded_mandate_id   = NULL,
+        superseded_price_paise  = NULL,
+        updated_at              = now()
+    FROM subscriptions AS prior
+    WHERE ${where}
+      AND prior.id = s.id
+      AND s.status = 'pending'
+      AND s.offer_switch
+    RETURNING s.user_id, s.status, s.price_paise, prior.superseded_mandate_id AS stale_mandate_id
   `) as unknown as Omit<SetupGrant, "kind">[];
   return rows[0] ? { kind: "switch", ...rows[0] } : null;
 }
 
-/** The ELSE branch is itself a ₹199 TRANSACTION debit -> the three debit-tracking columns move on it and ONLY on it. */
+/** The ELSE branch is itself a TRANSACTION debit at the row's price -> the debit-tracking columns move on it and ONLY on it. */
 async function grantSetup(
   sql: Sql,
   where: Fragment,
@@ -204,38 +210,31 @@ export async function honourLateOfferApproval(
   phonepeSubId: string | null,
 ): Promise<SetupGrant | null> {
   const rows = (await sql`
-    WITH g AS (
-      UPDATE subscriptions AS s
-      SET merchant_subscription_id = s.offer_mandate_id,
-          phonepe_subscription_id  = ${phonepeSubId}::text,
-          price_paise              = ${OFFER_PRICE_PAISE},
-          next_debit_at            = GREATEST(s.next_debit_at, now() + ${SWITCH_NOTICE_SLIDE}::interval),
-          current_period_end       = GREATEST(s.current_period_end, s.next_debit_at,
-                                              now() + ${SWITCH_NOTICE_SLIDE}::interval),
-          trial_end                = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
-                                          THEN s.trial_end
-                                          ELSE GREATEST(s.current_period_end, s.next_debit_at,
-                                                        now() + ${SWITCH_NOTICE_SLIDE}::interval) END,
-          notified_at              = NULL,
-          redemption_order_id      = NULL,
-          offer_mandate_id         = NULL,
-          offer_switch             = false,
-          updated_at               = now()
-      FROM subscriptions AS prior
-      WHERE s.offer_mandate_id = ${offerMandateId}
-        AND prior.id = s.id
-        AND s.status IN ('trialing', 'active')
-        AND s.price_paise = ${STANDARD_PRICE_PAISE}
-        AND s.superseded_mandate_id IS NULL
-        AND s.current_period_end > now()
-        AND s.next_debit_at > now() + interval '1 hour'
-      RETURNING s.user_id, s.status, s.price_paise, prior.merchant_subscription_id AS stale_mandate_id
-    ),
-    stamp AS (
-      UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now())
-      FROM g WHERE users.id = g.user_id
-    )
-    SELECT * FROM g
+    UPDATE subscriptions AS s
+    SET merchant_subscription_id = s.offer_mandate_id,
+        phonepe_subscription_id  = ${phonepeSubId}::text,
+        price_paise              = ${OFFER_PRICE_PAISE},
+        next_debit_at            = GREATEST(s.next_debit_at, now() + ${SWITCH_NOTICE_SLIDE}::interval),
+        current_period_end       = GREATEST(s.current_period_end, s.next_debit_at,
+                                            now() + ${SWITCH_NOTICE_SLIDE}::interval),
+        trial_end                = CASE WHEN s.trial_end IS NOT NULL AND s.current_period_end > s.trial_end
+                                        THEN s.trial_end
+                                        ELSE GREATEST(s.current_period_end, s.next_debit_at,
+                                                      now() + ${SWITCH_NOTICE_SLIDE}::interval) END,
+        notified_at              = NULL,
+        redemption_order_id      = NULL,
+        offer_mandate_id         = NULL,
+        offer_switch             = false,
+        updated_at               = now()
+    FROM subscriptions AS prior
+    WHERE s.offer_mandate_id = ${offerMandateId}
+      AND prior.id = s.id
+      AND s.status IN ('trialing', 'active')
+      AND s.price_paise = ${STANDARD_PRICE_PAISE}
+      AND s.superseded_mandate_id IS NULL
+      AND s.current_period_end > now()
+      AND s.next_debit_at > now() + interval '1 hour'
+    RETURNING s.user_id, s.status, s.price_paise, prior.merchant_subscription_id AS stale_mandate_id
   `) as unknown as Omit<SetupGrant, "kind">[];
   return rows[0] ? { kind: "switch", ...rows[0] } : null;
 }
@@ -245,6 +244,9 @@ export async function noteRevokeRetry(sql: Sql, userId: string, mandateId: strin
   await sql`
     UPDATE subscriptions
     SET revoke_retry_mandate_id = ${mandateId},
+        -- The first failure dates the 72 h ALARM; another id is a new failure, or its first retry would alarm
+        revoke_retry_at         = CASE WHEN revoke_retry_mandate_id = ${mandateId}
+                                       THEN COALESCE(revoke_retry_at, now()) ELSE now() END,
         updated_at              = now()
     WHERE user_id = ${userId}
   `;

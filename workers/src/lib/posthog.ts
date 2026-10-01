@@ -44,9 +44,9 @@ function eventTimestamp(occurredAt: Date | string | null | undefined): string {
   return new Date().toISOString();
 }
 
-/** `offer: "cancel_99"` on an event about a ₹99 mandate, nothing otherwise -> absent reads as the standard price. */
-function offerProperty(pricePaise: number): { offer?: string } {
-  const offer = offerOfPrice(pricePaise);
+/** `offer` only where the row proves which offer it is (`offerOfPrice`); `price_paise` is always the truth. */
+function offerProperty(pricePaise: number, trialing: boolean): { offer?: string } {
+  const offer = offerOfPrice(pricePaise, trialing);
   return offer ? { offer } : {};
 }
 
@@ -107,7 +107,7 @@ export async function reportPostHogFirstConversion(env: Env, purchase: FirstConv
           target_app: purchase.targetApp ?? "unknown",
           phonepe_merchant: purchase.merchantSubId ? merchantOf(purchase.merchantSubId) : "unknown",
           price_paise: amountPaise,
-          ...offerProperty(amountPaise),
+          ...offerProperty(amountPaise, true),
           $lib: "arul-worker",
         },
       }),
@@ -211,7 +211,7 @@ export async function reportPostHogSubscriptionCancel(env: Env, cancel: Subscrip
             ? {
                 price_paise: cancel.pricePaise,
                 value: cancel.pricePaise / 100,
-                ...offerProperty(cancel.pricePaise),
+                ...offerProperty(cancel.pricePaise, cancel.priorStatus === "trialing"),
               }
             : {}),
           $lib: "arul-worker",

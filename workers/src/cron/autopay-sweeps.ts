@@ -301,32 +301,30 @@ async function sweepOfferMandates(env: Env, sql: Sql, budget: SweepBudget): Prom
 /** A parked ₹199 the switch grant could not revoke -> never notified, so it cannot debit; the user still sees it. */
 async function retryStaleRevokes(env: Env, sql: Sql, budget: SweepBudget): Promise<void> {
   const rows = (await sql`
-    SELECT s.id, s.revoke_retry_mandate_id, u.cancel_offer_at
-    FROM subscriptions AS s
-    JOIN users AS u ON u.id = s.user_id
-    WHERE s.revoke_retry_mandate_id IS NOT NULL
-    ORDER BY s.updated_at ASC
+    SELECT id, revoke_retry_mandate_id, revoke_retry_at
+    FROM subscriptions
+    WHERE revoke_retry_mandate_id IS NOT NULL
+    ORDER BY updated_at ASC
     LIMIT ${MAX_REVOKE_RETRY_ROWS}
-  `) as unknown as { id: string; revoke_retry_mandate_id: string; cancel_offer_at: unknown }[];
+  `) as unknown as { id: string; revoke_retry_mandate_id: string; revoke_retry_at: unknown }[];
 
   const tally = { revoked: 0, left: 0 };
   await inLanes(rows, budget, 3, async (row) => {
     const mandateId = row.revoke_retry_mandate_id;
     if (await revokeMandateTolerant(env, mandateId).catch(() => false)) {
       await sql`
-        UPDATE subscriptions SET revoke_retry_mandate_id = NULL
+        UPDATE subscriptions SET revoke_retry_mandate_id = NULL, revoke_retry_at = NULL
         WHERE id = ${row.id} AND revoke_retry_mandate_id = ${mandateId}
       `;
       tally.revoked += 1;
       return;
     }
     tally.left += 1;
-    // The switch stamped cancel_offer_at in the same statement that parked this id -> it dates the first failure
-    const since = toDate(row.cancel_offer_at);
+    const since = toDate(row.revoke_retry_at);
     if (since !== null && Date.now() - since.getTime() > REVOKE_ALARM_MS) {
       console.error(
         `[autopay-sweeps] ALARM — replaced ₹199 mandate ${mandateId} still not revoked ` +
-          `${Math.round((Date.now() - since.getTime()) / 3_600_000)}h after the ₹99 switch; revoke it by hand`,
+          `${Math.round((Date.now() - since.getTime()) / 3_600_000)}h after its first failed revoke; revoke it by hand`,
       );
     }
   });

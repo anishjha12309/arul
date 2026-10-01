@@ -113,10 +113,8 @@ describe("DELETE /me", () => {
     const tx = calls.filter((c) => c.inTx);
     expect(tx).toHaveLength(2);
     expect(tx[0].text).toContain("INSERT INTO trial_tombstones");
-    // The EARLIEST tombstone wins -> a later deletion only fills a cancel-offer stamp it lacked
-    expect(tx[0].text).toContain("ON CONFLICT (google_sub_hash) DO UPDATE");
-    expect(tx[0].text).toContain("COALESCE(trial_tombstones.trial_end, EXCLUDED.trial_end)");
-    expect(tx[0].text).toContain("COALESCE(trial_tombstones.cancel_offer_at, EXCLUDED.cancel_offer_at)");
+    expect(tx[0].text).toContain("ON CONFLICT (google_sub_hash) DO NOTHING");
+    expect(tx[0].text).not.toContain("cancel_offer_at");
     expect(tx[0].values[0]).not.toBe("google-123");
     expect(tx[0].values[1]).toEqual(trialing.trial_end);
     expect(tx[1].text).toContain("DELETE FROM users");

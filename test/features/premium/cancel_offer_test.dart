@@ -1,8 +1,8 @@
-// The ₹99 cancel-save offer, from "Cancel it" to its outcome.
+// The ₹99 cancel-save offer, from the Cancel tap to its outcome.
 //
-// The offer sits between a subscriber's decision to cancel and the cancel itself, so every path out
-// of it must land on exactly one of: the switch, the cancel as asked, or nothing changed. And the
-// switch is a subscriber keeping their plan — it may never count as a trial or a conversion.
+// The offer comes first and the confirm after it, so every path out of the sheet must land on
+// exactly one of: the switch, the confirm, or nothing changed. And the switch is a subscriber
+// keeping their plan — it may never count as a trial or a conversion.
 
 import 'dart:async';
 
@@ -19,6 +19,7 @@ import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/domain/trial_nudge.dart';
+import 'package:arul/features/premium/presentation/cancel_offer_sheet.dart';
 import 'package:arul/features/premium/presentation/premium_screen.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
@@ -181,6 +182,8 @@ void main() {
       prefs = await SharedPreferences.getInstance();
       PremiumPurchase.clock = () => tester.binding.clock.now();
       addTearDown(() => PremiumPurchase.clock = DateTime.now);
+      cancelOfferClock = () => tester.binding.clock.now();
+      addTearDown(() => cancelOfferClock = DateTime.now);
       mockChannels(tester);
 
       final sub = SubscriptionModel(
@@ -225,12 +228,15 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Future<void> confirmCancel(WidgetTester tester) async {
+    Future<void> tapCancel(WidgetTester tester) async {
       final button = find.byKey(const ValueKey('member-cancel-button'));
       await tester.ensureVisible(button);
       await tester.tap(button);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancel it'));
+    }
+
+    Future<void> tapAndSettle(WidgetTester tester, Finder finder) async {
+      await tester.tap(finder);
       await tester.pumpAndSettle();
     }
 
@@ -242,7 +248,7 @@ void main() {
     }
 
     Future<void> acceptWithPhonePe(WidgetTester tester) async {
-      await tester.tap(find.text('Get discount'));
+      await tester.tap(find.text('Get 50% discount'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('PhonePe'));
       await tester.pump();
@@ -255,25 +261,98 @@ void main() {
     });
 
     testWidgets(
-      'eligible: "Cancel it" opens the offer, and nothing is cancelled yet',
+      'eligible: the Cancel tap opens the offer first, and nothing is cancelled',
       (tester) async {
         await openPlanHome(tester, eligible: true);
-        await confirmCancel(tester);
+        await tapCancel(tester);
 
-        expect(find.text('50% OFF'), findsOneWidget);
-        expect(find.text('Get discount'), findsOneWidget);
+        expect(find.text('Special offer'), findsOneWidget);
+        expect(find.text('Limited time pricing'), findsOneWidget);
+        expect(find.text('50% off'), findsOneWidget);
+        expect(find.text('₹99/month', findRichText: true), findsOneWidget);
         expect(
-          find.text(
-            // The date is held together with no-break spaces.
-            'Not now cancels your subscription. You keep premium until '
-            '13 Oct 2026.',
-          ),
+          find.text('Monthly payment, same price forever'),
           findsOneWidget,
         );
+        expect(
+          find.text('Offer ends in 10:00', findRichText: true),
+          findsOneWidget,
+        );
+        expect(find.text('Get 50% discount'), findsOneWidget);
+        expect(find.text("I don't want the offer"), findsOneWidget);
+        expect(find.text('Cancel subscription?'), findsNothing);
         expect(api.bodiesOf('/payments/cancel'), isEmpty);
+        final tapped = eventsNamed('cancel_tapped').single!;
+        expect(tapped['offer_eligible'], isTrue);
+        expect(tapped['offer'], 'cancel_99');
+        expect(tapped['price_paise'], '19900');
         expect(eventsNamed('cancel_offer_shown'), hasLength(1));
       },
     );
+
+    testWidgets('the hold counts down, then disables the discount', (
+      tester,
+    ) async {
+      await openPlanHome(tester, eligible: true);
+      await tapCancel(tester);
+
+      await tester.pump(const Duration(seconds: 61));
+      expect(
+        find.text('Offer ends in 08:59', findRichText: true),
+        findsOneWidget,
+      );
+
+      for (var i = 0; i < 9; i++) {
+        await tester.pump(const Duration(minutes: 1));
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('Offer ended', findRichText: true), findsOneWidget);
+      expect(eventsNamed('cancel_offer_expired'), hasLength(1));
+
+      await tester.tap(find.text('Get 50% discount'));
+      await tester.pumpAndSettle();
+      expect(find.text('PhonePe'), findsNothing);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+    });
+
+    testWidgets('a screen reader hears the end once, not a tick a second', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await openPlanHome(tester, eligible: true);
+      await tapCancel(tester);
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Offer ends in 10:00')),
+        matchesSemantics(label: 'Offer ends in 10:00', isLiveRegion: false),
+      );
+
+      await tester.pump(const Duration(minutes: 11));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getSemantics(find.bySemanticsLabel('Offer ended')),
+        matchesSemantics(label: 'Offer ended', isLiveRegion: true),
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('a fresh Cancel tap is a fresh ten minutes', (tester) async {
+      await openPlanHome(tester, eligible: true);
+      await tapCancel(tester);
+      await tester.pump(const Duration(minutes: 11));
+      await tester.pumpAndSettle();
+      expect(find.text('Offer ended', findRichText: true), findsOneWidget);
+
+      await tapAndSettle(
+        tester,
+        find.byKey(const ValueKey('cancel-offer-close')),
+      );
+      await tapAndSettle(tester, find.text('Keep premium'));
+      await tapCancel(tester);
+      expect(
+        find.text('Offer ends in 10:00', findRichText: true),
+        findsOneWidget,
+      );
+    });
 
     testWidgets(
       'the confirm dialog wears the member card, its date on one line',
@@ -304,33 +383,23 @@ void main() {
       },
     );
 
-    testWidgets('ineligible: "Cancel it" cancels as before, with no offer', (
+    testWidgets('ineligible: the confirm comes straight up, with no offer', (
       tester,
     ) async {
       await openPlanHome(tester, eligible: false);
-      await confirmCancel(tester);
+      await tapCancel(tester);
+      expect(find.text('Special offer'), findsNothing);
+      await tapAndSettle(tester, find.text('Cancel it'));
 
-      expect(find.text('Get discount'), findsNothing);
       expect(api.bodiesOf('/payments/cancel'), [null]);
       expect(eventsNamed('cancel_offer_shown'), isEmpty);
       expect(
-        find.text(
-          'Subscription cancelled. You keep premium until 13 Oct 2026.',
-        ),
-        findsOneWidget,
+        eventsNamed('cancel_tapped').single!.containsKey('offer'),
+        isFalse,
       );
-    });
-
-    testWidgets('Not now cancels with the offer declined', (tester) async {
-      await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
-      await tester.tap(find.text('Not now'));
-      await tester.pumpAndSettle();
-
-      expect(api.bodiesOf('/payments/cancel'), [
-        {'offer_declined': true},
-      ]);
-      expect(eventsNamed('cancel_offer_declined'), hasLength(1));
+      final confirmed = eventsNamed('cancel_confirmed').single!;
+      expect(confirmed['after_offer'], isFalse);
+      expect(confirmed.containsKey('offer'), isFalse);
       expect(
         find.text(
           'Subscription cancelled. You keep premium until 13 Oct 2026.',
@@ -339,15 +408,68 @@ void main() {
       );
     });
 
-    testWidgets('the scrim declines the offer too', (tester) async {
+    testWidgets(
+      "\"I don't want the offer\" opens the confirm, and Cancel it cancels",
+      (tester) async {
+        await openPlanHome(tester, eligible: true);
+        await tapCancel(tester);
+        await tapAndSettle(tester, find.text("I don't want the offer"));
+
+        expect(find.text('Special offer'), findsNothing);
+        expect(find.text('Cancel subscription?'), findsOneWidget);
+        expect(api.bodiesOf('/payments/cancel'), isEmpty);
+        await tapAndSettle(tester, find.text('Cancel it'));
+
+        expect(api.bodiesOf('/payments/cancel'), [
+          {'offer_declined': true},
+        ]);
+        expect(eventsNamed('cancel_offer_declined').single?['via'], 'link');
+        final confirmed = eventsNamed('cancel_confirmed').single!;
+        expect(confirmed['after_offer'], isTrue);
+        expect(confirmed['offer'], 'cancel_99');
+        expect(
+          find.text(
+            'Subscription cancelled. You keep premium until 13 Oct 2026.',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('the X, then Keep premium, changes nothing', (tester) async {
       await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
+      await tapCancel(tester);
+      await tapAndSettle(
+        tester,
+        find.byKey(const ValueKey('cancel-offer-close')),
+      );
+      await tapAndSettle(tester, find.text('Keep premium'));
+
+      expect(api.bodiesOf('/payments/cancel'), isEmpty);
+      expect(eventsNamed('cancel_offer_declined').single?['via'], 'close');
+      expect(eventsNamed('cancel_kept').single?['after_offer'], isTrue);
+    });
+
+    testWidgets('the scrim and back open the confirm, never a cancel', (
+      tester,
+    ) async {
+      await openPlanHome(tester, eligible: true);
+      await tapCancel(tester);
       await tester.tapAt(const Offset(20, 20));
       await tester.pumpAndSettle();
+      expect(find.text('Special offer'), findsNothing);
+      expect(find.text('Cancel subscription?'), findsOneWidget);
+      await tapAndSettle(tester, find.text('Keep premium'));
 
-      expect(find.text('Get discount'), findsNothing);
-      expect(api.bodiesOf('/payments/cancel'), [
-        {'offer_declined': true},
+      await tapCancel(tester);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Cancel subscription?'), findsOneWidget);
+
+      expect(api.bodiesOf('/payments/cancel'), isEmpty);
+      expect(eventsNamed('cancel_offer_declined').map((e) => e?['via']), [
+        'dismiss',
+        'dismiss',
       ]);
     });
 
@@ -355,7 +477,7 @@ void main() {
       'Get discount switches through the UPI app — no trial, no cancel',
       (tester) async {
         await openPlanHome(tester, eligible: true);
-        await confirmCancel(tester);
+        await tapCancel(tester);
         await acceptWithPhonePe(tester);
 
         final initiate = api.bodiesOf('/payments/initiate').single!;
@@ -366,9 +488,11 @@ void main() {
         await settle(tester);
 
         expect(find.text("You're on ₹99/month."), findsOneWidget);
-        expect(find.text('Get discount'), findsNothing);
+        expect(find.text('Get 50% discount'), findsNothing);
+        expect(find.text('Cancel subscription?'), findsNothing);
         expect(api.bodiesOf('/payments/cancel'), isEmpty);
         expect(eventsNamed('cancel_offer_accepted'), hasLength(1));
+        expect(eventsNamed('cancel_offer_switched'), hasLength(1));
         expect(eventsNamed('trial_started'), isEmpty);
         final started = eventsNamed('checkout_started').single!;
         expect(started['offer'], 'cancel_99');
@@ -387,7 +511,7 @@ void main() {
     ) async {
       launchResult = false;
       await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
+      await tapCancel(tester);
       await acceptWithPhonePe(tester);
       await settle(tester);
 
@@ -407,7 +531,7 @@ void main() {
       'the Worker handing the ₹199 plan back is a failure, not a switch',
       (tester) async {
         await openPlanHome(tester, eligible: true);
-        await confirmCancel(tester);
+        await tapCancel(tester);
         await acceptWithPhonePe(tester);
 
         api.status = _statusRow('active', 19900);
@@ -427,7 +551,7 @@ void main() {
     ) async {
       launchResult = false;
       await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
+      await tapCancel(tester);
       await acceptWithPhonePe(tester);
       await settle(tester);
       expect(find.text("Didn't go through"), findsOneWidget);
@@ -443,17 +567,19 @@ void main() {
       expect(api.bodiesOf('/payments/cancel'), isEmpty);
     });
 
-    testWidgets('the retry sheet can still cancel, spending the offer', (
+    testWidgets('the retry sheet can still cancel, through the confirm', (
       tester,
     ) async {
       launchResult = false;
       await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
+      await tapCancel(tester);
       await acceptWithPhonePe(tester);
       await settle(tester);
 
       await tester.tap(find.byKey(const ValueKey('cancel-offer-retry-cancel')));
       await tester.pumpAndSettle();
+      expect(api.bodiesOf('/payments/cancel'), isEmpty);
+      await tapAndSettle(tester, find.text('Cancel it'));
 
       expect(api.bodiesOf('/payments/cancel'), [
         {'offer_declined': true},
@@ -470,7 +596,7 @@ void main() {
         message: 'This offer is not available',
       );
       await openPlanHome(tester, eligible: true);
-      await confirmCancel(tester);
+      await tapCancel(tester);
       await acceptWithPhonePe(tester);
       await settle(tester, seconds: 1);
 
@@ -483,8 +609,8 @@ void main() {
       tester,
     ) async {
       await openPlanHome(tester, eligible: true, apps: const []);
-      await confirmCancel(tester);
-      await tester.tap(find.text('Get discount'));
+      await tapCancel(tester);
+      await tester.tap(find.text('Get 50% discount'));
       await tester.pump();
       await settle(tester);
 
@@ -492,12 +618,157 @@ void main() {
       expect(initiate['offer'], 'cancel_99');
       expect(initiate['mode'], 'qr');
       expect(find.text('Scan to subscribe'), findsOneWidget);
-      expect(find.text('Get discount'), findsNothing);
+      expect(find.text('Get 50% discount'), findsNothing);
 
       api.status = _statusRow('active', 9900);
       await tester.tap(find.text('I have paid'));
       await settle(tester, seconds: 1);
       expect(find.text("You're on ₹99/month."), findsOneWidget);
+    });
+  });
+
+  group('the winback', () {
+    Future<void> openResubscribe(
+      WidgetTester tester, {
+      required bool winback,
+    }) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues(const {});
+      prefs = await SharedPreferences.getInstance();
+      PremiumPurchase.clock = () => tester.binding.clock.now();
+      addTearDown(() => PremiumPurchase.clock = DateTime.now);
+      cancelOfferClock = () => tester.binding.clock.now();
+      addTearDown(() => cancelOfferClock = DateTime.now);
+      mockChannels(tester);
+      api.initiate = {
+        'merchantOrderId': 'DKS_WIN_1',
+        'intentUrl': 'upi://mandate?tr=DKS_WIN_1&am=99',
+        'trialEligible': false,
+        'amountPaise': 9900,
+      };
+
+      final sub = SubscriptionModel(
+        id: 'sub_1',
+        userId: 'u_1',
+        status: SubscriptionStatus.cancelled,
+        merchantOrderId: 'DKS_ORIGINAL',
+        trialEnd: DateTime(2026, 9, 1),
+        currentPeriodEnd: DateTime(2026, 10, 13, 12),
+        winbackOfferEligible: winback,
+      );
+      final router = GoRouter(
+        initialLocation: '/premium',
+        routes: [
+          GoRoute(
+            path: '/premium',
+            builder: (_, _) => const PremiumScreen(source: 'settings'),
+          ),
+          GoRoute(path: '/browse', builder: (_, _) => const SizedBox()),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...baseOverrides(),
+            entitlementDetailProvider.overrideWith(
+              (ref) async => Entitlement(isPremium: true, subscription: sub),
+            ),
+            installedUpiAppsProvider.overrideWith(
+              (ref) async => const UpiScan(apps: [_phonePe], otherPackages: []),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: ArulTheme.light(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> tapResubscribe(WidgetTester tester) async {
+      final cta = find.text('Resubscribe');
+      await tester.ensureVisible(cta);
+      await tester.tap(cta);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a returning user sees the offer first, and accepting is ₹99 '
+        'through the chosen app', (tester) async {
+      await openResubscribe(tester, winback: true);
+      await tapResubscribe(tester);
+
+      expect(find.text('Special offer'), findsOneWidget);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+      final shown = eventsNamed('cancel_offer_shown').single!;
+      expect(shown['offer'], 'winback_99');
+      expect(shown['flow'], 'winback');
+
+      await tester.tap(find.text('Get 50% discount'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final body = api.bodiesOf('/payments/initiate').single!;
+      expect(body['offer'], 'winback_99');
+      expect(body['targetApp'], 'com.phonepe.app');
+      final started = eventsNamed('checkout_started').single!;
+      expect(started['value'], 99.0);
+      expect(started['paywall_source'], 'winback_offer');
+
+      // An ordinary sale at ₹99: the paid-month event carries the ₹99 value and the offer.
+      api.status = _statusRow('active', 9900);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      final paid = eventsNamed('subscription_active').single!;
+      expect(paid['value'], 99.0);
+      expect(paid['offer'], 'winback_99');
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets("\"I don't want the offer\" continues at the full price", (
+      tester,
+    ) async {
+      await openResubscribe(tester, winback: true);
+      await tapResubscribe(tester);
+      await tester.tap(find.text("I don't want the offer"));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final body = api.bodiesOf('/payments/initiate').single!;
+      expect(body.containsKey('offer'), isFalse);
+      expect(eventsNamed('cancel_offer_declined').single?['via'], 'link');
+      // Past the ₹199 attempt's own watch.
+      await tester.pump(const Duration(minutes: 20));
+    });
+
+    testWidgets('the X leaves them on the screen, with nothing started', (
+      tester,
+    ) async {
+      await openResubscribe(tester, winback: true);
+      await tapResubscribe(tester);
+      await tester.tap(find.byKey(const ValueKey('cancel-offer-close')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Special offer'), findsNothing);
+      expect(find.text('Resubscribe'), findsOneWidget);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+      expect(eventsNamed('cancel_offer_declined').single?['via'], 'close');
+    });
+
+    testWidgets('without the Worker saying so, Resubscribe skips the offer', (
+      tester,
+    ) async {
+      await openResubscribe(tester, winback: false);
+      await tester.tap(find.text('Resubscribe'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Special offer'), findsNothing);
+      expect(eventsNamed('cancel_offer_shown'), isEmpty);
     });
   });
 

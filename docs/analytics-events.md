@@ -6,7 +6,7 @@ the Play-install gate and reading the data: [analytics-ops.md](analytics-ops.md)
 allow-list are exact sets pinned by tests — a typo drops silently.
 
 - **PostHog** — PLAY installs only, and **only the journey** (`login_success` → `trial_started` →
-  `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus the sign-in diagnostics below. Gated by
+  `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus the two exceptions below. Gated by
   `AnalyticsCohort` (is this install in the panel?) and `AllowlistedAnalyticsService` (is the event on
   the list?). `Application Installed` is emitted by hand in `main.dart` — the one PostHog event that
   bypasses `AnalyticsService`.
@@ -78,9 +78,8 @@ outcome is a process that died under Google's surface — the only way that loss
   `subscription_active` and `payment_failed`; `checkout_started` fires once per decision, never on a
   resume.
 - `paywall_shown`, `payment_failed` and their value rules: [checkout.md](checkout.md) §Events.
-- The ₹99 offer's `cancel_offer_shown`/`_accepted`/`_declined`/`_retry_shown` are GA4-only, pinned off
-  PostHog. An offer attempt's events carry `offer: cancel_99` + `price_paise`; its `checkout_started` is
-  never `begin_checkout`/InitiateCheckout (a switch is no conversion). Server events add `price_paise`.
+- Offer checkout events carry `offer: cancel_99` + `price_paise`; that `checkout_started` is never
+  `begin_checkout`/InitiateCheckout (a switch is no conversion).
 - The return page adds `trial_return_shown` and `return_video_start`/`return_video_muted`; a tap from
   it stamps `surface: return` on the checkout events (absent = the trial screen). The sign-in events use
   `surface` for their own values — filter by event before splitting.
@@ -103,10 +102,12 @@ property, a `register()` super property or a person property — [analytics-sign
   installs cannot be back-dated into a spike. PostHog DAU means "did a journey thing"; GA4's
   `first_open`/`session_start` are the "opened the app" record.
 - `Posthog().setup()` is not awaited — native init stays off the first-frame path.
+- **The cancel funnel is on the list** (owner exception): `cancel_tapped`, `cancel_offer_*`,
+  `cancel_confirmed`/`_kept`, `resubscribe_tapped`; `flow: winback` = a comeback.
+  `_accepted` = the tap; `_switched` = ₹99 live.
 - **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
   risk; `deep_link_opened` stays off too and must never feed an optimiser.
-- **Analytics is never a ranking source** — the feed orders by server-side counters
-  ([browse.md](browse.md)).
+- **Analytics never ranks the feed**; Neon counters do ([browse.md](browse.md)).
 
 ## Property conventions
 

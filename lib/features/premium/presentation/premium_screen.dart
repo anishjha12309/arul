@@ -462,10 +462,53 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     }
   }
 
-  Future<void> _confirmAndCancel(SubscriptionModel sub) async {
+  // The offer first, then the confirm: every way off the sheet opens the confirm, and only its
+  // "Cancel it" ends the plan.
+  Future<void> _onCancelTapped(SubscriptionModel sub) async {
     if (_cancelBusy) return;
+    _trackOffer(
+      'cancel_tapped',
+      sub,
+      offer: sub.cancelOfferEligible,
+      extra: {'offer_eligible': sub.cancelOfferEligible},
+    );
+    if (sub.cancelOfferEligible) {
+      final choice = await _offerBeforeCancel(sub);
+      if (!mounted || choice == CancelOfferChoice.accept) return;
+      // Dismissed mid-initiate: the switch is under way and the purchase listener owns its outcome.
+      if (_switchUnderWay()) return;
+      // Torn down by navigation (a push tap): no confirm over a screen that is no longer shown.
+      if (!(ModalRoute.of(context)?.isCurrent ?? false)) return;
+      _trackOffer(
+        'cancel_offer_declined',
+        sub,
+        sheet: 'offer',
+        extra: {
+          'via': switch (choice) {
+            CancelOfferChoice.decline => 'link',
+            CancelOfferChoice.close => 'close',
+            _ => 'dismiss',
+          },
+        },
+      );
+    }
+    await _confirmCancel(sub, afterOffer: sub.cancelOfferEligible);
+  }
+
+  bool _switchUnderWay() {
+    final state = ref.read(premiumPurchaseProvider);
+    return state is PurchaseLoading ||
+        state is PurchaseProcessing ||
+        state is PurchaseScannable;
+  }
+
+  Future<void> _confirmCancel(
+    SubscriptionModel? sub, {
+    required bool afterOffer,
+  }) async {
+    if (_cancelBusy || !mounted) return;
     final l10n = AppLocalizations.of(context);
-    final end = sub.currentPeriodEnd?.toLocal();
+    final end = sub?.currentPeriodEnd?.toLocal();
 
     final date = end == null ? null : l10n.premiumPlanDate(end);
     final ok = await showPremiumConfirmDialog(
@@ -473,23 +516,22 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       title: l10n.premiumCancelDialogTitle,
       message: date == null
           ? l10n.premiumCancelDialogBody
-          // The same "d MMM y" as the plan rows, held on one line like the offer sheet's.
+          // The same "d MMM y" as the plan rows, held on one line.
           : l10n
                 .premiumCancelDialogBodyDate(end!)
                 .replaceFirst(date, date.replaceAll(' ', ' ')),
       confirmLabel: l10n.premiumCancelConfirm,
       cancelLabel: l10n.premiumCancelKeep,
     );
-    if (ok != true || !mounted) return;
-
-    if (sub.cancelOfferEligible) {
-      final choice = await _offerBeforeCancel(sub);
-      // Only a DECLINE cancels: a sheet torn down by navigation (a push tap) answers null, and
-      // ending a paid plan is never something the app does on the person's behalf.
-      if (choice != CancelOfferChoice.decline || !mounted) return;
-      _trackOffer('cancel_offer_declined', sub, sheet: 'offer');
-    }
-    await _cancelSubscription(end, offerDeclined: sub.cancelOfferEligible);
+    if (!mounted) return;
+    _trackOffer(
+      ok == true ? 'cancel_confirmed' : 'cancel_kept',
+      sub,
+      offer: afterOffer,
+      extra: {'after_offer': afterOffer},
+    );
+    if (ok != true) return;
+    await _cancelSubscription(end, offerDeclined: afterOffer);
   }
 
   Future<void> _cancelSubscription(
@@ -529,20 +571,18 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
 
   // `accept` = a switch is under way and the purchase listener owns what follows.
   Future<CancelOfferChoice?> _offerBeforeCancel(SubscriptionModel sub) {
-    final l10n = AppLocalizations.of(context);
     _offerSub = sub;
     _trackOffer('cancel_offer_shown', sub);
     return _holdOfferSheet(
       showCancelOfferSheet(
         context,
-        price: rupeesFromPaise(sub.pricePaise),
         offerPrice: rupeesFromPaise(kCancelOfferPricePaise),
-        accessUntil: _formatDate(l10n, sub.currentPeriodEnd),
         onAccept: () {
           _trackOffer('cancel_offer_accepted', sub, sheet: 'offer');
           return _startOffer();
         },
         untilHandedOff: _untilOfferHandedOff,
+        onExpired: () => _trackOffer('cancel_offer_expired', sub),
       ),
     );
   }
@@ -554,10 +594,13 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     });
   }
 
-  // GA4-only, off the PostHog list exactly as `paywall_shown` is.
+  // The cancel funnel, on the PostHog list by the owner's exception (docs/analytics-events.md).
+  // `offer` false = no offer was in play (an ineligible cancel), so the event carries none.
   void _trackOffer(
     String event,
     SubscriptionModel? sub, {
+    bool offer = true,
+    String offerId = kCancelOffer,
     String? sheet,
     Map<String, Object> extra = const {},
   }) {
@@ -566,8 +609,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         .track(
           event,
           properties: {
-            kCheckoutOfferProperty: kCancelOffer,
+            if (offer) kCheckoutOfferProperty: offerId,
             'plan_status': ?sub?.status.name,
+            'price_paise': ?sub?.pricePaise.toString(),
             'sheet': ?sheet,
             ...extra,
           },
@@ -647,6 +691,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   Future<void> _offerSwitched(AppLocalizations l10n) async {
+    _trackOffer('cancel_offer_switched', _offerSub);
     await _offerSheet;
     await _qrSheet;
     if (!mounted) return;
@@ -691,12 +736,14 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     switch (choice) {
       case CancelOfferChoice.accept:
         return;
-      case CancelOfferChoice.decline:
-        _trackOffer('cancel_offer_declined', sub, sheet: 'retry');
-        await _cancelSubscription(
-          sub?.currentPeriodEnd?.toLocal(),
-          offerDeclined: true,
+      case CancelOfferChoice.decline || CancelOfferChoice.close:
+        _trackOffer(
+          'cancel_offer_declined',
+          sub,
+          sheet: 'retry',
+          extra: {'via': 'cancel'},
         );
+        await _confirmCancel(sub, afterOffer: true);
       case null:
         showArulToast(
           context,
@@ -746,6 +793,82 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       trialEligible: trialEligible,
       asQr: true,
     );
+  }
+
+  // Every paid start goes through here: a returning user (the Worker's `winback_offer_eligible`)
+  // sees the ₹99 offer first. A free trial never does — it is the better deal already.
+  void _startPaid(
+    String? targetApp, {
+    required bool trialEligible,
+    bool asQr = false,
+  }) {
+    final sub = ref.read(entitlementDetailProvider).asData?.value.subscription;
+    if (trialEligible || sub == null || !sub.winbackOfferEligible) {
+      if (asQr) {
+        _startQrPurchase(trialEligible: trialEligible);
+      } else {
+        _startPurchase(targetApp, trialEligible: trialEligible);
+      }
+      return;
+    }
+    unawaited(_winbackFirst(sub, targetApp: targetApp, asQr: asQr));
+  }
+
+  // Accept = ₹99 through the same app or QR the tap chose; the link = the full price, as tapped; the X,
+  // back or scrim leave them on the screen, where the next tap is a fresh 10:00.
+  Future<void> _winbackFirst(
+    SubscriptionModel sub, {
+    required String? targetApp,
+    required bool asQr,
+  }) async {
+    if (_offerSheet != null) return;
+    void track(String event, [Map<String, Object> extra = const {}]) =>
+        _trackOffer(
+          event,
+          sub,
+          offerId: kWinbackOffer,
+          extra: {'flow': 'winback', ...extra},
+        );
+    track('cancel_offer_shown');
+    final choice = await _holdOfferSheet(
+      showCancelOfferSheet(
+        context,
+        offerPrice: rupeesFromPaise(kCancelOfferPricePaise),
+        onAccept: () async {
+          track('cancel_offer_accepted');
+          return _beginPaid(targetApp, asQr: asQr, offer: kWinbackOffer);
+        },
+        untilHandedOff: _untilOfferHandedOff,
+        onExpired: () => track('cancel_offer_expired'),
+      ),
+    );
+    if (!mounted || choice == CancelOfferChoice.accept || _switchUnderWay()) {
+      return;
+    }
+    track('cancel_offer_declined', {
+      'via': switch (choice) {
+        CancelOfferChoice.decline => 'link',
+        CancelOfferChoice.close => 'close',
+        _ => 'dismiss',
+      },
+    });
+    if (choice != CancelOfferChoice.decline) return;
+    _beginPaid(targetApp, asQr: asQr);
+  }
+
+  // No `AppConfig.hasBackend` guard, like [_beginOffer]: this only runs once a Worker answered `/me`.
+  bool _beginPaid(String? targetApp, {required bool asQr, String? offer}) {
+    if (asQr) ArulHaptics.tap();
+    unawaited(
+      ref
+          .read(premiumPurchaseProvider.notifier)
+          .startTrial(
+            targetApp: asQr ? _kQrFormalityPackage : targetApp,
+            asQr: asQr,
+            offer: offer,
+          ),
+    );
+    return ref.read(premiumPurchaseProvider) is PurchaseLoading;
   }
 
   /// Whether a QR sheet is already up, so the listener below opens exactly one per attempt.
@@ -905,7 +1028,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                   );
                 }
                 _sellIsTrial = false;
-                return switch (sub.status) {
+                return switch (sub.shownStatus(DateTime.now())) {
                   SubscriptionStatus.trialing ||
                   SubscriptionStatus.active => _planHome(p, sub, purchaseBusy),
                   SubscriptionStatus.cancelled => _resubscribeHome(
@@ -914,8 +1037,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
                     purchaseBusy,
                     resumable,
                   ),
-                  // isPremium was true, so pending/paused/expired cannot reach here.
-                  // The enum is exhaustive though, and a silent wrong screen is worse than a safe one.
+                  // Premium with no plan of its own behind it (a referral reward) is sold one.
                   _ => _paywall(
                     p,
                     e,
@@ -979,7 +1101,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             );
         return;
       }
-      _startQrPurchase(trialEligible: trialEligible);
+      _startPaid(null, trialEligible: trialEligible, asQr: true);
       return;
     }
 
@@ -1302,12 +1424,12 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         trialEligible: trialEligible,
       ),
       onPurchase: () =>
-          _startPurchase(selectedUpiPackage, trialEligible: trialEligible),
+          _startPaid(selectedUpiPackage, trialEligible: trialEligible),
       // Non-null ONLY where there is nothing to launch, and then it IS the CTA. With an app
       // installed the QR is strictly worse than the one tap that opens its mandate sheet; without
       // one it is the only thing that can finish, so it needs no separate affordance.
       onPayByQr: upiApps.isEmpty && upiAsync.hasValue
-          ? () => _startQrPurchase(trialEligible: trialEligible)
+          ? () => _startPaid(null, trialEligible: trialEligible, asQr: true)
           : null,
     );
   }
@@ -1338,7 +1460,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       config?.featureFlags['show_social_proof'] != false;
 
   Widget _planHome(_Palette p, SubscriptionModel sub, bool purchaseBusy) {
-    final trialing = sub.status == SubscriptionStatus.trialing;
+    final trialing =
+        sub.shownStatus(DateTime.now()) == SubscriptionStatus.trialing;
     final renewalDate = trialing
         ? (sub.trialEnd ?? sub.currentPeriodEnd)
         : sub.currentPeriodEnd;
@@ -1346,12 +1469,15 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     return ArulMemberView(
       trialing: trialing,
       renewalDate: _formatDate(AppLocalizations.of(context), renewalDate),
-      // The row's own price, not the sell's: a member switched to the ₹99 offer pays ₹99.
-      monthlyPrice: rupeesFromPaise(sub.pricePaise),
+      // The row's own price, not the sell's: a member switched to the ₹99 offer pays ₹99. Mid-switch
+      // the row already reads ₹99, but the plan it parked is still the one being paid.
+      monthlyPrice: sub.status == SubscriptionStatus.pending
+          ? _monthlyPrice(ref.watch(appConfigProvider).asData?.value?.prices)
+          : rupeesFromPaise(sub.pricePaise),
       // An offer switch in flight holds the button: a second cancel would race the first answer.
       cancelBusy: _cancelBusy || purchaseBusy,
       onBack: _leave,
-      onCancel: () => _confirmAndCancel(sub),
+      onCancel: () => _onCancelTapped(sub),
     );
   }
 
@@ -1418,9 +1544,19 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       ),
       // Same rule as the paywall: with nothing installed, `_startPurchase(null)` fell through to the
       // SDK page — not a dead CTA but a worse one, since that page needs an app on this very phone.
-      onResubscribe: upiApps.isEmpty && upiAsync.hasValue
-          ? () => _startQrPurchase(trialEligible: false)
-          : () => _startPurchase(selectedUpiPackage, trialEligible: false),
+      onResubscribe: () {
+        _trackOffer(
+          'resubscribe_tapped',
+          sub,
+          offer: false,
+          extra: {'method': upiApps.isEmpty ? 'qr' : 'upi_app'},
+        );
+        _startPaid(
+          selectedUpiPackage,
+          trialEligible: false,
+          asQr: upiApps.isEmpty && upiAsync.hasValue,
+        );
+      },
     );
   }
 }

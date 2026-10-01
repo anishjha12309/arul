@@ -9,8 +9,9 @@ alter table subscriptions add column if not exists offer_switch            boole
 alter table subscriptions add column if not exists offer_mandate_id        text;
 -- A parked ₹199 the switch grant could not revoke; the hourly sweep retries it.
 alter table subscriptions add column if not exists revoke_retry_mandate_id text;
+-- The first failed revoke of revoke_retry_mandate_id, set and NULLed with it: it dates the sweep's 72 h ALARM.
+alter table subscriptions add column if not exists revoke_retry_at         timestamptz;
 
--- NULL = the one cancel offer is still theirs. The tombstone copy survives account deletion and is pre-seeded
--- onto the new users row at sign-in, the way trial_end is.
-alter table users            add column if not exists cancel_offer_at timestamptz;
-alter table trial_tombstones add column if not exists cancel_offer_at timestamptz;
+-- The offer keeps no per-person record (owner). Drop AFTER the Worker that stops writing these is live.
+alter table users            drop column if exists cancel_offer_at;
+alter table trial_tombstones drop column if exists cancel_offer_at;

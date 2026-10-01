@@ -14,3 +14,23 @@ class Entitlement {
   String toString() =>
       'Entitlement(isPremium: $isPremium, status: ${subscription?.status})';
 }
+
+/// The plan a row is shown as: a `pending` setup claim over a live period reads as the plan it left.
+extension ShownPlan on SubscriptionModel {
+  SubscriptionStatus shownStatus(DateTime now) {
+    final end = currentPeriodEnd;
+    if (status != SubscriptionStatus.pending ||
+        end == null ||
+        !end.isAfter(now)) {
+      return status;
+    }
+    // Nothing paid for changes until the claim settles: a switch is off a live plan, anything else
+    // (a ₹199 resubscribe or a ₹99 winback) is from `cancelled`.
+    if (!offerSwitch) return SubscriptionStatus.cancelled;
+    // The switch moves trial_end with the period, so a trial still reads unconverted (releaseClaim's CASE).
+    final trial = trialEnd;
+    return trial != null && !end.isAfter(trial)
+        ? SubscriptionStatus.trialing
+        : SubscriptionStatus.active;
+  }
+}

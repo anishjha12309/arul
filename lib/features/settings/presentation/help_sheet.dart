@@ -7,6 +7,7 @@ import '../../../app/widgets/gopuram_mark.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../theme/arul_tokens.dart';
+import '../../premium/domain/entitlement.dart';
 import '../../premium/providers/entitlement_provider.dart';
 
 enum HelpAction { support, manage, delete }
@@ -42,7 +43,7 @@ class _HelpSheet extends ConsumerWidget {
     // field `/premium` itself switches on.
     final manageSub = entitlement?.isPremium != true
         ? null
-        : switch (entitlement?.subscription?.status) {
+        : switch (entitlement?.subscription?.shownStatus(DateTime.now())) {
             SubscriptionStatus.trialing => l10n.settingsPremiumSubTrial,
             SubscriptionStatus.active => l10n.settingsPremiumSubActive,
             SubscriptionStatus.cancelled => l10n.settingsPremiumSubCancelled,

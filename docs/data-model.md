@@ -33,13 +33,15 @@ parameterized query to the verified `sub`; the app never reaches the DB.
 - `subscriptions.superseded_mandate_id` is the still-billing mandate a re-subscribe parked
   ([phonepe.md](phonepe.md)); NULL = nothing parked. `superseded_price_paise` is its price, set, restored
   and NULLed with it.
-- `subscriptions.price_paise` is the FIXED monthly debit of THIS row's mandate (9900 only after a cancel_99
-  switch); every notify, settle and `paid_paise` stamp reads it, and every claim rewrites it.
+- `subscriptions.price_paise` is the FIXED monthly debit of THIS row's mandate (9900 after a cancel_99 switch or a
+  winback_99 claim, kept by a released winback); every notify, settle and `paid_paise` stamp reads it, and every
+  claim rewrites it.
 - `offer_switch` is TRUE only while a cancel_99 setup is pending — the grant and the releases branch on it,
-  never on amounts. `offer_mandate_id` is a released switch's ₹99, watched for a late approval;
-  `revoke_retry_mandate_id` a replaced ₹199 PhonePe would not revoke ([cancel-offer.md](cancel-offer.md)).
-- `users.cancel_offer_at` NULL = the one cancel offer is still theirs; `trial_tombstones.cancel_offer_at`
-  carries it across account deletion.
+  never on amounts (a winback is 9900 with it false). `offer_mandate_id` is a released switch's ₹99, watched for a
+  late approval; `revoke_retry_mandate_id` a replaced ₹199 PhonePe would not revoke, and `revoke_retry_at` its first
+  failure, set and NULLed with it, which dates the 72 h ALARM ([cancel-offer.md](cancel-offer.md)).
+- Neither offer keeps a per-person record (owner): `users.cancel_offer_at` and `trial_tombstones.cancel_offer_at` are
+  dropped. Never revive one.
 - **`subscriptions.updated_at` moves on EVERY update** (trigger), and the hourly sweeps touch every legacy
   live row daily: never read it as a tap or checkout time.
 

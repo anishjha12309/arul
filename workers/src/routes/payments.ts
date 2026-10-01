@@ -10,7 +10,7 @@ import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
 import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../lib/posthog.js";
-import { CANCEL_OFFER, OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE } from "../lib/pricing.js";
+import { CANCEL_OFFER, OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE, WINBACK_OFFER } from "../lib/pricing.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import {
@@ -24,6 +24,7 @@ import {
   releaseClaim,
   type SetupGrant,
   TRIAL_MS,
+  winbackOfferEligible,
 } from "../lib/subscription-state.js";
 import {
   setupSubscription,
@@ -83,6 +84,7 @@ interface PriorSubscription {
   current_period_end: unknown;
   updated_at: unknown;
   offer_eligible: boolean | null;
+  winback_eligible: boolean | null;
 }
 
 /**
@@ -128,11 +130,13 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   if (plan !== "monthly" && plan !== "yearly") {
     return errorResponse(400, "invalid_plan", "plan must be 'monthly' or 'yearly'");
   }
-  // One offer exists -> an unknown value is refused, never read as a plain checkout at the full price
-  if (body.offer !== undefined && body.offer !== null && body.offer !== CANCEL_OFFER) {
-    return errorResponse(400, "invalid_offer", `offer must be '${CANCEL_OFFER}'`);
+  // An unknown offer is refused, never read as a plain checkout at the full price
+  const offer = body.offer === CANCEL_OFFER || body.offer === WINBACK_OFFER ? body.offer : null;
+  if (body.offer !== undefined && body.offer !== null && offer === null) {
+    return errorResponse(400, "invalid_offer", `offer must be '${CANCEL_OFFER}' or '${WINBACK_OFFER}'`);
   }
-  const offer = body.offer === CANCEL_OFFER;
+  // Only the switch parks a live plan behind a ₹2 check; a winback is an ordinary paid re-setup at ₹99
+  const cancelOffer = offer === CANCEL_OFFER;
   const pricePaise = offer ? OFFER_PRICE_PAISE : STANDARD_PRICE_PAISE;
 
   // Shape check only -> PhonePe validates the package itself -> do not maintain an allow-list here
@@ -155,7 +159,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     // the claim below re-reads and re-decides under the lock
     let seen = await readClaimRow(sql, sub);
 
-    if (offer) {
+    if (cancelOffer) {
       if (claimInFlight(seen)) return setupInProgress();
       // Their own earlier switch attempt never reported back (app left inside the UPI app) -> hand the ₹199 back
       // first, so a second try is judged on the plan they still have, not refused as ineligible
@@ -167,10 +171,18 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       const gate = await offerMandateGate(env, sql, sub, seen.merchant_subscription_id as string);
       if (gate === "error") return errorResponse(502, "phonepe_error", "PhonePe gateway error");
       if (gate === "unavailable") return offerUnavailable();
-    } else if (seen?.redemption_order_id && !hasLiveSubscription(seen)) {
+    } else {
+      if (offer) {
+        if (claimInFlight(seen)) return setupInProgress();
+        if (seen?.winback_eligible !== true) return offerUnavailable();
+      }
       // A debit that settled while the row was out of the cron's reach looks like "no premium" -> the user taps
       // Subscribe again, and a claim would move the row to 'pending' past every heal -> heal it and answer instead
-      if (await healBeforeClaim(c, sql, sub, seen, tails)) {
+      if (
+        seen?.redemption_order_id &&
+        !hasLiveSubscription(seen) &&
+        (await healBeforeClaim(c, sql, sub, seen, tails))
+      ) {
         return errorResponse(409, "already_subscribed", "You already have an active subscription");
       }
     }
@@ -197,8 +209,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       if (claimInFlight(existing)) return { conflict: "setup_in_flight" } as ClaimResult;
 
       if (offer) {
-        // Decision 5 re-checked under the lock -> neither the client nor the unlocked read is trusted
-        if (existing?.offer_eligible !== true) return { conflict: "offer_unavailable" } as ClaimResult;
+        // Eligibility re-checked under the lock -> neither the client nor the unlocked read is trusted
+        const eligible = cancelOffer ? existing?.offer_eligible : existing?.winback_eligible;
+        if (eligible !== true) return { conflict: "offer_unavailable" } as ClaimResult;
       } else if (
         existing &&
         (existing.status === "trialing" || existing.status === "active") &&
@@ -236,7 +249,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
         )
         VALUES (
           ${sub}, 'pending', ${plan}, ${merchantSubscriptionId}, ${merchantOrderId},
-          ${recordedTargetApp}, ${parkedMandateId}, ${parkedPricePaise}, ${pricePaise}, ${offer},
+          ${recordedTargetApp}, ${parkedMandateId}, ${parkedPricePaise}, ${pricePaise}, ${cancelOffer},
           ${checkoutContext ? JSON.stringify(checkoutContext) : null}::text::jsonb
         )
         ON CONFLICT (user_id)
@@ -258,15 +271,15 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
       if (keepAlive) {
         console.log(
           `[payments/initiate] parked live mandate ${existing.merchant_subscription_id} for user ${sub} — ` +
-            `revoked only once the new setup is approved${offer ? " (cancel_99 switch)" : ""}`,
+            `revoked only once the new setup is approved${cancelOffer ? " (cancel_99 switch)" : ""}`,
         );
       }
 
       return {
         conflict: false,
         supersededMandateId: superseded,
-        // The switch is a ₹2 PENNY_DROP whatever trial_end says -> it never starts a trial
-        trialEligible: !offer && (existing === null || existing.trial_end === null),
+        // The switch is a ₹2 PENNY_DROP whatever trial_end says, a winback a paid setup -> neither starts a trial
+        trialEligible: offer === null && (existing === null || existing.trial_end === null),
         staleOfferMandateId: existing?.offer_mandate_id ?? null,
       } as ClaimResult;
     })) as unknown as ClaimResult;
@@ -282,9 +295,9 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     if (staleOfferMandateId && staleOfferMandateId !== merchantSubscriptionId) {
       revokeInBackground(c, staleOfferMandateId, "payments/initiate");
     }
-    const upfrontAmountPaise = trialEligible || offer ? undefined : STANDARD_PRICE_PAISE;
+    const upfrontAmountPaise = trialEligible || cancelOffer ? undefined : pricePaise;
     const setupAmountPaise = upfrontAmountPaise ?? 200;
-    const offerFields = offer ? { offer: CANCEL_OFFER, pricePaise } : {};
+    const offerFields = offer ? { offer, pricePaise } : {};
 
     // Attach PhonePe's order id to the row already claimed above, SCOPED to the claimed merchant_order_id
     // A later initiate may have superseded this claim while PhonePe answered -> this must not stamp the newer mandate
@@ -378,7 +391,7 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
     } catch (ppErr) {
       console.error("[payments/initiate] PhonePe error:", ppErr);
       // No order reached the user -> an offer claim left pending would read as ineligible to their "Try again"
-      if (offer) {
+      if (cancelOffer) {
         await releaseClaim(sql, sql`s.user_id = ${sub} AND s.merchant_order_id = ${merchantOrderId}`);
       }
       return errorResponse(502, "phonepe_error", "PhonePe gateway error");
@@ -428,14 +441,13 @@ export async function handleInitiate(c: Context<{ Bindings: Env }>): Promise<Res
   }
 }
 
-/** The claim's view of the user's ONE row, with decision 5's eligibility evaluated in the same read. */
+/** The claim's view of the user's ONE row, with both offers' eligibility evaluated in the same read. */
 async function readClaimRow(sql: ReturnType<typeof getDb>, sub: string): Promise<PriorSubscription | null> {
   const rows = (await sql`
     SELECT s.trial_end, s.status, s.merchant_subscription_id, s.superseded_mandate_id, s.superseded_price_paise,
            s.price_paise, s.offer_mandate_id, s.offer_switch, s.redemption_order_id, s.current_period_end, s.updated_at,
-           ${cancelOfferEligible(sql)} AS offer_eligible
+           ${winbackOfferEligible(sql)} AS winback_eligible, ${cancelOfferEligible(sql)} AS offer_eligible
     FROM subscriptions AS s
-    JOIN users AS u ON u.id = s.user_id
     WHERE s.user_id = ${sub}
     LIMIT 1
   `) as unknown as PriorSubscription[];
@@ -926,6 +938,8 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
                                              THEN NULL ELSE offer_mandate_id END,
               revoke_retry_mandate_id = CASE WHEN revoke_retry_mandate_id = ${merchantSubId}
                                              THEN NULL ELSE revoke_retry_mandate_id END,
+              revoke_retry_at         = CASE WHEN revoke_retry_mandate_id = ${merchantSubId}
+                                             THEN NULL ELSE revoke_retry_at END,
               updated_at              = now()
           WHERE superseded_mandate_id = ${merchantSubId}
              OR offer_mandate_id = ${merchantSubId}
@@ -1134,15 +1148,7 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
 
-  // Optional -> fielded builds send no body and keep their offer; only the offer sheet's explicit decline spends it
-  let offerDeclined = false;
-  try {
-    const body = (await c.req.json()) as { offer_declined?: unknown } | null;
-    offerDeclined = body?.offer_declined === true;
-  } catch {
-    // No body is the fielded builds' cancel
-  }
-
+  // The body is never read -> fielded builds post {offer_declined:true} or nothing, and either must still cancel
   const sql = getDb(env);
   try {
     const rows = await sql`
@@ -1192,34 +1198,28 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
     // A pending switch goes back to the ₹199 it parked and keeps its unapproved ₹99 in offer_mandate_id, so a late
     // approval is revoked by the sweep, never resurrected into a month off a ₹2 check
     const cancelled = (await sql`
-      WITH c AS (
-        UPDATE subscriptions AS s
-        SET status                   = 'cancelled',
-            merchant_subscription_id = CASE WHEN s.offer_switch
-                                            THEN COALESCE(s.superseded_mandate_id, s.merchant_subscription_id)
-                                            ELSE s.merchant_subscription_id END,
-            price_paise              = CASE WHEN s.offer_switch AND s.superseded_mandate_id IS NOT NULL
-                                            THEN COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE})
-                                            ELSE s.price_paise END,
-            offer_mandate_id         = CASE WHEN s.offer_switch THEN s.merchant_subscription_id
-                                            WHEN ${offerRevoked}::boolean THEN NULL
-                                            ELSE s.offer_mandate_id END,
-            revoke_retry_mandate_id  = CASE WHEN ${retryRevoked}::boolean THEN NULL
-                                            ELSE s.revoke_retry_mandate_id END,
-            offer_switch             = false,
-            superseded_mandate_id    = NULL,
-            superseded_price_paise   = NULL,
-            next_debit_at            = NULL,
-            notified_at              = NULL,
-            updated_at               = now()
-        WHERE s.user_id = ${sub}
-        RETURNING s.updated_at, s.price_paise, s.merchant_subscription_id
-      ),
-      stamp AS (
-        UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now())
-        WHERE users.id = ${sub} AND ${offerDeclined}::boolean AND EXISTS (SELECT 1 FROM c)
-      )
-      SELECT * FROM c
+      UPDATE subscriptions AS s
+      SET status                   = 'cancelled',
+          merchant_subscription_id = CASE WHEN s.offer_switch
+                                          THEN COALESCE(s.superseded_mandate_id, s.merchant_subscription_id)
+                                          ELSE s.merchant_subscription_id END,
+          price_paise              = CASE WHEN s.offer_switch AND s.superseded_mandate_id IS NOT NULL
+                                          THEN COALESCE(s.superseded_price_paise, ${STANDARD_PRICE_PAISE})
+                                          ELSE s.price_paise END,
+          offer_mandate_id         = CASE WHEN s.offer_switch THEN s.merchant_subscription_id
+                                          WHEN ${offerRevoked}::boolean THEN NULL
+                                          ELSE s.offer_mandate_id END,
+          revoke_retry_mandate_id  = CASE WHEN ${retryRevoked}::boolean THEN NULL
+                                          ELSE s.revoke_retry_mandate_id END,
+          revoke_retry_at          = CASE WHEN ${retryRevoked}::boolean THEN NULL ELSE s.revoke_retry_at END,
+          offer_switch             = false,
+          superseded_mandate_id    = NULL,
+          superseded_price_paise   = NULL,
+          next_debit_at            = NULL,
+          notified_at              = NULL,
+          updated_at               = now()
+      WHERE s.user_id = ${sub}
+      RETURNING s.updated_at, s.price_paise, s.merchant_subscription_id
     `) as unknown as {
       updated_at?: Date | string | null;
       price_paise?: number | string | null;

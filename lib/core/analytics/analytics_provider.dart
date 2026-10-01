@@ -30,6 +30,18 @@ const postHogAllowedEvents = <String>{
   'login_failed',
   'login_attempt',
   'login_surface_shown',
+
+  // The cancel funnel: an owner exception to the fixed count, a handful of subscribers a day.
+  'cancel_tapped',
+  'cancel_offer_shown',
+  'cancel_offer_accepted',
+  'cancel_offer_switched',
+  'cancel_offer_declined',
+  'cancel_offer_expired',
+  'cancel_offer_retry_shown',
+  'cancel_confirmed',
+  'cancel_kept',
+  'resubscribe_tapped',
 };
 
 /// App-wide [AnalyticsService], assembled from whichever keys are configured -> call sites never change.

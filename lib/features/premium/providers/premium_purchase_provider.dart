@@ -167,6 +167,10 @@ class PremiumPurchase extends _$PremiumPurchase {
   // Captured at [startTrial] like [_trialAttempt]: the attempt's events and outcome all hang off it.
   String? _offer;
 
+  // Only the ₹99 SWITCH is never a sale (no conversion, never resumable, a price verdict); a winback
+  // is an ordinary paid checkout at ₹99.
+  bool get _isSwitch => _offer == kCancelOffer;
+
   // Rides every journey event of an offer attempt, so GA4 reads the ₹99 switch apart from a sale.
   Map<String, Object> get _offerProps {
     final offer = _offer;
@@ -174,9 +178,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     return {
       kCheckoutOfferProperty: offer,
       'price_paise': '$kCancelOfferPricePaise',
-      'paywall_source': 'cancel_offer',
+      'paywall_source': _isSwitch ? 'cancel_offer' : 'winback_offer',
     };
   }
+
+  double get _attemptPriceRupees =>
+      _offer != null ? kCancelOfferPricePaise / 100 : _monthlyPriceRupees();
 
   /// Writes [next] only while the paywall still owns this notifier.
   /// After the pop the state has no reader and the setter throws -> the write is dropped.
@@ -223,7 +230,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         return;
       }
     }
-    final price = _monthlyPriceRupees();
+    final price = _attemptPriceRupees;
     _analytics.track(
       event,
       properties: {
@@ -237,6 +244,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         'target_app': ?_checkoutTargetApp,
         'surface': ?_checkoutSurface,
         ...JourneyStamps.conversionProps(),
+        ..._offerProps,
       },
     );
     if (event == ArulEvents.trialStarted) {
@@ -250,9 +258,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   void _trackCheckoutStarted(String method, String? targetApp) {
     _checkoutMethod = method;
     _checkoutTargetApp = targetApp;
-    final price = _offer != null
-        ? kCancelOfferPricePaise / 100
-        : _monthlyPriceRupees();
+    final price = _attemptPriceRupees;
     _analytics.track(
       'checkout_started',
       properties: {
@@ -323,7 +329,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// Always prefer this over assigning [PurchaseError] directly.
   void _fail(String reason, PurchaseError error) {
     _setState(
-      _offer == null
+      !_isSwitch
           ? error
           : PurchaseError(_offerFailureKind(error.kind), offer: true),
     );
@@ -392,6 +398,19 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// there is no user-driven cancel: returning to Arul only re-offers the app that holds the sheet.
   String? _intentOrderId;
 
+  // A resume polls the SAME order id again, so the id cannot tell the live poll from the one it
+  // replaced, which still wakes from its delay later: only the newest claim may clear it.
+  int _intentOrderOwner = 0;
+
+  int _claimIntentOrder(String? merchantOrderId) {
+    _intentOrderId = merchantOrderId;
+    return ++_intentOrderOwner;
+  }
+
+  void _releaseIntentOrder(int owner) {
+    if (owner == _intentOrderOwner) _intentOrderId = null;
+  }
+
   /// Bumped to cancel a running [_confirmWithServer] loop — it captures the value and goes silent.
   /// So a user-tapped cancel owns the next state without racing a late poll response.
   int _pollGeneration = 0;
@@ -434,7 +453,8 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// `paymentMode.targetApp` mandatory on UPI_INTENT — the package is a formality their API
   /// requires, the QR is the actual handoff, and the Worker records the difference.
   ///
-  /// [offer] ([kCancelOffer]) is a subscriber's ₹99 switch: no trial, no conversion, never resumable.
+  /// [offer] [kCancelOffer] is a subscriber's ₹99 switch (no trial, no conversion, never resumable);
+  /// [kWinbackOffer] is a returning user's ordinary paid checkout at ₹99.
   Future<void> startTrial({
     String? targetApp,
     bool trialEligible = false,
@@ -458,6 +478,8 @@ class PremiumPurchase extends _$PremiumPurchase {
     _offer = offer;
     _trialAttempt = trialEligible && offer == null;
     _clearIntentAttempt();
+    // An older poll can still be asleep on its order; an SDK checkout would read it as its own.
+    _claimIntentOrder(null);
     state = const PurchaseLoading();
     _priceAtStart = _monthlyPriceRupees();
     _checkoutSurface = surface;
@@ -606,7 +628,7 @@ class PremiumPurchase extends _$PremiumPurchase {
 
       await _confirmWithServer(merchantOrderId);
     } on ApiException catch (e) {
-      if (e.code == 'already_subscribed' && _offer == null) {
+      if (e.code == 'already_subscribed' && !_isSwitch) {
         // The narrowed entitlementProvider DERIVES from the detail one.
         // Invalidating only the narrow one re-reads the stale detail -> the UI never flips.
         _refreshEntitlement();
@@ -676,12 +698,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     }
 
     _setState(const PurchaseProcessing());
-    _intentOrderId = merchantOrderId;
+    final owner = _claimIntentOrder(merchantOrderId);
     unawaited(_rememberHandoff(merchantOrderId));
     try {
       await _confirmWithServer(merchantOrderId, delays: _intentPollDelays);
     } finally {
-      _intentOrderId = null;
+      _releaseIntentOrder(owner);
     }
   }
 
@@ -708,15 +730,15 @@ class PremiumPurchase extends _$PremiumPurchase {
         intentUrl: intentUrl,
         merchantOrderId: merchantOrderId,
         expiresAt: expiresAt,
-        offer: _offer != null,
+        offer: _isSwitch,
       ),
     );
     unawaited(_rememberHandoff(merchantOrderId));
-    _intentOrderId = merchantOrderId;
+    final owner = _claimIntentOrder(merchantOrderId);
     try {
       await _watchScannable(merchantOrderId, expiresAt);
     } finally {
-      _intentOrderId = null;
+      _releaseIntentOrder(owner);
     }
   }
 
@@ -750,7 +772,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         await _autoResolveIntent(orderId, reason: 'qr_expired', silent: true);
         return;
       }
-      if (await _settleFromStatus(orderId)) return;
+      if (await _settleFromStatus(orderId, generation)) return;
     }
   }
 
@@ -764,7 +786,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     if (scannable == null || _resolvingIntent) return;
     _resolvingIntent = true;
     try {
-      await _settleFromStatus(scannable.merchantOrderId);
+      await _settleFromStatus(scannable.merchantOrderId, _pollGeneration);
     } finally {
       _resolvingIntent = false;
     }
@@ -796,6 +818,7 @@ class PremiumPurchase extends _$PremiumPurchase {
   bool _resolvingIntent = false;
 
   Future<void> pollNowOnResume() async {
+    final generation = _pollGeneration;
     final resumable = _resumableState;
     // A QR attempt sends nobody anywhere, but the user still leaves Arul — for the camera, or for
     // the other phone — and a return is the one cheap moment to ask. It stays scannable either way:
@@ -805,7 +828,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       if (_resolvingIntent) return;
       _resolvingIntent = true;
       try {
-        await _settleFromStatus(scannable.merchantOrderId);
+        await _settleFromStatus(scannable.merchantOrderId, generation);
       } finally {
         _resolvingIntent = false;
       }
@@ -818,7 +841,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     try {
       // NO artificial delay. Production tails showed PhonePe still PENDING at both samples of a
       // 2 s re-poll on every real back-out -> the wait never changed an outcome, only held a spinner.
-      if (await _settleFromStatus(orderId)) return;
+      if (await _settleFromStatus(orderId, generation)) return;
       if (resumable != null) {
         // Already resumable: the one thing a return can still decide is that the window is gone.
         if (!_now().isBefore(resumable.expiresAt)) {
@@ -844,10 +867,13 @@ class PremiumPurchase extends _$PremiumPurchase {
   }
 
   /// One status check — true when it OWNED the outcome, false when the order is still open.
-  Future<bool> _settleFromStatus(String orderId) async {
+  Future<bool> _settleFromStatus(String orderId, int generation) async {
     try {
       final statusResp = await _api.post('/payments/status');
       final serverStatus = statusResp['status'] as String? ?? '';
+      // A resume, a switch or the deadline acted while this was on the wire, and a newer order may
+      // be in the UPI app now: this answer is about the row as it was, so it must decide nothing.
+      if (generation != _pollGeneration) return true;
       // A cancel owned the outcome meanwhile.
       // A DISPOSED notifier is not that case — nothing else can settle its order — so it reports.
       if (ref.mounted &&
@@ -862,14 +888,15 @@ class PremiumPurchase extends _$PremiumPurchase {
         await _settleGranted(serverStatus, orderId, statusResp);
         return true;
       }
-      if (serverStatus == 'expired') {
+      final dead = _deadAttemptReason(serverStatus);
+      if (dead != null) {
         _pollGeneration++;
         if ((_resumableState != null || _scannableState != null) &&
-            _offer == null) {
-          _trackPaymentFailed('expired', cancelled: false);
+            !_isSwitch) {
+          _trackPaymentFailed(dead, cancelled: false);
           _setState(const PurchaseIdle());
         } else {
-          _fail('expired', const PurchaseError(PurchaseErrorKind.intentFailed));
+          _fail(dead, const PurchaseError(PurchaseErrorKind.intentFailed));
         }
         await _nudge.remember(orderId, trialAttempt: _trialAttempt);
         return true;
@@ -877,9 +904,18 @@ class PremiumPurchase extends _$PremiumPurchase {
       return false;
     } catch (e) {
       debugPrint('[PremiumPurchase] resume status check failed: $e');
-      return false;
+      return generation != _pollGeneration;
     }
   }
+
+  // A resubscribe claim the Worker released hands the live period back as `cancelled`, not
+  // `expired` (releaseClaim's CASE): the order is dead either way, and "open again" would re-send
+  // the user to it. An offer's release restores trialing/active, which its price check reads.
+  String? _deadAttemptReason(String serverStatus) => switch (serverStatus) {
+    'expired' => 'expired',
+    'cancelled' when !_isSwitch => 'claim_released',
+    _ => null,
+  };
 
   // For an offer the row's price is the verdict: ₹99 is the switch, anything else is the ₹199 plan
   // handed back by an attempt the Worker released.
@@ -888,7 +924,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     String orderId,
     Map<String, dynamic> statusResp,
   ) async {
-    if (_offer != null) {
+    if (_isSwitch) {
       final row = statusResp['subscription'];
       final price = row is Map ? row['price_paise'] : null;
       _refreshEntitlement();
@@ -931,7 +967,7 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
     // An offer never ends silently: its failure is what brings back the choice it interrupted.
-    if (silent && _offer == null) {
+    if (silent && !_isSwitch) {
       _trackPaymentFailed(reason, cancelled: false);
       _setState(const PurchaseIdle());
     } else {
@@ -946,9 +982,9 @@ class PremiumPurchase extends _$PremiumPurchase {
   /// approval that lands while they look at the screen still settles by itself.
   /// With no link to re-fire, or nobody left to press it, this is the old terminal path instead.
   Future<void> _enterResumable(String orderId) async {
-    // An offer is never resumable: the member view has no button to finish it, and the row sits at
+    // The switch is never resumable: the member view has no button to finish it, and the row sits at
     // `pending` for as long as the order stays open — release it, and the retry sheet asks again.
-    if (_offer != null) {
+    if (_isSwitch) {
       await _autoResolveIntent(orderId, reason: 'offer_abandoned');
       return;
     }
@@ -1014,7 +1050,7 @@ class PremiumPurchase extends _$PremiumPurchase {
         );
         return;
       }
-      if (await _settleFromStatus(orderId)) return;
+      if (await _settleFromStatus(orderId, generation)) return;
     }
   }
 
@@ -1024,7 +1060,7 @@ class PremiumPurchase extends _$PremiumPurchase {
     // Mid-switch counts as gone: the state still reads resumable while the abandon is in flight,
     // and re-opening an order that is being revoked server-side sends the user to a dead sheet.
     final resumable = _resumableState;
-    if (resumable == null || _switching) return;
+    if (resumable == null || _switching || _pastDeadline(resumable)) return;
 
     _pollGeneration++;
     _checkoutMethod = 'upi_app_resumed';
@@ -1045,16 +1081,21 @@ class PremiumPurchase extends _$PremiumPurchase {
       return;
     }
 
-    _intentOrderId = resumable.merchantOrderId;
+    final owner = _claimIntentOrder(resumable.merchantOrderId);
     try {
       await _confirmWithServer(
         resumable.merchantOrderId,
         delays: _intentPollDelays,
       );
     } finally {
-      _intentOrderId = null;
+      _releaseIntentOrder(owner);
     }
   }
+
+  // The deadline's own abandon may already be on the wire with the state still resumable, and its
+  // Idle would land over whatever a tap started now — on a link PhonePe has already killed.
+  bool _pastDeadline(PurchaseResumable resumable) =>
+      !_now().isBefore(resumable.expiresAt);
 
   /// The person picked a DIFFERENT UPI app while their order is still open — one motion, two steps.
   Future<void> switchApp(
@@ -1063,10 +1104,12 @@ class PremiumPurchase extends _$PremiumPurchase {
     bool asQr = false,
     String? surface,
   }) async {
+    final offer = _offer;
     final resumable = _resumableState;
     if (resumable == null ||
         (!asQr && resumable.targetApp == targetApp) ||
-        _switching) {
+        _switching ||
+        _pastDeadline(resumable)) {
       return;
     }
     _switching = true;
@@ -1089,6 +1132,8 @@ class PremiumPurchase extends _$PremiumPurchase {
       trialEligible: trialEligible,
       asQr: asQr,
       surface: surface,
+      // A ₹99 winback moved to another app stays ₹99; the abandon above does not end the offer.
+      offer: offer,
     );
   }
 
@@ -1168,9 +1213,10 @@ class PremiumPurchase extends _$PremiumPurchase {
         // 'expired' during a setup poll = the setup died at the UPI app.
         // Intent flow -> the one standard failure+refund line, because the app decides.
         // SDK flow -> the user already saw PhonePe's own screens, so a neutral toast fits.
-        if (serverStatus == 'expired') {
+        final dead = _deadAttemptReason(serverStatus);
+        if (dead != null) {
           _fail(
-            'expired',
+            dead,
             _intentOrderId != null
                 ? const PurchaseError(PurchaseErrorKind.intentFailed)
                 : const PurchaseError(PurchaseErrorKind.cancelled),

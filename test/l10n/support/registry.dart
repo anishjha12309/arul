@@ -401,18 +401,14 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  // The two cancel-offer sheets open over /premium's member view. The offer carries the dated
-  // footnote (its longer form); the retry sheet the longest reason a failed switch can give.
+  // The two cancel-offer sheets open over /premium's member view; the retry sheet carries the
+  // longest reason a failed switch can give.
   ScreenEntry(
     id: 'premium.cancel_offer_sheet',
     build: () => SheetHost(
       open: (context) => showCancelOfferSheet(
         context,
-        price: '₹199',
         offerPrice: '₹99',
-        accessUntil: AppLocalizations.of(
-          context,
-        ).premiumPlanDate(DateTime(2026, 10, 13)),
         onAccept: () async => false,
         untilHandedOff: () async {},
       ),

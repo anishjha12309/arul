@@ -114,6 +114,31 @@ void main() {
       }
     });
 
+    testWidgets(
+      'a resubscribe in flight over a live period still shows it, as cancelled',
+      (tester) async {
+        final l10n = await pump(
+          tester,
+          overrides: [
+            entitlementDetailProvider.overrideWith(
+              (ref) async => Entitlement(
+                isPremium: true,
+                subscription: SubscriptionModel(
+                  id: 'sub_1',
+                  userId: 'u_1',
+                  status: SubscriptionStatus.pending,
+                  currentPeriodEnd: DateTime.now().add(const Duration(days: 3)),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        expect(_manage, findsOneWidget);
+        expect(find.text(l10n.settingsPremiumSubCancelled), findsOneWidget);
+      },
+    );
+
     testWidgets('a lapsed plan hides it even while the flag still says premium', (
       tester,
     ) async {

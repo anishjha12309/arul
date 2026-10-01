@@ -1636,41 +1636,59 @@ abstract class AppLocalizations {
   /// **'Keep premium'**
   String get premiumCancelKeep;
 
-  /// Cancel-offer sheet eyebrow over the price. Uppercase in English; a plain phrase in other scripts.
+  /// Cancel-offer sheet title, the first thing a Cancel subscription tap opens.
   ///
   /// In en, this message translates to:
-  /// **'50% OFF'**
-  String get cancelOfferEyebrow;
+  /// **'Special offer'**
+  String get cancelOfferTitle;
 
-  /// Cancel-offer sheet, under the ₹99 price: the discount never ends, and cancelling stays as easy as today.
+  /// Cancel-offer sheet subtitle under the title.
   ///
   /// In en, this message translates to:
-  /// **'Forever. Cancel anytime, same as now.'**
-  String get cancelOfferForever;
+  /// **'Limited time pricing'**
+  String get cancelOfferSubtitle;
 
-  /// Cancel-offer sheet: what happens after Get discount. A commercial statement — it must NOT promise any refund.
+  /// Cancel-offer sheet: the large discount line. 50% = ₹99 against ₹199.
   ///
   /// In en, this message translates to:
-  /// **'Your UPI app will ask you to approve {offerPrice}/month. We stop your {price} autopay as soon as you do.'**
-  String cancelOfferApprove(String offerPrice, String price);
+  /// **'50% off'**
+  String get cancelOfferDiscount;
 
-  /// Cancel-offer sheet footnote when the period end is unknown. 'Not now' names the button (referNotNow) — quote its translation.
+  /// Cancel-offer sheet: the offer price per month under the discount.
   ///
   /// In en, this message translates to:
-  /// **'Not now cancels your subscription.'**
-  String get cancelOfferDeclineNote;
+  /// **'{price}/month'**
+  String cancelOfferPrice(String price);
 
-  /// Cancel-offer sheet footnote with the period end. 'Not now' names the button (referNotNow) — quote its translation.
+  /// Cancel-offer sheet, under the offer price: how the offer bills (every month, via the new autopay) and that the price never goes up. Names the NEW price's terms only, never the old price.
   ///
   /// In en, this message translates to:
-  /// **'Not now cancels your subscription. You keep premium until {date}.'**
-  String cancelOfferDeclineNoteDate(String date);
+  /// **'Monthly payment, same price forever'**
+  String get cancelOfferBilling;
+
+  /// Cancel-offer sheet timer pill. {time} counts down mm:ss from 10:00 (a real hold per sheet).
+  ///
+  /// In en, this message translates to:
+  /// **'Offer ends in {time}'**
+  String cancelOfferEndsIn(String time);
+
+  /// Cancel-offer sheet timer pill once the 10-minute hold ran out; the discount button is disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer ended'**
+  String get cancelOfferEnded;
 
   /// Cancel-offer sheet primary button: switch to ₹99/month through the UPI app.
   ///
   /// In en, this message translates to:
-  /// **'Get discount'**
+  /// **'Get 50% discount'**
   String get cancelOfferAccept;
+
+  /// Cancel-offer sheet underlined link under the button: turns the offer down. It opens the cancel confirmation, it does not cancel by itself.
+  ///
+  /// In en, this message translates to:
+  /// **'I don\'t want the offer'**
+  String get cancelOfferDecline;
 
   /// Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app.
   ///

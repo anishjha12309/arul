@@ -307,6 +307,17 @@ void main() {
         'login_failed',
         'login_attempt',
         'login_surface_shown',
+        // The cancel funnel -> an owner exception to the fixed count, tiny volume.
+        'cancel_tapped',
+        'cancel_offer_shown',
+        'cancel_offer_accepted',
+        'cancel_offer_switched',
+        'cancel_offer_declined',
+        'cancel_offer_expired',
+        'cancel_offer_retry_shown',
+        'cancel_confirmed',
+        'cancel_kept',
+        'resubscribe_tapped',
       });
     });
 
@@ -320,11 +331,6 @@ void main() {
         // `paywall_shown` fires on every open of the sell -> volume, and GA4 answers the question
         // it exists for (which UPI apps was this user offered) without spending the PostHog budget.
         'paywall_shown',
-        // The ₹99 cancel-save offer: a subscriber's plan change, read in GA4 beside `paywall_shown`.
-        'cancel_offer_shown',
-        'cancel_offer_accepted',
-        'cancel_offer_declined',
-        'cancel_offer_retry_shown',
         'feed_session_ended',
         'subscription_active',
         'referral_shared',

@@ -82,14 +82,13 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
     // A Google token with no `name` claim keeps the stored value -> it must never blank the row
     const upsertUser = (code: string) => sql`
       WITH tomb AS (
-        SELECT trial_end, cancel_offer_at FROM trial_tombstones
+        SELECT trial_end FROM trial_tombstones
         WHERE google_sub_hash = ${tombHash}
         LIMIT 1
       ),
       up AS (
-        INSERT INTO users (google_sub, email, display_name, referral_code, cancel_offer_at)
-        VALUES (${googleClaims.sub}, ${googleClaims.email}, ${googleClaims.name ?? null}, ${code},
-                (SELECT cancel_offer_at FROM tomb))
+        INSERT INTO users (google_sub, email, display_name, referral_code)
+        VALUES (${googleClaims.sub}, ${googleClaims.email}, ${googleClaims.name ?? null}, ${code})
         ON CONFLICT (google_sub) DO UPDATE
         SET display_name = CASE WHEN users.display_name_custom
                                 THEN users.display_name

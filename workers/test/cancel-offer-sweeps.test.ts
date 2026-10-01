@@ -97,12 +97,12 @@ function routedSql(route: Route = () => undefined) {
 const HEAL_SELECT = /^SELECT id, redemption_order_id, status FROM subscriptions/;
 const CLAIMS_SELECT = /^SELECT id, user_id, merchant_subscription_id, merchant_order_id, offer_switch/;
 const OFFERS_SELECT = /^SELECT id, offer_mandate_id FROM subscriptions/;
-const RETRY_SELECT = /^SELECT s\.id, s\.revoke_retry_mandate_id/;
+const RETRY_SELECT = /^SELECT id, revoke_retry_mandate_id, revoke_retry_at FROM subscriptions/;
 const LEGACY_SELECT =
   /^SELECT id, merchant_subscription_id FROM subscriptions WHERE status IN \('trialing', 'active'\)/;
 const RELEASE = /AS released_mandate_id/;
-const SWITCH = /^WITH g AS \( UPDATE subscriptions AS s SET status = CASE/;
-const HONOUR = /^WITH g AS \( UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
+const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
+const HONOUR = /^UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
 const GRANT = /AND s\.status = 'pending' AND NOT s\.offer_switch/;
 const HEAL_CANDIDATE =
   /^SELECT COALESCE\(s\.superseded_mandate_id, s\.merchant_subscription_id\) AS mandate_id/;
@@ -113,7 +113,8 @@ const CLEAR_ORDER =
   /^UPDATE subscriptions SET redemption_order_id = NULL, notified_at = NULL WHERE id = \? AND redemption_order_id = \?/;
 const CLEAR_OFFER =
   /^UPDATE subscriptions SET offer_mandate_id = NULL WHERE id = \? AND offer_mandate_id = \?/;
-const CLEAR_RETRY = /^UPDATE subscriptions SET revoke_retry_mandate_id = NULL WHERE id = \?/;
+const CLEAR_RETRY =
+  /^UPDATE subscriptions SET revoke_retry_mandate_id = NULL, revoke_retry_at = NULL WHERE id = \? AND revoke_retry_mandate_id = \?/;
 const TOUCH =
   /^UPDATE subscriptions SET updated_at = now\(\) WHERE id = \? AND status IN \('trialing', 'active'\)/;
 const PASS_A = /^SELECT id, user_id, merchant_subscription_id, next_debit_at, debit_count/;
@@ -324,7 +325,7 @@ describe("runHourlySweeps — five passes, one budget", () => {
         heal: [{ id: "h1", redemption_order_id: LEGACY_R, status: "cancelled" }],
         claims: [{ id: "c1", merchant_order_id: HSR_NEW_ORDER, updated_at: ago(HOUR) }],
         offers: [{ id: "o1", offer_mandate_id: HSR_99 }],
-        retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, cancel_offer_at: ago(DAY) }],
+        retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, revoke_retry_at: ago(DAY) }],
         legacy: [{ id: "l1", merchant_subscription_id: LEGACY_199 }],
       },
       () => undefined,
@@ -428,7 +429,7 @@ describe("7a — stale pending claims", () => {
         : undefined,
     );
     expect(without(db)).toEqual(["switch", "note-retry"]);
-    expect(db.ran(NOTE_RETRY)[0].values).toEqual([LEGACY_199, USER_ID]);
+    expect(db.ran(NOTE_RETRY)[0].values).toEqual([LEGACY_199, LEGACY_199, USER_ID]);
   });
 
   it.each([
@@ -660,10 +661,21 @@ describe("4h — a released switch's ₹99 watched for a late approval", () => {
 });
 
 describe("revoke retries — a ₹199 the switch could not revoke", () => {
-  it("a revoke that lands clears the column", async () => {
+  it("reads its own clock, never a users column", async () => {
+    fakePhonePe();
+    const { db } = await sweep({ retries: [] });
+    const select = db.ran(RETRY_SELECT)[0];
+    expect(select.text).toBe(
+      "SELECT id, revoke_retry_mandate_id, revoke_retry_at FROM subscriptions " +
+        "WHERE revoke_retry_mandate_id IS NOT NULL ORDER BY updated_at ASC LIMIT ?",
+    );
+    expect(select.text).not.toContain("users");
+  });
+
+  it("a revoke that lands clears the id and its clock together", async () => {
     const { calls } = fakePhonePe();
     const { db } = await sweep({
-      retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, cancel_offer_at: ago(HOUR) }],
+      retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, revoke_retry_at: ago(HOUR) }],
     });
     expect(db.ran(CLEAR_RETRY)[0].values).toEqual(["r1", LEGACY_199]);
     expect(revokes(calls)).toEqual([["legacy", LEGACY_199]]);
@@ -672,11 +684,11 @@ describe("revoke retries — a ₹199 the switch could not revoke", () => {
   it.each([
     [80 * HOUR, true],
     [10 * HOUR, false],
-  ])("still refused %s ms after the switch -> kept; ALARM %s", async (sinceMs, alarm) => {
+  ])("still refused %s ms after its first failed revoke -> kept; ALARM %s", async (sinceMs, alarm) => {
     fakePhonePe({ cancel: refuseCancel });
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const { db } = await sweep({
-      retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, cancel_offer_at: ago(sinceMs) }],
+      retries: [{ id: "r1", revoke_retry_mandate_id: LEGACY_199, revoke_retry_at: ago(sinceMs) }],
     });
     expect(db.ran(CLEAR_RETRY)).toEqual([]);
     const alarmed = errors.mock.calls.some(([line]) => String(line).includes("ALARM"));

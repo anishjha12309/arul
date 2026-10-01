@@ -46,8 +46,14 @@ abstract class SubscriptionModel with _$SubscriptionModel {
     /// What the mandate charges a month, in paise. A Worker that predates the field sold ₹199 only.
     @Default(19900) int pricePaise,
 
-    /// Whether cancelling first offers the ₹99 switch — the Worker's once-per-person verdict.
+    /// Whether cancelling first offers the ₹99 switch — the Worker's verdict, never re-derived here.
     @Default(false) bool cancelOfferEligible,
+
+    /// Whether a returning user's paid checkout first offers ₹99 — the Worker's verdict as well.
+    @Default(false) bool winbackOfferEligible,
+
+    /// True only while a ₹99 switch off a live plan is pending (a ₹99 winback also reads 9900).
+    @Default(false) bool offerSwitch,
   }) = _SubscriptionModel;
 
   factory SubscriptionModel.fromJson(Map<String, dynamic> json) =>

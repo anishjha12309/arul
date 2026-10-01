@@ -10,7 +10,7 @@ import { verifyAccessToken, verifyRefreshToken, denylistJti } from "../lib/jwt.j
 import { getDb } from "../lib/db.js";
 import { premiumPredicate } from "../lib/entitlement.js";
 import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
-import { cancelOfferEligible } from "../lib/subscription-state.js";
+import { cancelOfferEligible, winbackOfferEligible } from "../lib/subscription-state.js";
 import { revokeMandateTolerant } from "../lib/phonepe.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { reportPostHogSubscriptionCancel } from "../lib/posthog.js";
@@ -42,6 +42,8 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
              s.updated_at AS sub_updated_at,
              s.price_paise AS sub_price_paise,
              COALESCE(${cancelOfferEligible(sql)}, false) AS sub_cancel_offer_eligible,
+             COALESCE(${winbackOfferEligible(sql)}, false) AS sub_winback_offer_eligible,
+             s.offer_switch AS sub_offer_switch,
              ${premiumPredicate(sql, sub)} AS premium
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
@@ -72,6 +74,9 @@ export async function handleMe(c: Context<{ Bindings: Env }>): Promise<Response>
             updated_at: toIso(row.sub_updated_at),
             price_paise: Number(row.sub_price_paise ?? STANDARD_PRICE_PAISE),
             cancel_offer_eligible: row.sub_cancel_offer_eligible === true,
+            winback_offer_eligible: row.sub_winback_offer_eligible === true,
+            // A pending ₹99 row is a switch off a live plan or a winback over a cancelled one; the app shows each
+            offer_switch: row.sub_offer_switch === true,
           };
     return c.json({
       user: {
@@ -172,7 +177,7 @@ export async function handleDeleteAccount(c: Context<{ Bindings: Env }>): Promis
   const sql = getDb(env);
   try {
     const rows = await sql`
-      SELECT u.google_sub, u.cancel_offer_at, s.status, s.merchant_subscription_id, s.superseded_mandate_id,
+      SELECT u.google_sub, s.status, s.merchant_subscription_id, s.superseded_mandate_id,
              s.offer_mandate_id, s.revoke_retry_mandate_id, s.offer_switch, s.trial_end, s.price_paise
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
@@ -228,20 +233,16 @@ export async function handleDeleteAccount(c: Context<{ Bindings: Env }>): Promis
     }
 
     // 2. Tombstone (only when the trial was consumed) and the cascade delete, ATOMICALLY -> a split loses the guard
-    // The cancel offer needs a live trialing/active row, so a spent offer always rides a tombstone
     const trialEnd = row.trial_end as Date | null;
-    const cancelOfferAt = (row.cancel_offer_at as Date | null | undefined) ?? null;
     const subHash =
       trialEnd === null ? null : await hashGoogleSub(row.google_sub as string, env.TRIAL_TOMBSTONE_SECRET);
     await sql.begin(async (tx) => {
       if (subHash !== null) {
-        // The EARLIEST tombstone wins -> it only ever needs to exist; a later deletion only fills a stamp it lacked
+        // ON CONFLICT keeps the EARLIEST tombstone -> it only ever needs to exist, never to be current
         await tx`
-          INSERT INTO trial_tombstones (google_sub_hash, trial_end, cancel_offer_at)
-          VALUES (${subHash}, ${trialEnd}, ${cancelOfferAt})
-          ON CONFLICT (google_sub_hash) DO UPDATE
-          SET trial_end       = COALESCE(trial_tombstones.trial_end, EXCLUDED.trial_end),
-              cancel_offer_at = COALESCE(trial_tombstones.cancel_offer_at, EXCLUDED.cancel_offer_at)
+          INSERT INTO trial_tombstones (google_sub_hash, trial_end)
+          VALUES (${subHash}, ${trialEnd})
+          ON CONFLICT (google_sub_hash) DO NOTHING
         `;
       }
       await tx`DELETE FROM users WHERE id = ${sub}`;
@@ -279,9 +280,10 @@ export async function handleMeSubscription(c: Context<{ Bindings: Env }>): Promi
       SELECT s.id, s.user_id, s.status, s.plan,
              s.phonepe_subscription_id, s.merchant_subscription_id, s.merchant_order_id,
              s.trial_end, s.current_period_end, s.updated_at, s.price_paise,
-             ${cancelOfferEligible(sql)} AS cancel_offer_eligible
+             ${cancelOfferEligible(sql)} AS cancel_offer_eligible,
+             ${winbackOfferEligible(sql)} AS winback_offer_eligible,
+             s.offer_switch
       FROM subscriptions AS s
-      JOIN users AS u ON u.id = s.user_id
       WHERE s.user_id = ${sub}
       LIMIT 1
     `;
@@ -304,6 +306,8 @@ export async function handleMeSubscription(c: Context<{ Bindings: Env }>): Promi
       updated_at: toIso(row.updated_at),
       price_paise: Number(row.price_paise ?? STANDARD_PRICE_PAISE),
       cancel_offer_eligible: row.cancel_offer_eligible === true,
+      winback_offer_eligible: row.winback_offer_eligible === true,
+      offer_switch: row.offer_switch === true,
     });
   } catch (err) {
     console.error("[me/subscription] DB error:", err);

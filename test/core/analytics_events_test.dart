@@ -17,18 +17,32 @@ void main() {
     expect(ArulEvents.applicationInstalled, 'Application Installed');
   });
 
-  test('the PostHog allow-list is exactly the five journey events', () {
-    expect(postHogAllowedEvents, {
-      'login_success',
-      'wallpaper_applied',
-      'wallpaper_shared',
-      'ringtone_set',
-      'trial_started',
-      // TEMPORARY, added for the sign-in diagnosis -> see analytics_provider.dart.
-      'login_cancelled',
-      'login_failed',
-      'login_attempt',
-      'login_surface_shown',
-    });
-  });
+  test(
+    'the PostHog allow-list is exactly the journey events and the cancel funnel',
+    () {
+      expect(postHogAllowedEvents, {
+        'login_success',
+        'wallpaper_applied',
+        'wallpaper_shared',
+        'ringtone_set',
+        'trial_started',
+        // TEMPORARY, added for the sign-in diagnosis -> see analytics_provider.dart.
+        'login_cancelled',
+        'login_failed',
+        'login_attempt',
+        'login_surface_shown',
+        // The cancel funnel -> an owner exception, see analytics_provider.dart.
+        'cancel_tapped',
+        'cancel_offer_shown',
+        'cancel_offer_accepted',
+        'cancel_offer_switched',
+        'cancel_offer_declined',
+        'cancel_offer_expired',
+        'cancel_offer_retry_shown',
+        'cancel_confirmed',
+        'cancel_kept',
+        'resubscribe_tapped',
+      });
+    },
+  );
 }

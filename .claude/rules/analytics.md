@@ -17,7 +17,9 @@ paths:
   `test/core/analytics_gating_test.dart`. A new `track()` call site costs nothing until it is added.
   Re-adding an event is a decision, not a cleanup.
 - **The PostHog event count is fixed (owner): new signal is a property, super property or person
-  property (`JourneyStamps`), never a capture.** Native probes start only after Google's surface is up.
+  property (`JourneyStamps`), never a capture.** One owner exception: the cancel funnel
+  (`cancel_*`, `resubscribe_tapped`), listed in `docs/analytics-events.md`. Native probes start
+  only after Google's surface is up.
 - **Widening the cohort rate is safe; narrowing is not.** The stored value is the draw, not a
   boolean, so raising the rate only adds installs while lowering it drops every install whose draw
   exceeds the new rate and makes any spanning cohort discontinuous.

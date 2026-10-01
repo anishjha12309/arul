@@ -1,6 +1,6 @@
 /**
- * The ₹99 cancel-save offer through the routes: initiate, webhook, status, cancel, abandon, /me, DELETE /me and
- * /auth/login. There is no Postgres here -> assertions read SQL text, bound values and statement order, and
+ * The ₹99 offers (the cancel_99 switch and the winback_99 re-setup) through the routes: initiate, webhook, status,
+ * cancel, abandon, /me, DELETE /me and /auth/login. There is no Postgres here -> assertions read SQL text, bound values and statement order, and
  * lib/phonepe.ts runs for real against a stub that names the merchant each call authenticated as
  */
 
@@ -107,13 +107,13 @@ function routedSql(route: Route = () => undefined) {
   return { sql, stmts, ran };
 }
 
-const CLAIM_READ = /AS offer_eligible FROM subscriptions AS s JOIN users AS u/;
+const CLAIM_READ = /AS winback_eligible, \(.*\) AS offer_eligible FROM subscriptions AS s WHERE/;
 const LOCK = /^SELECT 1 FROM users WHERE id = \? FOR UPDATE$/;
 const CLAIM = /^INSERT INTO subscriptions \( user_id, status, plan/;
 const PARK = /^UPDATE subscriptions AS s SET status = \?, next_debit_at = NULL, notified_at = NULL/;
 const RELEASE = /AS released_mandate_id/;
-const SWITCH = /^WITH g AS \( UPDATE subscriptions AS s SET status = CASE/;
-const HONOUR = /^WITH g AS \( UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
+const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
+const HONOUR = /^UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
 const GRANT = /AND s\.status = 'pending' AND NOT s\.offer_switch/;
 const RESURRECT = /AND s\.status IN \('expired', 'cancelled'\) AND NOT s\.offer_switch/;
 const WATCHED = /^SELECT 1 FROM subscriptions WHERE offer_mandate_id = \?/;
@@ -123,7 +123,7 @@ const HEAL = /^UPDATE subscriptions AS s SET status = \?, merchant_subscription_
 const NOTE_RETRY = /^UPDATE subscriptions SET revoke_retry_mandate_id = \?/;
 const STATUS_READ = /^SELECT id, user_id, status, plan, merchant_subscription_id/;
 const CANCEL_READ = /^SELECT merchant_subscription_id, superseded_mandate_id, offer_mandate_id/;
-const CANCEL_WRITE = /^WITH c AS \( UPDATE subscriptions AS s SET status = 'cancelled'/;
+const CANCEL_WRITE = /^UPDATE subscriptions AS s SET status = 'cancelled', merchant_subscription_id = CASE/;
 const ABANDON_READ = /^SELECT status, merchant_subscription_id FROM subscriptions WHERE user_id = \?/;
 const WEBHOOK_CANCEL = /^UPDATE subscriptions AS s SET status = 'cancelled', next_debit_at = NULL/;
 const CLEAR_IDS = /^UPDATE subscriptions SET superseded_mandate_id = CASE WHEN superseded_mandate_id = \?/;
@@ -449,7 +449,6 @@ describe("POST /payments/initiate {offer: 'cancel_99'}", () => {
     ],
     ["a parked mandate", { superseded_mandate_id: HSR_99 }, "s.superseded_mandate_id IS NULL"],
     ["already on ₹99", { price_paise: "9900" }, "s.price_paise = ?"],
-    ["the offer already spent", { cancel_offer_at: ago(DAY) }, "u.cancel_offer_at IS NULL"],
     ["not trialing or active", { status: "paused" }, "s.status IN ('trialing', 'active')"],
     ["the period over", { current_period_end: ago(HOUR) }, "s.current_period_end > now()"],
     ["no live mandate", { merchant_subscription_id: null }, "s.merchant_subscription_id IS NOT NULL"],
@@ -519,7 +518,7 @@ describe("POST /payments/initiate {offer: 'cancel_99'}", () => {
     expect(order(db)).toEqual(["claim-read"]);
   });
 
-  it.each([["cancel_49"], [99], [true], [{ id: "cancel_99" }], [""]])(
+  it.each([["cancel_49"], ["winback_199"], [99], [true], [{ id: "cancel_99" }], [""]])(
     "an unknown offer %j is 400 invalid_offer, never a full-price checkout",
     async (offer) => {
       fakePhonePe();
@@ -697,6 +696,196 @@ describe("POST /payments/initiate {offer: 'cancel_99'}", () => {
   });
 });
 
+describe("POST /payments/initiate {offer: 'winback_99'}", () => {
+  const WINBACK = { plan: "monthly", offer: "winback_99", targetApp: "com.phonepe.app" };
+  const returning = (patch: J = {}): J => ({
+    trial_end: ago(40 * DAY),
+    status: "cancelled",
+    merchant_subscription_id: LEGACY_199,
+    superseded_mandate_id: null,
+    superseded_price_paise: null,
+    price_paise: "19900",
+    offer_mandate_id: null,
+    offer_switch: false,
+    redemption_order_id: null,
+    current_period_end: ahead(5 * DAY),
+    updated_at: ago(DAY),
+    offer_eligible: false,
+    winback_eligible: true,
+    ...patch,
+  });
+  const initiate = (body: J, claimRows: (read: number) => unknown[], extra: Route = () => undefined) => {
+    let reads = 0;
+    return call(
+      handleInitiate,
+      (t, v) => {
+        const answer = extra(t, v);
+        if (answer !== undefined) return answer;
+        if (CLAIM_READ.test(t)) {
+          reads += 1;
+          return claimRows(reads);
+        }
+        return undefined;
+      },
+      { token, body },
+    );
+  };
+
+  it("a cancelled returning user: a ₹99 TRANSACTION re-setup, nothing parked, no switch, no trial", async () => {
+    const { calls } = fakePhonePe();
+    const { res, body, db } = await initiate(WINBACK, () => [returning()]);
+
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      flow: "intent",
+      trialEligible: false,
+      amountPaise: 9900,
+      offer: "winback_99",
+      pricePaise: 9900,
+    });
+    const msid = String(body?.merchantSubscriptionId);
+    const moid = String(body?.merchantOrderId);
+    expect(msid).toMatch(/^DKS_HS_550E8400_/);
+    // No live mandate to gate on -> no mandate-status read, straight to the setup
+    expect(calls.map((c) => [c.merchant, c.method, c.path])).toEqual([
+      ["hsr", "POST", "/subscriptions/v2/setup"],
+    ]);
+    expect(calls[0].body).toMatchObject({
+      merchantOrderId: moid,
+      amount: 9900,
+      paymentFlow: {
+        type: "SUBSCRIPTION_SETUP",
+        merchantSubscriptionId: msid,
+        authWorkflowType: "TRANSACTION",
+        amountType: "FIXED",
+        maxAmount: 9900,
+      },
+    });
+    expect(order(db)).toEqual(["claim-read", "lock", "claim-read", "claim", "attach"]);
+    expect(db.ran(CLAIM)[0].values).toEqual([
+      USER_ID,
+      "monthly",
+      msid,
+      moid,
+      "com.phonepe.app",
+      null,
+      null,
+      9900,
+      false,
+      null,
+    ]);
+    for (const read of db.ran(CLAIM_READ)) {
+      expect(read.text).toContain(
+        "(( s.status IN ('cancelled', 'expired', 'pending') AND s.trial_end IS NOT NULL " +
+          "AND s.superseded_mandate_id IS NULL )) AS winback_eligible",
+      );
+      expect(read.values).toEqual([19900, USER_ID]);
+    }
+  });
+
+  it("an expired returning user takes it the same way (its dead mandate revoked, as on any re-setup), SDK page too", async () => {
+    const { calls } = fakePhonePe();
+    const { res, body } = await initiate({ plan: "monthly", offer: "winback_99" }, () => [
+      returning({ status: "expired", current_period_end: ago(10 * DAY) }),
+    ]);
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({
+      merchantId: "HSRUTILITYONLINE",
+      trialEligible: false,
+      amountPaise: 9900,
+      offer: "winback_99",
+      pricePaise: 9900,
+    });
+    expect(calls[0].path).toBe("/checkout/v2/sdk/order");
+    expect(revokes(calls)).toEqual([["legacy", LEGACY_199]]);
+    expect(calls[0].body).toMatchObject({
+      amount: 9900,
+      paymentFlow: {
+        subscriptionDetails: { authWorkflowType: "TRANSACTION", maxAmount: 9900, amountType: "FIXED" },
+      },
+    });
+  });
+
+  it.each([
+    ["a new user (no row)", () => []],
+    ["a new user (trial_end NULL)", () => [returning({ trial_end: null, winback_eligible: false })]],
+    ["a trialing user", () => [returning({ status: "trialing", winback_eligible: false })]],
+    ["an active user", () => [returning({ status: "active", winback_eligible: false })]],
+    ["a paused user", () => [returning({ status: "paused", winback_eligible: false })]],
+  ])("%s -> 409 offer_unavailable before any PhonePe call or claim", async (_why, rows) => {
+    fakePhonePe();
+    const { res, body, db } = await initiate(WINBACK, rows);
+    expect(res.status).toBe(409);
+    expect(errorCode(body)).toBe("offer_unavailable");
+    expect(order(db)).toEqual(["claim-read"]);
+    expect(pp.calls).toEqual([]);
+  });
+
+  it("re-checked under the lock: a row gone ineligible answers offer_unavailable, never already_subscribed", async () => {
+    fakePhonePe();
+    const { res, body, db } = await initiate(WINBACK, (read) =>
+      read === 1 ? [returning()] : [returning({ status: "active", winback_eligible: false })],
+    );
+    expect(res.status).toBe(409);
+    expect(errorCode(body)).toBe("offer_unavailable");
+    expect(order(db)).toEqual(["claim-read", "lock", "claim-read"]);
+    expect(pp.calls).toEqual([]);
+  });
+
+  it("a double tap is setup_in_progress (the in-flight guard runs before eligibility)", async () => {
+    fakePhonePe();
+    const claimed = returning({ status: "pending", updated_at: new Date(), price_paise: "9900" });
+    const { res, body, db } = await initiate(WINBACK, () => [claimed]);
+    expect(res.status).toBe(409);
+    expect(errorCode(body)).toBe("setup_in_progress");
+    expect(order(db)).toEqual(["claim-read"]);
+  });
+
+  it("their own stale winback claim is re-claimed, and its unapproved mandate revoked", async () => {
+    const { calls } = fakePhonePe();
+    const stale = returning({ status: "pending", merchant_subscription_id: HSR_99, updated_at: ago(HOUR) });
+    const { res, db } = await initiate(WINBACK, () => [stale]);
+    expect(res.status).toBe(200);
+    expect(db.ran(CLAIM)[0].values.slice(5, 9)).toEqual([null, null, 9900, false]);
+    expect(revokes(calls)).toEqual([["hsr", HSR_99]]);
+  });
+
+  it("a settled debit on the row heals and answers already_subscribed instead of charging ₹99", async () => {
+    const { calls } = fakePhonePe({ order: () => ({ state: "COMPLETED" }) });
+    const { res, body, db } = await initiate(
+      WINBACK,
+      () => [
+        returning({
+          redemption_order_id: LEGACY_R,
+          trial_end: ago(3 * DAY),
+          current_period_end: ago(3 * DAY),
+        }),
+      ],
+      (t) => {
+        if (HEAL_CANDIDATE.test(t)) return [{ mandate_id: LEGACY_199 }];
+        if (HEAL.test(t)) {
+          return [
+            { user_id: USER_ID, status: "active", merchant_subscription_id: LEGACY_199, price_paise: 19900 },
+          ];
+        }
+        return undefined;
+      },
+    );
+    expect(res.status).toBe(409);
+    expect(errorCode(body)).toBe("already_subscribed");
+    expect(order(db)).toEqual(["claim-read", "heal-candidate", "heal"]);
+    expect(calls.map((c) => c.path)).not.toContain("/subscriptions/v2/setup");
+  });
+
+  it("both setup paths failing keeps the claim pending, like any paid re-setup", async () => {
+    const down = () => new Response("down", { status: 500 });
+    fakePhonePe({ intent: down, sdk: down });
+    const { res, db } = await initiate(WINBACK, () => [returning()]);
+    expect(res.status).toBe(502);
+    expect(db.ran(RELEASE)).toEqual([]);
+  });
+});
+
 describe("POST /payments/webhook — the switch, releases and late approvals", () => {
   const setupCompleted = (msid: string, orderId: string) => ({
     event: "subscription.setup.order.completed",
@@ -750,7 +939,7 @@ describe("POST /payments/webhook — the switch, releases and late approvals", (
       SWITCH.test(t) ? [switched] : undefined,
     );
     expect(order(db)).toEqual(["switch", "note-retry"]);
-    expect(db.ran(NOTE_RETRY)[0].values).toEqual([LEGACY_199, USER_ID]);
+    expect(db.ran(NOTE_RETRY)[0].values).toEqual([LEGACY_199, LEGACY_199, USER_ID]);
   });
 
   it("a plain setup falls through the switch to the grant", async () => {
@@ -761,6 +950,26 @@ describe("POST /payments/webhook — the switch, releases and late approvals", (
         : undefined,
     );
     expect(order(db)).toEqual(["switch", "grant"]);
+  });
+
+  it("a winback's ₹99 TRANSACTION is the ordinary paid grant: the referral reward, no audit warning", async () => {
+    fakePhonePe();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const winback = setupCompleted(HSR_99, HSR_99_ORDER);
+    winback.payload.amount = 9900;
+    const { db } = await deliver(winback, (t) =>
+      GRANT.test(t)
+        ? [{ user_id: USER_ID, status: "active", price_paise: "9900", stale_mandate_id: null }]
+        : undefined,
+    );
+    const warned = warn.mock.calls.some(([line]) => String(line).includes("Trial-consumed user activated"));
+    warn.mockRestore();
+    expect(order(db)).toEqual(["switch", "grant"]);
+    expect(db.ran(GRANT)[0].text).toContain(
+      "paid_paise = CASE WHEN s.trial_end IS NULL THEN s.paid_paise ELSE s.paid_paise + s.price_paise END",
+    );
+    expect(grantReferralReward).toHaveBeenCalledWith(expect.anything(), USER_ID);
+    expect(warned).toBe(false);
   });
 
   it("a late approval of a released ₹99 on a row still on its ₹199 is honoured, never resurrected", async () => {
@@ -882,6 +1091,9 @@ describe("POST /payments/webhook — the switch, releases and late approvals", (
       "revoke_retry_mandate_id = CASE WHEN revoke_retry_mandate_id = ? THEN NULL ELSE revoke_retry_mandate_id END",
     );
     expect(clear.text).toContain(
+      "revoke_retry_at = CASE WHEN revoke_retry_mandate_id = ? THEN NULL ELSE revoke_retry_at END",
+    );
+    expect(clear.text).toContain(
       "WHERE superseded_mandate_id = ? OR offer_mandate_id = ? OR revoke_retry_mandate_id = ?",
     );
     expect(clear.values.every((v) => v === LEGACY_199)).toBe(true);
@@ -982,6 +1194,34 @@ describe("POST /payments/status — the grant and release surfaces", () => {
     expect(calls.filter((c) => c.path.endsWith("/status")).map((c) => c.merchant)).toEqual(["hsr", "hsr"]);
   });
 
+  it("COMPLETED on a winback claim runs the ordinary grant and answers active at 9900", async () => {
+    fakePhonePe({
+      order: () => ({
+        state: "COMPLETED",
+        paymentFlow: { type: "SUBSCRIPTION_SETUP", subscriptionId: "OMS_99" },
+      }),
+    });
+    const winbackClaim = { ...pendingSwitch, superseded_mandate_id: null, status: "pending" };
+    let reads = 0;
+    const { body, db } = await call(
+      handleStatus,
+      (t) => {
+        if (STATUS_READ.test(t)) {
+          reads += 1;
+          return [reads === 1 ? { ...winbackClaim } : { ...winbackClaim, status: "active" }];
+        }
+        if (GRANT.test(t))
+          return [{ user_id: USER_ID, status: "active", price_paise: "9900", stale_mandate_id: null }];
+        return undefined;
+      },
+      { token },
+    );
+    expect(body?.status).toBe("active");
+    expect(body?.subscription).toMatchObject({ status: "active", price_paise: 9900 });
+    expect(order(db).filter((l) => l === "switch" || l === "grant")).toEqual(["switch", "grant"]);
+    expect(grantReferralReward).toHaveBeenCalledWith(expect.anything(), USER_ID);
+  });
+
   it.each([["FAILED"], ["EXPIRED"]])(
     "%s releases through the shared release and answers the restored ₹199",
     async (state) => {
@@ -1021,7 +1261,7 @@ describe("POST /payments/status — the grant and release surfaces", () => {
   );
 });
 
-describe("POST /payments/cancel — the offer stamp and the extra mandates", () => {
+describe("POST /payments/cancel — the extra mandates, and no per-person record", () => {
   const liveRow = (patch: J = {}): J => ({
     merchant_subscription_id: LEGACY_199,
     superseded_mandate_id: null,
@@ -1051,20 +1291,19 @@ describe("POST /payments/cancel — the offer stamp and the extra mandates", () 
     );
 
   it.each([
-    ["no body (fielded builds)", { noBody: true }, false],
-    ["an empty body", { body: {} }, false],
-    ["offer_declined: true", { body: { offer_declined: true } }, true],
-    ["offer_declined: 'yes'", { body: { offer_declined: "yes" } }, false],
-  ])("%s -> stamps users.cancel_offer_at only on the explicit decline", async (_why, opts, stamped) => {
+    ["no body (fielded builds)", { noBody: true }],
+    ["an empty body", { body: {} }],
+    ["offer_declined: true (fielded builds)", { body: { offer_declined: true } }],
+    ["offer_declined: 'yes'", { body: { offer_declined: "yes" } }],
+  ])("%s -> the same one cancel write, and nothing about the offer is recorded", async (_why, opts) => {
     fakePhonePe();
     const { res, db } = await cancel(liveRow(), opts);
     expect(res.status).toBe(200);
+    expect(db.stmts).toHaveLength(2);
     const write = db.ran(CANCEL_WRITE)[0];
-    expect(write.text).toContain(
-      "stamp AS ( UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now()) " +
-        "WHERE users.id = ? AND ?::boolean AND EXISTS (SELECT 1 FROM c) )",
-    );
-    expect(write.values).toEqual([19900, true, true, USER_ID, USER_ID, stamped]);
+    expect(write.text).not.toContain("users");
+    expect(write.text).toContain("RETURNING s.updated_at, s.price_paise, s.merchant_subscription_id");
+    expect(write.values).toEqual([19900, true, true, true, USER_ID]);
   });
 
   it("revokes a watched ₹99 and a revoke-retry ₹199 besides the live mandate, each at its merchant", async () => {
@@ -1084,7 +1323,10 @@ describe("POST /payments/cancel — the offer stamp and the extra mandates", () 
     expect(write.text).toContain(
       "revoke_retry_mandate_id = CASE WHEN ?::boolean THEN NULL ELSE s.revoke_retry_mandate_id END",
     );
-    expect(write.values.slice(1, 3)).toEqual([true, true]);
+    expect(write.text).toContain(
+      "revoke_retry_at = CASE WHEN ?::boolean THEN NULL ELSE s.revoke_retry_at END",
+    );
+    expect(write.values.slice(1, 4)).toEqual([true, true, true]);
   });
 
   it("the extra mandates are best effort: one PhonePe keeps live stays on the row, the cancel still succeeds", async () => {
@@ -1092,6 +1334,13 @@ describe("POST /payments/cancel — the offer stamp and the extra mandates", () 
     const { res, db } = await cancel(liveRow({ offer_mandate_id: HSR_99 }));
     expect(res.status).toBe(200);
     expect(db.ran(CANCEL_WRITE)[0].values.slice(1, 3)).toEqual([false, true]);
+  });
+
+  it("a revoke-retry ₹199 PhonePe still keeps live stays on the row with its ALARM clock", async () => {
+    fakePhonePe({ cancel: (id) => (id === OLD_99 ? refuseCancel() : undefined) });
+    const { res, db } = await cancel(liveRow({ revoke_retry_mandate_id: OLD_99 }));
+    expect(res.status).toBe(200);
+    expect(db.ran(CANCEL_WRITE)[0].values.slice(1, 4)).toEqual([true, false, false]);
   });
 
   describe("mid-switch", () => {
@@ -1197,6 +1446,7 @@ describe("GET /me and /me/subscription — price and eligibility", () => {
     sub_status: "trialing",
     sub_price_paise: "19900",
     sub_cancel_offer_eligible: true,
+    sub_winback_offer_eligible: false,
     premium: true,
     ...patch,
   });
@@ -1208,8 +1458,35 @@ describe("GET /me and /me/subscription — price and eligibility", () => {
     expect(read.text).toMatch(
       /COALESCE\(\(\( s\.status IN \('trialing', 'active'\)[\s\S]*\)\), false\) AS sub_cancel_offer_eligible/,
     );
-    expect(read.text).toContain("u.cancel_offer_at IS NULL");
-    expect(body?.subscription).toMatchObject({ price_paise: 19900, cancel_offer_eligible: true });
+    expect(read.text).toContain(
+      "COALESCE((( s.status IN ('cancelled', 'expired', 'pending') AND s.trial_end IS NOT NULL " +
+        "AND s.superseded_mandate_id IS NULL )), false) AS sub_winback_offer_eligible",
+    );
+    expect(read.text).not.toContain("cancel_offer_at");
+    expect(body?.subscription).toMatchObject({
+      price_paise: 19900,
+      cancel_offer_eligible: true,
+      winback_offer_eligible: false,
+    });
+  });
+
+  it.each([
+    [{ sub_status: "cancelled", sub_cancel_offer_eligible: false, sub_winback_offer_eligible: true }, true],
+    [{ sub_winback_offer_eligible: null }, false],
+    [{ sub_winback_offer_eligible: "t" }, false],
+  ])("%j -> winback_offer_eligible %s (strictly true only)", async (patch, out) => {
+    const { body } = await call(handleMe, (t) => (ME.test(t) ? [meRow(patch)] : undefined), { token });
+    expect(body?.subscription).toMatchObject({ winback_offer_eligible: out });
+  });
+
+  it.each([
+    [{ sub_status: "pending", sub_offer_switch: true }, true],
+    [{ sub_status: "pending", sub_offer_switch: false }, false],
+    [{ sub_offer_switch: null }, false],
+  ])("%j -> offer_switch %s, so a pending ₹99 row tells a switch from a winback", async (patch, out) => {
+    const { db, body } = await call(handleMe, (t) => (ME.test(t) ? [meRow(patch)] : undefined), { token });
+    expect(db.stmts[0].text).toContain("s.offer_switch AS sub_offer_switch");
+    expect(body?.subscription).toMatchObject({ offer_switch: out });
   });
 
   it.each([
@@ -1221,32 +1498,38 @@ describe("GET /me and /me/subscription — price and eligibility", () => {
     expect(body?.subscription).toMatchObject({ price_paise: price, cancel_offer_eligible: eligibleOut });
   });
 
-  it("/me/subscription carries the same two keys through an inner join on users", async () => {
+  it("/me/subscription carries the same three keys from the subscriptions row alone", async () => {
     const { db, body } = await call(
       handleMeSubscription,
       () => [
         {
           id: "row-1",
           user_id: USER_ID,
-          status: "active",
+          status: "cancelled",
           price_paise: "9900",
           cancel_offer_eligible: false,
+          winback_offer_eligible: true,
         },
       ],
       { token },
     );
-    expect(db.stmts[0].text).toContain("FROM subscriptions AS s JOIN users AS u ON u.id = s.user_id");
+    expect(db.stmts[0].text).toContain("FROM subscriptions AS s WHERE s.user_id = ?");
+    expect(db.stmts[0].text).not.toContain("users");
     expect(db.stmts[0].text).toContain("AS cancel_offer_eligible");
-    expect(body).toMatchObject({ price_paise: 9900, cancel_offer_eligible: false });
+    expect(db.stmts[0].text).toContain("AS winback_offer_eligible");
+    expect(body).toMatchObject({
+      price_paise: 9900,
+      cancel_offer_eligible: false,
+      winback_offer_eligible: true,
+    });
   });
 });
 
-describe("the offer survives account deletion", () => {
+describe("account deletion and sign-in carry no offer record", () => {
   const TOMB = /^INSERT INTO trial_tombstones/;
 
-  it("DELETE /me writes the spent offer onto the tombstone and revokes the extra mandates best effort", async () => {
+  it("DELETE /me tombstones trial_end alone and revokes the extra mandates best effort", async () => {
     const { calls } = fakePhonePe({ cancel: (id) => (id === LEGACY_199 ? refuseCancel() : undefined) });
-    const spentAt = ago(5 * DAY);
     const trialEnd = ago(30 * DAY);
     const { res, db } = await call(
       handleDeleteAccount,
@@ -1255,7 +1538,6 @@ describe("the offer survives account deletion", () => {
           ? [
               {
                 google_sub: "g-sub",
-                cancel_offer_at: spentAt,
                 status: "cancelled",
                 merchant_subscription_id: HSR_99,
                 superseded_mandate_id: null,
@@ -1275,29 +1557,15 @@ describe("the offer survives account deletion", () => {
       ["legacy", LEGACY_199],
     ]);
     const tomb = db.ran(TOMB)[0];
-    expect(tomb.text).toContain("INSERT INTO trial_tombstones (google_sub_hash, trial_end, cancel_offer_at)");
-    expect(tomb.text).toContain(
-      "ON CONFLICT (google_sub_hash) DO UPDATE SET trial_end = COALESCE(trial_tombstones.trial_end, EXCLUDED.trial_end), " +
-        "cancel_offer_at = COALESCE(trial_tombstones.cancel_offer_at, EXCLUDED.cancel_offer_at)",
+    expect(tomb.text).toBe(
+      "INSERT INTO trial_tombstones (google_sub_hash, trial_end) VALUES (?, ?) ON CONFLICT (google_sub_hash) DO NOTHING",
     );
-    expect(tomb.values).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), trialEnd, spentAt]);
+    expect(tomb.values).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), trialEnd]);
+    expect(db.stmts[0].text).not.toContain("cancel_offer_at");
     expect(db.ran(/^DELETE FROM users WHERE id = \?/)).toHaveLength(1);
   });
 
-  it("an unspent offer writes a NULL stamp", async () => {
-    fakePhonePe();
-    const { db } = await call(
-      handleDeleteAccount,
-      (t) =>
-        t.startsWith("SELECT u.google_sub")
-          ? [{ google_sub: "g-sub", cancel_offer_at: null, status: "expired", trial_end: ago(DAY) }]
-          : undefined,
-      { token },
-    );
-    expect(db.ran(TOMB)[0].values[2]).toBeNull();
-  });
-
-  it("/auth/login pre-seeds users.cancel_offer_at from the tombstone in the same statement, new rows only", async () => {
+  it("/auth/login seeds only trial_end from the tombstone", async () => {
     vi.mocked(verifyGoogleIdToken).mockResolvedValue({
       sub: "g-sub",
       email: "g@example.com",
@@ -1324,15 +1592,10 @@ describe("the offer survives account deletion", () => {
 
     expect(res.status).toBe(200);
     const upsert = db.ran("INSERT INTO users")[0].text;
-    expect(upsert).toContain("WITH tomb AS ( SELECT trial_end, cancel_offer_at FROM trial_tombstones");
+    expect(upsert).toContain("WITH tomb AS ( SELECT trial_end FROM trial_tombstones");
     expect(upsert).toContain(
-      "INSERT INTO users (google_sub, email, display_name, referral_code, cancel_offer_at) " +
-        "VALUES (?, ?, ?, ?, (SELECT cancel_offer_at FROM tomb))",
+      "INSERT INTO users (google_sub, email, display_name, referral_code) VALUES (?, ?, ?, ?)",
     );
-    const onConflict = upsert.slice(
-      upsert.indexOf("ON CONFLICT (google_sub) DO UPDATE"),
-      upsert.indexOf("RETURNING"),
-    );
-    expect(onConflict).not.toContain("cancel_offer_at");
+    expect(upsert).not.toContain("cancel_offer_at");
   });
 });

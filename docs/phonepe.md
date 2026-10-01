@@ -53,8 +53,9 @@ the SAME request on any intent failure** — a second initiate bounces off its o
 payment page reads "auto-paid till NaNth Invalid Date". The intent flow defaults to 30 years.
 
 `trial_end` NULL → **PENNY_DROP** (₹2 — PhonePe requires exactly 200 paise for that flow — and a 1-day
-trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real ₹199 first debit (`amount: 19900`) →
-straight to `active`. `maxAmount` = the claim's `price_paise`, `amountType: FIXED`, `frequency: MONTHLY`.
+trial). NOT NULL → `authWorkflowType: TRANSACTION` with a real first debit at the claim's price (`amount: 19900`,
+9900 on a winback) → straight to `active`. `maxAmount` = the claim's `price_paise`, `amountType: FIXED`,
+`frequency: MONTHLY`.
 
 **409 `setup_in_progress` stays distinct from 409 `already_subscribed`** — the app treats
 `already_subscribed` as success and must never do that for an in-flight setup. Initiate is serialized

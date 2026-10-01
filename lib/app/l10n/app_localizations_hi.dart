@@ -874,28 +874,35 @@ class AppLocalizationsHi extends AppLocalizations {
   String get premiumCancelKeep => 'प्रीमियम जारी रखें';
 
   @override
-  String get cancelOfferEyebrow => '50% छूट';
+  String get cancelOfferTitle => 'खास ऑफ़र';
 
   @override
-  String get cancelOfferForever =>
-      'हमेशा के लिए यही दाम। अभी की तरह कभी भी रद्द करें।';
+  String get cancelOfferSubtitle => 'सीमित समय की कीमत';
 
   @override
-  String cancelOfferApprove(String offerPrice, String price) {
-    return 'आपका UPI ऐप $offerPrice/माह को मंज़ूरी देने के लिए कहेगा। जैसे ही आप मंज़ूरी देंगे, हम आपका $price वाला ऑटोपे बंद कर देंगे।';
+  String get cancelOfferDiscount => '50% छूट';
+
+  @override
+  String cancelOfferPrice(String price) {
+    return '$price/माह';
   }
 
   @override
-  String get cancelOfferDeclineNote =>
-      '\'अभी नहीं\' चुनने पर आपका सब्सक्रिप्शन रद्द हो जाएगा।';
+  String get cancelOfferBilling => 'हर महीने भुगतान, हमेशा यही दाम';
 
   @override
-  String cancelOfferDeclineNoteDate(String date) {
-    return '\'अभी नहीं\' चुनने पर आपका सब्सक्रिप्शन रद्द हो जाएगा। $date तक प्रीमियम चालू रहेगा।';
+  String cancelOfferEndsIn(String time) {
+    return 'ऑफ़र खत्म होने में $time';
   }
 
   @override
-  String get cancelOfferAccept => 'छूट पाएँ';
+  String get cancelOfferEnded => 'ऑफ़र खत्म हो गया';
+
+  @override
+  String get cancelOfferAccept => '50% छूट पाएँ';
+
+  @override
+  String get cancelOfferDecline => 'मुझे यह ऑफ़र नहीं चाहिए';
 
   @override
   String get cancelOfferRetryTitle => 'पूरा नहीं हुआ';

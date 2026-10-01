@@ -24,7 +24,13 @@ import {
   merchantOf,
 } from "../src/lib/phonepe.js";
 import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../src/lib/posthog.js";
-import { CANCEL_OFFER, OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE, offerOfPrice } from "../src/lib/pricing.js";
+import {
+  CANCEL_OFFER,
+  OFFER_PRICE_PAISE,
+  STANDARD_PRICE_PAISE,
+  WINBACK_OFFER,
+  offerOfPrice,
+} from "../src/lib/pricing.js";
 import { grantReferralReward } from "../src/lib/referral.js";
 import { rearmUnpausedSubscription } from "../src/lib/subscription-rearm.js";
 import {
@@ -35,6 +41,7 @@ import {
   noteRevokeRetry,
   parkSubscription,
   releaseClaim,
+  winbackOfferEligible,
 } from "../src/lib/subscription-state.js";
 
 const USER_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -190,7 +197,6 @@ const ELIGIBILITY_CLAUSES = [
   "s.next_debit_at > now() + interval '1 hour'",
   "s.superseded_mandate_id IS NULL",
   "s.price_paise = ?",
-  "u.cancel_offer_at IS NULL",
 ];
 
 describe("cancelOfferEligible — decision 5 in one fragment", () => {
@@ -206,6 +212,25 @@ describe("cancelOfferEligible — decision 5 in one fragment", () => {
   it("does not gate on notified_at — Pass A notifies a 1-day trial minutes after it starts", () => {
     const frag = cancelOfferEligible(asSql(routedSql())) as unknown as Stmt;
     expect(frag.text).not.toContain("notified_at");
+  });
+
+  it("has no per-person limit: no users column is read", () => {
+    const frag = cancelOfferEligible(asSql(routedSql())) as unknown as Stmt;
+    expect(frag.text).not.toMatch(/\bu\./);
+  });
+});
+
+describe("winbackOfferEligible — a returning user with no live plan, in one fragment", () => {
+  it("returning (trial_end set), not live, nothing parked; binds nothing and reads no users column", () => {
+    const db = routedSql();
+    const frag = winbackOfferEligible(asSql(db)) as unknown as Stmt;
+    expect(frag.text).toBe(
+      "( s.status IN ('cancelled', 'expired', 'pending') AND s.trial_end IS NOT NULL " +
+        "AND s.superseded_mandate_id IS NULL )",
+    );
+    expect(frag.values).toEqual([]);
+    expect(frag.text).not.toMatch(/\bu\./);
+    expect(db.stmts).toEqual([]);
   });
 });
 
@@ -245,10 +270,10 @@ describe("releaseClaim — every release path's ONE statement", () => {
 });
 
 describe("grantCompletedSetup — the offer switch runs FIRST on every grant surface", () => {
-  const SWITCH = /^WITH g AS \( UPDATE subscriptions AS s SET status = CASE/;
+  const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
   const GRANT = "AND s.status = 'pending' AND NOT s.offer_switch";
 
-  it("a pending cancel_99 switches: no paid month, no debit stamps, price kept, offer spent in the same statement", async () => {
+  it("a pending cancel_99 switches: no paid month, no debit stamps, price kept, no per-person record", async () => {
     const db = routedSql((t) =>
       SWITCH.test(t)
         ? [{ user_id: USER_ID, status: "trialing", price_paise: "9900", stale_mandate_id: LEGACY_199 }]
@@ -292,10 +317,7 @@ describe("grantCompletedSetup — the offer switch runs FIRST on every grant sur
       "WHERE (s.user_id = ?) AND prior.id = s.id AND s.status = 'pending' AND s.offer_switch " +
         "RETURNING s.user_id, s.status, s.price_paise, prior.superseded_mandate_id AS stale_mandate_id",
     );
-    expect(text).toContain(
-      "stamp AS ( UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now()) " +
-        "FROM g WHERE users.id = g.user_id )",
-    );
+    expect(text).not.toContain("users");
     for (const untouched of [
       /paid_paise/,
       /debit_count/,
@@ -310,7 +332,7 @@ describe("grantCompletedSetup — the offer switch runs FIRST on every grant sur
     expect(grantReferralReward).not.toHaveBeenCalled();
   });
 
-  it("a plain claim falls through to the grant, which stamps paid_paise from the row's own price", async () => {
+  it("a plain claim (a winback too) falls through to the grant, which stamps paid_paise from the row's own price", async () => {
     const db = routedSql((t) =>
       t.includes(GRANT)
         ? [{ user_id: USER_ID, status: "active", price_paise: 19900, stale_mandate_id: null }]
@@ -327,6 +349,7 @@ describe("grantCompletedSetup — the offer switch runs FIRST on every grant sur
       "paid_paise = CASE WHEN s.trial_end IS NULL THEN s.paid_paise ELSE s.paid_paise + s.price_paise END",
     );
     expect(grant.text).toContain("WHERE (s.id = ?) AND prior.id = s.id");
+    expect(grant.text).toContain("status = CASE WHEN s.trial_end IS NULL THEN 'trialing' ELSE 'active' END");
     expect(grant.values).not.toContain(STANDARD_PRICE_PAISE);
     expect(grant.values).not.toContain(OFFER_PRICE_PAISE);
   });
@@ -341,7 +364,7 @@ describe("grantCompletedSetup — the offer switch runs FIRST on every grant sur
 describe("honourLateOfferApproval — a late ₹99 approval", () => {
   it("switches only a trialing/active row still on its ₹199, unparked, live and not due within the hour", async () => {
     const db = routedSql((t) =>
-      t.startsWith("WITH g AS ( UPDATE subscriptions AS s SET merchant_subscription_id = s.offer_mandate_id")
+      t.startsWith("UPDATE subscriptions AS s SET merchant_subscription_id = s.offer_mandate_id")
         ? [{ user_id: USER_ID, status: "active", price_paise: 9900, stale_mandate_id: LEGACY_199 }]
         : undefined,
     );
@@ -362,9 +385,7 @@ describe("honourLateOfferApproval — a late ₹99 approval", () => {
       expect(text).toContain(cleared);
     }
     expect(text).toContain("prior.merchant_subscription_id AS stale_mandate_id");
-    expect(text).toContain(
-      "UPDATE users SET cancel_offer_at = COALESCE(users.cancel_offer_at, now()) FROM g",
-    );
+    expect(text).not.toContain("users");
     expect(values).toEqual([
       "OMS_9",
       OFFER_PRICE_PAISE,
@@ -537,11 +558,17 @@ describe("healSettledDebit — a COMPLETED order on a row that never converted",
 });
 
 describe("noteRevokeRetry and the 7d rearm", () => {
-  it("parks a ₹199 the switch could not revoke in revoke_retry_mandate_id", async () => {
+  it("parks a ₹199 the switch could not revoke in revoke_retry_mandate_id, dated by its own clock", async () => {
     const db = routedSql();
     await noteRevokeRetry(asSql(db), USER_ID, LEGACY_199);
-    expect(db.stmts[0].text).toContain("SET revoke_retry_mandate_id = ?");
-    expect(db.stmts[0].values).toEqual([LEGACY_199, USER_ID]);
+    const { text, values } = db.stmts[0];
+    expect(text).toContain("SET revoke_retry_mandate_id = ?,");
+    // A re-note of the same id keeps the first failure; another id restarts the ALARM clock
+    expect(text).toContain(
+      "revoke_retry_at = CASE WHEN revoke_retry_mandate_id = ? THEN COALESCE(revoke_retry_at, now()) ELSE now() END",
+    );
+    expect(text).toContain("WHERE user_id = ?");
+    expect(values).toEqual([LEGACY_199, LEGACY_199, USER_ID]);
   });
 
   it("7d: an unpause rearms to 'active' only for a converted row, never by comparing trial_end to now()", async () => {
@@ -559,13 +586,19 @@ describe("noteRevokeRetry and the 7d rearm", () => {
 });
 
 describe("pricing, ids and analytics", () => {
-  it("one offer, one price", () => {
-    expect([STANDARD_PRICE_PAISE, OFFER_PRICE_PAISE, CANCEL_OFFER]).toEqual([19900, 9900, "cancel_99"]);
-    expect(offerOfPrice(9900)).toBe(CANCEL_OFFER);
-    expect(offerOfPrice("9900" as unknown as number)).toBe(CANCEL_OFFER);
-    expect(offerOfPrice(19900)).toBeNull();
-    expect(offerOfPrice(null)).toBeNull();
-    expect(offerOfPrice(undefined)).toBeNull();
+  it("two offers, one price; only a ₹99 trial proves which offer (a winback is never a trial)", () => {
+    expect([STANDARD_PRICE_PAISE, OFFER_PRICE_PAISE, CANCEL_OFFER, WINBACK_OFFER]).toEqual([
+      19900,
+      9900,
+      "cancel_99",
+      "winback_99",
+    ]);
+    expect(offerOfPrice(9900, true)).toBe(CANCEL_OFFER);
+    expect(offerOfPrice("9900" as unknown as number, true)).toBe(CANCEL_OFFER);
+    expect(offerOfPrice(9900, false)).toBeNull();
+    expect(offerOfPrice(19900, true)).toBeNull();
+    expect(offerOfPrice(null, true)).toBeNull();
+    expect(offerOfPrice(undefined, false)).toBeNull();
   });
 
   it("mandateCreatedAt reads a mandate id's own mint time for both merchants, and nothing else", () => {
@@ -595,6 +628,26 @@ describe("pricing, ids and analytics", () => {
     expect(props(posthog[0])).toMatchObject(want);
     if (amount === STANDARD_PRICE_PAISE) expect(props(posthog[0])).not.toHaveProperty("offer");
   });
+
+  it.each([
+    ["trialing", { price_paise: 9900, value: 99, offer: CANCEL_OFFER }],
+    ["active", { price_paise: 9900, value: 99 }],
+    ["paused", { price_paise: 9900, value: 99 }],
+  ])(
+    "subscription_cancel of a ₹99 row that was %s tags the offer only when the row proves it",
+    async (prior, want) => {
+      const { posthog } = fakePhonePe();
+      await reportPostHogSubscriptionCancel(dualEnv(), {
+        userId: USER_ID,
+        merchantSubId: HSR_99,
+        reason: "user_cancel",
+        priorStatus: prior,
+        pricePaise: 9900,
+      });
+      expect(props(posthog[0])).toMatchObject(want);
+      if (prior !== "trialing") expect(props(posthog[0])).not.toHaveProperty("offer");
+    },
+  );
 
   it("subscription_cancel without a known price sends no price keys at all", async () => {
     const { posthog } = fakePhonePe();

@@ -53,6 +53,13 @@ spinner — 3 attempts, 15 s cap — inside that same loop; a server ANSWER is n
   PhonePe reporting the order expired, resets the CTA SILENTLY; the next tap is a fresh order.
 - **The app chip stays changeable:** another app abandons the open order and starts a fresh checkout
   with it in one motion; the same app does nothing.
+- **A resume re-polls the SAME order id**, so only the newest attempt may clear it: the replaced poll's
+  wake-up cleared it once and the next return was a no-op (~2 min spinner). A status answer landing after a
+  resume, switch or deadline decides nothing.
+- A resubscribe claim the Worker released answers `cancelled`, not `expired` (its period is live): it ends
+  the attempt like `expired` (`claim_released`), never a dead "open again".
+- **A premium `pending` row is a claim over a paid period**: /premium and the help sheet show the plan it
+  left (`shownStatus`; `offer_switch` tells a switch from a ₹99 winback), never the sell page.
 - **Deadline = the link's `QRexpire`**, split from the RAW query then percent-decoded
   (`Uri.queryParameters` turns the bare `+05:30` into a space). Production links expire 5 min after
   creation, whatever the docs' sample says; with no `QRexpire`, launch + 10 min, capped at 15 — the setup
@@ -86,6 +93,17 @@ while resumable). It drives one dismissible feed row and one reminder
 
 ## The cancel offer ([cancel-offer.md](cancel-offer.md))
 
+- **Offer first, then confirm.** Cancel subscription opens the offer sheet when `/me` says eligible, else the
+  "Cancel subscription?" confirm. Every way off the sheet (X, "I don't want the offer", back, drag, scrim) opens
+  that confirm: a decline never cancels by itself. Only its "Cancel it" posts `/payments/cancel`; "Keep
+  premium" keeps the plan. The retry sheet's cancel goes through the same confirm.
+- **A returning user's paid checkout opens the same sheet** (`winback_offer_eligible`): Resubscribe, the paid
+  sell and the picker's QR row all pass `_startPaid`. Accept = `winback_99` through the app or QR tapped, an
+  ordinary ₹99 sale (resumable, converts); the link = full price; X/back start nothing.
+- **The 10-minute hold is real, per sheet** (owner): "Offer ends in mm:ss" from 10:00; at 00:00 Get discount
+  disables and the sheet says the offer expired, cancel and close still work; the next Cancel tap shows a fresh
+  10:00. True for every visit on purpose: a countdown that lies is "false urgency" under India's CCPA dark-pattern
+  guidelines. The server never enforces it — the row stays eligible, so an accept at 00:01 must not bounce.
 - An offer attempt (`offer: 'cancel_99'` on initiate) is a switch, never a sale: no `trial_started`, no
   trial marker, no return page, and `TrialConversionCatchUp` treats a 9900 row as already reported.
 - **Never resumable.** An open order on return is abandoned (the ₹199 comes back at once) and the retry

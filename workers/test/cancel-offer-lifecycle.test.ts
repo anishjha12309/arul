@@ -100,15 +100,15 @@ function routedSql(route: Route = () => undefined) {
   return { sql, stmts, ran };
 }
 
-const CLAIM_READ = /AS offer_eligible FROM subscriptions AS s JOIN users AS u/;
+const CLAIM_READ = /AS winback_eligible, \(.*\) AS offer_eligible FROM subscriptions AS s WHERE/;
 const CLAIM = /^INSERT INTO subscriptions \( user_id, status, plan/;
-const SWITCH = /^WITH g AS \( UPDATE subscriptions AS s SET status = CASE/;
-const HONOUR = /^WITH g AS \( UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
+const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
+const HONOUR = /^UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
 const GRANT = /AND s\.status = 'pending' AND NOT s\.offer_switch/;
 const RELEASE = /AS released_mandate_id/;
 const STATUS_READ = /^SELECT id, user_id, status, plan, merchant_subscription_id/;
 const CANCEL_READ = /^SELECT merchant_subscription_id, superseded_mandate_id, offer_mandate_id/;
-const CANCEL_WRITE = /^WITH c AS \( UPDATE subscriptions AS s SET status = 'cancelled'/;
+const CANCEL_WRITE = /^UPDATE subscriptions AS s SET status = 'cancelled', merchant_subscription_id = CASE/;
 const ABANDON_READ = /^SELECT status, merchant_subscription_id FROM subscriptions WHERE user_id = \?/;
 const OFFERS_SELECT = /^SELECT id, offer_mandate_id FROM subscriptions/;
 const PASS_A = /^SELECT id, user_id, merchant_subscription_id, next_debit_at, debit_count/;
@@ -486,7 +486,8 @@ describe.each([
       { token, body: { offer_declined: true } },
     );
     expect(res.status).toBe(200);
-    expect(db.ran(CANCEL_WRITE)[0].values.at(-1)).toBe(true);
+    // The fielded decline body is accepted and records nothing: the offer keeps no per-person answer
+    expect(db.ran(CANCEL_WRITE)[0].text).not.toContain("users");
     expect(trace(calls)).toEqual([
       [parkedAt, "revoke", parked],
       ["hsr", "revoke", HSR_99],
