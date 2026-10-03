@@ -82,4 +82,33 @@ void main() {
       'value': 'ta',
     });
   });
+
+  // The SDK writes super properties to disk: a battery reading registered there would ride the next
+  // process's first events, before its own probe lands.
+  test('a per-process reading rides captures but never the SDK\'s persisted '
+      'super properties', () async {
+    await PostHogAnalyticsService.started();
+    expect(
+      calls
+          .where((c) => c.method == 'unregister')
+          .map((c) => c.arguments['key']),
+      contains('battery_pct'),
+    );
+
+    const svc = PostHogAnalyticsService();
+    svc
+      ..register('battery_pct', 12)
+      ..register(kDeviceTierProperty, 'low');
+    svc.track('login_success');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(captured('login_success'), {
+      'battery_pct': 12,
+      kDeviceTierProperty: 'low',
+    });
+    expect(
+      calls.where((c) => c.method == 'register').map((c) => c.arguments['key']),
+      [kDeviceTierProperty],
+    );
+  });
 }

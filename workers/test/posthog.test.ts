@@ -56,6 +56,8 @@ describe("reportPostHogFirstConversion", () => {
       currency: "INR",
       // A row that predates `upi_target_app` says so, never a blank or a guess.
       target_app: "unknown",
+      // Cloudflare's egress IP must not geolocate the subscriber.
+      $geoip_disable: true,
     });
   });
 
@@ -194,6 +196,7 @@ describe("reportPostHogSubscriptionCancel", () => {
       during_trial: false,
       merchant_subscription_id: "DKS_S_1",
       $lib: "arul-worker",
+      $geoip_disable: true,
     });
     expect(env.KV.put).toHaveBeenCalledWith("ph:subscription_cancel:DKS_S_1", "1", expect.anything());
   });

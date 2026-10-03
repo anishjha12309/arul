@@ -121,8 +121,8 @@ property, a `register()` super property or a person property — [analytics-sign
 - **`app_language`, `language_source` and `geo_region` ride EVERY event via `register`, never only
   `identify`** — a person property leaves every pre-login event blank. PostHog's reset strips super
   properties, so that sink re-applies them, and it also stamps them onto the capture itself, primed from
-  prefs before `setup()` — the first `login_attempt` lands before `register`. `reset()` runs on sign-out
-  and deletion before the wall shows. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`**,
+  prefs before `setup()` — the first `login_attempt` lands before `register`. `reset()` runs on sign-out,
+  deletion and a dead session, before the wall. **GA4's reset is `setUserId(null)`, never `resetAnalyticsData`**,
   which mints a new app instance id and cuts the Ads attribution of a re-login.
 - `language_source` (`pick`·`link`·`geo`·`phone`·`default`; `geo` = an older build's region language)
   and `geo_region` (Cloudflare's region or `none`, `none` until `GET /geo` answers). GA4 hides both

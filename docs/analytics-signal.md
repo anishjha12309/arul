@@ -41,8 +41,15 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
 - `trial_started` carries the path to it (`checkout_n`, `paywall_n`, `paywall_source`, `gate_*`,
   `cards_n`, `previews_n`, `s_on_paywall`, `s_tap_to_trial`), all persisted, so the late catch-up copy
   carries them too.
+- **Per-process readings never reach native `register`** (`_processOnly` in the PostHog sink: battery,
+  memory, storage, thermal, boot age, launch source, first frame…). posthog-android persists super
+  properties to disk, so a relaunch's early events carried the LAST process's battery; they ride
+  `track()`'s merge only, and `started()` unregisters what an older build left there.
 - Channel, tier, `gms_version`, `upi_apps` and `is_internal` also go to the PERSON on `identify`, so the
-  server events (`subscription_*`, no device context) break down by them.
+  server events (`subscription_*`, no device context) break down by them. A stored session identifies
+  after `/me` too: a Block Store restore never signs in, and its events stayed anonymous.
+- **Worker captures send `$geoip_disable`** (as posthog-node does): the request IP is Cloudflare's, and
+  person-on-events stamped every subscriber's person as US, wiping the state they installed from.
 - **GA4 never sees the diagnostics:** `kPostHogOnlyProperties` is dropped from GA4 events AND user
   properties — GA4 caps an event at 25 parameters and a project at 25 user-property names. A new
   diagnostic key goes IN the set; a key GA4 already reports on (`upi_apps`, `paywall_source`, `low_ram`,

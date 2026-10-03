@@ -109,6 +109,8 @@ export async function reportPostHogFirstConversion(env: Env, purchase: FirstConv
           price_paise: amountPaise,
           ...offerProperty(amountPaise, true),
           $lib: "arul-worker",
+          // The request IP is Cloudflare's, so GeoIP would stamp the person (person-on-events) as US.
+          $geoip_disable: true,
         },
       }),
     });
@@ -215,6 +217,7 @@ export async function reportPostHogSubscriptionCancel(env: Env, cancel: Subscrip
               }
             : {}),
           $lib: "arul-worker",
+          $geoip_disable: true,
         },
       }),
     });

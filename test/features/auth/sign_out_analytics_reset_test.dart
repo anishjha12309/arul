@@ -21,7 +21,8 @@ class _RecordingAnalytics implements AnalyticsService {
       calls.add('track:$event');
 
   @override
-  void identify(String userId, {Map<String, Object?>? userProperties}) {}
+  void identify(String userId, {Map<String, Object?>? userProperties}) =>
+      calls.add('identify:$userId');
 
   @override
   void screen(String name, {Map<String, Object?>? properties}) {}
@@ -106,4 +107,53 @@ void main() {
   test('a wall over a live session says so', () {
     expect(auth.wallReason, 'signed_in');
   });
+
+  // A Block Store restore reaches the feed without a sign-in, so nothing else would identify it.
+  test('a stored session identifies its user once /me confirms it', () {
+    expect(analytics.calls, contains('identify:u1'));
+  });
+
+  test(
+    'a session that dies on its own resets analytics before the wall',
+    () async {
+      final dying = _RecordingAnalytics();
+      var alive = true;
+      final api = ApiClient(
+        httpClient: MockClient((req) async {
+          if (req.url.path == '/me' && alive) {
+            return _json({
+              'user': {'id': 'u1', 'displayName': 'A', 'email': 'a@x'},
+            }, 200);
+          }
+          return _json({
+            'error': {'code': 'unauthorized', 'message': 'x'},
+          }, 401);
+        }),
+      );
+      final dead = ApiAuthService(
+        apiClient: api,
+        analytics: dying,
+        crash: const NoOpCrashReporter(),
+        freshInstall: false,
+      );
+      await dead.initialized;
+      int? resetsWhenWallUp;
+      final sub = dead.authStateChanges.listen((s) {
+        if (!s.isAuthenticated) {
+          resetsWhenWallUp = dying.calls.where((c) => c == 'reset').length;
+        }
+      });
+
+      alive = false;
+      await expectLater(
+        api.post('/payments/status'),
+        throwsA(isA<ApiException>()),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(dead.wallReason, 'session_expired');
+      expect(resetsWhenWallUp, 1);
+      await sub.cancel();
+    },
+  );
 }

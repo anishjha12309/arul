@@ -135,6 +135,9 @@ class ApiAuthService implements AuthService {
           email: email,
         );
         _crash.setUserId(userId);
+        // A Block Store restore never signed in here, so every event would stay anonymous. The
+        // SDKs ignore a repeat of the id they already hold -> only a new identity sends anything.
+        _analytics.identify(userId);
       }
     } on ApiException catch (e) {
       if (e.status == 401) {
@@ -153,6 +156,9 @@ class ApiAuthService implements AuthService {
     if (!_current.isAuthenticated) return;
     _wallReason = reason;
     _crash.setUserId(null);
+    // As on sign-out: an identified SDK ignores the next account's identify, so its events would
+    // land on this user.
+    _analytics.reset();
     _emit(AuthUserState.unauthenticated());
   }
 
